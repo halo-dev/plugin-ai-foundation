@@ -28,12 +28,15 @@
 ## 3. Extension 定义与注册
 
 - [ ] 3.1 创建 `AiProvider` Extension 类，标注 `@GVK(group = "aifoundation.halo.run", version = "v1alpha1", kind = "AiProvider")`
-- [ ] 3.2 定义 `AiProvider.Spec`，包含 providerType、displayName、config（Map<String,String>）、enabled
-- [ ] 3.3 定义 `AiProvider.Status`，包含 phase 和 message 字段
+- [ ] 3.2 定义 `AiProvider.Spec`，包含 providerType、displayName、enabled、baseUrl、apiKeySecretRefs，以及用于高级配置的 `config`
+- [ ] 3.3 定义 `AiProvider.Status`，包含 phase、message、lastCheckedAt 字段
 - [ ] 3.4 创建 `AiModel` Extension 类，标注 `@GVK(group = "aifoundation.halo.run", version = "v1alpha1", kind = "AiModel")`
-- [ ] 3.5 定义 `AiModel.Spec`，包含 providerName、modelId、displayName
+- [ ] 3.5 定义 `AiModel.Spec`，包含 providerName（引用 `AiProvider.metadata.name`）、modelId、displayName、group、capabilities、endpointType、supportedTextDelta、enabled
 - [ ] 3.6 在 `AiFoundationPlugin.start()` 中通过 `SchemeManager` 注册 `AiProvider` 和 `AiModel` 方案
 - [ ] 3.7 在 `AiFoundationPlugin.stop()` 中注销方案
+- [ ] 3.8 为 `AiModel` 添加 `(providerName, modelId)` 唯一性校验
+- [ ] 3.9 实现删除 `AiProvider` 时的引用校验，阻止删除仍被 `AiModel` 引用的 provider
+- [ ] 3.10 在服务端统一实现唯一性、引用完整性和删除保护校验，确保不能被 UI 绕过
 
 ## 4. 提供商实现
 
@@ -52,6 +55,8 @@
 - [ ] 4.13 添加提供商客户端缓存，并在 Extension 更新时刷新
 - [ ] 4.14 为每个 provider adapter 实现 `providerOptions` 解析（如 OpenAI 的 logitBias）
 - [ ] 4.15 为每个 provider adapter 实现 `maxEmbeddingsPerCall()` 和 `supportsParallelCalls()`
+- [ ] 4.16 支持 `AiProvider.spec.apiKeySecretRefs` 多密钥配置，并通过 Halo Secret 解析真实凭据
+- [ ] 4.17 实现多密钥按顺序回退策略，并在连通性测试中支持逐个密钥检测
 
 ## 5. AiModelService 实现
 
@@ -73,21 +78,26 @@
 - [ ] 6.3 实现 `POST /providers/{name}/connectivity` 用于连通性测试
 - [ ] 6.4 为端点添加 OpenAPI 文档注解
 - [ ] 6.5 将 `groupVersion` 配置为 `console.api.aifoundation.halo.run/v1alpha1`
+- [ ] 6.6 为 provider 详情页提供按 provider 聚合查询其关联 `AiModel` 的接口或查询封装
 
 ## 7. Vue Console UI
 
 - [ ] 7.1 在 `ui/src/index.ts` 中于系统菜单下注册 Console 路由
-- [ ] 7.2 创建 `ProviderManager.vue` 作为主管理页面，包含提供商列表和模型列表两个标签页
-- [ ] 7.3 创建 `ProviderCard.vue` 用于展示单个提供商信息
-- [ ] 7.4 创建 `ProviderForm.vue` 弹窗用于创建/编辑提供商
-- [ ] 7.5 创建 `ModelCard.vue` 用于展示单个模型信息（格式：提供商 / 模型）
-- [ ] 7.6 创建 `ModelForm.vue` 弹窗用于添加/编辑模型（选择提供商 + 输入 modelId + 显示名称）
-- [ ] 7.7 实现提供商增删改查操作，使用 `@tanstack/vue-query` 和 `axiosInstance`
-- [ ] 7.8 实现模型增删改查操作，使用 `@tanstack/vue-query` 和 `axiosInstance`
-- [ ] 7.9 实现从提供商 API 获取模型列表并批量添加的功能
-- [ ] 7.10 实现连通性测试按钮，包含加载状态和结果展示
-- [ ] 7.11 添加表单校验（提供商类型的必填字段、模型的 providerName 和 modelId 必填）
-- [ ] 7.12 使用 `@halo-dev/components` 和 UnoCSS 进行 UI 样式设计
+- [ ] 7.2 创建 `ProviderManager.vue` 作为主管理页面，采用“左侧 provider 列表 + 右侧 provider workspace”的布局
+- [ ] 7.3 创建 `ProviderList.vue`，支持 provider 搜索、状态展示和切换
+- [ ] 7.4 创建 `ProviderDetail.vue`，在同一页面展示 provider 配置与关联模型列表
+- [ ] 7.5 创建 `ProviderForm.vue` 用于创建/编辑 provider，支持 baseUrl、apiKeySecretRefs、enabled 和高级配置
+- [ ] 7.6 实现 Halo Secret 绑定/创建流程，以及密钥脱敏展示与替换交互
+- [ ] 7.7 创建 `ModelList.vue`，按 group 分组展示模型，并显示 capability 标签
+- [ ] 7.8 创建 `ModelForm.vue` 用于添加/编辑模型，支持 modelId、displayName、group、capabilities、endpointType、supportedTextDelta
+- [ ] 7.9 实现提供商增删改查操作，使用 `@tanstack/vue-query` 和 `axiosInstance`
+- [ ] 7.10 实现模型增删改查操作，使用 `@tanstack/vue-query` 和 `axiosInstance`
+- [ ] 7.11 实现从提供商 API 获取模型列表、筛选、批量添加和共享默认值设置
+- [ ] 7.12 实现模型搜索、按 capability 过滤、按 group 折叠展示
+- [ ] 7.13 实现连通性测试按钮，包含加载状态、检测结果和 `lastCheckedAt` 展示
+- [ ] 7.14 添加表单校验（provider 结构化字段、模型唯一性、providerName/modelId 必填），并与服务端校验规则保持一致
+- [ ] 7.15 删除 provider 前检测是否仍有关联模型，并在 UI 中阻止删除
+- [ ] 7.16 使用 `@halo-dev/components` 和 UnoCSS 进行 UI 样式设计
 
 ## 8. 插件元数据与安全
 
@@ -95,6 +105,7 @@
 - [ ] 8.2 创建 `app/src/main/resources/extensions/roleTemplate.yaml` 用于 RBAC 权限
 - [ ] 8.3 如需为 Console API 配置代理，创建 `app/src/main/resources/extensions/reverseProxy.yaml`
 - [ ] 8.4 确保 API 端点受适当的角色模板保护
+- [ ] 8.5 确认插件运行时具备读取所引用 Halo Secret 的权限边界
 
 ## 9. 构建与验证
 

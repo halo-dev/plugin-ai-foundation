@@ -16,13 +16,22 @@ The Console UI SHALL display a list of all `AiProvider` Extensions with their ty
 - **THEN** the system SHALL display all `AiProvider` resources in a card or table layout
 - **AND** each item SHALL show `providerType`, `displayName`, `enabled` status, and `status.phase`
 
+### Requirement: Provider workspace layout
+The Console UI SHALL use a provider-centric workspace inspired by Cherry Studio.
+
+#### Scenario: Aggregated provider workspace
+- **WHEN** an admin opens the AI model configuration page
+- **THEN** the left side SHALL display the provider list
+- **AND** selecting a provider SHALL open a right-side detail workspace for that provider
+- **AND** the workspace SHALL include both provider configuration and the models belonging to that provider
+
 ### Requirement: Create new provider
 The Console UI SHALL allow admins to create a new `AiProvider` Extension by selecting a provider type and filling in configuration fields.
 
 #### Scenario: Create OpenAI provider
 - **WHEN** an admin clicks "添加模型供应商"
 - **AND** selects "OpenAI" as the provider type
-- **AND** enters display name "OpenAI Official" and API key
+- **AND** enters display name "OpenAI Official" and binds a Halo Secret containing the API key
 - **AND** clicks save
 - **THEN** the system SHALL create a new `AiProvider` Extension via POST to the Extension API
 - **AND** the new provider SHALL appear in the list
@@ -32,10 +41,28 @@ The Console UI SHALL allow admins to edit an existing `AiProvider`'s configurati
 
 #### Scenario: Update API key
 - **WHEN** an admin clicks edit on an existing OpenAI provider
-- **AND** changes the API key
+- **AND** changes the bound Halo Secret or replaces its referenced key
 - **AND** clicks save
 - **THEN** the system SHALL update the `AiProvider` Extension via PUT to the Extension API
 - **AND** subsequent AI calls SHALL use the new API key
+
+#### Scenario: Edit structured provider connection fields
+- **WHEN** an admin edits a provider
+- **THEN** the form SHALL expose structured fields such as `baseUrl`, `apiKeySecretRefs`, and `enabled`
+- **AND** advanced provider-specific fields MAY be edited through an additional advanced settings area backed by `spec.config`
+
+### Requirement: API key masking and testing
+The Console UI SHALL protect sensitive provider keys while still allowing connectivity verification.
+
+#### Scenario: Masked API key display
+- **WHEN** an admin opens a provider detail page
+- **THEN** the UI SHALL display bound Halo Secret references and masked previews by default
+- **AND** the UI SHALL allow opening a Secret edit or replacement flow when needed
+
+#### Scenario: Multiple API keys input
+- **WHEN** an admin configures multiple API keys for a provider
+- **THEN** the UI SHALL allow binding multiple Halo Secret references in order
+- **AND** the stored provider value SHALL map to `spec.apiKeySecretRefs`
 
 ### Requirement: Delete provider
 The Console UI SHALL allow admins to delete an `AiProvider` Extension.
@@ -46,25 +73,47 @@ The Console UI SHALL allow admins to delete an `AiProvider` Extension.
 - **THEN** the system SHALL delete the `AiProvider` Extension via DELETE to the Extension API
 - **AND** the provider SHALL disappear from the list
 
+#### Scenario: Block deleting provider with models
+- **WHEN** an admin clicks delete on a provider that still has associated `AiModel` entries
+- **THEN** the UI SHALL prevent deletion
+- **AND** explain that dependent models must be removed first
+
 ### Requirement: Model list view
-The Console UI SHALL display a list of all `AiModel` Extensions, showing each model as `(Provider / Model)` format.
+The Console UI SHALL display provider-scoped `AiModel` entries in the selected provider workspace.
 
 #### Scenario: View all models
-- **WHEN** an admin navigates to the model list tab
-- **THEN** the system SHALL display all `AiModel` resources
-- **AND** each item SHALL show in format `(ProviderDisplayName / ModelDisplayName)`
-- **AND** each item SHALL show the underlying `providerName/modelId` reference
+- **WHEN** an admin selects a provider
+- **THEN** the system SHALL display all `AiModel` resources whose `providerName` matches the selected provider
+- **AND** each item SHALL show the model display name and underlying `providerName/modelId` reference
+- **AND** each item SHALL show its group and capability tags when available
+
+### Requirement: Model grouping and filtering
+The Console UI SHALL support browsing models with group and capability context.
+
+#### Scenario: Grouped model display
+- **WHEN** the selected provider has models with `spec.group`
+- **THEN** the UI SHALL group models by that value in collapsible sections
+
+#### Scenario: Filter models by keyword or capability
+- **WHEN** an admin enters a search term or chooses a capability filter
+- **THEN** the UI SHALL narrow the displayed models within the selected provider workspace
+- **AND** filtering SHALL work with model ID, display name, group, and capability tags
 
 ### Requirement: Add model from provider
-The Console UI SHALL allow admins to add a new `AiModel` by selecting a configured provider and specifying a model ID.
+The Console UI SHALL allow admins to add a new `AiModel` inside the currently selected provider workspace.
 
 #### Scenario: Add model from provider
 - **WHEN** an admin clicks "添加模型"
-- **AND** selects an existing configured provider (e.g., "OpenAI Official")
+- **AND** the current workspace is for provider "OpenAI Official"
 - **AND** enters model ID (e.g., "gpt-4o") and display name (e.g., "GPT-4o")
 - **AND** clicks save
 - **THEN** the system SHALL create a new `AiModel` Extension via POST to the Extension API
 - **AND** the new model SHALL appear in the list as `(OpenAI Official / GPT-4o)`
+
+#### Scenario: Add model metadata
+- **WHEN** an admin creates or edits a model
+- **THEN** the form SHALL support editing `group`, `capabilities`, `endpointType`, and `supportedTextDelta`
+- **AND** these values SHALL be persisted to the `AiModel` Extension
 
 ### Requirement: Browse provider models
 The Console UI SHALL allow browsing available models from a provider's API to simplify model addition.
@@ -75,14 +124,24 @@ The Console UI SHALL allow browsing available models from a provider's API to si
 - **AND** display available models
 - **AND** allow the admin to select one or more models to add as `AiModel` entries
 
+#### Scenario: Batch add discovered models
+- **WHEN** an admin selects multiple discovered models from the provider API result
+- **THEN** the UI SHALL create multiple `AiModel` entries in one batch workflow
+- **AND** the admin MAY set shared defaults such as `group` or `endpointType` before confirming
+
 ### Requirement: Edit model
-The Console UI SHALL allow admins to edit an existing `AiModel`'s display name.
+The Console UI SHALL allow admins to edit an existing `AiModel`'s metadata.
 
 #### Scenario: Update model display name
 - **WHEN** an admin clicks edit on a model
 - **AND** changes the display name
 - **AND** clicks save
 - **THEN** the system SHALL update the `AiModel` Extension via PUT to the Extension API
+
+#### Scenario: Update model capabilities
+- **WHEN** an admin edits a model and changes capability tags such as `vision`, `reasoning`, `function_calling`, or `embedding`
+- **THEN** the system SHALL update the `AiModel` Extension
+- **AND** the updated tags SHALL immediately affect the model list display and filtering
 
 ### Requirement: Delete model
 The Console UI SHALL allow admins to delete an `AiModel` Extension.

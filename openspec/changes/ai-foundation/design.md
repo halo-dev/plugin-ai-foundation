@@ -13,6 +13,7 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - `plugin-app-store`（`../plugin-app-store/`）：带 Maven 发布 API 的多模块 Gradle 模式
 - `plugin-feed`（`../plugin-feed/`）：多模块 Gradle 模式（`api`、`app`、`ui`）
 - **Vercel AI SDK**（`../ai/`）：provider 抽象架构、能力分离接口（`LanguageModelV4` / `EmbeddingModelV4`）、流式 Part 标准化、`providerOptions` 透传机制、错误类型体系的设计参考
+- **Cherry Studio**（`../cherry-studio/`）：provider workspace 交互、模型能力标签、模型分组与批量管理体验的设计参考
 
 ## 目标 / 非目标
 
@@ -20,9 +21,10 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - 提供统一的 AI 模型提供商配置入口
 - 提供统一的 AI 模型定义管理（从已配置的提供商中添加模型）
 - 暴露包装的 Java API（`AiModelService`），其他插件无需依赖 Spring AI 即可消费
-- 支持 8 个以上提供商的对话和向量嵌入能力
+- 支持 8 个以上提供商接入，并按 provider 实际能力暴露对话和向量嵌入能力
 - 提供 Vue Console 页面，用于提供商增删改查、模型管理和连通性测试
 - 使用 Extension（`AiProvider`、`AiModel`）替代 settings.yaml 进行配置持久化
+- 在不放弃 Halo Extension 资源建模的前提下，提供接近 Cherry Studio 的厂商/模型配置体验
 
 **非目标：**
 - 图像生成（超出第一阶段范围）
@@ -68,30 +70,55 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 
 ### 4. 双 Extension 设计（AiProvider + AiModel）
 
-**决策：** 采用两个 Extension 分别管理提供商配置和模型定义。消费者调用 `AiModelService.chat("${providerName}/${modelId}", prompt)`，通过 `providerName/modelId` 格式定位模型。
+**决策：** 采用两个 Extension 分别管理提供商配置和模型定义。消费者调用 `AiModelService.chat("${providerName}/${modelId}", prompt)`，通过 `providerName/modelId` 格式定位模型；Console UI 则按 provider 聚合展示其配置和关联模型，形成 Cherry Studio 风格的 provider workspace。
 
 **理由：**
 - 模型作为一等公民，独立生命周期，支持统一查询和管理
 - `AiModel` 绑定到 `AiProvider`，界面展示为 `(提供商 / 模型)` 如 `(OpenAI / GPT-4o)`
 - 调用简洁直观：`AiModelService.chat("aihubmix/claude-3.5", "你好")`
-- 未来可扩展：给模型加 `defaultTemperature`、`capabilities` 等字段
+- 可以在 `AiModel` 上承载 `group`、`capabilities`、`endpointType`、`supportedTextDelta` 等仅用于管理与选择的元数据
 - 从 Extension 配置到提供商客户端的直接映射
+- 不把 `models` 内嵌到 `AiProvider`，仍可通过 provider 聚合查询构建 Cherry Studio 式右侧详情页
 
-**`AiProvider`**：存储提供商配置（API 密钥、代理等）
-**`AiModel`**：存储模型定义（providerName 引用、modelId、displayName）
+**`AiProvider`**：存储提供商实例配置（providerType、displayName、baseUrl、apiKeySecretRefs、enabled、proxy、高级 config 等）
+**`AiModel`**：存储模型定义与管理元数据（providerName 引用 `AiProvider.metadata.name`、modelId、displayName、group、capabilities、endpointType、supportedTextDelta、enabled）
 
 **考虑的替代方案：** 单 Extension `AiProvider` 内嵌 `models` 列表 —— 被拒绝，因为模型多了之后单个体积过大，且无法独立查询和扩展。
 
 ### 5. 按提供商代理支持
 
-**决策：** 每个 `AiProvider` Extension 的 `config` 映射可以包含 `proxyHost` 和 `proxyPort`。
+**决策：** `AiProvider.Spec` 同时采用结构化字段和扩展配置：通用连接字段（如 `baseUrl`、`enabled`）使用显式字段，敏感凭据通过 `apiKeySecretRefs` 引用 Halo Secret，provider-specific 高级选项保留在 `config` 映射中；代理配置可通过结构化字段或 `config` 扩展承载。
 
 **理由：**
 - 不同提供商可能需要不同代理（如国内 vs 国际）
 - 避免可能在提供商之间冲突的全局代理状态
 - 匹配 ai-assistant 中现有的 `ProxyWebClient` 模式，但按提供商限定范围
+- 仅用 `Map<String, String> config` 难以支撑 Cherry Studio 风格的表单交互、字段校验和敏感信息处理
+- 将常用连接信息结构化后，Console 可以更稳定地实现输入、脱敏、检测和帮助文案
+- Halo Secret 比直接把 API Key 放进 Extension spec 更符合敏感信息管理需求
 
-### 6. 第一阶段无 Reconciler
+**多密钥策略：**
+- `apiKeySecretRefs` 按顺序保存多个 Halo Secret 引用
+- 运行时按顺序尝试可用密钥，请求失败后切换到下一个密钥
+- 连通性测试可以按密钥粒度执行并回传结果
+- 第一阶段不引入复杂的熔断、权重或负载均衡策略
+
+### 6. 模型元数据增厚以支撑管理体验
+
+**决策：** `AiModel.Spec` 除基本标识外，第一阶段增加 `group`、`capabilities`、`endpointType`、`supportedTextDelta`、`enabled` 等字段，用于表达模型分组、能力标签和协议兼容性。
+
+**理由：**
+- Cherry Studio 的模型管理体验依赖分组、能力标签和端点类型来支持搜索、筛选和编辑
+- provider API 返回的模型数据并不总是完整或稳定，需要本地元数据做补充与覆盖
+- 这些字段优先服务于 Console 和模型选择体验，不要求全部暴露到公共 Java API
+
+**约束：**
+- `(providerName, modelId)` 必须唯一
+- `providerName` 必须引用现有 `AiProvider.metadata.name`
+- 删除仍被 `AiModel` 引用的 `AiProvider` 时应阻止删除，避免隐式级联删除模型
+- 所有唯一性、引用完整性和删除保护约束以服务端校验为准，UI 仅做前置提示
+
+### 7. 第一阶段无 Reconciler
 
 **决策：** 提供商状态（`phase`、`message`）仅通过手动连通性测试更新。
 
@@ -100,7 +127,16 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - 手动测试对初始用户体验足够
 - 可稍后添加，不会破坏 API 变更
 
-### 7. 能力分离的 API 接口设计
+### 8. Cherry Studio 风格的 provider workspace
+
+**决策：** Console UI 参考 Cherry Studio，采用左侧 provider 列表、右侧 provider 详情与模型列表的工作区布局，而不是将 provider 和 model 完全拆成两个割裂的管理页面。
+
+**理由：**
+- provider 配置和其关联模型本质上是同一个管理上下文
+- 右侧详情区可以同时承载 API 密钥、API 地址、连通性检测、模型搜索、批量导入、模型编辑等操作
+- 存储层依然保持 `AiProvider` / `AiModel` 分离，不牺牲 Halo Extension 的可查询性
+
+### 9. 能力分离的 API 接口设计
 
 **决策：** `api/` 模块将 chat 和 embedding 能力拆分为独立的接口 —— `LanguageModel` 和 `EmbeddingModel`，`AiModelService` 作为 Registry/Factory 返回具体能力接口。
 
@@ -120,7 +156,7 @@ EmbeddingModel em = aiModelService.embeddingModel("openai/text-embedding-3-small
 Mono<EmbeddingResponse> result = em.embed(List.of("text1", "text2"));
 ```
 
-### 8. 扩展 ChatChunk 流式数据结构
+### 10. 扩展 ChatChunk 流式数据结构
 
 **决策：** `ChatChunk` 不仅包含 `content` 和 `last` 标记，还增加 `type`、`finishReason` 和 `usage` 字段。
 
@@ -141,7 +177,7 @@ public class ChatChunk {
 }
 ```
 
-### 9. Provider Options 透传机制
+### 11. Provider Options 透传机制
 
 **决策：** `ChatRequest` 增加 `Map<String, Object> providerOptions` 字段，用于透传 provider-specific 配置。
 
@@ -151,7 +187,7 @@ public class ChatChunk {
 - 消费者需要高级功能时可通过透传机制使用，不破坏 API 稳定性
 - 每个 provider adapter 自行解析自己关心的 providerOptions 键
 
-### 10. 错误类型体系
+### 12. 错误类型体系
 
 **决策：** `api/` 模块定义基于 `AiFoundationException` 的异常层次结构，替代通用的 `Mono.error()`。
 
@@ -177,9 +213,10 @@ public class ProviderApiException extends AiFoundationException {
 |------|---------|
 | **Spring AI 版本锁定** —— Foundation 固定使用 Spring AI 2.0.0-M2；未来升级可能破坏间接依赖 Spring AI 的消费者插件 | API 模块包装所有类型；消费者永远看不到 Spring AI 类。Spring AI 仅在 `app/` 模块中。 |
 | **提供商 API 漂移** —— 厂商 API 变更，破坏模型列表或连通性测试 | 提供商适配器是隔离的；只需更新受影响的适配器。模型列表是尽力而为（可回退到手动输入）。 |
-| **Extension 模式演进** —— 添加新的提供商特定配置字段可能需要 Extension 版本升级 | 使用 `Map<String, String> config` 避免新提供商的模式变更。 |
+| **Extension 模式演进** —— 新提供商可能引入额外配置字段 | 通用连接字段结构化，敏感凭据通过 Halo Secret 引用，provider-specific 选项放入 `config`，在校验与扩展性之间折中。 |
 | **类加载器隔离** —— 其他插件需要在运行时访问 `api/` 类 | 遵循 Halo 的 `pluginDependencies` 机制。API jar 在父插件的类加载器中。 |
 | **迁移复杂度** —— 将 ai-assistant 从其自己的提供商层移出并非易事 | 第一阶段聚焦构建基础。迁移是单独的阶段，有专门的规划。 |
+| **模型元数据漂移** —— 厂商返回的模型能力信息可能不完整或变更频繁 | 允许管理员在 `AiModel` 上编辑和覆盖能力标签、分组与端点类型。 |
 
 ## 迁移计划
 
