@@ -12,6 +12,7 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - `plugin-ai-assistant`（`../plugin-ai-assistant/`）：要迁移的提供商实现来源
 - `plugin-app-store`（`../plugin-app-store/`）：带 Maven 发布 API 的多模块 Gradle 模式
 - `plugin-feed`（`../plugin-feed/`）：多模块 Gradle 模式（`api`、`app`、`ui`）
+- **Vercel AI SDK**（`../ai/`）：provider 抽象架构、能力分离接口（`LanguageModelV4` / `EmbeddingModelV4`）、流式 Part 标准化、`providerOptions` 透传机制、错误类型体系的设计参考
 
 ## 目标 / 非目标
 
@@ -99,6 +100,77 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - 手动测试对初始用户体验足够
 - 可稍后添加，不会破坏 API 变更
 
+### 7. 能力分离的 API 接口设计
+
+**决策：** `api/` 模块将 chat 和 embedding 能力拆分为独立的接口 —— `LanguageModel` 和 `EmbeddingModel`，`AiModelService` 作为 Registry/Factory 返回具体能力接口。
+
+**理由：**
+- 借鉴 Vercel AI SDK 的 `LanguageModelV4` / `EmbeddingModelV4` 分离设计
+- 消费者插件只依赖所需能力的接口，不需要引入无关的类型
+- 为第二阶段扩展图像生成（`ImageModel`）、语音合成预留清晰的接口位置
+- 每个接口可独立演进版本，互不干扰
+
+**调用方式：**
+```java
+// 消费插件获取能力接口
+LanguageModel lm = aiModelService.languageModel("openai/gpt-4o");
+Mono<String> result = lm.chat("Hello");
+
+EmbeddingModel em = aiModelService.embeddingModel("openai/text-embedding-3-small");
+Mono<EmbeddingResponse> result = em.embed(List.of("text1", "text2"));
+```
+
+### 8. 扩展 ChatChunk 流式数据结构
+
+**决策：** `ChatChunk` 不仅包含 `content` 和 `last` 标记，还增加 `type`、`finishReason` 和 `usage` 字段。
+
+**理由：**
+- 借鉴 Vercel AI SDK 的 `LanguageModelV4StreamPart` 标准化设计
+- 未来支持 reasoning、tool calling 时不需要改变 API 形状
+- `usage` 字段（promptTokens、completionTokens）对计费/监控场景必要
+- `finishReason`（stop、length、error）让消费者知道对话终止原因
+
+**结构：**
+```java
+public class ChatChunk {
+    ChunkType type;        // TEXT, REASONING, TOOL_CALL, ERROR, FINISH
+    String content;
+    boolean last;
+    String finishReason;   // stop, length, error, null
+    Usage usage;           // promptTokens, completionTokens
+}
+```
+
+### 9. Provider Options 透传机制
+
+**决策：** `ChatRequest` 增加 `Map<String, Object> providerOptions` 字段，用于透传 provider-specific 配置。
+
+**理由：**
+- 借鉴 Vercel AI SDK 的 `providerOptions` 命名空间设计
+- 通用 API 不需要暴露所有 provider 特有参数（如 OpenAI 的 `logitBias`、Anthropic 的 `cacheControl`）
+- 消费者需要高级功能时可通过透传机制使用，不破坏 API 稳定性
+- 每个 provider adapter 自行解析自己关心的 providerOptions 键
+
+### 10. 错误类型体系
+
+**决策：** `api/` 模块定义基于 `AiFoundationException` 的异常层次结构，替代通用的 `Mono.error()`。
+
+**理由：**
+- 借鉴 Vercel AI SDK 的 `AISDKError` 基类 + marker pattern
+- 消费插件可以通过 `instanceof` 精确处理不同类型的错误（模型不存在 vs 提供商禁用 vs API 调用失败）
+- 统一的错误基类便于日志收集和监控
+
+**类型：**
+```java
+public class AiFoundationException extends RuntimeException { ... }
+public class ModelNotFoundException extends AiFoundationException { ... }
+public class ProviderDisabledException extends AiFoundationException { ... }
+public class ProviderApiException extends AiFoundationException {
+    int statusCode;
+    String providerType;
+}
+```
+
 ## 风险 / 权衡
 
 | 风险 | 缓解措施 |
@@ -122,4 +194,6 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 ## 待解决问题
 
 - `AiProvider` Extension 是否应该包含 `priority` 或 `default` 标志用于回退行为？
+  - **初步结论：** 第一阶段暂不引入。provider 回退逻辑增加了复杂度，待有明确 consumer 需求后再添加。可在 `AiProvider.Spec` 中预留 `defaultModel` 字段指向默认的 `AiModel`。
 - `embed()` 是否应该支持批量大小限制或对大输入列表的自动分块？
+  - **初步结论：** 借鉴 Vercel AI SDK 的 `embedMany` 设计，`EmbeddingModel` 接口暴露 `maxEmbeddingsPerCall()` 和 `supportsParallelCalls()` 属性。`AiModelServiceImpl` 内部实现自动分块和并行调用，消费者无需感知批量限制。

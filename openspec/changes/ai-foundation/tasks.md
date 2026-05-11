@@ -10,16 +10,20 @@
 
 ## 2. API 模块 —— 公共接口
 
-- [ ] 2.1 定义 `AiModelService` 接口，支持 `modelRef`（`${providerName}/${modelId}` 格式）调用
-- [ ] 2.2 定义 `ChatRequest` 数据类（messages、temperature、maxTokens、topP）
-- [ ] 2.3 定义 `Message` 数据类（role、content）
-- [ ] 2.4 定义 `ChatResponse` 数据类（content、finishReason、promptTokens、completionTokens）
-- [ ] 2.5 定义 `ChatChunk` 数据类（content、last 标记）
-- [ ] 2.6 定义 `EmbeddingResponse` 数据类（embeddings 为 List<float[]>）
-- [ ] 2.7 定义 `ModelInfo` 数据类（providerName、modelId、displayName）
-- [ ] 2.8 定义 `ProviderInfo` 数据类（name、displayName、providerType、enabled、phase）
-- [ ] 2.9 在 `api/build.gradle` 中添加 `run.halo.tools.platform:plugin:2.23.0` 和 `run.halo.app:api` 依赖
-- [ ] 2.10 配置 `maven-publish` 在 `api/build.gradle` 中并填写正确的 POM 元数据
+- [ ] 2.1 定义 `LanguageModel` 接口（`chat(String prompt): Mono<String>`、`streamChat(ChatRequest): Flux<ChatChunk>`）
+- [ ] 2.2 定义 `EmbeddingModel` 接口（`embed(List<String>): Mono<EmbeddingResponse>`、`maxEmbeddingsPerCall(): int`、`supportsParallelCalls(): boolean`）
+- [ ] 2.3 定义 `AiModelService` 接口作为 Registry（`languageModel(String modelRef)`、`embeddingModel(String modelRef)`、`listModels()`、`listProviders()`）
+- [ ] 2.4 定义 `ChatRequest` 数据类（messages、temperature、maxTokens、topP、providerOptions）
+- [ ] 2.5 定义 `Message` 数据类（role、content）
+- [ ] 2.6 定义 `ChatChunk` 数据类（type、content、last、finishReason、usage）
+- [ ] 2.7 定义 `ChunkType` 枚举（TEXT、REASONING、TOOL_CALL、ERROR、FINISH）
+- [ ] 2.8 定义 `Usage` 数据类（promptTokens、completionTokens）
+- [ ] 2.9 定义 `EmbeddingResponse` 数据类（embeddings 为 List<float[]>）
+- [ ] 2.10 定义 `ModelInfo` 数据类（providerName、modelId、displayName）
+- [ ] 2.11 定义 `ProviderInfo` 数据类（name、displayName、providerType、enabled、phase）
+- [ ] 2.12 定义异常层次结构：`AiFoundationException`、`ModelNotFoundException`、`ProviderDisabledException`、`ProviderApiException`
+- [ ] 2.13 在 `api/build.gradle` 中添加 `run.halo.tools.platform:plugin:2.23.0` 和 `run.halo.app:api` 依赖
+- [ ] 2.14 配置 `maven-publish` 在 `api/build.gradle` 中并填写正确的 POM 元数据
 
 ## 3. Extension 定义与注册
 
@@ -46,17 +50,21 @@
 - [ ] 4.11 通过配置映射实现按提供商代理支持（proxyHost、proxyPort）
 - [ ] 4.12 为每个提供商实现模型列表（从 ai-assistant 的 *Model 类迁移）
 - [ ] 4.13 添加提供商客户端缓存，并在 Extension 更新时刷新
+- [ ] 4.14 为每个 provider adapter 实现 `providerOptions` 解析（如 OpenAI 的 logitBias）
+- [ ] 4.15 为每个 provider adapter 实现 `maxEmbeddingsPerCall()` 和 `supportsParallelCalls()`
 
 ## 5. AiModelService 实现
 
-- [ ] 5.1 实现 `AiModelServiceImpl` 作为 `AiModelService` 的运行时实现
-- [ ] 5.2 实现 `chat(String modelRef, String prompt)`，解析 `providerName/modelId`，返回 `Mono<String>`
-- [ ] 5.3 实现 `streamChat(String modelRef, ChatRequest)`，解析 `providerName/modelId`，返回 `Flux<ChatChunk>`
-- [ ] 5.4 实现 `embed(String modelRef, List<String>)`，解析 `providerName/modelId`，返回 `Mono<EmbeddingResponse>`
-- [ ] 5.5 实现 `listModels()`，返回 `Mono<List<ModelInfo>>` 查询所有 `AiModel` Extension
-- [ ] 5.6 实现 `listProviders()`，返回 `Mono<List<ProviderInfo>>` 查询所有 `AiProvider` Extension
-- [ ] 5.7 实现错误处理：无效 modelRef 格式、未配置模型、已禁用提供商
-- [ ] 5.8 将 `AiModelServiceImpl` 注册为 Spring `@Component` Bean
+- [ ] 5.1 实现 `AiModelServiceImpl` 作为 Registry，解析 `modelRef` 并返回对应的能力接口
+- [ ] 5.2 实现 `languageModel(String modelRef)`，解析 `providerName/modelId`，返回 `LanguageModel` 实例
+- [ ] 5.3 实现 `embeddingModel(String modelRef)`，解析 `providerName/modelId`，返回 `EmbeddingModel` 实例
+- [ ] 5.4 实现 `LanguageModelImpl.chat(String prompt)`，调用底层 Spring AI 客户端并返回 `Mono<String>`
+- [ ] 5.5 实现 `LanguageModelImpl.streamChat(ChatRequest)`，返回标准化 `Flux<ChatChunk>`（含 type、usage、finishReason）
+- [ ] 5.6 实现 `EmbeddingModelImpl.embed(List<String>)`，内部自动分块（按 `maxEmbeddingsPerCall`）和并行调用
+- [ ] 5.7 实现 `listModels()`，返回 `Mono<List<ModelInfo>>` 查询所有 `AiModel` Extension
+- [ ] 5.8 实现 `listProviders()`，返回 `Mono<List<ProviderInfo>>` 查询所有 `AiProvider` Extension
+- [ ] 5.9 实现错误处理：无效 modelRef 格式、未配置模型、已禁用提供商（抛出 typed exceptions）
+- [ ] 5.10 将 `AiModelServiceImpl` 注册为 Spring `@Component` Bean
 
 ## 6. Console 端点
 

@@ -59,3 +59,30 @@ The system SHALL cache AI provider clients and refresh them when the correspondi
 #### Scenario: Config update refreshes client
 - **WHEN** an `AiProvider` Extension is updated with a new API key
 - **THEN** subsequent calls using that provider SHALL use the new API key
+
+### Requirement: Embedding batch limits per provider
+
+The system SHALL expose provider-specific embedding batch limits through the `EmbeddingModel` interface.
+
+#### Scenario: OpenAI batch limit
+- **WHEN** an `AiProvider` has `providerType = "openai"`
+- **THEN** the corresponding `EmbeddingModel.maxEmbeddingsPerCall()` SHALL return `96`
+- **AND** `supportsParallelCalls()` SHALL return `true`
+
+#### Scenario: Ollama batch limit
+- **WHEN** an `AiProvider` has `providerType = "ollama"`
+- **THEN** the corresponding `EmbeddingModel.maxEmbeddingsPerCall()` SHALL return a reasonable default (e.g., `1` or provider-specific value)
+- **AND** `supportsParallelCalls()` SHALL return `false`
+
+### Requirement: Provider options configuration support
+
+The system SHALL allow each provider adapter to declare supported `providerOptions` keys and their types.
+
+#### Scenario: OpenAI provider options
+- **WHEN** a consumer passes `providerOptions.openai.logitBias` in a `ChatRequest`
+- **THEN** the OpenAI adapter SHALL parse the logit bias map and include it in the API request
+
+#### Scenario: Ignoring unknown provider options
+- **WHEN** a consumer passes `providerOptions.unknown.key` in a `ChatRequest`
+- **THEN** the system SHALL silently ignore unknown provider options namespaces
+- **AND** the call SHALL proceed without error
