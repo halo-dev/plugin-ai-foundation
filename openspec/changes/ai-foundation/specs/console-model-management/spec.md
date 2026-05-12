@@ -36,6 +36,14 @@ The Console UI SHALL allow admins to create a new `AiProvider` Extension by sele
 - **THEN** the system SHALL create a new `AiProvider` Extension via POST to the Extension API
 - **AND** the new provider SHALL appear in the list
 
+#### Scenario: Create AiHubMix provider without manual base URL
+- **WHEN** an admin clicks "添加模型供应商"
+- **AND** selects "AiHubMix" as the provider type
+- **AND** binds a Halo Secret containing the API key
+- **AND** clicks save
+- **THEN** the system SHALL create a new `AiProvider` Extension using the built-in AiHubMix preset
+- **AND** the admin SHALL NOT be required to manually enter AiHubMix's API base URL
+
 ### Requirement: Edit provider configuration
 The Console UI SHALL allow admins to edit an existing `AiProvider`'s configuration.
 
@@ -48,21 +56,22 @@ The Console UI SHALL allow admins to edit an existing `AiProvider`'s configurati
 
 #### Scenario: Edit structured provider connection fields
 - **WHEN** an admin edits a provider
-- **THEN** the form SHALL expose structured fields such as `baseUrl`, `apiKeySecretRefs`, and `enabled`
+- **THEN** the form SHALL expose structured fields such as `baseUrl`, `apiKeySecretName`, and `enabled`
 - **AND** advanced provider-specific fields MAY be edited through an additional advanced settings area backed by `spec.config`
+
+#### Scenario: Built-in preset hides custom base URL
+- **WHEN** an admin edits a built-in provider such as `aihubmix` or `siliconflow`
+- **THEN** the form SHOULD prioritize the preset experience of editing API key and basic metadata
+- **AND** the admin SHALL NOT be required to fill a custom `baseUrl`
+- **AND** only the `openailike` provider type SHALL require manual `baseUrl` input
 
 ### Requirement: API key masking and testing
 The Console UI SHALL protect sensitive provider keys while still allowing connectivity verification.
 
 #### Scenario: Masked API key display
 - **WHEN** an admin opens a provider detail page
-- **THEN** the UI SHALL display bound Halo Secret references and masked previews by default
+- **THEN** the UI SHALL display the bound Halo Secret name and masked preview by default
 - **AND** the UI SHALL allow opening a Secret edit or replacement flow when needed
-
-#### Scenario: Multiple API keys input
-- **WHEN** an admin configures multiple API keys for a provider
-- **THEN** the UI SHALL allow binding multiple Halo Secret references in order
-- **AND** the stored provider value SHALL map to `spec.apiKeySecretRefs`
 
 ### Requirement: Delete provider
 The Console UI SHALL allow admins to delete an `AiProvider` Extension.
@@ -84,7 +93,7 @@ The Console UI SHALL display provider-scoped `AiModel` entries in the selected p
 #### Scenario: View all models
 - **WHEN** an admin selects a provider
 - **THEN** the system SHALL display all `AiModel` resources whose `providerName` matches the selected provider
-- **AND** each item SHALL show the model display name and underlying `providerName/modelId` reference
+- **AND** each item SHALL show the model display name and underlying `providerResourceName/modelId` reference, where `providerResourceName = AiProvider.metadata.name`
 - **AND** each item SHALL show its group and capability tags when available
 
 ### Requirement: Model grouping and filtering

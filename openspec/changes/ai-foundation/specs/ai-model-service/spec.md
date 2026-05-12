@@ -13,9 +13,9 @@ The `api/` module SHALL expose an `AiModelService` interface acting as a Registr
 The system SHALL define a `LanguageModel` interface providing chat and streaming chat capabilities.
 
 #### Scenario: Interface contract
-- **WHEN** a consumer calls `aiModelService.languageModel("openai/gpt-4o")`
+- **WHEN** a consumer calls `aiModelService.languageModel("openai-official/gpt-4o")`
 - **AND** the corresponding `AiProvider` is configured and enabled
-- **AND** the `AiModel` with `providerName = "openai"` and `modelId = "gpt-4o"` exists
+- **AND** the `AiModel` with `providerName = "openai-official"` and `modelId = "gpt-4o"` exists
 - **THEN** the system SHALL return a `LanguageModel` instance
 
 #### Scenario: Synchronous chat
@@ -33,7 +33,7 @@ The system SHALL define a `LanguageModel` interface providing chat and streaming
 The system SHALL define an `EmbeddingModel` interface providing text embedding capabilities.
 
 #### Scenario: Interface contract
-- **WHEN** a consumer calls `aiModelService.embeddingModel("openai/text-embedding-3-small")`
+- **WHEN** a consumer calls `aiModelService.embeddingModel("openai-official/text-embedding-3-small")`
 - **AND** the corresponding provider is configured and enabled
 - **AND** the `AiModel` exists
 - **THEN** the system SHALL return an `EmbeddingModel` instance
@@ -103,14 +103,15 @@ The system SHALL return typed exceptions for different error conditions.
 - **WHEN** a consumer calls `aiModelService.languageModel("invalid-ref")`
 - **AND** the reference does not contain a `/` separator
 - **THEN** the system SHALL throw `ModelNotFoundException` with a descriptive message
+- **AND** valid references SHALL use the format `providerResourceName/modelId`, where `providerResourceName = AiProvider.metadata.name`
 
 #### Scenario: Unconfigured model error
-- **WHEN** a consumer calls `aiModelService.languageModel("openai/gpt-4o")`
-- **AND** no matching `AiModel` with `providerName = "openai"` and `modelId = "gpt-4o"` exists
+- **WHEN** a consumer calls `aiModelService.languageModel("openai-official/gpt-4o")`
+- **AND** no matching `AiModel` with `providerName = "openai-official"` and `modelId = "gpt-4o"` exists
 - **THEN** the system SHALL throw `ModelNotFoundException` with a descriptive message
 
 #### Scenario: Disabled provider error
-- **WHEN** a consumer calls `aiModelService.languageModel("openai/gpt-4o")`
+- **WHEN** a consumer calls `aiModelService.languageModel("openai-official/gpt-4o")`
 - **AND** the `AiModel` exists but the parent `AiProvider` is disabled
 - **THEN** the system SHALL throw `ProviderDisabledException` with a descriptive message
 

@@ -6,7 +6,7 @@ The system SHALL define an Extension named `AiProvider` with GVK `aifoundation.h
 #### Scenario: Extension structure validation
 - **WHEN** a user creates an `AiProvider` resource
 - **THEN** the resource MUST have `spec.providerType`, `spec.displayName`, `spec.enabled`, and structured connection fields
-- **AND** structured connection fields MUST include `spec.apiKeySecretRefs` for API-key based providers and `spec.baseUrl` for self-hosted or custom-base-url providers
+- **AND** structured connection fields MUST include `spec.apiKeySecretName` for API-key based providers and `spec.baseUrl` for self-hosted or custom-base-url providers
 - **AND** the resource MAY include `spec.config` (Map<String, String>) for provider-specific advanced options
 - **AND** the resource MUST have `status.phase`, `status.message`, and `status.lastCheckedAt` fields
 
@@ -18,6 +18,7 @@ The system SHALL define an Extension named `AiModel` with GVK `aifoundation.halo
 - **THEN** the resource MUST have `spec.providerName`, `spec.modelId`, `spec.displayName`, `spec.enabled`, and `spec.group`
 - **AND** the resource MUST support model metadata fields including `spec.capabilities`, `spec.endpointType`, and `spec.supportedTextDelta`
 - **AND** `spec.providerName` MUST reference an existing `AiProvider.metadata.name`
+- **AND** `spec.providerName` SHALL denote the provider instance resource name rather than `spec.providerType`
 
 #### Scenario: Model identifier uniqueness
 - **WHEN** a user creates or updates an `AiModel`
@@ -36,17 +37,24 @@ The system SHALL support the following provider types: `openai`, `deepseek`, `si
 
 ### Requirement: Provider configuration per type
 The system SHALL interpret `AiProvider` structured fields according to the provider type:
-- `openai`: requires at least one `apiKeySecretRefs` entry
-- `deepseek`: requires at least one `apiKeySecretRefs` entry
-- `siliconflow`: requires at least one `apiKeySecretRefs` entry
-- `doubao`: requires at least one `apiKeySecretRefs` entry
-- `ernie`: requires at least one `apiKeySecretRefs` entry
-- `zhipuai`: requires at least one `apiKeySecretRefs` entry
+- `aihubmix`: requires `apiKeySecretName`; uses built-in default `baseUrl`
+- `openai`: requires `apiKeySecretName`
+- `deepseek`: requires `apiKeySecretName`
+- `siliconflow`: requires `apiKeySecretName`
+- `doubao`: requires `apiKeySecretName`
+- `ernie`: requires `apiKeySecretName`
+- `zhipuai`: requires `apiKeySecretName`
 - `ollama`: requires `baseUrl`
-- `openailike`: requires `baseUrl` and at least one `apiKeySecretRefs` entry
+- `openailike`: requires `baseUrl` and `apiKeySecretName`
+
+#### Scenario: Built-in provider preset configuration
+- **WHEN** a user creates an `AiProvider` with a built-in provider type such as `aihubmix` or `siliconflow`
+- **THEN** the user SHALL be able to complete configuration by selecting the provider type and binding `apiKeySecretName`
+- **AND** the system SHALL use the built-in default `baseUrl` and provider-specific request behavior for that type
+- **AND** the user SHALL NOT be required to manually enter the provider's API base URL
 
 #### Scenario: OpenAI provider configuration
-- **WHEN** an `AiProvider` has `providerType = "openai"` and `apiKeySecretRefs = ["openai-key-1"]`
+- **WHEN** an `AiProvider` has `providerType = "openai"` and `apiKeySecretName = "openai-key"`
 - **AND** the referenced Halo Secret contains an API key value
 - **THEN** the system SHALL create an OpenAI-compatible client with the resolved API key
 
@@ -59,21 +67,21 @@ The system SHALL store provider API credentials through Halo Secret references.
 
 #### Scenario: Secret-backed provider credentials
 - **WHEN** an API-key based provider is configured
-- **THEN** the `AiProvider` resource SHALL store Halo Secret references instead of plaintext API keys
-- **AND** the runtime SHALL resolve the referenced secrets before calling the upstream provider
+- **THEN** the `AiProvider` resource SHALL store `apiKeySecretName` instead of plaintext API keys
+- **AND** the runtime SHALL resolve the referenced Secret before calling the upstream provider
 
-### Requirement: Multiple API keys support
-The system SHALL allow a provider to reference multiple API key secrets.
+### Requirement: Single Secret reference in first phase
+The first phase SHALL use a single Halo Secret reference for each API-key based provider.
 
-#### Scenario: Multiple API keys configured
-- **WHEN** an admin saves `apiKeySecretRefs = ["key-a", "key-b"]` for an API-key based provider
-- **THEN** the provider configuration SHALL persist all references in order
-- **AND** connectivity testing MAY validate one or more referenced keys individually
+#### Scenario: Single Secret reference configured
+- **WHEN** an admin saves `apiKeySecretName = "openai-key"` for an API-key based provider
+- **THEN** the provider configuration SHALL persist exactly one Secret name
+- **AND** connectivity testing SHALL validate the provider using that Secret
 
-#### Scenario: Ordered key fallback
-- **WHEN** multiple API key secret references are configured for a provider
-- **THEN** the runtime SHALL try them in configured order
-- **AND** the first phase SHALL not require weighted balancing or circuit breaking
+#### Scenario: No multi-Secret rotation in first phase
+- **WHEN** an API-key based provider is configured in the first phase
+- **THEN** the runtime SHALL NOT support multiple Secret references, ordered fallback, or key rotation
+- **AND** future multi-key support MAY be introduced by parsing comma-separated keys from a single Secret value
 
 ### Requirement: Sensitive key handling
 The system SHALL treat provider API keys as sensitive values.
@@ -84,7 +92,7 @@ The system SHALL treat provider API keys as sensitive values.
 
 #### Scenario: Masked key display
 - **WHEN** a Console client reads an `AiProvider` for configuration display
-- **THEN** the UI SHALL present bound secret references and masked previews by default
+- **THEN** the UI SHALL present the bound Secret name and masked preview by default
 - **AND** the full key value SHALL only be handled through explicit Secret edit interaction
 
 ### Requirement: Provider enable/disable

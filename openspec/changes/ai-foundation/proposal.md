@@ -5,11 +5,12 @@
 ## 变更内容
 
 - **将当前 starter 项目重构为 Gradle 多模块插件**（`api`、`app`、`ui`），提供集中式 AI 模型基础设施
-- **`api/` 模块**：发布到 Maven Central，暴露能力分离的接口 —— `LanguageModel`（对话/流式对话）和 `EmbeddingModel`（向量嵌入），`AiModelService` 作为 Registry 按 `providerName/modelId` 返回具体能力接口。所有类型均为包装类型（非 Spring AI 原生）
+- **`api/` 模块**：发布到 Maven Central，暴露能力分离的接口 —— `LanguageModel`（对话/流式对话）和 `EmbeddingModel`（向量嵌入），`AiModelService` 作为 Registry 按 `providerResourceName/modelId` 返回具体能力接口，其中 `providerResourceName` 对应 `AiProvider.metadata.name`。所有类型均为包装类型（非 Spring AI 原生）
 - **`app/` 模块**：插件运行时，实现 `AiModelService`，将 AI 提供商配置与模型元数据管理为 Halo Extension
 - **`ui/` 模块**：基于 Vue 的 Console 页面，参考 Cherry Studio 的交互方式，提供“左侧厂商列表 + 右侧厂商详情/模型列表”的聚合管理界面
-- **新建 Extension `AiProvider`**（`aifoundation.halo.run/v1alpha1`）：存储提供商实例配置，包含提供商类型、显示名称、启用状态、结构化连接字段（如 `baseUrl`、`apiKeySecretRefs`），并通过 Halo Secret 存储敏感凭据，以及用于扩展高级选项的 `config`
-- **新建 Extension `AiModel`**（`aifoundation.halo.run/v1alpha1`）：存储模型定义，除 `providerName`、`modelId`、`displayName` 外，还包含分组、能力标签、端点类型、流式兼容性等面向 Console 管理的元数据
+- **新建 Extension `AiProvider`**（`aifoundation.halo.run/v1alpha1`）：存储提供商实例配置，包含提供商类型、显示名称、启用状态、结构化连接字段（如 `baseUrl`、`apiKeySecretName`），并通过 Halo Secret 存储敏感凭据，以及用于扩展高级选项的 `config`
+- **内置厂商预设优先**：对于 AiHubMix、硅基流动、OpenAI、DeepSeek 等内置 provider type，用户在 Console 中直接选择厂商并配置 `apiKeySecretName` 即可；仅 `openailike` 作为兜底类型要求用户填写自定义 `baseUrl`
+- **新建 Extension `AiModel`**（`aifoundation.halo.run/v1alpha1`）：存储模型定义，除 `providerName`（即 provider 资源名，引用 `AiProvider.metadata.name`）、`modelId`、`displayName` 外，还包含分组、能力标签、端点类型、流式兼容性等面向 Console 管理的元数据
 - **提供商实现**：从 plugin-ai-assistant 迁移 OpenAI 兼容的提供商适配器，支持 OpenAI、DeepSeek、硅基流动、豆包、文心一言、智谱AI、Ollama 和 OpenAI 兼容模型；第一阶段按 provider 实际能力暴露 chat / embedding，而非要求所有 provider 同时支持两类能力
 - **流式响应标准化**：`ChatChunk` 扩展为包含 `type`（TEXT/REASONING/FINISH 等）、`finishReason`、`usage`（token 统计）的结构，为未来支持 reasoning、tool calling 预留扩展空间
 - **错误类型体系**：`api/` 模块定义 `AiFoundationException` 异常层次结构（`ModelNotFoundException`、`ProviderDisabledException`、`ProviderApiException`），消费插件可通过 `instanceof` 精确处理错误

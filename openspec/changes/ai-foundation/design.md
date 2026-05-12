@@ -70,24 +70,24 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 
 ### 4. 双 Extension 设计（AiProvider + AiModel）
 
-**决策：** 采用两个 Extension 分别管理提供商配置和模型定义。消费者调用 `AiModelService.chat("${providerName}/${modelId}", prompt)`，通过 `providerName/modelId` 格式定位模型；Console UI 则按 provider 聚合展示其配置和关联模型，形成 Cherry Studio 风格的 provider workspace。
+**决策：** 采用两个 Extension 分别管理提供商配置和模型定义。消费者通过 `${providerResourceName}/${modelId}` 格式定位模型，其中 `providerResourceName` 对应 `AiProvider.metadata.name`，而不是 `providerType`；Console UI 则按 provider 聚合展示其配置和关联模型，形成 Cherry Studio 风格的 provider workspace。
 
 **理由：**
 - 模型作为一等公民，独立生命周期，支持统一查询和管理
-- `AiModel` 绑定到 `AiProvider`，界面展示为 `(提供商 / 模型)` 如 `(OpenAI / GPT-4o)`
-- 调用简洁直观：`AiModelService.chat("aihubmix/claude-3.5", "你好")`
+- `AiModel` 绑定到 `AiProvider`，底层引用使用 provider 实例资源名，界面展示为 `(提供商 / 模型)` 如 `(OpenAI 官方 / GPT-4o)`
+- 调用简洁直观，同时支持同类型 provider 多实例：`AiModelService.chat("openai-official/gpt-4o", "你好")`
 - 可以在 `AiModel` 上承载 `group`、`capabilities`、`endpointType`、`supportedTextDelta` 等仅用于管理与选择的元数据
 - 从 Extension 配置到提供商客户端的直接映射
 - 不把 `models` 内嵌到 `AiProvider`，仍可通过 provider 聚合查询构建 Cherry Studio 式右侧详情页
 
-**`AiProvider`**：存储提供商实例配置（providerType、displayName、baseUrl、apiKeySecretRefs、enabled、proxy、高级 config 等）
-**`AiModel`**：存储模型定义与管理元数据（providerName 引用 `AiProvider.metadata.name`、modelId、displayName、group、capabilities、endpointType、supportedTextDelta、enabled）
+**`AiProvider`**：存储提供商实例配置（providerType、displayName、baseUrl、apiKeySecretName、enabled、proxy、高级 config 等）
+**`AiModel`**：存储模型定义与管理元数据（providerName 引用 `AiProvider.metadata.name`，表示 provider 实例资源名而非 providerType；包含 modelId、displayName、group、capabilities、endpointType、supportedTextDelta、enabled）
 
 **考虑的替代方案：** 单 Extension `AiProvider` 内嵌 `models` 列表 —— 被拒绝，因为模型多了之后单个体积过大，且无法独立查询和扩展。
 
 ### 5. 按提供商代理支持
 
-**决策：** `AiProvider.Spec` 同时采用结构化字段和扩展配置：通用连接字段（如 `baseUrl`、`enabled`）使用显式字段，敏感凭据通过 `apiKeySecretRefs` 引用 Halo Secret，provider-specific 高级选项保留在 `config` 映射中；代理配置可通过结构化字段或 `config` 扩展承载。
+**决策：** `AiProvider.Spec` 同时采用结构化字段和扩展配置：通用连接字段（如 `baseUrl`、`enabled`）使用显式字段，敏感凭据通过 `apiKeySecretName` 引用单个 Halo Secret，provider-specific 高级选项保留在 `config` 映射中；代理配置可通过结构化字段或 `config` 扩展承载。
 
 **理由：**
 - 不同提供商可能需要不同代理（如国内 vs 国际）
@@ -96,12 +96,18 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - 仅用 `Map<String, String> config` 难以支撑 Cherry Studio 风格的表单交互、字段校验和敏感信息处理
 - 将常用连接信息结构化后，Console 可以更稳定地实现输入、脱敏、检测和帮助文案
 - Halo Secret 比直接把 API Key 放进 Extension spec 更符合敏感信息管理需求
+- 内置厂商预设（如 `aihubmix`、`siliconflow`、`openai`、`deepseek`）应优先提供“选厂商 + 填密钥”的体验，而不是暴露底层 `baseUrl`
 
-**多密钥策略：**
-- `apiKeySecretRefs` 按顺序保存多个 Halo Secret 引用
-- 运行时按顺序尝试可用密钥，请求失败后切换到下一个密钥
-- 连通性测试可以按密钥粒度执行并回传结果
-- 第一阶段不引入复杂的熔断、权重或负载均衡策略
+**内置厂商预设与自定义 provider 的边界：**
+- `aihubmix`、`siliconflow`、`openai`、`deepseek`、`doubao`、`ernie`、`zhipuai` 等内置 provider type 使用插件内置的默认 `baseUrl` / 请求头策略
+- `openailike` 作为自定义 OpenAI-compatible provider 的兜底类型，要求用户显式填写 `baseUrl`
+- `baseUrl` 字段在资源模型中保留，但对内置 provider type 可由服务端填充默认值，或在 Console 中默认隐藏/只读
+
+**密钥策略：**
+- 第一阶段仅支持单个 `apiKeySecretName`
+- 运行时始终从该 Secret 解析凭据，不支持多 Secret 轮换或回退
+- 连通性测试按 provider 粒度执行，不返回逐 key 检测结果
+- 后续如需兼容 Cherry Studio 风格的多 key，可约定在同一个 Secret value 中使用逗号分隔多个 key，由 provider adapter 自行解析
 
 ### 6. 模型元数据增厚以支撑管理体验
 
@@ -148,11 +154,11 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 
 **调用方式：**
 ```java
-// 消费插件获取能力接口
-LanguageModel lm = aiModelService.languageModel("openai/gpt-4o");
+// 消费插件获取能力接口，modelRef 采用 provider 实例资源名 / modelId
+LanguageModel lm = aiModelService.languageModel("openai-official/gpt-4o");
 Mono<String> result = lm.chat("Hello");
 
-EmbeddingModel em = aiModelService.embeddingModel("openai/text-embedding-3-small");
+EmbeddingModel em = aiModelService.embeddingModel("openai-official/text-embedding-3-small");
 Mono<EmbeddingResponse> result = em.embed(List.of("text1", "text2"));
 ```
 

@@ -19,7 +19,7 @@
 - [ ] 2.7 定义 `ChunkType` 枚举（TEXT、REASONING、TOOL_CALL、ERROR、FINISH）
 - [ ] 2.8 定义 `Usage` 数据类（promptTokens、completionTokens）
 - [ ] 2.9 定义 `EmbeddingResponse` 数据类（embeddings 为 List<float[]>）
-- [ ] 2.10 定义 `ModelInfo` 数据类（providerName、modelId、displayName）
+- [ ] 2.10 定义 `ModelInfo` 数据类（providerName、modelId、displayName，其中 providerName 表示 provider 资源名）
 - [ ] 2.11 定义 `ProviderInfo` 数据类（name、displayName、providerType、enabled、phase）
 - [ ] 2.12 定义异常层次结构：`AiFoundationException`、`ModelNotFoundException`、`ProviderDisabledException`、`ProviderApiException`
 - [ ] 2.13 在 `api/build.gradle` 中添加 `run.halo.tools.platform:plugin:2.23.0` 和 `run.halo.app:api` 依赖
@@ -28,7 +28,8 @@
 ## 3. Extension 定义与注册
 
 - [ ] 3.1 创建 `AiProvider` Extension 类，标注 `@GVK(group = "aifoundation.halo.run", version = "v1alpha1", kind = "AiProvider")`
-- [ ] 3.2 定义 `AiProvider.Spec`，包含 providerType、displayName、enabled、baseUrl、apiKeySecretRefs，以及用于高级配置的 `config`
+- [ ] 3.2 定义 `AiProvider.Spec`，包含 providerType、displayName、enabled、baseUrl、apiKeySecretName，以及用于高级配置的 `config`
+- [ ] 3.2.1 明确内置 provider type（如 `aihubmix`、`siliconflow`）的默认 `baseUrl` 策略，以及 `openailike` 的自定义 `baseUrl` 策略
 - [ ] 3.3 定义 `AiProvider.Status`，包含 phase、message、lastCheckedAt 字段
 - [ ] 3.4 创建 `AiModel` Extension 类，标注 `@GVK(group = "aifoundation.halo.run", version = "v1alpha1", kind = "AiModel")`
 - [ ] 3.5 定义 `AiModel.Spec`，包含 providerName（引用 `AiProvider.metadata.name`）、modelId、displayName、group、capabilities、endpointType、supportedTextDelta、enabled
@@ -50,19 +51,19 @@
 - [ ] 4.8 实现智谱AI 提供商的 `ZhiPuAdapter`
 - [ ] 4.9 实现 Ollama 提供商的 `OllamaAdapter`
 - [ ] 4.10 实现 OpenAI 兼容提供商的 `OpenAiLikeAdapter`
+- [ ] 4.10.1 为 `aihubmix`、`siliconflow` 等内置 provider adapter 固化默认 `baseUrl` 和必要的 provider-specific 请求头/行为
 - [ ] 4.11 通过配置映射实现按提供商代理支持（proxyHost、proxyPort）
 - [ ] 4.12 为每个提供商实现模型列表（从 ai-assistant 的 *Model 类迁移）
 - [ ] 4.13 添加提供商客户端缓存，并在 Extension 更新时刷新
 - [ ] 4.14 为每个 provider adapter 实现 `providerOptions` 解析（如 OpenAI 的 logitBias）
 - [ ] 4.15 为每个 provider adapter 实现 `maxEmbeddingsPerCall()` 和 `supportsParallelCalls()`
-- [ ] 4.16 支持 `AiProvider.spec.apiKeySecretRefs` 多密钥配置，并通过 Halo Secret 解析真实凭据
-- [ ] 4.17 实现多密钥按顺序回退策略，并在连通性测试中支持逐个密钥检测
+- [ ] 4.16 支持 `AiProvider.spec.apiKeySecretName` 单 Secret 配置，并通过 Halo Secret 解析真实凭据
 
 ## 5. AiModelService 实现
 
 - [ ] 5.1 实现 `AiModelServiceImpl` 作为 Registry，解析 `modelRef` 并返回对应的能力接口
-- [ ] 5.2 实现 `languageModel(String modelRef)`，解析 `providerName/modelId`，返回 `LanguageModel` 实例
-- [ ] 5.3 实现 `embeddingModel(String modelRef)`，解析 `providerName/modelId`，返回 `EmbeddingModel` 实例
+- [ ] 5.2 实现 `languageModel(String modelRef)`，解析 `providerResourceName/modelId`（其中 `providerResourceName = AiProvider.metadata.name`），返回 `LanguageModel` 实例
+- [ ] 5.3 实现 `embeddingModel(String modelRef)`，解析 `providerResourceName/modelId`（其中 `providerResourceName = AiProvider.metadata.name`），返回 `EmbeddingModel` 实例
 - [ ] 5.4 实现 `LanguageModelImpl.chat(String prompt)`，调用底层 Spring AI 客户端并返回 `Mono<String>`
 - [ ] 5.5 实现 `LanguageModelImpl.streamChat(ChatRequest)`，返回标准化 `Flux<ChatChunk>`（含 type、usage、finishReason）
 - [ ] 5.6 实现 `EmbeddingModelImpl.embed(List<String>)`，内部自动分块（按 `maxEmbeddingsPerCall`）和并行调用
@@ -86,7 +87,8 @@
 - [ ] 7.2 创建 `ProviderManager.vue` 作为主管理页面，采用“左侧 provider 列表 + 右侧 provider workspace”的布局
 - [ ] 7.3 创建 `ProviderList.vue`，支持 provider 搜索、状态展示和切换
 - [ ] 7.4 创建 `ProviderDetail.vue`，在同一页面展示 provider 配置与关联模型列表
-- [ ] 7.5 创建 `ProviderForm.vue` 用于创建/编辑 provider，支持 baseUrl、apiKeySecretRefs、enabled 和高级配置
+- [ ] 7.5 创建 `ProviderForm.vue` 用于创建/编辑 provider，支持 baseUrl、apiKeySecretName、enabled 和高级配置
+- [ ] 7.5.1 对内置 provider type 提供“选厂商 + 填密钥”的预设表单；仅 `openailike` 暴露必填 `baseUrl`
 - [ ] 7.6 实现 Halo Secret 绑定/创建流程，以及密钥脱敏展示与替换交互
 - [ ] 7.7 创建 `ModelList.vue`，按 group 分组展示模型，并显示 capability 标签
 - [ ] 7.8 创建 `ModelForm.vue` 用于添加/编辑模型，支持 modelId、displayName、group、capabilities、endpointType、supportedTextDelta
@@ -95,7 +97,7 @@
 - [ ] 7.11 实现从提供商 API 获取模型列表、筛选、批量添加和共享默认值设置
 - [ ] 7.12 实现模型搜索、按 capability 过滤、按 group 折叠展示
 - [ ] 7.13 实现连通性测试按钮，包含加载状态、检测结果和 `lastCheckedAt` 展示
-- [ ] 7.14 添加表单校验（provider 结构化字段、模型唯一性、providerName/modelId 必填），并与服务端校验规则保持一致
+- [ ] 7.14 添加表单校验（provider 结构化字段、模型唯一性、providerResourceName/modelId 必填），并与服务端校验规则保持一致
 - [ ] 7.15 删除 provider 前检测是否仍有关联模型，并在 UI 中阻止删除
 - [ ] 7.16 使用 `@halo-dev/components` 和 UnoCSS 进行 UI 样式设计
 
