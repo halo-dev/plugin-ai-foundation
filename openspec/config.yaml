@@ -1,20 +1,55 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Repository: halo-dev/plugin-ai-foundation
+  Domain: Halo CMS plugin that provides shared AI foundation capabilities for other plugins.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Architecture conventions:
+  - Prefer phased delivery. Backend foundation and Console UI may be split into separate changes.
+  - The backend foundation change should prioritize data model correctness, server-side validation, provider adapters, and debug/admin endpoints before UI work.
+  - Console UI may be delivered in a later dedicated change once backend contracts are stable.
+
+  AI provider modeling:
+  - AiProvider and AiModel are separate Extensions; storage stays split even if UI aggregates by provider.
+  - AiModel.spec.providerName refers to AiProvider.metadata.name (provider resource name / provider instance), not providerType.
+  - modelRef format is providerResourceName/modelId.
+  - providerType is user-facing built-in provider preset or adapter key, such as aihubmix, siliconflow, openai, deepseek, ollama, openailike.
+  - Built-in provider presets should prefer "select vendor + configure key" UX; only openailike requires manual baseUrl input.
+
+  Credential conventions:
+  - Use apiKeySecretName for a single Halo Secret reference.
+  - First phase does not support multi-Secret rotation.
+  - Future multi-key support, if needed, should come from parsing comma-separated keys inside one Secret value rather than changing the outer schema back to a list.
+
+  Provider defaults currently expected in specs/design:
+  - aihubmix => default baseUrl https://aihubmix.com plus provider-specific headers
+  - siliconflow => default baseUrl https://api.siliconflow.cn
+  - openai => default baseUrl https://api.openai.com
+  - deepseek => default baseUrl https://api.deepseek.com
+  - openailike => user must provide baseUrl
+
+  Embedding API conventions:
+  - Keep the API independent from Spring AI types.
+  - Prefer a two-layer embedding API: simple calls for common use, plus an EmbeddingRequest for advanced scenarios.
+  - Advanced embedding requests may include dimensions, maxBatchSize, and providerOptions.
+  - Support query embedding explicitly (for example, embedQuery) instead of forcing every consumer to wrap a single string in a list.
+
+  Debug/admin API conventions:
+  - Backend changes should expose debug/admin endpoints for provider model discovery, connectivity testing, and test chat.
+  - The first-phase test-chat endpoint should accept only prompt in the request body and return at least modelRef, content, finishReason, and usage.
+
+rules:
+  proposal:
+    - Clearly state when a change is intentionally backend-only or UI-only.
+    - If work is phased, mention dependencies between changes explicitly.
+    - Always include a short non-goals section when scope is being reduced.
+  design:
+    - Preserve the distinction between providerType and provider resource name.
+    - Do not describe built-in providers as requiring manual baseUrl unless the provider type is openailike.
+    - When mentioning test APIs, describe them as debug/admin endpoints rather than UI-only console endpoints.
+    - For embedding APIs, keep simple and advanced request layers explicit without introducing Spring AI types into the public contract.
+  tasks:
+    - Put server-side validation before UI tasks when both exist.
+    - Add explicit tasks for provider-specific default baseUrl or header behavior when built-in provider presets are involved.
+    - When UI is split to another change, remove UI tasks from the backend change instead of leaving placeholders.
+    - When embedding APIs need to support RAG scenarios, add explicit tasks for EmbeddingRequest-style advanced parameters and query embedding.

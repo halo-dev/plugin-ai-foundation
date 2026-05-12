@@ -16,6 +16,7 @@
 - **流式响应标准化**：`ChatChunk` 扩展为包含 `type`（TEXT/REASONING/FINISH 等）、`finishReason`、`usage`（token 统计）的结构，为未来支持 reasoning、tool calling 预留扩展空间
 - **错误类型体系**：`api/` 模块定义 `AiFoundationException` 异常层次结构（`ModelNotFoundException`、`ProviderDisabledException`、`ProviderApiException`），消费插件可通过 `instanceof` 精确处理错误
 - **Provider Options 透传**：`ChatRequest` 支持 `Map<String, Object> providerOptions`，允许消费插件传递 provider-specific 参数（如 OpenAI 的 `logitBias`）而不污染通用 API
+- **向量调用分层 API**：`EmbeddingModel` 同时提供简单调用（`embed(List<String>)`、`embedQuery(String)`）和高级调用（`embed(EmbeddingRequest)`）；`EmbeddingRequest` 支持 `dimensions`、`maxBatchSize` 和 `providerOptions`，以兼容 RAG 等高级场景而不暴露 Spring AI 类型
 - **调试 / 管理端点**：自定义端点，用于模型列表（`/providers/{name}/models`）、连通性测试（`/providers/{name}/connectivity`）和调试对话测试（`/providers/{providerName}/models/{modelId}/test-chat`）
 - **不支持 ExtensionPoint 自定义提供商**：所有提供商内置于本插件，以确保一致的行为和安全性
 - **无 Reconciler**：提供商状态仅通过手动连通性测试管理

@@ -11,7 +11,7 @@
 ## 2. API 模块 —— 公共接口
 
 - [ ] 2.1 定义 `LanguageModel` 接口（`chat(String prompt): Mono<String>`、`streamChat(ChatRequest): Flux<ChatChunk>`）
-- [ ] 2.2 定义 `EmbeddingModel` 接口（`embed(List<String>): Mono<EmbeddingResponse>`、`maxEmbeddingsPerCall(): int`、`supportsParallelCalls(): boolean`）
+- [ ] 2.2 定义 `EmbeddingModel` 接口（`embed(List<String>): Mono<EmbeddingResponse>`、`embed(EmbeddingRequest): Mono<EmbeddingResponse>`、`embedQuery(String): Mono<float[]>`、`maxEmbeddingsPerCall(): int`、`supportsParallelCalls(): boolean`）
 - [ ] 2.3 定义 `AiModelService` 接口作为 Registry（`languageModel(String modelRef)`、`embeddingModel(String modelRef)`、`listModels()`、`listProviders()`）
 - [ ] 2.4 定义 `ChatRequest` 数据类（messages、temperature、maxTokens、topP、providerOptions）
 - [ ] 2.5 定义 `Message` 数据类（role、content）
@@ -19,6 +19,7 @@
 - [ ] 2.7 定义 `ChunkType` 枚举（TEXT、REASONING、TOOL_CALL、ERROR、FINISH）
 - [ ] 2.8 定义 `Usage` 数据类（promptTokens、completionTokens）
 - [ ] 2.9 定义 `EmbeddingResponse` 数据类（embeddings 为 List<float[]>）
+- [ ] 2.9.1 定义 `EmbeddingRequest` 数据类（inputs、dimensions、maxBatchSize、providerOptions）
 - [ ] 2.10 定义 `ModelInfo` 数据类（providerName、modelId、displayName，其中 providerName 表示 provider 资源名）
 - [ ] 2.11 定义 `ProviderInfo` 数据类（name、displayName、providerType、enabled、phase）
 - [ ] 2.12 定义异常层次结构：`AiFoundationException`、`ModelNotFoundException`、`ProviderDisabledException`、`ProviderApiException`

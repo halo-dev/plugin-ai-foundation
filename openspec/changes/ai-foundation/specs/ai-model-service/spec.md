@@ -44,10 +44,30 @@ The system SHALL define an `EmbeddingModel` interface providing text embedding c
 - **THEN** the system SHALL return a `Mono<EmbeddingResponse>` containing a list of float arrays
 - **AND** if the input list exceeds `maxEmbeddingsPerCall()`, the system SHALL automatically split into batches and aggregate results
 
+#### Scenario: Query embedding
+- **WHEN** a consumer calls `embeddingModel.embedQuery("what is Halo plugin?")`
+- **AND** the provider supports embedding
+- **THEN** the system SHALL return a `Mono<float[]>` containing a single query embedding
+
+#### Scenario: Advanced embedding request
+- **WHEN** a consumer calls `embeddingModel.embed(request)`
+- **AND** `request` contains `inputs`, optional `dimensions`, optional `maxBatchSize`, and optional `providerOptions`
+- **THEN** the system SHALL apply supported advanced options to the underlying provider request
+- **AND** the API SHALL remain independent of Spring AI `EmbeddingOptions`
+
 #### Scenario: Embedding batch limits exposed
 - **WHEN** a consumer accesses `embeddingModel.maxEmbeddingsPerCall()`
 - **THEN** the system SHALL return the provider-specific batch limit (e.g., 96 for OpenAI)
 - **AND** `embeddingModel.supportsParallelCalls()` SHALL indicate whether parallel batch execution is supported
+
+#### Scenario: Dimensions override for RAG-style indexing
+- **WHEN** a consumer sends an `EmbeddingRequest` with `dimensions = 1024`
+- **THEN** the system SHALL pass the dimensions override to providers that support it
+- **AND** providers that do not support dimensions override MAY ignore it or reject it explicitly according to provider behavior
+
+#### Scenario: Caller batch size override
+- **WHEN** a consumer sends an `EmbeddingRequest` with `maxBatchSize = 36`
+- **THEN** the system SHALL use that value as a caller-side batching limit in addition to any provider-imposed maximum
 
 ### Requirement: ChatRequest with provider options
 

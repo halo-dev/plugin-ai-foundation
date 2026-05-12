@@ -152,13 +152,15 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 
 ### 9. 能力分离的 API 接口设计
 
-**决策：** `api/` 模块将 chat 和 embedding 能力拆分为独立的接口 —— `LanguageModel` 和 `EmbeddingModel`，`AiModelService` 作为 Registry/Factory 返回具体能力接口。
+**决策：** `api/` 模块将 chat 和 embedding 能力拆分为独立的接口 —— `LanguageModel` 和 `EmbeddingModel`，`AiModelService` 作为 Registry/Factory 返回具体能力接口。`EmbeddingModel` 同时提供简单调用和高级请求调用，避免为了兼容 RAG 暴露 Spring AI 类型。
 
 **理由：**
 - 借鉴 Vercel AI SDK 的 `LanguageModelV4` / `EmbeddingModelV4` 分离设计
 - 消费者插件只依赖所需能力的接口，不需要引入无关的类型
 - 为第二阶段扩展图像生成（`ImageModel`）、语音合成预留清晰的接口位置
 - 每个接口可独立演进版本，互不干扰
+- 向量能力需要同时覆盖普通 embedding 调用和 RAG 场景中的 query embedding、dimensions 覆盖、批大小控制
+- 用 Foundation 自己的 `EmbeddingRequest` 表达高级参数，能保持 API 通用性并避免泄漏 Spring AI 的 `EmbeddingOptions`
 
 **调用方式：**
 ```java
@@ -168,6 +170,15 @@ Mono<String> result = lm.chat("Hello");
 
 EmbeddingModel em = aiModelService.embeddingModel("openai-official/text-embedding-3-small");
 Mono<EmbeddingResponse> result = em.embed(List.of("text1", "text2"));
+Mono<float[]> query = em.embedQuery("what is Halo plugin?");
+
+EmbeddingRequest request = EmbeddingRequest.builder()
+    .inputs(List.of("text1", "text2"))
+    .dimensions(1024)
+    .maxBatchSize(36)
+    .providerOptions(Map.of("openai", Map.of("user", "rag-indexer")))
+    .build();
+Mono<EmbeddingResponse> advanced = em.embed(request);
 ```
 
 ### 10. 扩展 ChatChunk 流式数据结构
