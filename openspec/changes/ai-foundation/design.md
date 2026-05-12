@@ -6,7 +6,7 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 1. 将 AI 提供商配置存储为 Halo Extension
 2. 管理所有支持提供商的 AI 客户端生命周期
 3. 通过发布的 `api/` 模块暴露干净的 Java SDK
-4. 提供用于配置管理的 Console UI
+4. 先提供用于配置管理和调试的服务端 API，再在后续 change 中补齐 Console UI
 
 参考：
 - `plugin-ai-assistant`（`../plugin-ai-assistant/`）：要迁移的提供商实现来源
@@ -22,9 +22,9 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - 提供统一的 AI 模型定义管理（从已配置的提供商中添加模型）
 - 暴露包装的 Java API（`AiModelService`），其他插件无需依赖 Spring AI 即可消费
 - 支持 8 个以上提供商接入，并按 provider 实际能力暴露对话和向量嵌入能力
-- 提供 Vue Console 页面，用于提供商增删改查、模型管理和连通性测试
+- 提供服务端管理与调试接口，用于提供商增删改查、模型管理、连通性测试和测试对话
 - 使用 Extension（`AiProvider`、`AiModel`）替代 settings.yaml 进行配置持久化
-- 在不放弃 Halo Extension 资源建模的前提下，提供接近 Cherry Studio 的厂商/模型配置体验
+- 在不放弃 Halo Extension 资源建模的前提下，为后续 Console workspace 预留接近 Cherry Studio 的厂商/模型配置体验
 
 **非目标：**
 - 图像生成（超出第一阶段范围）
@@ -32,6 +32,7 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - 自动协调或健康检查 Reconciler（仅手动连通性测试）
 - 第三方提供商的 ExtensionPoint（所有提供商内置）
 - 第一阶段迁移现有 ai-assistant 配置
+- 第一阶段交付 Vue Console UI（已拆分为独立的 `ai-foundation-console` change）
 
 ## 决策
 
@@ -60,17 +61,17 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 
 ### 3. 多模块 Gradle 结构
 
-**决策：** 三个模块：`api/`、`app/`、`ui/`。
+**决策：** 当前 change 先交付两个模块：`api/`、`app/`；`ui/` 模块在后续 `ai-foundation-console` change 中引入。
 
 **理由：**
 - `api/` 作为轻量库发布到 Maven Central
 - `app/` 包含插件运行时和提供商实现
-- `ui/` 独立构建 Console 前端
-- 遵循 `plugin-feed`（`api`/`app`/`ui`）和 `plugin-app-store`（`api`/`appstore`/`console`）的既定模式
+- 当前 change 先压缩实现范围，优先完成后端数据模型、校验与调试能力
+- 后续仍可遵循 `plugin-feed`（`api`/`app`/`ui`）和 `plugin-app-store`（`api`/`appstore`/`console`）的既定模式补齐 UI
 
 ### 4. 双 Extension 设计（AiProvider + AiModel）
 
-**决策：** 采用两个 Extension 分别管理提供商配置和模型定义。消费者通过 `${providerResourceName}/${modelId}` 格式定位模型，其中 `providerResourceName` 对应 `AiProvider.metadata.name`，而不是 `providerType`；Console UI 则按 provider 聚合展示其配置和关联模型，形成 Cherry Studio 风格的 provider workspace。
+**决策：** 采用两个 Extension 分别管理提供商配置和模型定义。消费者通过 `${providerResourceName}/${modelId}` 格式定位模型，其中 `providerResourceName` 对应 `AiProvider.metadata.name`，而不是 `providerType`；后续 Console UI 再按 provider 聚合展示其配置和关联模型，形成 Cherry Studio 风格的 provider workspace。
 
 **理由：**
 - 模型作为一等公民，独立生命周期，支持统一查询和管理
@@ -103,6 +104,13 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - `openailike` 作为自定义 OpenAI-compatible provider 的兜底类型，要求用户显式填写 `baseUrl`
 - `baseUrl` 字段在资源模型中保留，但对内置 provider type 可由服务端填充默认值，或在 Console 中默认隐藏/只读
 
+**第一阶段内置默认值清单：**
+- `aihubmix`：默认 `baseUrl = https://aihubmix.com`，并附加 AiHubMix 所需的内置请求头策略
+- `siliconflow`：默认 `baseUrl = https://api.siliconflow.cn`
+- `openai`：默认 `baseUrl = https://api.openai.com`
+- `deepseek`：默认 `baseUrl = https://api.deepseek.com`
+- `openailike`：不提供默认 `baseUrl`，必须由用户显式填写
+
 **密钥策略：**
 - 第一阶段仅支持单个 `apiKeySecretName`
 - 运行时始终从该 Secret 解析凭据，不支持多 Secret 轮换或回退
@@ -133,9 +141,9 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - 手动测试对初始用户体验足够
 - 可稍后添加，不会破坏 API 变更
 
-### 8. Cherry Studio 风格的 provider workspace
+### 8. Cherry Studio 风格的 provider workspace（后续 change）
 
-**决策：** Console UI 参考 Cherry Studio，采用左侧 provider 列表、右侧 provider 详情与模型列表的工作区布局，而不是将 provider 和 model 完全拆成两个割裂的管理页面。
+**决策：** 在后续 `ai-foundation-console` change 中，Console UI 参考 Cherry Studio，采用左侧 provider 列表、右侧 provider 详情与模型列表的工作区布局，而不是将 provider 和 model 完全拆成两个割裂的管理页面。
 
 **理由：**
 - provider 配置和其关联模型本质上是同一个管理上下文
@@ -226,9 +234,11 @@ public class ProviderApiException extends AiFoundationException {
 
 ## 迁移计划
 
-**第一阶段（本次变更）：** 构建包含所有提供商、API 模块和 Console UI 的 ai-foundation 插件。
+**第一阶段（本次变更）：** 构建 ai-foundation backend foundation，包括 `api`、`app`、Extension 资源、服务端校验、provider 适配，以及模型发现 / 连通性 / 测试对话接口。
 
-**第二阶段（未来）：** 将 `plugin-ai-assistant` 迁移为依赖 `ai-foundation`：
+**第二阶段（后续 change）：** 构建 `ai-foundation-console`，交付 provider workspace、模型管理界面、Secret 绑定交互和测试按钮。
+
+**第三阶段（未来）：** 将 `plugin-ai-assistant` 迁移为依赖 `ai-foundation`：
 - 从 ai-assistant 中移除提供商实现和 settings.yaml 提供商配置
 - 添加 `compileOnly 'run.halo.aifoundation:api:x.x.x'` 和 `pluginDependencies: ai-foundation: 1.*`
 - 更新 ai-assistant 的编辑器/摘要/RAG 服务以使用 `AiModelService`
@@ -240,3 +250,5 @@ public class ProviderApiException extends AiFoundationException {
   - **初步结论：** 第一阶段暂不引入。provider 回退逻辑增加了复杂度，待有明确 consumer 需求后再添加。可在 `AiProvider.Spec` 中预留 `defaultModel` 字段指向默认的 `AiModel`。
 - `embed()` 是否应该支持批量大小限制或对大输入列表的自动分块？
   - **初步结论：** 借鉴 Vercel AI SDK 的 `embedMany` 设计，`EmbeddingModel` 接口暴露 `maxEmbeddingsPerCall()` 和 `supportsParallelCalls()` 属性。`AiModelServiceImpl` 内部实现自动分块和并行调用，消费者无需感知批量限制。
+- 管理员调试接口是否应该返回完整 `ChatResponse` 还是最小测试结果？
+  - **初步结论：** 第一阶段提供最小 `test-chat` 接口，请求只包含 `prompt`，响应返回 `modelRef`、`content`、`finishReason`、`usage`，便于 CLI / Postman / 后续 Console 直接复用。

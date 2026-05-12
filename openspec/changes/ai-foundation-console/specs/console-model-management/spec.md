@@ -170,6 +170,14 @@ The Console UI SHALL provide a manual connectivity test button for each provider
 - **AND** display success if the API key is valid
 - **AND** display an error message if the API key is invalid or the service is unreachable
 
+### Requirement: Test chat debugging
+The Console UI SHALL provide a test chat entry that reuses the backend `test-chat` endpoint.
+
+#### Scenario: Test chat with selected model
+- **WHEN** an admin selects a configured `AiModel` and enters a prompt
+- **THEN** the UI SHALL call the backend `test-chat` endpoint for that `providerResourceName/modelId`
+- **AND** display the returned content and available metadata
+
 ### Requirement: RBAC permissions
 The plugin SHALL define role templates for viewing and managing AI providers and models.
 

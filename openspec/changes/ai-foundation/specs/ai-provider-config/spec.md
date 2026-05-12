@@ -25,7 +25,7 @@ The system SHALL define an Extension named `AiModel` with GVK `aifoundation.halo
 - **THEN** the tuple `(spec.providerName, spec.modelId)` MUST be unique across all `AiModel` resources
 
 ### Requirement: Supported provider types
-The system SHALL support the following provider types: `openai`, `deepseek`, `siliconflow`, `doubao`, `ernie`, `zhipuai`, `ollama`, `openailike`.
+The system SHALL support the following provider types: `aihubmix`, `openai`, `deepseek`, `siliconflow`, `doubao`, `ernie`, `zhipuai`, `ollama`, `openailike`.
 
 #### Scenario: Provider type validation
 - **WHEN** a user creates an `AiProvider` with `spec.providerType = "openai"`
@@ -52,6 +52,19 @@ The system SHALL interpret `AiProvider` structured fields according to the provi
 - **THEN** the user SHALL be able to complete configuration by selecting the provider type and binding `apiKeySecretName`
 - **AND** the system SHALL use the built-in default `baseUrl` and provider-specific request behavior for that type
 - **AND** the user SHALL NOT be required to manually enter the provider's API base URL
+
+#### Scenario: Built-in provider default base URLs
+- **WHEN** the system initializes a built-in provider preset
+- **THEN** it SHALL use the following defaults unless a later design revision explicitly changes them:
+- **AND** `aihubmix` SHALL default to `https://aihubmix.com`
+- **AND** `siliconflow` SHALL default to `https://api.siliconflow.cn`
+- **AND** `openai` SHALL default to `https://api.openai.com`
+- **AND** `deepseek` SHALL default to `https://api.deepseek.com`
+
+#### Scenario: AiHubMix provider-specific behavior
+- **WHEN** an `AiProvider` has `providerType = "aihubmix"`
+- **THEN** the runtime SHALL use the built-in AiHubMix default `baseUrl`
+- **AND** the runtime SHALL apply the provider-specific request header behavior required by AiHubMix
 
 #### Scenario: OpenAI provider configuration
 - **WHEN** an `AiProvider` has `providerType = "openai"` and `apiKeySecretName = "openai-key"`

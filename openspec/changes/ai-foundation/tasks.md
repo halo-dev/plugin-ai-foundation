@@ -1,12 +1,12 @@
 ## 1. Gradle 多模块项目搭建
 
-- [ ] 1.1 重构项目为多模块结构：创建 `api/`、`app/`、`ui/` 目录
+- [ ] 1.1 重构项目为多模块结构：创建 `api/`、`app/` 目录
 - [ ] 1.2 更新根目录 `build.gradle` 为父项目（移除插件开发工具）
-- [ ] 1.3 更新 `settings.gradle` 以包含 `api`、`app`、`ui`
+- [ ] 1.3 更新 `settings.gradle` 以包含 `api`、`app`
 - [ ] 1.4 创建 `api/build.gradle` 作为 `java-library` 并配置 `maven-publish`
 - [ ] 1.5 创建 `app/build.gradle` 并配置 Halo 插件开发工具和 Spring AI 依赖
 - [ ] 1.6 将现有 `src/` 内容移至 `app/src/` 或清理旧结构
-- [ ] 1.7 验证所有模块均能通过 `./gradlew build` 成功构建
+- [ ] 1.7 验证后端模块均能通过 `./gradlew build` 成功构建
 
 ## 2. API 模块 —— 公共接口
 
@@ -44,6 +44,7 @@
 - [ ] 4.1 创建 `ProviderFactory`，将 providerType 映射到 Spring AI 客户端构建器
 - [ ] 4.2 创建 `AbstractProviderAdapter` 基类（从 ai-assistant 的 AbstractOpenAiClientProvider 迁移）
 - [ ] 4.3 实现 OpenAI 提供商的 `OpenAiAdapter`
+- [ ] 4.3.1 实现 AiHubMix 提供商的 `AiHubMixAdapter`
 - [ ] 4.4 实现 DeepSeek 提供商的 `DeepSeekAdapter`
 - [ ] 4.5 实现硅基流动提供商的 `SiliconFlowAdapter`
 - [ ] 4.6 实现豆包提供商的 `DouBaoAdapter`
@@ -72,49 +73,29 @@
 - [ ] 5.9 实现错误处理：无效 modelRef 格式、未配置模型、已禁用提供商（抛出 typed exceptions）
 - [ ] 5.10 将 `AiModelServiceImpl` 注册为 Spring `@Component` Bean
 
-## 6. Console 端点
+## 6. 调试 / 管理端点
 
-- [ ] 6.1 创建 `ProviderConsoleEndpoint` 实现 `CustomEndpoint`
+- [ ] 6.1 创建 `ProviderDebugEndpoint`（或等价命名）实现 `CustomEndpoint`
 - [ ] 6.2 实现 `GET /providers/{name}/models` 用于从提供商 API 获取模型列表
 - [ ] 6.3 实现 `POST /providers/{name}/connectivity` 用于连通性测试
-- [ ] 6.4 为端点添加 OpenAPI 文档注解
-- [ ] 6.5 将 `groupVersion` 配置为 `console.api.aifoundation.halo.run/v1alpha1`
-- [ ] 6.6 为 provider 详情页提供按 provider 聚合查询其关联 `AiModel` 的接口或查询封装
+- [ ] 6.4 实现 `POST /providers/{providerName}/models/{modelId}/test-chat`，请求体接收 `prompt`，用于管理员快速验证模型可用性
+- [ ] 6.5 为端点添加 OpenAPI 文档注解
+- [ ] 6.6 将 `groupVersion` 配置为 `console.api.aifoundation.halo.run/v1alpha1`
+- [ ] 6.7 为 provider 详情页提供按 provider 聚合查询其关联 `AiModel` 的接口或查询封装
 
-## 7. Vue Console UI
+## 7. 插件元数据与安全
 
-- [ ] 7.1 在 `ui/src/index.ts` 中于系统菜单下注册 Console 路由
-- [ ] 7.2 创建 `ProviderManager.vue` 作为主管理页面，采用“左侧 provider 列表 + 右侧 provider workspace”的布局
-- [ ] 7.3 创建 `ProviderList.vue`，支持 provider 搜索、状态展示和切换
-- [ ] 7.4 创建 `ProviderDetail.vue`，在同一页面展示 provider 配置与关联模型列表
-- [ ] 7.5 创建 `ProviderForm.vue` 用于创建/编辑 provider，支持 baseUrl、apiKeySecretName、enabled 和高级配置
-- [ ] 7.5.1 对内置 provider type 提供“选厂商 + 填密钥”的预设表单；仅 `openailike` 暴露必填 `baseUrl`
-- [ ] 7.6 实现 Halo Secret 绑定/创建流程，以及密钥脱敏展示与替换交互
-- [ ] 7.7 创建 `ModelList.vue`，按 group 分组展示模型，并显示 capability 标签
-- [ ] 7.8 创建 `ModelForm.vue` 用于添加/编辑模型，支持 modelId、displayName、group、capabilities、endpointType、supportedTextDelta
-- [ ] 7.9 实现提供商增删改查操作，使用 `@tanstack/vue-query` 和 `axiosInstance`
-- [ ] 7.10 实现模型增删改查操作，使用 `@tanstack/vue-query` 和 `axiosInstance`
-- [ ] 7.11 实现从提供商 API 获取模型列表、筛选、批量添加和共享默认值设置
-- [ ] 7.12 实现模型搜索、按 capability 过滤、按 group 折叠展示
-- [ ] 7.13 实现连通性测试按钮，包含加载状态、检测结果和 `lastCheckedAt` 展示
-- [ ] 7.14 添加表单校验（provider 结构化字段、模型唯一性、providerResourceName/modelId 必填），并与服务端校验规则保持一致
-- [ ] 7.15 删除 provider 前检测是否仍有关联模型，并在 UI 中阻止删除
-- [ ] 7.16 使用 `@halo-dev/components` 和 UnoCSS 进行 UI 样式设计
+- [ ] 7.1 更新 `app/src/main/resources/plugin.yaml`，添加 `pluginDependencies`、`requires` 和正确的元数据
+- [ ] 7.2 创建 `app/src/main/resources/extensions/roleTemplate.yaml` 用于 RBAC 权限
+- [ ] 7.3 如需为 Console API 配置代理，创建 `app/src/main/resources/extensions/reverseProxy.yaml`
+- [ ] 7.4 确保 API 端点受适当的角色模板保护
+- [ ] 7.5 确认插件运行时具备读取所引用 Halo Secret 的权限边界
 
-## 8. 插件元数据与安全
+## 8. 构建与验证
 
-- [ ] 8.1 更新 `app/src/main/resources/plugin.yaml`，添加 `pluginDependencies`、`requires` 和正确的元数据
-- [ ] 8.2 创建 `app/src/main/resources/extensions/roleTemplate.yaml` 用于 RBAC 权限
-- [ ] 8.3 如需为 Console API 配置代理，创建 `app/src/main/resources/extensions/reverseProxy.yaml`
-- [ ] 8.4 确保 API 端点受适当的角色模板保护
-- [ ] 8.5 确认插件运行时具备读取所引用 Halo Secret 的权限边界
-
-## 9. 构建与验证
-
-- [ ] 9.1 验证 `./gradlew :api:build` 成功并生成可发布的 jar
-- [ ] 9.2 验证 `./gradlew :app:build` 成功并生成插件 jar
-- [ ] 9.3 验证 `./gradlew :ui:build` 成功并生成 dist 资源
-- [ ] 9.4 运行 `./gradlew :app:test` 并确保测试通过
-- [ ] 9.5 验证插件 jar 在 `console/` 目录中包含 UI 资源
-- [ ] 9.6 在 Halo 开发模式下测试插件启动（`./gradlew :app:haloServer`）
-- [ ] 9.7 验证插件启动后 `AiProvider` 和 `AiModel` Extension 出现在 Halo API 中
+- [ ] 8.1 验证 `./gradlew :api:build` 成功并生成可发布的 jar
+- [ ] 8.2 验证 `./gradlew :app:build` 成功并生成插件 jar
+- [ ] 8.3 运行 `./gradlew :app:test` 并确保测试通过
+- [ ] 8.4 在 Halo 开发模式下测试插件启动（`./gradlew :app:haloServer`）
+- [ ] 8.5 验证插件启动后 `AiProvider` 和 `AiModel` Extension 出现在 Halo API 中
+- [ ] 8.6 通过调试接口验证 `test-chat` 端点可使用 `providerResourceName/modelId + prompt` 发起测试请求
