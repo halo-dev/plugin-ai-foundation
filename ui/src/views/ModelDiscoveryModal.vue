@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AiModel } from '@/api/generated'
 import { useCreateModel, useProviderModels } from '@/composables/useModels'
-import { ENDPOINT_TYPE_OPTIONS } from '@/types'
+import type { DiscoveredModel } from '@/composables/useModels'
 import { VButton, VCard, VEmpty, VLoading } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
@@ -10,6 +10,7 @@ import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
 
 const props = defineProps<{
   providerName: string
+  providerType: string
 }>()
 
 const emit = defineEmits<{
@@ -22,27 +23,45 @@ const queryClient = useQueryClient()
 
 const selectedModels = ref<Set<string>>(new Set())
 const defaultGroup = ref('')
-const defaultEndpointType = ref('')
 const adding = ref(false)
 
 const availableModels = computed(() => {
-  return discovered.value || []
+  return discovered.value?.models || []
 })
 
+function inferEndpointType(dm: DiscoveredModel): string {
+  const caps = dm.capabilities || []
+  if (caps.includes('embedding')) {
+    return props.providerType === 'ollama' ? 'ollama-chat' : 'openai-embedding'
+  }
+  return props.providerType === 'ollama' ? 'ollama-chat' : 'openai-chat'
+}
+
 function toggleSelection(model: DiscoveredModel) {
-  if (selectedModels.value.has(model.name)) {
-    selectedModels.value.delete(model.name)
+  if (selectedModels.value.has(model.modelId)) {
+    selectedModels.value.delete(model.modelId)
   } else {
-    selectedModels.value.add(model.name)
+    selectedModels.value.add(model.modelId)
   }
 }
 
 function isSelected(model: DiscoveredModel) {
-  return selectedModels.value.has(model.name)
+  return selectedModels.value.has(model.modelId)
+}
+
+function capabilityLabel(cap: string): string {
+  switch (cap) {
+    case 'chat':
+      return '对话'
+    case 'embedding':
+      return 'Embedding'
+    default:
+      return cap
+  }
 }
 
 async function batchAdd() {
-  const toAdd = availableModels.value.filter((m) => selectedModels.value.has(m.name))
+  const toAdd = availableModels.value.filter((m) => selectedModels.value.has(m.modelId))
   if (toAdd.length === 0) return
 
   adding.value = true
@@ -58,7 +77,7 @@ async function batchAdd() {
           displayName: dm.displayName || dm.modelId,
           enabled: true,
           group: defaultGroup.value.trim() || undefined,
-          endpointType: defaultEndpointType.value || undefined,
+          endpointType: inferEndpointType(dm),
         },
       }
       await createModel.mutateAsync(newModel)
@@ -96,15 +115,6 @@ async function batchAdd() {
           <label>默认分组</label>
           <input v-model="defaultGroup" type="text" placeholder="可选" />
         </div>
-        <div class="default-field">
-          <label>默认 Endpoint</label>
-          <select v-model="defaultEndpointType">
-            <option value="">可选</option>
-            <option v-for="opt in ENDPOINT_TYPE_OPTIONS" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
-            </option>
-          </select>
-        </div>
       </div>
 
       <div class="discovery-actions">
@@ -125,7 +135,7 @@ async function batchAdd() {
       <div class="discovery-list">
         <VCard
           v-for="model in availableModels"
-          :key="model.name"
+          :key="model.modelId"
           :class="['discovery-item', { 'discovery-item--selected': isSelected(model) }]"
           @click="toggleSelection(model)"
         >
@@ -138,6 +148,16 @@ async function batchAdd() {
           <div class="discovery-item__info">
             <span class="discovery-item__name">{{ model.displayName || model.modelId }}</span>
             <span class="discovery-item__id">{{ model.modelId }}</span>
+          </div>
+          <div class="discovery-item__capabilities">
+            <span
+              v-for="cap in model.capabilities"
+              :key="cap"
+              class="capability-tag"
+              :class="`capability-tag--${cap}`"
+            >
+              {{ capabilityLabel(cap) }}
+            </span>
           </div>
         </VCard>
       </div>
@@ -245,6 +265,8 @@ async function batchAdd() {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex: 1;
+    min-width: 0;
   }
 
   &__name {
@@ -256,6 +278,30 @@ async function batchAdd() {
     font-size: 12px;
     color: #9ca3af;
     font-family: monospace;
+  }
+
+  &__capabilities {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+}
+
+.capability-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+
+  &--chat {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+
+  &--embedding {
+    background: #fce7f3;
+    color: #be185d;
   }
 }
 </style>

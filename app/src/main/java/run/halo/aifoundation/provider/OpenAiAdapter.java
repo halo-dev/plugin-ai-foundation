@@ -58,4 +58,9 @@ public class OpenAiAdapter extends AbstractProviderAdapter {
     public String getProviderType() {
         return "openai";
     }
+
+    @Override
+    protected String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
 }

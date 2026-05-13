@@ -20,6 +20,13 @@ const debugApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi(
   axiosInstance,
 )
 
+export interface DiscoveredModel {
+  modelId: string
+  displayName: string
+  name: string
+  capabilities: string[]
+}
+
 export function useModels() {
   return useQuery<AiModel[]>({
     queryKey: ['ai-models'],
@@ -99,13 +106,13 @@ export function useDeleteModel() {
 }
 
 export function useProviderModels(providerName: string) {
-  return useQuery({
+  return useQuery<{ models: DiscoveredModel[]; providerName: string }>({
     queryKey: ['provider-models', providerName],
     queryFn: async () => {
       const { data } = await debugApi.listProviderModels({
         name: providerName,
       })
-      return data
+      return data as { models: DiscoveredModel[]; providerName: string }
     },
     enabled: !!providerName,
   })

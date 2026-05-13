@@ -58,4 +58,9 @@ public class ZhiPuAdapter extends AbstractProviderAdapter {
     public String getProviderType() {
         return "zhipuai";
     }
+
+    @Override
+    protected String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
 }

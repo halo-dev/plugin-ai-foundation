@@ -63,4 +63,15 @@ public class AiHubMixAdapter extends AbstractProviderAdapter {
     public String getProviderType() {
         return "aihubmix";
     }
+
+    @Override
+    protected String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
+
+    @Override
+    protected void customizeDiscoveryRequest(
+        org.springframework.web.reactive.function.client.WebClient.RequestHeadersSpec<?> requestSpec) {
+        requestSpec.header("APP-Code", APP_CODE);
+    }
 }

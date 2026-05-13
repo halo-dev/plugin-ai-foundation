@@ -49,4 +49,9 @@ public class DeepSeekAdapter extends AbstractProviderAdapter {
     public String getProviderType() {
         return "deepseek";
     }
+
+    @Override
+    protected String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
 }

@@ -43,7 +43,7 @@ export interface AiModelSpec {
      * @type {string}
      * @memberof AiModelSpec
      */
-    'endpointType'?: string;
+    'endpointType': string;
     /**
      * 
      * @type {string}

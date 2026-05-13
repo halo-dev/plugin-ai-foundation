@@ -143,6 +143,7 @@ const isBuiltIn = computed(() => BUILT_IN_PROVIDERS.includes(props.provider.spec
       <ModelDiscoveryModal
         v-if="discoveryVisible"
         :provider-name="provider.metadata.name"
+        :provider-type="provider.spec.providerType"
         @close="discoveryVisible = false"
       />
     </VCard>

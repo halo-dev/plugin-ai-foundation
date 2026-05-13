@@ -58,4 +58,9 @@ public class SiliconFlowAdapter extends AbstractProviderAdapter {
     public String getProviderType() {
         return "siliconflow";
     }
+
+    @Override
+    protected String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
 }

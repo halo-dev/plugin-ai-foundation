@@ -58,4 +58,9 @@ public class DouBaoAdapter extends AbstractProviderAdapter {
     public String getProviderType() {
         return "doubao";
     }
+
+    @Override
+    protected String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
 }

@@ -27,6 +27,11 @@ class AbstractProviderAdapterTest {
         public String getProviderType() {
             return "test";
         }
+
+        @Override
+        protected String getDefaultBaseUrl() {
+            return "https://test.example.com";
+        }
     }
 
     @Test

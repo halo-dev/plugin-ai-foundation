@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Provider debug endpoints
 The backend SHALL expose admin/debug endpoints for model discovery, connectivity validation, and test chat without requiring the Console UI.
 

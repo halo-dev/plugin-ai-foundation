@@ -62,4 +62,15 @@ public class OpenAiLikeAdapter extends AbstractProviderAdapter {
     public String getProviderType() {
         return "openailike";
     }
+
+    @Override
+    protected String getDefaultBaseUrl() {
+        var baseUrl = provider.getSpec().getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalArgumentException(
+                "baseUrl is required for openailike provider: "
+                    + provider.getMetadata().getName());
+        }
+        return baseUrl;
+    }
 }
