@@ -30,12 +30,10 @@ public class AiModelServiceImpl implements AiModelService {
     private final SecretResolver secretResolver;
 
     @Override
-    public LanguageModel languageModel(String modelRef) {
-        var parts = parseModelRef(modelRef);
-        var providerName = parts[0];
-        var modelId = parts[1];
-
-        var aiModel = findAiModel(providerName, modelId);
+    public LanguageModel languageModel(String modelName) {
+        var aiModel = fetchAiModel(modelName);
+        var providerName = aiModel.getSpec().getProviderName();
+        var modelId = aiModel.getSpec().getModelId();
         var provider = fetchProvider(providerName);
 
         if (!provider.getSpec().isEnabled()) {
@@ -50,12 +48,10 @@ public class AiModelServiceImpl implements AiModelService {
     }
 
     @Override
-    public EmbeddingModel embeddingModel(String modelRef) {
-        var parts = parseModelRef(modelRef);
-        var providerName = parts[0];
-        var modelId = parts[1];
-
-        var aiModel = findAiModel(providerName, modelId);
+    public EmbeddingModel embeddingModel(String modelName) {
+        var aiModel = fetchAiModel(modelName);
+        var providerName = aiModel.getSpec().getProviderName();
+        var modelId = aiModel.getSpec().getModelId();
         var provider = fetchProvider(providerName);
 
         if (!provider.getSpec().isEnabled()) {
@@ -84,6 +80,7 @@ public class AiModelServiceImpl implements AiModelService {
     public Mono<List<ModelInfo>> listModels() {
         return client.listAll(AiModel.class, new ListOptions(), Sort.unsorted())
             .map(model -> ModelInfo.builder()
+                .name(model.getMetadata().getName())
                 .providerName(model.getSpec().getProviderName())
                 .modelId(model.getSpec().getModelId())
                 .displayName(model.getSpec().getDisplayName())
@@ -109,27 +106,10 @@ public class AiModelServiceImpl implements AiModelService {
             .collectList();
     }
 
-    private String[] parseModelRef(String modelRef) {
-        if (modelRef == null || !modelRef.contains("/")) {
-            throw new ModelNotFoundException(modelRef);
-        }
-        var idx = modelRef.indexOf('/');
-        var providerName = modelRef.substring(0, idx);
-        var modelId = modelRef.substring(idx + 1);
-        if (providerName.isBlank() || modelId.isBlank()) {
-            throw new ModelNotFoundException(modelRef);
-        }
-        return new String[] {providerName, modelId};
-    }
-
-    private AiModel findAiModel(String providerName, String modelId) {
-        return client.list(AiModel.class,
-                model -> providerName.equals(model.getSpec().getProviderName())
-                    && modelId.equals(model.getSpec().getModelId()),
-                null)
-            .next()
+    private AiModel fetchAiModel(String modelName) {
+        return client.fetch(AiModel.class, modelName)
             .blockOptional()
-            .orElseThrow(() -> new ModelNotFoundException(providerName + "/" + modelId));
+            .orElseThrow(() -> new ModelNotFoundException(modelName));
     }
 
     private AiProvider fetchProvider(String providerName) {

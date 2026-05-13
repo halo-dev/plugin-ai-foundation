@@ -1,17 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { axiosInstance } from '@halo-dev/api-client'
-import { ModelConsoleEndpointApi, ProviderConsoleEndpointApi } from '@/api/generated/api'
 import type { ProviderModelListResponse, TestChatRequest, TestChatResponse } from '@/types'
-import type { AiModel } from '@/api/generated'
+import {
+  ConsoleApiAifoundationHaloRunV1alpha1ModelApi,
+  ConsoleApiAifoundationHaloRunV1alpha1ProviderApi,
+  type AiModel,
+} from '@/api/generated'
 
-const modelApi = new ModelConsoleEndpointApi(undefined, '', axiosInstance)
-const providerApi = new ProviderConsoleEndpointApi(undefined, '', axiosInstance)
+const modelApi = new ConsoleApiAifoundationHaloRunV1alpha1ModelApi(undefined, '', axiosInstance)
+const providerApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(
+  undefined,
+  '',
+  axiosInstance,
+)
 
 export function useModels() {
   return useQuery<AiModel[]>({
     queryKey: ['ai-models'],
     queryFn: async () => {
-      const { data } = await modelApi.list1()
+      const { data } = await modelApi.listModels()
       return data
     },
   })
@@ -21,7 +28,7 @@ export function useModel(name: string) {
   return useQuery<AiModel>({
     queryKey: ['ai-model', name],
     queryFn: async () => {
-      const { data } = await modelApi.get1({ name })
+      const { data } = await modelApi.getModel({ name })
       return data
     },
     enabled: !!name,
@@ -32,7 +39,7 @@ export function useModelsByProvider(providerName: string) {
   return useQuery<AiModel[]>({
     queryKey: ['ai-models', 'provider', providerName],
     queryFn: async () => {
-      const { data } = await modelApi.list1()
+      const { data } = await modelApi.listModels()
       return data.filter((m) => m.spec.providerName === providerName)
     },
     enabled: !!providerName,
@@ -43,7 +50,9 @@ export function useCreateModel() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (model: AiModel) => {
-      const { data } = await modelApi.create1({ aiModel: model as unknown as Parameters<typeof modelApi.create1>[0]['aiModel'] })
+      const { data } = await modelApi.createModel({
+        aiModel: model,
+      })
       return data
     },
     onSuccess: () => {
@@ -56,7 +65,10 @@ export function useUpdateModel() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ name, model }: { name: string; model: AiModel }) => {
-      const { data } = await modelApi.update1({ name, aiModel: model as unknown as Parameters<typeof modelApi.update1>[0]['aiModel'] })
+      const { data } = await modelApi.updateModel({
+        name,
+        aiModel: model,
+      })
       return data
     },
     onSuccess: (_, variables) => {
@@ -71,7 +83,7 @@ export function useDeleteModel() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (name: string) => {
-      await modelApi.delete1({ name })
+      await modelApi.deleteModel({ name })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-models'] })
@@ -84,7 +96,7 @@ export function useProviderModels(providerName: string) {
   return useQuery({
     queryKey: ['provider-models', providerName],
     queryFn: async () => {
-      const { data } = await providerApi.list({  })
+      const { data } = await providerApi.listProviders({})
       return data
     },
     enabled: !!providerName,
@@ -93,18 +105,10 @@ export function useProviderModels(providerName: string) {
 
 export function useTestChat() {
   return useMutation({
-    mutationFn: async ({
-      providerName,
-      modelId,
-      request,
-    }: {
-      providerName: string
-      modelId: string
-      request: TestChatRequest
-    }) => {
+    mutationFn: async ({ modelName, request }: { modelName: string; request: TestChatRequest }) => {
       const { data } = await axiosInstance.post<TestChatResponse>(
-        `/apis/console.api.aifoundation.halo.run/v1alpha1/providers/${providerName}/models/${encodeURIComponent(modelId)}/test-chat`,
-        request
+        `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${modelName}/test-chat`,
+        request,
       )
       return data
     },

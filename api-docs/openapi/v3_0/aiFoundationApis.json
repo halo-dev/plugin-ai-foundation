@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:44646",
+    "url" : "http://localhost:34835",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -568,6 +568,43 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat" : {
+      "post" : {
+        "description" : "Test chat completion with a specific model.",
+        "operationId" : "TestModelChat",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestChatRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/providers" : {
       "get" : {
         "description" : "List all AI providers.",
@@ -742,51 +779,6 @@
             "type" : "string"
           }
         } ],
-        "responses" : {
-          "default" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "string"
-                }
-              }
-            },
-            "description" : "default response"
-          }
-        },
-        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
-      }
-    },
-    "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{providerName}/models/{modelId}/test-chat" : {
-      "post" : {
-        "description" : "Test chat completion with a specific model.",
-        "operationId" : "TestProviderChat",
-        "parameters" : [ {
-          "description" : "Provider name",
-          "in" : "path",
-          "name" : "providerName",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "description" : "Model ID",
-          "in" : "path",
-          "name" : "modelId",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "*/*" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/TestChatRequest"
-              }
-            }
-          }
-        },
         "responses" : {
           "default" : {
             "content" : {

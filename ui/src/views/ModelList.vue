@@ -181,8 +181,7 @@ function openTestChat(model: AiModel) {
       @close="testChatVisible = false"
     >
       <TestChatModal
-        :provider-name="providerName"
-        :model-id="testChatModel.spec.modelId"
+        :model-name="testChatModel.metadata.name"
         :model-display-name="testChatModel.spec.displayName"
         @close="testChatVisible = false"
       />

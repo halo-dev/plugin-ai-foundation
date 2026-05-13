@@ -5,8 +5,7 @@ import { useTestChat } from '@/composables/useModels'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 
 const props = defineProps<{
-  providerName: string
-  modelId: string
+  modelName: string
   modelDisplayName: string
 }>()
 
@@ -24,8 +23,7 @@ async function send() {
   result.value = ''
   try {
     const res = await testChat.mutateAsync({
-      providerName: props.providerName,
-      modelId: props.modelId,
+      modelName: props.modelName,
       request: { prompt: prompt.value.trim() },
     })
     result.value = res.content

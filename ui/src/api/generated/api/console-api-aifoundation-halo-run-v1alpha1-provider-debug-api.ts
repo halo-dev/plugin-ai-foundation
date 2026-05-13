@@ -72,20 +72,16 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiAxiosParamCrea
         },
         /**
          * Test chat completion with a specific model.
-         * @param {string} providerName Provider name
-         * @param {string} modelId Model ID
+         * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestChatRequest} [testChatRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testProviderChat: async (providerName: string, modelId: string, testChatRequest?: TestChatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'providerName' is not null or undefined
-            assertParamExists('testProviderChat', 'providerName', providerName)
-            // verify required parameter 'modelId' is not null or undefined
-            assertParamExists('testProviderChat', 'modelId', modelId)
-            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{providerName}/models/{modelId}/test-chat`
-                .replace(`{${"providerName"}}`, encodeURIComponent(String(providerName)))
-                .replace(`{${"modelId"}}`, encodeURIComponent(String(modelId)));
+        testModelChat: async (name: string, testChatRequest?: TestChatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('testModelChat', 'name', name)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -184,16 +180,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiFp = function(
         },
         /**
          * Test chat completion with a specific model.
-         * @param {string} providerName Provider name
-         * @param {string} modelId Model ID
+         * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestChatRequest} [testChatRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async testProviderChat(providerName: string, modelId: string, testChatRequest?: TestChatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.testProviderChat(providerName, modelId, testChatRequest, options);
+        async testModelChat(name: string, testChatRequest?: TestChatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChat(name, testChatRequest, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi.testProviderChat']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi.testModelChat']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -229,12 +224,12 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiFactory = func
         },
         /**
          * Test chat completion with a specific model.
-         * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChatRequest} requestParameters Request parameters.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChatRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testProviderChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChatRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
-            return localVarFp.testProviderChat(requestParameters.providerName, requestParameters.modelId, requestParameters.testChatRequest, options).then((request) => request(axios, basePath));
+        testModelChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChatRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
+            return localVarFp.testModelChat(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * Test provider connectivity.
@@ -263,29 +258,22 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiListProvid
 }
 
 /**
- * Request parameters for testProviderChat operation in ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi.
+ * Request parameters for testModelChat operation in ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi.
  * @export
- * @interface ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChatRequest
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChatRequest
  */
-export interface ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChatRequest {
+export interface ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChatRequest {
     /**
-     * Provider name
+     * Model name (AiModel.metadata.name)
      * @type {string}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChat
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChat
      */
-    readonly providerName: string
-
-    /**
-     * Model ID
-     * @type {string}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChat
-     */
-    readonly modelId: string
+    readonly name: string
 
     /**
      * 
      * @type {TestChatRequest}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChat
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChat
      */
     readonly testChatRequest?: TestChatRequest
 }
@@ -324,13 +312,13 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi extends BaseA
 
     /**
      * Test chat completion with a specific model.
-     * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChatRequest} requestParameters Request parameters.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChatRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi
      */
-    public testProviderChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestProviderChatRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiFp(this.configuration).testProviderChat(requestParameters.providerName, requestParameters.modelId, requestParameters.testChatRequest, options).then((request) => request(this.axios, this.basePath));
+    public testModelChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiTestModelChatRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApiFp(this.configuration).testModelChat(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

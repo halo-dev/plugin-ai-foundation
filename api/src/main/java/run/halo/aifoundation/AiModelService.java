@@ -5,9 +5,9 @@ import reactor.core.publisher.Mono;
 
 public interface AiModelService {
 
-    LanguageModel languageModel(String modelRef);
+    LanguageModel languageModel(String modelName);
 
-    EmbeddingModel embeddingModel(String modelRef);
+    EmbeddingModel embeddingModel(String modelName);
 
     Mono<List<ModelInfo>> listModels();
 

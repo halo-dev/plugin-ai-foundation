@@ -1,15 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { axiosInstance } from '@halo-dev/api-client'
-import { ProviderConsoleEndpointApi } from '@/api/generated/api'
+import { ConsoleApiAifoundationHaloRunV1alpha1ProviderApi } from '@/api/generated/api'
 import type { AiProvider } from '@/api/generated'
 
-const providerApi = new ProviderConsoleEndpointApi(undefined, '', axiosInstance)
+const providerApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(undefined, '', axiosInstance)
 
 export function useProviders() {
   return useQuery<AiProvider[]>({
     queryKey: ['ai-providers'],
     queryFn: async () => {
-      const { data } = await providerApi.list()
+      const { data } = await providerApi.listProviders()
       return data
     },
   })
@@ -19,7 +19,7 @@ export function useProvider(name: string) {
   return useQuery<AiProvider>({
     queryKey: ['ai-provider', name],
     queryFn: async () => {
-      const { data } = await providerApi.get({ name })
+      const { data } = await providerApi.getProvider({ name })
       return data
     },
     enabled: !!name,
@@ -30,7 +30,7 @@ export function useCreateProvider() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (provider: AiProvider) => {
-      const { data } = await providerApi.create({
+      const { data } = await providerApi.createProvider({
         aiProvider: provider,
       })
       return data
@@ -51,7 +51,7 @@ export function useUpdateProvider() {
       name: string
       provider: AiProvider
     }) => {
-      const { data } = await providerApi.update({
+      const { data } = await providerApi.updateProvider({
         name,
         aiProvider: provider,
       })
@@ -68,7 +68,7 @@ export function useDeleteProvider() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (name: string) => {
-      await providerApi._delete({ name })
+      await providerApi.deleteProvider({ name })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-providers'] })

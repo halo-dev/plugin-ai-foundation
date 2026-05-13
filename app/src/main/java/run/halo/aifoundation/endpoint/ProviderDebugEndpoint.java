@@ -73,21 +73,15 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
                     .response(responseBuilder()
                         .implementation(Map.class))
             )
-            .POST("/providers/{providerName}/models/{modelId}/test-chat",
+            .POST("/models/{name}/test-chat",
                 this::testChat,
-                builder -> builder.operationId("TestProviderChat")
+                builder -> builder.operationId("TestModelChat")
                     .description("Test chat completion with a specific model.")
                     .tag(tag)
                     .parameter(parameterBuilder()
-                        .name("providerName")
+                        .name("name")
                         .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
-                    .parameter(parameterBuilder()
-                        .name("modelId")
-                        .in(ParameterIn.PATH)
-                        .description("Model ID")
+                        .description("Model name (AiModel.metadata.name)")
                         .implementation(String.class)
                         .required(true))
                     .requestBody(requestBodyBuilder()
@@ -311,23 +305,20 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> testChat(ServerRequest request) {
-        var providerName = request.pathVariable("providerName");
-        var modelId = java.net.URLDecoder.decode(
-            request.pathVariable("modelId"), java.nio.charset.StandardCharsets.UTF_8);
-        var modelRef = providerName + "/" + modelId;
-        log.info("testChat: providerName={}, modelId={}, modelRef={}", providerName, modelId, modelRef);
+        var modelName = request.pathVariable("name");
+        log.info("testChat: modelName={}", modelName);
 
         return request.bodyToMono(TestChatRequest.class)
             .defaultIfEmpty(new TestChatRequest())
             .flatMap(body -> {
                 var prompt = body.getPrompt() != null ? body.getPrompt() : "Hello!";
-                return Mono.fromCallable(() -> aiModelService.languageModel(modelRef))
+                return Mono.fromCallable(() -> aiModelService.languageModel(modelName))
                     .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
                     .flatMap(languageModel -> languageModel.chat(prompt))
                     .flatMap(content -> ServerResponse.ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .bodyValue(Map.of(
-                            "modelRef", modelRef,
+                            "modelName", modelName,
                             "content", content,
                             "finishReason", "stop"
                         )))

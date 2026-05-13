@@ -51,7 +51,7 @@ async function batchAdd() {
       const newModel: AiModel = {
         apiVersion: 'aifoundation.halo.run/v1alpha1',
         kind: 'AiModel',
-        metadata: { generateName: 'model-', name: '' },
+        metadata: { generateName: `${props.providerName}-${dm.modelId}-`, name: '' },
         spec: {
           providerName: props.providerName,
           modelId: dm.modelId,

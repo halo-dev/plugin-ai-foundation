@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: AiModelService as Registry/Factory
 
 The `api/` module SHALL expose an `AiModelService` interface acting as a Registry/Factory that resolves model names to capability-specific interfaces (`LanguageModel`, `EmbeddingModel`).
@@ -130,3 +132,9 @@ The system SHALL return typed exceptions for different error conditions.
 #### Scenario: Provider API error
 - **WHEN** a provider API returns an HTTP error (e.g., 401 Unauthorized)
 - **THEN** the system SHALL throw `ProviderApiException` with `statusCode` and `providerType` fields set
+
+## REMOVED Requirements
+
+### Requirement: Invalid model reference format
+**Reason**: The composite `providerName/modelId` format and its `/` separator validation are no longer used. Model references are now `metadata.name` strings with no special format.
+**Migration**: Use `AiModel.metadata.name` directly as the model reference. No format parsing is needed.

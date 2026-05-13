@@ -5,7 +5,7 @@ export interface TestChatRequest {
 }
 
 export interface TestChatResponse {
-  modelRef: string
+  modelName: string
   content: string
   finishReason: string
 }

@@ -91,7 +91,7 @@ async function handleSubmit(values: Record<string, unknown>) {
     const newModel: AiModel = {
       apiVersion: 'aifoundation.halo.run/v1alpha1',
       kind: 'AiModel',
-      metadata: { generateName: 'model-', name: '' },
+      metadata: { generateName: `${props.providerName}-${spec.modelId}-`, name: '' },
       spec,
     }
     await createModel.mutateAsync(newModel)

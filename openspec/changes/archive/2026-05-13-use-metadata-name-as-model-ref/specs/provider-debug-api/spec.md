@@ -1,15 +1,6 @@
-### Requirement: Provider debug endpoints
-The backend SHALL expose admin/debug endpoints for model discovery, connectivity validation, and test chat without requiring the Console UI.
+## MODIFIED Requirements
 
-#### Scenario: List provider models
-- **WHEN** an admin calls `GET /providers/{name}/models`
-- **THEN** the system SHALL fetch or return the discovered model list for the specified provider
-
-#### Scenario: Test provider connectivity
-- **WHEN** an admin calls `POST /providers/{name}/connectivity`
-- **THEN** the system SHALL validate the provider configuration and update `status.phase`, `status.message`, and `status.lastCheckedAt`
-
-#### Scenario: Test chat against configured model
+### Requirement: Test chat against configured model
 - **WHEN** an admin calls `POST /models/{name}/test-chat` where `{name}` is `AiModel.metadata.name`
 - **AND** the request body contains a `prompt`
 - **THEN** the system SHALL resolve the configured model by `metadata.name` via `client.fetch`

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -52,15 +51,17 @@ class AiModelServiceImplTest {
     void listModels_returnsAllModels() {
         when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
             .thenReturn(Flux.just(
-                aiModel("provider-a", "gpt-4", "GPT-4"),
-                aiModel("provider-b", "claude-3", "Claude 3")
+                aiModel("openai-prod-gpt-4-abc", "provider-a", "gpt-4", "GPT-4"),
+                aiModel("ollama-local-claude-3-xyz", "provider-b", "claude-3", "Claude 3")
             ));
 
         StepVerifier.create(service.listModels())
             .assertNext(models -> {
                 assertThat(models).hasSize(2);
+                assertThat(models.get(0).getName()).isEqualTo("openai-prod-gpt-4-abc");
                 assertThat(models.get(0).getModelId()).isEqualTo("gpt-4");
                 assertThat(models.get(0).getProviderName()).isEqualTo("provider-a");
+                assertThat(models.get(1).getName()).isEqualTo("ollama-local-claude-3-xyz");
                 assertThat(models.get(1).getModelId()).isEqualTo("claude-3");
             })
             .verifyComplete();
@@ -112,69 +113,45 @@ class AiModelServiceImplTest {
             .verifyComplete();
     }
 
-    // ---- languageModel — parseModelRef validation ----
+    // ---- languageModel — fetch by metadata.name ----
 
     @Test
-    void languageModel_nullModelRef_throwsModelNotFoundException() {
-        assertThatThrownBy(() -> service.languageModel(null))
-            .isInstanceOf(ModelNotFoundException.class);
-    }
+    void languageModel_modelNotFound_throwsModelNotFoundException() {
+        when(client.fetch(AiModel.class, "nonexistent-model")).thenReturn(Mono.empty());
 
-    @Test
-    void languageModel_modelRefWithoutSlash_throwsModelNotFoundException() {
-        assertThatThrownBy(() -> service.languageModel("no-slash-here"))
-            .isInstanceOf(ModelNotFoundException.class);
-    }
-
-    @Test
-    void languageModel_modelRefWithBlankProviderName_throwsModelNotFoundException() {
-        assertThatThrownBy(() -> service.languageModel("/gpt-4"))
-            .isInstanceOf(ModelNotFoundException.class);
-    }
-
-    @Test
-    void languageModel_modelRefWithBlankModelId_throwsModelNotFoundException() {
-        assertThatThrownBy(() -> service.languageModel("openai/"))
+        assertThatThrownBy(() -> service.languageModel("nonexistent-model"))
             .isInstanceOf(ModelNotFoundException.class);
     }
 
     @Test
     void languageModel_disabledProvider_throwsProviderDisabledException() {
         var provider = aiProvider("openai-prod", "openai", false);
-        var model = aiModel("openai-prod", "gpt-4", "GPT-4");
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4");
 
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(model));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
 
-        assertThatThrownBy(() -> service.languageModel("openai-prod/gpt-4"))
+        assertThatThrownBy(() -> service.languageModel("openai-prod-gpt-4-abc"))
             .isInstanceOf(ProviderDisabledException.class);
     }
 
     @Test
     void languageModel_providerNotFound_throwsModelNotFoundException() {
-        var model = aiModel("openai-prod", "gpt-4", "GPT-4");
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(model));
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4");
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.languageModel("openai-prod/gpt-4"))
+        assertThatThrownBy(() -> service.languageModel("openai-prod-gpt-4-abc"))
             .isInstanceOf(ModelNotFoundException.class)
             .hasMessageContaining("Provider not found");
     }
 
-    @Test
-    void languageModel_modelNotFound_throwsModelNotFoundException() {
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
-
-        assertThatThrownBy(() -> service.languageModel("openai-prod/gpt-4"))
-            .isInstanceOf(ModelNotFoundException.class);
-    }
-
     // ---- helpers ----
 
-    private AiModel aiModel(String providerName, String modelId, String displayName) {
+    private AiModel aiModel(String name, String providerName, String modelId, String displayName) {
         var model = new AiModel();
         var metadata = new Metadata();
-        metadata.setName(providerName + "-" + modelId);
+        metadata.setName(name);
         model.setMetadata(metadata);
         var spec = new AiModel.AiModelSpec();
         spec.setProviderName(providerName);
