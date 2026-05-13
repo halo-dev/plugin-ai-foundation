@@ -190,10 +190,3 @@ The Console UI SHALL provide a test chat entry that reuses the backend `test-cha
 - **THEN** the UI SHALL call the backend `test-chat` endpoint for that `providerResourceName/modelId`
 - **AND** display the returned content and available metadata
 
-### Requirement: RBAC permissions
-The plugin SHALL define role templates for viewing and managing AI providers and models.
-
-#### Scenario: Permission enforcement
-- **WHEN** a non-admin user tries to access the AI model configuration page
-- **THEN** the system SHALL deny access based on RBAC rules
-- **AND** the menu item SHALL be hidden if the user lacks permission
