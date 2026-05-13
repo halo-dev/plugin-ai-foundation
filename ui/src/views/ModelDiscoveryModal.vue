@@ -72,7 +72,7 @@ async function batchAdd() {
   try {
     for (const dm of toAdd) {
       const generateName =
-        `${props.providerName}-${dm.modelId.replace('/', '-')}-`.toLocaleLowerCase()
+        `${props.providerName}-${dm.modelId.replace(/\//g, '-')}-`.toLocaleLowerCase()
       const newModel: AiModel = {
         apiVersion: 'aifoundation.halo.run/v1alpha1',
         kind: 'AiModel',

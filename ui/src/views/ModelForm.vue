@@ -90,7 +90,7 @@ async function handleSubmit(values: Record<string, unknown>) {
     })
   } else {
     const generateName =
-      `${props.providerName}-${spec.modelId.replace('/', '-')}-`.toLocaleLowerCase()
+      `${props.providerName}-${spec.modelId.replace(/\//g, '-')}-`.toLocaleLowerCase()
     const newModel: AiModel = {
       apiVersion: 'aifoundation.halo.run/v1alpha1',
       kind: 'AiModel',
