@@ -34,6 +34,7 @@ public class AiModel extends AbstractExtension {
         /** Capability labels (e.g., chat, embedding, vision). */
         private List<String> capabilities;
         /** Endpoint type (e.g., openai-chat, openai-embedding, ollama-chat). */
+        @Schema(requiredMode = REQUIRED)
         private String endpointType;
         /** Whether the model supports streaming text delta. */
         private Boolean supportedTextDelta;
