@@ -2,8 +2,8 @@
 import { ref, computed, watch } from 'vue'
 import { VButton } from '@halo-dev/components'
 import { useCreateProvider, useUpdateProvider } from '@/composables/useProviders'
-import type { AiProvider, AiProviderSpec } from '@/types'
 import { PROVIDER_TYPE_LABELS, BUILT_IN_PROVIDERS } from '@/types'
+import type { AiProvider, AiProviderSpec } from '@/api/generated'
 
 const props = defineProps<{
   provider?: AiProvider | null
@@ -40,12 +40,13 @@ watch(
       formValues.value = { enabled: true }
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
-const providerTypeOptions = Object.entries(PROVIDER_TYPE_LABELS).map(
-  ([value, label]) => ({ value, label })
-)
+const providerTypeOptions = Object.entries(PROVIDER_TYPE_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}))
 
 const requiresBaseUrl = computed(() => {
   const type = formValues.value.providerType as string
@@ -63,9 +64,7 @@ async function handleSubmit(values: Record<string, unknown>) {
     providerType: values.providerType as string,
     displayName: (values.displayName as string)?.trim() || '',
     enabled: !!values.enabled,
-    baseUrl: requiresBaseUrl.value
-      ? ((values.baseUrl as string)?.trim() || undefined)
-      : undefined,
+    baseUrl: requiresBaseUrl.value ? (values.baseUrl as string)?.trim() || undefined : undefined,
     apiKeySecretName: (values.apiKeySecretName as string) || undefined,
     proxyHost: (values.proxyHost as string)?.trim() || undefined,
     proxyPort: values.proxyPort ? Number(values.proxyPort) : undefined,
@@ -129,31 +128,13 @@ async function handleSubmit(values: Record<string, unknown>) {
         placeholder="https://api.example.com/v1"
       />
 
-      <FormKit
-        type="secret"
-        name="apiKeySecretName"
-        label="API Key Secret"
-      />
+      <FormKit type="secret" name="apiKeySecretName" label="API Key Secret" />
 
-      <FormKit
-        type="text"
-        name="proxyHost"
-        label="代理主机"
-        placeholder="可选"
-      />
+      <FormKit type="text" name="proxyHost" label="代理主机" placeholder="可选" />
 
-      <FormKit
-        type="number"
-        name="proxyPort"
-        label="代理端口"
-        placeholder="可选"
-      />
+      <FormKit type="number" name="proxyPort" label="代理端口" placeholder="可选" />
 
-      <FormKit
-        type="switch"
-        name="enabled"
-        label="启用"
-      />
+      <FormKit type="switch" name="enabled" label="启用" />
 
       <button ref="submitBtn" type="submit" style="display: none"></button>
     </FormKit>

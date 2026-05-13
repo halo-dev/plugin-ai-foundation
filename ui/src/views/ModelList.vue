@@ -1,15 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import {
-  VButton,
-  VCard,
-  VTag,
-  VEmpty,
-  VModal,
-} from '@halo-dev/components'
+import { VButton, VCard, VTag, VEmpty, VModal } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useDeleteModel } from '@/composables/useModels'
-import type { AiModel } from '@/types'
 import { CAPABILITY_OPTIONS } from '@/types'
 import ModelForm from './ModelForm.vue'
 import TestChatModal from './TestChatModal.vue'
@@ -17,6 +10,7 @@ import RiEditLine from '~icons/ri/edit-line'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiSearchLine from '~icons/ri/search-line'
 import RiChat1Line from '~icons/ri/chat-1-line'
+import type { AiModel } from '@/api/generated'
 
 const props = defineProps<{
   models: AiModel[]
@@ -41,13 +35,11 @@ const filteredModels = computed(() => {
       (m) =>
         m.spec.displayName.toLowerCase().includes(q) ||
         m.spec.modelId.toLowerCase().includes(q) ||
-        (m.spec.group && m.spec.group.toLowerCase().includes(q))
+        (m.spec.group && m.spec.group.toLowerCase().includes(q)),
     )
   }
   if (capabilityFilter.value) {
-    result = result.filter(
-      (m) => m.spec.capabilities?.includes(capabilityFilter.value)
-    )
+    result = result.filter((m) => m.spec.capabilities?.includes(capabilityFilter.value))
   }
   return result
 })
@@ -113,20 +105,11 @@ function openTestChat(model: AiModel) {
     <div class="model-list__filters">
       <div class="filter-search">
         <RiSearchLine class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索模型..."
-          class="filter-input"
-        />
+        <input v-model="searchQuery" type="text" placeholder="搜索模型..." class="filter-input" />
       </div>
       <select v-model="capabilityFilter" class="filter-select">
         <option value="">全部能力</option>
-        <option
-          v-for="cap in CAPABILITY_OPTIONS"
-          :key="cap.value"
-          :value="cap.value"
-        >
+        <option v-for="cap in CAPABILITY_OPTIONS" :key="cap.value" :value="cap.value">
           {{ cap.label }}
         </option>
       </select>
@@ -137,11 +120,7 @@ function openTestChat(model: AiModel) {
     </div>
 
     <div v-else class="model-list__groups">
-      <div
-        v-for="(models, group) in groupedModels"
-        :key="group"
-        class="model-group"
-      >
+      <div v-for="(models, group) in groupedModels" :key="group" class="model-group">
         <div class="model-group__header" @click="toggleGroup(group)">
           <span class="model-group__toggle">{{ isExpanded(group) ? '▼' : '▶' }}</span>
           <span class="model-group__name">{{ group }}</span>
@@ -149,11 +128,7 @@ function openTestChat(model: AiModel) {
         </div>
 
         <div v-show="isExpanded(group)" class="model-group__items">
-          <VCard
-            v-for="model in models"
-            :key="model.metadata.name"
-            class="model-card"
-          >
+          <VCard v-for="model in models" :key="model.metadata.name" class="model-card">
             <div class="model-card__header">
               <div class="model-card__info">
                 <span class="model-card__name">{{ model.spec.displayName }}</span>
@@ -173,12 +148,7 @@ function openTestChat(model: AiModel) {
               </div>
             </div>
             <div v-if="model.spec.capabilities?.length" class="model-card__tags">
-              <VTag
-                v-for="cap in model.spec.capabilities"
-                :key="cap"
-                size="sm"
-                type="primary"
-              >
+              <VTag v-for="cap in model.spec.capabilities" :key="cap" size="sm" type="primary">
                 {{ capabilityLabel(cap) }}
               </VTag>
             </div>

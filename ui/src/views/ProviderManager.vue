@@ -9,7 +9,7 @@ import ProviderDetail from './ProviderDetail.vue'
 import ProviderForm from './ProviderForm.vue'
 import { useProviders, useDeleteProvider } from '@/composables/useProviders'
 import { useModels } from '@/composables/useModels'
-import type { AiProvider } from '@/types'
+import type { AiProvider } from '@/api/generated'
 
 const { data: providers, isLoading: providersLoading } = useProviders()
 const { data: allModels } = useModels()

@@ -72,13 +72,13 @@ haloPlugin {
     openApi {
         outputDir = file("$rootDir/api-docs/openapi/v3_0")
         groupingRules {
-            create("aifoundation-console") {
-                displayName = "AI Foundation Console APIs"
-                pathsToMatch = ["/apis/console.api.aifoundation.halo.run/**"]
+            aiFoundationApis {
+                displayName = "AI Foundation APIs"
+                pathsToMatch = ["/apis/console.api.aifoundation.halo.run/**", "/apis/aifoundation.halo.run/**"]
             }
         }
         groupedApiMappings = [
-            '/v3/api-docs/aifoundation-console': 'aifoundation-console.json'
+            '/v3/api-docs/aiFoundationApis': 'aiFoundationApis.json'
         ]
         generator {
             outputDir = file("${rootDir}/ui/src/api/generated")

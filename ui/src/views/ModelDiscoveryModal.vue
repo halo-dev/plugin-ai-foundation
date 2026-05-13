@@ -3,10 +3,10 @@ import { ref, computed } from 'vue'
 import { VButton, VCard, VTag, VLoading, VEmpty } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useProviderModels, useCreateModel } from '@/composables/useModels'
-import type { DiscoveredModel, AiModel } from '@/types'
 import { ENDPOINT_TYPE_OPTIONS } from '@/types'
 import RiCheckLine from '~icons/ri/check-line'
 import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
+import type { AiModel } from '@/api/generated'
 
 const props = defineProps<{
   providerName: string

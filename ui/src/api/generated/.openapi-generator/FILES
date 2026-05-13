@@ -2,6 +2,8 @@
 .npmignore
 .openapi-generator-ignore
 api.ts
+api/ai-model-v1alpha1-api.ts
+api/ai-provider-v1alpha1-api.ts
 api/model-console-endpoint-api.ts
 api/provider-console-endpoint-api.ts
 base.ts
@@ -10,8 +12,10 @@ configuration.ts
 git_push.sh
 index.ts
 models/add-operation.ts
+models/ai-model-list.ts
 models/ai-model-spec.ts
 models/ai-model.ts
+models/ai-provider-list.ts
 models/ai-provider-spec.ts
 models/ai-provider-status.ts
 models/ai-provider.ts

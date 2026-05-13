@@ -1,18 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import {
-  VButton,
-  VCard,
-  VLoading,
-  VStatusDot,
-  VTag,
-  VEmpty,
-} from '@halo-dev/components'
-import type { AiProvider } from '@/types'
+import { VButton, VCard, VLoading, VStatusDot, VTag, VEmpty } from '@halo-dev/components'
 import { PROVIDER_TYPE_LABELS } from '@/types'
 import RiEditLine from '~icons/ri/edit-line'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiSearchLine from '~icons/ri/search-line'
+import type { AiProvider } from '@/api/generated'
 
 const props = defineProps<{
   providers: AiProvider[]
@@ -35,7 +28,7 @@ const filteredProviders = computed(() => {
     (p) =>
       p.spec.displayName.toLowerCase().includes(q) ||
       p.spec.providerType.toLowerCase().includes(q) ||
-      (PROVIDER_TYPE_LABELS[p.spec.providerType] || '').toLowerCase().includes(q)
+      (PROVIDER_TYPE_LABELS[p.spec.providerType] || '').toLowerCase().includes(q),
   )
 })
 
@@ -56,12 +49,7 @@ function statusPhase(phase?: string) {
     <div class="provider-list__search">
       <div class="search-input-wrapper">
         <RiSearchLine class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索供应商..."
-          class="search-input"
-        />
+        <input v-model="searchQuery" type="text" placeholder="搜索供应商..." class="search-input" />
       </div>
     </div>
 
@@ -100,13 +88,7 @@ function statusPhase(phase?: string) {
         <div class="provider-card__status">
           <VStatusDot :state="statusPhase(provider.status?.phase)" />
           <span class="text-xs text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
-          <VTag
-            v-if="!provider.spec.enabled"
-            size="sm"
-            style="margin-left: 8px"
-          >
-            已禁用
-          </VTag>
+          <VTag v-if="!provider.spec.enabled" size="sm" style="margin-left: 8px"> 已禁用 </VTag>
         </div>
       </VCard>
     </div>

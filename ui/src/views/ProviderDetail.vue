@@ -8,7 +8,6 @@ import {
   VTag,
   VStatusDot,
 } from '@halo-dev/components'
-import type { AiProvider } from '@/types'
 import { PROVIDER_TYPE_LABELS, BUILT_IN_PROVIDERS } from '@/types'
 import { useTestConnectivity } from '@/composables/useProviders'
 import { useModelsByProvider } from '@/composables/useModels'
@@ -20,6 +19,7 @@ import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiTestTubeLine from '~icons/ri/test-tube-line'
 import RiAddLine from '~icons/ri/add-line'
 import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
+import type { AiProvider } from '@/api/generated'
 
 const props = defineProps<{
   provider: AiProvider
@@ -52,9 +52,7 @@ function statusPhase(phase?: string) {
   }
 }
 
-const isBuiltIn = computed(() =>
-  BUILT_IN_PROVIDERS.includes(props.provider.spec.providerType)
-)
+const isBuiltIn = computed(() => BUILT_IN_PROVIDERS.includes(props.provider.spec.providerType))
 </script>
 
 <template>
@@ -71,11 +69,7 @@ const isBuiltIn = computed(() =>
           <VTag v-if="!provider.spec.enabled" size="sm" type="warning">已禁用</VTag>
         </div>
         <div class="provider-detail__actions">
-          <VButton
-            size="sm"
-            :loading="testConnectivity.isPending.value"
-            @click="onTest"
-          >
+          <VButton size="sm" :loading="testConnectivity.isPending.value" @click="onTest">
             <template #icon>
               <RiTestTubeLine />
             </template>
@@ -97,10 +91,7 @@ const isBuiltIn = computed(() =>
       </div>
 
       <div v-if="testConnectivity.data.value" class="connectivity-result">
-        <VTag
-          :type="testConnectivity.data.value.phase === 'OK' ? 'success' : 'error'"
-          size="sm"
-        >
+        <VTag :type="testConnectivity.data.value.phase === 'OK' ? 'success' : 'error'" size="sm">
           {{ testConnectivity.data.value.phase === 'OK' ? '连通成功' : '连通失败' }}
         </VTag>
         <span class="text-sm text-gray-600">{{ testConnectivity.data.value.message }}</span>
@@ -125,10 +116,7 @@ const isBuiltIn = computed(() =>
         <VDescriptionItem v-if="provider.spec.proxyHost" label="代理主机">
           {{ provider.spec.proxyHost }}:{{ provider.spec.proxyPort || '' }}
         </VDescriptionItem>
-        <VDescriptionItem
-          v-if="provider.status?.lastCheckedAt"
-          label="上次检测"
-        >
+        <VDescriptionItem v-if="provider.status?.lastCheckedAt" label="上次检测">
           {{ provider.status.lastCheckedAt }}
         </VDescriptionItem>
       </VDescription>
@@ -152,10 +140,7 @@ const isBuiltIn = computed(() =>
           </VButton>
         </div>
       </div>
-      <ModelList
-        :models="models || []"
-        :provider-name="provider.metadata.name"
-      />
+      <ModelList :models="models || []" :provider-name="provider.metadata.name" />
       <ModelDiscoveryModal
         v-if="discoveryVisible"
         :provider-name="provider.metadata.name"

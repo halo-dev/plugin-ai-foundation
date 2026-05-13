@@ -1,8 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "build": "run-p type-check \"build-only {@}\" --",
-    "build-only": "rsbuild build",
+    "build-with-check": "run-p type-check \"build-only {@}\" --",
+    "build": "rsbuild build",
     "dev": "rsbuild build --watch --env-mode=development",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path ../.gitignore",
     "lint:eslint": "eslint . --fix",

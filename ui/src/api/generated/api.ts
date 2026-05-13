@@ -14,6 +14,8 @@
 
 
 
+export * from './api/ai-model-v1alpha1-api';
+export * from './api/ai-provider-v1alpha1-api';
 export * from './api/model-console-endpoint-api';
 export * from './api/provider-console-endpoint-api';
 

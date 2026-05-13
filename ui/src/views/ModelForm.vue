@@ -2,8 +2,8 @@
 import { ref, computed, watch } from 'vue'
 import { VButton } from '@halo-dev/components'
 import { useCreateModel, useUpdateModel } from '@/composables/useModels'
-import type { AiModel, AiModelSpec } from '@/types'
 import { CAPABILITY_OPTIONS, ENDPOINT_TYPE_OPTIONS } from '@/types'
+import type { AiModel, AiModelSpec } from '@/api/generated'
 
 const props = defineProps<{
   model?: AiModel | null
@@ -45,7 +45,7 @@ watch(
       }
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const capabilityOptions = CAPABILITY_OPTIONS.map((c) => ({
@@ -127,19 +127,9 @@ async function handleSubmit(values: Record<string, unknown>) {
         placeholder="例如: GPT-4o"
       />
 
-      <FormKit
-        type="text"
-        name="group"
-        label="分组"
-        placeholder="例如: chat, embedding"
-      />
+      <FormKit type="text" name="group" label="分组" placeholder="例如: chat, embedding" />
 
-      <FormKit
-        type="checkbox"
-        name="capabilities"
-        label="能力标签"
-        :options="capabilityOptions"
-      />
+      <FormKit type="checkbox" name="capabilities" label="能力标签" :options="capabilityOptions" />
 
       <FormKit
         type="select"
@@ -148,17 +138,9 @@ async function handleSubmit(values: Record<string, unknown>) {
         :options="endpointTypeOptions"
       />
 
-      <FormKit
-        type="switch"
-        name="supportedTextDelta"
-        label="支持流式输出"
-      />
+      <FormKit type="switch" name="supportedTextDelta" label="支持流式输出" />
 
-      <FormKit
-        type="switch"
-        name="enabled"
-        label="启用"
-      />
+      <FormKit type="switch" name="enabled" label="启用" />
 
       <button ref="submitBtn" type="submit" style="display: none"></button>
     </FormKit>

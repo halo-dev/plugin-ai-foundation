@@ -1,5 +1,7 @@
 package run.halo.aifoundation.extension;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -7,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import run.halo.app.extension.AbstractExtension;
 import run.halo.app.extension.GVK;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -14,14 +17,18 @@ import run.halo.app.extension.GVK;
     plural = "aiproviders", singular = "aiprovider")
 public class AiProvider extends AbstractExtension {
 
+    @Schema(requiredMode = REQUIRED)
     private AiProviderSpec spec;
     private AiProviderStatus status;
 
     @Data
     public static class AiProviderSpec {
         /** Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike */
+        @Schema(requiredMode = REQUIRED)
         private String providerType;
+        @Schema(requiredMode = REQUIRED)
         private String displayName;
+        @Schema(requiredMode = REQUIRED)
         private boolean enabled = true;
         /** Base URL. Required for ollama and openailike; built-in providers use defaults. */
         private String baseUrl;
