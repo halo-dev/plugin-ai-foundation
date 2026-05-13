@@ -14,7 +14,7 @@ export default definePlugin({
           import(/* webpackChunkName: "ProviderManager" */ './views/ProviderManager.vue'),
         meta: {
           title: 'AI 模型配置',
-          permissions: ['plugin:ai-foundation:manage'],
+          permissions: ['*'],
           menu: {
             name: 'AI 模型配置',
             group: 'system',
