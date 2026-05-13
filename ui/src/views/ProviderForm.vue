@@ -67,6 +67,18 @@ const baseUrlPlaceholder = computed(() => {
 
 const isEditing = computed(() => !!props.provider)
 
+watch(
+  () => formValues.value.providerType,
+  () => {
+    if (!isEditing.value && selectedProviderType.value) {
+      const current = (formValues.value.displayName as string)?.trim()
+      if (!current) {
+        formValues.value.displayName = selectedProviderType.value.displayName
+      }
+    }
+  },
+)
+
 function submitForm() {
   submitBtn.value?.click()
 }

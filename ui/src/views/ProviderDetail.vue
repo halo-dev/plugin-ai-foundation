@@ -8,9 +8,11 @@ import {
   VCard,
   VDescription,
   VDescriptionItem,
+  VModal,
   VStatusDot,
   VTag,
 } from '@halo-dev/components'
+import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
 import RiAddLine from '~icons/ri/add-line'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
@@ -18,6 +20,7 @@ import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
 import RiEditLine from '~icons/ri/edit-line'
 import RiTestTubeLine from '~icons/ri/test-tube-line'
 import ModelDiscoveryModal from './ModelDiscoveryModal.vue'
+import ModelForm from './ModelForm.vue'
 import ModelList from './ModelList.vue'
 
 const props = defineProps<{
@@ -32,6 +35,7 @@ const emit = defineEmits<{
 const testConnectivity = useTestConnectivity()
 const { data: models } = useModelsByProvider(props.provider.metadata.name)
 const { data: providerTypes } = useProviderTypes()
+const queryClient = useQueryClient()
 
 const modelFormVisible = ref(false)
 const editingModel = ref(null)
@@ -58,6 +62,13 @@ function statusPhase(phase?: string) {
     default:
       return 'default'
   }
+}
+
+function onModelFormSaved() {
+  modelFormVisible.value = false
+  editingModel.value = null
+  queryClient.invalidateQueries({ queryKey: ['ai-models'] })
+  queryClient.invalidateQueries({ queryKey: ['ai-models', 'provider', props.provider.metadata.name] })
 }
 </script>
 
@@ -153,6 +164,18 @@ function statusPhase(phase?: string) {
         :provider-type="providerTypeInfo"
         @close="discoveryVisible = false"
       />
+      <VModal
+        v-if="modelFormVisible"
+        title="添加模型"
+        :width="600"
+        @close="modelFormVisible = false"
+      >
+        <ModelForm
+          :provider-name="provider.metadata.name"
+          @saved="onModelFormSaved"
+          @cancel="modelFormVisible = false"
+        />
+      </VModal>
     </VCard>
   </div>
 </template>

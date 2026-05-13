@@ -2,7 +2,7 @@
 import type { AiModel } from '@/api/generated'
 import { useDeleteModel } from '@/composables/useModels'
 import { CAPABILITY_OPTIONS } from '@/types'
-import { VButton, VCard, VEmpty, VModal, VTag } from '@halo-dev/components'
+import { Dialog, Toast, VButton, VCard, VEmpty, VModal, VTag } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
 import RiChat1Line from '~icons/ri/chat-1-line'
@@ -71,7 +71,6 @@ function onEdit(model: AiModel) {
 }
 
 function onDelete(model: AiModel) {
-  // eslint-disable-next-line no-undef
   Dialog.warning({
     title: '确认删除',
     description: `确定要删除模型 "${model.spec.displayName}" 吗？`,

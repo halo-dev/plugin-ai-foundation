@@ -2,7 +2,7 @@
 import type { AiProvider } from '@/api/generated'
 import { useModels } from '@/composables/useModels'
 import { useDeleteProvider, useProviders } from '@/composables/useProviders'
-import { VButton, VModal, VPageHeader } from '@halo-dev/components'
+import { Dialog, Toast, VButton, VModal, VPageHeader } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
 import RiAddLine from '~icons/ri/add-line'
@@ -37,11 +37,9 @@ function onEditProvider(provider: AiProvider) {
 function onDeleteProvider(provider: AiProvider) {
   const hasModels = allModels.value?.some((m) => m.spec.providerName === provider.metadata.name)
   if (hasModels) {
-    // eslint-disable-next-line no-undef
     Toast.warning('该供应商下仍有模型，请先删除所有模型后再删除供应商')
     return
   }
-  // eslint-disable-next-line no-undef
   Dialog.warning({
     title: '确认删除',
     description: `确定要删除供应商 "${provider.spec.displayName}" 吗？`,
@@ -93,6 +91,7 @@ const providerName = computed(() => selectedProvider.value?.metadata.name || '')
     <div class="provider-manager__detail">
       <ProviderDetail
         v-if="selectedProvider"
+        :key="selectedProvider.metadata.name"
         :provider="selectedProvider"
         @edit="onEditProvider"
         @delete="onDeleteProvider"
