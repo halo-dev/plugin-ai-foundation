@@ -88,10 +88,12 @@ async function handleSubmit(values: Record<string, unknown>) {
       model: updated,
     })
   } else {
+    const generateName =
+      `${props.providerName}-${spec.modelId.replace('/', '-')}-`.toLocaleLowerCase()
     const newModel: AiModel = {
       apiVersion: 'aifoundation.halo.run/v1alpha1',
       kind: 'AiModel',
-      metadata: { generateName: `${props.providerName}-${spec.modelId}-`, name: '' },
+      metadata: { generateName, name: '' },
       spec,
     }
     await createModel.mutateAsync(newModel)

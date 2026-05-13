@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AiModel } from '@/api/generated'
-import { useCreateModel, useProviderModels } from '@/composables/useModels'
 import type { DiscoveredModel } from '@/composables/useModels'
+import { useCreateModel, useProviderModels } from '@/composables/useModels'
 import { VButton, VCard, VEmpty, VLoading } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
@@ -67,10 +67,15 @@ async function batchAdd() {
   adding.value = true
   try {
     for (const dm of toAdd) {
+      const generateName =
+        `${props.providerName}-${dm.modelId.replace('/', '-')}-`.toLocaleLowerCase()
       const newModel: AiModel = {
         apiVersion: 'aifoundation.halo.run/v1alpha1',
         kind: 'AiModel',
-        metadata: { generateName: `${props.providerName}-${dm.modelId}-`, name: '' },
+        metadata: {
+          generateName,
+          name: '',
+        },
         spec: {
           providerName: props.providerName,
           modelId: dm.modelId,

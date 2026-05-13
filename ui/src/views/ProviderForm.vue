@@ -83,7 +83,7 @@ async function handleSubmit(values: Record<string, unknown>) {
     const newProvider: AiProvider = {
       apiVersion: 'aifoundation.halo.run/v1alpha1',
       kind: 'AiProvider',
-      metadata: { generateName: `${values.providerType}-`, name: '' },
+      metadata: { generateName: `${values.providerType}-`.toLocaleLowerCase(), name: '' },
       spec,
     }
     await createProvider.mutateAsync(newProvider)
