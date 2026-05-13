@@ -1,55 +1,40 @@
 schema: spec-driven
 
 context: |
-  Repository: halo-dev/plugin-ai-foundation
-  Domain: Halo CMS plugin that provides shared AI foundation capabilities for other plugins.
+  Halo CMS plugin providing shared AI foundation capabilities for other plugins.
+  Multi-module Gradle: api (published Java SDK), app (plugin impl), ui (Vue 3 console).
+  This plugin is unreleased — backward compatibility is not a concern.
 
-  Architecture conventions:
-  - Prefer phased delivery. Backend foundation and Console UI may be split into separate changes.
-  - The backend foundation change should prioritize data model correctness, server-side validation, provider adapters, and debug/admin endpoints before UI work.
-  - Console UI may be delivered in a later dedicated change once backend contracts are stable.
+  Provider type system:
+  - Each provider is a single @Component class implementing AiProviderType, extending AbstractAiProviderType.
+  - One class = identity + metadata + behavior. No split between adapter and metadata.
+  - Discovered via Spring ApplicationContext.getBeansOfType(). Adding a provider = one new class, no frontend changes.
+  - Metadata exposed via REST API. Frontend must not hardcode provider type lists.
 
-  AI provider modeling:
-  - AiProvider and AiModel are separate Extensions; storage stays split even if UI aggregates by provider.
-  - AiModel.spec.providerName refers to AiProvider.metadata.name (provider resource name / provider instance), not providerType.
-  - modelRef format is providerResourceName/modelId.
-  - providerType is user-facing built-in provider preset or adapter key, such as aihubmix, siliconflow, openai, deepseek, ollama, openailike.
-  - Built-in provider presets should prefer "select vendor + configure key" UX; only openailike requires manual baseUrl input.
+  Extension model:
+  - AiProvider and AiModel are separate Extensions (GVK: aifoundation.halo.run/v1alpha1).
+  - AiModel.spec.providerName references AiProvider.metadata.name (resource name, not providerType).
+  - modelRef format: providerResourceName/modelId.
 
-  Credential conventions:
-  - Use apiKeySecretName for a single Halo Secret reference.
-  - First phase does not support multi-Secret rotation.
-  - Future multi-key support, if needed, should come from parsing comma-separated keys inside one Secret value rather than changing the outer schema back to a list.
+  API key conventions:
+  - Stored as Halo Secret references (spec.apiKeySecretName), resolved at runtime by SecretResolver.
+  - Single Secret per provider. No multi-key rotation.
 
-  Provider defaults currently expected in specs/design:
-  - aihubmix => default baseUrl https://aihubmix.com plus provider-specific headers
-  - siliconflow => default baseUrl https://api.siliconflow.cn
-  - openai => default baseUrl https://api.openai.com
-  - deepseek => default baseUrl https://api.deepseek.com
-  - openailike => user must provide baseUrl
+  Embedding API:
+  - Two-layer: simple calls (embedQuery) + advanced EmbeddingRequest (dimensions, maxBatchSize, providerOptions).
+  - Public API must not expose Spring AI types.
 
-  Embedding API conventions:
-  - Keep the API independent from Spring AI types.
-  - Prefer a two-layer embedding API: simple calls for common use, plus an EmbeddingRequest for advanced scenarios.
-  - Advanced embedding requests may include dimensions, maxBatchSize, and providerOptions.
-  - Support query embedding explicitly (for example, embedQuery) instead of forcing every consumer to wrap a single string in a list.
-
-  Debug/admin API conventions:
-  - Backend changes should expose debug/admin endpoints for provider model discovery, connectivity testing, and test chat.
-  - The first-phase test-chat endpoint should accept only prompt in the request body and return at least modelRef, content, finishReason, and usage.
+  Dev workflow:
+  - After backend changes: docker rm halo-for-plugin-development -f && ./gradlew haloServer
+  - After API/field changes: ./gradlew generateApiClient — frontend must use generated client, never hardcode paths.
 
 rules:
   proposal:
-    - Clearly state when a change is intentionally backend-only or UI-only.
-    - If work is phased, mention dependencies between changes explicitly.
-    - Always include a short non-goals section when scope is being reduced.
+    - Always include a non-goals section when scope is being reduced.
+    - Clearly state when a change is backend-only or UI-only.
   design:
     - Preserve the distinction between providerType and provider resource name.
-    - Do not describe built-in providers as requiring manual baseUrl unless the provider type is openailike.
-    - When mentioning test APIs, describe them as debug/admin endpoints rather than UI-only console endpoints.
-    - For embedding APIs, keep simple and advanced request layers explicit without introducing Spring AI types into the public contract.
+    - Public embedding API must not expose Spring AI types.
   tasks:
     - Put server-side validation before UI tasks when both exist.
-    - Add explicit tasks for provider-specific default baseUrl or header behavior when built-in provider presets are involved.
     - When UI is split to another change, remove UI tasks from the backend change instead of leaving placeholders.
-    - When embedding APIs need to support RAG scenarios, add explicit tasks for EmbeddingRequest-style advanced parameters and query embedding.
