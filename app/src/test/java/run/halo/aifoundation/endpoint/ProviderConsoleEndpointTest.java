@@ -17,7 +17,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
-import run.halo.aifoundation.provider.ProviderClientCache;
+import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 

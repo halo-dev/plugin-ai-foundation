@@ -1,4 +1,4 @@
-package run.halo.aifoundation.provider;
+package run.halo.aifoundation.provider.support;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

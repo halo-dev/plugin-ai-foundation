@@ -1,4 +1,4 @@
-package run.halo.aifoundation.provider;
+package run.halo.aifoundation.provider.support;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -8,6 +8,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.AiProviderType;
 
 @Slf4j
 @Component

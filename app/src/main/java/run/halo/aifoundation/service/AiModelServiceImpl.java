@@ -16,8 +16,8 @@ import run.halo.aifoundation.ProviderInfo;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
-import run.halo.aifoundation.provider.ProviderClientCache;
-import run.halo.aifoundation.provider.SecretResolver;
+import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.ReactiveExtensionClient;
 

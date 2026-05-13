@@ -17,6 +17,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.ModelCapability;
 
 @Slf4j
 public abstract class AbstractAiProviderType implements AiProviderType {

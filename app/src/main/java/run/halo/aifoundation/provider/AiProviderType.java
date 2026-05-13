@@ -6,6 +6,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.lang.Nullable;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 
 public interface AiProviderType {
 

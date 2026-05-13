@@ -1,4 +1,4 @@
-package run.halo.aifoundation.provider;
+package run.halo.aifoundation.provider.support;
 
 import static org.mockito.Mockito.when;
 

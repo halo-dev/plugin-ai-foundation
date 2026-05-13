@@ -16,6 +16,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 
 @Slf4j
 @Component

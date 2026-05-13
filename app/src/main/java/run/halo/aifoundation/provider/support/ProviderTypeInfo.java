@@ -1,4 +1,4 @@
-package run.halo.aifoundation.provider;
+package run.halo.aifoundation.provider.support;
 
 import java.util.List;
 import lombok.Builder;
