@@ -102,7 +102,9 @@ export function useProviderModels(providerName: string) {
   return useQuery({
     queryKey: ['provider-models', providerName],
     queryFn: async () => {
-      const { data } = await providerApi.listProviders({})
+      const { data } = await debugApi.listProviderModels({
+        name: providerName,
+      })
       return data
     },
     enabled: !!providerName,
@@ -113,7 +115,6 @@ export function useTestChat() {
   return useMutation({
     mutationFn: async ({ modelName, request }: { modelName: string; request: TestChatRequest }) => {
       const { data } = await debugApi.testModelChat({ name: modelName, testChatRequest: request })
-
       return data
     },
   })

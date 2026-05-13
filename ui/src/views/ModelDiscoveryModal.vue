@@ -26,7 +26,7 @@ const defaultEndpointType = ref('')
 const adding = ref(false)
 
 const availableModels = computed(() => {
-  return discovered.value?.models || []
+  return discovered.value || []
 })
 
 function toggleSelection(model: DiscoveredModel) {
