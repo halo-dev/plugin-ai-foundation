@@ -1,0 +1,76 @@
+plugins {
+    id 'java'
+    id "io.freefair.lombok" version "9.2.0"
+    id "run.halo.plugin.devtools" version "0.6.2"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = 21
+}
+
+configurations.runtimeClasspath {
+    exclude group: 'io.projectreactor'
+    exclude group: 'org.reactivestreams'
+    exclude group: 'org.springframework'
+    exclude group: 'org.springframework.boot'
+    exclude group: 'org.springdoc'
+    exclude group: 'com.fasterxml.jackson.core'
+    exclude group: 'io.micrometer'
+    exclude group: 'org.slf4j'
+}
+
+dependencies {
+    implementation platform('run.halo.tools.platform:plugin:2.23.0')
+    implementation platform("org.springframework.ai:spring-ai-bom:2.0.0-M2")
+    implementation project(':api')
+
+    implementation 'org.springframework.ai:spring-ai-client-chat'
+    implementation 'org.springframework.ai:spring-ai-openai'
+    implementation 'org.springframework.ai:spring-ai-starter-model-deepseek'
+    implementation 'org.springframework.ai:spring-ai-starter-model-zhipuai'
+    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+
+    compileOnly 'run.halo.app:api'
+
+    testImplementation 'run.halo.app:api'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.named('generatePluginComponentsIdx') {
+    notCompatibleWithConfigurationCache('This task invokes "Task.project" at execution time, which is not supported with configuration cache.')
+}
+
+tasks.named('jar') {
+    dependsOn(':api:jar')
+}
+
+haloPlugin {
+    openApi {
+        outputDir = file("$rootDir/api-docs/openapi/v3_0")
+        groupingRules {
+            create("aifoundation-console") {
+                displayName = "AI Foundation Console APIs"
+                pathsToMatch = ["/apis/console.api.aifoundation.halo.run/**"]
+            }
+        }
+        generator {
+        }
+    }
+}
+
+halo {
+    version = '2.23'
+}

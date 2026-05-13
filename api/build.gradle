@@ -1,0 +1,60 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id "io.freefair.lombok" version "9.2.0"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+dependencies {
+    compileOnly platform('run.halo.tools.platform:plugin:2.23.0')
+    compileOnly 'run.halo.app:api'
+    compileOnly 'io.projectreactor:reactor-core'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            groupId = 'run.halo.aifoundation'
+            artifactId = 'api'
+            version = project.version
+
+            pom {
+                name = 'AI Foundation Plugin API for Halo'
+                description = 'Java SDK for consuming AI model capabilities from plugin-ai-foundation.'
+                url = 'https://github.com/halo-dev/plugin-ai-foundation'
+                licenses {
+                    license {
+                        name = 'The GNU General Public License v3.0'
+                        url = 'https://www.gnu.org/licenses/gpl-3.0.en.html'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'halo-dev'
+                        name = 'Halo'
+                        email = 'hi@halo.run'
+                    }
+                }
+                scm {
+                    url = 'https://github.com/halo-dev/plugin-ai-foundation'
+                    connection = 'scm:git:git@github.com:halo-dev/plugin-ai-foundation.git'
+                    developerConnection = 'scm:git:ssh://git@github.com:halo-dev/plugin-ai-foundation.git'
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
