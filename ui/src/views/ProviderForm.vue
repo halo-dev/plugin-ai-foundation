@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AiProvider, AiProviderSpec } from '@/api/generated'
 import { useCreateProvider, useUpdateProvider } from '@/composables/useProviders'
-import { PROVIDER_TYPE_LABELS } from '@/types'
+import { useProviderTypes } from '@/composables/useProviderTypes'
 import { VButton } from '@halo-dev/components'
 import { computed, ref, watch } from 'vue'
 
@@ -16,6 +16,7 @@ const emit = defineEmits<{
 
 const createProvider = useCreateProvider()
 const updateProvider = useUpdateProvider()
+const { data: providerTypes } = useProviderTypes()
 
 const submitBtn = ref<HTMLButtonElement>()
 
@@ -43,14 +44,25 @@ watch(
   { immediate: true },
 )
 
-const providerTypeOptions = Object.entries(PROVIDER_TYPE_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}))
+const providerTypeOptions = computed(() => {
+  if (!providerTypes.value) return []
+  return providerTypes.value.map((t) => ({
+    value: t.providerType,
+    label: t.displayName,
+  }))
+})
+
+const selectedProviderType = computed(() => {
+  const type = formValues.value.providerType as string
+  return providerTypes.value?.find((t) => t.providerType === type)
+})
 
 const requiresBaseUrl = computed(() => {
-  const type = formValues.value.providerType as string
-  return type === 'openailike' || type === 'ollama'
+  return selectedProviderType.value?.requiresBaseUrl ?? false
+})
+
+const baseUrlPlaceholder = computed(() => {
+  return selectedProviderType.value?.defaultBaseUrl || 'https://api.example.com/v1'
 })
 
 const isEditing = computed(() => !!props.provider)
@@ -125,7 +137,7 @@ async function handleSubmit(values: Record<string, unknown>) {
         name="baseUrl"
         label="Base URL"
         validation="required"
-        placeholder="https://api.example.com/v1"
+        :placeholder="baseUrlPlaceholder"
       />
 
       <FormKit type="secret" name="apiKeySecretName" label="API Key Secret" />

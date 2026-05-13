@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { AiProvider } from '@/api/generated'
 import { useModelsByProvider } from '@/composables/useModels'
+import { useProviderTypes } from '@/composables/useProviderTypes'
 import { useTestConnectivity } from '@/composables/useProviders'
-import { BUILT_IN_PROVIDERS, PROVIDER_TYPE_LABELS } from '@/types'
 import {
   VButton,
   VCard,
@@ -31,10 +31,19 @@ const emit = defineEmits<{
 
 const testConnectivity = useTestConnectivity()
 const { data: models } = useModelsByProvider(props.provider.metadata.name)
+const { data: providerTypes } = useProviderTypes()
 
 const modelFormVisible = ref(false)
 const editingModel = ref(null)
 const discoveryVisible = ref(false)
+
+const providerTypeInfo = computed(() => {
+  return providerTypes.value?.find((t) => t.providerType === props.provider.spec.providerType)
+})
+
+function providerTypeLabel(): string {
+  return providerTypeInfo.value?.displayName || props.provider.spec.providerType
+}
 
 function onTest() {
   testConnectivity.mutate(props.provider.metadata.name)
@@ -50,8 +59,6 @@ function statusPhase(phase?: string) {
       return 'default'
   }
 }
-
-const isBuiltIn = computed(() => BUILT_IN_PROVIDERS.includes(props.provider.spec.providerType))
 </script>
 
 <template>
@@ -61,7 +68,7 @@ const isBuiltIn = computed(() => BUILT_IN_PROVIDERS.includes(props.provider.spec
         <div class="provider-detail__title">
           <h2 class="text-lg font-semibold">{{ provider.spec.displayName }}</h2>
           <VTag size="sm">
-            {{ PROVIDER_TYPE_LABELS[provider.spec.providerType] || provider.spec.providerType }}
+            {{ providerTypeLabel() }}
           </VTag>
           <VStatusDot :state="statusPhase(provider.status?.phase)" />
           <span class="text-sm text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
@@ -141,9 +148,9 @@ const isBuiltIn = computed(() => BUILT_IN_PROVIDERS.includes(props.provider.spec
       </div>
       <ModelList :models="models || []" :provider-name="provider.metadata.name" />
       <ModelDiscoveryModal
-        v-if="discoveryVisible"
+        v-if="discoveryVisible && providerTypeInfo"
         :provider-name="provider.metadata.name"
-        :provider-type="provider.spec.providerType"
+        :provider-type="providerTypeInfo"
         @close="discoveryVisible = false"
       />
     </VCard>

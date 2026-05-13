@@ -1,4 +1,4 @@
-## ADDED Requirements
+## Requirements
 
 ### Requirement: AiProvider Extension definition
 The system SHALL define an Extension named `AiProvider` with GVK `aifoundation.halo.run/v1alpha1`.
@@ -7,7 +7,6 @@ The system SHALL define an Extension named `AiProvider` with GVK `aifoundation.h
 - **WHEN** a user creates an `AiProvider` resource
 - **THEN** the resource MUST have `spec.providerType`, `spec.displayName`, `spec.enabled`, and structured connection fields
 - **AND** structured connection fields MUST include `spec.apiKeySecretName` for API-key based providers and `spec.baseUrl` for self-hosted or custom-base-url providers
-- **AND** the resource MAY include `spec.config` (Map<String, String>) for provider-specific advanced options
 - **AND** the resource MUST have `status.phase`, `status.message`, and `status.lastCheckedAt` fields
 
 ### Requirement: AiModel Extension definition
@@ -25,55 +24,30 @@ The system SHALL define an Extension named `AiModel` with GVK `aifoundation.halo
 - **THEN** the tuple `(spec.providerName, spec.modelId)` MUST be unique across all `AiModel` resources
 
 ### Requirement: Supported provider types
-The system SHALL support the following provider types: `aihubmix`, `openai`, `deepseek`, `siliconflow`, `doubao`, `ernie`, `zhipuai`, `ollama`, `openailike`.
+The system SHALL validate `spec.providerType` at provider creation time by checking that a corresponding `AiProviderType` bean exists in the Spring context. The system SHALL NOT maintain a hardcoded list of supported provider types.
 
 #### Scenario: Provider type validation
 - **WHEN** a user creates an `AiProvider` with `spec.providerType = "openai"`
-- **THEN** the system SHALL accept the resource
+- **THEN** the system SHALL look up an `AiProviderType` bean where `getProviderType()` returns "openai"
+- **AND** if found, the system SHALL accept the resource
 
 #### Scenario: Unsupported provider type rejection
 - **WHEN** a user creates an `AiProvider` with `spec.providerType = "unknown"`
-- **THEN** the system SHOULD reject the resource with a validation error
+- **THEN** the system SHALL reject the resource with a validation error
+- **AND** the error message SHALL indicate that no provider type matching "unknown" was found
 
 ### Requirement: Provider configuration per type
-The system SHALL interpret `AiProvider` structured fields according to the provider type:
-- `aihubmix`: requires `apiKeySecretName`; uses built-in default `baseUrl`
-- `openai`: requires `apiKeySecretName`
-- `deepseek`: requires `apiKeySecretName`
-- `siliconflow`: requires `apiKeySecretName`
-- `doubao`: requires `apiKeySecretName`
-- `ernie`: requires `apiKeySecretName`
-- `zhipuai`: requires `apiKeySecretName`
-- `ollama`: requires `baseUrl`
-- `openailike`: requires `baseUrl` and `apiKeySecretName`
+The system SHALL interpret `AiProvider` structured fields according to the `AiProviderType` metadata, not according to hardcoded per-type rules.
 
 #### Scenario: Built-in provider preset configuration
-- **WHEN** a user creates an `AiProvider` with a built-in provider type such as `aihubmix` or `siliconflow`
+- **WHEN** a user creates an `AiProvider` with a built-in provider type (where `AiProviderType.isBuiltIn()` is true)
 - **THEN** the user SHALL be able to complete configuration by selecting the provider type and binding `apiKeySecretName`
-- **AND** the system SHALL use the built-in default `baseUrl` and provider-specific request behavior for that type
+- **AND** the system SHALL use the `AiProviderType.getDefaultBaseUrl()` and provider-specific request behavior for that type
 - **AND** the user SHALL NOT be required to manually enter the provider's API base URL
 
-#### Scenario: Built-in provider default base URLs
-- **WHEN** the system initializes a built-in provider preset
-- **THEN** it SHALL use the following defaults unless a later design revision explicitly changes them:
-- **AND** `aihubmix` SHALL default to `https://aihubmix.com`
-- **AND** `siliconflow` SHALL default to `https://api.siliconflow.cn`
-- **AND** `openai` SHALL default to `https://api.openai.com`
-- **AND** `deepseek` SHALL default to `https://api.deepseek.com`
-
-#### Scenario: AiHubMix provider-specific behavior
-- **WHEN** an `AiProvider` has `providerType = "aihubmix"`
-- **THEN** the runtime SHALL use the built-in AiHubMix default `baseUrl`
-- **AND** the runtime SHALL apply the provider-specific request header behavior required by AiHubMix
-
-#### Scenario: OpenAI provider configuration
-- **WHEN** an `AiProvider` has `providerType = "openai"` and `apiKeySecretName = "openai-key"`
-- **AND** the referenced Halo Secret contains an API key value
-- **THEN** the system SHALL create an OpenAI-compatible client with the resolved API key
-
-#### Scenario: Ollama provider configuration
-- **WHEN** an `AiProvider` has `providerType = "ollama"` and `baseUrl = "http://localhost:11434"`
-- **THEN** the system SHALL create an Ollama client with the given base URL
+#### Scenario: Provider type requiring base URL
+- **WHEN** a user creates an `AiProvider` with a provider type where `AiProviderType.requiresBaseUrl()` is true
+- **THEN** the user SHALL be required to provide `spec.baseUrl`
 
 ### Requirement: Secret-backed credentials
 The system SHALL store provider API credentials through Halo Secret references.
@@ -133,20 +107,6 @@ The system SHALL enforce data integrity on the server side.
 - **WHEN** a client submits an invalid provider or model mutation directly to the backend
 - **THEN** the server SHALL still enforce uniqueness, reference integrity, and deletion safety checks
 - **AND** the request SHALL be rejected even if the UI failed to pre-validate it
-
-### Requirement: Embedding batch limits per provider
-
-The system SHALL expose provider-specific embedding batch limits through the `EmbeddingModel` interface.
-
-#### Scenario: OpenAI batch limit
-- **WHEN** an `AiProvider` has `providerType = "openai"`
-- **THEN** the corresponding `EmbeddingModel.maxEmbeddingsPerCall()` SHALL return `96`
-- **AND** `supportsParallelCalls()` SHALL return `true`
-
-#### Scenario: Ollama batch limit
-- **WHEN** an `AiProvider` has `providerType = "ollama"`
-- **THEN** the corresponding `EmbeddingModel.maxEmbeddingsPerCall()` SHALL return a reasonable default (e.g., `1` or provider-specific value)
-- **AND** `supportsParallelCalls()` SHALL return `false`
 
 ### Requirement: Provider options configuration support
 

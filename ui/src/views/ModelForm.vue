@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AiModel, AiModelSpec } from '@/api/generated'
 import { useCreateModel, useUpdateModel } from '@/composables/useModels'
-import { CAPABILITY_OPTIONS, ENDPOINT_TYPE_OPTIONS } from '@/types'
+import { CAPABILITY_OPTIONS } from '@/types'
 import { VButton } from '@halo-dev/components'
 import { computed, ref, watch } from 'vue'
 
@@ -53,10 +53,11 @@ const capabilityOptions = CAPABILITY_OPTIONS.map((c) => ({
   label: c.label,
 }))
 
-const endpointTypeOptions = ENDPOINT_TYPE_OPTIONS.map((o) => ({
-  value: o.value,
-  label: o.label,
-}))
+const endpointTypeOptions = [
+  { value: 'openai-chat', label: 'OpenAI Chat' },
+  { value: 'openai-embedding', label: 'OpenAI Embedding' },
+  { value: 'ollama-chat', label: 'Ollama Chat' },
+]
 
 const isEditing = computed(() => !!props.model)
 

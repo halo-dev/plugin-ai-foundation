@@ -2,6 +2,7 @@
 import type { AiModel } from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/useModels'
 import { useCreateModel, useProviderModels } from '@/composables/useModels'
+import type { ProviderTypeInfo } from '@/composables/useProviderTypes'
 import { VButton, VCard, VEmpty, VLoading } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
@@ -10,7 +11,7 @@ import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
 
 const props = defineProps<{
   providerName: string
-  providerType: string
+  providerType: ProviderTypeInfo
 }>()
 
 const emit = defineEmits<{
@@ -30,11 +31,14 @@ const availableModels = computed(() => {
 })
 
 function inferEndpointType(dm: DiscoveredModel): string {
+  const endpointTypes = props.providerType.supportedEndpointTypes || []
   const caps = dm.capabilities || []
   if (caps.includes('embedding')) {
-    return props.providerType === 'ollama' ? 'ollama-chat' : 'openai-embedding'
+    const embeddingType = endpointTypes.find((t) => t.includes('embedding'))
+    return embeddingType || endpointTypes[0] || 'openai-embedding'
   }
-  return props.providerType === 'ollama' ? 'ollama-chat' : 'openai-chat'
+  const chatType = endpointTypes.find((t) => t.includes('chat'))
+  return chatType || endpointTypes[0] || 'openai-chat'
 }
 
 function toggleSelection(model: DiscoveredModel) {

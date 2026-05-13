@@ -1,7 +1,11 @@
 package run.halo.aifoundation.provider;
 
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 
@@ -9,27 +13,71 @@ import run.halo.aifoundation.extension.AiProvider;
 @Component
 public class ProviderClientCache {
 
-    private final ConcurrentHashMap<String, ProviderAdapterHolder> cache =
-        new ConcurrentHashMap<>();
+    private final Map<String, ChatModel> chatModelCache = new ConcurrentHashMap<>();
+    private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
+    private final ApplicationContext applicationContext;
 
-    public ProviderAdapterHolder getOrCreate(AiProvider provider, String apiKey) {
+    private volatile Map<String, AiProviderType> providerTypeMap;
+
+    public ProviderClientCache(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
+
+    public Map<String, AiProviderType> getProviderTypeMap() {
+        if (providerTypeMap == null) {
+            synchronized (this) {
+                if (providerTypeMap == null) {
+                    providerTypeMap = applicationContext.getBeansOfType(AiProviderType.class)
+                        .values().stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                            AiProviderType::getProviderType,
+                            java.util.function.Function.identity(),
+                            (a, b) -> {
+                                log.warn("Duplicate provider type: {}, keeping first", a.getProviderType());
+                                return a;
+                            }
+                        ));
+                }
+            }
+        }
+        return providerTypeMap;
+    }
+
+    public AiProviderType getProviderType(String providerType) {
+        var type = getProviderTypeMap().get(providerType);
+        if (type == null) {
+            throw new IllegalArgumentException("Unsupported provider type: " + providerType);
+        }
+        return type;
+    }
+
+    public ChatModel getOrCreateChatModel(AiProvider provider, String apiKey, String modelId) {
         var name = provider.getMetadata().getName();
-        return cache.computeIfAbsent(name, k -> {
-            log.debug("Creating provider adapter for: {}", name);
-            var adapter = ProviderAdapterFactory.create(provider, apiKey);
-            return new ProviderAdapterHolder(adapter);
+        return chatModelCache.computeIfAbsent(name, k -> {
+            log.debug("Creating chat model for provider: {}", name);
+            var type = getProviderType(provider.getSpec().getProviderType());
+            return type.buildChatModel(provider, apiKey, modelId);
+        });
+    }
+
+    public EmbeddingModel getOrCreateEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
+        var name = provider.getMetadata().getName();
+        return embeddingModelCache.computeIfAbsent(name, k -> {
+            log.debug("Creating embedding model for provider: {}", name);
+            var type = getProviderType(provider.getSpec().getProviderType());
+            return type.buildEmbeddingModel(provider, apiKey, modelId);
         });
     }
 
     public void invalidate(String providerName) {
-        var removed = cache.remove(providerName);
-        if (removed != null) {
-            log.debug("Invalidated cached adapter for provider: {}", providerName);
-        }
+        chatModelCache.remove(providerName);
+        embeddingModelCache.remove(providerName);
+        log.debug("Invalidated cached models for provider: {}", providerName);
     }
 
     public void invalidateAll() {
-        cache.clear();
-        log.debug("Invalidated all cached provider adapters");
+        chatModelCache.clear();
+        embeddingModelCache.clear();
+        log.debug("Invalidated all cached provider models");
     }
 }

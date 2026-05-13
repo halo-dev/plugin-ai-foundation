@@ -3,8 +3,6 @@ package run.halo.aifoundation.extension;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import run.halo.app.extension.AbstractExtension;
@@ -38,8 +36,6 @@ public class AiProvider extends AbstractExtension {
         private String proxyHost;
         /** Proxy port for this provider (optional). */
         private Integer proxyPort;
-        /** Provider-specific advanced configuration. */
-        private Map<String, String> config;
     }
 
     @Data
@@ -52,10 +48,4 @@ public class AiProvider extends AbstractExtension {
             UNKNOWN, OK, ERROR
         }
     }
-
-    /** Supported provider types. */
-    public static final List<String> SUPPORTED_PROVIDER_TYPES = List.of(
-        "aihubmix", "openai", "deepseek", "siliconflow",
-        "doubao", "ernie", "zhipuai", "ollama", "openailike"
-    );
 }

@@ -23,10 +23,9 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.DiscoveredModel;
 import run.halo.aifoundation.provider.ModelCapability;
-import run.halo.aifoundation.provider.ProviderAdapter;
-import run.halo.aifoundation.provider.ProviderAdapterFactory;
 import run.halo.aifoundation.provider.ProviderClientCache;
 import run.halo.aifoundation.provider.SecretResolver;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
@@ -109,7 +108,7 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
             .flatMap(provider -> {
                 var secretName = provider.getSpec().getApiKeySecretName();
                 return secretResolver.resolveApiKey(secretName)
-                    .flatMap(apiKey -> discoverModelsViaAdapter(provider, apiKey))
+                    .flatMap(apiKey -> discoverModelsViaProviderType(provider, apiKey))
                     .switchIfEmpty(Mono.defer(() -> {
                         log.warn("Provider API returned empty for {}, falling back to local models",
                             name);
@@ -124,10 +123,16 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
             });
     }
 
-    private Mono<ServerResponse> discoverModelsViaAdapter(AiProvider provider, String apiKey) {
+    private Mono<ServerResponse> discoverModelsViaProviderType(AiProvider provider, String apiKey) {
         var providerName = provider.getMetadata().getName();
-        return Mono.fromCallable(() -> ProviderAdapterFactory.create(provider, apiKey))
-            .flatMap(ProviderAdapter::discoverModels)
+        AiProviderType providerType;
+        try {
+            providerType = providerClientCache.getProviderType(provider.getSpec().getProviderType());
+        } catch (IllegalArgumentException e) {
+            return Mono.error(new ResponseStatusException(
+                HttpStatus.BAD_REQUEST, e.getMessage()));
+        }
+        return providerType.discoverModels(provider, apiKey)
             .map(models -> models.stream()
                 .map(dm -> Map.<String, Object>of(
                     "modelId", dm.modelId(),
@@ -221,8 +226,8 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
         return Mono.fromCallable(() -> {
             try {
                 providerClientCache.invalidate(provider.getMetadata().getName());
-                var holder = providerClientCache.getOrCreate(provider, apiKey);
-                holder.getAdapter().buildChatModel("test");
+                var type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
+                type.buildChatModel(provider, apiKey, "test");
                 return new ConnectivityResult(true, "OK");
             } catch (Exception e) {
                 log.warn("Connectivity check failed for provider: {}",

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -15,18 +16,27 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.ProviderClientCache;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
 class ProviderConsoleEndpointTest {
 
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
+    private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
 
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        var endpoint = new ProviderConsoleEndpoint(client);
+        // Simulate "openai" as a known provider type
+        var openAiType = mock(AiProviderType.class);
+        when(openAiType.getProviderType()).thenReturn("openai");
+        when(providerClientCache.getProviderTypeMap())
+            .thenReturn(Map.of("openai", openAiType));
+
+        var endpoint = new ProviderConsoleEndpoint(client, providerClientCache);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();

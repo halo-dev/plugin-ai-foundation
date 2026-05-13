@@ -6,6 +6,7 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -18,6 +19,8 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.ProviderClientCache;
+import run.halo.aifoundation.provider.ProviderTypeInfo;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
@@ -30,6 +33,7 @@ import run.halo.app.extension.ReactiveExtensionClient;
 public class ProviderConsoleEndpoint implements CustomEndpoint {
 
     private final ReactiveExtensionClient client;
+    private final ProviderClientCache providerClientCache;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -90,6 +94,13 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                         .required(true))
                     .response(responseBuilder().implementation(Void.class))
             )
+            .GET("provider-types", this::listProviderTypes,
+                builder -> builder.operationId("ListProviderTypes")
+                    .description("List all available provider types with metadata.")
+                    .tag(tag)
+                    .response(responseBuilder()
+                        .implementationArray(ProviderTypeInfo.class))
+            )
             .build();
     }
 
@@ -118,11 +129,12 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 var providerType = provider.getSpec() != null
                     ? provider.getSpec().getProviderType() : null;
                 if (providerType == null
-                    || !AiProvider.SUPPORTED_PROVIDER_TYPES.contains(providerType)) {
+                    || !providerClientCache.getProviderTypeMap().containsKey(providerType)) {
                     return Mono.error(new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Unsupported provider type: " + providerType
-                            + ". Supported types: " + AiProvider.SUPPORTED_PROVIDER_TYPES));
+                            + ". Supported types: "
+                            + providerClientCache.getProviderTypeMap().keySet()));
                 }
                 if (provider.getMetadata() == null) {
                     provider.setMetadata(new Metadata());
@@ -171,5 +183,27 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                     .flatMap(client::delete)
                     .then(ServerResponse.noContent().build());
             });
+    }
+
+    private Mono<ServerResponse> listProviderTypes(ServerRequest request) {
+        var types = providerClientCache.getProviderTypeMap().values().stream()
+            .map(type -> ProviderTypeInfo.builder()
+                .providerType(type.getProviderType())
+                .displayName(type.getDisplayName())
+                .description(type.getDescription())
+                .iconUrl(type.getIconUrl())
+                .documentationUrl(type.getDocumentationUrl())
+                .websiteUrl(type.getWebsiteUrl())
+                .builtIn(type.isBuiltIn())
+                .requiresBaseUrl(type.requiresBaseUrl())
+                .defaultBaseUrl(type.getDefaultBaseUrl())
+                .supportedEndpointTypes(type.getSupportedEndpointTypes())
+                .supportsEmbeddings(type.supportsEmbeddings())
+                .build())
+            .sorted(Comparator
+                .comparing((ProviderTypeInfo t) -> !t.isBuiltIn())
+                .thenComparing(ProviderTypeInfo::getProviderType))
+            .toList();
+        return ServerResponse.ok().bodyValue(types);
     }
 }

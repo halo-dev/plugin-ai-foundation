@@ -15,6 +15,7 @@ import run.halo.aifoundation.ProviderDisabledException;
 import run.halo.aifoundation.ProviderInfo;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.ProviderClientCache;
 import run.halo.aifoundation.provider.SecretResolver;
 import run.halo.app.extension.ListOptions;
@@ -41,8 +42,7 @@ public class AiModelServiceImpl implements AiModelService {
         }
 
         var apiKey = resolveApiKey(provider);
-        var holder = providerClientCache.getOrCreate(provider, apiKey);
-        var chatModel = holder.getAdapter().buildChatModel(modelId);
+        var chatModel = providerClientCache.getOrCreateChatModel(provider, apiKey, modelId);
 
         return new LanguageModelImpl(chatModel, provider.getSpec().getProviderType());
     }
@@ -59,9 +59,8 @@ public class AiModelServiceImpl implements AiModelService {
         }
 
         var apiKey = resolveApiKey(provider);
-        var holder = providerClientCache.getOrCreate(provider, apiKey);
-        var adapter = holder.getAdapter();
-        var springEmbeddingModel = adapter.buildEmbeddingModel(modelId);
+        AiProviderType type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
+        var springEmbeddingModel = providerClientCache.getOrCreateEmbeddingModel(provider, apiKey, modelId);
 
         if (springEmbeddingModel == null) {
             throw new ModelNotFoundException(
@@ -71,8 +70,8 @@ public class AiModelServiceImpl implements AiModelService {
         return new EmbeddingModelImpl(
             springEmbeddingModel,
             provider.getSpec().getProviderType(),
-            adapter.maxEmbeddingsPerCall(),
-            adapter.supportsParallelCalls()
+            type.maxEmbeddingsPerCall(),
+            type.supportsParallelCalls()
         );
     }
 

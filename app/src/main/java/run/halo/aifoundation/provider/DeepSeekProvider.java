@@ -1,0 +1,74 @@
+package run.halo.aifoundation.provider;
+
+import java.util.List;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.ai.deepseek.DeepSeekChatOptions;
+import org.springframework.ai.deepseek.api.DeepSeekApi;
+import org.springframework.stereotype.Component;
+import run.halo.aifoundation.extension.AiProvider;
+
+@Component
+public class DeepSeekProvider extends AbstractAiProviderType {
+
+    private static final String DEFAULT_BASE_URL = "https://api.deepseek.com";
+
+    @Override
+    public String getProviderType() {
+        return "deepseek";
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "DeepSeek";
+    }
+
+    @Override
+    public boolean isBuiltIn() {
+        return true;
+    }
+
+    @Override
+    public boolean requiresBaseUrl() {
+        return false;
+    }
+
+    @Override
+    public String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
+
+    @Override
+    public List<String> getSupportedEndpointTypes() {
+        return List.of("openai-chat");
+    }
+
+    @Override
+    public boolean supportsEmbeddings() {
+        return false;
+    }
+
+    @Override
+    public int maxEmbeddingsPerCall() {
+        return 0;
+    }
+
+    @Override
+    public boolean supportsParallelCalls() {
+        return false;
+    }
+
+    @Override
+    public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
+        var deepSeekApi = DeepSeekApi.builder()
+            .baseUrl(resolveBaseUrl(provider))
+            .apiKey(apiKey)
+            .webClientBuilder(webClientBuilder())
+            .restClientBuilder(restClientBuilder())
+            .build();
+        return DeepSeekChatModel.builder()
+            .deepSeekApi(deepSeekApi)
+            .defaultOptions(DeepSeekChatOptions.builder().model(modelId).build())
+            .build();
+    }
+}

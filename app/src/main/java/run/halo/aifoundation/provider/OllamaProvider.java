@@ -13,28 +13,64 @@ import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.ollama.api.OllamaEmbeddingOptions;
 import org.springframework.ai.ollama.management.ModelManagementOptions;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
 
 @Slf4j
-public class OllamaAdapter extends AbstractProviderAdapter {
+@Component
+public class OllamaProvider extends AbstractAiProviderType {
 
     private static final String DEFAULT_BASE_URL = "http://localhost:11434";
 
-    private final OllamaApi ollamaApi;
-
-    public OllamaAdapter(AiProvider provider, String apiKey) {
-        super(provider, apiKey);
-        this.ollamaApi = OllamaApi.builder()
-            .baseUrl(resolveBaseUrl(DEFAULT_BASE_URL))
-            .webClientBuilder(webClientBuilder())
-            .restClientBuilder(restClientBuilder())
-            .build();
+    @Override
+    public String getProviderType() {
+        return "ollama";
     }
 
     @Override
-    public ChatModel buildChatModel(String modelId) {
+    public String getDisplayName() {
+        return "Ollama";
+    }
+
+    @Override
+    public boolean isBuiltIn() {
+        return false;
+    }
+
+    @Override
+    public boolean requiresBaseUrl() {
+        return true;
+    }
+
+    @Override
+    public String getDefaultBaseUrl() {
+        return DEFAULT_BASE_URL;
+    }
+
+    @Override
+    public List<String> getSupportedEndpointTypes() {
+        return List.of("ollama-chat");
+    }
+
+    @Override
+    public boolean supportsEmbeddings() {
+        return true;
+    }
+
+    @Override
+    public int maxEmbeddingsPerCall() {
+        return 1;
+    }
+
+    @Override
+    public boolean supportsParallelCalls() {
+        return false;
+    }
+
+    @Override
+    public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
+        var ollamaApi = buildOllamaApi(provider);
         return OllamaChatModel.builder()
             .ollamaApi(ollamaApi)
             .defaultOptions(OllamaChatOptions.builder().model(modelId).build())
@@ -43,7 +79,8 @@ public class OllamaAdapter extends AbstractProviderAdapter {
     }
 
     @Override
-    public EmbeddingModel buildEmbeddingModel(String modelId) {
+    public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
+        var ollamaApi = buildOllamaApi(provider);
         return OllamaEmbeddingModel.builder()
             .ollamaApi(ollamaApi)
             .defaultOptions(OllamaEmbeddingOptions.builder().model(modelId).build())
@@ -52,8 +89,8 @@ public class OllamaAdapter extends AbstractProviderAdapter {
     }
 
     @Override
-    public Mono<List<DiscoveredModel>> discoverModels() {
-        var baseUrl = resolveBaseUrl(DEFAULT_BASE_URL);
+    public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
+        var baseUrl = resolveBaseUrl(provider);
         var providerName = provider.getMetadata().getName();
         log.info("Discovering models for Ollama provider {}: baseUrl={}", providerName, baseUrl);
 
@@ -84,23 +121,11 @@ public class OllamaAdapter extends AbstractProviderAdapter {
             });
     }
 
-    @Override
-    public int maxEmbeddingsPerCall() {
-        return 1;
-    }
-
-    @Override
-    public boolean supportsParallelCalls() {
-        return false;
-    }
-
-    @Override
-    public String getProviderType() {
-        return "ollama";
-    }
-
-    @Override
-    protected String getDefaultBaseUrl() {
-        return DEFAULT_BASE_URL;
+    private OllamaApi buildOllamaApi(AiProvider provider) {
+        return OllamaApi.builder()
+            .baseUrl(resolveBaseUrl(provider))
+            .webClientBuilder(webClientBuilder())
+            .restClientBuilder(restClientBuilder())
+            .build();
     }
 }

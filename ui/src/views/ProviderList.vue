@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AiProvider } from '@/api/generated'
-import { PROVIDER_TYPE_LABELS } from '@/types'
+import { useProviderTypes } from '@/composables/useProviderTypes'
 import { VButton, VCard, VEmpty, VLoading, VStatusDot, VTag } from '@halo-dev/components'
 import { computed, ref } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
@@ -19,7 +19,13 @@ const emit = defineEmits<{
   (e: 'delete', provider: AiProvider): void
 }>()
 
+const { data: providerTypes } = useProviderTypes()
 const searchQuery = ref('')
+
+function providerTypeLabel(providerType: string): string {
+  const info = providerTypes.value?.find((t) => t.providerType === providerType)
+  return info?.displayName || providerType
+}
 
 const filteredProviders = computed(() => {
   if (!searchQuery.value) return props.providers
@@ -28,7 +34,7 @@ const filteredProviders = computed(() => {
     (p) =>
       p.spec.displayName.toLowerCase().includes(q) ||
       p.spec.providerType.toLowerCase().includes(q) ||
-      (PROVIDER_TYPE_LABELS[p.spec.providerType] || '').toLowerCase().includes(q),
+      providerTypeLabel(p.spec.providerType).toLowerCase().includes(q),
   )
 })
 
@@ -73,7 +79,7 @@ function statusPhase(phase?: string) {
           <div class="provider-card__title">
             <span class="font-medium">{{ provider.spec.displayName }}</span>
             <VTag size="sm">
-              {{ PROVIDER_TYPE_LABELS[provider.spec.providerType] || provider.spec.providerType }}
+              {{ providerTypeLabel(provider.spec.providerType) }}
             </VTag>
           </div>
           <div class="provider-card__actions" @click.stop>

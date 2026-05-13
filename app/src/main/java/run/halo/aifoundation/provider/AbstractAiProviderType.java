@@ -7,8 +7,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.ReactorClientHttpRequestFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -19,21 +19,21 @@ import reactor.netty.http.client.HttpClient;
 import run.halo.aifoundation.extension.AiProvider;
 
 @Slf4j
-@Getter
-public abstract class AbstractProviderAdapter implements ProviderAdapter {
+public abstract class AbstractAiProviderType implements AiProviderType {
 
-    protected final AiProvider provider;
-    protected final String apiKey;
-
-    protected AbstractProviderAdapter(AiProvider provider, String apiKey) {
-        this.provider = provider;
-        this.apiKey = apiKey;
-    }
-
-    protected String resolveBaseUrl(String defaultBaseUrl) {
+    protected String resolveBaseUrl(AiProvider provider) {
         var spec = provider.getSpec();
         var baseUrl = spec.getBaseUrl();
-        return (baseUrl != null && !baseUrl.isBlank()) ? baseUrl : defaultBaseUrl;
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            return baseUrl;
+        }
+        var defaultUrl = getDefaultBaseUrl();
+        if (defaultUrl == null || defaultUrl.isBlank()) {
+            throw new IllegalArgumentException(
+                "baseUrl is required for " + getProviderType()
+                    + " provider: " + provider.getMetadata().getName());
+        }
+        return defaultUrl;
     }
 
     protected WebClient.Builder webClientBuilder() {
@@ -55,23 +55,13 @@ public abstract class AbstractProviderAdapter implements ProviderAdapter {
     }
 
     @Override
-    public org.springframework.ai.embedding.EmbeddingModel buildEmbeddingModel(String modelId) {
+    public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         return null;
     }
 
     @Override
-    public int maxEmbeddingsPerCall() {
-        return 96;
-    }
-
-    @Override
-    public boolean supportsParallelCalls() {
-        return true;
-    }
-
-    @Override
-    public Mono<List<DiscoveredModel>> discoverModels() {
-        var baseUrl = resolveBaseUrl(getDefaultBaseUrl());
+    public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
+        var baseUrl = resolveBaseUrl(provider);
         var providerName = provider.getMetadata().getName();
         log.info("Discovering models for provider {}: type={}, baseUrl={}",
             providerName, getProviderType(), baseUrl);
@@ -122,8 +112,5 @@ public abstract class AbstractProviderAdapter implements ProviderAdapter {
 
     protected void customizeDiscoveryRequest(
         WebClient.RequestHeadersSpec<?> requestSpec) {
-        // Default no-op; subclasses can override to add provider-specific headers
     }
-
-    protected abstract String getDefaultBaseUrl();
 }
