@@ -12,10 +12,10 @@ import run.halo.app.extension.GVK;
     plural = "aimodels", singular = "aimodel")
 public class AiModel extends AbstractExtension {
 
-    private Spec spec;
+    private AiModelSpec spec;
 
     @Data
-    public static class Spec {
+    public static class AiModelSpec {
         /** References AiProvider.metadata.name (provider instance resource name). */
         private String providerName;
         private String modelId;

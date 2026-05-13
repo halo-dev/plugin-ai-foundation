@@ -61,7 +61,7 @@ public class ProviderConsoleEndpoint {
             provider.setMetadata(new Metadata());
         }
         if (provider.getStatus() == null) {
-            provider.setStatus(new AiProvider.Status());
+            provider.setStatus(new AiProvider.AiProviderStatus());
         }
         return client.create(provider);
     }

@@ -14,11 +14,11 @@ import run.halo.app.extension.GVK;
     plural = "aiproviders", singular = "aiprovider")
 public class AiProvider extends AbstractExtension {
 
-    private Spec spec;
-    private Status status;
+    private AiProviderSpec spec;
+    private AiProviderStatus status;
 
     @Data
-    public static class Spec {
+    public static class AiProviderSpec {
         /** Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike */
         private String providerType;
         private String displayName;
@@ -36,7 +36,7 @@ public class AiProvider extends AbstractExtension {
     }
 
     @Data
-    public static class Status {
+    public static class AiProviderStatus {
         private Phase phase = Phase.UNKNOWN;
         private String message;
         private Instant lastCheckedAt;

@@ -87,14 +87,14 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
                     .flatMap(apiKey -> performConnectivityCheck(provider, apiKey))
                     .flatMap(result -> {
                         if (provider.getStatus() == null) {
-                            provider.setStatus(new AiProvider.Status());
+                            provider.setStatus(new AiProvider.AiProviderStatus());
                         }
                         provider.getStatus().setLastCheckedAt(Instant.now());
                         if (result.isSuccess()) {
-                            provider.getStatus().setPhase(AiProvider.Status.Phase.OK);
+                            provider.getStatus().setPhase(AiProvider.AiProviderStatus.Phase.OK);
                             provider.getStatus().setMessage("Connectivity check passed");
                         } else {
-                            provider.getStatus().setPhase(AiProvider.Status.Phase.ERROR);
+                            provider.getStatus().setPhase(AiProvider.AiProviderStatus.Phase.ERROR);
                             provider.getStatus().setMessage(result.getMessage());
                         }
                         return client.update(provider);
