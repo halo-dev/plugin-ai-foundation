@@ -17,4 +17,3 @@ jobs:
       node-version: 24
       java-version: 21
       artifacts-path: app/build/libs
-      skip-node-setup: true
