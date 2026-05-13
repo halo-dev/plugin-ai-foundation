@@ -1,14 +1,20 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { axiosInstance } from '@halo-dev/api-client'
-import type { ProviderModelListResponse, TestChatRequest, TestChatResponse } from '@/types'
 import {
   ConsoleApiAifoundationHaloRunV1alpha1ModelApi,
   ConsoleApiAifoundationHaloRunV1alpha1ProviderApi,
+  ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi,
   type AiModel,
+  type TestChatRequest,
 } from '@/api/generated'
+import { axiosInstance } from '@halo-dev/api-client'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 const modelApi = new ConsoleApiAifoundationHaloRunV1alpha1ModelApi(undefined, '', axiosInstance)
 const providerApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(
+  undefined,
+  '',
+  axiosInstance,
+)
+const debugApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi(
   undefined,
   '',
   axiosInstance,
@@ -106,10 +112,8 @@ export function useProviderModels(providerName: string) {
 export function useTestChat() {
   return useMutation({
     mutationFn: async ({ modelName, request }: { modelName: string; request: TestChatRequest }) => {
-      const { data } = await axiosInstance.post<TestChatResponse>(
-        `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${modelName}/test-chat`,
-        request,
-      )
+      const { data } = await debugApi.testModelChat({ name: modelName, testChatRequest: request })
+
       return data
     },
   })

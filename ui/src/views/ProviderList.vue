@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { VButton, VCard, VLoading, VStatusDot, VTag, VEmpty } from '@halo-dev/components'
-import { PROVIDER_TYPE_LABELS } from '@/types'
-import RiEditLine from '~icons/ri/edit-line'
-import RiDeleteBinLine from '~icons/ri/delete-bin-line'
-import RiSearchLine from '~icons/ri/search-line'
 import type { AiProvider } from '@/api/generated'
+import { PROVIDER_TYPE_LABELS } from '@/types'
+import { VButton, VCard, VEmpty, VLoading, VStatusDot, VTag } from '@halo-dev/components'
+import { computed, ref } from 'vue'
+import RiDeleteBinLine from '~icons/ri/delete-bin-line'
+import RiEditLine from '~icons/ri/edit-line'
+import RiSearchLine from '~icons/ri/search-line'
 
 const props = defineProps<{
   providers: AiProvider[]

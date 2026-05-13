@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { VButton, VCard } from '@halo-dev/components'
 import { useTestChat } from '@/composables/useModels'
+import { VButton, VCard } from '@halo-dev/components'
+import { ref } from 'vue'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 
 const props = defineProps<{
@@ -41,18 +41,8 @@ async function send() {
     </div>
 
     <div class="test-chat__input">
-      <textarea
-        v-model="prompt"
-        rows="3"
-        placeholder="输入提示词..."
-        class="test-chat__textarea"
-      />
-      <VButton
-        type="primary"
-        size="sm"
-        :loading="testChat.isPending.value"
-        @click="send"
-      >
+      <textarea v-model="prompt" rows="3" placeholder="输入提示词..." class="test-chat__textarea" />
+      <VButton type="primary" size="sm" :loading="testChat.isPending.value" @click="send">
         <template #icon>
           <RiSendPlaneLine />
         </template>

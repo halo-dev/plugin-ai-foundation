@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { VButton } from '@halo-dev/components'
+import type { AiModel, AiModelSpec } from '@/api/generated'
 import { useCreateModel, useUpdateModel } from '@/composables/useModels'
 import { CAPABILITY_OPTIONS, ENDPOINT_TYPE_OPTIONS } from '@/types'
-import type { AiModel, AiModelSpec } from '@/api/generated'
+import { VButton } from '@halo-dev/components'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps<{
   model?: AiModel | null

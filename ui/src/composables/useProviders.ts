@@ -1,9 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { axiosInstance } from '@halo-dev/api-client'
-import { ConsoleApiAifoundationHaloRunV1alpha1ProviderApi } from '@/api/generated/api'
 import type { AiProvider } from '@/api/generated'
+import { ConsoleApiAifoundationHaloRunV1alpha1ProviderApi } from '@/api/generated/api'
+import { axiosInstance } from '@halo-dev/api-client'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-const providerApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(undefined, '', axiosInstance)
+const providerApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(
+  undefined,
+  '',
+  axiosInstance,
+)
 
 export function useProviders() {
   return useQuery<AiProvider[]>({
@@ -44,13 +48,7 @@ export function useCreateProvider() {
 export function useUpdateProvider() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({
-      name,
-      provider,
-    }: {
-      name: string
-      provider: AiProvider
-    }) => {
+    mutationFn: async ({ name, provider }: { name: string; provider: AiProvider }) => {
       const { data } = await providerApi.updateProvider({
         name,
         aiProvider: provider,

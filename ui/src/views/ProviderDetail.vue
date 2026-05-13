@@ -1,25 +1,24 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import type { AiProvider } from '@/api/generated'
+import { useModelsByProvider } from '@/composables/useModels'
+import { useTestConnectivity } from '@/composables/useProviders'
+import { BUILT_IN_PROVIDERS, PROVIDER_TYPE_LABELS } from '@/types'
 import {
   VButton,
   VCard,
   VDescription,
   VDescriptionItem,
-  VTag,
   VStatusDot,
+  VTag,
 } from '@halo-dev/components'
-import { PROVIDER_TYPE_LABELS, BUILT_IN_PROVIDERS } from '@/types'
-import { useTestConnectivity } from '@/composables/useProviders'
-import { useModelsByProvider } from '@/composables/useModels'
-import ModelList from './ModelList.vue'
-import ModelForm from './ModelForm.vue'
-import ModelDiscoveryModal from './ModelDiscoveryModal.vue'
-import RiEditLine from '~icons/ri/edit-line'
-import RiDeleteBinLine from '~icons/ri/delete-bin-line'
-import RiTestTubeLine from '~icons/ri/test-tube-line'
+import { computed, ref } from 'vue'
 import RiAddLine from '~icons/ri/add-line'
+import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
-import type { AiProvider } from '@/api/generated'
+import RiEditLine from '~icons/ri/edit-line'
+import RiTestTubeLine from '~icons/ri/test-tube-line'
+import ModelDiscoveryModal from './ModelDiscoveryModal.vue'
+import ModelList from './ModelList.vue'
 
 const props = defineProps<{
   provider: AiProvider

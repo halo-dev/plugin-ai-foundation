@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { VPageHeader, VButton, VModal } from '@halo-dev/components'
+import type { AiProvider } from '@/api/generated'
+import { useModels } from '@/composables/useModels'
+import { useDeleteProvider, useProviders } from '@/composables/useProviders'
+import { VButton, VModal, VPageHeader } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import RiBrainLine from '~icons/ri/brain-line'
+import { computed, ref } from 'vue'
 import RiAddLine from '~icons/ri/add-line'
-import ProviderList from './ProviderList.vue'
+import RiBrainLine from '~icons/ri/brain-line'
 import ProviderDetail from './ProviderDetail.vue'
 import ProviderForm from './ProviderForm.vue'
-import { useProviders, useDeleteProvider } from '@/composables/useProviders'
-import { useModels } from '@/composables/useModels'
-import type { AiProvider } from '@/api/generated'
+import ProviderList from './ProviderList.vue'
 
 const { data: providers, isLoading: providersLoading } = useProviders()
 const { data: allModels } = useModels()
@@ -35,9 +35,7 @@ function onEditProvider(provider: AiProvider) {
 }
 
 function onDeleteProvider(provider: AiProvider) {
-  const hasModels = allModels.value?.some(
-    (m) => m.spec.providerName === provider.metadata.name
-  )
+  const hasModels = allModels.value?.some((m) => m.spec.providerName === provider.metadata.name)
   if (hasModels) {
     // eslint-disable-next-line no-undef
     Toast.warning('该供应商下仍有模型，请先删除所有模型后再删除供应商')

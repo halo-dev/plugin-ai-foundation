@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { VButton } from '@halo-dev/components'
-import { useCreateProvider, useUpdateProvider } from '@/composables/useProviders'
-import { PROVIDER_TYPE_LABELS, BUILT_IN_PROVIDERS } from '@/types'
 import type { AiProvider, AiProviderSpec } from '@/api/generated'
+import { useCreateProvider, useUpdateProvider } from '@/composables/useProviders'
+import { PROVIDER_TYPE_LABELS } from '@/types'
+import { VButton } from '@halo-dev/components'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps<{
   provider?: AiProvider | null

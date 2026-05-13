@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { VButton, VCard, VTag, VLoading, VEmpty } from '@halo-dev/components'
-import { useQueryClient } from '@tanstack/vue-query'
-import { useProviderModels, useCreateModel } from '@/composables/useModels'
+import type { AiModel } from '@/api/generated'
+import { useCreateModel, useProviderModels } from '@/composables/useModels'
 import { ENDPOINT_TYPE_OPTIONS } from '@/types'
+import { VButton, VCard, VEmpty, VLoading } from '@halo-dev/components'
+import { useQueryClient } from '@tanstack/vue-query'
+import { computed, ref } from 'vue'
 import RiCheckLine from '~icons/ri/check-line'
 import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
-import type { AiModel } from '@/api/generated'
 
 const props = defineProps<{
   providerName: string

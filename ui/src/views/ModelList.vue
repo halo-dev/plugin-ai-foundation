@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { VButton, VCard, VTag, VEmpty, VModal } from '@halo-dev/components'
-import { useQueryClient } from '@tanstack/vue-query'
+import type { AiModel } from '@/api/generated'
 import { useDeleteModel } from '@/composables/useModels'
 import { CAPABILITY_OPTIONS } from '@/types'
+import { VButton, VCard, VEmpty, VModal, VTag } from '@halo-dev/components'
+import { useQueryClient } from '@tanstack/vue-query'
+import { computed, ref } from 'vue'
+import RiChat1Line from '~icons/ri/chat-1-line'
+import RiDeleteBinLine from '~icons/ri/delete-bin-line'
+import RiEditLine from '~icons/ri/edit-line'
+import RiSearchLine from '~icons/ri/search-line'
 import ModelForm from './ModelForm.vue'
 import TestChatModal from './TestChatModal.vue'
-import RiEditLine from '~icons/ri/edit-line'
-import RiDeleteBinLine from '~icons/ri/delete-bin-line'
-import RiSearchLine from '~icons/ri/search-line'
-import RiChat1Line from '~icons/ri/chat-1-line'
-import type { AiModel } from '@/api/generated'
 
 const props = defineProps<{
   models: AiModel[]

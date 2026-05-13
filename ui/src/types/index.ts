@@ -1,26 +1,3 @@
-
-
-export interface TestChatRequest {
-  prompt: string
-}
-
-export interface TestChatResponse {
-  modelName: string
-  content: string
-  finishReason: string
-}
-
-export interface DiscoveredModel {
-  modelId: string
-  displayName: string
-  name: string
-}
-
-export interface ProviderModelListResponse {
-  models: DiscoveredModel[]
-  providerName: string
-}
-
 export const SUPPORTED_PROVIDER_TYPES = [
   'aihubmix',
   'openai',
