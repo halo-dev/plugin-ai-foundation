@@ -1,5 +1,11 @@
 package run.halo.aifoundation.endpoint;
 
+import static org.springdoc.core.fn.builders.apiresponse.Builder.responseBuilder;
+import static org.springdoc.core.fn.builders.parameter.Builder.parameterBuilder;
+import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuilder;
+import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
+
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +18,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.server.RouterFunction;
-import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,8 +31,6 @@ import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ReactiveExtensionClient;
 
-import static org.springframework.web.reactive.function.server.RequestPredicates.accept;
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -40,13 +43,59 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
-        return RouterFunctions.route()
-            .GET("/providers/{name}/models", accept(MediaType.APPLICATION_JSON),
-                this::listProviderModels)
-            .POST("/providers/{name}/connectivity", accept(MediaType.APPLICATION_JSON),
-                this::testConnectivity)
+        final var tag = "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug";
+        return route()
+            .GET("/providers/{name}/models",
+                this::listProviderModels,
+                builder -> builder.operationId("ListProviderModels")
+                    .description("List models for a provider.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Provider name")
+                        .implementation(String.class)
+                        .required(true))
+                    .response(responseBuilder()
+                        .implementation(Map.class))
+            )
+            .POST("/providers/{name}/connectivity",
+                this::testConnectivity,
+                builder -> builder.operationId("TestProviderConnectivity")
+                    .description("Test provider connectivity.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Provider name")
+                        .implementation(String.class)
+                        .required(true))
+                    .response(responseBuilder()
+                        .implementation(Map.class))
+            )
             .POST("/providers/{providerName}/models/{modelId}/test-chat",
-                accept(MediaType.APPLICATION_JSON), this::testChat)
+                this::testChat,
+                builder -> builder.operationId("TestProviderChat")
+                    .description("Test chat completion with a specific model.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("providerName")
+                        .in(ParameterIn.PATH)
+                        .description("Provider name")
+                        .implementation(String.class)
+                        .required(true))
+                    .parameter(parameterBuilder()
+                        .name("modelId")
+                        .in(ParameterIn.PATH)
+                        .description("Model ID")
+                        .implementation(String.class)
+                        .required(true))
+                    .requestBody(requestBodyBuilder()
+                        .required(false)
+                        .implementation(TestChatRequest.class))
+                    .response(responseBuilder()
+                        .implementation(Map.class))
+            )
             .build();
     }
 

@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:65059",
+    "url" : "http://localhost:44646",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -437,9 +437,10 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models" : {
       "get" : {
-        "operationId" : "list_1",
+        "description" : "List all AI models.",
+        "operationId" : "ListModels",
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -450,16 +451,17 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "model-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       },
       "post" : {
-        "operationId" : "create_1",
+        "description" : "Create a new AI model.",
+        "operationId" : "CreateModel",
         "requestBody" : {
           "content" : {
-            "application/json" : {
+            "*/*" : {
               "schema" : {
                 "$ref" : "#/components/schemas/AiModel"
               }
@@ -468,7 +470,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -476,16 +478,18 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "model-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}" : {
       "delete" : {
-        "operationId" : "delete_1",
+        "description" : "Delete an AI model.",
+        "operationId" : "DeleteModel",
         "parameters" : [ {
+          "description" : "Model name",
           "in" : "path",
           "name" : "name",
           "required" : true,
@@ -494,15 +498,18 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "default" : {
+            "content" : { },
+            "description" : "default response"
           }
         },
-        "tags" : [ "model-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       },
       "get" : {
-        "operationId" : "get_1",
+        "description" : "Get an AI model by name.",
+        "operationId" : "GetModel",
         "parameters" : [ {
+          "description" : "Model name",
           "in" : "path",
           "name" : "name",
           "required" : true,
@@ -511,7 +518,7 @@
           }
         } ],
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -519,14 +526,16 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "model-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       },
       "put" : {
-        "operationId" : "update_1",
+        "description" : "Update an AI model.",
+        "operationId" : "UpdateModel",
         "parameters" : [ {
+          "description" : "Model name",
           "in" : "path",
           "name" : "name",
           "required" : true,
@@ -536,7 +545,7 @@
         } ],
         "requestBody" : {
           "content" : {
-            "application/json" : {
+            "*/*" : {
               "schema" : {
                 "$ref" : "#/components/schemas/AiModel"
               }
@@ -545,7 +554,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -553,17 +562,18 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "model-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/providers" : {
       "get" : {
-        "operationId" : "list",
+        "description" : "List all AI providers.",
+        "operationId" : "ListProviders",
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -574,16 +584,17 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "provider-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       },
       "post" : {
-        "operationId" : "create",
+        "description" : "Create a new AI provider.",
+        "operationId" : "CreateProvider",
         "requestBody" : {
           "content" : {
-            "application/json" : {
+            "*/*" : {
               "schema" : {
                 "$ref" : "#/components/schemas/AiProvider"
               }
@@ -592,7 +603,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -600,16 +611,18 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "provider-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}" : {
       "delete" : {
-        "operationId" : "delete",
+        "description" : "Delete an AI provider.",
+        "operationId" : "DeleteProvider",
         "parameters" : [ {
+          "description" : "Provider name",
           "in" : "path",
           "name" : "name",
           "required" : true,
@@ -618,15 +631,18 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "default" : {
+            "content" : { },
+            "description" : "default response"
           }
         },
-        "tags" : [ "provider-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       },
       "get" : {
-        "operationId" : "get",
+        "description" : "Get an AI provider by name.",
+        "operationId" : "GetProvider",
         "parameters" : [ {
+          "description" : "Provider name",
           "in" : "path",
           "name" : "name",
           "required" : true,
@@ -635,7 +651,7 @@
           }
         } ],
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -643,14 +659,16 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "provider-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       },
       "put" : {
-        "operationId" : "update",
+        "description" : "Update an AI provider.",
+        "operationId" : "UpdateProvider",
         "parameters" : [ {
+          "description" : "Provider name",
           "in" : "path",
           "name" : "name",
           "required" : true,
@@ -660,7 +678,7 @@
         } ],
         "requestBody" : {
           "content" : {
-            "application/json" : {
+            "*/*" : {
               "schema" : {
                 "$ref" : "#/components/schemas/AiProvider"
               }
@@ -669,7 +687,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -677,10 +695,111 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "default response"
           }
         },
-        "tags" : [ "provider-console-endpoint" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/connectivity" : {
+      "post" : {
+        "description" : "Test provider connectivity.",
+        "operationId" : "TestProviderConnectivity",
+        "parameters" : [ {
+          "description" : "Provider name",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/models" : {
+      "get" : {
+        "description" : "List models for a provider.",
+        "operationId" : "ListProviderModels",
+        "parameters" : [ {
+          "description" : "Provider name",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{providerName}/models/{modelId}/test-chat" : {
+      "post" : {
+        "description" : "Test chat completion with a specific model.",
+        "operationId" : "TestProviderChat",
+        "parameters" : [ {
+          "description" : "Provider name",
+          "in" : "path",
+          "name" : "providerName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Model ID",
+          "in" : "path",
+          "name" : "modelId",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestChatRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
       }
     }
   },
@@ -706,7 +825,7 @@
         }
       },
       "AiModel" : {
-        "required" : [ "apiVersion", "kind", "metadata" ],
+        "required" : [ "apiVersion", "kind", "metadata", "spec" ],
         "type" : "object",
         "properties" : {
           "apiVersion" : {
@@ -773,6 +892,7 @@
         }
       },
       "AiModelSpec" : {
+        "required" : [ "displayName", "enabled", "modelId", "providerName" ],
         "type" : "object",
         "properties" : {
           "capabilities" : {
@@ -805,7 +925,7 @@
         }
       },
       "AiProvider" : {
-        "required" : [ "apiVersion", "kind", "metadata" ],
+        "required" : [ "apiVersion", "kind", "metadata", "spec" ],
         "type" : "object",
         "properties" : {
           "apiVersion" : {
@@ -875,6 +995,7 @@
         }
       },
       "AiProviderSpec" : {
+        "required" : [ "displayName", "enabled", "providerType" ],
         "type" : "object",
         "properties" : {
           "apiKeySecretName" : {
@@ -1076,6 +1197,14 @@
           },
           "value" : {
             "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "TestChatRequest" : {
+        "type" : "object",
+        "properties" : {
+          "prompt" : {
+            "type" : "string"
           }
         }
       },

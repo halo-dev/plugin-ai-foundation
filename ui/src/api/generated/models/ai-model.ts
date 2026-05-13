@@ -49,6 +49,6 @@ export interface AiModel {
      * @type {AiModelSpec}
      * @memberof AiModel
      */
-    'spec'?: AiModelSpec;
+    'spec': AiModelSpec;
 }
 

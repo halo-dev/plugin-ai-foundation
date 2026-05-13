@@ -43,19 +43,19 @@ export interface AiProviderSpec {
      * @type {string}
      * @memberof AiProviderSpec
      */
-    'displayName'?: string;
+    'displayName': string;
     /**
      * 
      * @type {boolean}
      * @memberof AiProviderSpec
      */
-    'enabled'?: boolean;
+    'enabled': boolean;
     /**
      * 
      * @type {string}
      * @memberof AiProviderSpec
      */
-    'providerType'?: string;
+    'providerType': string;
     /**
      * 
      * @type {string}

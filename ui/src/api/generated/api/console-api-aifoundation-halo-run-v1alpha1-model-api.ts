@@ -24,20 +24,20 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { AiModel } from '../models';
 /**
- * ModelConsoleEndpointApi - axios parameter creator
+ * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - axios parameter creator
  * @export
  */
-export const ModelConsoleEndpointApiAxiosParamCreator = function (configuration?: Configuration) {
+export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * 
+         * Create a new AI model.
          * @param {AiModel} aiModel 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        create1: async (aiModel: AiModel, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        createModel: async (aiModel: AiModel, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'aiModel' is not null or undefined
-            assertParamExists('create1', 'aiModel', aiModel)
+            assertParamExists('createModel', 'aiModel', aiModel)
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -73,14 +73,14 @@ export const ModelConsoleEndpointApiAxiosParamCreator = function (configuration?
             };
         },
         /**
-         * 
-         * @param {string} name 
+         * Delete an AI model.
+         * @param {string} name Model name
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        delete1: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        deleteModel: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
-            assertParamExists('delete1', 'name', name)
+            assertParamExists('deleteModel', 'name', name)
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}`
                 .replace(`{${"name"}}`, encodeURIComponent(String(name)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
@@ -114,14 +114,14 @@ export const ModelConsoleEndpointApiAxiosParamCreator = function (configuration?
             };
         },
         /**
-         * 
-         * @param {string} name 
+         * Get an AI model by name.
+         * @param {string} name Model name
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        get1: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        getModel: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
-            assertParamExists('get1', 'name', name)
+            assertParamExists('getModel', 'name', name)
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}`
                 .replace(`{${"name"}}`, encodeURIComponent(String(name)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
@@ -155,11 +155,11 @@ export const ModelConsoleEndpointApiAxiosParamCreator = function (configuration?
             };
         },
         /**
-         * 
+         * List all AI models.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        list1: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listModels: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -192,17 +192,17 @@ export const ModelConsoleEndpointApiAxiosParamCreator = function (configuration?
             };
         },
         /**
-         * 
-         * @param {string} name 
+         * Update an AI model.
+         * @param {string} name Model name
          * @param {AiModel} aiModel 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        update1: async (name: string, aiModel: AiModel, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        updateModel: async (name: string, aiModel: AiModel, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
-            assertParamExists('update1', 'name', name)
+            assertParamExists('updateModel', 'name', name)
             // verify required parameter 'aiModel' is not null or undefined
-            assertParamExists('update1', 'aiModel', aiModel)
+            assertParamExists('updateModel', 'aiModel', aiModel)
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}`
                 .replace(`{${"name"}}`, encodeURIComponent(String(name)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
@@ -242,251 +242,251 @@ export const ModelConsoleEndpointApiAxiosParamCreator = function (configuration?
 };
 
 /**
- * ModelConsoleEndpointApi - functional programming interface
+ * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - functional programming interface
  * @export
  */
-export const ModelConsoleEndpointApiFp = function(configuration?: Configuration) {
-    const localVarAxiosParamCreator = ModelConsoleEndpointApiAxiosParamCreator(configuration)
+export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator(configuration)
     return {
         /**
-         * 
+         * Create a new AI model.
          * @param {AiModel} aiModel 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async create1(aiModel: AiModel, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AiModel>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.create1(aiModel, options);
+        async createModel(aiModel: AiModel, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AiModel>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.createModel(aiModel, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ModelConsoleEndpointApi.create1']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.createModel']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * 
-         * @param {string} name 
+         * Delete an AI model.
+         * @param {string} name Model name
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async delete1(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.delete1(name, options);
+        async deleteModel(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.deleteModel(name, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ModelConsoleEndpointApi.delete1']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.deleteModel']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * 
-         * @param {string} name 
+         * Get an AI model by name.
+         * @param {string} name Model name
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async get1(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AiModel>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.get1(name, options);
+        async getModel(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AiModel>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getModel(name, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ModelConsoleEndpointApi.get1']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.getModel']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * 
+         * List all AI models.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async list1(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<AiModel>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.list1(options);
+        async listModels(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<AiModel>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listModels(options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ModelConsoleEndpointApi.list1']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.listModels']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * 
-         * @param {string} name 
+         * Update an AI model.
+         * @param {string} name Model name
          * @param {AiModel} aiModel 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async update1(name: string, aiModel: AiModel, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AiModel>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.update1(name, aiModel, options);
+        async updateModel(name: string, aiModel: AiModel, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AiModel>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.updateModel(name, aiModel, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ModelConsoleEndpointApi.update1']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.updateModel']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
     }
 };
 
 /**
- * ModelConsoleEndpointApi - factory interface
+ * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - factory interface
  * @export
  */
-export const ModelConsoleEndpointApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
-    const localVarFp = ModelConsoleEndpointApiFp(configuration)
+export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(configuration)
     return {
         /**
-         * 
-         * @param {ModelConsoleEndpointApiCreate1Request} requestParameters Request parameters.
+         * Create a new AI model.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        create1(requestParameters: ModelConsoleEndpointApiCreate1Request, options?: RawAxiosRequestConfig): AxiosPromise<AiModel> {
-            return localVarFp.create1(requestParameters.aiModel, options).then((request) => request(axios, basePath));
+        createModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest, options?: RawAxiosRequestConfig): AxiosPromise<AiModel> {
+            return localVarFp.createModel(requestParameters.aiModel, options).then((request) => request(axios, basePath));
         },
         /**
-         * 
-         * @param {ModelConsoleEndpointApiDelete1Request} requestParameters Request parameters.
+         * Delete an AI model.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        delete1(requestParameters: ModelConsoleEndpointApiDelete1Request, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.delete1(requestParameters.name, options).then((request) => request(axios, basePath));
+        deleteModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.deleteModel(requestParameters.name, options).then((request) => request(axios, basePath));
         },
         /**
-         * 
-         * @param {ModelConsoleEndpointApiGet1Request} requestParameters Request parameters.
+         * Get an AI model by name.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        get1(requestParameters: ModelConsoleEndpointApiGet1Request, options?: RawAxiosRequestConfig): AxiosPromise<AiModel> {
-            return localVarFp.get1(requestParameters.name, options).then((request) => request(axios, basePath));
+        getModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest, options?: RawAxiosRequestConfig): AxiosPromise<AiModel> {
+            return localVarFp.getModel(requestParameters.name, options).then((request) => request(axios, basePath));
         },
         /**
-         * 
+         * List all AI models.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        list1(options?: RawAxiosRequestConfig): AxiosPromise<Array<AiModel>> {
-            return localVarFp.list1(options).then((request) => request(axios, basePath));
+        listModels(options?: RawAxiosRequestConfig): AxiosPromise<Array<AiModel>> {
+            return localVarFp.listModels(options).then((request) => request(axios, basePath));
         },
         /**
-         * 
-         * @param {ModelConsoleEndpointApiUpdate1Request} requestParameters Request parameters.
+         * Update an AI model.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModelRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        update1(requestParameters: ModelConsoleEndpointApiUpdate1Request, options?: RawAxiosRequestConfig): AxiosPromise<AiModel> {
-            return localVarFp.update1(requestParameters.name, requestParameters.aiModel, options).then((request) => request(axios, basePath));
+        updateModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModelRequest, options?: RawAxiosRequestConfig): AxiosPromise<AiModel> {
+            return localVarFp.updateModel(requestParameters.name, requestParameters.aiModel, options).then((request) => request(axios, basePath));
         },
     };
 };
 
 /**
- * Request parameters for create1 operation in ModelConsoleEndpointApi.
+ * Request parameters for createModel operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
  * @export
- * @interface ModelConsoleEndpointApiCreate1Request
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest
  */
-export interface ModelConsoleEndpointApiCreate1Request {
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest {
     /**
      * 
      * @type {AiModel}
-     * @memberof ModelConsoleEndpointApiCreate1
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModel
      */
     readonly aiModel: AiModel
 }
 
 /**
- * Request parameters for delete1 operation in ModelConsoleEndpointApi.
+ * Request parameters for deleteModel operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
  * @export
- * @interface ModelConsoleEndpointApiDelete1Request
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest
  */
-export interface ModelConsoleEndpointApiDelete1Request {
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest {
     /**
-     * 
+     * Model name
      * @type {string}
-     * @memberof ModelConsoleEndpointApiDelete1
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModel
      */
     readonly name: string
 }
 
 /**
- * Request parameters for get1 operation in ModelConsoleEndpointApi.
+ * Request parameters for getModel operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
  * @export
- * @interface ModelConsoleEndpointApiGet1Request
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest
  */
-export interface ModelConsoleEndpointApiGet1Request {
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest {
     /**
-     * 
+     * Model name
      * @type {string}
-     * @memberof ModelConsoleEndpointApiGet1
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModel
      */
     readonly name: string
 }
 
 /**
- * Request parameters for update1 operation in ModelConsoleEndpointApi.
+ * Request parameters for updateModel operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
  * @export
- * @interface ModelConsoleEndpointApiUpdate1Request
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModelRequest
  */
-export interface ModelConsoleEndpointApiUpdate1Request {
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModelRequest {
     /**
-     * 
+     * Model name
      * @type {string}
-     * @memberof ModelConsoleEndpointApiUpdate1
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModel
      */
     readonly name: string
 
     /**
      * 
      * @type {AiModel}
-     * @memberof ModelConsoleEndpointApiUpdate1
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModel
      */
     readonly aiModel: AiModel
 }
 
 /**
- * ModelConsoleEndpointApi - object-oriented interface
+ * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - object-oriented interface
  * @export
- * @class ModelConsoleEndpointApi
+ * @class ConsoleApiAifoundationHaloRunV1alpha1ModelApi
  * @extends {BaseAPI}
  */
-export class ModelConsoleEndpointApi extends BaseAPI {
+export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
     /**
-     * 
-     * @param {ModelConsoleEndpointApiCreate1Request} requestParameters Request parameters.
+     * Create a new AI model.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
-     * @memberof ModelConsoleEndpointApi
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
-    public create1(requestParameters: ModelConsoleEndpointApiCreate1Request, options?: RawAxiosRequestConfig) {
-        return ModelConsoleEndpointApiFp(this.configuration).create1(requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
+    public createModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).createModel(requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * 
-     * @param {ModelConsoleEndpointApiDelete1Request} requestParameters Request parameters.
+     * Delete an AI model.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
-     * @memberof ModelConsoleEndpointApi
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
-    public delete1(requestParameters: ModelConsoleEndpointApiDelete1Request, options?: RawAxiosRequestConfig) {
-        return ModelConsoleEndpointApiFp(this.configuration).delete1(requestParameters.name, options).then((request) => request(this.axios, this.basePath));
+    public deleteModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).deleteModel(requestParameters.name, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * 
-     * @param {ModelConsoleEndpointApiGet1Request} requestParameters Request parameters.
+     * Get an AI model by name.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
-     * @memberof ModelConsoleEndpointApi
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
-    public get1(requestParameters: ModelConsoleEndpointApiGet1Request, options?: RawAxiosRequestConfig) {
-        return ModelConsoleEndpointApiFp(this.configuration).get1(requestParameters.name, options).then((request) => request(this.axios, this.basePath));
+    public getModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).getModel(requestParameters.name, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * 
+     * List all AI models.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
-     * @memberof ModelConsoleEndpointApi
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
-    public list1(options?: RawAxiosRequestConfig) {
-        return ModelConsoleEndpointApiFp(this.configuration).list1(options).then((request) => request(this.axios, this.basePath));
+    public listModels(options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).listModels(options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * 
-     * @param {ModelConsoleEndpointApiUpdate1Request} requestParameters Request parameters.
+     * Update an AI model.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModelRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
-     * @memberof ModelConsoleEndpointApi
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
-    public update1(requestParameters: ModelConsoleEndpointApiUpdate1Request, options?: RawAxiosRequestConfig) {
-        return ModelConsoleEndpointApiFp(this.configuration).update1(requestParameters.name, requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
+    public updateModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModelRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).updateModel(requestParameters.name, requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

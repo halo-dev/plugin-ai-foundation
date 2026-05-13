@@ -4,34 +4,32 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
-@ExtendWith(MockitoExtension.class)
 class ProviderConsoleEndpointTest {
 
-    @Mock
-    ReactiveExtensionClient client;
+    private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
 
-    ProviderConsoleEndpoint endpoint;
+    private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        endpoint = new ProviderConsoleEndpoint(client);
+        var endpoint = new ProviderConsoleEndpoint(client);
+        webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
+            .configureClient()
+            .build();
     }
 
     // ---- list ----
@@ -44,73 +42,76 @@ class ProviderConsoleEndpointTest {
                 provider("ollama-local", "ollama")
             ));
 
-        StepVerifier.create(endpoint.list())
-            .expectNextCount(2)
-            .verifyComplete();
+        webTestClient.get().uri("/providers")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBodyList(AiProvider.class)
+            .hasSize(2);
     }
 
     // ---- get ----
 
     @Test
-    void get_existingProvider_returnsIt() {
+    void get_existingProvider_returns200() {
         var p = provider("openai-prod", "openai");
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(p));
 
-        StepVerifier.create(endpoint.get("openai-prod"))
-            .assertNext(result -> assertThat(result.getMetadata().getName()).isEqualTo("openai-prod"))
-            .verifyComplete();
+        webTestClient.get().uri("/providers/openai-prod")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AiProvider.class)
+            .consumeWith(response ->
+                assertThat(response.getResponseBody().getMetadata().getName())
+                    .isEqualTo("openai-prod"));
     }
 
     @Test
     void get_notFound_returns404() {
         when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
 
-        StepVerifier.create(endpoint.get("missing"))
-            .expectErrorSatisfies(err -> {
-                assertThat(err).isInstanceOf(ResponseStatusException.class);
-                assertThat(((ResponseStatusException) err).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
-            })
-            .verify();
+        webTestClient.get().uri("/providers/missing")
+            .exchange()
+            .expectStatus().isNotFound();
     }
 
     // ---- create ----
 
     @Test
-    void create_validProvider_createsAndReturns() {
+    void create_validProvider_returns200() {
         var p = provider("new-provider", "openai");
-        when(client.create(p)).thenReturn(Mono.just(p));
+        when(client.create(any(AiProvider.class))).thenReturn(Mono.just(p));
 
-        StepVerifier.create(endpoint.create(p))
-            .assertNext(result ->
-                assertThat(result.getSpec().getProviderType()).isEqualTo("openai"))
-            .verifyComplete();
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AiProvider.class)
+            .consumeWith(response ->
+                assertThat(response.getResponseBody().getSpec().getProviderType())
+                    .isEqualTo("openai"));
     }
 
     @Test
     void create_unsupportedProviderType_returns400() {
         var p = provider("bad-provider", "unknown-ai");
 
-        StepVerifier.create(endpoint.create(p))
-            .expectErrorSatisfies(err -> {
-                assertThat(err).isInstanceOf(ResponseStatusException.class);
-                assertThat(((ResponseStatusException) err).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
-            })
-            .verify();
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
     void create_nullProviderType_returns400() {
         var p = provider("bad-provider", null);
 
-        StepVerifier.create(endpoint.create(p))
-            .expectErrorSatisfies(err -> {
-                assertThat(err).isInstanceOf(ResponseStatusException.class);
-                assertThat(((ResponseStatusException) err).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
-            })
-            .verify();
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
@@ -121,19 +122,17 @@ class ProviderConsoleEndpointTest {
         p.setMetadata(metadata);
         // spec is null
 
-        StepVerifier.create(endpoint.create(p))
-            .expectErrorSatisfies(err -> {
-                assertThat(err).isInstanceOf(ResponseStatusException.class);
-                assertThat(((ResponseStatusException) err).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
-            })
-            .verify();
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     // ---- update ----
 
     @Test
-    void update_existingProvider_updatesSpec() {
+    void update_existingProvider_returns200() {
         var existing = provider("openai-prod", "openai");
         var updated = provider("openai-prod", "openai");
         updated.getSpec().setDisplayName("Updated Name");
@@ -141,38 +140,40 @@ class ProviderConsoleEndpointTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(existing));
         when(client.update(existing)).thenReturn(Mono.just(existing));
 
-        StepVerifier.create(endpoint.update("openai-prod", updated))
-            .assertNext(result ->
-                assertThat(result.getSpec().getDisplayName()).isEqualTo("Updated Name"))
-            .verifyComplete();
+        webTestClient.put().uri("/providers/openai-prod")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(updated)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AiProvider.class)
+            .consumeWith(response ->
+                assertThat(response.getResponseBody().getSpec().getDisplayName())
+                    .isEqualTo("Updated Name"));
     }
 
     @Test
     void update_notFound_returns404() {
         when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
 
-        StepVerifier.create(endpoint.update("missing", provider("missing", "openai")))
-            .expectErrorSatisfies(err -> {
-                assertThat(err).isInstanceOf(ResponseStatusException.class);
-                assertThat(((ResponseStatusException) err).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
-            })
-            .verify();
+        webTestClient.put().uri("/providers/missing")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(provider("missing", "openai"))
+            .exchange()
+            .expectStatus().isNotFound();
     }
 
     // ---- delete ----
 
     @Test
-    void delete_noAssociatedModels_deletesSuccessfully() {
+    void delete_noAssociatedModels_returns204() {
         var p = provider("openai-prod", "openai");
         when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(p));
         when(client.delete(p)).thenReturn(Mono.just(p));
 
-        StepVerifier.create(endpoint.delete("openai-prod"))
-            .assertNext(response ->
-                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT))
-            .verifyComplete();
+        webTestClient.delete().uri("/providers/openai-prod")
+            .exchange()
+            .expectStatus().isNoContent();
     }
 
     @Test
@@ -180,14 +181,9 @@ class ProviderConsoleEndpointTest {
         var model = model("openai-prod", "gpt-4");
         when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(model));
 
-        StepVerifier.create(endpoint.delete("openai-prod"))
-            .expectErrorSatisfies(err -> {
-                assertThat(err).isInstanceOf(ResponseStatusException.class);
-                assertThat(((ResponseStatusException) err).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
-                assertThat(err.getMessage()).contains("associated AI models");
-            })
-            .verify();
+        webTestClient.delete().uri("/providers/openai-prod")
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
@@ -195,13 +191,9 @@ class ProviderConsoleEndpointTest {
         when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
         when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
 
-        StepVerifier.create(endpoint.delete("missing"))
-            .expectErrorSatisfies(err -> {
-                assertThat(err).isInstanceOf(ResponseStatusException.class);
-                assertThat(((ResponseStatusException) err).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
-            })
-            .verify();
+        webTestClient.delete().uri("/providers/missing")
+            .exchange()
+            .expectStatus().isNotFound();
     }
 
     // ---- helpers ----

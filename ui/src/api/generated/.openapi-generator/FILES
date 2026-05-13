@@ -4,8 +4,9 @@
 api.ts
 api/ai-model-v1alpha1-api.ts
 api/ai-provider-v1alpha1-api.ts
-api/model-console-endpoint-api.ts
-api/provider-console-endpoint-api.ts
+api/console-api-aifoundation-halo-run-v1alpha1-model-api.ts
+api/console-api-aifoundation-halo-run-v1alpha1-provider-api.ts
+api/console-api-aifoundation-halo-run-v1alpha1-provider-debug-api.ts
 base.ts
 common.ts
 configuration.ts
@@ -26,4 +27,5 @@ models/metadata.ts
 models/move-operation.ts
 models/remove-operation.ts
 models/replace-operation.ts
+models/test-chat-request.ts
 models/test-operation.ts

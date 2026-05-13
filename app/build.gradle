@@ -21,6 +21,7 @@ configurations.runtimeClasspath {
     exclude group: 'org.springframework'
     exclude group: 'org.springframework.boot'
     exclude group: 'org.springdoc'
+    exclude group: 'io.swagger.core.v3'
     exclude group: 'com.fasterxml.jackson.core'
     exclude group: 'io.micrometer'
     exclude group: 'org.slf4j'

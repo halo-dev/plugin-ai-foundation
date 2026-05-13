@@ -31,13 +31,13 @@ export interface AiModelSpec {
      * @type {string}
      * @memberof AiModelSpec
      */
-    'displayName'?: string;
+    'displayName': string;
     /**
      * 
      * @type {boolean}
      * @memberof AiModelSpec
      */
-    'enabled'?: boolean;
+    'enabled': boolean;
     /**
      * 
      * @type {string}
@@ -55,13 +55,13 @@ export interface AiModelSpec {
      * @type {string}
      * @memberof AiModelSpec
      */
-    'modelId'?: string;
+    'modelId': string;
     /**
      * 
      * @type {string}
      * @memberof AiModelSpec
      */
-    'providerName'?: string;
+    'providerName': string;
     /**
      * 
      * @type {boolean}

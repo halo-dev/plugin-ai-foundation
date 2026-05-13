@@ -52,7 +52,7 @@ export interface AiProvider {
      * @type {AiProviderSpec}
      * @memberof AiProvider
      */
-    'spec'?: AiProviderSpec;
+    'spec': AiProviderSpec;
     /**
      * 
      * @type {AiProviderStatus}
