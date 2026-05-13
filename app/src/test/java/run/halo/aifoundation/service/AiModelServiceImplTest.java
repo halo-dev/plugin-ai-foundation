@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Sort;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -22,6 +23,7 @@ import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.ProviderClientCache;
 import run.halo.aifoundation.provider.SecretResolver;
+import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -48,7 +50,7 @@ class AiModelServiceImplTest {
 
     @Test
     void listModels_returnsAllModels() {
-        when(client.list(eq(AiModel.class), isNull(), isNull()))
+        when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
             .thenReturn(Flux.just(
                 aiModel("provider-a", "gpt-4", "GPT-4"),
                 aiModel("provider-b", "claude-3", "Claude 3")
@@ -66,7 +68,8 @@ class AiModelServiceImplTest {
 
     @Test
     void listModels_emptyResult_returnsEmptyList() {
-        when(client.list(eq(AiModel.class), isNull(), isNull())).thenReturn(Flux.empty());
+        when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
+            .thenReturn(Flux.empty());
 
         StepVerifier.create(service.listModels())
             .assertNext(models -> assertThat(models).isEmpty())
@@ -81,7 +84,7 @@ class AiModelServiceImplTest {
         provider1.setStatus(statusWithPhase(AiProvider.AiProviderStatus.Phase.OK));
         var provider2 = aiProvider("ollama-local", "ollama", false);
 
-        when(client.list(eq(AiProvider.class), isNull(), isNull()))
+        when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
             .thenReturn(Flux.just(provider1, provider2));
 
         StepVerifier.create(service.listProviders())
@@ -101,7 +104,7 @@ class AiModelServiceImplTest {
     void listProviders_nullStatus_showsUnknownPhase() {
         var provider = aiProvider("my-provider", "openai", true);
         provider.setStatus(null);
-        when(client.list(eq(AiProvider.class), isNull(), isNull()))
+        when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
             .thenReturn(Flux.just(provider));
 
         StepVerifier.create(service.listProviders())

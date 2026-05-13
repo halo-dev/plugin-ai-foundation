@@ -12,7 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -39,14 +38,14 @@ class ProviderConsoleEndpointTest {
 
     @Test
     void list_returnsAllProviders() {
-        when(client.list(eq(AiProvider.class), isNull(), isNull()))
+        when(client.listAll(eq(AiProvider.class), any(), any()))
             .thenReturn(Flux.just(
                 provider("openai-prod", "openai"),
                 provider("ollama-local", "ollama")
             ));
 
         StepVerifier.create(endpoint.list())
-            .assertNext(result -> assertThat(result.getItems()).hasSize(2))
+            .expectNextCount(2)
             .verifyComplete();
     }
 

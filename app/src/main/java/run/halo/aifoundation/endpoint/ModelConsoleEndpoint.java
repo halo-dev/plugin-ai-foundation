@@ -2,6 +2,7 @@ package run.halo.aifoundation.endpoint;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,10 +14,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
-import run.halo.app.extension.ListResult;
+import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.ApiVersion;
@@ -31,10 +33,8 @@ public class ModelConsoleEndpoint {
     private final ReactiveExtensionClient client;
 
     @GetMapping
-    public Mono<ListResult<AiModel>> list() {
-        return client.list(AiModel.class, null, null)
-            .collectList()
-            .map(models -> new ListResult<>(models.size(), models.size(), 1, models));
+    public Flux<AiModel> list() {
+        return client.listAll(AiModel.class, new ListOptions(), Sort.unsorted());
     }
 
     @GetMapping("/{name}")

@@ -3,6 +3,7 @@ package run.halo.aifoundation.service;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
@@ -16,6 +17,7 @@ import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.ProviderClientCache;
 import run.halo.aifoundation.provider.SecretResolver;
+import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.ReactiveExtensionClient;
 
 @Slf4j
@@ -80,7 +82,7 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<List<ModelInfo>> listModels() {
-        return client.list(AiModel.class, null, null)
+        return client.listAll(AiModel.class, new ListOptions(), Sort.unsorted())
             .map(model -> ModelInfo.builder()
                 .providerName(model.getSpec().getProviderName())
                 .modelId(model.getSpec().getModelId())
@@ -91,7 +93,7 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<List<ProviderInfo>> listProviders() {
-        return client.list(AiProvider.class, null, null)
+        return client.listAll(AiProvider.class, new ListOptions(), Sort.unsorted())
             .map(provider -> {
                 var status = provider.getStatus();
                 var phase = status != null && status.getPhase() != null

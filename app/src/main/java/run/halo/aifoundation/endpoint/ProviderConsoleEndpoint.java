@@ -6,6 +6,7 @@ import java.util.Map;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,10 +16,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
-import run.halo.app.extension.ListResult;
+import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.ApiVersion;
@@ -33,10 +35,8 @@ public class ProviderConsoleEndpoint {
     private final ReactiveExtensionClient client;
 
     @GetMapping
-    public Mono<ListResult<AiProvider>> list() {
-        return client.list(AiProvider.class, null, null)
-            .collectList()
-            .map(providers -> new ListResult<>(providers.size(), providers.size(), 1, providers));
+    public Flux<AiProvider> list() {
+        return client.listAll(AiProvider.class, new ListOptions(), Sort.unsorted());
     }
 
     @GetMapping("/{name}")
