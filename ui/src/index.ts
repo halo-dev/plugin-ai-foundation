@@ -10,7 +10,8 @@ export default definePlugin({
       route: {
         path: '/ai-foundation',
         name: 'AiFoundation',
-        component: () => import(/* webpackChunkName: "ProviderManager" */ './views/ProviderManager.vue'),
+        component: () =>
+          import(/* webpackChunkName: "ProviderManager" */ './views/ProviderManager.vue'),
         meta: {
           title: 'AI 模型配置',
           permissions: ['plugin:ai-foundation:manage'],

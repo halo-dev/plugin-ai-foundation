@@ -1,6 +1,0 @@
-{
-	"dependencies": {
-		"@tanstack/vue-query": "^4.44.0",
-		"@vueuse/core": "^10.11.1"
-	}
-}
