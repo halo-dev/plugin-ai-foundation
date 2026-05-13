@@ -1,6 +1,7 @@
 package run.halo.aifoundation.endpoint;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -55,25 +57,158 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> listProviderModels(ServerRequest request) {
         var name = request.pathVariable("name");
+        log.info("Listing models for provider: {}", name);
         return client.fetch(AiProvider.class, name)
             .switchIfEmpty(Mono.error(
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
             .flatMap(provider -> {
-                // Return locally configured models for this provider
-                return client.list(AiModel.class,
-                        model -> name.equals(model.getSpec().getProviderName()), null)
-                    .map(model -> Map.of(
-                        "modelId", model.getSpec().getModelId() != null
-                            ? model.getSpec().getModelId() : "",
-                        "displayName", model.getSpec().getDisplayName() != null
-                            ? model.getSpec().getDisplayName() : "",
-                        "name", model.getMetadata().getName()
-                    ))
-                    .collectList()
-                    .flatMap(models -> ServerResponse.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(Map.of("models", models, "providerName", name)));
+                var secretName = provider.getSpec().getApiKeySecretName();
+                log.info("Provider {} has apiKeySecretName: {}", name, secretName);
+                return secretResolver.resolveApiKey(secretName)
+                    .flatMap(apiKey -> {
+                        log.info("Resolved API key for provider {}: length={}", name, apiKey.length());
+                        return fetchModelsFromProviderApi(provider, apiKey);
+                    })
+                    .switchIfEmpty(Mono.defer(() -> {
+                        log.warn("Provider API returned empty for {}, falling back to local models", name);
+                        return fetchLocalModels(name);
+                    }))
+                    .onErrorResume(e -> {
+                        log.error("Failed to fetch models from provider API for {}, falling back to local models",
+                            name, e);
+                        return fetchLocalModels(name);
+                    });
             });
+    }
+
+    private Mono<ServerResponse> fetchLocalModels(String providerName) {
+        log.info("Fetching local models for provider: {}", providerName);
+        return client.list(AiModel.class,
+                model -> providerName.equals(model.getSpec().getProviderName()), null)
+            .map(model -> Map.of(
+                "modelId", model.getSpec().getModelId() != null
+                    ? model.getSpec().getModelId() : "",
+                "displayName", model.getSpec().getDisplayName() != null
+                    ? model.getSpec().getDisplayName() : "",
+                "name", model.getMetadata().getName()
+            ))
+            .collectList()
+            .flatMap(models -> {
+                log.info("Found {} local models for provider {}", models.size(), providerName);
+                return ServerResponse.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("models", models, "providerName", providerName));
+            });
+    }
+
+    private Mono<ServerResponse> fetchModelsFromProviderApi(AiProvider provider, String apiKey) {
+        var providerType = provider.getSpec().getProviderType();
+        var baseUrl = resolveBaseUrl(provider);
+        var providerName = provider.getMetadata().getName();
+
+        log.info("Fetching models from provider API: type={}, baseUrl={}, providerName={}",
+            providerType, baseUrl, providerName);
+
+        if ("ollama".equals(providerType)) {
+            return fetchOllamaModels(baseUrl, providerName);
+        }
+
+        var wc = WebClient.builder().baseUrl(baseUrl).build();
+        var requestSpec = wc.get().uri("/v1/models");
+
+        if (apiKey != null && !apiKey.isBlank()) {
+            requestSpec = requestSpec.header("Authorization", "Bearer " + apiKey);
+        }
+
+        if ("aihubmix".equals(providerType)) {
+            requestSpec = requestSpec.header("APP-Code", "NEUE3459");
+        }
+
+        return requestSpec
+            .retrieve()
+            .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
+            .doOnNext(json -> log.info("Provider API response for {}: {}", providerName, json))
+            .flatMap(json -> {
+                var data = json.get("data");
+                if (!(data instanceof List<?> dataList)) {
+                    log.warn("Provider API response missing 'data' array for {}", providerName);
+                    return Mono.empty();
+                }
+                List<Map<String, String>> models = new ArrayList<>();
+                for (var item : dataList) {
+                    if (item instanceof Map<?, ?> node) {
+                        var modelIdObj = node.get("id");
+                        var modelId = modelIdObj != null ? modelIdObj.toString() : "";
+                        if (!modelId.isBlank()) {
+                            models.add(Map.of(
+                                "modelId", modelId,
+                                "displayName", modelId,
+                                "name", ""
+                            ));
+                        }
+                    }
+                }
+                log.info("Fetched {} models from provider API for {}", models.size(), providerName);
+                return ServerResponse.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of(
+                        "models", models,
+                        "providerName", providerName
+                    ));
+            })
+            .doOnError(e -> log.error("Provider API request failed for {}: {}", providerName, e.getMessage(), e));
+    }
+
+    private Mono<ServerResponse> fetchOllamaModels(String baseUrl, String providerName) {
+        var wc = WebClient.builder().baseUrl(baseUrl).build();
+        return wc.get()
+            .uri("/api/tags")
+            .retrieve()
+            .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
+            .flatMap(json -> {
+                var modelsObj = json.get("models");
+                if (!(modelsObj instanceof List<?> modelsList)) {
+                    return Mono.empty();
+                }
+                List<Map<String, String>> models = new ArrayList<>();
+                for (var item : modelsList) {
+                    if (item instanceof Map<?, ?> node) {
+                        var nameObj = node.get("name");
+                        var modelId = nameObj != null ? nameObj.toString() : "";
+                        if (!modelId.isBlank()) {
+                            models.add(Map.of(
+                                "modelId", modelId,
+                                "displayName", modelId,
+                                "name", ""
+                            ));
+                        }
+                    }
+                }
+                return ServerResponse.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of(
+                        "models", models,
+                        "providerName", providerName
+                    ));
+            });
+    }
+
+    private String resolveBaseUrl(AiProvider provider) {
+        var specBaseUrl = provider.getSpec().getBaseUrl();
+        if (specBaseUrl != null && !specBaseUrl.isBlank()) {
+            return specBaseUrl;
+        }
+        return switch (provider.getSpec().getProviderType()) {
+            case "openai" -> "https://api.openai.com";
+            case "aihubmix" -> "https://aihubmix.com";
+            case "deepseek" -> "https://api.deepseek.com";
+            case "siliconflow" -> "https://api.siliconflow.cn";
+            case "doubao" -> "https://ark.cn-beijing.volces.com/api";
+            case "ernie" -> "https://qianfan.baidubce.com";
+            case "zhipuai" -> "https://open.bigmodel.cn/api";
+            case "ollama" -> "http://localhost:11434";
+            default -> "";
+        };
     }
 
     private Mono<ServerResponse> testConnectivity(ServerRequest request) {
@@ -128,28 +263,28 @@ public class ProviderDebugEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> testChat(ServerRequest request) {
         var providerName = request.pathVariable("providerName");
-        var modelId = request.pathVariable("modelId");
+        var modelId = java.net.URLDecoder.decode(
+            request.pathVariable("modelId"), java.nio.charset.StandardCharsets.UTF_8);
         var modelRef = providerName + "/" + modelId;
+        log.info("testChat: providerName={}, modelId={}, modelRef={}", providerName, modelId, modelRef);
 
         return request.bodyToMono(TestChatRequest.class)
             .defaultIfEmpty(new TestChatRequest())
             .flatMap(body -> {
                 var prompt = body.getPrompt() != null ? body.getPrompt() : "Hello!";
-                try {
-                    var languageModel = aiModelService.languageModel(modelRef);
-                    return languageModel.chat(prompt)
-                        .flatMap(content -> ServerResponse.ok()
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .bodyValue(Map.of(
-                                "modelRef", modelRef,
-                                "content", content,
-                                "finishReason", "stop"
-                            )));
-                } catch (Exception e) {
-                    return Mono.error(new ResponseStatusException(
+                return Mono.fromCallable(() -> aiModelService.languageModel(modelRef))
+                    .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                    .flatMap(languageModel -> languageModel.chat(prompt))
+                    .flatMap(content -> ServerResponse.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(Map.of(
+                            "modelRef", modelRef,
+                            "content", content,
+                            "finishReason", "stop"
+                        )))
+                    .onErrorResume(e -> Mono.error(new ResponseStatusException(
                         HttpStatus.BAD_GATEWAY,
-                        "Chat test failed: " + e.getMessage(), e));
-                }
+                        "Chat test failed: " + e.getMessage(), e)));
             });
     }
 

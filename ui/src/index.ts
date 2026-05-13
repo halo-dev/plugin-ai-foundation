@@ -1,6 +1,6 @@
 import { definePlugin } from '@halo-dev/ui-shared'
-import { IconPlug } from '@halo-dev/components'
 import { markRaw } from 'vue'
+import RiBrainLine from '~icons/ri/brain-line'
 
 export default definePlugin({
   components: {},
@@ -8,17 +8,17 @@ export default definePlugin({
     {
       parentName: 'Root',
       route: {
-        path: '/example',
-        name: 'Example',
-        component: () => import(/* webpackChunkName: "HomeView" */ './views/HomeView.vue'),
+        path: '/ai-foundation',
+        name: 'AiFoundation',
+        component: () => import(/* webpackChunkName: "ProviderManager" */ './views/ProviderManager.vue'),
         meta: {
-          title: '示例页面',
-          searchable: true,
+          title: 'AI 模型配置',
+          permissions: ['plugin:ai-foundation:manage'],
           menu: {
-            name: '示例页面',
-            group: '示例分组',
-            icon: markRaw(IconPlug),
-            priority: 0,
+            name: 'AI 模型配置',
+            group: 'system',
+            icon: markRaw(RiBrainLine),
+            priority: 100,
           },
         },
       },
