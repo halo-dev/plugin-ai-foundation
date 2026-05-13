@@ -49,6 +49,17 @@ test {
     useJUnitPlatform()
 }
 
+tasks.register('processUiResources', Copy) {
+    from project(':ui').layout.buildDirectory.dir('dist')
+    into layout.buildDirectory.dir('resources/main/console')
+    dependsOn project(':ui').tasks.named('assemble')
+    shouldRunAfter tasks.named('processResources')
+}
+
+tasks.named('classes') {
+    dependsOn tasks.named('processUiResources')
+}
+
 tasks.named('generatePluginComponentsIdx') {
     notCompatibleWithConfigurationCache('This task invokes "Task.project" at execution time, which is not supported with configuration cache.')
 }
@@ -61,12 +72,26 @@ haloPlugin {
     openApi {
         outputDir = file("$rootDir/api-docs/openapi/v3_0")
         groupingRules {
-            create("aifoundation-console") {
-                displayName = "AI Foundation Console APIs"
-                pathsToMatch = ["/apis/console.api.aifoundation.halo.run/**"]
+            aiFoundationApis {
+                displayName = "AI Foundation APIs"
+                pathsToMatch = ["/apis/console.api.aifoundation.halo.run/**", "/apis/aifoundation.halo.run/**"]
             }
         }
+        groupedApiMappings = [
+            '/v3/api-docs/aiFoundationApis': 'aiFoundationApis.json'
+        ]
         generator {
+            outputDir = file("${rootDir}/ui/src/api/generated")
+            additionalProperties = [
+                useES6: true,
+                useSingleRequestParameter: true,
+                withSeparateModelsAndApi: true,
+                apiPackage: "api",
+                modelPackage: "models"
+            ]
+            typeMappings = [
+                set: "Array"
+            ]
         }
     }
 }
