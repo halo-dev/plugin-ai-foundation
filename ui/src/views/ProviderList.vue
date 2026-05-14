@@ -51,38 +51,38 @@ function statusPhase(phase?: string) {
 </script>
 
 <template>
-  <div class="provider-list">
-    <div class="provider-list__search">
-      <div class="search-input-wrapper">
-        <RiSearchLine class="search-icon" />
-        <input v-model="searchQuery" type="text" placeholder="搜索供应商..." class="search-input" />
+  <div class=":uno: provider-list">
+    <div class=":uno: provider-list__search">
+      <div class=":uno: search-input-wrapper">
+        <RiSearchLine class=":uno: search-icon" />
+        <input v-model="searchQuery" type="text" placeholder="搜索供应商..." class=":uno: search-input" />
       </div>
     </div>
 
     <VLoading v-if="loading" />
 
-    <div v-else-if="filteredProviders.length === 0" class="provider-list__empty">
+    <div v-else-if="filteredProviders.length === 0" class=":uno: provider-list__empty">
       <VEmpty title="暂无供应商" />
     </div>
 
-    <div v-else class="provider-list__items">
+    <div v-else class=":uno: provider-list__items">
       <VCard
         v-for="provider in filteredProviders"
         :key="provider.metadata.name"
         :class="[
-          'provider-card',
-          { 'provider-card--active': selectedName === provider.metadata.name },
+          ':uno: provider-card',
+          { ':uno: provider-card--active': selectedName === provider.metadata.name },
         ]"
         @click="emit('select', provider)"
       >
-        <div class="provider-card__header">
-          <div class="provider-card__title">
-            <span class="font-medium">{{ provider.spec.displayName }}</span>
+        <div class=":uno: provider-card__header">
+          <div class=":uno: provider-card__title">
+            <span class=":uno: font-medium">{{ provider.spec.displayName }}</span>
             <VTag size="sm">
               {{ providerTypeLabel(provider.spec.providerType) }}
             </VTag>
           </div>
-          <div class="provider-card__actions" @click.stop>
+          <div class=":uno: provider-card__actions" @click.stop>
             <VButton type="default" size="sm" @click="emit('edit', provider)">
               <RiEditLine />
             </VButton>
@@ -91,9 +91,9 @@ function statusPhase(phase?: string) {
             </VButton>
           </div>
         </div>
-        <div class="provider-card__status">
+        <div class=":uno: provider-card__status">
           <VStatusDot :state="statusPhase(provider.status?.phase)" />
-          <span class="text-xs text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
+          <span class=":uno: text-xs text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
           <VTag v-if="!provider.spec.enabled" size="sm" style="margin-left: 8px"> 已禁用 </VTag>
         </div>
       </VCard>

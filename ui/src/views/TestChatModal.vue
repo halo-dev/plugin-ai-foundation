@@ -34,14 +34,14 @@ async function send() {
 </script>
 
 <template>
-  <div class="test-chat">
-    <div class="test-chat__header">
-      <h3 class="text-base font-semibold">测试对话: {{ modelDisplayName }}</h3>
+  <div class=":uno: test-chat">
+    <div class=":uno: test-chat__header">
+      <h3 class=":uno: text-base font-semibold">测试对话: {{ modelDisplayName }}</h3>
       <VButton type="secondary" size="sm" @click="emit('close')">关闭</VButton>
     </div>
 
-    <div class="test-chat__input">
-      <textarea v-model="prompt" rows="3" placeholder="输入提示词..." class="test-chat__textarea" />
+    <div class=":uno: test-chat__input">
+      <textarea v-model="prompt" rows="3" placeholder="输入提示词..." class=":uno: test-chat__textarea" />
       <VButton type="primary" size="sm" :loading="testChat.isPending.value" @click="send">
         <template #icon>
           <RiSendPlaneLine />
@@ -50,10 +50,10 @@ async function send() {
       </VButton>
     </div>
 
-    <div v-if="result || testChat.isPending.value" class="test-chat__result">
+    <div v-if="result || testChat.isPending.value" class=":uno: test-chat__result">
       <VCard>
-        <div v-if="testChat.isPending.value" class="text-gray-500">请求中...</div>
-        <div v-else class="whitespace-pre-wrap text-sm">{{ result }}</div>
+        <div v-if="testChat.isPending.value" class=":uno: text-gray-500">请求中...</div>
+        <div v-else class=":uno: whitespace-pre-wrap text-sm">{{ result }}</div>
       </VCard>
     </div>
   </div>

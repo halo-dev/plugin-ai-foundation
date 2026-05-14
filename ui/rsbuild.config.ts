@@ -1,6 +1,7 @@
 import { rsbuildConfig } from '@halo-dev/ui-plugin-bundler-kit'
-import Icons from 'unplugin-icons/rspack'
 import { pluginSass } from '@rsbuild/plugin-sass'
+import { UnoCSSRspackPlugin } from '@unocss/webpack/rspack'
+import Icons from 'unplugin-icons/rspack'
 import type { RsbuildConfig } from '@rsbuild/core'
 
 const MANIFEST_PATH = '../app/src/main/resources/plugin.yaml'
@@ -27,9 +28,14 @@ export default rsbuildConfig({
       tools: {
         rspack: {
           cache: false,
-          plugins: [Icons({ compiler: 'vue3' })],
+          plugins: [
+            Icons({ compiler: 'vue3' }),
+            UnoCSSRspackPlugin({
+              configFile: './uno.config.ts',
+            }),
+          ],
         },
       },
     }
   },
-})
+}) as RsbuildConfig

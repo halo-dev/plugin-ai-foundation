@@ -75,19 +75,19 @@ function onModelFormSaved() {
 </script>
 
 <template>
-  <div class="provider-detail">
+  <div class=":uno: provider-detail">
     <VCard>
-      <div class="provider-detail__header">
-        <div class="provider-detail__title">
-          <h2 class="text-lg font-semibold">{{ provider.spec.displayName }}</h2>
+      <div class=":uno: provider-detail__header">
+        <div class=":uno: provider-detail__title">
+          <h2 class=":uno: text-lg font-semibold">{{ provider.spec.displayName }}</h2>
           <VTag size="sm">
             {{ providerTypeLabel() }}
           </VTag>
           <VStatusDot :state="statusPhase(provider.status?.phase)" />
-          <span class="text-sm text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
+          <span class=":uno: text-sm text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
           <VTag v-if="!provider.spec.enabled" size="sm" type="warning">已禁用</VTag>
         </div>
-        <div class="provider-detail__actions">
+        <div class=":uno: provider-detail__actions">
           <VButton size="sm" :loading="testConnectivity.isPending.value" @click="onTest">
             <template #icon>
               <RiTestTubeLine />
@@ -109,17 +109,17 @@ function onModelFormSaved() {
         </div>
       </div>
 
-      <div v-if="testConnectivity.data.value" class="connectivity-result">
+      <div v-if="testConnectivity.data.value" class=":uno: connectivity-result">
         <VTag :type="(testConnectivity.data.value as any).phase === 'OK' ? 'success' : 'error'" size="sm">
           {{ (testConnectivity.data.value as any).phase === 'OK' ? '连通成功' : '连通失败' }}
         </VTag>
-        <span class="text-sm text-gray-600">{{ (testConnectivity.data.value as any).message }}</span>
-        <span v-if="(testConnectivity.data.value as any).lastCheckedAt" class="text-xs text-gray-400">
+        <span class=":uno: text-sm text-gray-600">{{ (testConnectivity.data.value as any).message }}</span>
+        <span v-if="(testConnectivity.data.value as any).lastCheckedAt" class=":uno: text-xs text-gray-400">
           检测时间: {{ (testConnectivity.data.value as any).lastCheckedAt }}
         </span>
       </div>
 
-      <VDescription class="mt-4">
+      <VDescription class=":uno: mt-4">
         <VDescriptionItem label="资源名称">
           {{ provider.metadata.name }}
         </VDescriptionItem>
@@ -141,10 +141,10 @@ function onModelFormSaved() {
       </VDescription>
     </VCard>
 
-    <VCard class="mt-4">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-base font-semibold">关联模型</h3>
-        <div class="flex gap-2">
+    <VCard class=":uno: mt-4">
+      <div class=":uno: mb-4 flex items-center justify-between">
+        <h3 class=":uno: text-base font-semibold">关联模型</h3>
+        <div class=":uno: flex gap-2">
           <VButton type="secondary" size="sm" @click="discoveryVisible = true">
             <template #icon>
               <RiDownloadCloudLine />

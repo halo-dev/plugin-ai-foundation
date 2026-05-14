@@ -4,7 +4,7 @@ import { useModels } from '@/composables/useModels'
 import { useDeleteProvider, useProviders } from '@/composables/useProviders'
 import { Dialog, Toast, VButton, VModal, VPageHeader } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import RiAddLine from '~icons/ri/add-line'
 import RiBrainLine from '~icons/ri/brain-line'
 import ProviderDetail from './ProviderDetail.vue'
@@ -58,14 +58,12 @@ function onFormSaved() {
   editingProvider.value = null
   queryClient.invalidateQueries({ queryKey: ['ai-providers'] })
 }
-
-const providerName = computed(() => selectedProvider.value?.metadata.name || '')
 </script>
 
 <template>
   <VPageHeader title="AI 模型配置">
     <template #icon>
-      <RiBrainLine class="h-6 w-6 text-gray-700 mr-2" />
+      <RiBrainLine class=":uno: mr-2 h-6 w-6 text-gray-700" />
     </template>
     <template #actions>
       <VButton type="primary" @click="onCreateProvider">
@@ -77,8 +75,8 @@ const providerName = computed(() => selectedProvider.value?.metadata.name || '')
     </template>
   </VPageHeader>
 
-  <div class="provider-manager">
-    <div class="provider-manager__list">
+  <div class=":uno: provider-manager">
+    <div class=":uno: provider-manager__list">
       <ProviderList
         :providers="providers || []"
         :loading="providersLoading"
@@ -88,7 +86,7 @@ const providerName = computed(() => selectedProvider.value?.metadata.name || '')
         @delete="onDeleteProvider"
       />
     </div>
-    <div class="provider-manager__detail">
+    <div class=":uno: provider-manager__detail">
       <ProviderDetail
         v-if="selectedProvider"
         :key="selectedProvider.metadata.name"
@@ -96,8 +94,8 @@ const providerName = computed(() => selectedProvider.value?.metadata.name || '')
         @edit="onEditProvider"
         @delete="onDeleteProvider"
       />
-      <div v-else class="empty-state">
-        <p class="text-gray-500">请从左侧选择一个供应商查看详情</p>
+      <div v-else class=":uno: empty-state">
+        <p class=":uno: text-gray-500">请从左侧选择一个供应商查看详情</p>
       </div>
     </div>
   </div>

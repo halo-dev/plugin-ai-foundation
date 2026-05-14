@@ -1,4 +1,5 @@
 import { definePlugin } from '@halo-dev/ui-shared'
+import 'uno.css'
 import { markRaw } from 'vue'
 import RiBrainLine from '~icons/ri/brain-line'
 

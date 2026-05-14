@@ -90,13 +90,13 @@ async function batchAdd() {
       }
       await createModel.mutateAsync(newModel)
     }
-    // eslint-disable-next-line no-undef
+     
     Toast.success(`成功添加 ${toAdd.length} 个模型`)
     queryClient.invalidateQueries({ queryKey: ['ai-models'] })
     queryClient.invalidateQueries({ queryKey: ['ai-models', 'provider', props.providerName] })
     emit('close')
   } catch (e) {
-    // eslint-disable-next-line no-undef
+     
     Toast.error('添加模型失败: ' + (e as Error).message)
   } finally {
     adding.value = false
@@ -105,27 +105,27 @@ async function batchAdd() {
 </script>
 
 <template>
-  <div class="discovery-modal">
-    <div class="discovery-header">
-      <h3 class="text-base font-semibold">从供应商获取模型</h3>
+  <div class=":uno: discovery-modal">
+    <div class=":uno: discovery-header">
+      <h3 class=":uno: text-base font-semibold">从供应商获取模型</h3>
       <VButton type="secondary" size="sm" @click="emit('close')">关闭</VButton>
     </div>
 
     <VLoading v-if="isLoading" />
 
-    <div v-else-if="availableModels.length === 0" class="discovery-empty">
+    <div v-else-if="availableModels.length === 0" class=":uno: discovery-empty">
       <VEmpty title="未获取到模型列表" />
     </div>
 
-    <div v-else class="discovery-content">
-      <div class="discovery-defaults">
-        <div class="default-field">
+    <div v-else class=":uno: discovery-content">
+      <div class=":uno: discovery-defaults">
+        <div class=":uno: default-field">
           <label>默认分组</label>
           <input v-model="defaultGroup" type="text" placeholder="可选" />
         </div>
       </div>
 
-      <div class="discovery-actions">
+      <div class=":uno: discovery-actions">
         <VButton
           type="primary"
           size="sm"
@@ -140,29 +140,29 @@ async function batchAdd() {
         </VButton>
       </div>
 
-      <div class="discovery-list">
+      <div class=":uno: discovery-list">
         <VCard
           v-for="model in availableModels"
           :key="model.modelId"
-          :class="['discovery-item', { 'discovery-item--selected': isSelected(model) }]"
+          :class="[':uno: discovery-item', { ':uno: discovery-item--selected': isSelected(model) }]"
           @click="toggleSelection(model)"
         >
-          <div class="discovery-item__check">
-            <div v-if="isSelected(model)" class="check-icon">
+          <div class=":uno: discovery-item__check">
+            <div v-if="isSelected(model)" class=":uno: check-icon">
               <RiCheckLine />
             </div>
-            <div v-else class="check-placeholder"></div>
+            <div v-else class=":uno: check-placeholder"></div>
           </div>
-          <div class="discovery-item__info">
-            <span class="discovery-item__name">{{ model.displayName || model.modelId }}</span>
-            <span class="discovery-item__id">{{ model.modelId }}</span>
+          <div class=":uno: discovery-item__info">
+            <span class=":uno: discovery-item__name">{{ model.displayName || model.modelId }}</span>
+            <span class=":uno: discovery-item__id">{{ model.modelId }}</span>
           </div>
-          <div class="discovery-item__capabilities">
+          <div class=":uno: discovery-item__capabilities">
             <span
               v-for="cap in model.capabilities"
               :key="cap"
-              class="capability-tag"
-              :class="`capability-tag--${cap}`"
+              class=":uno: capability-tag"
+              :class="`:uno: capability-tag--{cap}`"
             >
               {{ capabilityLabel(cap) }}
             </span>

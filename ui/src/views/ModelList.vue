@@ -100,13 +100,13 @@ function openTestChat(model: AiModel) {
 </script>
 
 <template>
-  <div class="model-list">
-    <div class="model-list__filters">
-      <div class="filter-search">
-        <RiSearchLine class="search-icon" />
-        <input v-model="searchQuery" type="text" placeholder="搜索模型..." class="filter-input" />
+  <div class=":uno: model-list">
+    <div class=":uno: model-list__filters">
+      <div class=":uno: filter-search">
+        <RiSearchLine class=":uno: search-icon" />
+        <input v-model="searchQuery" type="text" placeholder="搜索模型..." class=":uno: filter-input" />
       </div>
-      <select v-model="capabilityFilter" class="filter-select">
+      <select v-model="capabilityFilter" class=":uno: filter-select">
         <option value="">全部能力</option>
         <option v-for="cap in CAPABILITY_OPTIONS" :key="cap.value" :value="cap.value">
           {{ cap.label }}
@@ -114,27 +114,27 @@ function openTestChat(model: AiModel) {
       </select>
     </div>
 
-    <div v-if="Object.keys(groupedModels).length === 0" class="model-list__empty">
+    <div v-if="Object.keys(groupedModels).length === 0" class=":uno: model-list__empty">
       <VEmpty title="暂无模型" />
     </div>
 
-    <div v-else class="model-list__groups">
-      <div v-for="(models, group) in groupedModels" :key="group" class="model-group">
-        <div class="model-group__header" @click="toggleGroup(group)">
-          <span class="model-group__toggle">{{ isExpanded(group) ? '▼' : '▶' }}</span>
-          <span class="model-group__name">{{ group }}</span>
-          <span class="model-group__count">({{ models.length }})</span>
+    <div v-else class=":uno: model-list__groups">
+      <div v-for="(models, group) in groupedModels" :key="group" class=":uno: model-group">
+        <div class=":uno: model-group__header" @click="toggleGroup(group)">
+          <span class=":uno: model-group__toggle">{{ isExpanded(group) ? '▼' : '▶' }}</span>
+          <span class=":uno: model-group__name">{{ group }}</span>
+          <span class=":uno: model-group__count">({{ models.length }})</span>
         </div>
 
-        <div v-show="isExpanded(group)" class="model-group__items">
-          <VCard v-for="model in models" :key="model.metadata.name" class="model-card">
-            <div class="model-card__header">
-              <div class="model-card__info">
-                <span class="model-card__name">{{ model.spec.displayName }}</span>
-                <span class="model-card__id">{{ model.spec.modelId }}</span>
+        <div v-show="isExpanded(group)" class=":uno: model-group__items">
+          <VCard v-for="model in models" :key="model.metadata.name" class=":uno: model-card">
+            <div class=":uno: model-card__header">
+              <div class=":uno: model-card__info">
+                <span class=":uno: model-card__name">{{ model.spec.displayName }}</span>
+                <span class=":uno: model-card__id">{{ model.spec.modelId }}</span>
                 <VTag v-if="!model.spec.enabled" size="sm" type="warning">已禁用</VTag>
               </div>
-              <div class="model-card__actions">
+              <div class=":uno: model-card__actions">
                 <VButton type="default" size="sm" @click="openTestChat(model)">
                   <RiChat1Line />
                 </VButton>
@@ -146,13 +146,13 @@ function openTestChat(model: AiModel) {
                 </VButton>
               </div>
             </div>
-            <div v-if="model.spec.capabilities?.length" class="model-card__tags">
+            <div v-if="model.spec.capabilities?.length" class=":uno: model-card__tags">
               <VTag v-for="cap in model.spec.capabilities" :key="cap" size="sm" type="primary">
                 {{ capabilityLabel(cap) }}
               </VTag>
             </div>
-            <div v-if="model.spec.endpointType" class="model-card__meta">
-              <span class="text-xs text-gray-500">{{ model.spec.endpointType }}</span>
+            <div v-if="model.spec.endpointType" class=":uno: model-card__meta">
+              <span class=":uno: text-xs text-gray-500">{{ model.spec.endpointType }}</span>
             </div>
           </VCard>
         </div>

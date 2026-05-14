@@ -118,7 +118,7 @@ async function handleSubmit(values: Record<string, unknown>) {
 </script>
 
 <template>
-  <div class="provider-form">
+  <div class=":uno: provider-form">
     <FormKit
       id="provider-form"
       type="form"
@@ -163,7 +163,7 @@ async function handleSubmit(values: Record<string, unknown>) {
       <button ref="submitBtn" type="submit" style="display: none"></button>
     </FormKit>
 
-    <div class="form-actions">
+    <div class=":uno: form-actions">
       <VButton type="secondary" @click="emit('cancel')">取消</VButton>
       <VButton
         type="primary"
