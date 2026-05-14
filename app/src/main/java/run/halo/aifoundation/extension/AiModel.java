@@ -20,23 +20,21 @@ public class AiModel extends AbstractExtension {
 
     @Data
     public static class AiModelSpec {
-        /** References AiProvider.metadata.name (provider instance resource name). */
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "References AiProvider.metadata.name (provider instance resource name)")
         private String providerName;
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "Unique identifier of the model within the provider")
         private String modelId;
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "Display name of the model")
         private String displayName;
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "Whether the model is enabled")
         private boolean enabled = true;
-        /** Model group for display/filtering purposes. */
+        @Schema(description = "Model group for display/filtering purposes")
         private String group;
-        /** Capability labels (e.g., chat, embedding, vision). */
+        @Schema(description = "Capability labels (e.g., chat, embedding, vision)")
         private List<String> capabilities;
-        /** Endpoint type (e.g., openai-chat, openai-embedding, ollama-chat). */
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "Endpoint type (e.g., openai-chat, openai-embedding, ollama-chat)")
         private String endpointType;
-        /** Whether the model supports streaming text delta. */
+        @Schema(description = "Whether the model supports streaming text delta")
         private Boolean supportedTextDelta;
     }
 }

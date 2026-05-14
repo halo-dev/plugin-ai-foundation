@@ -10,6 +10,7 @@ export * from './copy-operation';
 export * from './json-patch-inner';
 export * from './metadata';
 export * from './move-operation';
+export * from './provider-type-info';
 export * from './remove-operation';
 export * from './replace-operation';
 export * from './test-chat-request';

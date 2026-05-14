@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:46695",
+    "url" : "http://localhost:53081",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -605,6 +605,28 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/provider-types" : {
+      "get" : {
+        "description" : "List all available provider types with metadata.",
+        "operationId" : "ListProviderTypes",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ProviderTypeInfo"
+                  }
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/providers" : {
       "get" : {
         "description" : "List all AI providers.",
@@ -889,30 +911,39 @@
         "properties" : {
           "capabilities" : {
             "type" : "array",
+            "description" : "Capability labels (e.g., chat, embedding, vision)",
             "items" : {
-              "type" : "string"
+              "type" : "string",
+              "description" : "Capability labels (e.g., chat, embedding, vision)"
             }
           },
           "displayName" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Display name of the model"
           },
           "enabled" : {
-            "type" : "boolean"
+            "type" : "boolean",
+            "description" : "Whether the model is enabled"
           },
           "endpointType" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Endpoint type (e.g., openai-chat, openai-embedding, ollama-chat)"
           },
           "group" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Model group for display/filtering purposes"
           },
           "modelId" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Unique identifier of the model within the provider"
           },
           "providerName" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "References AiProvider.metadata.name (provider instance resource name)"
           },
           "supportedTextDelta" : {
-            "type" : "boolean"
+            "type" : "boolean",
+            "description" : "Whether the model supports streaming text delta"
           }
         }
       },
@@ -991,31 +1022,32 @@
         "type" : "object",
         "properties" : {
           "apiKeySecretName" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Name of the Halo Secret containing the API key"
           },
           "baseUrl" : {
-            "type" : "string"
-          },
-          "config" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "string"
-            }
+            "type" : "string",
+            "description" : "Base URL. Required for ollama and openailike; built-in providers use defaults"
           },
           "displayName" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Display name of the provider"
           },
           "enabled" : {
-            "type" : "boolean"
+            "type" : "boolean",
+            "description" : "Whether the provider is enabled"
           },
           "providerType" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike"
           },
           "proxyHost" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Proxy host for this provider (optional)"
           },
           "proxyPort" : {
             "type" : "integer",
+            "description" : "Proxy port for this provider (optional)",
             "format" : "int32"
           }
         }
@@ -1025,13 +1057,16 @@
         "properties" : {
           "lastCheckedAt" : {
             "type" : "string",
+            "description" : "Timestamp of the last connectivity check",
             "format" : "date-time"
           },
           "message" : {
-            "type" : "string"
+            "type" : "string",
+            "description" : "Status message, especially useful when phase is ERROR"
           },
           "phase" : {
             "type" : "string",
+            "description" : "Current phase of the provider",
             "enum" : [ "UNKNOWN", "OK", "ERROR" ]
           }
         }
@@ -1154,6 +1189,47 @@
             "type" : "string",
             "description" : "A JSON Pointer path pointing to the location to move/copy from.",
             "example" : "/a/b/c"
+          }
+        }
+      },
+      "ProviderTypeInfo" : {
+        "type" : "object",
+        "properties" : {
+          "builtIn" : {
+            "type" : "boolean"
+          },
+          "defaultBaseUrl" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "documentationUrl" : {
+            "type" : "string"
+          },
+          "iconUrl" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "requiresBaseUrl" : {
+            "type" : "boolean"
+          },
+          "supportedEndpointTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "supportsEmbeddings" : {
+            "type" : "boolean"
+          },
+          "websiteUrl" : {
+            "type" : "string"
           }
         }
       },

@@ -21,49 +21,43 @@
  */
 export interface AiProviderSpec {
     /**
-     * 
+     * Name of the Halo Secret containing the API key
      * @type {string}
      * @memberof AiProviderSpec
      */
     'apiKeySecretName'?: string;
     /**
-     * 
+     * Base URL. Required for ollama and openailike; built-in providers use defaults
      * @type {string}
      * @memberof AiProviderSpec
      */
     'baseUrl'?: string;
     /**
-     * 
-     * @type {{ [key: string]: string; }}
-     * @memberof AiProviderSpec
-     */
-    'config'?: { [key: string]: string; };
-    /**
-     * 
+     * Display name of the provider
      * @type {string}
      * @memberof AiProviderSpec
      */
     'displayName': string;
     /**
-     * 
+     * Whether the provider is enabled
      * @type {boolean}
      * @memberof AiProviderSpec
      */
     'enabled': boolean;
     /**
-     * 
+     * Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike
      * @type {string}
      * @memberof AiProviderSpec
      */
     'providerType': string;
     /**
-     * 
+     * Proxy host for this provider (optional)
      * @type {string}
      * @memberof AiProviderSpec
      */
     'proxyHost'?: string;
     /**
-     * 
+     * Proxy port for this provider (optional)
      * @type {number}
      * @memberof AiProviderSpec
      */

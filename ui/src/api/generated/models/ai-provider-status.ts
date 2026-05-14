@@ -21,19 +21,19 @@
  */
 export interface AiProviderStatus {
     /**
-     * 
+     * Timestamp of the last connectivity check
      * @type {string}
      * @memberof AiProviderStatus
      */
     'lastCheckedAt'?: string;
     /**
-     * 
+     * Status message, especially useful when phase is ERROR
      * @type {string}
      * @memberof AiProviderStatus
      */
     'message'?: string;
     /**
-     * 
+     * Current phase of the provider
      * @type {string}
      * @memberof AiProviderStatus
      */

@@ -21,49 +21,49 @@
  */
 export interface AiModelSpec {
     /**
-     * 
+     * Capability labels (e.g., chat, embedding, vision)
      * @type {Array<string>}
      * @memberof AiModelSpec
      */
     'capabilities'?: Array<string>;
     /**
-     * 
+     * Display name of the model
      * @type {string}
      * @memberof AiModelSpec
      */
     'displayName': string;
     /**
-     * 
+     * Whether the model is enabled
      * @type {boolean}
      * @memberof AiModelSpec
      */
     'enabled': boolean;
     /**
-     * 
+     * Endpoint type (e.g., openai-chat, openai-embedding, ollama-chat)
      * @type {string}
      * @memberof AiModelSpec
      */
     'endpointType': string;
     /**
-     * 
+     * Model group for display/filtering purposes
      * @type {string}
      * @memberof AiModelSpec
      */
     'group'?: string;
     /**
-     * 
+     * Unique identifier of the model within the provider
      * @type {string}
      * @memberof AiModelSpec
      */
     'modelId': string;
     /**
-     * 
+     * References AiProvider.metadata.name (provider instance resource name)
      * @type {string}
      * @memberof AiModelSpec
      */
     'providerName': string;
     /**
-     * 
+     * Whether the model supports streaming text delta
      * @type {boolean}
      * @memberof AiModelSpec
      */

@@ -21,27 +21,29 @@ public class AiProvider extends AbstractExtension {
 
     @Data
     public static class AiProviderSpec {
-        /** Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike */
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike")
         private String providerType;
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "Display name of the provider")
         private String displayName;
-        @Schema(requiredMode = REQUIRED)
+        @Schema(requiredMode = REQUIRED, description = "Whether the provider is enabled")
         private boolean enabled = true;
-        /** Base URL. Required for ollama and openailike; built-in providers use defaults. */
+        @Schema(description = "Base URL. Required for ollama and openailike; built-in providers use defaults")
         private String baseUrl;
-        /** Name of the Halo Secret containing the API key. */
+        @Schema(description = "Name of the Halo Secret containing the API key")
         private String apiKeySecretName;
-        /** Proxy host for this provider (optional). */
+        @Schema(description = "Proxy host for this provider (optional)")
         private String proxyHost;
-        /** Proxy port for this provider (optional). */
+        @Schema(description = "Proxy port for this provider (optional)")
         private Integer proxyPort;
     }
 
     @Data
     public static class AiProviderStatus {
+        @Schema(description = "Current phase of the provider")
         private Phase phase = Phase.UNKNOWN;
+        @Schema(description = "Status message, especially useful when phase is ERROR")
         private String message;
+        @Schema(description = "Timestamp of the last connectivity check")
         private Instant lastCheckedAt;
 
         public enum Phase {
