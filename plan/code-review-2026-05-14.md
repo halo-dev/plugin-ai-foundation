@@ -26,7 +26,7 @@ return chatModelCache.computeIfAbsent(name, k -> {
 
 ---
 
-### 2. ProviderClientCache 对 null EmbeddingModel 会抛出 NPE
+### ~~2. ProviderClientCache 对 null EmbeddingModel 会抛出 NPE~~ ✅ FIXED
 
 **位置**: `ProviderClientCache.java:64-71`
 

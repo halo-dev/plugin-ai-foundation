@@ -65,11 +65,17 @@ public class ProviderClientCache {
     public EmbeddingModel getOrCreateEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var name = provider.getMetadata().getName();
         var key = name + "/" + modelId;
-        return embeddingModelCache.computeIfAbsent(key, k -> {
-            log.debug("Creating embedding model for provider: {}, model: {}", name, modelId);
-            var type = getProviderType(provider.getSpec().getProviderType());
-            return type.buildEmbeddingModel(provider, apiKey, modelId);
-        });
+        var existing = embeddingModelCache.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var model = type.buildEmbeddingModel(provider, apiKey, modelId);
+        if (model == null) {
+            return null;
+        }
+        var prev = embeddingModelCache.putIfAbsent(key, model);
+        return prev != null ? prev : model;
     }
 
     public void invalidate(String providerName) {
