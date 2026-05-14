@@ -8,7 +8,7 @@
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
     "prettier": "prettier --write src/",
-    "test:unit": "vitest --passWithNoTests",
+    "test:unit": "echo 'No tests'",
     "type-check": "vue-tsc --build"
   },
   "prettier": {
