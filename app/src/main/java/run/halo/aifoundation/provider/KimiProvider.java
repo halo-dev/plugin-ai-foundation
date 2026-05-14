@@ -22,7 +22,27 @@ public class KimiProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "Kimi";
+        return "月之暗面 Kimi";
+    }
+
+    @Override
+    public String getDescription() {
+        return "月之暗面（Moonshot AI）推出的智能助手，支持超长上下文和多模态理解。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/kimi.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://www.moonshot.cn";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://platform.kimi.com/docs/api/overview";
     }
 
     @Override

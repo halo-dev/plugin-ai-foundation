@@ -28,7 +28,27 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "AiHubMix";
+        return "AIHubMix";
+    }
+
+    @Override
+    public String getDescription() {
+        return "AIHubMix 提供的多模型 API 聚合平台，支持 Claude、GPT、Gemini 等主流模型。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/aihubmix.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://aihubmix.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://docs.aihubmix.com";
     }
 
     @Override

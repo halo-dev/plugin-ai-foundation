@@ -35,6 +35,26 @@ public class OllamaProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public String getDescription() {
+        return "本地运行开源大语言模型的工具，支持多种模型和自定义配置。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/ollama.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://ollama.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://docs.ollama.com";
+    }
+
+    @Override
     public boolean isBuiltIn() {
         return false;
     }

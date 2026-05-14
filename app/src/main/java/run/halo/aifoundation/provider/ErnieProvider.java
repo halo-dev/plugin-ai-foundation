@@ -26,7 +26,27 @@ public class ErnieProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "ERNIE";
+        return "文心一言";
+    }
+
+    @Override
+    public String getDescription() {
+        return "百度推出的文心大模型，具备知识增强和中文理解能力。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/wenxin.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://yiyan.baidu.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://cloud.baidu.com/doc/WENXINWORKSHOP/index.html";
     }
 
     @Override

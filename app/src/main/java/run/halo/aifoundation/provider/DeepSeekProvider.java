@@ -20,7 +20,27 @@ public class DeepSeekProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "DeepSeek";
+        return "深度求索 DeepSeek";
+    }
+
+    @Override
+    public String getDescription() {
+        return "深度求索推出的高性能大语言模型，支持对话、推理和代码生成。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/deepseek.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://deepseek.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://api-docs.deepseek.com";
     }
 
     @Override

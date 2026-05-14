@@ -26,7 +26,27 @@ public class DouBaoProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "DouBao";
+        return "豆包";
+    }
+
+    @Override
+    public String getDescription() {
+        return "字节跳动推出的豆包大模型，提供对话、嵌入和多模态能力。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/doubao.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://www.doubao.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://www.volcengine.com/product/doubao/";
     }
 
     @Override

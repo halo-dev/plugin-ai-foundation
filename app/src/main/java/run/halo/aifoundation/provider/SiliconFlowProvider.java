@@ -26,7 +26,27 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "SiliconFlow";
+        return "硅基流动";
+    }
+
+    @Override
+    public String getDescription() {
+        return "硅基流动提供的大模型推理平台，聚合多种开源和商业模型。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/siliconcloud.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://www.siliconflow.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://docs.siliconflow.com";
     }
 
     @Override

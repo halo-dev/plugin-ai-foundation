@@ -26,7 +26,27 @@ public class ZhiPuProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "ZhiPu AI";
+        return "智谱开放平台";
+    }
+
+    @Override
+    public String getDescription() {
+        return "智谱 AI 推出的 GLM 系列大模型开放平台，支持对话、嵌入和多模态能力。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/zhipu.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://www.zhipu.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://open.bigmodel.cn/dev/api";
     }
 
     @Override

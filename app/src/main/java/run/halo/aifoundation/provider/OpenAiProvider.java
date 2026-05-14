@@ -29,6 +29,26 @@ public class OpenAiProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public String getDescription() {
+        return "OpenAI 推出的 GPT 系列大模型，支持对话、嵌入和多种任务。";
+    }
+
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/openai.png";
+    }
+
+    @Override
+    public String getWebsiteUrl() {
+        return "https://openai.com";
+    }
+
+    @Override
+    public String getDocumentationUrl() {
+        return "https://platform.openai.com/docs";
+    }
+
+    @Override
     public boolean isBuiltIn() {
         return true;
     }
