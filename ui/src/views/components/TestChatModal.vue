@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { useTestChat } from '@/composables/useModels'
+import { aiConsoleApiClient } from '@/api'
+import type { TestChatRequest } from '@/api/generated'
 import { VButton, VCard } from '@halo-dev/components'
+import { useMutation } from '@tanstack/vue-query'
 import { ref } from 'vue'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 
@@ -13,7 +15,15 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const testChat = useTestChat()
+const testChat = useMutation({
+  mutationFn: async ({ modelName, request }: { modelName: string; request: TestChatRequest }) => {
+    const { data } = await aiConsoleApiClient.model.testModelChat({
+      name: modelName,
+      testChatRequest: request,
+    })
+    return data
+  },
+})
 
 const prompt = ref('Hello!')
 const result = ref('')

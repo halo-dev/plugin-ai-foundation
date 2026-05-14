@@ -4,18 +4,17 @@ import { useModelsFetch } from '@/composables/use-models-fetch'
 import {
   VButton,
   VCard,
+  VDropdown,
   VDropdownItem,
   VEmpty,
-  VEntity,
   VEntityContainer,
-  VEntityField,
   VLoading,
-  VSpace,
 } from '@halo-dev/components'
 import { computed, ref } from 'vue'
 import RiAddLine from '~icons/ri/add-line'
-import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
+import ModelCreationModal from './ModelCreationModal.vue'
 import ModelsDiscoveryModal from './ModelsDiscoveryModal.vue'
+import ProviderModelListItem from './ProviderModelListItem.vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -28,25 +27,24 @@ const { data: models, isLoading } = useModelsFetch({
 })
 
 const discoveryModalVisible = ref(false)
+const creationModalVisible = ref(false)
 </script>
 <template>
   <VCard :body-class="['!p-0']" title="模型列表">
     <template #actions>
       <div class=":uno: px-4">
-        <VSpace>
-          <VButton type="secondary" size="sm" @click="discoveryModalVisible = true">
-            <template #icon>
-              <RiDownloadCloudLine />
-            </template>
-            从供应商获取
-          </VButton>
-          <VButton type="primary" size="sm">
+        <VDropdown>
+          <VButton type="secondary" size="sm">
             <template #icon>
               <RiAddLine />
             </template>
             添加模型
           </VButton>
-        </VSpace>
+          <template #popper>
+            <VDropdownItem @click="discoveryModalVisible = true">从供应商获取</VDropdownItem>
+            <VDropdownItem @click="creationModalVisible = true">手动添加</VDropdownItem>
+          </template>
+        </VDropdown>
       </div>
     </template>
 
@@ -58,16 +56,8 @@ const discoveryModalVisible = ref(false)
       message="你可以从供应商获取或者手动添加模型"
     />
 
-    <VEntityContainer>
-      <VEntity v-for="model in models" :key="model.metadata.name">
-        <template #start>
-          <VEntityField :title="model.spec.displayName" :description="model.spec.modelId" />
-        </template>
-        <template #end></template>
-        <template #dropdownItems>
-          <VDropdownItem>删除</VDropdownItem>
-        </template>
-      </VEntity>
+    <VEntityContainer v-else>
+      <ProviderModelListItem v-for="model in models" :key="model.metadata.name" :model="model" />
     </VEntityContainer>
   </VCard>
 
@@ -75,5 +65,11 @@ const discoveryModalVisible = ref(false)
     v-if="provider && discoveryModalVisible"
     :provider="provider"
     @close="discoveryModalVisible = false"
+  />
+
+  <ModelCreationModal
+    v-if="provider && creationModalVisible"
+    :provider-name="provider.metadata.name"
+    @close="creationModalVisible = false"
   />
 </template>

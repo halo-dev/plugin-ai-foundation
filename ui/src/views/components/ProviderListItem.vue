@@ -1,19 +1,17 @@
 <script lang="ts" setup>
 import type { AiProvider } from '@/api/generated'
-import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
-import { VAvatar } from '@halo-dev/components'
-import { computed } from 'vue'
+import { useProviderType } from '@/composables/use-provider-types-fetch'
+import { VAvatar, VStatusDot } from '@halo-dev/components'
+import { toRefs } from 'vue'
 
 const props = defineProps<{
   provider: AiProvider
   isSelected: boolean
 }>()
 
-const { data: providerTypes } = useProviderTypesFetch()
+const { provider } = toRefs(props)
 
-const providerType = computed(() => {
-  return providerTypes.value?.find((t) => t.providerType === props.provider.spec.providerType)
-})
+const providerType = useProviderType(provider)
 </script>
 <template>
   <div
@@ -23,11 +21,14 @@ const providerType = computed(() => {
       ':uno: bg-gray-50': !isSelected,
     }"
   >
-    <VAvatar :src="providerType?.iconUrl" circle size="xs" />
-    <div>
-      <div class=":uno: text-sm font-semibold">
+    <VAvatar class=":uno: flex-none" :src="providerType?.iconUrl" circle size="xs" />
+    <div class=":uno: min-w-0 flex-1">
+      <div class=":uno: truncate text-sm font-semibold">
         {{ provider.spec.displayName }}
       </div>
+    </div>
+    <div class=":uno: flex-none" v-if="provider.metadata.deletionTimestamp">
+      <VStatusDot state="warning" animate />
     </div>
   </div>
 </template>

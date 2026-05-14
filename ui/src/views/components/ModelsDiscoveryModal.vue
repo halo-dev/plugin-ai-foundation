@@ -6,7 +6,7 @@ import {
   useDiscoverModelsFetch,
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
-import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
+import { useProviderType } from '@/composables/use-provider-types-fetch'
 import {
   Toast,
   VButton,
@@ -19,11 +19,13 @@ import {
   VSpace,
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, ref, toRefs } from 'vue'
 
 const props = defineProps<{
   provider: AiProvider
 }>()
+
+const { provider } = toRefs(props)
 
 const emit = defineEmits<{
   (event: 'close'): void
@@ -84,11 +86,7 @@ async function handleImport() {
   queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
 }
 
-const { data: providerTypes } = useProviderTypesFetch()
-
-const providerType = computed(() => {
-  return providerTypes.value?.find((t) => t.providerType === props.provider.spec.providerType)
-})
+const providerType = useProviderType(provider)
 
 // TODO: 优化
 function inferEndpointType(dm: DiscoveredModel): string {

@@ -13,7 +13,7 @@ import ProviderList from './components/ProviderList.vue'
   </VPageHeader>
 
   <div class=":uno: h-[calc(100vh-3.5rem)] flex">
-    <div class=":uno: w-64 flex-none p-2">
+    <div class=":uno: w-72 flex-none p-2">
       <ProviderList />
     </div>
 

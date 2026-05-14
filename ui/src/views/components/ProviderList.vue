@@ -15,7 +15,10 @@ const creationModalVisible = ref(false)
 watch(
   () => providers.value,
   (value) => {
-    if (value?.length && !selectedProvider.value) {
+    if (
+      value?.length &&
+      (!selectedProvider.value || !value.find((p) => p.metadata.name === selectedProvider.value))
+    ) {
       selectedProvider.value = value[0].metadata.name
     }
   },

@@ -14,6 +14,7 @@ const emit = defineEmits<{
 const queryClient = useQueryClient()
 
 const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
+const form = useTemplateRef<InstanceType<typeof ProviderForm>>('form')
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ProviderFormState) => {
@@ -58,11 +59,10 @@ function onSubmit(data: ProviderFormState) {
     ref="modal"
     @close="emit('close')"
   >
-    <ProviderForm @submit="onSubmit" />
+    <ProviderForm ref="form" @submit="onSubmit" />
     <template #footer>
       <VSpace>
-        <!-- @vue-ignore -->
-        <VButton type="secondary" :loading="isPending" @click="$formkit.submit('provider-form')">
+        <VButton type="secondary" :loading="isPending" @click="form?.submit()">
           保存
         </VButton>
         <VButton @click="modal?.close()">关闭</VButton>

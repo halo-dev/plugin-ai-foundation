@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import type { ProviderFormState } from '@/types/form'
+import { submitForm } from '@formkit/core'
 import { computed, ref, watch } from 'vue'
 
 const props = defineProps<{
@@ -50,6 +51,17 @@ const isEditing = computed(() => !!props.formState)
 function onSubmit(data: ProviderFormState) {
   emit('submit', data)
 }
+
+const providerTypeHelp = computed(() => {
+  if (selectedProviderType.value?.documentationUrl) {
+    return `${selectedProviderType.value.displayName} 文档地址：${selectedProviderType.value.documentationUrl}`
+  }
+  return ''
+})
+
+defineExpose({
+  submit: () => submitForm('provider-form'),
+})
 </script>
 
 <template>
@@ -63,6 +75,7 @@ function onSubmit(data: ProviderFormState) {
       :disabled="isEditing"
       v-model="providerType"
       :value="formState?.providerType"
+      :help="providerTypeHelp"
     />
 
     <FormKit
@@ -90,6 +103,12 @@ function onSubmit(data: ProviderFormState) {
       name="apiKeySecretName"
       label="API Key"
       :value="formState?.apiKeySecretName"
+      :requiredKeys="[
+        {
+          key: 'token',
+        },
+      ]"
+      help="新建一个密钥，并将平台的 API key 填入该密钥的 Value 字段"
     />
 
     <FormKit
