@@ -158,10 +158,12 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
         },
         /**
          * List all AI models.
+         * @param {Array<string>} [labelSelector] Label selector for filtering models
+         * @param {Array<string>} [fieldSelector] Field selector for filtering models (e.g., spec.providerName&#x3D;openai)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listModels: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listModels: async (labelSelector?: Array<string>, fieldSelector?: Array<string>, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -181,6 +183,14 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             // authentication bearerAuth required
             // http bearer authentication required
             await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (labelSelector) {
+                localVarQueryParameter['labelSelector'] = labelSelector;
+            }
+
+            if (fieldSelector) {
+                localVarQueryParameter['fieldSelector'] = fieldSelector;
+            }
 
 
     
@@ -333,11 +343,13 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
         },
         /**
          * List all AI models.
+         * @param {Array<string>} [labelSelector] Label selector for filtering models
+         * @param {Array<string>} [fieldSelector] Field selector for filtering models (e.g., spec.providerName&#x3D;openai)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listModels(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<AiModel>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listModels(options);
+        async listModels(labelSelector?: Array<string>, fieldSelector?: Array<string>, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<AiModel>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listModels(labelSelector, fieldSelector, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.listModels']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -407,11 +419,12 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
         },
         /**
          * List all AI models.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listModels(options?: RawAxiosRequestConfig): AxiosPromise<Array<AiModel>> {
-            return localVarFp.listModels(options).then((request) => request(axios, basePath));
+        listModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<Array<AiModel>> {
+            return localVarFp.listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(axios, basePath));
         },
         /**
          * Test chat completion with a specific model.
@@ -474,6 +487,27 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest {
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModel
      */
     readonly name: string
+}
+
+/**
+ * Request parameters for listModels operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest {
+    /**
+     * Label selector for filtering models
+     * @type {Array<string>}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModels
+     */
+    readonly labelSelector?: Array<string>
+
+    /**
+     * Field selector for filtering models (e.g., spec.providerName&#x3D;openai)
+     * @type {Array<string>}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModels
+     */
+    readonly fieldSelector?: Array<string>
 }
 
 /**
@@ -560,12 +594,13 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
 
     /**
      * List all AI models.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
-    public listModels(options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).listModels(options).then((request) => request(this.axios, this.basePath));
+    public listModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest = {}, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

@@ -51,6 +51,20 @@ class ModelConsoleEndpointTest {
             .hasSize(2);
     }
 
+    @Test
+    void list_withFieldSelector_returnsFilteredModels() {
+        when(client.listAll(eq(AiModel.class), any(), any()))
+            .thenReturn(Flux.just(
+                model("gpt-4", "openai-prod", "gpt-4")
+            ));
+
+        webTestClient.get().uri("/models?fieldSelector=spec.providerName=openai-prod")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBodyList(AiModel.class)
+            .hasSize(1);
+    }
+
     // ---- get ----
 
     @Test

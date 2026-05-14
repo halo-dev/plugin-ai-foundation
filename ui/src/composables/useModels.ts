@@ -34,8 +34,10 @@ export function useModelsByProvider(providerName: string) {
   return useQuery<AiModel[]>({
     queryKey: ['ai-models', 'provider', providerName],
     queryFn: async () => {
-      const { data } = await aiConsoleApiClient.model.listModels()
-      return data.filter((m) => m.spec.providerName === providerName)
+      const { data } = await aiConsoleApiClient.model.listModels({
+        fieldSelector: [`spec.providerName=${providerName}`],
+      })
+      return data
     },
     enabled: !!providerName,
   })

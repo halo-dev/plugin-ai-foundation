@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:60254",
+    "url" : "http://localhost:49917",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -439,6 +439,27 @@
       "get" : {
         "description" : "List all AI models.",
         "operationId" : "ListModels",
+        "parameters" : [ {
+          "description" : "Label selector for filtering models",
+          "in" : "query",
+          "name" : "labelSelector",
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "description" : "Field selector for filtering models (e.g., spec.providerName=openai)",
+          "in" : "query",
+          "name" : "fieldSelector",
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        } ],
         "responses" : {
           "default" : {
             "content" : {

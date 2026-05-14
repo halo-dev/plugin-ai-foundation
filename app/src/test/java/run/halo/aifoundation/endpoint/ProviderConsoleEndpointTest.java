@@ -179,7 +179,7 @@ class ProviderConsoleEndpointTest {
     @Test
     void delete_noAssociatedModels_returns204() {
         var p = provider("openai-prod", "openai");
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
+        when(client.listAll(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(p));
         when(client.delete(p)).thenReturn(Mono.just(p));
 
@@ -191,7 +191,7 @@ class ProviderConsoleEndpointTest {
     @Test
     void delete_withAssociatedModels_returns400() {
         var model = model("openai-prod", "gpt-4");
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(model));
+        when(client.listAll(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(model));
 
         webTestClient.delete().uri("/providers/openai-prod")
             .exchange()
@@ -200,7 +200,7 @@ class ProviderConsoleEndpointTest {
 
     @Test
     void delete_providerNotFound_returns404() {
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
+        when(client.listAll(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
         when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
 
         webTestClient.delete().uri("/providers/missing")

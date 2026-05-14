@@ -31,6 +31,7 @@ import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.extension.index.query.Queries;
 
 @Slf4j
 @Component
@@ -189,8 +190,10 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> deleteProvider(ServerRequest request) {
         var name = request.pathVariable("name");
-        return client.list(AiModel.class,
-                model -> name.equals(model.getSpec().getProviderName()), null)
+        var listOptions = ListOptions.builder()
+            .fieldQuery(Queries.equal("spec.providerName", name))
+            .build();
+        return client.listAll(AiModel.class, listOptions, null)
             .hasElements()
             .flatMap(hasModels -> {
                 if (Boolean.TRUE.equals(hasModels)) {

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.app.extension.SchemeManager;
+import run.halo.app.extension.index.IndexSpecs;
 import run.halo.app.plugin.BasePlugin;
 import run.halo.app.plugin.PluginContext;
 
@@ -23,7 +24,10 @@ public class AiFoundationPlugin extends BasePlugin {
     @Override
     public void start() {
         schemeManager.register(AiProvider.class);
-        schemeManager.register(AiModel.class);
+        schemeManager.register(AiModel.class, indexSpecs -> {
+            indexSpecs.add(IndexSpecs.<AiModel, String>single("spec.providerName", String.class)
+                .indexFunc(model -> model.getSpec().getProviderName()));
+        });
         log.info("AI Foundation plugin started, registered AiProvider and AiModel extensions.");
     }
 

@@ -6,6 +6,7 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import java.util.List;
 import java.util.Map;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.extension.router.selector.SelectorUtil;
 
 @Slf4j
 @Component
@@ -44,6 +46,16 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 builder -> builder.operationId("ListModels")
                     .description("List all AI models.")
                     .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("labelSelector")
+                        .in(ParameterIn.QUERY)
+                        .description("Label selector for filtering models")
+                        .implementationArray(String.class))
+                    .parameter(parameterBuilder()
+                        .name("fieldSelector")
+                        .in(ParameterIn.QUERY)
+                        .description("Field selector for filtering models (e.g., spec.providerName=openai)")
+                        .implementationArray(String.class))
                     .response(responseBuilder()
                         .implementationArray(AiModel.class))
             )
@@ -120,7 +132,11 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> listModels(ServerRequest request) {
-        return client.listAll(AiModel.class, new ListOptions(), Sort.unsorted())
+        var queryParams = request.queryParams();
+        var fieldSelector = queryParams.getOrDefault("fieldSelector", List.of());
+        var labelSelector = queryParams.getOrDefault("labelSelector", List.of());
+        var listOptions = SelectorUtil.labelAndFieldSelectorToListOptions(labelSelector, fieldSelector);
+        return client.listAll(AiModel.class, listOptions, Sort.unsorted())
             .collectList()
             .flatMap(models -> ServerResponse.ok().bodyValue(models));
     }
