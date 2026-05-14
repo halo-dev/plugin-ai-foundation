@@ -53,37 +53,10 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                     .response(responseBuilder()
                         .implementationArray(AiProvider.class))
             )
-            .GET("providers/{name}", this::getProvider,
-                builder -> builder.operationId("GetProvider")
-                    .description("Get an AI provider by name.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
-                    .response(responseBuilder().implementation(AiProvider.class))
-            )
             .POST("providers", this::createProvider,
                 builder -> builder.operationId("CreateProvider")
                     .description("Create a new AI provider.")
                     .tag(tag)
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(AiProvider.class))
-                    .response(responseBuilder().implementation(AiProvider.class))
-            )
-            .PUT("providers/{name}", this::updateProvider,
-                builder -> builder.operationId("UpdateProvider")
-                    .description("Update an AI provider.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Provider name")
-                        .implementation(String.class)
-                        .required(true))
                     .requestBody(requestBodyBuilder()
                         .required(true)
                         .implementation(AiProvider.class))
@@ -141,14 +114,6 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             .flatMap(providers -> ServerResponse.ok().bodyValue(providers));
     }
 
-    private Mono<ServerResponse> getProvider(ServerRequest request) {
-        var name = request.pathVariable("name");
-        return client.fetch(AiProvider.class, name)
-            .switchIfEmpty(Mono.error(
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
-            .flatMap(provider -> ServerResponse.ok().bodyValue(provider));
-    }
-
     private Mono<ServerResponse> createProvider(ServerRequest request) {
         return request.bodyToMono(AiProvider.class)
             .flatMap(provider -> {
@@ -171,21 +136,6 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 return client.create(provider);
             })
             .flatMap(created -> ServerResponse.ok().bodyValue(created));
-    }
-
-    private Mono<ServerResponse> updateProvider(ServerRequest request) {
-        var name = request.pathVariable("name");
-        return request.bodyToMono(AiProvider.class)
-            .flatMap(provider -> client.fetch(AiProvider.class, name)
-                .switchIfEmpty(Mono.error(
-                    new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Provider not found: " + name)))
-                .flatMap(existing -> {
-                    existing.setSpec(provider.getSpec());
-                    return client.update(existing);
-                })
-            )
-            .flatMap(updated -> ServerResponse.ok().bodyValue(updated));
     }
 
     private Mono<ServerResponse> deleteProvider(ServerRequest request) {

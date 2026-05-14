@@ -1,31 +1,4 @@
-## ADDED Requirements
-
-### Requirement: Console navigation menu
-The plugin SHALL register a Console route under the system menu group for managing AI providers and models.
-
-#### Scenario: Menu registration
-- **WHEN** an admin user opens the Halo Console
-- **THEN** there SHALL be a menu item named "AI 模型配置" under the system group
-- **AND** clicking it SHALL navigate to the provider and model management page
-
-### Requirement: Provider list view
-The Console UI SHALL display a list of all `AiProvider` Extensions with their type, display name, and status.
-
-#### Scenario: View all providers
-- **WHEN** an admin opens the AI model configuration page
-- **THEN** the system SHALL fetch all providers via GET on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/providers`)
-- **AND** the response SHALL be a non-paginated array
-- **AND** each item SHALL show `providerType`, `displayName`, `enabled` status, and `status.phase`
-
-### Requirement: Provider workspace layout
-The Console UI SHALL use a provider-centric master-detail workspace.
-
-#### Scenario: Aggregated provider workspace
-- **WHEN** an admin opens the AI model configuration page
-- **THEN** the left side SHALL display the provider list
-- **AND** selecting a provider SHALL open a right-side detail workspace for that provider
-- **AND** the workspace SHALL include both provider configuration and the models belonging to that provider
-- **AND** switching to a different provider SHALL refresh the model list to show only models belonging to the newly selected provider
+## MODIFIED Requirements
 
 ### Requirement: Create new provider
 The Console UI SHALL allow admins to create a new `AiProvider` Extension by selecting a provider type and filling in configuration fields.
@@ -75,14 +48,6 @@ The Console UI SHALL allow admins to edit an existing `AiProvider`'s configurati
 - **AND** the admin SHALL NOT be required to fill a custom `baseUrl`
 - **AND** only the `openailike` provider type SHALL require manual `baseUrl` input
 
-### Requirement: API key masking and testing
-The Console UI SHALL protect sensitive provider keys while still allowing connectivity verification.
-
-#### Scenario: Masked API key display
-- **WHEN** an admin opens a provider detail page
-- **THEN** the UI SHALL display the bound Halo Secret name and masked preview by default
-- **AND** the UI SHALL allow opening a Secret edit or replacement flow when needed
-
 ### Requirement: Delete provider
 The Console UI SHALL allow admins to delete an `AiProvider` Extension.
 
@@ -96,29 +61,16 @@ The Console UI SHALL allow admins to delete an `AiProvider` Extension.
 #### Scenario: Block deleting provider with models
 - **WHEN** an admin clicks delete on a provider that still has associated `AiModel` entries
 - **THEN** the backend SHALL reject the request with a 400 error
-- **AND** display a toast message explaining that dependent models must be removed first
+- **AND** the UI SHALL display a toast message explaining that dependent models must be removed first
 
-### Requirement: Model list view
-The Console UI SHALL display provider-scoped `AiModel` entries in the selected provider workspace.
+### Requirement: Provider list view
+The Console UI SHALL display a list of all `AiProvider` Extensions with their type, display name, and status.
 
-#### Scenario: View all models
-- **WHEN** an admin selects a provider
-- **THEN** the system SHALL fetch models via GET on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/models`) with `fieldSelector=spec.providerName={selectedProvider}`
+#### Scenario: View all providers
+- **WHEN** an admin opens the AI model configuration page
+- **THEN** the system SHALL fetch all providers via GET on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/providers`)
 - **AND** the response SHALL be a non-paginated array
-- **AND** each item SHALL show the model display name and underlying `providerResourceName/modelId` reference, where `providerResourceName = AiProvider.metadata.name`
-- **AND** each item SHALL show its group and capability tags when available
-
-### Requirement: Model grouping and filtering
-The Console UI SHALL support browsing models with group and capability context.
-
-#### Scenario: Grouped model display
-- **WHEN** the selected provider has models with `spec.group`
-- **THEN** the UI SHALL group models by that value in collapsible sections
-
-#### Scenario: Filter models by keyword or capability
-- **WHEN** an admin enters a search term or chooses a capability filter
-- **THEN** the UI SHALL narrow the displayed models within the selected provider workspace
-- **AND** filtering SHALL work with model ID, display name, group, and capability tags
+- **AND** each item SHALL show `providerType`, `displayName`, `enabled` status, and `status.phase`
 
 ### Requirement: Add model from provider
 The Console UI SHALL allow admins to add a new `AiModel` inside the currently selected provider workspace.
@@ -136,24 +88,6 @@ The Console UI SHALL allow admins to add a new `AiModel` inside the currently se
 - **WHEN** an admin creates or edits a model
 - **THEN** the form SHALL support editing `group`, `capabilities`, `endpointType`, and `supportedTextDelta`
 - **AND** these values SHALL be persisted to the `AiModel` Extension
-
-### Requirement: Browse provider models
-The Console UI SHALL allow browsing available models from a provider's API to simplify model addition.
-
-#### Scenario: Browse and add from provider API
-- **WHEN** an admin selects a provider and clicks "从供应商获取模型列表"
-- **THEN** the system SHALL call the model listing endpoint for that provider
-- **AND** display available models with their inferred capabilities (chat/embedding)
-- **AND** allow the admin to select one or more models to add as `AiModel` entries
-
-#### Scenario: Batch add discovered models
-- **WHEN** an admin selects multiple discovered models from the provider API result
-- **THEN** the UI SHALL create multiple `AiModel` entries in one batch workflow
-- **AND** the admin MAY set shared defaults such as `group` before confirming
-- **AND** the `endpointType` SHALL be automatically inferred from each model's `capabilities` field:
-  - models with `CHAT` capability → chat endpointType (e.g., `openai-chat`, `ollama-chat`)
-  - models with `EMBEDDING` capability → embedding endpointType (e.g., `openai-embedding`)
-- **AND** the UI SHALL NOT display a manual endpointType selector during batch add from discovery
 
 ### Requirement: Edit model
 The Console UI SHALL allow admins to edit an existing `AiModel`'s metadata.
@@ -179,22 +113,15 @@ The Console UI SHALL allow admins to delete an `AiModel` Extension.
 - **THEN** the system SHALL delete the `AiModel` Extension via DELETE to the Extension API (`/apis/aifoundation.halo.run/v1alpha1/aimodels/{name}`)
 - **AND** the model SHALL disappear from the list
 
-### Requirement: Connectivity testing
-The Console UI SHALL provide a manual connectivity test button for each provider.
+### Requirement: Model list view
+The Console UI SHALL display provider-scoped `AiModel` entries in the selected provider workspace.
 
-#### Scenario: Test OpenAI connectivity
-- **WHEN** an admin clicks "测试连通性" on an OpenAI provider
-- **THEN** the system SHALL call the connectivity test endpoint
-- **AND** display success if the API key is valid
-- **AND** display an error message if the API key is invalid or the service is unreachable
-
-### Requirement: Test chat debugging
-The Console UI SHALL provide a test chat entry that reuses the backend `test-chat` endpoint.
-
-#### Scenario: Test chat with selected model
-- **WHEN** an admin selects a configured `AiModel` and enters a prompt
-- **THEN** the UI SHALL call the backend `test-chat` endpoint for that `providerResourceName/modelId`
-- **AND** display the returned content and available metadata
+#### Scenario: View all models
+- **WHEN** an admin selects a provider
+- **THEN** the system SHALL fetch models via GET on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/models`) with `fieldSelector=spec.providerName={selectedProvider}`
+- **AND** the response SHALL be a non-paginated array
+- **AND** each item SHALL show the model display name and underlying `providerResourceName/modelId` reference, where `providerResourceName = AiProvider.metadata.name`
+- **AND** each item SHALL show its group and capability tags when available
 
 ## REMOVED Requirements
 

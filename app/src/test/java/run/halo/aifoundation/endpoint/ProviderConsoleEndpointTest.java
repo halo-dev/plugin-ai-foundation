@@ -61,31 +61,6 @@ class ProviderConsoleEndpointTest {
             .hasSize(2);
     }
 
-    // ---- get ----
-
-    @Test
-    void get_existingProvider_returns200() {
-        var p = provider("openai-prod", "openai");
-        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(p));
-
-        webTestClient.get().uri("/providers/openai-prod")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiProvider.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo("openai-prod"));
-    }
-
-    @Test
-    void get_notFound_returns404() {
-        when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
-
-        webTestClient.get().uri("/providers/missing")
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
     // ---- create ----
 
     @Test
@@ -139,39 +114,6 @@ class ProviderConsoleEndpointTest {
             .bodyValue(p)
             .exchange()
             .expectStatus().isBadRequest();
-    }
-
-    // ---- update ----
-
-    @Test
-    void update_existingProvider_returns200() {
-        var existing = provider("openai-prod", "openai");
-        var updated = provider("openai-prod", "openai");
-        updated.getSpec().setDisplayName("Updated Name");
-
-        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(existing));
-        when(client.update(existing)).thenReturn(Mono.just(existing));
-
-        webTestClient.put().uri("/providers/openai-prod")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(updated)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiProvider.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getSpec().getDisplayName())
-                    .isEqualTo("Updated Name"));
-    }
-
-    @Test
-    void update_notFound_returns404() {
-        when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
-
-        webTestClient.put().uri("/providers/missing")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(provider("missing", "openai"))
-            .exchange()
-            .expectStatus().isNotFound();
     }
 
     // ---- delete ----

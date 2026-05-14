@@ -65,31 +65,6 @@ class ModelConsoleEndpointTest {
             .hasSize(1);
     }
 
-    // ---- get ----
-
-    @Test
-    void get_existingModel_returns200() {
-        var m = model("gpt-4", "openai-prod", "gpt-4");
-        when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(m));
-
-        webTestClient.get().uri("/models/gpt-4")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiModel.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo("gpt-4"));
-    }
-
-    @Test
-    void get_notFound_returns404() {
-        when(client.fetch(AiModel.class, "missing")).thenReturn(Mono.empty());
-
-        webTestClient.get().uri("/models/missing")
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
     // ---- create ----
 
     @Test
@@ -213,28 +188,6 @@ class ModelConsoleEndpointTest {
             .bodyValue(updated)
             .exchange()
             .expectStatus().isEqualTo(409);
-    }
-
-    // ---- delete ----
-
-    @Test
-    void delete_existingModel_returns204() {
-        var m = model("gpt-4", "openai-prod", "gpt-4");
-        when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(m));
-        when(client.delete(m)).thenReturn(Mono.just(m));
-
-        webTestClient.delete().uri("/models/gpt-4")
-            .exchange()
-            .expectStatus().isNoContent();
-    }
-
-    @Test
-    void delete_notFound_returns404() {
-        when(client.fetch(AiModel.class, "missing")).thenReturn(Mono.empty());
-
-        webTestClient.delete().uri("/models/missing")
-            .exchange()
-            .expectStatus().isNotFound();
     }
 
     // ---- helpers ----
