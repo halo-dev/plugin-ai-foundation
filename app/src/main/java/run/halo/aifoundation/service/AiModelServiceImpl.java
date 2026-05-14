@@ -12,6 +12,7 @@ import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.AiServices;
 import run.halo.aifoundation.EmbeddingModel;
 import run.halo.aifoundation.LanguageModel;
+import run.halo.aifoundation.ModelDisabledException;
 import run.halo.aifoundation.ModelInfo;
 import run.halo.aifoundation.ModelNotFoundException;
 import run.halo.aifoundation.ProviderDisabledException;
@@ -50,6 +51,10 @@ public class AiModelServiceImpl implements AiModelService {
         var modelId = aiModel.getSpec().getModelId();
         var provider = fetchProvider(providerName);
 
+        if (!aiModel.getSpec().isEnabled()) {
+            throw new ModelDisabledException(modelName);
+        }
+
         if (!provider.getSpec().isEnabled()) {
             throw new ProviderDisabledException(providerName);
         }
@@ -66,6 +71,10 @@ public class AiModelServiceImpl implements AiModelService {
         var providerName = aiModel.getSpec().getProviderName();
         var modelId = aiModel.getSpec().getModelId();
         var provider = fetchProvider(providerName);
+
+        if (!aiModel.getSpec().isEnabled()) {
+            throw new ModelDisabledException(modelName);
+        }
 
         if (!provider.getSpec().isEnabled()) {
             throw new ProviderDisabledException(providerName);

@@ -1,10 +1,4 @@
-### Requirement: AiModelService as Registry/Factory
-
-The `api/` module SHALL expose an `AiModelService` interface acting as a Registry/Factory that resolves model names to capability-specific interfaces (`LanguageModel`, `EmbeddingModel`).
-
-#### Scenario: Service registry contract
-- **WHEN** a consumer plugin declares `compileOnly 'run.halo.aifoundation:api:x.x.x'`
-- **THEN** it SHALL have access to `AiModelService`, `LanguageModel`, `EmbeddingModel`, and all wrapper data types without adding Spring AI dependencies
+## MODIFIED Requirements
 
 ### Requirement: LanguageModel interface definition
 
@@ -68,52 +62,6 @@ The system SHALL define an `EmbeddingModel` interface providing text embedding c
 #### Scenario: Caller batch size override
 - **WHEN** a consumer sends an `EmbeddingRequest` with `maxBatchSize = 36`
 - **THEN** the system SHALL use that value as a caller-side batching limit in addition to any provider-imposed maximum
-
-### Requirement: ChatRequest with provider options
-
-The system SHALL support structured chat with temperature, maxTokens, and provider-specific options via `ChatRequest`.
-
-#### Scenario: Chat with custom temperature
-- **WHEN** a consumer sends a `ChatRequest` with `temperature = 0.5` and `maxTokens = 100`
-- **THEN** the system SHALL pass these options to the underlying provider client
-
-#### Scenario: Provider options pass-through
-- **WHEN** a consumer sends a `ChatRequest` with `providerOptions = {"openai": {"logitBias": {"50256": -100}}}`
-- **THEN** the OpenAI provider adapter SHALL parse and apply the provider-specific options
-- **AND** non-OpenAI provider adapters SHALL ignore the "openai" namespace
-
-### Requirement: Standardized ChatChunk stream parts
-
-The system SHALL emit `ChatChunk` stream parts with standardized fields.
-
-#### Scenario: Text streaming
-- **WHEN** a streaming chat response emits text content
-- **THEN** each chunk SHALL have `type = TEXT` and a `content` delta
-- **AND** the final chunk SHALL have `type = FINISH`, `last = true`, and `finishReason = "stop"`
-
-#### Scenario: Token usage reporting
-- **WHEN** a streaming chat completes
-- **THEN** the final `FINISH` chunk SHALL include `usage` with `promptTokens` and `completionTokens`
-
-#### Scenario: Error during streaming
-- **WHEN** an error occurs during streaming (e.g., API key invalid)
-- **THEN** the stream SHALL emit a chunk with `type = ERROR` before terminating
-
-### Requirement: Model info listing
-
-The system SHALL expose `Mono<List<ModelInfo>> listModels()` to list all configured `AiModel` entries.
-
-#### Scenario: List all configured models
-- **WHEN** a consumer calls `aiModelService.listModels()`
-- **THEN** the system SHALL return all `AiModel` Extensions with their `name` (the `metadata.name`), `providerName`, `modelId`, and `displayName`
-
-### Requirement: Provider info listing
-
-The system SHALL expose `Mono<List<ProviderInfo>> listProviders()` to list all configured providers and their status.
-
-#### Scenario: List all providers
-- **WHEN** a consumer calls `aiModelService.listProviders()`
-- **THEN** the system SHALL return all `AiProvider` Extensions with their `providerType`, `displayName`, `enabled`, and `status.phase`
 
 ### Requirement: Typed exception hierarchy
 

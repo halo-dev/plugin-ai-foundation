@@ -55,11 +55,13 @@ return new ConnectivityResult(true, "OK");
 ---
 
 
-### 5. AiModelServiceImpl 完全不检查模型的 enabled 状态
+### ~~5. AiModelServiceImpl 完全不检查模型的 enabled 状态~~ ✅ FIXED
 
 **位置**: `app/src/main/java/run/halo/aifoundation/service/AiModelServiceImpl.java:47-89`
 
 `languageModel()` 和 `embeddingModel()` 检查了 provider 是否启用，但**完全没有检查 model 自身的 `spec.enabled`**。被禁用的模型仍可被消费插件调用。
+
+**修复**: 新增 `ModelDisabledException`，在 `languageModel()` 和 `embeddingModel()` 中 fetch model 后立即检查 `aiModel.getSpec().isEnabled()`。
 
 ---
 
