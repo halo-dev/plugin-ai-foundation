@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:53081",
+    "url" : "http://localhost:60254",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -602,7 +602,7 @@
             "description" : "default response"
           }
         },
-        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/provider-types" : {
@@ -624,7 +624,7 @@
             "description" : "default response"
           }
         },
-        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderType" ]
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/providers" : {
@@ -785,13 +785,13 @@
             "description" : "default response"
           }
         },
-        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       }
     },
-    "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/models" : {
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/discover-models" : {
       "get" : {
-        "description" : "List models for a provider.",
-        "operationId" : "ListProviderModels",
+        "description" : "Discover remote models for a provider.",
+        "operationId" : "DiscoverProviderModels",
         "parameters" : [ {
           "description" : "Provider name",
           "in" : "path",
@@ -813,7 +813,7 @@
             "description" : "default response"
           }
         },
-        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ProviderDebug" ]
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       }
     }
   },

@@ -75,7 +75,7 @@ async function handleSubmit(values: Record<string, unknown>) {
     capabilities: (values.capabilities as string[])?.length
       ? (values.capabilities as string[])
       : undefined,
-    endpointType: (values.endpointType as string) || undefined,
+    endpointType: (values.endpointType as string) || 'openai-chat',
     supportedTextDelta: !!values.supportedTextDelta,
   }
 

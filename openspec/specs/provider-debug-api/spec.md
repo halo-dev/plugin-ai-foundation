@@ -1,31 +1,51 @@
-### Requirement: Provider debug endpoints
-The backend SHALL expose admin/debug endpoints for model discovery, connectivity validation, and test chat without requiring the Console UI.
+### Requirement: Provider type metadata is served by a dedicated endpoint
+The system SHALL expose provider type metadata via a dedicated `ProviderTypeConsoleEndpoint` separate from provider CRUD operations.
 
-#### Scenario: List provider models
-- **WHEN** an admin calls `GET /providers/{name}/models`
-- **THEN** the system SHALL resolve the provider's `ProviderAdapter` via `ProviderAdapterFactory.create()`
-- **AND** call `adapter.discoverModels()` to fetch the model list
+#### Scenario: Provider types endpoint is independent
+- **WHEN** a client requests provider type metadata
+- **THEN** the request is handled by `ProviderTypeConsoleEndpoint` at `provider-types`
+- **AND** it is not mixed with `AiProvider` CRUD routes in `ProviderConsoleEndpoint`
+
+### Requirement: Provider remote model discovery
+The backend SHALL expose a remote model discovery endpoint via `ProviderConsoleEndpoint` for fetching models from a provider's remote API.
+
+#### Scenario: Discover provider models
+- **WHEN** an admin calls `GET providers/{name}/discover-models`
+- **THEN** the system SHALL resolve the provider's adapter via the provider type
+- **AND** call the adapter's model discovery method to fetch the model list
 - **AND** each model in the response SHALL include `modelId`, `displayName`, and `capabilities` fields
-- **AND** if the remote API call fails, the system SHALL fall back to returning locally stored `AiModel` resources for that provider
+- **AND** if the remote API call fails, the system SHALL return an error response without falling back to locally stored `AiModel` resources
 
 #### Scenario: Discovery response format
 - **WHEN** the model discovery endpoint returns successfully
 - **THEN** the response body SHALL contain `{ "models": [...], "providerName": "..." }`
 - **AND** each model object SHALL include `"modelId"`, `"displayName"`, and `"capabilities"` (an array of capability strings, e.g., `["chat"]` or `["embedding"]`)
 
+### Requirement: Test provider connectivity
+The backend SHALL expose a connectivity validation endpoint via `ProviderConsoleEndpoint`.
+
 #### Scenario: Test provider connectivity
-- **WHEN** an admin calls `POST /providers/{name}/connectivity`
+- **WHEN** an admin calls `POST providers/{name}/connectivity`
 - **THEN** the system SHALL validate the provider configuration and update `status.phase`, `status.message`, and `status.lastCheckedAt`
 
+### Requirement: Test chat against configured model
+The backend SHALL expose a test chat endpoint via `ModelConsoleEndpoint` for executing a non-streaming chat request against a configured model.
+
 #### Scenario: Test chat against configured model
-- **WHEN** an admin calls `POST /models/{name}/test-chat` where `{name}` is `AiModel.metadata.name`
+- **WHEN** an admin calls `POST models/{name}/test-chat` where `{name}` is `AiModel.metadata.name`
 - **AND** the request body contains a `prompt`
-- **THEN** the system SHALL resolve the configured model by `metadata.name` via `client.fetch`
+- **THEN** the system SHALL resolve the configured model by `metadata.name`
 - **AND** the system SHALL execute a non-streaming chat request using the configured provider
 - **AND** the response SHALL include `modelName`, generated `content`, and available completion metadata such as `finishReason` and `usage`
 
 #### Scenario: Minimal test chat request and response
-- **WHEN** a client calls the `test-chat` endpoint in the first phase
+- **WHEN** a client calls the `test-chat` endpoint
 - **THEN** the request body SHALL only need to contain `prompt`
 - **AND** the response SHALL include `modelName`, `content`, `finishReason`, and `usage`
-- **AND** the first phase SHALL NOT require the full public `ChatResponse` shape for this debug endpoint
+
+### Requirement: Endpoint routes use relative paths
+All endpoints registered via Halo `CustomEndpoint` SHALL use relative path strings without a leading `/`.
+
+#### Scenario: Endpoint route registration
+- **WHEN** inspecting any `CustomEndpoint` implementation's route definitions
+- **THEN** no route string starts with `/`

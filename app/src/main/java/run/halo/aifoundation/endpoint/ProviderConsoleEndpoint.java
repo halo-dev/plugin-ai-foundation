@@ -6,11 +6,14 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
-import java.util.Comparator;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -19,8 +22,10 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.ModelCapability;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
-import run.halo.aifoundation.provider.support.ProviderTypeInfo;
+import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
@@ -34,6 +39,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
 
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
+    private final SecretResolver secretResolver;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -94,12 +100,31 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                         .required(true))
                     .response(responseBuilder().implementation(Void.class))
             )
-            .GET("provider-types", this::listProviderTypes,
-                builder -> builder.operationId("ListProviderTypes")
-                    .description("List all available provider types with metadata.")
+            .GET("providers/{name}/discover-models", this::discoverModels,
+                builder -> builder.operationId("DiscoverProviderModels")
+                    .description("Discover remote models for a provider.")
                     .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Provider name")
+                        .implementation(String.class)
+                        .required(true))
                     .response(responseBuilder()
-                        .implementationArray(ProviderTypeInfo.class))
+                        .implementation(Map.class))
+            )
+            .POST("providers/{name}/connectivity", this::testConnectivity,
+                builder -> builder.operationId("TestProviderConnectivity")
+                    .description("Test provider connectivity.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Provider name")
+                        .implementation(String.class)
+                        .required(true))
+                    .response(responseBuilder()
+                        .implementation(Map.class))
             )
             .build();
     }
@@ -185,25 +210,105 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             });
     }
 
-    private Mono<ServerResponse> listProviderTypes(ServerRequest request) {
-        var types = providerClientCache.getProviderTypeMap().values().stream()
-            .map(type -> ProviderTypeInfo.builder()
-                .providerType(type.getProviderType())
-                .displayName(type.getDisplayName())
-                .description(type.getDescription())
-                .iconUrl(type.getIconUrl())
-                .documentationUrl(type.getDocumentationUrl())
-                .websiteUrl(type.getWebsiteUrl())
-                .builtIn(type.isBuiltIn())
-                .requiresBaseUrl(type.requiresBaseUrl())
-                .defaultBaseUrl(type.getDefaultBaseUrl())
-                .supportedEndpointTypes(type.getSupportedEndpointTypes())
-                .supportsEmbeddings(type.supportsEmbeddings())
-                .build())
-            .sorted(Comparator
-                .comparing((ProviderTypeInfo t) -> !t.isBuiltIn())
-                .thenComparing(ProviderTypeInfo::getProviderType))
-            .toList();
-        return ServerResponse.ok().bodyValue(types);
+    private Mono<ServerResponse> discoverModels(ServerRequest request) {
+        var name = request.pathVariable("name");
+        log.info("Discovering models for provider: {}", name);
+        return client.fetch(AiProvider.class, name)
+            .switchIfEmpty(Mono.error(
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+            .flatMap(provider -> {
+                var secretName = provider.getSpec().getApiKeySecretName();
+                return secretResolver.resolveApiKey(secretName)
+                    .flatMap(apiKey -> discoverModelsViaProviderType(provider, apiKey));
+            });
+    }
+
+    private Mono<ServerResponse> discoverModelsViaProviderType(AiProvider provider, String apiKey) {
+        var providerName = provider.getMetadata().getName();
+        AiProviderType providerType;
+        try {
+            providerType = providerClientCache.getProviderType(provider.getSpec().getProviderType());
+        } catch (IllegalArgumentException e) {
+            return Mono.error(new ResponseStatusException(
+                HttpStatus.BAD_REQUEST, e.getMessage()));
+        }
+        return providerType.discoverModels(provider, apiKey)
+            .map(models -> models.stream()
+                .map(dm -> Map.<String, Object>of(
+                    "modelId", dm.modelId(),
+                    "displayName", dm.displayName(),
+                    "name", "",
+                    "capabilities", dm.capabilities().stream()
+                        .map(ModelCapability::name)
+                        .map(String::toLowerCase)
+                        .toList()
+                ))
+                .toList()
+            )
+            .flatMap(models -> {
+                log.info("Discovered {} models for provider {}", models.size(), providerName);
+                return ServerResponse.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("models", models, "providerName", providerName));
+            });
+    }
+
+    private Mono<ServerResponse> testConnectivity(ServerRequest request) {
+        var name = request.pathVariable("name");
+        return client.fetch(AiProvider.class, name)
+            .switchIfEmpty(Mono.error(
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+            .flatMap(provider -> {
+                var secretName = provider.getSpec().getApiKeySecretName();
+                return secretResolver.resolveApiKey(secretName)
+                    .flatMap(apiKey -> performConnectivityCheck(provider, apiKey))
+                    .flatMap(result -> {
+                        if (provider.getStatus() == null) {
+                            provider.setStatus(new AiProvider.AiProviderStatus());
+                        }
+                        provider.getStatus().setLastCheckedAt(Instant.now());
+                        if (result.isSuccess()) {
+                            provider.getStatus().setPhase(AiProvider.AiProviderStatus.Phase.OK);
+                            provider.getStatus().setMessage("Connectivity check passed");
+                        } else {
+                            provider.getStatus().setPhase(AiProvider.AiProviderStatus.Phase.ERROR);
+                            provider.getStatus().setMessage(result.getMessage());
+                        }
+                        return client.update(provider);
+                    })
+                    .flatMap(updated -> ServerResponse.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(Map.of(
+                            "phase", updated.getStatus().getPhase().name(),
+                            "message", updated.getStatus().getMessage() != null
+                                ? updated.getStatus().getMessage() : "",
+                            "lastCheckedAt", updated.getStatus().getLastCheckedAt().toString()
+                        )));
+            });
+    }
+
+    private Mono<ConnectivityResult> performConnectivityCheck(AiProvider provider, String apiKey) {
+        return Mono.fromCallable(() -> {
+            try {
+                providerClientCache.invalidate(provider.getMetadata().getName());
+                var type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
+                type.buildChatModel(provider, apiKey, "test");
+                return new ConnectivityResult(true, "OK");
+            } catch (Exception e) {
+                log.warn("Connectivity check failed for provider: {}",
+                    provider.getMetadata().getName(), e);
+                return new ConnectivityResult(false, e.getMessage());
+            }
+        });
+    }
+
+    record ConnectivityResult(boolean success, String message) {
+        boolean isSuccess() {
+            return success;
+        }
+
+        String getMessage() {
+            return message;
+        }
     }
 }

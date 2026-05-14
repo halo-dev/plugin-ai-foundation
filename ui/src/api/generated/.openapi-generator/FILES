@@ -6,7 +6,7 @@ api/ai-model-v1alpha1-api.ts
 api/ai-provider-v1alpha1-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-model-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-provider-api.ts
-api/console-api-aifoundation-halo-run-v1alpha1-provider-debug-api.ts
+api/console-api-aifoundation-halo-run-v1alpha1-provider-type-api.ts
 base.ts
 common.ts
 configuration.ts

@@ -23,6 +23,8 @@ import { DUMMY_BASE_URL, assertParamExists, setApiKeyToObject, setBasicAuthToObj
 import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError, operationServerMap } from '../base';
 // @ts-ignore
 import type { AiModel } from '../models';
+// @ts-ignore
+import type { TestChatRequest } from '../models';
 /**
  * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - axios parameter creator
  * @export
@@ -192,6 +194,51 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             };
         },
         /**
+         * Test chat completion with a specific model.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestChatRequest} [testChatRequest] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelChat: async (name: string, testChatRequest?: TestChatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('testModelChat', 'name', name)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(testChatRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Update an AI model.
          * @param {string} name Model name
          * @param {AiModel} aiModel 
@@ -296,6 +343,19 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Test chat completion with a specific model.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestChatRequest} [testChatRequest] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async testModelChat(name: string, testChatRequest?: TestChatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChat(name, testChatRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelChat']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Update an AI model.
          * @param {string} name Model name
          * @param {AiModel} aiModel 
@@ -354,6 +414,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.listModels(options).then((request) => request(axios, basePath));
         },
         /**
+         * Test chat completion with a specific model.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
+            return localVarFp.testModelChat(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Update an AI model.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiUpdateModelRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -405,6 +474,27 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelRequest {
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModel
      */
     readonly name: string
+}
+
+/**
+ * Request parameters for testModelChat operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest {
+    /**
+     * Model name (AiModel.metadata.name)
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChat
+     */
+    readonly name: string
+
+    /**
+     * 
+     * @type {TestChatRequest}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChat
+     */
+    readonly testChatRequest?: TestChatRequest
 }
 
 /**
@@ -476,6 +566,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
      */
     public listModels(options?: RawAxiosRequestConfig) {
         return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).listModels(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Test chat completion with a specific model.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
+     */
+    public testModelChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChat(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

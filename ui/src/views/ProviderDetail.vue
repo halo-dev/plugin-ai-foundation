@@ -110,12 +110,12 @@ function onModelFormSaved() {
       </div>
 
       <div v-if="testConnectivity.data.value" class="connectivity-result">
-        <VTag :type="testConnectivity.data.value.phase === 'OK' ? 'success' : 'error'" size="sm">
-          {{ testConnectivity.data.value.phase === 'OK' ? '连通成功' : '连通失败' }}
+        <VTag :type="(testConnectivity.data.value as any).phase === 'OK' ? 'success' : 'error'" size="sm">
+          {{ (testConnectivity.data.value as any).phase === 'OK' ? '连通成功' : '连通失败' }}
         </VTag>
-        <span class="text-sm text-gray-600">{{ testConnectivity.data.value.message }}</span>
-        <span v-if="testConnectivity.data.value.lastCheckedAt" class="text-xs text-gray-400">
-          检测时间: {{ testConnectivity.data.value.lastCheckedAt }}
+        <span class="text-sm text-gray-600">{{ (testConnectivity.data.value as any).message }}</span>
+        <span v-if="(testConnectivity.data.value as any).lastCheckedAt" class="text-xs text-gray-400">
+          检测时间: {{ (testConnectivity.data.value as any).lastCheckedAt }}
         </span>
       </div>
 

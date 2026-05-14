@@ -71,7 +71,7 @@ export function useTestConnectivity() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (name: string) => {
-      const { data } = await aiConsoleApiClient.debug.testProviderConnectivity({ name })
+      const { data } = await aiConsoleApiClient.provider.testProviderConnectivity({ name })
       return data
     },
     onSuccess: (_, name) => {

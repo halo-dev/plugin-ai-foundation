@@ -26,7 +26,7 @@ async function send() {
       modelName: props.modelName,
       request: { prompt: prompt.value.trim() },
     })
-    result.value = res.content
+    result.value = (res as any).content
   } catch (e) {
     result.value = '请求失败: ' + (e as Error).message
   }

@@ -4,7 +4,7 @@ import {
   AiProviderV1alpha1Api,
   ConsoleApiAifoundationHaloRunV1alpha1ModelApi,
   ConsoleApiAifoundationHaloRunV1alpha1ProviderApi,
-  ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi,
+  ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi,
 } from './generated'
 
 const aiCoreApiClient = {
@@ -15,7 +15,7 @@ const aiCoreApiClient = {
 const aiConsoleApiClient = {
   model: new ConsoleApiAifoundationHaloRunV1alpha1ModelApi(undefined, '', axiosInstance),
   provider: new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(undefined, '', axiosInstance),
-  debug: new ConsoleApiAifoundationHaloRunV1alpha1ProviderDebugApi(undefined, '', axiosInstance),
+  providerType: new ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi(undefined, '', axiosInstance),
 }
 
 export { aiConsoleApiClient, aiCoreApiClient }

@@ -18,6 +18,7 @@ import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -25,6 +26,7 @@ class ProviderConsoleEndpointTest {
 
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
+    private final SecretResolver secretResolver = mock(SecretResolver.class);
 
     private WebTestClient webTestClient;
 
@@ -36,7 +38,7 @@ class ProviderConsoleEndpointTest {
         when(providerClientCache.getProviderTypeMap())
             .thenReturn(Map.of("openai", openAiType));
 
-        var endpoint = new ProviderConsoleEndpoint(client, providerClientCache);
+        var endpoint = new ProviderConsoleEndpoint(client, providerClientCache, secretResolver);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();

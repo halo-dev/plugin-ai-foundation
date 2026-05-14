@@ -6,7 +6,7 @@ export function useProviderTypes() {
   return useQuery<ProviderTypeInfo[]>({
     queryKey: ['ai-provider-types'],
     queryFn: async () => {
-      const { data } = await aiConsoleApiClient.provider.listProviderTypes()
+      const { data } = await aiConsoleApiClient.providerType.listProviderTypes()
       return data
     },
     staleTime: Infinity,

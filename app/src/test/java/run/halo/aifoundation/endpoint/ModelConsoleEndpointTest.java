@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.app.extension.Metadata;
@@ -21,12 +22,13 @@ import run.halo.app.extension.ReactiveExtensionClient;
 class ModelConsoleEndpointTest {
 
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
+    private final AiModelService aiModelService = mock(AiModelService.class);
 
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        var endpoint = new ModelConsoleEndpoint(client);
+        var endpoint = new ModelConsoleEndpoint(client, aiModelService);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();

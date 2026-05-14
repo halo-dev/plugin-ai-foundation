@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { AiModel } from '@/api/generated'
+import type { AiModel, ProviderTypeInfo } from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/useModels'
 import { useCreateModel, useProviderModels } from '@/composables/useModels'
-import type { ProviderTypeInfo } from '@/composables/useProviderTypes'
 import { VButton, VCard, VEmpty, VLoading } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'

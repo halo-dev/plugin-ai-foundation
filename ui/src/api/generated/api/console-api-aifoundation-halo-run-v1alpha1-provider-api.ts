@@ -23,8 +23,6 @@ import { DUMMY_BASE_URL, assertParamExists, setApiKeyToObject, setBasicAuthToObj
 import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError, operationServerMap } from '../base';
 // @ts-ignore
 import type { AiProvider } from '../models';
-// @ts-ignore
-import type { ProviderTypeInfo } from '../models';
 /**
  * ConsoleApiAifoundationHaloRunV1alpha1ProviderApi - axios parameter creator
  * @export
@@ -116,15 +114,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiAxiosParamCreator =
             };
         },
         /**
-         * Get an AI provider by name.
+         * Discover remote models for a provider.
          * @param {string} name Provider name
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getProvider: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        discoverProviderModels: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
-            assertParamExists('getProvider', 'name', name)
-            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}`
+            assertParamExists('discoverProviderModels', 'name', name)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/discover-models`
                 .replace(`{${"name"}}`, encodeURIComponent(String(name)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -157,12 +155,16 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiAxiosParamCreator =
             };
         },
         /**
-         * List all available provider types with metadata.
+         * Get an AI provider by name.
+         * @param {string} name Provider name
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listProviderTypes: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/provider-types`;
+        getProvider: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('getProvider', 'name', name)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -208,6 +210,47 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiAxiosParamCreator =
             }
 
             const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Test provider connectivity.
+         * @param {string} name Provider name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testProviderConnectivity: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('testProviderConnectivity', 'name', name)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}/connectivity`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
@@ -312,6 +355,18 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp = function(confi
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Discover remote models for a provider.
+         * @param {string} name Provider name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async discoverProviderModels(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.discoverProviderModels(name, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.discoverProviderModels']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Get an AI provider by name.
          * @param {string} name Provider name
          * @param {*} [options] Override http request option.
@@ -324,17 +379,6 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp = function(confi
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * List all available provider types with metadata.
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async listProviderTypes(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<ProviderTypeInfo>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listProviderTypes(options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.listProviderTypes']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
          * List all AI providers.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -343,6 +387,18 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp = function(confi
             const localVarAxiosArgs = await localVarAxiosParamCreator.listProviders(options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.listProviders']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Test provider connectivity.
+         * @param {string} name Provider name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async testProviderConnectivity(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testProviderConnectivity(name, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.testProviderConnectivity']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -387,6 +443,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFactory = function 
             return localVarFp.deleteProvider(requestParameters.name, options).then((request) => request(axios, basePath));
         },
         /**
+         * Discover remote models for a provider.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        discoverProviderModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
+            return localVarFp.discoverProviderModels(requestParameters.name, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Get an AI provider by name.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderApiGetProviderRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -396,20 +461,21 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFactory = function 
             return localVarFp.getProvider(requestParameters.name, options).then((request) => request(axios, basePath));
         },
         /**
-         * List all available provider types with metadata.
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        listProviderTypes(options?: RawAxiosRequestConfig): AxiosPromise<Array<ProviderTypeInfo>> {
-            return localVarFp.listProviderTypes(options).then((request) => request(axios, basePath));
-        },
-        /**
          * List all AI providers.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
         listProviders(options?: RawAxiosRequestConfig): AxiosPromise<Array<AiProvider>> {
             return localVarFp.listProviders(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Test provider connectivity.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderApiTestProviderConnectivityRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testProviderConnectivity(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderApiTestProviderConnectivityRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
+            return localVarFp.testProviderConnectivity(requestParameters.name, options).then((request) => request(axios, basePath));
         },
         /**
          * Update an AI provider.
@@ -452,6 +518,20 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDeleteProviderR
 }
 
 /**
+ * Request parameters for discoverProviderModels operation in ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest {
+    /**
+     * Provider name
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModels
+     */
+    readonly name: string
+}
+
+/**
  * Request parameters for getProvider operation in ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.
  * @export
  * @interface ConsoleApiAifoundationHaloRunV1alpha1ProviderApiGetProviderRequest
@@ -461,6 +541,20 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ProviderApiGetProviderRequ
      * Provider name
      * @type {string}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderApiGetProvider
+     */
+    readonly name: string
+}
+
+/**
+ * Request parameters for testProviderConnectivity operation in ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ProviderApiTestProviderConnectivityRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ProviderApiTestProviderConnectivityRequest {
+    /**
+     * Provider name
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderApiTestProviderConnectivity
      */
     readonly name: string
 }
@@ -516,6 +610,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ProviderApi extends BaseAPI {
     }
 
     /**
+     * Discover remote models for a provider.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderApi
+     */
+    public discoverProviderModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp(this.configuration).discoverProviderModels(requestParameters.name, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
      * Get an AI provider by name.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderApiGetProviderRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -527,16 +632,6 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ProviderApi extends BaseAPI {
     }
 
     /**
-     * List all available provider types with metadata.
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderApi
-     */
-    public listProviderTypes(options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp(this.configuration).listProviderTypes(options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
      * List all AI providers.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -544,6 +639,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ProviderApi extends BaseAPI {
      */
     public listProviders(options?: RawAxiosRequestConfig) {
         return ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp(this.configuration).listProviders(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Test provider connectivity.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ProviderApiTestProviderConnectivityRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ProviderApi
+     */
+    public testProviderConnectivity(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderApiTestProviderConnectivityRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp(this.configuration).testProviderConnectivity(requestParameters.name, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

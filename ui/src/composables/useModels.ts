@@ -91,7 +91,7 @@ export function useProviderModels(providerName: string) {
   return useQuery<{ models: DiscoveredModel[]; providerName: string }>({
     queryKey: ['provider-models', providerName],
     queryFn: async () => {
-      const { data } = await aiConsoleApiClient.debug.listProviderModels({
+      const { data } = await aiConsoleApiClient.provider.discoverProviderModels({
         name: providerName,
       })
       return data as unknown as { models: DiscoveredModel[]; providerName: string }
@@ -103,7 +103,7 @@ export function useProviderModels(providerName: string) {
 export function useTestChat() {
   return useMutation({
     mutationFn: async ({ modelName, request }: { modelName: string; request: TestChatRequest }) => {
-      const { data } = await aiConsoleApiClient.debug.testModelChat({
+      const { data } = await aiConsoleApiClient.model.testModelChat({
         name: modelName,
         testChatRequest: request,
       })
