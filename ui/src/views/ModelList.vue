@@ -100,13 +100,18 @@ function openTestChat(model: AiModel) {
 </script>
 
 <template>
-  <div class=":uno: model-list">
-    <div class=":uno: model-list__filters">
-      <div class=":uno: filter-search">
-        <RiSearchLine class=":uno: search-icon" />
-        <input v-model="searchQuery" type="text" placeholder="搜索模型..." class=":uno: filter-input" />
+  <div>
+    <div class=":uno: mb-4 flex flex-wrap gap-3">
+      <div class=":uno: relative min-w-[200px] flex-1">
+        <RiSearchLine class=":uno: absolute left-2.5 top-1/2 h-4 w-4 text-gray-400 -translate-y-1/2" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="搜索模型..."
+          class=":uno: w-full border border-gray-200 rounded-md px-3 py-2 pl-8 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+        />
       </div>
-      <select v-model="capabilityFilter" class=":uno: filter-select">
+      <select v-model="capabilityFilter" class=":uno: min-w-[120px] border border-gray-200 rounded-md bg-white px-3 py-2 text-sm">
         <option value="">全部能力</option>
         <option v-for="cap in CAPABILITY_OPTIONS" :key="cap.value" :value="cap.value">
           {{ cap.label }}
@@ -114,27 +119,27 @@ function openTestChat(model: AiModel) {
       </select>
     </div>
 
-    <div v-if="Object.keys(groupedModels).length === 0" class=":uno: model-list__empty">
+    <div v-if="Object.keys(groupedModels).length === 0" class=":uno: py-8">
       <VEmpty title="暂无模型" />
     </div>
 
-    <div v-else class=":uno: model-list__groups">
-      <div v-for="(models, group) in groupedModels" :key="group" class=":uno: model-group">
-        <div class=":uno: model-group__header" @click="toggleGroup(group)">
-          <span class=":uno: model-group__toggle">{{ isExpanded(group) ? '▼' : '▶' }}</span>
-          <span class=":uno: model-group__name">{{ group }}</span>
-          <span class=":uno: model-group__count">({{ models.length }})</span>
+    <div v-else class=":uno: flex flex-col gap-3">
+      <div v-for="(models, group) in groupedModels" :key="group">
+        <div class=":uno: flex cursor-pointer items-center gap-2 rounded px-1 py-2 transition-colors duration-200 hover:bg-gray-100" @click="toggleGroup(group)">
+          <span class=":uno: w-4 text-center text-[10px] text-gray-500">{{ isExpanded(group) ? '▼' : '▶' }}</span>
+          <span class=":uno: text-sm font-medium">{{ group }}</span>
+          <span class=":uno: text-xs text-gray-400">({{ models.length }})</span>
         </div>
 
-        <div v-show="isExpanded(group)" class=":uno: model-group__items">
-          <VCard v-for="model in models" :key="model.metadata.name" class=":uno: model-card">
-            <div class=":uno: model-card__header">
-              <div class=":uno: model-card__info">
-                <span class=":uno: model-card__name">{{ model.spec.displayName }}</span>
-                <span class=":uno: model-card__id">{{ model.spec.modelId }}</span>
+        <div v-show="isExpanded(group)" class=":uno: mt-1 flex flex-col gap-2 pl-6">
+          <VCard v-for="model in models" :key="model.metadata.name">
+            <div class=":uno: mb-2 flex items-center justify-between">
+              <div class=":uno: flex flex-wrap items-center gap-2">
+                <span class=":uno: text-sm font-medium">{{ model.spec.displayName }}</span>
+                <span class=":uno: text-xs text-gray-400 font-mono">{{ model.spec.modelId }}</span>
                 <VTag v-if="!model.spec.enabled" size="sm" type="warning">已禁用</VTag>
               </div>
-              <div class=":uno: model-card__actions">
+              <div class=":uno: flex gap-1">
                 <VButton type="default" size="sm" @click="openTestChat(model)">
                   <RiChat1Line />
                 </VButton>
@@ -146,12 +151,12 @@ function openTestChat(model: AiModel) {
                 </VButton>
               </div>
             </div>
-            <div v-if="model.spec.capabilities?.length" class=":uno: model-card__tags">
+            <div v-if="model.spec.capabilities?.length" class=":uno: flex flex-wrap gap-1.5">
               <VTag v-for="cap in model.spec.capabilities" :key="cap" size="sm" type="primary">
                 {{ capabilityLabel(cap) }}
               </VTag>
             </div>
-            <div v-if="model.spec.endpointType" class=":uno: model-card__meta">
+            <div v-if="model.spec.endpointType" class=":uno: mt-1.5">
               <span class=":uno: text-xs text-gray-500">{{ model.spec.endpointType }}</span>
             </div>
           </VCard>
@@ -187,146 +192,3 @@ function openTestChat(model: AiModel) {
     </VModal>
   </div>
 </template>
-
-<style lang="scss" scoped>
-.model-list {
-  &__filters {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-
-  &__empty {
-    padding: 32px 0;
-  }
-
-  &__groups {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-}
-
-.filter-search {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-
-  .search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    color: #9ca3af;
-  }
-}
-
-.filter-input {
-  width: 100%;
-  padding: 8px 12px 8px 32px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-
-  &:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-  }
-}
-
-.filter-select {
-  padding: 8px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 14px;
-  background: #fff;
-  min-width: 120px;
-}
-
-.model-group {
-  &__header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 4px;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background 0.2s;
-
-    &:hover {
-      background: #f3f4f6;
-    }
-  }
-
-  &__toggle {
-    font-size: 10px;
-    color: #6b7280;
-    width: 16px;
-    text-align: center;
-  }
-
-  &__name {
-    font-weight: 500;
-    font-size: 14px;
-  }
-
-  &__count {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-
-  &__items {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-left: 24px;
-    margin-top: 4px;
-  }
-}
-
-.model-card {
-  &__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-
-  &__info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  &__name {
-    font-weight: 500;
-    font-size: 14px;
-  }
-
-  &__id {
-    font-size: 12px;
-    color: #9ca3af;
-    font-family: monospace;
-  }
-
-  &__actions {
-    display: flex;
-    gap: 4px;
-  }
-
-  &__tags {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  &__meta {
-    margin-top: 6px;
-  }
-}
-</style>

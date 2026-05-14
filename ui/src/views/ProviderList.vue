@@ -51,38 +51,43 @@ function statusPhase(phase?: string) {
 </script>
 
 <template>
-  <div class=":uno: provider-list">
-    <div class=":uno: provider-list__search">
-      <div class=":uno: search-input-wrapper">
-        <RiSearchLine class=":uno: search-icon" />
-        <input v-model="searchQuery" type="text" placeholder="搜索供应商..." class=":uno: search-input" />
+  <div>
+    <div class=":uno: border-b border-gray-200 p-3">
+      <div class=":uno: relative">
+        <RiSearchLine class=":uno: absolute left-2.5 top-1/2 h-4 w-4 text-gray-400 -translate-y-1/2" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="搜索供应商..."
+          class=":uno: w-full border border-gray-200 rounded-md px-3 py-2 pl-8 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+        />
       </div>
     </div>
 
     <VLoading v-if="loading" />
 
-    <div v-else-if="filteredProviders.length === 0" class=":uno: provider-list__empty">
+    <div v-else-if="filteredProviders.length === 0" class=":uno: px-4 py-8">
       <VEmpty title="暂无供应商" />
     </div>
 
-    <div v-else class=":uno: provider-list__items">
+    <div v-else class=":uno: flex flex-col gap-2 p-2">
       <VCard
         v-for="provider in filteredProviders"
         :key="provider.metadata.name"
         :class="[
-          ':uno: provider-card',
-          { ':uno: provider-card--active': selectedName === provider.metadata.name },
+          ':uno: group cursor-pointer transition-all duration-200 hover:border-blue-500',
+          { ':uno: border-blue-500 bg-blue-50': selectedName === provider.metadata.name },
         ]"
         @click="emit('select', provider)"
       >
-        <div class=":uno: provider-card__header">
-          <div class=":uno: provider-card__title">
+        <div class=":uno: mb-2 flex items-start justify-between">
+          <div class=":uno: flex flex-wrap items-center gap-2">
             <span class=":uno: font-medium">{{ provider.spec.displayName }}</span>
             <VTag size="sm">
               {{ providerTypeLabel(provider.spec.providerType) }}
             </VTag>
           </div>
-          <div class=":uno: provider-card__actions" @click.stop>
+          <div class=":uno: flex gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100" @click.stop>
             <VButton type="default" size="sm" @click="emit('edit', provider)">
               <RiEditLine />
             </VButton>
@@ -91,105 +96,12 @@ function statusPhase(phase?: string) {
             </VButton>
           </div>
         </div>
-        <div class=":uno: provider-card__status">
+        <div class=":uno: flex items-center gap-1.5">
           <VStatusDot :state="statusPhase(provider.status?.phase)" />
           <span class=":uno: text-xs text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
-          <VTag v-if="!provider.spec.enabled" size="sm" style="margin-left: 8px"> 已禁用 </VTag>
+          <VTag v-if="!provider.spec.enabled" size="sm" class=":uno: ml-2"> 已禁用 </VTag>
         </div>
       </VCard>
     </div>
   </div>
 </template>
-
-<style lang="scss" scoped>
-.provider-list {
-  &__search {
-    padding: 12px;
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  &__items {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  &__empty {
-    padding: 32px 16px;
-  }
-}
-
-.search-input-wrapper {
-  position: relative;
-
-  .search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    color: #9ca3af;
-  }
-
-  .search-input {
-    width: 100%;
-    padding: 8px 12px 8px 32px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    font-size: 14px;
-    outline: none;
-
-    &:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-    }
-  }
-}
-
-.provider-card {
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    border-color: #3b82f6;
-  }
-
-  &--active {
-    border-color: #3b82f6;
-    background: #eff6ff;
-  }
-
-  &__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
-  }
-
-  &__title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  &__actions {
-    display: flex;
-    gap: 4px;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-
-  &:hover &__actions {
-    opacity: 1;
-  }
-
-  &__status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-}
-</style>

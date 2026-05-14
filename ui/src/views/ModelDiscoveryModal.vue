@@ -90,13 +90,12 @@ async function batchAdd() {
       }
       await createModel.mutateAsync(newModel)
     }
-     
+
     Toast.success(`成功添加 ${toAdd.length} 个模型`)
     queryClient.invalidateQueries({ queryKey: ['ai-models'] })
     queryClient.invalidateQueries({ queryKey: ['ai-models', 'provider', props.providerName] })
     emit('close')
   } catch (e) {
-     
     Toast.error('添加模型失败: ' + (e as Error).message)
   } finally {
     adding.value = false
@@ -105,27 +104,27 @@ async function batchAdd() {
 </script>
 
 <template>
-  <div class=":uno: discovery-modal">
-    <div class=":uno: discovery-header">
+  <div class=":uno: py-2">
+    <div class=":uno: mb-4 flex items-center justify-between">
       <h3 class=":uno: text-base font-semibold">从供应商获取模型</h3>
       <VButton type="secondary" size="sm" @click="emit('close')">关闭</VButton>
     </div>
 
     <VLoading v-if="isLoading" />
 
-    <div v-else-if="availableModels.length === 0" class=":uno: discovery-empty">
+    <div v-else-if="availableModels.length === 0" class=":uno: py-8">
       <VEmpty title="未获取到模型列表" />
     </div>
 
-    <div v-else class=":uno: discovery-content">
-      <div class=":uno: discovery-defaults">
-        <div class=":uno: default-field">
-          <label>默认分组</label>
-          <input v-model="defaultGroup" type="text" placeholder="可选" />
+    <div v-else>
+      <div class=":uno: mb-4 flex flex-wrap gap-3">
+        <div class=":uno: min-w-[150px] flex flex-1 flex-col gap-1">
+          <label class=":uno: text-xs text-gray-500">默认分组</label>
+          <input v-model="defaultGroup" type="text" placeholder="可选" class=":uno: border border-gray-200 rounded-md px-2.5 py-1.5 text-sm" />
         </div>
       </div>
 
-      <div class=":uno: discovery-actions">
+      <div class=":uno: mb-3">
         <VButton
           type="primary"
           size="sm"
@@ -140,29 +139,29 @@ async function batchAdd() {
         </VButton>
       </div>
 
-      <div class=":uno: discovery-list">
+      <div class=":uno: max-h-[400px] flex flex-col gap-2 overflow-y-auto">
         <VCard
           v-for="model in availableModels"
           :key="model.modelId"
-          :class="[':uno: discovery-item', { ':uno: discovery-item--selected': isSelected(model) }]"
+          :class="[':uno: flex items-center gap-2.5 cursor-pointer transition-all duration-200 py-2.5 px-3 hover:border-blue-500', { ':uno: bg-blue-50 border-blue-500': isSelected(model) }]"
           @click="toggleSelection(model)"
         >
-          <div class=":uno: discovery-item__check">
-            <div v-if="isSelected(model)" class=":uno: check-icon">
+          <div class=":uno: shrink-0">
+            <div v-if="isSelected(model)" class=":uno: h-5 w-5 flex items-center justify-center rounded-full bg-blue-500 text-xs text-white">
               <RiCheckLine />
             </div>
-            <div v-else class=":uno: check-placeholder"></div>
+            <div v-else class=":uno: h-5 w-5 border-2 border-gray-300 rounded-full"></div>
           </div>
-          <div class=":uno: discovery-item__info">
-            <span class=":uno: discovery-item__name">{{ model.displayName || model.modelId }}</span>
-            <span class=":uno: discovery-item__id">{{ model.modelId }}</span>
+          <div class=":uno: min-w-0 flex flex-1 flex-col gap-0.5">
+            <span class=":uno: text-sm font-medium">{{ model.displayName || model.modelId }}</span>
+            <span class=":uno: text-xs text-gray-400 font-mono">{{ model.modelId }}</span>
           </div>
-          <div class=":uno: discovery-item__capabilities">
+          <div class=":uno: flex shrink-0 gap-1">
             <span
               v-for="cap in model.capabilities"
               :key="cap"
-              class=":uno: capability-tag"
-              :class="`:uno: capability-tag--{cap}`"
+              class=":uno: inline-block rounded px-2 py-0.5 text-[11px] font-500"
+              :class="cap === 'chat' ? ':uno: bg-blue-100 text-blue-700' : cap === 'embedding' ? ':uno: bg-pink-100 text-pink-700' : ':uno: bg-gray-100 text-gray-700'"
             >
               {{ capabilityLabel(cap) }}
             </span>
@@ -172,144 +171,3 @@ async function batchAdd() {
     </div>
   </div>
 </template>
-
-<style lang="scss" scoped>
-.discovery-modal {
-  padding: 8px 0;
-}
-
-.discovery-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.discovery-empty {
-  padding: 32px 0;
-}
-
-.discovery-defaults {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-
-  .default-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1;
-    min-width: 150px;
-
-    label {
-      font-size: 12px;
-      color: #6b7280;
-    }
-
-    input,
-    select {
-      padding: 6px 10px;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-  }
-}
-
-.discovery-actions {
-  margin-bottom: 12px;
-}
-
-.discovery-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.discovery-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  padding: 10px 12px;
-
-  &:hover {
-    border-color: #3b82f6;
-  }
-
-  &--selected {
-    background: #eff6ff;
-    border-color: #3b82f6;
-  }
-
-  &__check {
-    flex-shrink: 0;
-  }
-
-  .check-icon {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #3b82f6;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-  }
-
-  .check-placeholder {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid #d1d5db;
-  }
-
-  &__info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-    min-width: 0;
-  }
-
-  &__name {
-    font-size: 14px;
-    font-weight: 500;
-  }
-
-  &__id {
-    font-size: 12px;
-    color: #9ca3af;
-    font-family: monospace;
-  }
-
-  &__capabilities {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-}
-
-.capability-tag {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-
-  &--chat {
-    background: #dbeafe;
-    color: #1d4ed8;
-  }
-
-  &--embedding {
-    background: #fce7f3;
-    color: #be185d;
-  }
-}
-</style>

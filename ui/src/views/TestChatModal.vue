@@ -26,7 +26,7 @@ async function send() {
       modelName: props.modelName,
       request: { prompt: prompt.value.trim() },
     })
-    result.value = (res as any).content
+    result.value = (res as unknown as { content: string }).content
   } catch (e) {
     result.value = '请求失败: ' + (e as Error).message
   }
@@ -34,14 +34,19 @@ async function send() {
 </script>
 
 <template>
-  <div class=":uno: test-chat">
-    <div class=":uno: test-chat__header">
+  <div class=":uno: py-2">
+    <div class=":uno: mb-4 flex items-center justify-between">
       <h3 class=":uno: text-base font-semibold">测试对话: {{ modelDisplayName }}</h3>
       <VButton type="secondary" size="sm" @click="emit('close')">关闭</VButton>
     </div>
 
-    <div class=":uno: test-chat__input">
-      <textarea v-model="prompt" rows="3" placeholder="输入提示词..." class=":uno: test-chat__textarea" />
+    <div class=":uno: mb-4 flex flex-col gap-2.5">
+      <textarea
+        v-model="prompt"
+        rows="3"
+        placeholder="输入提示词..."
+        class=":uno: w-full resize-y border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+      />
       <VButton type="primary" size="sm" :loading="testChat.isPending.value" @click="send">
         <template #icon>
           <RiSendPlaneLine />
@@ -50,7 +55,7 @@ async function send() {
       </VButton>
     </div>
 
-    <div v-if="result || testChat.isPending.value" class=":uno: test-chat__result">
+    <div v-if="result || testChat.isPending.value" class=":uno: max-h-[300px] overflow-y-auto">
       <VCard>
         <div v-if="testChat.isPending.value" class=":uno: text-gray-500">请求中...</div>
         <div v-else class=":uno: whitespace-pre-wrap text-sm">{{ result }}</div>
@@ -58,43 +63,3 @@ async function send() {
     </div>
   </div>
 </template>
-
-<style lang="scss" scoped>
-.test-chat {
-  padding: 8px 0;
-
-  &__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-  }
-
-  &__input {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-
-  &__textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    font-size: 14px;
-    resize: vertical;
-    outline: none;
-
-    &:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-    }
-  }
-
-  &__result {
-    max-height: 300px;
-    overflow-y: auto;
-  }
-}
-</style>

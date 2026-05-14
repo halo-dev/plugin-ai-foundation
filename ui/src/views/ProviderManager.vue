@@ -75,8 +75,8 @@ function onFormSaved() {
     </template>
   </VPageHeader>
 
-  <div class=":uno: provider-manager">
-    <div class=":uno: provider-manager__list">
+  <div class=":uno: h-[calc(100vh-64px)] flex gap-0">
+    <div class=":uno: min-w-80 w-80 overflow-y-auto border-r border-gray-200 bg-white">
       <ProviderList
         :providers="providers || []"
         :loading="providersLoading"
@@ -86,7 +86,7 @@ function onFormSaved() {
         @delete="onDeleteProvider"
       />
     </div>
-    <div class=":uno: provider-manager__detail">
+    <div class=":uno: flex-1 overflow-y-auto bg-slate-50 p-4">
       <ProviderDetail
         v-if="selectedProvider"
         :key="selectedProvider.metadata.name"
@@ -94,8 +94,8 @@ function onFormSaved() {
         @edit="onEditProvider"
         @delete="onDeleteProvider"
       />
-      <div v-else class=":uno: empty-state">
-        <p class=":uno: text-gray-500">请从左侧选择一个供应商查看详情</p>
+      <div v-else class=":uno: h-full flex items-center justify-center text-gray-400">
+        <p>请从左侧选择一个供应商查看详情</p>
       </div>
     </div>
   </div>
@@ -113,34 +113,3 @@ function onFormSaved() {
     />
   </VModal>
 </template>
-
-<style lang="scss" scoped>
-.provider-manager {
-  display: flex;
-  height: calc(100vh - 64px);
-  gap: 0;
-
-  &__list {
-    width: 320px;
-    min-width: 320px;
-    border-right: 1px solid #e5e7eb;
-    background: #fff;
-    overflow-y: auto;
-  }
-
-  &__detail {
-    flex: 1;
-    overflow-y: auto;
-    background: #f8fafc;
-    padding: 16px;
-  }
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #9ca3af;
-}
-</style>

@@ -75,10 +75,10 @@ function onModelFormSaved() {
 </script>
 
 <template>
-  <div class=":uno: provider-detail">
+  <div>
     <VCard>
-      <div class=":uno: provider-detail__header">
-        <div class=":uno: provider-detail__title">
+      <div class=":uno: mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class=":uno: flex flex-wrap items-center gap-2.5">
           <h2 class=":uno: text-lg font-semibold">{{ provider.spec.displayName }}</h2>
           <VTag size="sm">
             {{ providerTypeLabel() }}
@@ -87,7 +87,7 @@ function onModelFormSaved() {
           <span class=":uno: text-sm text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
           <VTag v-if="!provider.spec.enabled" size="sm" type="warning">已禁用</VTag>
         </div>
-        <div class=":uno: provider-detail__actions">
+        <div class=":uno: flex flex-wrap gap-2">
           <VButton size="sm" :loading="testConnectivity.isPending.value" @click="onTest">
             <template #icon>
               <RiTestTubeLine />
@@ -109,7 +109,7 @@ function onModelFormSaved() {
         </div>
       </div>
 
-      <div v-if="testConnectivity.data.value" class=":uno: connectivity-result">
+      <div v-if="testConnectivity.data.value" class=":uno: mb-3 flex items-center gap-2.5 rounded-md bg-slate-50 px-3 py-2.5">
         <VTag :type="(testConnectivity.data.value as any).phase === 'OK' ? 'success' : 'error'" size="sm">
           {{ (testConnectivity.data.value as any).phase === 'OK' ? '连通成功' : '连通失败' }}
         </VTag>
@@ -181,39 +181,3 @@ function onModelFormSaved() {
     </VCard>
   </div>
 </template>
-
-<style lang="scss" scoped>
-.provider-detail {
-  &__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  &__title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  &__actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-}
-
-.connectivity-result {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-radius: 6px;
-  margin-bottom: 12px;
-}
-</style>

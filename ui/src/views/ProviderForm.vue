@@ -118,7 +118,7 @@ async function handleSubmit(values: Record<string, unknown>) {
 </script>
 
 <template>
-  <div class=":uno: provider-form">
+  <div class=":uno: py-2">
     <FormKit
       id="provider-form"
       type="form"
@@ -160,10 +160,10 @@ async function handleSubmit(values: Record<string, unknown>) {
 
       <FormKit type="switch" name="enabled" label="启用" />
 
-      <button ref="submitBtn" type="submit" style="display: none"></button>
+      <button ref="submitBtn" type="submit" class=":uno: hidden"></button>
     </FormKit>
 
-    <div class=":uno: form-actions">
+    <div class=":uno: mt-6 flex justify-end gap-3 border-t border-gray-200 pt-4">
       <VButton type="secondary" @click="emit('cancel')">取消</VButton>
       <VButton
         type="primary"
@@ -175,18 +175,3 @@ async function handleSubmit(values: Record<string, unknown>) {
     </div>
   </div>
 </template>
-
-<style lang="scss" scoped>
-.provider-form {
-  padding: 8px 0;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-}
-</style>
