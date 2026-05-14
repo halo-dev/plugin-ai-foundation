@@ -65,7 +65,7 @@ return new ConnectivityResult(true, "OK");
 
 ---
 
-### 6. ModelForm 的 endpointType 是前端硬编码
+### ~~6. ModelForm 的 endpointType 是前端硬编码~~ ✅ FIXED
 
 **位置**: `ui/src/views/components/ModelForm.vue:22-26`
 

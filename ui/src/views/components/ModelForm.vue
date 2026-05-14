@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import { CAPABILITY_OPTIONS } from '@/types'
 import type { ModelFormState } from '@/types/form'
 import { submitForm } from '@formkit/core'
@@ -6,6 +7,7 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   formState?: ModelFormState
+  providerType: string
 }>()
 
 const emit = defineEmits<{
@@ -19,11 +21,30 @@ const capabilityOptions = CAPABILITY_OPTIONS.map((c) => ({
   label: c.label,
 }))
 
-const endpointTypeOptions = [
-  { value: 'openai-chat', label: 'OpenAI Chat' },
-  { value: 'openai-embedding', label: 'OpenAI Embedding' },
-  { value: 'ollama-chat', label: 'Ollama Chat' },
-]
+const { data: providerTypes } = useProviderTypesFetch()
+
+function getEndpointLabel(value: string): string {
+  const labels: Record<string, string> = {
+    'openai-chat': 'OpenAI Chat',
+    'openai-embedding': 'OpenAI Embedding',
+    'ollama-chat': 'Ollama Chat',
+  }
+  return labels[value] || value
+}
+
+const endpointTypeOptions = computed(() => {
+  const type = providerTypes.value?.find((t) => t.providerType === props.providerType)
+  const types = type?.supportedEndpointTypes || []
+  return types.map((v) => ({ value: v, label: getEndpointLabel(v) }))
+})
+
+const defaultEndpointType = computed(() => {
+  const options = endpointTypeOptions.value
+  if (options.length === 1) {
+    return options[0].value
+  }
+  return props.formState?.endpointType || 'openai-chat'
+})
 
 function onSubmit(data: ModelFormState) {
   emit('submit', data)
@@ -76,7 +97,8 @@ defineExpose({
       name="endpointType"
       label="Endpoint 类型"
       :options="endpointTypeOptions"
-      :value="formState?.endpointType"
+      :value="formState?.endpointType || defaultEndpointType"
+      :disabled="endpointTypeOptions.length <= 1"
     />
 
     <FormKit

@@ -69,7 +69,7 @@ const creationModalVisible = ref(false)
 
   <ModelCreationModal
     v-if="provider && creationModalVisible"
-    :provider-name="provider.metadata.name"
+    :provider="provider"
     @close="creationModalVisible = false"
   />
 </template>
