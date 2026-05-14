@@ -1,125 +1,79 @@
 <script setup lang="ts">
-import type { AiProvider } from '@/api/generated'
-import { useModelsByProvider } from '@/composables/useModels'
-import { useProviderTypes } from '@/composables/useProviderTypes'
+import { aiConsoleApiClient } from '@/api'
 import { useTestConnectivity } from '@/composables/useProviders'
 import {
   VButton,
   VCard,
   VDescription,
   VDescriptionItem,
-  VModal,
-  VStatusDot,
-  VTag,
+  VLoading,
+  VSpace,
 } from '@halo-dev/components'
-import { useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
-import RiAddLine from '~icons/ri/add-line'
+import { useQuery } from '@tanstack/vue-query'
+import { useRouteQuery } from '@vueuse/router'
+import { ref } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
-import RiDownloadCloudLine from '~icons/ri/download-cloud-line'
 import RiEditLine from '~icons/ri/edit-line'
 import RiTestTubeLine from '~icons/ri/test-tube-line'
-import ModelDiscoveryModal from './ModelDiscoveryModal.vue'
-import ModelForm from './ModelForm.vue'
-import ModelList from './ModelList.vue'
+import ProviderEditingModal from './components/ProviderEditingModal.vue'
+import ProviderModelsList from './components/ProviderModelsList.vue'
 
-const props = defineProps<{
-  provider: AiProvider
-}>()
+const selectedProvider = useRouteQuery<string | undefined>('provider')
 
-const emit = defineEmits<{
-  (e: 'edit', provider: AiProvider): void
-  (e: 'delete', provider: AiProvider): void
-}>()
+const { data: provider, isLoading } = useQuery({
+  queryKey: ['plugin:ai-foundation:provider', selectedProvider],
+  queryFn: async () => {
+    if (!selectedProvider.value) {
+      return null
+    }
 
-const testConnectivity = useTestConnectivity()
-const { data: models } = useModelsByProvider(props.provider.metadata.name)
-const { data: providerTypes } = useProviderTypes()
-const queryClient = useQueryClient()
-
-const modelFormVisible = ref(false)
-const editingModel = ref(null)
-const discoveryVisible = ref(false)
-
-const providerTypeInfo = computed(() => {
-  return providerTypes.value?.find((t) => t.providerType === props.provider.spec.providerType)
+    const { data } = await aiConsoleApiClient.provider.getProvider({
+      name: selectedProvider.value,
+    })
+    return data
+  },
 })
 
-function providerTypeLabel(): string {
-  return providerTypeInfo.value?.displayName || props.provider.spec.providerType
-}
+const testConnectivity = useTestConnectivity()
 
 function onTest() {
-  testConnectivity.mutate(props.provider.metadata.name)
+  testConnectivity.mutate(provider.value?.metadata.name || '')
 }
 
-function statusPhase(phase?: string) {
-  switch (phase) {
-    case 'OK':
-      return 'success'
-    case 'ERROR':
-      return 'error'
-    default:
-      return 'default'
-  }
-}
-
-function onModelFormSaved() {
-  modelFormVisible.value = false
-  editingModel.value = null
-  queryClient.invalidateQueries({ queryKey: ['ai-models'] })
-  queryClient.invalidateQueries({
-    queryKey: ['ai-models', 'provider', props.provider.metadata.name],
-  })
-}
+const editingModalVisible = ref(false)
 </script>
 
 <template>
-  <div>
-    <VCard>
-      <div class=":uno: mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div class=":uno: flex flex-wrap items-center gap-2.5">
-          <h2 class=":uno: text-lg font-semibold">{{ provider.spec.displayName }}</h2>
-          <VTag size="sm">
-            {{ providerTypeLabel() }}
-          </VTag>
-          <VStatusDot :state="statusPhase(provider.status?.phase)" />
-          <span class=":uno: text-sm text-gray-500">{{ provider.status?.phase || 'UNKNOWN' }}</span>
-          <VTag v-if="!provider.spec.enabled" size="sm" type="warning">已禁用</VTag>
+  <VLoading v-if="isLoading" />
+  <div v-else-if="!provider">获取供应商失败</div>
+  <div v-else class=":uno: space-y-4">
+    <VCard :title="provider.spec.displayName" :body-class="['!p-0']">
+      <template #actions>
+        <div class=":uno: px-4">
+          <VSpace>
+            <VButton size="sm" :loading="testConnectivity.isPending.value" @click="onTest">
+              <template #icon>
+                <RiTestTubeLine />
+              </template>
+              测试连通性
+            </VButton>
+            <VButton type="secondary" size="sm" @click="editingModalVisible = true">
+              <template #icon>
+                <RiEditLine />
+              </template>
+              编辑
+            </VButton>
+            <VButton type="danger" size="sm">
+              <template #icon>
+                <RiDeleteBinLine />
+              </template>
+              删除
+            </VButton>
+          </VSpace>
         </div>
-        <div class=":uno: flex flex-wrap gap-2">
-          <VButton size="sm" :loading="testConnectivity.isPending.value" @click="onTest">
-            <template #icon>
-              <RiTestTubeLine />
-            </template>
-            测试连通性
-          </VButton>
-          <VButton type="secondary" size="sm" @click="emit('edit', provider)">
-            <template #icon>
-              <RiEditLine />
-            </template>
-            编辑
-          </VButton>
-          <VButton type="danger" size="sm" @click="emit('delete', provider)">
-            <template #icon>
-              <RiDeleteBinLine />
-            </template>
-            删除
-          </VButton>
-        </div>
-      </div>
+      </template>
 
-      <div v-if="testConnectivity.data.value" class=":uno: mb-3 flex items-center gap-2.5 rounded-md bg-slate-50 px-3 py-2.5">
-        <VTag :type="(testConnectivity.data.value as any).phase === 'OK' ? 'success' : 'error'" size="sm">
-          {{ (testConnectivity.data.value as any).phase === 'OK' ? '连通成功' : '连通失败' }}
-        </VTag>
-        <span class=":uno: text-sm text-gray-600">{{ (testConnectivity.data.value as any).message }}</span>
-        <span v-if="(testConnectivity.data.value as any).lastCheckedAt" class=":uno: text-xs text-gray-400">
-          检测时间: {{ (testConnectivity.data.value as any).lastCheckedAt }}
-        </span>
-      </div>
-
-      <VDescription class=":uno: mt-4">
+      <VDescription>
         <VDescriptionItem label="资源名称">
           {{ provider.metadata.name }}
         </VDescriptionItem>
@@ -135,49 +89,15 @@ function onModelFormSaved() {
         <VDescriptionItem v-if="provider.spec.proxyHost" label="代理主机">
           {{ provider.spec.proxyHost }}:{{ provider.spec.proxyPort || '' }}
         </VDescriptionItem>
-        <VDescriptionItem v-if="provider.status?.lastCheckedAt" label="上次检测">
-          {{ provider.status.lastCheckedAt }}
-        </VDescriptionItem>
       </VDescription>
     </VCard>
 
-    <VCard class=":uno: mt-4">
-      <div class=":uno: mb-4 flex items-center justify-between">
-        <h3 class=":uno: text-base font-semibold">关联模型</h3>
-        <div class=":uno: flex gap-2">
-          <VButton type="secondary" size="sm" @click="discoveryVisible = true">
-            <template #icon>
-              <RiDownloadCloudLine />
-            </template>
-            从供应商获取
-          </VButton>
-          <VButton type="primary" size="sm" @click="modelFormVisible = true">
-            <template #icon>
-              <RiAddLine />
-            </template>
-            添加模型
-          </VButton>
-        </div>
-      </div>
-      <ModelList :models="models || []" :provider-name="provider.metadata.name" />
-      <ModelDiscoveryModal
-        v-if="discoveryVisible && providerTypeInfo"
-        :provider-name="provider.metadata.name"
-        :provider-type="providerTypeInfo"
-        @close="discoveryVisible = false"
-      />
-      <VModal
-        v-if="modelFormVisible"
-        title="添加模型"
-        :width="600"
-        @close="modelFormVisible = false"
-      >
-        <ModelForm
-          :provider-name="provider.metadata.name"
-          @saved="onModelFormSaved"
-          @cancel="modelFormVisible = false"
-        />
-      </VModal>
-    </VCard>
+    <ProviderModelsList v-if="provider" :provider="provider" />
   </div>
+
+  <ProviderEditingModal
+    v-if="provider && editingModalVisible"
+    :provider="provider"
+    @close="editingModalVisible = false"
+  />
 </template>

@@ -22,6 +22,7 @@ export default definePlugin({
             icon: markRaw(RiBrainLine),
             priority: 100,
           },
+          hideFooter: true,
         },
       },
     },

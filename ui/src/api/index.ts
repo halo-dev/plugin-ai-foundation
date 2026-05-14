@@ -15,7 +15,11 @@ const aiCoreApiClient = {
 const aiConsoleApiClient = {
   model: new ConsoleApiAifoundationHaloRunV1alpha1ModelApi(undefined, '', axiosInstance),
   provider: new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(undefined, '', axiosInstance),
-  providerType: new ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi(undefined, '', axiosInstance),
+  providerType: new ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi(
+    undefined,
+    '',
+    axiosInstance,
+  ),
 }
 
 export { aiConsoleApiClient, aiCoreApiClient }
