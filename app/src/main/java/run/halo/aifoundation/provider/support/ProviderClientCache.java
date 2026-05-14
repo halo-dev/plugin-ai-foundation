@@ -54,8 +54,9 @@ public class ProviderClientCache {
 
     public ChatModel getOrCreateChatModel(AiProvider provider, String apiKey, String modelId) {
         var name = provider.getMetadata().getName();
-        return chatModelCache.computeIfAbsent(name, k -> {
-            log.debug("Creating chat model for provider: {}", name);
+        var key = name + "/" + modelId;
+        return chatModelCache.computeIfAbsent(key, k -> {
+            log.debug("Creating chat model for provider: {}, model: {}", name, modelId);
             var type = getProviderType(provider.getSpec().getProviderType());
             return type.buildChatModel(provider, apiKey, modelId);
         });
@@ -63,16 +64,18 @@ public class ProviderClientCache {
 
     public EmbeddingModel getOrCreateEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var name = provider.getMetadata().getName();
-        return embeddingModelCache.computeIfAbsent(name, k -> {
-            log.debug("Creating embedding model for provider: {}", name);
+        var key = name + "/" + modelId;
+        return embeddingModelCache.computeIfAbsent(key, k -> {
+            log.debug("Creating embedding model for provider: {}, model: {}", name, modelId);
             var type = getProviderType(provider.getSpec().getProviderType());
             return type.buildEmbeddingModel(provider, apiKey, modelId);
         });
     }
 
     public void invalidate(String providerName) {
-        chatModelCache.remove(providerName);
-        embeddingModelCache.remove(providerName);
+        var prefix = providerName + "/";
+        chatModelCache.keySet().removeIf(key -> key.startsWith(prefix));
+        embeddingModelCache.keySet().removeIf(key -> key.startsWith(prefix));
         log.debug("Invalidated cached models for provider: {}", providerName);
     }
 

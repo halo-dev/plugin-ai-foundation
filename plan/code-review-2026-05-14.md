@@ -7,7 +7,7 @@
 
 ## 严重问题（必须修复）
 
-### 1. ProviderClientCache 缓存键不包含 modelId，导致同 provider 下不同模型共享 ChatModel
+### ~~1. ProviderClientCache 缓存键不包含 modelId，导致同 provider 下不同模型共享 ChatModel~~ ✅ FIXED
 
 **位置**: `app/src/main/java/run/halo/aifoundation/provider/support/ProviderClientCache.java:57-71`
 
@@ -149,18 +149,6 @@ for (const model of data) {
 
 ---
 
-### 12. ProviderList.vue 的 selectedProvider ref 比较
-
-**位置**: `ui/src/views/components/ProviderList.vue:41`
-
-```vue
-:is-selected="selectedProvider === provider.metadata.name"
-```
-
-`selectedProvider` 是 `useRouteQuery` 返回的 `Ref`，在 template 表达式中可能比较的是 ref 对象而非其值。建议显式使用 `.value` 或确保解包。
-
----
-
 ### 13. `generateName` 使用 `toLocaleLowerCase()` 依赖运行时 locale
 
 **位置**: `ui/src/views/components/ModelCreationModal.vue:25-26`, `ModelsDiscoveryModal.vue:59`
@@ -239,22 +227,6 @@ private Boolean supportedTextDelta;
 
 ---
 
-### 22. ProviderForm 的 displayName 会被 providerType 切换覆盖
-
-**位置**: `ui/src/views/components/ProviderForm.vue:32-39`
-
-```ts
-watch(() => providerType.value, (value) => {
-  if (value) {
-    displayName.value = selectedProviderType.value?.displayName // 覆盖用户输入
-  }
-})
-```
-
-用户先输入了自定义 displayName，再切换 provider type 时，输入会被覆盖。
-
----
-
 ### 23. TestChatModal 不支持流式输出
 
 UI 显示"测试对话"，但 `test-chat` endpoint 返回完整响应（`Mono<Map>`），不是 SSE 流。大模型长回复时用户需等待整个响应完成后才能看到内容。
@@ -306,23 +278,3 @@ if (size <= 0) {
 ```
 
 当 `maxEmbeddingsPerCall` 为 0（如 DeepSeekProvider 返回 0）时，应禁用 batching 或抛异常，而不是把整个列表作为一个 batch 发送。
-
----
-
-### 29. 前端轮询逻辑不完整
-
-**位置**: `ui/src/composables/use-models-fetch.ts:31-34`, `use-providers-fetch.ts:13-16`
-
-只轮询 `deletionTimestamp` 状态，没有轮询创建/更新中的过渡状态。模型创建后如果 server-side 还在处理，前端可能暂时看不到新数据。
-
----
-
-### 30. AiHubMixProvider 的 APP_CODE 硬编码
-
-**位置**: `app/src/main/java/run/halo/aifoundation/provider/AiHubMixProvider.java:22`
-
-```java
-private static final String APP_CODE = "NEUE3459";
-```
-
-硬编码了第三方平台的 app code，可能不适用于所有用户场景。
