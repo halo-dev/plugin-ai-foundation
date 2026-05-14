@@ -11,7 +11,7 @@ import run.halo.aifoundation.extension.AiProvider;
 @Component
 public class MiniMaxProvider extends AbstractAiProviderType {
 
-    private static final String DEFAULT_BASE_URL = "https://api.minimax.io";
+    private static final String DEFAULT_BASE_URL = "https://api.minimaxi.com";
     private static final String COMPLETIONS_PATH = "/v1/chat/completions";
     private static final String EMBEDDINGS_PATH = "/v1/embeddings";
 
