@@ -241,18 +241,15 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ConnectivityResult> performConnectivityCheck(AiProvider provider, String apiKey) {
-        return Mono.fromCallable(() -> {
-            try {
-                providerClientCache.invalidate(provider.getMetadata().getName());
-                var type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
-                type.buildChatModel(provider, apiKey, "test");
-                return new ConnectivityResult(true, "OK");
-            } catch (Exception e) {
+        providerClientCache.invalidate(provider.getMetadata().getName());
+        var type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
+        return type.discoverModels(provider, apiKey)
+            .map(models -> new ConnectivityResult(true, "Connectivity check passed"))
+            .onErrorResume(e -> {
                 log.warn("Connectivity check failed for provider: {}",
                     provider.getMetadata().getName(), e);
-                return new ConnectivityResult(false, e.getMessage());
-            }
-        });
+                return Mono.just(new ConnectivityResult(false, e.getMessage()));
+            });
     }
 
     record ConnectivityResult(boolean success, String message) {

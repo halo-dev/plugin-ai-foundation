@@ -36,7 +36,7 @@ return chatModelCache.computeIfAbsent(name, k -> {
 
 ---
 
-### 3. "连通性检查"根本没有实际调用远程 API
+### ~~3. "连通性检查"根本没有实际调用远程 API~~ ✅ FIXED
 
 **位置**: `app/src/main/java/run/halo/aifoundation/endpoint/ProviderConsoleEndpoint.java:243-256`
 
