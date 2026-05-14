@@ -128,6 +128,6 @@ defineExpose({
       :value="formState?.proxyPort"
     />
 
-    <FormKit type="switch" name="enabled" label="启用" :value="formState?.enabled || true" />
+    <FormKit type="switch" name="enabled" label="启用" :value="formState?.enabled ?? true" />
   </FormKit>
 </template>

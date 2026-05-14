@@ -54,19 +54,6 @@ return new ConnectivityResult(true, "OK");
 
 ---
 
-### 4. ProviderForm 的 enabled switch 默认值逻辑错误
-
-**位置**: `ui/src/views/components/ProviderForm.vue:131`
-
-```vue
-<FormKit type="switch" name="enabled" label="启用" :value="formState?.enabled || true" />
-```
-
-当 `formState.enabled` 为 `false` 时，`false || true` 结果为 `true`。**编辑已禁用的 provider 时，开关会错误显示为启用状态**。
-
-**修复方向**: 使用 `??`（空值合并）而非 `||`：`:value="formState?.enabled ?? true"`。
-
----
 
 ### 5. AiModelServiceImpl 完全不检查模型的 enabled 状态
 
