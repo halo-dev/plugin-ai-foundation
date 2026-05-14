@@ -27,11 +27,10 @@ dependencies {
 
 ### AiModelService
 
-`AiModelService` 是入口服务，通过 Spring 注入获取：
+`AiModelService` 是入口服务，由于 Halo 插件间的 Spring ApplicationContext 隔离，不能通过 `@Autowired` 注入，需通过静态定位器 `AiServices` 获取：
 
 ```java
-@Autowired
-private AiModelService aiModelService;
+AiModelService aiModelService = AiServices.getModelService();
 ```
 
 它提供以下方法：
@@ -197,15 +196,14 @@ aiModelService.listProviders()
 @Service
 public class MyAiService {
 
-    @Autowired
-    private AiModelService aiModelService;
-
     public Mono<String> summarize(String content) {
+        AiModelService aiModelService = AiServices.getModelService();
         LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat");
         return model.chat("请总结以下内容：\n" + content);
     }
 
     public Mono<float[]> vectorize(String text) {
+        AiModelService aiModelService = AiServices.getModelService();
         EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small");
         return model.embedQuery(text);
     }
@@ -214,6 +212,7 @@ public class MyAiService {
 
 ## 注意事项
 
-1. **确保本插件已启用**：调用 `languageModel()` 或 `embeddingModel()` 时，如果对应的提供商未启用，会抛出 `ProviderDisabledException`
+1. **确保本插件已启用**：调用 `AiServices.getModelService()` 时，如果 ai-foundation 插件未启动，会抛出 `IllegalStateException`；调用 `languageModel()` 或 `embeddingModel()` 时，如果对应的提供商未启用，会抛出 `ProviderDisabledException`
 2. **异步 API**：所有方法返回 `Mono` 或 `Flux`，请在响应式上下文中使用，或调用 `.block()`（不推荐在响应式链中阻塞）
 3. **模型名称**：使用 `listModels()` 获取准确的 `name` 字段，不要硬编码 modelId
+4. **跨插件调用**：由于 Halo 插件 ApplicationContext 隔离，不能通过 `@Autowired` 注入 `AiModelService`，请使用 `AiServices.getModelService()` 静态方法获取

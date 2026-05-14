@@ -39,7 +39,7 @@ This is a **Halo CMS plugin** that provides shared AI foundation capabilities fo
 
 ### Module Structure
 
-- **`api/`** — Published Java SDK (`run.halo.aifoundation:api`). Other Halo plugins depend on this to call AI capabilities. Contains service interfaces (`AiModelService`, `LanguageModel`, `EmbeddingModel`), request/response types, and exceptions. Published to Maven Local.
+- **`api/`** — Published Java SDK (`run.halo.aifoundation:api`). Other Halo plugins depend on this to call AI capabilities. Contains `AiServices` (static service locator), service interfaces (`AiModelService`, `LanguageModel`, `EmbeddingModel`), request/response types, and exceptions. Published to Maven Local.
 - **`app/`** — Plugin implementation. Depends on `:api`. Contains extension definitions, provider types, endpoints, service implementations, and RBAC. Uses Spring AI for model integration.
 - **`ui/`** — Vue 3 + Rsbuild console UI. Auto-generated TypeScript API client from OpenAPI spec at `src/api/generated/`.
 
@@ -52,6 +52,8 @@ This is a **Halo CMS plugin** that provides shared AI foundation capabilities fo
 **API Key Resolution**: API keys are stored as Halo Secret references (`spec.apiKeySecretName`), resolved at runtime by `SecretResolver`. Never stored in plaintext in the provider resource.
 
 **Client Caching**: `ProviderClientCache` caches `ChatModel`/`EmbeddingModel` instances per provider, invalidated on provider update.
+
+**Cross-Plugin Service Access**: Due to Halo's plugin ApplicationContext isolation, `AiModelService` cannot be injected via `@Autowired` from other plugins. Instead, consumer plugins use `AiServices.getModelService()` — a static locator in the `api` module. `AiModelServiceImpl` registers itself on `@PostConstruct` and clears on `@PreDestroy`.
 
 **OpenAPI Code Generation**: Backend endpoints auto-generate TypeScript client code in `ui/src/api/generated/` during build. Do not edit generated files manually.
 
