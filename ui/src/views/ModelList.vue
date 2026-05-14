@@ -2,7 +2,7 @@
 import type { AiModel } from '@/api/generated'
 import { useDeleteModel } from '@/composables/useModels'
 import { CAPABILITY_OPTIONS } from '@/types'
-import { Dialog, Toast, VButton, VCard, VEmpty, VModal, VTag } from '@halo-dev/components'
+import { Dialog, VButton, VCard, VEmpty, VModal, VTag } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
 import RiChat1Line from '~icons/ri/chat-1-line'

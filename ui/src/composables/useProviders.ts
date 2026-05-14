@@ -1,19 +1,12 @@
+import { aiConsoleApiClient } from '@/api'
 import type { AiProvider } from '@/api/generated'
-import { ConsoleApiAifoundationHaloRunV1alpha1ProviderApi } from '@/api/generated/api'
-import { axiosInstance } from '@halo-dev/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-
-const providerApi = new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(
-  undefined,
-  '',
-  axiosInstance,
-)
 
 export function useProviders() {
   return useQuery<AiProvider[]>({
     queryKey: ['ai-providers'],
     queryFn: async () => {
-      const { data } = await providerApi.listProviders()
+      const { data } = await aiConsoleApiClient.provider.listProviders()
       return data
     },
   })
@@ -23,7 +16,7 @@ export function useProvider(name: string) {
   return useQuery<AiProvider>({
     queryKey: ['ai-provider', name],
     queryFn: async () => {
-      const { data } = await providerApi.getProvider({ name })
+      const { data } = await aiConsoleApiClient.provider.getProvider({ name })
       return data
     },
     enabled: !!name,
@@ -34,7 +27,7 @@ export function useCreateProvider() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (provider: AiProvider) => {
-      const { data } = await providerApi.createProvider({
+      const { data } = await aiConsoleApiClient.provider.createProvider({
         aiProvider: provider,
       })
       return data
@@ -49,7 +42,7 @@ export function useUpdateProvider() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ name, provider }: { name: string; provider: AiProvider }) => {
-      const { data } = await providerApi.updateProvider({
+      const { data } = await aiConsoleApiClient.provider.updateProvider({
         name,
         aiProvider: provider,
       })
@@ -66,7 +59,7 @@ export function useDeleteProvider() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (name: string) => {
-      await providerApi.deleteProvider({ name })
+      await aiConsoleApiClient.provider.deleteProvider({ name })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-providers'] })
@@ -78,9 +71,7 @@ export function useTestConnectivity() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (name: string) => {
-      const { data } = await axiosInstance.post(
-        `/apis/console.api.aifoundation.halo.run/v1alpha1/providers/${name}/connectivity`,
-      )
+      const { data } = await aiConsoleApiClient.debug.testProviderConnectivity({ name })
       return data
     },
     onSuccess: (_, name) => {

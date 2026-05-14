@@ -68,7 +68,9 @@ function onModelFormSaved() {
   modelFormVisible.value = false
   editingModel.value = null
   queryClient.invalidateQueries({ queryKey: ['ai-models'] })
-  queryClient.invalidateQueries({ queryKey: ['ai-models', 'provider', props.provider.metadata.name] })
+  queryClient.invalidateQueries({
+    queryKey: ['ai-models', 'provider', props.provider.metadata.name],
+  })
 }
 </script>
 
