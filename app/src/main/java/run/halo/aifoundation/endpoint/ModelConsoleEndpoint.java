@@ -19,8 +19,13 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
+import run.halo.aifoundation.ChatChunk;
+import run.halo.aifoundation.ChatRequest;
+import run.halo.aifoundation.ChunkType;
+import run.halo.aifoundation.Message;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
@@ -97,9 +102,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .required(true))
                     .response(responseBuilder().implementation(Void.class))
             )
-            .POST("models/{name}/test-chat", this::testChat,
-                builder -> builder.operationId("TestModelChat")
-                    .description("Test chat completion with a specific model.")
+            .POST("models/{name}/test-chat/stream", this::testChatStream,
+                builder -> builder.operationId("TestModelChatStream")
+                    .description("Test chat completion with streaming response.")
                     .tag(tag)
                     .parameter(parameterBuilder()
                         .name("name")
@@ -111,7 +116,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .required(false)
                         .implementation(TestChatRequest.class))
                     .response(responseBuilder()
-                        .implementation(Map.class))
+                        .implementation(ChatChunk.class))
             )
             .build();
     }
@@ -180,27 +185,31 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .then(ServerResponse.noContent().build());
     }
 
-    private Mono<ServerResponse> testChat(ServerRequest request) {
+    private Mono<ServerResponse> testChatStream(ServerRequest request) {
         var modelName = request.pathVariable("name");
-        log.info("testChat: modelName={}", modelName);
+        log.info("testChatStream: modelName={}", modelName);
 
         return request.bodyToMono(TestChatRequest.class)
             .defaultIfEmpty(new TestChatRequest())
             .flatMap(body -> {
                 var prompt = body.getPrompt() != null ? body.getPrompt() : "Hello!";
-                return Mono.fromCallable(() -> aiModelService.languageModel(modelName))
+                var chatRequest = ChatRequest.builder()
+                    .messages(List.of(Message.user(prompt)))
+                    .build();
+                Flux<ChatChunk> flux = Mono
+                    .fromCallable(() -> aiModelService.languageModel(modelName))
                     .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
-                    .flatMap(languageModel -> languageModel.chat(prompt))
-                    .flatMap(content -> ServerResponse.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(Map.of(
-                            "modelName", modelName,
-                            "content", content,
-                            "finishReason", "stop"
-                        )))
-                    .onErrorResume(e -> Mono.error(new ResponseStatusException(
-                        HttpStatus.BAD_GATEWAY,
-                        "Chat test failed: " + e.getMessage(), e)));
+                    .flatMapMany(languageModel -> languageModel.streamChat(chatRequest))
+                    .onErrorResume(e -> {
+                        log.error("Stream chat failed for model: {}", modelName, e);
+                        return Flux.just(ChatChunk.builder()
+                            .type(ChunkType.ERROR)
+                            .content("Chat test failed: " + e.getMessage())
+                            .build());
+                    });
+                return ServerResponse.ok()
+                    .contentType(MediaType.TEXT_EVENT_STREAM)
+                    .body(flux, ChatChunk.class);
             });
     }
 
