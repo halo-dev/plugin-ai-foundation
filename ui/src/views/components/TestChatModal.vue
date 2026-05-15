@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VButton, VCard } from '@halo-dev/components'
+import { VButton, VCard, VModal } from '@halo-dev/components'
 import { ref } from 'vue'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 
@@ -118,32 +118,29 @@ async function send() {
 </script>
 
 <template>
-  <div class=":uno: py-2">
-    <div class=":uno: mb-4 flex items-center justify-between">
-      <h3 class=":uno: text-base font-semibold">测试对话: {{ modelDisplayName }}</h3>
-      <VButton type="secondary" size="sm" @click="emit('close')">关闭</VButton>
-    </div>
+  <VModal :title="`测试对话: ${modelDisplayName}`" :centered="false" :width="600" ref="modal" @close="emit('close')">
+    <div class=":uno: py-2">
+      <div class=":uno: mb-4 flex flex-col gap-2.5">
+        <textarea
+          v-model="prompt"
+          rows="3"
+          placeholder="输入提示词..."
+          class=":uno: w-full resize-y border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+        />
+        <VButton type="primary" size="sm" :loading="isLoading" @click="send">
+          <template #icon>
+            <RiSendPlaneLine />
+          </template>
+          发送
+        </VButton>
+      </div>
 
-    <div class=":uno: mb-4 flex flex-col gap-2.5">
-      <textarea
-        v-model="prompt"
-        rows="3"
-        placeholder="输入提示词..."
-        class=":uno: w-full resize-y border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-      />
-      <VButton type="primary" size="sm" :loading="isLoading" @click="send">
-        <template #icon>
-          <RiSendPlaneLine />
-        </template>
-        发送
-      </VButton>
+      <div v-if="result || isLoading" class=":uno: max-h-[300px] overflow-y-auto">
+        <VCard>
+          <div v-if="isLoading && !result" class=":uno: text-gray-500">请求中...</div>
+          <div class=":uno: whitespace-pre-wrap text-sm">{{ result }}</div>
+        </VCard>
+      </div>
     </div>
-
-    <div v-if="result || isLoading" class=":uno: max-h-[300px] overflow-y-auto">
-      <VCard>
-        <div v-if="isLoading && !result" class=":uno: text-gray-500">请求中...</div>
-        <div class=":uno: whitespace-pre-wrap text-sm">{{ result }}</div>
-      </VCard>
-    </div>
-  </div>
+  </VModal>
 </template>

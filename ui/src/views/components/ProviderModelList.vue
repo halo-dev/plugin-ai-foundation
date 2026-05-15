@@ -13,8 +13,8 @@ import {
 import { computed, ref } from 'vue'
 import RiAddLine from '~icons/ri/add-line'
 import ModelCreationModal from './ModelCreationModal.vue'
-import ModelsDiscoveryModal from './ModelsDiscoveryModal.vue'
 import ProviderModelListItem from './ProviderModelListItem.vue'
+import ProviderModelsDiscoveryModal from './ProviderModelsDiscoveryModal.vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -61,7 +61,7 @@ const creationModalVisible = ref(false)
     </VEntityContainer>
   </VCard>
 
-  <ModelsDiscoveryModal
+  <ProviderModelsDiscoveryModal
     v-if="provider && discoveryModalVisible"
     :provider="provider"
     @close="discoveryModalVisible = false"

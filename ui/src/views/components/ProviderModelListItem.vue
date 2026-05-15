@@ -5,6 +5,7 @@ import { QK_MODELS } from '@/composables/use-models-fetch'
 import {
   Dialog,
   Toast,
+  VDropdownDivider,
   VDropdownItem,
   VEntity,
   VEntityField,
@@ -13,6 +14,7 @@ import {
 import { useQueryClient } from '@tanstack/vue-query'
 import { ref } from 'vue'
 import ModelEditingModal from './ModelEditingModal.vue'
+import TestChatModal from './TestChatModal.vue'
 
 const props = defineProps<{
   model: AiModel
@@ -21,7 +23,7 @@ const props = defineProps<{
 const queryClient = useQueryClient()
 
 const editingModalVisible = ref(false)
-
+const testChatModalVisible = ref(false)
 function handleDelete() {
   Dialog.warning({
     title: '删除模型',
@@ -62,6 +64,8 @@ function handleDelete() {
     </template>
     <template #dropdownItems>
       <VDropdownItem @click="editingModalVisible = true">编辑</VDropdownItem>
+      <VDropdownItem @click="testChatModalVisible = true">测试</VDropdownItem>
+      <VDropdownDivider />
       <VDropdownItem type="danger" @click="handleDelete">删除</VDropdownItem>
     </template>
   </VEntity>
@@ -70,5 +74,12 @@ function handleDelete() {
     v-if="editingModalVisible"
     :model="model"
     @close="editingModalVisible = false"
+  />
+
+  <TestChatModal
+    v-if="testChatModalVisible"
+    :model-name="model.metadata.name"
+    :model-display-name="model.spec.displayName"
+    @close="testChatModalVisible = false"
   />
 </template>
