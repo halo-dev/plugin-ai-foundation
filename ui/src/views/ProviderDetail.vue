@@ -98,6 +98,9 @@ const testConnectivityMutation = useMutation({
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['plugin:ai-foundation:provider', selectedProvider] })
   },
+  onError: (error) => {
+    Toast.error('连通性检查失败: ' + (error as Error).message)
+  },
 })
 </script>
 

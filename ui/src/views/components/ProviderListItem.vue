@@ -23,8 +23,16 @@ const providerType = useProviderType(provider)
   >
     <VAvatar class=":uno: flex-none" :src="providerType?.iconUrl" circle size="xs" />
     <div class=":uno: min-w-0 flex-1">
-      <div class=":uno: truncate text-sm font-semibold">
-        {{ provider.spec.displayName }}
+      <div class=":uno: flex items-center gap-1.5">
+        <span class=":uno: truncate text-sm font-semibold">
+          {{ provider.spec.displayName }}
+        </span>
+        <span
+          v-if="!provider.spec.enabled"
+          class=":uno: rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500"
+        >
+          已禁用
+        </span>
       </div>
     </div>
     <div class=":uno: flex-none" v-if="provider.metadata.deletionTimestamp">

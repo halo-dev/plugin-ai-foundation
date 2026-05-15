@@ -43,7 +43,22 @@ function handleDelete() {
       <VEntityField :title="model.spec.displayName" :description="model.spec.modelId" />
     </template>
     <template #end>
-      <VStatusDot v-if="model.metadata.deletionTimestamp" animate state="warning" text="删除中" />
+      <div class=":uno: flex items-center gap-1.5">
+        <span
+          v-if="!model.spec.enabled"
+          class=":uno: rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500"
+        >
+          已禁用
+        </span>
+        <span
+          v-for="cap in model.spec.capabilities"
+          :key="cap"
+          class=":uno: rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
+        >
+          {{ cap }}
+        </span>
+        <VStatusDot v-if="model.metadata.deletionTimestamp" animate state="warning" text="删除中" />
+      </div>
     </template>
     <template #dropdownItems>
       <VDropdownItem @click="editingModalVisible = true">编辑</VDropdownItem>

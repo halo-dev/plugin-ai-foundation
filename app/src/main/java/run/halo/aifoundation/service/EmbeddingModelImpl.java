@@ -129,7 +129,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
 
     private <T> List<List<T>> partition(List<T> list, int size) {
         if (size <= 0) {
-            return List.of(list);
+            throw new IllegalArgumentException("Batch size must be positive, got: " + size);
         }
         var result = new ArrayList<List<T>>();
         for (int i = 0; i < list.size(); i += size) {

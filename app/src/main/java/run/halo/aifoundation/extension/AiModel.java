@@ -35,6 +35,6 @@ public class AiModel extends AbstractExtension {
         @Schema(requiredMode = REQUIRED, description = "Endpoint type (e.g., openai-chat, openai-embedding, ollama-chat)")
         private String endpointType;
         @Schema(description = "Whether the model supports streaming text delta")
-        private Boolean supportedTextDelta;
+        private boolean supportedTextDelta = true;
     }
 }
