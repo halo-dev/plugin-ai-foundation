@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Define the Console UI behavior for managing AI providers and models, including provider list, model list, CRUD operations, and utility features.
+## Requirements
 ### Requirement: Console navigation menu
 The plugin SHALL register a Console route under the system menu group for managing AI providers and models.
 
@@ -14,7 +16,7 @@ The Console UI SHALL display a list of all `AiProvider` Extensions with their ty
 #### Scenario: View all providers
 - **WHEN** an admin opens the AI model configuration page
 - **THEN** the system SHALL fetch all providers via GET on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/providers`)
-- **AND** the response SHALL be a non-paginated array
+- **AND** the response SHALL be a non-paginated array sorted by `metadata.creationTimestamp` descending
 - **AND** each item SHALL show `providerType`, `displayName`, `enabled` status, and `status.phase`
 
 ### Requirement: Provider workspace layout
@@ -100,7 +102,7 @@ The Console UI SHALL display provider-scoped `AiModel` entries in the selected p
 #### Scenario: View all models
 - **WHEN** an admin selects a provider
 - **THEN** the system SHALL fetch models via GET on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/models`) with `fieldSelector=spec.providerName={selectedProvider}`
-- **AND** the response SHALL be a non-paginated array
+- **AND** the response SHALL be a non-paginated array sorted by `metadata.creationTimestamp` descending
 - **AND** each item SHALL show the model display name and underlying `providerResourceName/modelId` reference, where `providerResourceName = AiProvider.metadata.name`
 - **AND** each item SHALL show its group and capability tags when available
 
@@ -192,12 +194,3 @@ The Console UI SHALL provide a test chat entry that reuses the backend `test-cha
 - **THEN** the UI SHALL call the backend `test-chat` endpoint for that `providerResourceName/modelId`
 - **AND** display the returned content and available metadata
 
-## REMOVED Requirements
-
-### Requirement: Console get/delete endpoints for models and get/update endpoints for providers
-**Reason**: These are pure pass-throughs to `ReactiveExtensionClient` with no added validation or logic. Halo's Extension API provides identical behavior.
-**Migration**:
-- Get model by name → `GET /apis/aifoundation.halo.run/v1alpha1/aimodels/{name}`
-- Delete model → `DELETE /apis/aifoundation.halo.run/v1alpha1/aimodels/{name}`
-- Get provider by name → `GET /apis/aifoundation.halo.run/v1alpha1/aiproviders/{name}`
-- Update provider → `PUT /apis/aifoundation.halo.run/v1alpha1/aiproviders/{name}`
