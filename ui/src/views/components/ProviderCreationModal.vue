@@ -4,6 +4,7 @@ import { QK_PROVIDERS } from '@/composables/use-providers-fetch'
 import type { ProviderFormState } from '@/types/form'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useRouteQuery } from '@vueuse/router'
 import { useTemplateRef } from 'vue'
 import ProviderForm from './ProviderForm.vue'
 
@@ -15,6 +16,8 @@ const queryClient = useQueryClient()
 
 const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
 const form = useTemplateRef<InstanceType<typeof ProviderForm>>('form')
+
+const selectedProvider = useRouteQuery<string | undefined>('provider')
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ProviderFormState) => {
@@ -38,10 +41,11 @@ const { mutate, isPending } = useMutation({
       },
     })
   },
-  onSuccess: () => {
+  onSuccess: (data) => {
     Toast.success('供应商创建成功')
     modal.value?.close()
     queryClient.invalidateQueries({ queryKey: [QK_PROVIDERS] })
+    selectedProvider.value = data.data.metadata.name
   },
 })
 
@@ -62,9 +66,7 @@ function onSubmit(data: ProviderFormState) {
     <ProviderForm ref="form" @submit="onSubmit" />
     <template #footer>
       <VSpace>
-        <VButton type="secondary" :loading="isPending" @click="form?.submit()">
-          保存
-        </VButton>
+        <VButton type="secondary" :loading="isPending" @click="form?.submit()"> 保存 </VButton>
         <VButton @click="modal?.close()">关闭</VButton>
       </VSpace>
     </template>
