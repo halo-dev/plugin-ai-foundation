@@ -140,19 +140,23 @@ for (const model of data) {
 
 ---
 
-### 11. Provider 创建时没有校验 requiresBaseUrl
+### ~~11. Provider 创建时没有校验 requiresBaseUrl~~ ✅ FIXED (with #9)
 
 **位置**: `app/src/main/java/run/halo/aifoundation/endpoint/ProviderConsoleEndpoint.java:117-139`
 
 对于 `ollama` 和 `openailike` 这类 `requiresBaseUrl=true` 的 provider，缺少 baseUrl 时创建仍会通过，但后续调用 `resolveBaseUrl()` 时会抛 `IllegalArgumentException`。
 
+**修复**: 随第9条重构 `validateAndSaveProvider` 时一并加入。创建和更新 provider 时都会检查 `type.requiresBaseUrl()`，未填 baseUrl 直接返回 400。
+
 ---
 
-### 13. `generateName` 使用 `toLocaleLowerCase()` 依赖运行时 locale
+### ~~13. `generateName` 使用 `toLocaleLowerCase()` 依赖运行时 locale~~ ✅ FIXED
 
 **位置**: `ui/src/views/components/ModelCreationModal.vue:25-26`, `ModelsDiscoveryModal.vue:59`
 
 `toLocaleLowerCase()` 在某些 locale（如土耳其语）中将 `I` 转换为 `ı` 而非 `i`，可能导致资源名包含非预期字符。应使用 `toLowerCase()`。
+
+**修复**: `ModelCreationModal.vue` 和 `ModelsDiscoveryModal.vue` 中的 `toLocaleLowerCase()` 均改为 `toLowerCase()`。
 
 ---
 
