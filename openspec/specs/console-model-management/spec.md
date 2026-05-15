@@ -90,13 +90,9 @@ The Console UI SHALL allow admins to delete an `AiProvider` Extension.
 - **WHEN** an admin clicks delete on a provider
 - **AND** confirms the deletion in a warning dialog
 - **THEN** the system SHALL call DELETE on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/providers/{name}`)
-- **AND** the backend SHALL block deletion if the provider still has associated `AiModel` entries
+- **AND** the backend SHALL allow deletion even if the provider has associated `AiModel` entries
+- **AND** the associated models SHALL be automatically deleted by the cascade delete reconciler
 - **AND** the provider SHALL disappear from the list
-
-#### Scenario: Block deleting provider with models
-- **WHEN** an admin clicks delete on a provider that still has associated `AiModel` entries
-- **THEN** the backend SHALL reject the request with a 400 error
-- **AND** display a toast message explaining that dependent models must be removed first
 
 ### Requirement: Model list view
 The Console UI SHALL display provider-scoped `AiModel` entries in the selected provider workspace.

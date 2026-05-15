@@ -15,7 +15,7 @@ The system SHALL define a `LanguageModel` interface providing chat and streaming
 - **AND** the corresponding `AiModel` exists
 - **AND** the corresponding `AiModel` is enabled
 - **AND** the corresponding `AiProvider` is configured and enabled
-- **THEN** the system SHALL return a `LanguageModel` instance
+- **THEN** the system SHALL return a `Mono<LanguageModel>` that emits the `LanguageModel` instance on success
 
 #### Scenario: Synchronous chat
 - **WHEN** a consumer calls `languageModel.chat("Hello")`
@@ -36,7 +36,7 @@ The system SHALL define an `EmbeddingModel` interface providing text embedding c
 - **AND** the corresponding `AiModel` exists
 - **AND** the corresponding `AiModel` is enabled
 - **AND** the corresponding `AiProvider` is configured and enabled
-- **THEN** the system SHALL return an `EmbeddingModel` instance
+- **THEN** the system SHALL return a `Mono<EmbeddingModel>` that emits the `EmbeddingModel` instance on success
 
 #### Scenario: Batch embedding
 - **WHEN** a consumer calls `embeddingModel.embed(List.of("text1", "text2", "text3"))`
@@ -103,38 +103,38 @@ The system SHALL emit `ChatChunk` stream parts with standardized fields.
 
 The system SHALL expose `Mono<List<ModelInfo>> listModels()` to list all configured `AiModel` entries.
 
-#### Scenario: List all configured models
+#### Scenario: List all configured models with enabled status
 - **WHEN** a consumer calls `aiModelService.listModels()`
-- **THEN** the system SHALL return all `AiModel` Extensions with their `name` (the `metadata.name`), `providerName`, `modelId`, and `displayName`
+- **THEN** the system SHALL return all `AiModel` Extensions with their `name` (the `metadata.name`), `providerName`, `modelId`, `displayName`, and `enabled`
 
 ### Requirement: Provider info listing
 
 The system SHALL expose `Mono<List<ProviderInfo>> listProviders()` to list all configured providers and their status.
 
-#### Scenario: List all providers
+#### Scenario: List all providers with last check time
 - **WHEN** a consumer calls `aiModelService.listProviders()`
-- **THEN** the system SHALL return all `AiProvider` Extensions with their `providerType`, `displayName`, `enabled`, and `status.phase`
+- **THEN** the system SHALL return all `AiProvider` Extensions with their `name`, `displayName`, `providerType`, `enabled`, `phase`, and `lastCheckedAt`
 
 ### Requirement: Typed exception hierarchy
 
-The system SHALL return typed exceptions for different error conditions.
+The system SHALL return typed exceptions for different error conditions through the reactive error channel.
 
 #### Scenario: Unconfigured model error
 - **WHEN** a consumer calls `aiModelService.languageModel("openai-official-gpt-4o-a7f3k")`
 - **AND** no `AiModel` with that `metadata.name` exists
-- **THEN** the system SHALL throw `ModelNotFoundException` with a descriptive message
+- **THEN** the system SHALL emit `ModelNotFoundException` through the `Mono<LanguageModel>` error channel
 
 #### Scenario: Disabled provider error
 - **WHEN** a consumer calls `aiModelService.languageModel("openai-official-gpt-4o-a7f3k")`
 - **AND** the `AiModel` exists but the parent `AiProvider` is disabled
-- **THEN** the system SHALL throw `ProviderDisabledException` with a descriptive message
+- **THEN** the system SHALL emit `ProviderDisabledException` through the `Mono<LanguageModel>` error channel
 
 #### Scenario: Disabled model error
 - **WHEN** a consumer calls `aiModelService.languageModel("openai-official-gpt-4o-a7f3k")` or `aiModelService.embeddingModel("openai-official-text-embedding-3-small-b2c4d")`
 - **AND** the `AiModel` exists but its `spec.enabled` is `false`
 - **AND** the parent `AiProvider` is enabled
-- **THEN** the system SHALL throw `ModelDisabledException` with a descriptive message
+- **THEN** the system SHALL emit `ModelDisabledException` through the reactive error channel
 
 #### Scenario: Provider API error
 - **WHEN** a provider API returns an HTTP error (e.g., 401 Unauthorized)
-- **THEN** the system SHALL throw `ProviderApiException` with `statusCode` and `providerType` fields set
+- **THEN** the system SHALL emit `ProviderApiException` with `statusCode` and `providerType` fields set through the reactive error channel
