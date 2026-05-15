@@ -196,9 +196,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 var chatRequest = ChatRequest.builder()
                     .messages(List.of(Message.user(prompt)))
                     .build();
-                Flux<ChatChunk> flux = Mono
-                    .fromCallable(() -> aiModelService.languageModel(modelName))
-                    .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                Flux<ChatChunk> flux = aiModelService.languageModel(modelName)
                     .flatMapMany(languageModel -> languageModel.streamChat(chatRequest))
                     .onErrorResume(e -> {
                         log.error("Stream chat failed for model: {}", modelName, e);

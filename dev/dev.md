@@ -37,8 +37,8 @@ AiModelService aiModelService = AiServices.getModelService();
 
 | 方法 | 返回类型 | 说明 |
 |------|---------|------|
-| `languageModel(String modelName)` | `LanguageModel` | 获取指定语言模型实例 |
-| `embeddingModel(String modelName)` | `EmbeddingModel` | 获取指定嵌入模型实例 |
+| `languageModel(String modelName)` | `Mono<LanguageModel>` | 获取指定语言模型实例（需在响应式上下文中订阅） |
+| `embeddingModel(String modelName)` | `Mono<EmbeddingModel>` | 获取指定嵌入模型实例（需在响应式上下文中订阅） |
 | `listModels()` | `Mono<List<ModelInfo>>` | 列出所有已配置的模型 |
 | `listProviders()` | `Mono<List<ProviderInfo>>` | 列出所有已配置的提供商 |
 
@@ -53,7 +53,7 @@ AiModelService aiModelService = AiServices.getModelService();
 ### 简单对话
 
 ```java
-LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat");
+LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat").block();
 
 model.chat("你好，请介绍一下 Halo CMS")
     .subscribe(response -> {
@@ -64,7 +64,7 @@ model.chat("你好，请介绍一下 Halo CMS")
 ### 流式对话（推荐用于聊天场景）
 
 ```java
-LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat");
+LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat").block();
 
 ChatRequest request = ChatRequest.builder()
     .messages(List.of(
@@ -114,7 +114,7 @@ Message.system("系统提示词");
 ### 简单嵌入
 
 ```java
-EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small");
+EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small").block();
 
 model.embedQuery("这是一段需要向量化的文本")
     .subscribe(embedding -> {
@@ -126,7 +126,7 @@ model.embedQuery("这是一段需要向量化的文本")
 ### 批量嵌入
 
 ```java
-EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small");
+EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small").block();
 
 List<String> texts = List.of("文本1", "文本2", "文本3");
 
@@ -198,21 +198,21 @@ public class MyAiService {
 
     public Mono<String> summarize(String content) {
         AiModelService aiModelService = AiServices.getModelService();
-        LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat");
-        return model.chat("请总结以下内容：\n" + content);
+        return aiModelService.languageModel("deepseek/deepseek-chat")
+            .flatMap(model -> model.chat("请总结以下内容：\n" + content));
     }
 
     public Mono<float[]> vectorize(String text) {
         AiModelService aiModelService = AiServices.getModelService();
-        EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small");
-        return model.embedQuery(text);
+        return aiModelService.embeddingModel("openai/text-embedding-3-small")
+            .flatMap(model -> model.embedQuery(text));
     }
 }
 ```
 
 ## 注意事项
 
-1. **确保本插件已启用**：调用 `AiServices.getModelService()` 时，如果 ai-foundation 插件未启动，会抛出 `IllegalStateException`；调用 `languageModel()` 或 `embeddingModel()` 时，如果对应的提供商未启用，会抛出 `ProviderDisabledException`
-2. **异步 API**：所有方法返回 `Mono` 或 `Flux`，请在响应式上下文中使用，或调用 `.block()`（不推荐在响应式链中阻塞）
+1. **确保本插件已启用**：调用 `AiServices.getModelService()` 时，如果 ai-foundation 插件未启动，会抛出 `IllegalStateException`；调用 `languageModel()` 或 `embeddingModel()` 时，如果对应的提供商未启用，会通过 `Mono` error channel 抛出 `ProviderDisabledException`
+2. **异步 API**：`languageModel()` 和 `embeddingModel()` 返回 `Mono`，需要在响应式上下文中通过 `.flatMap()` 链式调用，或在非响应式上下文中调用 `.block()` 获取实例。`chat()`、`streamChat()`、`embed()` 等方法同样返回 `Mono`/`Flux`
 3. **模型名称**：使用 `listModels()` 获取准确的 `name` 字段，不要硬编码 modelId
 4. **跨插件调用**：由于 Halo 插件 ApplicationContext 隔离，不能通过 `@Autowired` 注入 `AiModelService`，请使用 `AiServices.getModelService()` 静态方法获取

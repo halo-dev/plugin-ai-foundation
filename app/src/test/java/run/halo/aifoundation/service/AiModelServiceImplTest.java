@@ -1,7 +1,6 @@
 package run.halo.aifoundation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -51,8 +50,8 @@ class AiModelServiceImplTest {
     void listModels_returnsAllModels() {
         when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
             .thenReturn(Flux.just(
-                aiModel("openai-prod-gpt-4-abc", "provider-a", "gpt-4", "GPT-4"),
-                aiModel("ollama-local-claude-3-xyz", "provider-b", "claude-3", "Claude 3")
+                aiModel("openai-prod-gpt-4-abc", "provider-a", "gpt-4", "GPT-4", true),
+                aiModel("ollama-local-claude-3-xyz", "provider-b", "claude-3", "Claude 3", true)
             ));
 
         StepVerifier.create(service.listModels())
@@ -116,39 +115,56 @@ class AiModelServiceImplTest {
     // ---- languageModel — fetch by metadata.name ----
 
     @Test
-    void languageModel_modelNotFound_throwsModelNotFoundException() {
+    void languageModel_modelNotFound_emitsModelNotFoundException() {
         when(client.fetch(AiModel.class, "nonexistent-model")).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.languageModel("nonexistent-model"))
-            .isInstanceOf(ModelNotFoundException.class);
+        StepVerifier.create(service.languageModel("nonexistent-model"))
+            .expectError(ModelNotFoundException.class)
+            .verify();
     }
 
     @Test
-    void languageModel_disabledProvider_throwsProviderDisabledException() {
+    void languageModel_disabledModel_emitsModelDisabledException() {
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", false);
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
+
+        StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
+            .expectErrorSatisfies(e -> assertThat(e)
+                .isInstanceOf(run.halo.aifoundation.ModelDisabledException.class)
+                .hasMessageContaining("openai-prod-gpt-4-abc"))
+            .verify();
+    }
+
+    @Test
+    void languageModel_disabledProvider_emitsProviderDisabledException() {
         var provider = aiProvider("openai-prod", "openai", false);
-        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4");
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
 
         when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
 
-        assertThatThrownBy(() -> service.languageModel("openai-prod-gpt-4-abc"))
-            .isInstanceOf(ProviderDisabledException.class);
+        StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
+            .expectError(ProviderDisabledException.class)
+            .verify();
     }
 
     @Test
-    void languageModel_providerNotFound_throwsModelNotFoundException() {
-        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4");
+    void languageModel_providerNotFound_emitsModelNotFoundException() {
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
         when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.languageModel("openai-prod-gpt-4-abc"))
-            .isInstanceOf(ModelNotFoundException.class)
-            .hasMessageContaining("Provider not found");
+        StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
+            .expectErrorSatisfies(e -> assertThat(e)
+                .isInstanceOf(ModelNotFoundException.class)
+                .hasMessageContaining("Provider not found"))
+            .verify();
     }
 
     // ---- helpers ----
 
-    private AiModel aiModel(String name, String providerName, String modelId, String displayName) {
+    private AiModel aiModel(String name, String providerName, String modelId,
+                            String displayName, boolean enabled) {
         var model = new AiModel();
         var metadata = new Metadata();
         metadata.setName(name);
@@ -157,6 +173,7 @@ class AiModelServiceImplTest {
         spec.setProviderName(providerName);
         spec.setModelId(modelId);
         spec.setDisplayName(displayName);
+        spec.setEnabled(enabled);
         model.setSpec(spec);
         return model;
     }

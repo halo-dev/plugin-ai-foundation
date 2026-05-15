@@ -45,56 +45,64 @@ public class AiModelServiceImpl implements AiModelService {
     }
 
     @Override
-    public LanguageModel languageModel(String modelName) {
-        var aiModel = fetchAiModel(modelName);
-        var providerName = aiModel.getSpec().getProviderName();
-        var modelId = aiModel.getSpec().getModelId();
-        var provider = fetchProvider(providerName);
-
-        if (!aiModel.getSpec().isEnabled()) {
-            throw new ModelDisabledException(modelName);
-        }
-
-        if (!provider.getSpec().isEnabled()) {
-            throw new ProviderDisabledException(providerName);
-        }
-
-        var apiKey = resolveApiKey(provider);
-        var chatModel = providerClientCache.getOrCreateChatModel(provider, apiKey, modelId);
-
-        return new LanguageModelImpl(chatModel, provider.getSpec().getProviderType());
+    public Mono<LanguageModel> languageModel(String modelName) {
+        return fetchAiModel(modelName)
+            .flatMap(aiModel -> {
+                if (!aiModel.getSpec().isEnabled()) {
+                    return Mono.error(new ModelDisabledException(modelName));
+                }
+                var providerName = aiModel.getSpec().getProviderName();
+                var modelId = aiModel.getSpec().getModelId();
+                return fetchProvider(providerName)
+                    .flatMap(provider -> {
+                        if (!provider.getSpec().isEnabled()) {
+                            return Mono.error(new ProviderDisabledException(providerName));
+                        }
+                        return resolveApiKey(provider)
+                            .map(apiKey -> {
+                                var chatModel = providerClientCache
+                                    .getOrCreateChatModel(provider, apiKey, modelId);
+                                return new LanguageModelImpl(
+                                    chatModel, provider.getSpec().getProviderType());
+                            });
+                    });
+            });
     }
 
     @Override
-    public EmbeddingModel embeddingModel(String modelName) {
-        var aiModel = fetchAiModel(modelName);
-        var providerName = aiModel.getSpec().getProviderName();
-        var modelId = aiModel.getSpec().getModelId();
-        var provider = fetchProvider(providerName);
-
-        if (!aiModel.getSpec().isEnabled()) {
-            throw new ModelDisabledException(modelName);
-        }
-
-        if (!provider.getSpec().isEnabled()) {
-            throw new ProviderDisabledException(providerName);
-        }
-
-        var apiKey = resolveApiKey(provider);
-        AiProviderType type = providerClientCache.getProviderType(provider.getSpec().getProviderType());
-        var springEmbeddingModel = providerClientCache.getOrCreateEmbeddingModel(provider, apiKey, modelId);
-
-        if (springEmbeddingModel == null) {
-            throw new ModelNotFoundException(
-                "Provider '" + providerName + "' does not support embeddings");
-        }
-
-        return new EmbeddingModelImpl(
-            springEmbeddingModel,
-            provider.getSpec().getProviderType(),
-            type.maxEmbeddingsPerCall(),
-            type.supportsParallelCalls()
-        );
+    public Mono<EmbeddingModel> embeddingModel(String modelName) {
+        return fetchAiModel(modelName)
+            .flatMap(aiModel -> {
+                if (!aiModel.getSpec().isEnabled()) {
+                    return Mono.error(new ModelDisabledException(modelName));
+                }
+                var providerName = aiModel.getSpec().getProviderName();
+                var modelId = aiModel.getSpec().getModelId();
+                return fetchProvider(providerName)
+                    .flatMap(provider -> {
+                        if (!provider.getSpec().isEnabled()) {
+                            return Mono.error(new ProviderDisabledException(providerName));
+                        }
+                        return resolveApiKey(provider)
+                            .map(apiKey -> {
+                                AiProviderType type = providerClientCache
+                                    .getProviderType(provider.getSpec().getProviderType());
+                                var springEmbeddingModel = providerClientCache
+                                    .getOrCreateEmbeddingModel(provider, apiKey, modelId);
+                                if (springEmbeddingModel == null) {
+                                    throw new ModelNotFoundException(
+                                        "Provider '" + providerName
+                                            + "' does not support embeddings");
+                                }
+                                return new EmbeddingModelImpl(
+                                    springEmbeddingModel,
+                                    provider.getSpec().getProviderType(),
+                                    type.maxEmbeddingsPerCall(),
+                                    type.supportsParallelCalls()
+                                );
+                            });
+                    });
+            });
     }
 
     @Override
@@ -131,21 +139,19 @@ public class AiModelServiceImpl implements AiModelService {
             .collectList();
     }
 
-    private AiModel fetchAiModel(String modelName) {
+    private Mono<AiModel> fetchAiModel(String modelName) {
         return client.fetch(AiModel.class, modelName)
-            .blockOptional()
-            .orElseThrow(() -> new ModelNotFoundException(modelName));
+            .switchIfEmpty(Mono.error(new ModelNotFoundException(modelName)));
     }
 
-    private AiProvider fetchProvider(String providerName) {
+    private Mono<AiProvider> fetchProvider(String providerName) {
         return client.fetch(AiProvider.class, providerName)
-            .blockOptional()
-            .orElseThrow(() -> new ModelNotFoundException(
-                "Provider not found: " + providerName));
+            .switchIfEmpty(Mono.error(new ModelNotFoundException(
+                "Provider not found: " + providerName)));
     }
 
-    private String resolveApiKey(AiProvider provider) {
+    private Mono<String> resolveApiKey(AiProvider provider) {
         var secretName = provider.getSpec().getApiKeySecretName();
-        return secretResolver.resolveApiKey(secretName).block();
+        return secretResolver.resolveApiKey(secretName);
     }
 }

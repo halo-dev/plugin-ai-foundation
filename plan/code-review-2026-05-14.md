@@ -187,16 +187,20 @@ for (const model of data) {
 - 新增 `checkModelUniqueness` 方法，通过 `fetch` 单条查询检查重复（比 `list` 所有模型快得多）
 - 前端 `ModelCreationModal` 和 `ModelsDiscoveryModal` 不再传 `generateName`
 
-### 17. 缺少 provider→model 的级联删除机制
+### ~~17. 缺少 provider→model 的级联删除机制~~ 🔄 CHANGE: `provider-model-cascade-delete`
 
 `ProviderConsoleEndpoint` 在删除 provider 前检查了关联模型，但这只是 console API 层的保护。如果通过 Halo Core API 直接删除 Provider，会留下"孤儿" AiModel 记录（`spec.providerName` 指向不存在的 provider）。
 
+**修复**: 使用 Halo Reconciler Finalizer 模式实现级联删除。`AiProviderReconciler` 在 provider 被删除时自动清理关联的 `AiModel`。
+
 ---
 
-### 18. ModelInfo / ProviderInfo 缺少关键状态字段
+### ~~18. ModelInfo / ProviderInfo 缺少关键状态字段~~ 🔄 CHANGE: `enrich-model-provider-info`
 
 - `ModelInfo` 没有 `enabled` 字段，消费插件无法知道模型是否可用。
 - `ProviderInfo` 没有 `lastCheckedAt` 字段，UI 无法展示上次连通性检查时间。
+
+**修复**: `ModelInfo` 新增 `enabled` 字段，`ProviderInfo` 新增 `lastCheckedAt` 字段，`AiModelServiceImpl` 在组装 DTO 时填充。
 
 ---
 
@@ -228,9 +232,11 @@ private Boolean supportedTextDelta;
 
 ---
 
-### 23. TestChatModal 不支持流式输出
+### ~~23. TestChatModal 不支持流式输出~~ 🔄 CHANGE: `test-chat-streaming`
 
 UI 显示"测试对话"，但 `test-chat` endpoint 返回完整响应（`Mono<Map>`），不是 SSE 流。大模型长回复时用户需等待整个响应完成后才能看到内容。
+
+**修复**: 新增 `POST /models/{name}/test-chat/stream` SSE endpoint，前端 `TestChatModal` 改用 `fetch()` + `ReadableStream` 消费流式响应。
 
 ---
 
@@ -260,11 +266,13 @@ UI 显示"测试对话"，但 `test-chat` endpoint 返回完整响应（`Mono<Ma
 
 ## 其他代码问题
 
-### 27. AiModelServiceImpl 在 reactive 上下文中调用 `.block()`
+### ~~27. AiModelServiceImpl 在 reactive 上下文中调用 `.block()`~~ ✅ FIXED
 
 **位置**: `app/src/main/java/run/halo/aifoundation/service/AiModelServiceImpl.java:121-137`
 
 `fetchAiModel`、`fetchProvider`、`resolveApiKey` 都在 reactive pipeline 中调用了 `.block()`。虽然 `languageModel()` 和 `embeddingModel()` 是同步 API，但如果消费插件在 Netty event loop 线程中调用，会阻塞 IO 线程。
+
+**修复**: 将 `AiModelService.languageModel()` / `embeddingModel()` 改为返回 `Mono<LanguageModel>` / `Mono<EmbeddingModel>`，重写实现为纯 reactive chain，彻底消除 `.block()`。
 
 ---
 
