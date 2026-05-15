@@ -66,6 +66,7 @@ tasks.named('generatePluginComponentsIdx') {
 }
 
 tasks.named('jar') {
+    archiveBaseName = "plugin-ai-foundation"
     dependsOn(':api:jar')
 }
 
