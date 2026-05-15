@@ -23,6 +23,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
@@ -37,6 +38,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
+    private final ProviderClientCache providerClientCache;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -209,6 +211,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         }
         var providerName = model.getSpec().getProviderName();
         var modelId = model.getSpec().getModelId();
+        var endpointType = model.getSpec().getEndpointType();
 
         if (providerName == null || providerName.isBlank()) {
             return Mono.error(
@@ -218,11 +221,29 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             return Mono.error(
                 new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelId is required"));
         }
+        if (endpointType == null || endpointType.isBlank()) {
+            return Mono.error(
+                new ResponseStatusException(HttpStatus.BAD_REQUEST, "endpointType is required"));
+        }
 
         return client.fetch(AiProvider.class, providerName)
             .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Provider not found: " + providerName)))
-            .then(Mono.empty());
+            .flatMap(provider -> {
+                var providerType = provider.getSpec().getProviderType();
+                var type = providerClientCache.getProviderTypeMap().get(providerType);
+                if (type == null) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Unsupported provider type: " + providerType));
+                }
+                var supportedTypes = type.getSupportedEndpointTypes();
+                if (!supportedTypes.contains(endpointType)) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Endpoint type '" + endpointType + "' is not supported by provider type '"
+                            + providerType + "'. Supported types: " + supportedTypes));
+                }
+                return Mono.empty();
+            });
     }
 
     private Mono<Void> checkModelUniqueness(AiModel model, String excludeName) {
