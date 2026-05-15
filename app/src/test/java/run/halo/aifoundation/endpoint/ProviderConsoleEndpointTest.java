@@ -133,13 +133,14 @@ class ProviderConsoleEndpointTest {
     }
 
     @Test
-    void delete_withAssociatedModels_returns400() {
-        var model = model("openai-prod", "gpt-4");
-        when(client.listAll(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(model));
+    void delete_withAssociatedModels_returns204() {
+        var p = provider("openai-prod", "openai");
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(p));
+        when(client.delete(p)).thenReturn(Mono.just(p));
 
         webTestClient.delete().uri("/providers/openai-prod")
             .exchange()
-            .expectStatus().isBadRequest();
+            .expectStatus().isNoContent();
     }
 
     @Test

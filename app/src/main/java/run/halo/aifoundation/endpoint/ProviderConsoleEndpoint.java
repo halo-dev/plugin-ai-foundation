@@ -31,7 +31,6 @@ import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
-import run.halo.app.extension.index.query.Queries;
 
 @Slf4j
 @Component
@@ -204,27 +203,12 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> deleteProvider(ServerRequest request) {
         var name = request.pathVariable("name");
-        var listOptions = ListOptions.builder()
-            .fieldQuery(Queries.equal("spec.providerName", name))
-            .build();
-        return client.listAll(AiModel.class, listOptions, null)
-            .hasElements()
-            .flatMap(hasModels -> {
-                if (Boolean.TRUE.equals(hasModels)) {
-                    return Mono.error(
-                        new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Cannot delete provider '" + name
-                                + "': it has associated AI models. "
-                                + "Please delete all models first."));
-                }
-                return client.fetch(AiProvider.class, name)
-                    .switchIfEmpty(Mono.error(
-                        new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Provider not found: " + name)))
-                    .flatMap(client::delete)
-                    .then(ServerResponse.noContent().build());
-            });
+        return client.fetch(AiProvider.class, name)
+            .switchIfEmpty(Mono.error(
+                new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Provider not found: " + name)))
+            .flatMap(client::delete)
+            .then(ServerResponse.noContent().build());
     }
 
     private Mono<ServerResponse> discoverModels(ServerRequest request) {
