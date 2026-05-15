@@ -17,7 +17,7 @@ import ProviderList from './components/ProviderList.vue'
       <ProviderList />
     </div>
 
-    <div class=":uno: min-w-0 flex-1 shrink overflow-auto p-2">
+    <div class=":uno: min-w-0 flex-1 shrink overflow-auto p-2" style="scrollbar-gutter: stable">
       <ProviderDetail />
     </div>
   </div>
