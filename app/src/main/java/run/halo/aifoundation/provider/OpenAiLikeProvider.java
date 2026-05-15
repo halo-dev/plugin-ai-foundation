@@ -26,7 +26,17 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
 
     @Override
     public String getDisplayName() {
-        return "OpenAI Compatible";
+        return "OpenAI 兼容";
+    }
+
+    @Override
+    public String getDescription() {
+        return "用于配置 OpenAI 兼容的 AI 提供商，支持对话和嵌入功能。";
+    }
+    
+    @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/openai.png";
     }
 
     @Override

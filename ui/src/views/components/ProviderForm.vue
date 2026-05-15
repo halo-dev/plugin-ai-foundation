@@ -75,8 +75,25 @@ defineExpose({
       :disabled="isEditing"
       v-model="providerType"
       :value="formState?.providerType"
-      :help="providerTypeHelp"
-    />
+    >
+      <template
+        v-if="selectedProviderType?.description || selectedProviderType?.documentationUrl"
+        #help
+      >
+        <div class=":uno: mt-2 flex flex-col text-xs text-gray-500 space-y-1">
+          <div>{{ selectedProviderType?.description }}</div>
+          <div v-if="selectedProviderType?.documentationUrl">
+            文档地址：<a
+              :href="selectedProviderType?.documentationUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class=":uno: text-gray-900 hover:text-gray-600 hover:underline"
+              >{{ selectedProviderType?.documentationUrl }}</a
+            >
+          </div>
+        </div>
+      </template>
+    </FormKit>
 
     <FormKit
       type="text"
