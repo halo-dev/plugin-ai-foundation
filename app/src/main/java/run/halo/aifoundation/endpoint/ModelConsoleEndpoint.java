@@ -83,6 +83,18 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(AiModel.class))
                     .response(responseBuilder().implementation(AiModel.class))
             )
+            .DELETE("models/{name}", this::deleteModel,
+                builder -> builder.operationId("DeleteModel")
+                    .description("Delete an AI model.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Model name")
+                        .implementation(String.class)
+                        .required(true))
+                    .response(responseBuilder().implementation(Void.class))
+            )
             .POST("models/{name}/test-chat", this::testChat,
                 builder -> builder.operationId("TestModelChat")
                     .description("Test chat completion with a specific model.")
@@ -145,6 +157,15 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 )
             )
             .flatMap(updated -> ServerResponse.ok().bodyValue(updated));
+    }
+
+    private Mono<ServerResponse> deleteModel(ServerRequest request) {
+        var name = request.pathVariable("name");
+        return client.fetch(AiModel.class, name)
+            .switchIfEmpty(Mono.error(
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Model not found: " + name)))
+            .flatMap(client::delete)
+            .then(ServerResponse.noContent().build());
     }
 
     private Mono<ServerResponse> testChat(ServerRequest request) {

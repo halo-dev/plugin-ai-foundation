@@ -35,8 +35,10 @@ class ProviderConsoleEndpointTest {
         // Simulate "openai" as a known provider type
         var openAiType = mock(AiProviderType.class);
         when(openAiType.getProviderType()).thenReturn("openai");
+        when(openAiType.requiresBaseUrl()).thenReturn(false);
         when(providerClientCache.getProviderTypeMap())
             .thenReturn(Map.of("openai", openAiType));
+        when(providerClientCache.getProviderType("openai")).thenReturn(openAiType);
 
         var endpoint = new ProviderConsoleEndpoint(client, providerClientCache, secretResolver);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())

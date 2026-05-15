@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { aiConsoleApiClient, aiCoreApiClient } from '@/api'
+import { aiConsoleApiClient } from '@/api'
 import { AiProviderStatusPhaseEnum } from '@/api/generated'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
 import { QK_PROVIDERS } from '@/composables/use-providers-fetch'
@@ -33,7 +33,7 @@ const { data: provider, isLoading } = useQuery({
       return null
     }
 
-    const { data } = await aiCoreApiClient.provider.getAiProvider({
+    const { data } = await aiConsoleApiClient.provider.getProvider({
       name: selectedProvider.value,
     })
     return data

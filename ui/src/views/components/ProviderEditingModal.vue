@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { aiCoreApiClient } from '@/api'
+import { aiConsoleApiClient } from '@/api'
 import type { AiProvider } from '@/api/generated'
 import { QK_PROVIDERS } from '@/composables/use-providers-fetch'
 import type { ProviderFormState } from '@/types/form'
@@ -23,7 +23,7 @@ const form = useTemplateRef<InstanceType<typeof ProviderForm>>('form')
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ProviderFormState) => {
-    return await aiCoreApiClient.provider.updateAiProvider({
+    return await aiConsoleApiClient.provider.updateProvider({
       name: props.provider.metadata.name,
       aiProvider: {
         ...props.provider,

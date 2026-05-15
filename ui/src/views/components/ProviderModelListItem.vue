@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { aiCoreApiClient } from '@/api'
+import { aiConsoleApiClient } from '@/api'
 import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import {
@@ -28,7 +28,7 @@ function handleDelete() {
     description: '确定要删除该模型吗？删除后调用方将无法使用该模型',
     confirmType: 'danger',
     onConfirm: async () => {
-      await aiCoreApiClient.model.deleteAiModel({
+      await aiConsoleApiClient.model.deleteModel({
         name: props.model.metadata.name,
       })
       Toast.success('模型删除成功')

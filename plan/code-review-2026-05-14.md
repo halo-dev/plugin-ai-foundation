@@ -103,7 +103,7 @@ const endpointTypeOptions = [
 
 ---
 
-### 9. Model 和 Provider 的编辑/删除走 Core API，与创建走不同路径
+### ~~9. Model 和 Provider 的编辑/删除走 Core API，与创建走不同路径~~ ✅ FIXED
 
 **位置**: 多个前端文件
 
@@ -115,6 +115,12 @@ const endpointTypeOptions = [
 | Model 删除 | `aiCoreApiClient.model.deleteAiModel()` (core API) |
 
 **后果**: console endpoint 中的业务校验（provider type 校验、重复模型检查、关联模型检查）被绕过。
+
+**修复**:
+- ProviderConsoleEndpoint 新增 `GET /providers/{name}` 和 `PUT /providers/{name}`
+- ModelConsoleEndpoint 新增 `DELETE /models/{name}`
+- 前端 `ProviderDetail.vue`/`ProviderEditingModal.vue`/`ProviderModelListItem.vue` 改为使用 console API
+- 重新生成 TypeScript API client
 
 ---
 

@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:30241",
+    "url" : "http://localhost:61719",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -506,6 +506,26 @@
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}" : {
+      "delete" : {
+        "description" : "Delete an AI model.",
+        "operationId" : "DeleteModel",
+        "parameters" : [ {
+          "description" : "Model name",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : { },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      },
       "put" : {
         "description" : "Update an AI model.",
         "operationId" : "UpdateModel",
@@ -667,6 +687,68 @@
         "responses" : {
           "default" : {
             "content" : { },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      },
+      "get" : {
+        "description" : "Get an AI provider by name.",
+        "operationId" : "GetProvider",
+        "parameters" : [ {
+          "description" : "Provider name",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AiProvider"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      },
+      "put" : {
+        "description" : "Update an AI provider.",
+        "operationId" : "UpdateProvider",
+        "parameters" : [ {
+          "description" : "Provider name",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AiProvider"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AiProvider"
+                }
+              }
+            },
             "description" : "default response"
           }
         },

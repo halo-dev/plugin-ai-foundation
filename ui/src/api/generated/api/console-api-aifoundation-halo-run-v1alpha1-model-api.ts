@@ -75,6 +75,47 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             };
         },
         /**
+         * Delete an AI model.
+         * @param {string} name Model name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteModel: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('deleteModel', 'name', name)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * List all AI models.
          * @param {Array<string>} [labelSelector] Label selector for filtering models
          * @param {Array<string>} [fieldSelector] Field selector for filtering models (e.g., spec.providerName&#x3D;openai)
@@ -236,6 +277,18 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Delete an AI model.
+         * @param {string} name Model name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async deleteModel(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.deleteModel(name, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.deleteModel']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * List all AI models.
          * @param {Array<string>} [labelSelector] Label selector for filtering models
          * @param {Array<string>} [fieldSelector] Field selector for filtering models (e.g., spec.providerName&#x3D;openai)
@@ -294,6 +347,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.createModel(requestParameters.aiModel, options).then((request) => request(axios, basePath));
         },
         /**
+         * Delete an AI model.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.deleteModel(requestParameters.name, options).then((request) => request(axios, basePath));
+        },
+        /**
          * List all AI models.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -335,6 +397,20 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModel
      */
     readonly aiModel: AiModel
+}
+
+/**
+ * Request parameters for deleteModel operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest {
+    /**
+     * Model name
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModel
+     */
+    readonly name: string
 }
 
 /**
@@ -416,6 +492,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
      */
     public createModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest, options?: RawAxiosRequestConfig) {
         return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).createModel(requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Delete an AI model.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
+     */
+    public deleteModel(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).deleteModel(requestParameters.name, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

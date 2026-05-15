@@ -53,10 +53,37 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                     .response(responseBuilder()
                         .implementationArray(AiProvider.class))
             )
+            .GET("providers/{name}", this::getProvider,
+                builder -> builder.operationId("GetProvider")
+                    .description("Get an AI provider by name.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Provider name")
+                        .implementation(String.class)
+                        .required(true))
+                    .response(responseBuilder().implementation(AiProvider.class))
+            )
             .POST("providers", this::createProvider,
                 builder -> builder.operationId("CreateProvider")
                     .description("Create a new AI provider.")
                     .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(AiProvider.class))
+                    .response(responseBuilder().implementation(AiProvider.class))
+            )
+            .PUT("providers/{name}", this::updateProvider,
+                builder -> builder.operationId("UpdateProvider")
+                    .description("Update an AI provider.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Provider name")
+                        .implementation(String.class)
+                        .required(true))
                     .requestBody(requestBodyBuilder()
                         .required(true)
                         .implementation(AiProvider.class))
@@ -114,28 +141,65 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             .flatMap(providers -> ServerResponse.ok().bodyValue(providers));
     }
 
+    private Mono<ServerResponse> getProvider(ServerRequest request) {
+        var name = request.pathVariable("name");
+        return client.fetch(AiProvider.class, name)
+            .switchIfEmpty(Mono.error(
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider not found: " + name)))
+            .flatMap(provider -> ServerResponse.ok().bodyValue(provider));
+    }
+
     private Mono<ServerResponse> createProvider(ServerRequest request) {
         return request.bodyToMono(AiProvider.class)
-            .flatMap(provider -> {
-                var providerType = provider.getSpec() != null
-                    ? provider.getSpec().getProviderType() : null;
-                if (providerType == null
-                    || !providerClientCache.getProviderTypeMap().containsKey(providerType)) {
-                    return Mono.error(new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Unsupported provider type: " + providerType
-                            + ". Supported types: "
-                            + providerClientCache.getProviderTypeMap().keySet()));
-                }
-                if (provider.getMetadata() == null) {
-                    provider.setMetadata(new Metadata());
-                }
-                if (provider.getStatus() == null) {
-                    provider.setStatus(new AiProvider.AiProviderStatus());
-                }
-                return client.create(provider);
-            })
+            .flatMap(provider -> validateAndSaveProvider(provider, null))
             .flatMap(created -> ServerResponse.ok().bodyValue(created));
+    }
+
+    private Mono<ServerResponse> updateProvider(ServerRequest request) {
+        var name = request.pathVariable("name");
+        return request.bodyToMono(AiProvider.class)
+            .flatMap(provider -> validateAndSaveProvider(provider, name))
+            .flatMap(updated -> ServerResponse.ok().bodyValue(updated));
+    }
+
+    private Mono<AiProvider> validateAndSaveProvider(AiProvider provider, String existingName) {
+        var providerType = provider.getSpec() != null
+            ? provider.getSpec().getProviderType() : null;
+        if (providerType == null
+            || !providerClientCache.getProviderTypeMap().containsKey(providerType)) {
+            return Mono.error(new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Unsupported provider type: " + providerType
+                    + ". Supported types: "
+                    + providerClientCache.getProviderTypeMap().keySet()));
+        }
+        var type = providerClientCache.getProviderType(providerType);
+        if (type.requiresBaseUrl()) {
+            var baseUrl = provider.getSpec().getBaseUrl();
+            if (baseUrl == null || baseUrl.isBlank()) {
+                return Mono.error(new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Provider type '" + providerType + "' requires baseUrl"));
+            }
+        }
+        if (existingName == null) {
+            if (provider.getMetadata() == null) {
+                provider.setMetadata(new Metadata());
+            }
+            if (provider.getStatus() == null) {
+                provider.setStatus(new AiProvider.AiProviderStatus());
+            }
+            return client.create(provider);
+        }
+        return client.fetch(AiProvider.class, existingName)
+            .switchIfEmpty(Mono.error(
+                new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Provider not found: " + existingName)))
+            .flatMap(existing -> {
+                existing.setSpec(provider.getSpec());
+                providerClientCache.invalidate(existingName);
+                return client.update(existing);
+            });
     }
 
     private Mono<ServerResponse> deleteProvider(ServerRequest request) {
