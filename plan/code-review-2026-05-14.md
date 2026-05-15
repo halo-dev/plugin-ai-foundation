@@ -93,11 +93,13 @@ const endpointTypeOptions = [
 
 ---
 
-### 8. SecretResolver 对缺失/空 secret 返回空字符串而非报错
+### ~~8. SecretResolver 对缺失/空 secret 返回空字符串而非报错~~ ✅ FIXED
 
 **位置**: `app/src/main/java/run/halo/aifoundation/provider/support/SecretResolver.java:21-46`
 
 当 secret 不存在或没有数据时返回 `""`，导致后续 API 调用传入空 API key，远程服务返回 401/403，错误信息是 provider 的原始响应而非清晰的"API key 未配置"。
+
+**修复**: 当 `secretName` 非空但 secret 不存在、或 secret 的 `stringData` 为空时，抛出 `IllegalArgumentException` 并附带清晰错误信息。`null`/`blank` 的 `secretName` 仍返回 `""`（适配 Ollama 等无需 API key 的 provider）。
 
 ---
 

@@ -42,12 +42,12 @@ class SecretResolverTest {
     }
 
     @Test
-    void resolveApiKey_secretNotFound_returnsEmpty() {
+    void resolveApiKey_secretNotFound_throwsError() {
         when(client.fetch(Secret.class, "missing-secret")).thenReturn(Mono.empty());
 
         StepVerifier.create(secretResolver.resolveApiKey("missing-secret"))
-            .expectNext("")
-            .verifyComplete();
+            .expectErrorMessage("API key secret not found: missing-secret")
+            .verify();
     }
 
     @Test
@@ -97,13 +97,13 @@ class SecretResolverTest {
     }
 
     @Test
-    void resolveApiKey_emptyStringData_returnsEmpty() {
+    void resolveApiKey_emptyStringData_throwsError() {
         var secret = secretWithData(Map.of());
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
 
         StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
-            .expectNext("")
-            .verifyComplete();
+            .expectErrorMessage("API key secret 'my-secret' has no data")
+            .verify();
     }
 
     private Secret secretWithData(Map<String, String> stringData) {

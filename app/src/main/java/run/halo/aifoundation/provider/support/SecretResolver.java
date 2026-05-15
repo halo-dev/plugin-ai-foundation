@@ -23,11 +23,17 @@ public class SecretResolver {
             return Mono.just("");
         }
         return client.fetch(Secret.class, secretName)
+            .switchIfEmpty(Mono.error(() -> {
+                log.warn("API key secret '{}' not found", secretName);
+                return new IllegalArgumentException(
+                    "API key secret not found: " + secretName);
+            }))
             .flatMap(secret -> {
                 var stringData = secret.getStringData();
                 if (stringData == null || stringData.isEmpty()) {
-                    log.warn("Secret '{}' has no stringData", secretName);
-                    return Mono.just("");
+                    log.warn("API key secret '{}' has no data", secretName);
+                    return Mono.error(new IllegalArgumentException(
+                        "API key secret '" + secretName + "' has no data"));
                 }
                 var value = stringData.get("value");
                 if (value != null) {
@@ -38,10 +44,6 @@ public class SecretResolver {
                     return Mono.just(token);
                 }
                 return Mono.just(stringData.values().iterator().next());
-            })
-            .switchIfEmpty(Mono.fromSupplier(() -> {
-                log.warn("Secret '{}' not found", secretName);
-                return "";
-            }));
+            });
     }
 }
