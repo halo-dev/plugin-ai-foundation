@@ -107,7 +107,8 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<List<ModelInfo>> listModels() {
-        return client.listAll(AiModel.class, new ListOptions(), Sort.unsorted())
+        return client.listAll(AiModel.class, new ListOptions(),
+            Sort.by("metadata.creationTimestamp").descending())
             .map(model -> ModelInfo.builder()
                 .name(model.getMetadata().getName())
                 .providerName(model.getSpec().getProviderName())
@@ -120,7 +121,8 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<List<ProviderInfo>> listProviders() {
-        return client.listAll(AiProvider.class, new ListOptions(), Sort.unsorted())
+        return client.listAll(AiProvider.class, new ListOptions(),
+            Sort.by("metadata.creationTimestamp").descending())
             .map(provider -> {
                 var status = provider.getStatus();
                 var phase = status != null && status.getPhase() != null

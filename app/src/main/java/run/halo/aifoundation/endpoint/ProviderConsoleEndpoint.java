@@ -135,7 +135,8 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> listProviders(ServerRequest request) {
-        return client.listAll(AiProvider.class, new ListOptions(), Sort.unsorted())
+        return client.listAll(AiProvider.class, new ListOptions(),
+            Sort.by("metadata.creationTimestamp").descending())
             .collectList()
             .flatMap(providers -> ServerResponse.ok().bodyValue(providers));
     }

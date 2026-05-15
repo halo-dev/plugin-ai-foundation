@@ -131,7 +131,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var fieldSelector = queryParams.getOrDefault("fieldSelector", List.of());
         var labelSelector = queryParams.getOrDefault("labelSelector", List.of());
         var listOptions = SelectorUtil.labelAndFieldSelectorToListOptions(labelSelector, fieldSelector);
-        return client.listAll(AiModel.class, listOptions, Sort.unsorted())
+        return client.listAll(AiModel.class, listOptions,
+            Sort.by("metadata.creationTimestamp").descending())
             .collectList()
             .flatMap(models -> ServerResponse.ok().bodyValue(models));
     }
