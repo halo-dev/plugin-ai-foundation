@@ -19,6 +19,7 @@ import {
   VSpace,
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
+import { useFuse } from '@vueuse/integrations/useFuse'
 import { computed, ref, toRefs } from 'vue'
 
 const props = defineProps<{
@@ -38,6 +39,24 @@ const modal = ref<InstanceType<typeof VModal> | null>(null)
 const providerName = computed(() => props.provider.metadata.name)
 
 const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
+
+const keyword = ref('')
+
+const allModels = computed(() => models.value?.models || [])
+
+const { results } = useFuse(keyword, allModels, {
+  fuseOptions: {
+    keys: ['displayName', 'modelId'],
+    threshold: 0.3,
+  },
+})
+
+const filteredModels = computed(() => {
+  if (!keyword.value) {
+    return allModels.value
+  }
+  return results.value.map((r) => r.item)
+})
 
 const selectedModels = ref<Set<string>>(new Set())
 
@@ -75,7 +94,7 @@ async function handleImport() {
         aiModel: newModel,
       })
       return model.modelId
-    })
+    }),
   )
 
   const succeeded = results.filter((r) => r.status === 'fulfilled').length
@@ -83,7 +102,10 @@ async function handleImport() {
 
   if (failed.length > 0) {
     const failedIds = failed
-      .map((r, i) => `${data[i].modelId}: ${(r as PromiseRejectedResult).reason?.message || '未知错误'}`)
+      .map(
+        (r, i) =>
+          `${data[i].modelId}: ${(r as PromiseRejectedResult).reason?.message || '未知错误'}`,
+      )
       .join('\n')
     Toast.warning(`导入完成：成功 ${succeeded} 个，失败 ${failed.length} 个\n${failedIds}`)
   } else {
@@ -123,12 +145,20 @@ function inferEndpointType(dm: DiscoveredModel): string {
     @close="emit('close')"
   >
     <div>
+      <div class=":uno: p-4 border-b border-gray-100">
+        <SearchInput sync v-model="keyword" placeholder="搜索模型名称或 ID..." />
+      </div>
       <VLoading v-if="isLoading" />
-      <VEmpty v-else-if="models?.models.length === 0" title="无数据" message="无法获取到模型列表" />
+      <VEmpty v-else-if="allModels.length === 0" title="无数据" message="无法获取到模型列表" />
+      <VEmpty
+        v-else-if="filteredModels.length === 0"
+        title="无匹配结果"
+        message="未找到匹配的模型"
+      />
       <VEntityContainer v-else>
         <VEntity
           @click="toggleSelection(model)"
-          v-for="model in models?.models"
+          v-for="model in filteredModels"
           :key="model.modelId"
         >
           <template #checkbox>

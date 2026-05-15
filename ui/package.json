@@ -27,7 +27,9 @@
     "@halo-dev/ui-shared": "^2.24.0",
     "@tanstack/vue-query": "^4.44.0",
     "@vueuse/core": "^14.3.0",
+    "@vueuse/integrations": "^14.3.0",
     "@vueuse/router": "^14.3.0",
+    "fuse.js": "^7.3.0",
     "axios": "^1.16.1",
     "vue": "^3.5.34"
   },
