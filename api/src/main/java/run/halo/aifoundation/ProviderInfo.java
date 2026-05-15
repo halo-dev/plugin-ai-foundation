@@ -16,4 +16,5 @@ public class ProviderInfo {
     private String providerType;
     private boolean enabled;
     private String phase;
+    private String lastCheckedAt;
 }

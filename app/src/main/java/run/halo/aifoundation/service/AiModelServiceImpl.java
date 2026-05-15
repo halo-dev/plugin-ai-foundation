@@ -105,6 +105,7 @@ public class AiModelServiceImpl implements AiModelService {
                 .providerName(model.getSpec().getProviderName())
                 .modelId(model.getSpec().getModelId())
                 .displayName(model.getSpec().getDisplayName())
+                .enabled(model.getSpec().isEnabled())
                 .build())
             .collectList();
     }
@@ -116,12 +117,15 @@ public class AiModelServiceImpl implements AiModelService {
                 var status = provider.getStatus();
                 var phase = status != null && status.getPhase() != null
                     ? status.getPhase().name() : "UNKNOWN";
+                var lastCheckedAt = status != null && status.getLastCheckedAt() != null
+                    ? status.getLastCheckedAt().toString() : null;
                 return ProviderInfo.builder()
                     .name(provider.getMetadata().getName())
                     .displayName(provider.getSpec().getDisplayName())
                     .providerType(provider.getSpec().getProviderType())
                     .enabled(provider.getSpec().isEnabled())
                     .phase(phase)
+                    .lastCheckedAt(lastCheckedAt)
                     .build();
             })
             .collectList();

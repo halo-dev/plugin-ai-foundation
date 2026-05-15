@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -15,6 +17,8 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -22,12 +26,18 @@ class ModelConsoleEndpointTest {
 
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
     private final AiModelService aiModelService = mock(AiModelService.class);
+    private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
 
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        var endpoint = new ModelConsoleEndpoint(client, aiModelService);
+        var mockType = mock(AiProviderType.class);
+        when(mockType.getSupportedEndpointTypes()).thenReturn(List.of("openai-chat"));
+        when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
+        when(providerClientCache.getProviderType("openai")).thenReturn(mockType);
+
+        var endpoint = new ModelConsoleEndpoint(client, aiModelService, providerClientCache);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();
@@ -213,6 +223,7 @@ class ModelConsoleEndpointTest {
         spec.setProviderName(providerName);
         spec.setModelId(modelId);
         spec.setDisplayName(name);
+        spec.setEndpointType("openai-chat");
         m.setSpec(spec);
         return m;
     }

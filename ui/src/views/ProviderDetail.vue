@@ -162,6 +162,12 @@ const testConnectivityMutation = useMutation({
             <VStatusDot v-else :state="statusDot.state" :text="statusDot.label" />
           </div>
         </div>
+        <div class=":uno: space-y-1">
+          <div class=":uno: text-sm text-gray-500">上次检查</div>
+          <div class=":uno: text-sm font-semibold">
+            {{ provider.status?.lastCheckedAt ? new Date(provider.status.lastCheckedAt).toLocaleString() : '从未检查' }}
+          </div>
+        </div>
       </div>
     </VCard>
 

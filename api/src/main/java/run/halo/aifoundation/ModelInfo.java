@@ -16,4 +16,5 @@ public class ModelInfo {
     private String providerName;
     private String modelId;
     private String displayName;
+    private boolean enabled;
 }
