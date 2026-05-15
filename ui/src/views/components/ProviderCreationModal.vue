@@ -57,7 +57,7 @@ function onSubmit(data: ProviderFormState) {
 <template>
   <VModal
     mount-to-body
-    title="创建供应商"
+    title="接入供应商"
     :centered="false"
     :width="600"
     ref="modal"

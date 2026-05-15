@@ -48,7 +48,7 @@ watch(
     </div>
 
     <div class=":uno: flex-none border-t border-gray-100 p-2">
-      <VButton @click="creationModalVisible = true" block> 添加供应商 </VButton>
+      <VButton @click="creationModalVisible = true" block> 接入供应商 </VButton>
     </div>
   </div>
 
