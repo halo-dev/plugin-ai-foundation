@@ -85,7 +85,7 @@ const endpointTypeOptions = [
 
 ## 中等问题（建议修复）
 
-### 7. Provider 更新后缓存不会自动失效
+### ~~7. Provider 更新后缓存不会自动失效~~ ✅ FIXED
 
 **位置**: `ProviderClientCache.java:73-77`
 
