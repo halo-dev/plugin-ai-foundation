@@ -1,14 +1,14 @@
 <script setup lang="ts">
+import { useProviderQueryState } from '@/composables/use-provider-state'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import { VButton, VLoading } from '@halo-dev/components'
-import { useRouteQuery } from '@vueuse/router'
 import { ref, watch } from 'vue'
 import ProviderCreationModal from './ProviderCreationModal.vue'
 import ProviderListItem from './ProviderListItem.vue'
 
 const { data: providers, isLoading } = useProvidersFetch()
 
-const selectedProvider = useRouteQuery<string | undefined>('provider')
+const { selectedProvider } = useProviderQueryState()
 
 const creationModalVisible = ref(false)
 

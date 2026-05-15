@@ -43,7 +43,7 @@ async function send() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: prompt.value.trim() }),
         signal: abortController.signal,
-      }
+      },
     )
 
     if (!response.ok) {

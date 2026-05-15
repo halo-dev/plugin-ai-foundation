@@ -7,6 +7,7 @@ import {
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
+import { setFocus } from '@/utils/focus'
 import {
   Toast,
   VButton,
@@ -20,7 +21,7 @@ import {
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, ref, toRefs } from 'vue'
+import { computed, onMounted, ref, toRefs } from 'vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -132,6 +133,10 @@ function inferEndpointType(dm: DiscoveredModel): string {
   const chatType = endpointTypes.find((t) => t.includes('chat'))
   return chatType || endpointTypes[0] || 'openai-chat'
 }
+
+onMounted(() => {
+  setFocus('model-discovery-search-input')
+})
 </script>
 
 <template>
@@ -145,8 +150,13 @@ function inferEndpointType(dm: DiscoveredModel): string {
     @close="emit('close')"
   >
     <div>
-      <div class=":uno: p-4 border-b border-gray-100">
-        <SearchInput sync v-model="keyword" placeholder="搜索模型名称或 ID..." />
+      <div class=":uno: border-b border-gray-100 p-4">
+        <SearchInput
+          id="model-discovery-search-input"
+          sync
+          v-model="keyword"
+          placeholder="搜索模型名称或 ID..."
+        />
       </div>
       <VLoading v-if="isLoading" />
       <VEmpty v-else-if="allModels.length === 0" title="无数据" message="无法获取到模型列表" />

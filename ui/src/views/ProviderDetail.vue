@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { aiConsoleApiClient } from '@/api'
 import { AiProviderStatusPhaseEnum } from '@/api/generated'
+import { useProviderQueryState } from '@/composables/use-provider-state'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
 import { QK_PROVIDERS } from '@/composables/use-providers-fetch'
 import {
@@ -14,7 +15,6 @@ import {
   type StatusDotState,
 } from '@halo-dev/components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { useRouteQuery } from '@vueuse/router'
 import { computed, ref } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiEditLine from '~icons/ri/edit-line'
@@ -24,7 +24,7 @@ import ProviderModelList from './components/ProviderModelList.vue'
 
 const queryClient = useQueryClient()
 
-const selectedProvider = useRouteQuery<string | undefined>('provider')
+const { selectedProvider } = useProviderQueryState()
 
 const { data: provider, isLoading } = useQuery({
   queryKey: ['plugin:ai-foundation:provider', selectedProvider],
@@ -165,7 +165,11 @@ const testConnectivityMutation = useMutation({
         <div class=":uno: space-y-1">
           <div class=":uno: text-sm text-gray-500">上次检查</div>
           <div class=":uno: text-sm font-semibold">
-            {{ provider.status?.lastCheckedAt ? new Date(provider.status.lastCheckedAt).toLocaleString() : '从未检查' }}
+            {{
+              provider.status?.lastCheckedAt
+                ? new Date(provider.status.lastCheckedAt).toLocaleString()
+                : '从未检查'
+            }}
           </div>
         </div>
       </div>

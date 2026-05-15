@@ -68,9 +68,7 @@ function onSubmit(data: ModelFormState) {
     <ModelForm ref="form" :provider-type="providerType" @submit="onSubmit" />
     <template #footer>
       <VSpace>
-        <VButton type="secondary" :loading="isPending" @click="form?.submit()">
-          保存
-        </VButton>
+        <VButton type="secondary" :loading="isPending" @click="form?.submit()"> 保存 </VButton>
         <VButton @click="modal?.close()">关闭</VButton>
       </VSpace>
     </template>

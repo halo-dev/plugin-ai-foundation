@@ -1,8 +1,25 @@
 <script setup lang="ts">
+import type { Tab } from '@/components/SegmentedTabs.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import { VPageHeader } from '@halo-dev/components'
+import { useRouteQuery } from '@vueuse/router'
 import RiBrainLine from '~icons/ri/brain-line'
 import ProviderDetail from './ProviderDetail.vue'
+import AllModelList from './components/AllModelList.vue'
 import ProviderList from './components/ProviderList.vue'
+
+const tabs: Tab[] = [
+  {
+    label: '配置',
+    value: 'config',
+  },
+  {
+    label: '模型列表',
+    value: 'models',
+  },
+]
+
+const activeTab = useRouteQuery<Tab['value'] | undefined>('tab', 'config')
 </script>
 
 <template>
@@ -12,13 +29,19 @@ import ProviderList from './components/ProviderList.vue'
     </template>
   </VPageHeader>
 
-  <div class=":uno: h-[calc(100vh-3.5rem)] flex">
+  <div class=":uno: flex p-2 pb-0">
+    <SegmentedTabs v-model="activeTab" :tabs="tabs" />
+  </div>
+
+  <div v-if="activeTab === 'config'" class=":uno: h-[calc(100vh-6.5rem)] flex">
     <div class=":uno: w-72 flex-none p-2">
       <ProviderList />
     </div>
 
-    <div class=":uno: min-w-0 flex-1 shrink overflow-auto p-2" style="scrollbar-gutter: stable">
+    <div class=":uno: min-w-0 flex-1 shrink overflow-auto p-2">
       <ProviderDetail />
     </div>
   </div>
+
+  <AllModelList v-if="activeTab === 'models'" />
 </template>

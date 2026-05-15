@@ -13,14 +13,14 @@ export interface DiscoveredModel {
 export const QK_MODELS = 'plugin:ai-foundation:models'
 export const QK_DISCOVERED_MODELS = 'plugin:ai-foundation:discovered-models'
 
-export function useModelsFetch({ providerName }: { providerName: Ref<string | undefined> }) {
+export function useModelsFetch({ providerName }: { providerName?: Ref<string | undefined> }) {
   return useQuery<AiModel[]>({
     queryKey: [QK_MODELS, providerName],
     queryFn: async () => {
       const fieldSelector = []
 
-      if (providerName.value) {
-        fieldSelector.push(`spec.providerName=${providerName.value}`)
+      if (providerName?.value) {
+        fieldSelector.push(`spec.providerName=${providerName?.value}`)
       }
 
       const { data } = await aiConsoleApiClient.model.listModels({

@@ -1,10 +1,10 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
+import { useProviderQueryState } from '@/composables/use-provider-state'
 import { QK_PROVIDERS } from '@/composables/use-providers-fetch'
 import type { ProviderFormState } from '@/types/form'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useRouteQuery } from '@vueuse/router'
 import { useTemplateRef } from 'vue'
 import ProviderForm from './ProviderForm.vue'
 
@@ -17,7 +17,7 @@ const queryClient = useQueryClient()
 const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
 const form = useTemplateRef<InstanceType<typeof ProviderForm>>('form')
 
-const selectedProvider = useRouteQuery<string | undefined>('provider')
+const { selectedProvider } = useProviderQueryState()
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ProviderFormState) => {
