@@ -43,8 +43,7 @@ public class LanguageModelImpl implements LanguageModel {
             var springPrompt = new Prompt(springMessages);
             return chatModel.stream(springPrompt)
                 .map(this::mapChunk)
-                .doOnError(e -> log.error("[{}] Streaming error", providerType, e))
-                .onErrorReturn(buildErrorChunk("Stream error"));
+                .doOnError(e -> log.error("[{}] Streaming error", providerType, e));
         });
     }
 

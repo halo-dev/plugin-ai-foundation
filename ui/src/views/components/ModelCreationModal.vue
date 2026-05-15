@@ -26,13 +26,11 @@ const providerType = props.provider.spec.providerType
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ModelFormState) => {
-    const generateName =
-      `${providerName}-${formState.modelId.replace(/\//g, '-')}-`.toLowerCase()
     return await aiConsoleApiClient.model.createModel({
       aiModel: {
         apiVersion: 'aifoundation.halo.run/v1alpha1',
         kind: 'AiModel',
-        metadata: { generateName, name: '' },
+        metadata: { name: '' },
         spec: {
           providerName: providerName,
           modelId: formState.modelId,

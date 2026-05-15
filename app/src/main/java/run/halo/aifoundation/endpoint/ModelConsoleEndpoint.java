@@ -131,12 +131,21 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> createModel(ServerRequest request) {
         return request.bodyToMono(AiModel.class)
-            .flatMap(model -> validateModel(model, null)
+            .flatMap(model -> validateModel(model)
                 .then(Mono.defer(() -> {
                     if (model.getMetadata() == null) {
                         model.setMetadata(new Metadata());
                     }
-                    return client.create(model);
+                    var providerName = model.getSpec().getProviderName();
+                    var modelId = model.getSpec().getModelId();
+                    var deterministicName = buildModelName(providerName, modelId);
+                    model.getMetadata().setName(deterministicName);
+                    return client.fetch(AiModel.class, deterministicName)
+                        .flatMap(existing -> Mono.<AiModel>error(new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "A model with providerName='" + providerName
+                                + "' and modelId='" + modelId + "' already exists")))
+                        .switchIfEmpty(Mono.defer(() -> client.create(model)));
                 }))
             )
             .flatMap(created -> ServerResponse.ok().bodyValue(created));
@@ -145,7 +154,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private Mono<ServerResponse> updateModel(ServerRequest request) {
         var name = request.pathVariable("name");
         return request.bodyToMono(AiModel.class)
-            .flatMap(model -> validateModel(model, name)
+            .flatMap(model -> validateModel(model)
+                .then(checkModelUniqueness(model, name))
                 .then(client.fetch(AiModel.class, name)
                     .switchIfEmpty(Mono.error(
                         new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -192,7 +202,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             });
     }
 
-    private Mono<Void> validateModel(AiModel model, String excludeName) {
+    private Mono<Void> validateModel(AiModel model) {
         if (model.getSpec() == null) {
             return Mono.error(
                 new ResponseStatusException(HttpStatus.BAD_REQUEST, "Model spec is required"));
@@ -212,22 +222,28 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return client.fetch(AiProvider.class, providerName)
             .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Provider not found: " + providerName)))
-            .then(client.list(AiModel.class,
-                    existing -> providerName.equals(existing.getSpec().getProviderName())
-                        && modelId.equals(existing.getSpec().getModelId())
-                        && (excludeName == null || !excludeName.equals(
-                        existing.getMetadata().getName())),
-                    null)
-                .hasElements()
-                .flatMap(exists -> {
-                    if (Boolean.TRUE.equals(exists)) {
-                        return Mono.<Void>error(new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "A model with providerName='" + providerName
-                                + "' and modelId='" + modelId + "' already exists"));
-                    }
+            .then(Mono.empty());
+    }
+
+    private Mono<Void> checkModelUniqueness(AiModel model, String excludeName) {
+        var providerName = model.getSpec().getProviderName();
+        var modelId = model.getSpec().getModelId();
+        var deterministicName = buildModelName(providerName, modelId);
+        return client.fetch(AiModel.class, deterministicName)
+            .flatMap(existing -> {
+                if (excludeName != null && excludeName.equals(existing.getMetadata().getName())) {
                     return Mono.empty();
-                }));
+                }
+                return Mono.<Void>error(new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "A model with providerName='" + providerName
+                        + "' and modelId='" + modelId + "' already exists"));
+            })
+            .switchIfEmpty(Mono.empty());
+    }
+
+    private String buildModelName(String providerName, String modelId) {
+        return (providerName + "-" + modelId.replace("/", "-")).toLowerCase();
     }
 
     @Data

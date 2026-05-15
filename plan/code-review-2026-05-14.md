@@ -160,7 +160,7 @@ for (const model of data) {
 
 ---
 
-### 14. LanguageModelImpl.streamChat 吞掉错误
+### ~~14. LanguageModelImpl.streamChat 吞掉错误~~ ✅ FIXED
 
 **位置**: `app/src/main/java/run/halo/aifoundation/service/LanguageModelImpl.java:44-48`
 
@@ -171,13 +171,21 @@ for (const model of data) {
 
 流式错误被转换为 `ChunkType.ERROR`，调用方无法区分正常内容和真正错误，且丢失了原始异常信息。
 
+**修复**: 移除 `.onErrorReturn(buildErrorChunk(...))`，让异常正常传播。调用方可以通过 `.onErrorResume` 或 subscribe 的 error handler 来处理异常。
+
 ---
 
-### 15. validateModel 的唯一性检查非原子性
+### ~~15. validateModel 的唯一性检查非原子性~~ ✅ FIXED
 
 **位置**: `app/src/main/java/run/halo/aifoundation/endpoint/ModelConsoleEndpoint.java:174-210`
 
 `fetch provider` 和 `list existing models` 是两个独立查询。高并发下两个相同请求可能同时通过校验，创建重复模型。
+
+**修复**:
+- 后端 `createModel` 使用确定性 resource name（`providerName-modelId`），利用 Halo Extension 资源名的唯一性约束防止重复创建
+- `validateModel` 移除低效的 `list` 重复检查，仅保留 spec 校验和 provider 存在性检查
+- 新增 `checkModelUniqueness` 方法，通过 `fetch` 单条查询检查重复（比 `list` 所有模型快得多）
+- 前端 `ModelCreationModal` 和 `ModelsDiscoveryModal` 不再传 `generateName`
 
 ---
 

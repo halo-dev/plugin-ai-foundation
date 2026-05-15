@@ -56,13 +56,10 @@ async function handleImport() {
 
   const results = await Promise.allSettled(
     data.map(async (model) => {
-      const generateName =
-        `${props.provider.metadata.name}-${model.modelId.replace(/\//g, '-')}-`.toLowerCase()
       const newModel: AiModel = {
         apiVersion: 'aifoundation.halo.run/v1alpha1',
         kind: 'AiModel',
         metadata: {
-          generateName,
           name: '',
         },
         spec: {

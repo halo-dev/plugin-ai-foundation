@@ -3,7 +3,6 @@ package run.halo.aifoundation.endpoint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -71,8 +70,8 @@ class ModelConsoleEndpointTest {
     void create_validModel_returns200() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
-        when(client.create(any(AiModel.class))).thenReturn(Mono.just(m));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         webTestClient.post().uri("/models")
             .contentType(MediaType.APPLICATION_JSON)
@@ -82,7 +81,7 @@ class ModelConsoleEndpointTest {
             .expectBody(AiModel.class)
             .consumeWith(response ->
                 assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo("gpt-4"));
+                    .isEqualTo("openai-prod-gpt-4"));
     }
 
     @Test
@@ -124,9 +123,9 @@ class ModelConsoleEndpointTest {
 
     @Test
     void create_duplicateModel_returns409() {
-        var m = model("gpt-4", "openai-prod", "gpt-4");
+        var m = model("openai-prod-gpt-4", "openai-prod", "gpt-4");
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(m));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(m));
 
         webTestClient.post().uri("/models")
             .contentType(MediaType.APPLICATION_JSON)
@@ -144,7 +143,7 @@ class ModelConsoleEndpointTest {
         updated.getSpec().setDisplayName("Updated Name");
 
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(existing));
         when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(existing));
         when(client.update(existing)).thenReturn(Mono.just(existing));
 
@@ -163,7 +162,7 @@ class ModelConsoleEndpointTest {
     void update_notFound_returns404() {
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.empty());
         when(client.fetch(AiModel.class, "missing")).thenReturn(Mono.empty());
 
         webTestClient.put().uri("/models/missing")
@@ -180,7 +179,7 @@ class ModelConsoleEndpointTest {
         var updated = model("gpt-4", "openai-prod", "gpt-4");
 
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.list(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(other));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(other));
         when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(existing));
 
         webTestClient.put().uri("/models/gpt-4")
