@@ -52,38 +52,52 @@ function toggleSelection(model: DiscoveredModel) {
 async function handleImport() {
   const data = models.value?.models.filter((model) => selectedModels.value.has(model.modelId))
 
-  if (!data) return
+  if (!data || data.length === 0) return
 
-  for (const model of data) {
-    const generateName =
-      `${props.provider.metadata.name}-${model.modelId.replace(/\//g, '-')}-`.toLocaleLowerCase()
-    const newModel: AiModel = {
-      apiVersion: 'aifoundation.halo.run/v1alpha1',
-      kind: 'AiModel',
-      metadata: {
-        generateName,
-        name: '',
-      },
-      spec: {
-        providerName: props.provider.metadata.name,
-        modelId: model.modelId,
-        displayName: model.displayName || model.modelId,
-        enabled: true,
-        endpointType: inferEndpointType(model),
-      },
-    }
+  const results = await Promise.allSettled(
+    data.map(async (model) => {
+      const generateName =
+        `${props.provider.metadata.name}-${model.modelId.replace(/\//g, '-')}-`.toLowerCase()
+      const newModel: AiModel = {
+        apiVersion: 'aifoundation.halo.run/v1alpha1',
+        kind: 'AiModel',
+        metadata: {
+          generateName,
+          name: '',
+        },
+        spec: {
+          providerName: props.provider.metadata.name,
+          modelId: model.modelId,
+          displayName: model.displayName || model.modelId,
+          enabled: true,
+          endpointType: inferEndpointType(model),
+        },
+      }
 
-    // TODO: 优化
-    await aiConsoleApiClient.model.createModel({
-      aiModel: newModel,
+      await aiConsoleApiClient.model.createModel({
+        aiModel: newModel,
+      })
+      return model.modelId
     })
-  }
+  )
 
-  Toast.success(`成功导入 ${data.length} 个模型`)
+  const succeeded = results.filter((r) => r.status === 'fulfilled').length
+  const failed = results.filter((r) => r.status === 'rejected')
+
+  if (failed.length > 0) {
+    const failedIds = failed
+      .map((r, i) => `${data[i].modelId}: ${(r as PromiseRejectedResult).reason?.message || '未知错误'}`)
+      .join('\n')
+    Toast.warning(`导入完成：成功 ${succeeded} 个，失败 ${failed.length} 个\n${failedIds}`)
+  } else {
+    Toast.success(`成功导入 ${succeeded} 个模型`)
+  }
 
   modal.value?.close()
 
-  queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
+  if (succeeded > 0) {
+    queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
+  }
 }
 
 const providerType = useProviderType(provider)

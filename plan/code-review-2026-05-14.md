@@ -124,7 +124,7 @@ const endpointTypeOptions = [
 
 ---
 
-### 10. ModelsDiscoveryModal 导入模型无错误处理和回滚
+### ~~10. ModelsDiscoveryModal 导入模型无错误处理和回滚~~ ✅ FIXED
 
 **位置**: `ui/src/views/components/ModelsDiscoveryModal.vue:52-87`
 
@@ -135,6 +135,8 @@ for (const model of data) {
   await aiConsoleApiClient.model.createModel({ ... }) // 第3个失败时前2个已创建
 }
 ```
+
+**修复**: 改为 `Promise.allSettled` 并行导入，分别统计成功/失败数量。失败时 Toast 展示具体失败的模型 ID 和错误原因。仅在导入成功时才刷新列表缓存。
 
 ---
 
