@@ -41,6 +41,8 @@ import run.halo.app.extension.router.selector.SelectorUtil;
 @RequiredArgsConstructor
 public class ModelConsoleEndpoint implements CustomEndpoint {
 
+    private static final int MAX_NAME_GENERATION_ATTEMPTS = 10;
+
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
     private final ProviderClientCache providerClientCache;
@@ -146,14 +148,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                     }
                     var providerName = model.getSpec().getProviderName();
                     var modelId = model.getSpec().getModelId();
-                    var deterministicName = buildModelName(providerName, modelId);
-                    model.getMetadata().setName(deterministicName);
-                    return client.fetch(AiModel.class, deterministicName)
-                        .flatMap(existing -> Mono.<AiModel>error(new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "A model with providerName='" + providerName
-                                + "' and modelId='" + modelId + "' already exists")))
-                        .switchIfEmpty(Mono.defer(() -> client.create(model)));
+                    return createWithGeneratedName(model, providerName, modelId, 0);
                 }))
             )
             .flatMap(created -> ServerResponse.ok().bodyValue(created));
@@ -163,7 +158,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var name = request.pathVariable("name");
         return request.bodyToMono(AiModel.class)
             .flatMap(model -> validateModel(model)
-                .then(checkModelUniqueness(model, name))
                 .then(client.fetch(AiModel.class, name)
                     .switchIfEmpty(Mono.error(
                         new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -212,6 +206,19 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             });
     }
 
+    private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId,
+        int attempt) {
+        if (attempt >= MAX_NAME_GENERATION_ATTEMPTS) {
+            return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT,
+                "Could not generate a unique model resource name"));
+        }
+        var name = AiModelNameGenerator.generate(providerName, modelId, attempt);
+        model.getMetadata().setName(name);
+        return client.fetch(AiModel.class, name)
+            .flatMap(existing -> createWithGeneratedName(model, providerName, modelId, attempt + 1))
+            .switchIfEmpty(Mono.defer(() -> client.create(model)));
+    }
+
     private Mono<Void> validateModel(AiModel model) {
         if (model.getSpec() == null) {
             return Mono.error(
@@ -252,35 +259,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 }
                 return Mono.empty();
             });
-    }
-
-    private Mono<Void> checkModelUniqueness(AiModel model, String excludeName) {
-        var providerName = model.getSpec().getProviderName();
-        var modelId = model.getSpec().getModelId();
-        var deterministicName = buildModelName(providerName, modelId);
-        return client.fetch(AiModel.class, deterministicName)
-            .flatMap(existing -> {
-                if (excludeName != null && excludeName.equals(existing.getMetadata().getName())) {
-                    return Mono.empty();
-                }
-                return Mono.<Void>error(new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "A model with providerName='" + providerName
-                        + "' and modelId='" + modelId + "' already exists"));
-            })
-            .switchIfEmpty(Mono.empty());
-    }
-
-    private String buildModelName(String providerName, String modelId) {
-        return normalizeNamePart(providerName) + "-" + normalizeNamePart(modelId);
-    }
-
-    private String normalizeNamePart(String value) {
-        var normalized = value.toLowerCase()
-            .replaceAll("[^a-z0-9-]+", "-")
-            .replaceAll("-+", "-")
-            .replaceAll("^-|-$", "");
-        return normalized.isBlank() ? "model" : normalized;
     }
 
     @Data

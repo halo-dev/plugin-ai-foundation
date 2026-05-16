@@ -79,8 +79,9 @@ class ModelConsoleEndpointTest {
     @Test
     void create_validModel_returns200() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
+        var generatedName = AiModelNameGenerator.generate("openai-prod", "gpt-4");
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.empty());
+        when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         webTestClient.post().uri("/models")
@@ -91,15 +92,16 @@ class ModelConsoleEndpointTest {
             .expectBody(AiModel.class)
             .consumeWith(response ->
                 assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo("openai-prod-gpt-4"));
+                    .isEqualTo(generatedName));
     }
 
     @Test
     void create_modelNameNormalizesIllegalCharactersAndCase() {
         var m = model("ignored", "OpenAI-Prod", "GPT/4.1 Mini");
+        var generatedName = AiModelNameGenerator.generate("OpenAI-Prod", "GPT/4.1 Mini");
         when(client.fetch(AiProvider.class, "OpenAI-Prod"))
             .thenReturn(Mono.just(provider("OpenAI-Prod", "openai")));
-        when(client.fetch(AiModel.class, "openai-prod-gpt-4-1-mini")).thenReturn(Mono.empty());
+        when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         webTestClient.post().uri("/models")
@@ -110,23 +112,31 @@ class ModelConsoleEndpointTest {
             .expectBody(AiModel.class)
             .consumeWith(response ->
                 assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo("openai-prod-gpt-4-1-mini"));
+                    .isEqualTo(generatedName));
     }
 
     @Test
-    void create_normalizedNameCollision_returns409() {
-        var existing = model("openai-prod-gpt-4", "openai-prod", "gpt-4");
+    void create_normalizedNameCollision_usesNextGeneratedName() {
+        var firstName = AiModelNameGenerator.generate("openai-prod", "GPT/4");
+        var secondName = AiModelNameGenerator.generate("openai-prod", "GPT/4", 1);
+        var existing = model(firstName, "openai-prod", "gpt-4");
         var incoming = model("ignored", "openai-prod", "GPT/4");
 
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(existing));
+        when(client.fetch(AiModel.class, firstName)).thenReturn(Mono.just(existing));
+        when(client.fetch(AiModel.class, secondName)).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         webTestClient.post().uri("/models")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(incoming)
             .exchange()
-            .expectStatus().isEqualTo(409);
+            .expectStatus().isOk()
+            .expectBody(AiModel.class)
+            .consumeWith(response ->
+                assertThat(response.getResponseBody().getMetadata().getName())
+                    .isEqualTo(secondName));
     }
 
     @Test
@@ -167,16 +177,30 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
-    void create_duplicateModel_returns409() {
-        var m = model("openai-prod-gpt-4", "openai-prod", "gpt-4");
+    void create_duplicateProviderAndModelId_returns200WithDistinctName() {
+        var firstName = AiModelNameGenerator.generate("openai-prod", "gpt-4");
+        var secondName = AiModelNameGenerator.generate("openai-prod", "gpt-4", 1);
+        var existing = model(firstName, "openai-prod", "gpt-4");
+        var incoming = model("ignored", "openai-prod", "gpt-4");
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(m));
+        when(client.fetch(AiModel.class, firstName)).thenReturn(Mono.just(existing));
+        when(client.fetch(AiModel.class, secondName)).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         webTestClient.post().uri("/models")
             .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(m)
+            .bodyValue(incoming)
             .exchange()
-            .expectStatus().isEqualTo(409);
+            .expectStatus().isOk()
+            .expectBody(AiModel.class)
+            .consumeWith(response -> {
+                assertThat(response.getResponseBody().getSpec().getProviderName())
+                    .isEqualTo("openai-prod");
+                assertThat(response.getResponseBody().getSpec().getModelId())
+                    .isEqualTo("gpt-4");
+                assertThat(response.getResponseBody().getMetadata().getName())
+                    .isEqualTo(secondName);
+            });
     }
 
     // ---- update ----
@@ -188,7 +212,6 @@ class ModelConsoleEndpointTest {
         updated.getSpec().setDisplayName("Updated Name");
 
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(existing));
         when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(existing));
         when(client.update(existing)).thenReturn(Mono.just(existing));
 
@@ -207,7 +230,6 @@ class ModelConsoleEndpointTest {
     void update_notFound_returns404() {
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.empty());
         when(client.fetch(AiModel.class, "missing")).thenReturn(Mono.empty());
 
         webTestClient.put().uri("/models/missing")
@@ -218,20 +240,19 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
-    void update_duplicateModel_returns409() {
+    void update_duplicateProviderAndModelId_returns200() {
         var existing = model("gpt-4", "openai-prod", "gpt-4");
-        var other = model("gpt-4-turbo", "openai-prod", "gpt-4");
         var updated = model("gpt-4", "openai-prod", "gpt-4");
 
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(other));
         when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(existing));
+        when(client.update(existing)).thenReturn(Mono.just(existing));
 
         webTestClient.put().uri("/models/gpt-4")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(updated)
             .exchange()
-            .expectStatus().isEqualTo(409);
+            .expectStatus().isOk();
     }
 
     // ---- helpers ----
