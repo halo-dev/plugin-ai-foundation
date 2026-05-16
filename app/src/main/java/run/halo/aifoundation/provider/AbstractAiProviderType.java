@@ -16,6 +16,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.transport.ProxyProvider.Proxy;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.ModelCapability;
@@ -38,22 +39,41 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         return defaultUrl;
     }
 
-    protected WebClient.Builder webClientBuilder() {
+    protected WebClient.Builder webClientBuilder(AiProvider provider) {
         return WebClient.builder()
             .clientConnector(new ReactorClientHttpConnector(
-                HttpClient.create()
-                    .responseTimeout(Duration.ofMinutes(5))
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
+                httpClient(provider)
             ));
     }
 
-    protected RestClient.Builder restClientBuilder() {
+    protected RestClient.Builder restClientBuilder(AiProvider provider) {
         return RestClient.builder()
             .requestFactory(new ReactorClientHttpRequestFactory(
-                HttpClient.create()
-                    .responseTimeout(Duration.ofMinutes(5))
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
+                httpClient(provider)
             ));
+    }
+
+    protected HttpClient httpClient(AiProvider provider) {
+        var client = HttpClient.create()
+            .responseTimeout(Duration.ofMinutes(5))
+            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000);
+
+        var spec = provider != null ? provider.getSpec() : null;
+        if (spec == null) {
+            return client;
+        }
+
+        var proxyHost = spec.getProxyHost();
+        var proxyPort = spec.getProxyPort();
+        if (proxyHost == null || proxyHost.isBlank() || proxyPort == null) {
+            return client;
+        }
+
+        return client.proxy(proxy -> proxy
+            .type(Proxy.HTTP)
+            .host(proxyHost.trim())
+            .port(proxyPort)
+        );
     }
 
     @Override
@@ -68,7 +88,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         log.info("Discovering models for provider {}: type={}, baseUrl={}",
             providerName, getProviderType(), baseUrl);
 
-        var wc = webClientBuilder().baseUrl(baseUrl).build();
+        var wc = webClientBuilder(provider).baseUrl(baseUrl).build();
         var requestSpec = wc.get().uri("/v1/models");
 
         if (apiKey != null && !apiKey.isBlank()) {

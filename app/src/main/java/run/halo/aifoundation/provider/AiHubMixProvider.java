@@ -107,8 +107,8 @@ public class AiHubMixProvider extends AbstractAiProviderType {
             .headers(headers)
             .completionsPath(COMPLETIONS_PATH)
             .embeddingsPath(EMBEDDINGS_PATH)
-            .webClientBuilder(webClientBuilder())
-            .restClientBuilder(restClientBuilder())
+            .webClientBuilder(webClientBuilder(provider))
+            .restClientBuilder(restClientBuilder(provider))
             .build();
     }
 }

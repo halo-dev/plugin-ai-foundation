@@ -83,8 +83,8 @@ public class DeepSeekProvider extends AbstractAiProviderType {
         var deepSeekApi = DeepSeekApi.builder()
             .baseUrl(resolveBaseUrl(provider))
             .apiKey(apiKey)
-            .webClientBuilder(webClientBuilder())
-            .restClientBuilder(restClientBuilder())
+            .webClientBuilder(webClientBuilder(provider))
+            .restClientBuilder(restClientBuilder(provider))
             .build();
         return DeepSeekChatModel.builder()
             .deepSeekApi(deepSeekApi)

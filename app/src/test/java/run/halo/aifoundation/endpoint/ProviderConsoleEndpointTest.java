@@ -83,6 +83,76 @@ class ProviderConsoleEndpointTest {
     }
 
     @Test
+    void create_validProxyConfig_returns200() {
+        var p = provider("new-provider", "openai");
+        p.getSpec().setProxyHost("127.0.0.1");
+        p.getSpec().setProxyPort(7890);
+        when(client.create(any(AiProvider.class))).thenReturn(Mono.just(p));
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AiProvider.class)
+            .consumeWith(response -> {
+                var spec = response.getResponseBody().getSpec();
+                assertThat(spec.getProxyHost()).isEqualTo("127.0.0.1");
+                assertThat(spec.getProxyPort()).isEqualTo(7890);
+            });
+    }
+
+    @Test
+    void create_proxyHostWithoutProxyPort_returns400() {
+        var p = provider("bad-provider", "openai");
+        p.getSpec().setProxyHost("127.0.0.1");
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_proxyPortWithoutProxyHost_returns400() {
+        var p = provider("bad-provider", "openai");
+        p.getSpec().setProxyPort(7890);
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_blankProxyHostWithProxyPort_returns400() {
+        var p = provider("bad-provider", "openai");
+        p.getSpec().setProxyHost(" ");
+        p.getSpec().setProxyPort(7890);
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_invalidProxyPort_returns400() {
+        var p = provider("bad-provider", "openai");
+        p.getSpec().setProxyHost("127.0.0.1");
+        p.getSpec().setProxyPort(0);
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
     void create_unsupportedProviderType_returns400() {
         var p = provider("bad-provider", "unknown-ai");
 

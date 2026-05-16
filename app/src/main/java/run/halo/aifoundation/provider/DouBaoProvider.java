@@ -96,8 +96,8 @@ public class DouBaoProvider extends AbstractAiProviderType {
             .apiKey(apiKey)
             .completionsPath(CHAT_PATH)
             .embeddingsPath(EMBEDDING_PATH)
-            .webClientBuilder(webClientBuilder())
-            .restClientBuilder(restClientBuilder())
+            .webClientBuilder(webClientBuilder(provider))
+            .restClientBuilder(restClientBuilder(provider))
             .build();
     }
 }

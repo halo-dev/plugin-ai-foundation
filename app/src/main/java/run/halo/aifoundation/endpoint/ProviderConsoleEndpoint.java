@@ -183,6 +183,11 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                     "Provider type '" + providerType + "' requires baseUrl"));
             }
         }
+        try {
+            validateProxyConfig(provider.getSpec());
+        } catch (IllegalArgumentException e) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
+        }
         if (existingName == null) {
             if (provider.getMetadata() == null) {
                 provider.setMetadata(new Metadata());
@@ -201,6 +206,26 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 providerClientCache.invalidate(existingName);
                 return client.update(existing);
             });
+    }
+
+    private void validateProxyConfig(AiProvider.AiProviderSpec spec) {
+        var proxyHost = spec.getProxyHost();
+        var proxyPort = spec.getProxyPort();
+        var hasProxyHost = proxyHost != null && !proxyHost.isBlank();
+        var hasProxyPort = proxyPort != null;
+
+        if (!hasProxyHost && !hasProxyPort) {
+            return;
+        }
+        if (!hasProxyHost) {
+            throw new IllegalArgumentException("proxyHost is required when proxyPort is configured");
+        }
+        if (!hasProxyPort) {
+            throw new IllegalArgumentException("proxyPort is required when proxyHost is configured");
+        }
+        if (proxyPort < 1 || proxyPort > 65535) {
+            throw new IllegalArgumentException("proxyPort must be between 1 and 65535");
+        }
     }
 
     private Mono<ServerResponse> deleteProvider(ServerRequest request) {

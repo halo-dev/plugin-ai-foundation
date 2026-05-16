@@ -101,8 +101,8 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
             .apiKey(apiKey)
             .completionsPath(COMPLETIONS_PATH)
             .embeddingsPath(EMBEDDINGS_PATH)
-            .webClientBuilder(webClientBuilder())
-            .restClientBuilder(restClientBuilder())
+            .webClientBuilder(webClientBuilder(provider))
+            .restClientBuilder(restClientBuilder(provider))
             .build();
     }
 }

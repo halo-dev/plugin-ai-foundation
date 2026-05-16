@@ -115,7 +115,7 @@ public class OllamaProvider extends AbstractAiProviderType {
         var providerName = provider.getMetadata().getName();
         log.info("Discovering models for Ollama provider {}: baseUrl={}", providerName, baseUrl);
 
-        var wc = webClientBuilder().baseUrl(baseUrl).build();
+        var wc = webClientBuilder(provider).baseUrl(baseUrl).build();
         return wc.get()
             .uri("/api/tags")
             .retrieve()
@@ -145,8 +145,8 @@ public class OllamaProvider extends AbstractAiProviderType {
     private OllamaApi buildOllamaApi(AiProvider provider) {
         return OllamaApi.builder()
             .baseUrl(resolveBaseUrl(provider))
-            .webClientBuilder(webClientBuilder())
-            .restClientBuilder(restClientBuilder())
+            .webClientBuilder(webClientBuilder(provider))
+            .restClientBuilder(restClientBuilder(provider))
             .build();
     }
 }
