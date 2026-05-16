@@ -33,12 +33,12 @@ const activeTab = useRouteQuery<Tab['value'] | undefined>('tab', 'config')
     <SegmentedTabs v-model="activeTab" :tabs="tabs" />
   </div>
 
-  <div v-if="activeTab === 'config'" class=":uno: h-[calc(100vh-6.5rem)] flex">
-    <div class=":uno: w-72 flex-none p-2">
+  <div v-if="activeTab === 'config'" class=":uno: h-[calc(100vh-6.5rem)] flex flex-col sm:flex-row">
+    <div class=":uno: h-64 min-h-0 flex-none p-2 sm:h-auto sm:w-72">
       <ProviderList />
     </div>
 
-    <div class=":uno: min-w-0 flex-1 shrink overflow-auto p-2">
+    <div class=":uno: min-h-0 min-w-0 flex-1 shrink overflow-auto p-2">
       <ProviderDetail />
     </div>
   </div>

@@ -45,7 +45,7 @@ function handleDelete() {
       <VEntityField :title="model.spec.displayName" :description="model.spec.modelId" />
     </template>
     <template #end>
-      <div class=":uno: flex items-center gap-1.5">
+      <div class=":uno: flex flex-wrap items-center justify-end gap-1.5">
         <span
           v-if="!model.spec.enabled"
           class=":uno: rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500"

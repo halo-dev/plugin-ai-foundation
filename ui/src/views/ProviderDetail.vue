@@ -10,7 +10,6 @@ import {
   VButton,
   VCard,
   VLoading,
-  VSpace,
   VStatusDot,
   type StatusDotState,
 } from '@halo-dev/components'
@@ -110,8 +109,8 @@ const testConnectivityMutation = useMutation({
   <div v-else class=":uno: space-y-4">
     <VCard :title="provider.spec.displayName" :body-class="['!p-0']">
       <template #actions>
-        <div class=":uno: px-4">
-          <VSpace>
+        <div class=":uno: px-4 py-2 sm:py-0">
+          <div class=":uno: flex flex-wrap items-center justify-end gap-2">
             <VButton
               size="sm"
               :loading="testConnectivityMutation.isPending.value"
@@ -134,23 +133,23 @@ const testConnectivityMutation = useMutation({
               </template>
               删除
             </VButton>
-          </VSpace>
+          </div>
         </div>
       </template>
 
-      <div class=":uno: grid grid-cols-2 gap-2 px-4 py-3 lg:grid-cols-4">
-        <div class=":uno: space-y-1">
+      <div class=":uno: grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class=":uno: min-w-0 space-y-1">
           <div class=":uno: text-sm text-gray-500">资源名称</div>
-          <div class=":uno: text-sm font-semibold">{{ provider.metadata.name }}</div>
+          <div class=":uno: break-all text-sm font-semibold">{{ provider.metadata.name }}</div>
         </div>
-        <div class=":uno: space-y-1">
+        <div class=":uno: min-w-0 space-y-1">
           <div class=":uno: text-sm text-gray-500">供应商类型</div>
-          <div class=":uno: flex items-center gap-2 text-sm font-semibold">
-            <img :src="providerType?.iconUrl" class=":uno: h-4 w-4" />
-            {{ providerType?.displayName }}
+          <div class=":uno: min-w-0 flex items-center gap-2 text-sm font-semibold">
+            <img :src="providerType?.iconUrl" class=":uno: h-4 w-4 flex-none" />
+            <span class=":uno: min-w-0 truncate">{{ providerType?.displayName }}</span>
           </div>
         </div>
-        <div class=":uno: space-y-1">
+        <div class=":uno: min-w-0 space-y-1">
           <div class=":uno: text-sm text-gray-500">状态</div>
           <div>
             <VStatusDot
@@ -162,7 +161,7 @@ const testConnectivityMutation = useMutation({
             <VStatusDot v-else :state="statusDot.state" :text="statusDot.label" />
           </div>
         </div>
-        <div class=":uno: space-y-1">
+        <div class=":uno: min-w-0 space-y-1">
           <div class=":uno: text-sm text-gray-500">上次检查</div>
           <div class=":uno: text-sm font-semibold">
             {{
