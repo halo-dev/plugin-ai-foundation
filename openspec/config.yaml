@@ -33,6 +33,10 @@ context: |
   - After backend changes: docker rm halo-for-plugin-development -f && ./gradlew haloServer
   - After API/field changes: ./gradlew generateApiClient — frontend must use generated client, never hardcode paths.
 
+  Permission scope:
+  - This plugin is intended for super administrators to use and configure.
+  - Do not design or implement permission configuration for other user roles.
+
 rules:
   proposal:
     - Always include a non-goals section when scope is being reduced.
@@ -41,6 +45,7 @@ rules:
     - Preserve the distinction between providerType and provider resource name.
     - Public embedding API must not expose Spring AI types.
     - The plugin is unreleased; do not preserve backward compatibility or add compatibility code.
+    - Treat super administrator usage/configuration as the permission boundary; do not add role-specific permission configuration for other users.
   tasks:
     - Put server-side validation before UI tasks when both exist.
     - When UI is split to another change, remove UI tasks from the backend change instead of leaving placeholders.

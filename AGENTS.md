@@ -80,6 +80,7 @@ This is a **Halo CMS plugin** that provides shared AI foundation capabilities fo
 
 ## Conventions
 
+- This plugin is intended for super administrators to use and configure. Do not design or implement permission configuration for other user roles.
 - Provider defaults: built-in providers (OpenAI, DeepSeek, etc.) have hardcoded default base URLs; `openailike` has no default and requires manual `baseUrl`, while `ollama` has a local default but still allows/validates `baseUrl`
 - Embedding API: two-layer design — simple calls (`embedQuery`) and advanced `EmbeddingRequest` with dimensions, maxBatchSize, providerOptions
 - Backend validation takes priority over frontend — server-side checks are authoritative
