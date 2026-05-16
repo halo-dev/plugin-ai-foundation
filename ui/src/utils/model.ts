@@ -10,18 +10,21 @@ export function findProviderTypeForModel(
   return providerTypes?.find((type) => type.providerType === provider?.spec.providerType)
 }
 
-export function inferEndpointType(
-  model: DiscoveredModel,
-  supportedEndpointTypes: string[] | undefined,
-): string {
-  const endpointTypes = supportedEndpointTypes || []
-  const capabilities = model.capabilities || []
+export function createModelFromDiscovered(providerName: string, model: DiscoveredModel): AiModel {
+  const spec = {
+    providerName,
+    modelId: model.modelId,
+    displayName: model.displayName || model.modelId,
+    enabled: true,
+    ...(model.suggestedEndpointType ? { endpointType: model.suggestedEndpointType } : {}),
+  } as AiModel['spec']
 
-  if (capabilities.includes('embedding')) {
-    const embeddingType = endpointTypes.find((type) => type.includes('embedding'))
-    return embeddingType || endpointTypes[0] || 'openai-embedding'
+  return {
+    apiVersion: 'aifoundation.halo.run/v1alpha1',
+    kind: 'AiModel',
+    metadata: {
+      name: '',
+    },
+    spec,
   }
-
-  const chatType = endpointTypes.find((type) => type.includes('chat'))
-  return chatType || endpointTypes[0] || 'openai-chat'
 }

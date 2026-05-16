@@ -1,6 +1,6 @@
 import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
-import { findProviderTypeForModel, inferEndpointType } from './model'
+import { createModelFromDiscovered, findProviderTypeForModel } from './model'
 
 describe('findProviderTypeForModel', () => {
   it('matches by provider resource name instead of provider name prefix', () => {
@@ -24,33 +24,25 @@ describe('findProviderTypeForModel', () => {
   })
 })
 
-describe('inferEndpointType', () => {
-  it('prefers embedding endpoint when discovered model has embedding capability', () => {
+describe('createModelFromDiscovered', () => {
+  it('uses backend suggested endpoint type when present', () => {
     expect(
-      inferEndpointType(
-        discoveredModel('text-embedding-3-small', ['embedding']),
-        ['openai-chat', 'openai-embedding'],
-      ),
-    ).toBe('openai-embedding')
+      createModelFromDiscovered(
+        'openai-prod',
+        discoveredModel('text-embedding-3-small', ['embedding'], 'openai-embedding'),
+      ).spec,
+    ).toMatchObject({
+      providerName: 'openai-prod',
+      modelId: 'text-embedding-3-small',
+      displayName: 'text-embedding-3-small',
+      enabled: true,
+      endpointType: 'openai-embedding',
+    })
   })
 
-  it('prefers chat endpoint for non-embedding models', () => {
-    expect(
-      inferEndpointType(discoveredModel('gpt-4.1', ['chat']), [
-        'openai-embedding',
-        'openai-chat',
-      ]),
-    ).toBe('openai-chat')
-  })
-
-  it('falls back to first supported endpoint and then built-in defaults', () => {
-    expect(inferEndpointType(discoveredModel('rerank', ['rerank']), ['custom-rerank'])).toBe(
-      'custom-rerank',
-    )
-    expect(inferEndpointType(discoveredModel('embedding', ['embedding']), [])).toBe(
-      'openai-embedding',
-    )
-    expect(inferEndpointType(discoveredModel('chat', ['chat']), [])).toBe('openai-chat')
+  it('omits endpoint type when backend provides no suggestion', () => {
+    expect(createModelFromDiscovered('openai-prod', discoveredModel('rerank', ['rerank'])).spec)
+      .not.toHaveProperty('endpointType')
   })
 })
 
@@ -90,11 +82,12 @@ function providerTypeInfo(providerType: string, displayName: string): ProviderTy
   }
 }
 
-function discoveredModel(modelId: string, capabilities: string[]) {
+function discoveredModel(modelId: string, capabilities: string[], suggestedEndpointType?: string) {
   return {
     modelId,
     displayName: modelId,
     name: '',
     capabilities,
+    suggestedEndpointType,
   }
 }

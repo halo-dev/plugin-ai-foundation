@@ -8,7 +8,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -18,6 +21,8 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.ModelCapability;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.app.extension.Metadata;
@@ -28,13 +33,14 @@ class ProviderConsoleEndpointTest {
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
     private final SecretResolver secretResolver = mock(SecretResolver.class);
+    private AiProviderType openAiType;
 
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
         // Simulate "openai" as a known provider type
-        var openAiType = mock(AiProviderType.class);
+        openAiType = mock(AiProviderType.class);
         when(openAiType.getProviderType()).thenReturn("openai");
         when(openAiType.requiresBaseUrl()).thenReturn(false);
         when(providerClientCache.getProviderTypeMap())
@@ -228,6 +234,35 @@ class ProviderConsoleEndpointTest {
         webTestClient.delete().uri("/providers/missing")
             .exchange()
             .expectStatus().isNotFound();
+    }
+
+    // ---- discover models ----
+
+    @Test
+    void discoverModels_returnsSuggestedEndpointTypes() {
+        var provider = provider("openai-prod", "openai");
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(isNull())).thenReturn(Mono.just("sk-test"));
+        when(openAiType.discoverModels(provider, "sk-test")).thenReturn(Mono.just(List.of(
+            new DiscoveredModel("gpt-4", "gpt-4", Set.of(ModelCapability.CHAT)),
+            new DiscoveredModel("text-embedding-3-small", "text-embedding-3-small",
+                Set.of(ModelCapability.EMBEDDING))
+        )));
+        when(openAiType.recommendEndpointType(any(DiscoveredModel.class))).thenAnswer(invocation -> {
+            DiscoveredModel model = invocation.getArgument(0);
+            return model.capabilities().contains(ModelCapability.EMBEDDING)
+                ? Optional.of("openai-embedding") : Optional.of("openai-chat");
+        });
+
+        webTestClient.get().uri("/providers/openai-prod/discover-models")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.providerName").isEqualTo("openai-prod")
+            .jsonPath("$.models[0].modelId").isEqualTo("gpt-4")
+            .jsonPath("$.models[0].suggestedEndpointType").isEqualTo("openai-chat")
+            .jsonPath("$.models[1].modelId").isEqualTo("text-embedding-3-small")
+            .jsonPath("$.models[1].suggestedEndpointType").isEqualTo("openai-embedding");
     }
 
     // ---- helpers ----

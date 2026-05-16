@@ -112,7 +112,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                         .implementation(String.class)
                         .required(true))
                     .response(responseBuilder()
-                        .implementation(Map.class))
+                        .implementation(ProviderModelDiscoveryResponse.class))
             )
             .POST("providers/{name}/connectivity", this::testConnectivity,
                 builder -> builder.operationId("TestProviderConnectivity")
@@ -271,14 +271,15 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
         }
         return providerType.discoverModels(provider, apiKey)
             .map(models -> models.stream()
-                .map(dm -> Map.<String, Object>of(
-                    "modelId", dm.modelId(),
-                    "displayName", dm.displayName(),
-                    "name", "",
-                    "capabilities", dm.capabilities().stream()
+                .map(dm -> new DiscoveredModelItem(
+                    dm.modelId(),
+                    dm.displayName(),
+                    "",
+                    dm.capabilities().stream()
                         .map(ModelCapability::name)
                         .map(String::toLowerCase)
-                        .toList()
+                        .toList(),
+                    providerType.recommendEndpointType(dm).orElse(null)
                 ))
                 .toList()
             )
@@ -286,7 +287,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 log.info("Discovered {} models for provider {}", models.size(), providerName);
                 return ServerResponse.ok()
                     .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(Map.of("models", models, "providerName", providerName));
+                    .bodyValue(new ProviderModelDiscoveryResponse(providerName, models));
             });
     }
 

@@ -24,6 +24,8 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { AiModel } from '../models';
 // @ts-ignore
+import type { ChatChunk } from '../models';
+// @ts-ignore
 import type { TestChatRequest } from '../models';
 /**
  * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - axios parameter creator
@@ -163,16 +165,16 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             };
         },
         /**
-         * Test chat completion with a specific model.
+         * Test chat completion with streaming response.
          * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestChatRequest} [testChatRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelChat: async (name: string, testChatRequest?: TestChatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        testModelChatStream: async (name: string, testChatRequest?: TestChatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
-            assertParamExists('testModelChat', 'name', name)
-            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat`
+            assertParamExists('testModelChatStream', 'name', name)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream`
                 .replace(`{${"name"}}`, encodeURIComponent(String(name)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -302,16 +304,16 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Test chat completion with a specific model.
+         * Test chat completion with streaming response.
          * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestChatRequest} [testChatRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async testModelChat(name: string, testChatRequest?: TestChatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChat(name, testChatRequest, options);
+        async testModelChatStream(name: string, testChatRequest?: TestChatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ChatChunk>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChatStream(name, testChatRequest, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelChat']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelChatStream']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -365,13 +367,13 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(axios, basePath));
         },
         /**
-         * Test chat completion with a specific model.
-         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest} requestParameters Request parameters.
+         * Test chat completion with streaming response.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
-            return localVarFp.testModelChat(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(axios, basePath));
+        testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<ChatChunk> {
+            return localVarFp.testModelChatStream(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * Update an AI model.
@@ -435,22 +437,22 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest 
 }
 
 /**
- * Request parameters for testModelChat operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * Request parameters for testModelChatStream operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
  * @export
- * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest
  */
-export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest {
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest {
     /**
      * Model name (AiModel.metadata.name)
      * @type {string}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChat
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
      */
     readonly name: string
 
     /**
      * 
      * @type {TestChatRequest}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChat
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
      */
     readonly testChatRequest?: TestChatRequest
 }
@@ -517,14 +519,14 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
     }
 
     /**
-     * Test chat completion with a specific model.
-     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest} requestParameters Request parameters.
+     * Test chat completion with streaming response.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
-    public testModelChat(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChat(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(this.axios, this.basePath));
+    public testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChatStream(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

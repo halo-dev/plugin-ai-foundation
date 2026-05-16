@@ -563,10 +563,10 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
-    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat" : {
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream" : {
       "post" : {
-        "description" : "Test chat completion with a specific model.",
-        "operationId" : "TestModelChat",
+        "description" : "Test chat completion with streaming response.",
+        "operationId" : "TestModelChatStream",
         "parameters" : [ {
           "description" : "Model name (AiModel.metadata.name)",
           "in" : "path",
@@ -590,7 +590,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "string"
+                  "$ref" : "#/components/schemas/ChatChunk"
                 }
               }
             },
@@ -801,7 +801,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "string"
+                  "$ref" : "#/components/schemas/ProviderModelDiscoveryResponse"
                 }
               }
             },
@@ -1066,6 +1066,27 @@
           }
         }
       },
+      "ChatChunk" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "string"
+          },
+          "finishReason" : {
+            "type" : "string"
+          },
+          "last" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "TEXT", "REASONING", "TOOL_CALL", "ERROR", "FINISH" ]
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/Usage"
+          }
+        }
+      },
       "CopyOperation" : {
         "required" : [ "op", "from", "path" ],
         "type" : "object",
@@ -1085,6 +1106,29 @@
             "type" : "string",
             "description" : "A JSON Pointer path pointing to the location to move/copy from.",
             "example" : "/a/b/c"
+          }
+        }
+      },
+      "DiscoveredModelItem" : {
+        "type" : "object",
+        "properties" : {
+          "capabilities" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "modelId" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "suggestedEndpointType" : {
+            "type" : "string"
           }
         }
       },
@@ -1184,6 +1228,20 @@
             "type" : "string",
             "description" : "A JSON Pointer path pointing to the location to move/copy from.",
             "example" : "/a/b/c"
+          }
+        }
+      },
+      "ProviderModelDiscoveryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "models" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DiscoveredModelItem"
+            }
+          },
+          "providerName" : {
+            "type" : "string"
           }
         }
       },
@@ -1287,6 +1345,19 @@
           },
           "value" : {
             "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "Usage" : {
+        "type" : "object",
+        "properties" : {
+          "completionTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "promptTokens" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       }
