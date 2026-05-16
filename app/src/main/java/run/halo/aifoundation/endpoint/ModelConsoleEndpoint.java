@@ -34,6 +34,7 @@ import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.extension.index.query.Queries;
 import run.halo.app.extension.router.selector.SelectorUtil;
 
 @Slf4j
@@ -142,6 +143,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private Mono<ServerResponse> createModel(ServerRequest request) {
         return request.bodyToMono(AiModel.class)
             .flatMap(model -> validateModel(model)
+                .then(Mono.defer(() -> checkModelUniqueness(model, null)))
                 .then(Mono.defer(() -> {
                     if (model.getMetadata() == null) {
                         model.setMetadata(new Metadata());
@@ -158,6 +160,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var name = request.pathVariable("name");
         return request.bodyToMono(AiModel.class)
             .flatMap(model -> validateModel(model)
+                .then(Mono.defer(() -> checkModelUniqueness(model, name)))
                 .then(client.fetch(AiModel.class, name)
                     .switchIfEmpty(Mono.error(
                         new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -259,6 +262,26 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 }
                 return Mono.empty();
             });
+    }
+
+    private Mono<Void> checkModelUniqueness(AiModel model, String excludeName) {
+        var providerName = model.getSpec().getProviderName();
+        var modelId = model.getSpec().getModelId();
+        var listOptions = ListOptions.builder()
+            .fieldQuery(Queries.and(
+                Queries.equal("spec.providerName", providerName),
+                Queries.equal("spec.modelId", modelId)
+            ))
+            .build();
+        return client.listAll(AiModel.class, listOptions, Sort.unsorted())
+            .filter(existing -> excludeName == null
+                || !excludeName.equals(existing.getMetadata().getName()))
+            .next()
+            .flatMap(existing -> Mono.<Void>error(new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "A model with providerName='" + providerName
+                    + "' and modelId='" + modelId + "' already exists")))
+            .switchIfEmpty(Mono.empty());
     }
 
     @Data

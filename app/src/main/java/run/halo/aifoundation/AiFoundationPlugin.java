@@ -27,6 +27,8 @@ public class AiFoundationPlugin extends BasePlugin {
         schemeManager.register(AiModel.class, indexSpecs -> {
             indexSpecs.add(IndexSpecs.<AiModel, String>single("spec.providerName", String.class)
                 .indexFunc(model -> model.getSpec().getProviderName()));
+            indexSpecs.add(IndexSpecs.<AiModel, String>single("spec.modelId", String.class)
+                .indexFunc(model -> model.getSpec().getModelId()));
         });
         log.info("AI Foundation plugin started, registered AiProvider and AiModel extensions.");
     }
