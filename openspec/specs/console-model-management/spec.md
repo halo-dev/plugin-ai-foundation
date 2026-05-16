@@ -88,7 +88,8 @@ The Console UI SHALL allow admins to edit an existing `AiProvider`'s configurati
 - **WHEN** an admin edits a built-in provider such as `aihubmix` or `siliconflow`
 - **THEN** the form SHOULD prioritize the preset experience of editing API key and basic metadata
 - **AND** the admin SHALL NOT be required to fill a custom `baseUrl`
-- **AND** only the `openailike` provider type SHALL require manual `baseUrl` input
+- **AND** `openailike` SHALL require manual `baseUrl` input because it has no default
+- **AND** `ollama` MAY expose `baseUrl` for local endpoint customization while providing a default local URL
 
 ### Requirement: API key masking and testing
 The Console UI SHALL protect sensitive provider keys while still allowing connectivity verification.
@@ -239,4 +240,3 @@ The backend SHALL generate `AiModel.metadata.name` for models created through th
 - **WHEN** an `AiModel` has been created
 - **THEN** callers SHALL resolve that model by `AiModel.metadata.name`
 - **AND** the backend SHALL NOT require `spec.providerName + spec.modelId` to be unique across all `AiModel` resources
-

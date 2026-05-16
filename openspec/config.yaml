@@ -14,11 +14,16 @@ context: |
   Extension model:
   - AiProvider and AiModel are separate Extensions (GVK: aifoundation.halo.run/v1alpha1).
   - AiModel.spec.providerName references AiProvider.metadata.name (resource name, not providerType).
-  - modelRef format: providerResourceName/modelId.
+  - AiModelService lookups use AiModel.metadata.name as modelName.
+  - providerResourceName/modelId remains the underlying identity pair for display and uniqueness, not the service lookup key.
 
   API key conventions:
   - Stored as Halo Secret references (spec.apiKeySecretName), resolved at runtime by SecretResolver.
   - Single Secret per provider. No multi-key rotation.
+
+  Client caching:
+  - ProviderClientCache caches ChatModel/EmbeddingModel instances by provider resource name + modelId.
+  - Cache invalidation happens on AiProvider update/delete and Secret update for providers referencing that Secret.
 
   Embedding API:
   - Two-layer: simple calls (embedQuery) + advanced EmbeddingRequest (dimensions, maxBatchSize, providerOptions).
@@ -35,6 +40,7 @@ rules:
   design:
     - Preserve the distinction between providerType and provider resource name.
     - Public embedding API must not expose Spring AI types.
+    - The plugin is unreleased; do not preserve backward compatibility or add compatibility code.
   tasks:
     - Put server-side validation before UI tasks when both exist.
     - When UI is split to another change, remove UI tasks from the backend change instead of leaving placeholders.

@@ -47,11 +47,11 @@ This is a **Halo CMS plugin** that provides shared AI foundation capabilities fo
 
 **Provider Type System**: Each AI provider (OpenAI, DeepSeek, Ollama, etc.) is a single `@Component` class implementing `AiProviderType`, extending `AbstractAiProviderType`. One class encapsulates identity, metadata, and behavior. Provider types are discovered via Spring `ApplicationContext.getBeansOfType()`. To add a new provider, create one class — no frontend changes needed.
 
-**Extension Model**: `AiProvider` and `AiModel` are Halo Extension resources (GVK: `aifoundation.halo.run/v1alpha1`). `AiModel.spec.providerName` references `AiProvider.metadata.name` (the resource name, not providerType). Model identity is `providerResourceName/modelId`.
+**Extension Model**: `AiProvider` and `AiModel` are Halo Extension resources (GVK: `aifoundation.halo.run/v1alpha1`). `AiModel.spec.providerName` references `AiProvider.metadata.name` (the resource name, not providerType). `AiModelService` resolves models by `AiModel.metadata.name`; `providerResourceName/modelId` remains the underlying display and uniqueness identity.
 
 **API Key Resolution**: API keys are stored as Halo Secret references (`spec.apiKeySecretName`), resolved at runtime by `SecretResolver`. Never stored in plaintext in the provider resource.
 
-**Client Caching**: `ProviderClientCache` caches `ChatModel`/`EmbeddingModel` instances per provider, invalidated on provider update.
+**Client Caching**: `ProviderClientCache` caches `ChatModel`/`EmbeddingModel` instances by provider resource name and model ID. Cache entries are invalidated on provider update/delete and on Secret update for providers referencing that Secret.
 
 **Cross-Plugin Service Access**: Due to Halo's plugin ApplicationContext isolation, `AiModelService` cannot be injected via `@Autowired` from other plugins. Instead, consumer plugins use `AiServices.getModelService()` — a static locator in the `api` module. `AiModelServiceImpl` registers itself on `@PostConstruct` and clears on `@PreDestroy`.
 
@@ -60,15 +60,15 @@ This is a **Halo CMS plugin** that provides shared AI foundation capabilities fo
 ### Backend Package Layout (`app/src/main/java/run/halo/aifoundation/`)
 
 - `extension/` — Halo Extension models (`AiProvider`, `AiModel`)
-- `provider/` — `AiProviderType` interface, `AbstractAiProviderType`, 9 concrete providers, `ProviderClientCache`, `SecretResolver`
+- `provider/` — `AiProviderType` interface, `AbstractAiProviderType`, concrete provider implementations, `ProviderClientCache`, `SecretResolver`
 - `endpoint/` — Console REST endpoints (CRUD + debug/admin)
 - `service/` — `AiModelServiceImpl`, `LanguageModelImpl`, `EmbeddingModelImpl`
 
 ### Frontend Key Files (`ui/src/`)
 
-- `composables/useProviderTypes.ts` — Fetches provider type metadata from API (replaces hardcoded constants)
-- `composables/useProviders.ts` — Provider CRUD mutations/queries
-- `composables/useModels.ts` — Model CRUD and discovery queries
+- `composables/use-provider-types-fetch.ts` — Fetches provider type metadata from API (replaces hardcoded constants)
+- `composables/use-providers-fetch.ts` — Provider CRUD mutations/queries
+- `composables/use-models-fetch.ts` — Model CRUD and discovery queries
 - `views/` — Vue components for provider/model management
 
 ## Development Notes
@@ -80,7 +80,7 @@ This is a **Halo CMS plugin** that provides shared AI foundation capabilities fo
 
 ## Conventions
 
-- Provider defaults: built-in providers (OpenAI, DeepSeek, etc.) have hardcoded default base URLs; only `openailike` requires manual baseUrl input
+- Provider defaults: built-in providers (OpenAI, DeepSeek, etc.) have hardcoded default base URLs; `openailike` has no default and requires manual `baseUrl`, while `ollama` has a local default but still allows/validates `baseUrl`
 - Embedding API: two-layer design — simple calls (`embedQuery`) and advanced `EmbeddingRequest` with dimensions, maxBatchSize, providerOptions
 - Backend validation takes priority over frontend — server-side checks are authoritative
 - UI language is Chinese (zh-CN)
