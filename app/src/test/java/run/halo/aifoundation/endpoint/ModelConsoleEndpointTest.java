@@ -95,6 +95,41 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
+    void create_modelNameNormalizesIllegalCharactersAndCase() {
+        var m = model("ignored", "OpenAI-Prod", "GPT/4.1 Mini");
+        when(client.fetch(AiProvider.class, "OpenAI-Prod"))
+            .thenReturn(Mono.just(provider("OpenAI-Prod", "openai")));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4-1-mini")).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AiModel.class)
+            .consumeWith(response ->
+                assertThat(response.getResponseBody().getMetadata().getName())
+                    .isEqualTo("openai-prod-gpt-4-1-mini"));
+    }
+
+    @Test
+    void create_normalizedNameCollision_returns409() {
+        var existing = model("openai-prod-gpt-4", "openai-prod", "gpt-4");
+        var incoming = model("ignored", "openai-prod", "GPT/4");
+
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4")).thenReturn(Mono.just(existing));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(incoming)
+            .exchange()
+            .expectStatus().isEqualTo(409);
+    }
+
+    @Test
     void create_nullSpec_returns400() {
         var m = new AiModel();
         var metadata = new Metadata();

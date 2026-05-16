@@ -6,6 +6,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -40,11 +41,19 @@ public class LanguageModelImpl implements LanguageModel {
     public Flux<ChatChunk> streamChat(ChatRequest request) {
         return Flux.defer(() -> {
             var springMessages = convertMessages(request.getMessages());
-            var springPrompt = new Prompt(springMessages);
+            var springPrompt = new Prompt(springMessages, buildChatOptions(request));
             return chatModel.stream(springPrompt)
                 .map(this::mapChunk)
                 .doOnError(e -> log.error("[{}] Streaming error", providerType, e));
         });
+    }
+
+    private ChatOptions buildChatOptions(ChatRequest request) {
+        return ChatOptions.builder()
+            .temperature(request.getTemperature())
+            .maxTokens(request.getMaxTokens())
+            .topP(request.getTopP())
+            .build();
     }
 
     private ChatChunk mapChunk(ChatResponse response) {

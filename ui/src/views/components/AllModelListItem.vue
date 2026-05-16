@@ -3,6 +3,8 @@ import { aiConsoleApiClient } from '@/api'
 import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
+import { useProvidersFetch } from '@/composables/use-providers-fetch'
+import { findProviderTypeForModel } from '@/utils/model'
 import {
   Dialog,
   Toast,
@@ -43,12 +45,10 @@ function handleDelete() {
 }
 
 const { data: providerTypes } = useProviderTypesFetch()
+const { data: providers } = useProvidersFetch()
 
 const providerType = computed(() => {
-  // TODO: 优化匹配 Provider Type 的方式
-  return providerTypes.value?.find(
-    (t) => t.providerType === props.model.spec.providerName.split('-')[0],
-  )
+  return findProviderTypeForModel(props.model, providers.value, providerTypes.value)
 })
 </script>
 <template>

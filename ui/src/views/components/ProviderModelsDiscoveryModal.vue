@@ -8,6 +8,7 @@ import {
 } from '@/composables/use-models-fetch'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
 import { setFocus } from '@/utils/focus'
+import { inferEndpointType } from '@/utils/model'
 import {
   Toast,
   VButton,
@@ -87,7 +88,7 @@ async function handleImport() {
           modelId: model.modelId,
           displayName: model.displayName || model.modelId,
           enabled: true,
-          endpointType: inferEndpointType(model),
+          endpointType: inferEndpointType(model, providerType.value?.supportedEndpointTypes),
         },
       }
 
@@ -121,18 +122,6 @@ async function handleImport() {
 }
 
 const providerType = useProviderType(provider)
-
-// TODO: 优化
-function inferEndpointType(dm: DiscoveredModel): string {
-  const endpointTypes = providerType.value?.supportedEndpointTypes || []
-  const caps = dm.capabilities || []
-  if (caps.includes('embedding')) {
-    const embeddingType = endpointTypes.find((t) => t.includes('embedding'))
-    return embeddingType || endpointTypes[0] || 'openai-embedding'
-  }
-  const chatType = endpointTypes.find((t) => t.includes('chat'))
-  return chatType || endpointTypes[0] || 'openai-chat'
-}
 
 onMounted(() => {
   setFocus('model-discovery-search-input')

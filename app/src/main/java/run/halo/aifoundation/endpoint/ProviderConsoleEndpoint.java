@@ -31,6 +31,7 @@ import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.extension.router.selector.SelectorUtil;
 
 @Slf4j
 @Component
@@ -208,8 +209,17 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             .switchIfEmpty(Mono.error(
                 new ResponseStatusException(HttpStatus.NOT_FOUND,
                     "Provider not found: " + name)))
-            .flatMap(client::delete)
+            .flatMap(provider -> deleteProviderModels(name)
+                .then(client.delete(provider)))
             .then(ServerResponse.noContent().build());
+    }
+
+    private Mono<Void> deleteProviderModels(String providerName) {
+        var listOptions = SelectorUtil.labelAndFieldSelectorToListOptions(List.of(),
+            List.of("spec.providerName=" + providerName));
+        return client.listAll(AiModel.class, listOptions, null)
+            .flatMap(client::delete)
+            .then();
     }
 
     private Mono<ServerResponse> discoverModels(ServerRequest request) {

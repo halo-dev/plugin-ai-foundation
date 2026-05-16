@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
@@ -135,12 +136,18 @@ class ProviderConsoleEndpointTest {
     @Test
     void delete_withAssociatedModels_returns204() {
         var p = provider("openai-prod", "openai");
+        var model = model("openai-prod", "gpt-4");
+        when(client.listAll(eq(AiModel.class), any(), isNull())).thenReturn(Flux.just(model));
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(p));
+        when(client.delete(model)).thenReturn(Mono.just(model));
         when(client.delete(p)).thenReturn(Mono.just(p));
 
         webTestClient.delete().uri("/providers/openai-prod")
             .exchange()
             .expectStatus().isNoContent();
+
+        verify(client).delete(model);
+        verify(client).delete(p);
     }
 
     @Test

@@ -8,7 +8,7 @@
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
     "prettier": "prettier --write src/",
-    "test:unit": "echo 'No tests'",
+    "test:unit": "rstest run",
     "type-check": "vue-tsc --build"
   },
   "prettier": {
@@ -29,8 +29,8 @@
     "@vueuse/core": "^14.3.0",
     "@vueuse/integrations": "^14.3.0",
     "@vueuse/router": "^14.3.0",
-    "fuse.js": "^7.3.0",
     "axios": "^1.16.1",
+    "fuse.js": "^7.3.0",
     "vue": "^3.5.34"
   },
   "devDependencies": {
@@ -38,15 +38,19 @@
     "@iconify-json/ri": "^1.2.10",
     "@rsbuild/core": "^2.0.6",
     "@rsbuild/plugin-sass": "^1.5.2",
+    "@rsbuild/plugin-vue": "^1.2.8",
+    "@rstest/core": "^0.10.0",
     "@types/node": "^24.12.4",
     "@unocss/eslint-config": "^66.6.8",
     "@unocss/webpack": "^66.6.8",
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.7.0",
+    "@vue/test-utils": "^2.4.10",
     "@vue/tsconfig": "^0.7.0",
     "eslint": "^9.39.4",
     "eslint-plugin-oxlint": "^0.16.12",
     "eslint-plugin-vue": "~10.0.1",
+    "happy-dom": "^20.9.0",
     "npm-run-all2": "^7.0.2",
     "oxlint": "^0.16.12",
     "prettier": "^3.8.3",

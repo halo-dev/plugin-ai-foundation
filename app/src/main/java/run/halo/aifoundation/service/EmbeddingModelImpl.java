@@ -123,8 +123,20 @@ public class EmbeddingModelImpl implements EmbeddingModel {
 
     private org.springframework.ai.embedding.EmbeddingOptions buildEmbeddingOptions(
         EmbeddingRequest request) {
-        // Return null for default options; provider-specific dimensions would be handled here
-        return null;
+        if (request.getDimensions() == null) {
+            return null;
+        }
+        return new org.springframework.ai.embedding.EmbeddingOptions() {
+            @Override
+            public String getModel() {
+                return null;
+            }
+
+            @Override
+            public Integer getDimensions() {
+                return request.getDimensions();
+            }
+        };
     }
 
     private <T> List<List<T>> partition(List<T> list, int size) {

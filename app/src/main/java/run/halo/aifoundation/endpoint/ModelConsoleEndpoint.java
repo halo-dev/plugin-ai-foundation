@@ -272,7 +272,15 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     private String buildModelName(String providerName, String modelId) {
-        return (providerName + "-" + modelId.replace("/", "-")).toLowerCase();
+        return normalizeNamePart(providerName) + "-" + normalizeNamePart(modelId);
+    }
+
+    private String normalizeNamePart(String value) {
+        var normalized = value.toLowerCase()
+            .replaceAll("[^a-z0-9-]+", "-")
+            .replaceAll("-+", "-")
+            .replaceAll("^-|-$", "");
+        return normalized.isBlank() ? "model" : normalized;
     }
 
     @Data
