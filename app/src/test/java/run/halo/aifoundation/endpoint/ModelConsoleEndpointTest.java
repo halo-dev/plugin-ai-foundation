@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -27,12 +28,13 @@ class ModelConsoleEndpointTest {
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
     private final AiModelService aiModelService = mock(AiModelService.class);
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
+    private AiProviderType mockType;
 
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        var mockType = mock(AiProviderType.class);
+        mockType = mock(AiProviderType.class);
         when(mockType.getSupportedEndpointTypes()).thenReturn(List.of("openai-chat"));
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
         when(providerClientCache.getProviderType("openai")).thenReturn(mockType);
@@ -94,6 +96,60 @@ class ModelConsoleEndpointTest {
             .consumeWith(response ->
                 assertThat(response.getResponseBody().getMetadata().getName())
                     .isEqualTo(generatedName));
+    }
+
+    @Test
+    void create_missingEndpointType_usesProviderTypeRecommendation() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setEndpointType(null);
+        var generatedName = AiModelNameGenerator.generate("openai-prod", "gpt-4");
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(mockType.recommendEndpointType(eq("gpt-4"), any()))
+            .thenReturn(Optional.of("openai-chat"));
+        when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
+        when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AiModel.class)
+            .consumeWith(response ->
+                assertThat(response.getResponseBody().getSpec().getEndpointType())
+                    .isEqualTo("openai-chat"));
+    }
+
+    @Test
+    void create_missingEndpointTypeWithoutRecommendation_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setEndpointType("");
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(mockType.recommendEndpointType(eq("gpt-4"), any()))
+            .thenReturn(Optional.empty());
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_explicitUnsupportedEndpointType_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setEndpointType("openai-embedding");
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test

@@ -1,14 +1,13 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import type { AiModel, AiProvider } from '@/api/generated'
+import type { AiProvider } from '@/api/generated'
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
-import { useProviderType } from '@/composables/use-provider-types-fetch'
 import { setFocus } from '@/utils/focus'
-import { inferEndpointType } from '@/utils/model'
+import { createModelFromDiscovered } from '@/utils/model'
 import {
   Toast,
   VButton,
@@ -22,13 +21,11 @@ import {
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, onMounted, ref, toRefs } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 const props = defineProps<{
   provider: AiProvider
 }>()
-
-const { provider } = toRefs(props)
 
 const emit = defineEmits<{
   (event: 'close'): void
@@ -38,7 +35,7 @@ const queryClient = useQueryClient()
 
 const modal = ref<InstanceType<typeof VModal> | null>(null)
 
-const providerName = computed(() => props.provider.metadata.name)
+const providerName = computed(() => props.provider.metadata.name || '')
 
 const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
 
@@ -77,20 +74,7 @@ async function handleImport() {
 
   const results = await Promise.allSettled(
     data.map(async (model) => {
-      const newModel: AiModel = {
-        apiVersion: 'aifoundation.halo.run/v1alpha1',
-        kind: 'AiModel',
-        metadata: {
-          name: '',
-        },
-        spec: {
-          providerName: props.provider.metadata.name,
-          modelId: model.modelId,
-          displayName: model.displayName || model.modelId,
-          enabled: true,
-          endpointType: inferEndpointType(model, providerType.value?.supportedEndpointTypes),
-        },
-      }
+      const newModel = createModelFromDiscovered(providerName.value, model)
 
       await aiConsoleApiClient.model.createModel({
         aiModel: newModel,
@@ -120,8 +104,6 @@ async function handleImport() {
     queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
   }
 }
-
-const providerType = useProviderType(provider)
 
 onMounted(() => {
   setFocus('model-discovery-search-input')

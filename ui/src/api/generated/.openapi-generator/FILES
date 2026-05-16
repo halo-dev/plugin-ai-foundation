@@ -20,13 +20,17 @@ models/ai-provider-list.ts
 models/ai-provider-spec.ts
 models/ai-provider-status.ts
 models/ai-provider.ts
+models/chat-chunk.ts
 models/copy-operation.ts
+models/discovered-model-item.ts
 models/index.ts
 models/json-patch-inner.ts
 models/metadata.ts
 models/move-operation.ts
+models/provider-model-discovery-response.ts
 models/provider-type-info.ts
 models/remove-operation.ts
 models/replace-operation.ts
 models/test-chat-request.ts
 models/test-operation.ts
+models/usage.ts

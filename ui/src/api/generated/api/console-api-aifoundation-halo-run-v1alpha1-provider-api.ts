@@ -23,6 +23,8 @@ import { DUMMY_BASE_URL, assertParamExists, setApiKeyToObject, setBasicAuthToObj
 import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError, operationServerMap } from '../base';
 // @ts-ignore
 import type { AiProvider } from '../models';
+// @ts-ignore
+import type { ProviderModelDiscoveryResponse } from '../models';
 /**
  * ConsoleApiAifoundationHaloRunV1alpha1ProviderApi - axios parameter creator
  * @export
@@ -360,7 +362,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFp = function(confi
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async discoverProviderModels(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>> {
+        async discoverProviderModels(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProviderModelDiscoveryResponse>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.discoverProviderModels(name, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ProviderApi.discoverProviderModels']?.[localVarOperationServerIndex]?.url;
@@ -448,7 +450,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ProviderApiFactory = function 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        discoverProviderModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
+        discoverProviderModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ProviderApiDiscoverProviderModelsRequest, options?: RawAxiosRequestConfig): AxiosPromise<ProviderModelDiscoveryResponse> {
             return localVarFp.discoverProviderModels(requestParameters.name, options).then((request) => request(axios, basePath));
         },
         /**

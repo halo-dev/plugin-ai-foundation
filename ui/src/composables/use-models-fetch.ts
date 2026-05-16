@@ -1,13 +1,18 @@
 import { aiConsoleApiClient } from '@/api'
-import type { AiModel } from '@/api/generated'
+import type { AiModel, DiscoveredModelItem, ProviderModelDiscoveryResponse } from '@/api/generated'
 import { useQuery } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
 
-export interface DiscoveredModel {
+export type DiscoveredModel = DiscoveredModelItem & {
   modelId: string
   displayName: string
   name: string
   capabilities: string[]
+}
+
+type ProviderModelDiscoveryResult = Omit<ProviderModelDiscoveryResponse, 'models' | 'providerName'> & {
+  models: DiscoveredModel[]
+  providerName: string
 }
 
 export const QK_MODELS = 'plugin:ai-foundation:models'
@@ -36,7 +41,7 @@ export function useModelsFetch({ providerName }: { providerName?: Ref<string | u
 }
 
 export function useDiscoverModelsFetch(providerName: Ref<string | undefined>) {
-  return useQuery({
+  return useQuery<ProviderModelDiscoveryResult | null>({
     queryKey: [QK_DISCOVERED_MODELS, providerName],
     queryFn: async () => {
       if (!providerName.value) {
@@ -47,7 +52,7 @@ export function useDiscoverModelsFetch(providerName: Ref<string | undefined>) {
         name: providerName.value,
       })
 
-      return data as unknown as { models: DiscoveredModel[]; providerName: string }
+      return data as ProviderModelDiscoveryResult
     },
   })
 }
