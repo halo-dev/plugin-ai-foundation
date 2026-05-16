@@ -13,6 +13,9 @@
  */
 
 
+// May contain unused imports in some cases
+// @ts-ignore
+import type { Message } from './message';
 
 /**
  * 
@@ -21,10 +24,33 @@
  */
 export interface TestChatRequest {
     /**
-     * 
-     * @type {string}
+     *
+     * @type {number}
      * @memberof TestChatRequest
      */
-    'prompt'?: string;
+    'maxTokens'?: number;
+    /**
+     *
+     * @type {Array<Message>}
+     * @memberof TestChatRequest
+     */
+    'messages'?: Array<Message>;
+    /**
+     *
+     * @type {{ [key: string]: object; }}
+     * @memberof TestChatRequest
+     */
+    'providerOptions'?: { [key: string]: object; };
+    /**
+     *
+     * @type {number}
+     * @memberof TestChatRequest
+     */
+    'temperature'?: number;
+    /**
+     *
+     * @type {number}
+     * @memberof TestChatRequest
+     */
+    'topP'?: number;
 }
-

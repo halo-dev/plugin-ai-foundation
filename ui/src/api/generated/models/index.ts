@@ -10,6 +10,7 @@ export * from './chat-chunk';
 export * from './copy-operation';
 export * from './discovered-model-item';
 export * from './json-patch-inner';
+export * from './message';
 export * from './metadata';
 export * from './move-operation';
 export * from './provider-model-discovery-response';

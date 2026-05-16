@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:35381",
+    "url" : "http://localhost:34096",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1153,6 +1153,17 @@
           } ]
         }
       },
+      "Message" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "string"
+          },
+          "role" : {
+            "type" : "string"
+          }
+        }
+      },
       "Metadata" : {
         "required" : [ "name" ],
         "type" : "object",
@@ -1324,8 +1335,29 @@
       "TestChatRequest" : {
         "type" : "object",
         "properties" : {
-          "prompt" : {
-            "type" : "string"
+          "maxTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Message"
+            }
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
           }
         }
       },

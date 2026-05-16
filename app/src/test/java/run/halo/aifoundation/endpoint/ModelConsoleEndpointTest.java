@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -16,6 +19,11 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
+import run.halo.aifoundation.ChatChunk;
+import run.halo.aifoundation.ChatRequest;
+import run.halo.aifoundation.ChunkType;
+import run.halo.aifoundation.LanguageModel;
+import run.halo.aifoundation.Message;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -320,6 +328,87 @@ class ModelConsoleEndpointTest {
             .bodyValue(updated)
             .exchange()
             .expectStatus().isEqualTo(409);
+    }
+
+    // ---- test chat stream ----
+
+    @Test
+    void testChatStream_mapsMessagesAndOptionsToChatRequest() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamChat(any(ChatRequest.class)))
+            .thenReturn(Flux.just(
+                ChatChunk.builder().type(ChunkType.TEXT).content("Hi").build(),
+                ChatChunk.builder().type(ChunkType.FINISH).last(true).finishReason("stop").build()
+            ));
+
+        var body = Map.of(
+            "messages", List.of(
+                Map.of("role", "system", "content", "You are concise."),
+                Map.of("role", "user", "content", "Hello")
+            ),
+            "temperature", 0.2,
+            "maxTokens", 128,
+            "topP", 0.9,
+            "providerOptions", Map.of("seed", 42)
+        );
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(body)
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+            .expectBodyList(ChatChunk.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .extracting(ChatChunk::getType)
+                .containsExactly(ChunkType.TEXT, ChunkType.FINISH));
+
+        var captor = ArgumentCaptor.forClass(ChatRequest.class);
+        verify(languageModel).streamChat(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getMessages())
+            .extracting(Message::getRole)
+            .containsExactly("system", "user");
+        assertThat(request.getMessages())
+            .extracting(Message::getContent)
+            .containsExactly("You are concise.", "Hello");
+        assertThat(request.getTemperature()).isEqualTo(0.2);
+        assertThat(request.getMaxTokens()).isEqualTo(128);
+        assertThat(request.getTopP()).isEqualTo(0.9);
+        assertThat(request.getProviderOptions()).containsEntry("seed", 42);
+    }
+
+    @Test
+    void testChatStream_emptyMessages_returns400WithoutCallingModelService() {
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of()))
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        verify(aiModelService, never()).languageModel(any());
+    }
+
+    @Test
+    void testChatStream_streamErrorEmitsErrorChunk() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamChat(any(ChatRequest.class)))
+            .thenReturn(Flux.error(new IllegalStateException("upstream failed")));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of("role", "user", "content", "Hello"))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBodyList(ChatChunk.class)
+            .consumeWith(response -> {
+                assertThat(response.getResponseBody()).hasSize(1);
+                var chunk = response.getResponseBody().getFirst();
+                assertThat(chunk.getType()).isEqualTo(ChunkType.ERROR);
+                assertThat(chunk.getContent()).contains("upstream failed");
+            });
     }
 
     // ---- helpers ----
