@@ -193,10 +193,13 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
         return request.bodyToMono(TestChatRequest.class)
             .defaultIfEmpty(new TestChatRequest())
-            .flatMap(body -> {
-                var prompt = body.getPrompt() != null ? body.getPrompt() : "Hello!";
+            .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
                 var chatRequest = ChatRequest.builder()
-                    .messages(List.of(Message.user(prompt)))
+                    .messages(body.getMessages())
+                    .temperature(body.getTemperature())
+                    .maxTokens(body.getMaxTokens())
+                    .topP(body.getTopP())
+                    .providerOptions(body.getProviderOptions())
                     .build();
                 Flux<ChatChunk> flux = aiModelService.languageModel(modelName)
                     .flatMapMany(languageModel -> languageModel.streamChat(chatRequest))
@@ -210,7 +213,22 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 return ServerResponse.ok()
                     .contentType(MediaType.TEXT_EVENT_STREAM)
                     .body(flux, ChatChunk.class);
-            });
+            })));
+    }
+
+    private Mono<Void> validateTestChatRequest(TestChatRequest request) {
+        if (request.getMessages() == null || request.getMessages().isEmpty()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "messages must not be empty"));
+        }
+        for (var message : request.getMessages()) {
+            if (message == null || message.getRole() == null || message.getRole().isBlank()
+                || message.getContent() == null || message.getContent().isBlank()) {
+                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "messages must include non-empty role and content"));
+            }
+        }
+        return Mono.empty();
     }
 
     private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId,
@@ -322,6 +340,10 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     @Data
     static class TestChatRequest {
-        private String prompt;
+        private List<Message> messages;
+        private Double temperature;
+        private Integer maxTokens;
+        private Double topP;
+        private Map<String, Object> providerOptions;
     }
 }

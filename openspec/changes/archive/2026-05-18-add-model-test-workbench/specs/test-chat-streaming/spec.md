@@ -1,8 +1,4 @@
-## Purpose
-
-Define the Console streaming test-chat endpoint and frontend streaming behavior used by the model test workbench.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Backend exposes streaming test-chat endpoint
 The system SHALL provide a console endpoint `POST /models/{name}/test-chat/stream` that accepts chat messages and generation parameters in the request body and returns a stream of `ChatChunk` objects as Server-Sent Events.

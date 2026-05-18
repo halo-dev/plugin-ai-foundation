@@ -25,6 +25,7 @@ models/copy-operation.ts
 models/discovered-model-item.ts
 models/index.ts
 models/json-patch-inner.ts
+models/message.ts
 models/metadata.ts
 models/move-operation.ts
 models/provider-model-discovery-response.ts

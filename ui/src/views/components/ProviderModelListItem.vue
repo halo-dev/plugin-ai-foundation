@@ -12,9 +12,10 @@ import {
   VStatusDot,
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { ref } from 'vue'
+import { useRouteQuery } from '@vueuse/router'
+import { computed, ref } from 'vue'
 import ModelEditingModal from './ModelEditingModal.vue'
-import TestChatModal from './TestChatModal.vue'
+import { isEnabledChatModel } from '@/utils/model-test-workbench'
 
 const props = defineProps<{
   model: AiModel
@@ -23,7 +24,15 @@ const props = defineProps<{
 const queryClient = useQueryClient()
 
 const editingModalVisible = ref(false)
-const testChatModalVisible = ref(false)
+const tab = useRouteQuery<string | undefined>('tab')
+const testModel = useRouteQuery<string | undefined>('model')
+const canTest = computed(() => isEnabledChatModel(props.model))
+
+function openWorkbench() {
+  tab.value = 'test'
+  testModel.value = props.model.metadata.name
+}
+
 function handleDelete() {
   Dialog.warning({
     title: '删除模型',
@@ -64,7 +73,7 @@ function handleDelete() {
     </template>
     <template #dropdownItems>
       <VDropdownItem @click="editingModalVisible = true">编辑</VDropdownItem>
-      <VDropdownItem @click="testChatModalVisible = true">测试</VDropdownItem>
+      <VDropdownItem v-if="canTest" @click="openWorkbench">测试</VDropdownItem>
       <VDropdownDivider />
       <VDropdownItem type="danger" @click="handleDelete">删除</VDropdownItem>
     </template>
@@ -74,12 +83,5 @@ function handleDelete() {
     v-if="editingModalVisible"
     :model="model"
     @close="editingModalVisible = false"
-  />
-
-  <TestChatModal
-    v-if="testChatModalVisible"
-    :model-name="model.metadata.name"
-    :model-display-name="model.spec.displayName"
-    @close="testChatModalVisible = false"
   />
 </template>
