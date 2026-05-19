@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import type { AiProvider } from '@/api/generated'
+import { AiModelSpecModelTypeEnum } from '@/api/generated'
+import type { AiModel, AiModelSpecFeaturesEnum, AiProvider } from '@/api/generated'
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
@@ -8,6 +9,14 @@ import {
 } from '@/composables/use-models-fetch'
 import { setFocus } from '@/utils/focus'
 import { createModelFromDiscovered } from '@/utils/model'
+import {
+  MODEL_FEATURE_OPTIONS,
+  MODEL_TYPE_OPTIONS,
+  discoveryConfidenceLabel,
+  discoverySourceLabel,
+  modelFeatureLabel,
+  modelTypeLabel,
+} from '@/types'
 import {
   Toast,
   VButton,
@@ -58,6 +67,44 @@ const filteredModels = computed(() => {
 })
 
 const selectedModels = ref<Set<string>>(new Set())
+const profileOverrides = ref<
+  Record<
+    string,
+    {
+      modelType: AiModel['spec']['modelType']
+      features: NonNullable<AiModel['spec']['features']>
+    }
+  >
+>({})
+
+function profileFor(model: DiscoveredModel) {
+  const existing = profileOverrides.value[model.modelId]
+  if (existing) {
+    return existing
+  }
+  const fallback = {
+    modelType: model.modelType || AiModelSpecModelTypeEnum.Language,
+    features: model.features || [],
+  }
+  profileOverrides.value[model.modelId] = fallback
+  return fallback
+}
+
+function setModelType(model: DiscoveredModel, event: Event) {
+  profileFor(model).modelType = (event.target as HTMLSelectElement).value as AiModel['spec']['modelType']
+}
+
+function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum, event: Event) {
+  const profile = profileFor(model)
+  const checked = (event.target as HTMLInputElement).checked
+  if (checked && !profile.features.includes(feature)) {
+    profile.features = [...profile.features, feature]
+  }
+  if (!checked) {
+    profile.features = profile.features.filter((item) => item !== feature)
+  }
+  profileOverrides.value[model.modelId] = profile
+}
 
 function toggleSelection(model: DiscoveredModel) {
   if (selectedModels.value.has(model.modelId)) {
@@ -74,7 +121,7 @@ async function handleImport() {
 
   const results = await Promise.allSettled(
     data.map(async (model) => {
-      const newModel = createModelFromDiscovered(providerName.value, model)
+      const newModel = createModelFromDiscovered(providerName.value, model, profileFor(model))
 
       await aiConsoleApiClient.model.createModel({
         aiModel: newModel,
@@ -146,7 +193,48 @@ onMounted(() => {
             <input @click.stop type="checkbox" v-model="selectedModels" :value="model.modelId" />
           </template>
           <template #start>
-            <VEntityField :title="model.displayName" :description="model.modelId" />
+            <VEntityField :title="model.displayName" :description="model.modelId">
+              <template #extra>
+                <span class=":uno: rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-600">
+                  {{ modelTypeLabel(profileFor(model).modelType) }}
+                </span>
+                <span
+                  v-for="feature in profileFor(model).features"
+                  :key="feature"
+                  class=":uno: ml-1 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
+                >
+                  {{ modelFeatureLabel(feature) }}
+                </span>
+                <span class=":uno: ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                  {{ discoverySourceLabel(model.source) }} / {{ discoveryConfidenceLabel(model.confidence) }}
+                </span>
+              </template>
+            </VEntityField>
+          </template>
+          <template #end>
+            <div class=":uno: flex max-w-xl flex-wrap items-center justify-end gap-2" @click.stop>
+              <select
+                :value="profileFor(model).modelType"
+                class=":uno: h-8 rounded border border-gray-200 bg-white px-2 text-sm"
+                @change="setModelType(model, $event)"
+              >
+                <option v-for="item in MODEL_TYPE_OPTIONS" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+              <label
+                v-for="item in MODEL_FEATURE_OPTIONS"
+                :key="item.value"
+                class=":uno: inline-flex items-center gap-1 text-xs text-gray-600"
+              >
+                <input
+                  type="checkbox"
+                  :checked="profileFor(model).features.includes(item.value)"
+                  @change="toggleFeature(model, item.value, $event)"
+                />
+                {{ item.label }}
+              </label>
+            </div>
           </template>
         </VEntity>
       </VEntityContainer>

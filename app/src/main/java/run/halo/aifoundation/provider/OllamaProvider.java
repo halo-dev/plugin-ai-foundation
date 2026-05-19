@@ -16,6 +16,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 
 @Slf4j
@@ -70,13 +71,8 @@ public class OllamaProvider extends AbstractAiProviderType {
     }
 
     @Override
-    public List<String> getSupportedEndpointTypes() {
-        return List.of("ollama-chat");
-    }
-
-    @Override
-    public boolean supportsEmbeddings() {
-        return true;
+    public List<AdapterType> getSupportedAdapterTypes() {
+        return List.of(AdapterType.OLLAMA_CHAT);
     }
 
     @Override
@@ -132,8 +128,7 @@ public class OllamaProvider extends AbstractAiProviderType {
                         var nameObj = node.get("name");
                         var modelId = nameObj != null ? nameObj.toString() : "";
                         if (!modelId.isBlank()) {
-                            models.add(new DiscoveredModel(
-                                modelId, modelId, inferCapabilities(modelId)));
+                            models.add(inferModelProfile(modelId));
                         }
                     }
                 }

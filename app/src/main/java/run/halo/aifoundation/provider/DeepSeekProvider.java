@@ -7,6 +7,7 @@ import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
 
 @Component
 public class DeepSeekProvider extends AbstractAiProviderType {
@@ -59,13 +60,8 @@ public class DeepSeekProvider extends AbstractAiProviderType {
     }
 
     @Override
-    public List<String> getSupportedEndpointTypes() {
-        return List.of("openai-chat");
-    }
-
-    @Override
-    public boolean supportsEmbeddings() {
-        return false;
+    public List<AdapterType> getSupportedAdapterTypes() {
+        return List.of(AdapterType.OPENAI_CHAT);
     }
 
     @Override

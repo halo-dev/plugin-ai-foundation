@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
+import { AiModelSpecDiscoveryConfidenceEnum, AiModelSpecDiscoverySourceEnum } from '@/api/generated'
 import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
@@ -41,10 +42,14 @@ const { mutate, isPending } = useMutation({
           displayName: formState.displayName,
           enabled: formState.enabled,
           group: formState.group || undefined,
-          capabilities: formState.capabilities?.length ? formState.capabilities : undefined,
-          endpointType: formState.endpointType || 'openai-chat',
-          supportedTextDelta: formState.supportedTextDelta ?? true,
-        },
+          modelType: formState.modelType,
+          features: formState.features?.length ? formState.features : undefined,
+          adapterType: formState.adapterType || props.model.spec.adapterType,
+          discoverySource:
+            props.model.spec.discoverySource || AiModelSpecDiscoverySourceEnum.Manual,
+          discoveryConfidence:
+            props.model.spec.discoveryConfidence || AiModelSpecDiscoveryConfidenceEnum.High,
+        } as AiModel['spec'],
       },
     })
   },
@@ -77,9 +82,9 @@ function onSubmit(data: ModelFormState) {
         displayName: model.spec.displayName,
         enabled: model.spec.enabled,
         group: model.spec.group,
-        capabilities: model.spec.capabilities,
-        endpointType: model.spec.endpointType,
-        supportedTextDelta: model.spec.supportedTextDelta,
+        modelType: model.spec.modelType,
+        features: model.spec.features,
+        adapterType: model.spec.adapterType,
       }"
       @submit="onSubmit"
     />

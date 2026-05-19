@@ -8,6 +8,7 @@ export * from './ai-provider-spec';
 export * from './ai-provider-status';
 export * from './chat-chunk';
 export * from './copy-operation';
+export * from './default-model-slots';
 export * from './discovered-model-item';
 export * from './json-patch-inner';
 export * from './message';

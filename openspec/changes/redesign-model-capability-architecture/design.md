@@ -124,9 +124,13 @@ AI Foundation should provide central defaults by model purpose:
 
 Each default stores an `AiModel.metadata.name`, not a provider model ID. Defaults should validate that the selected model has the expected `modelType` and is enabled. Consumer plugins can either save an explicit `AiModel.metadata.name` or leave their setting empty and ask AI Foundation for the default wrapper.
 
+Default slots should be stored in the plugin's Setting-backed ConfigMap under the `defaults` group instead of a dedicated singleton Extension. The Console keeps a purpose-built `/default-model-slots` API so the backend can validate selected models and the UI does not need to manipulate raw ConfigMap values.
+
 The default mechanism is not a runtime failover strategy. If the configured/default model fails during invocation, automatic retry/fallback is out of scope for this change.
 
 Alternative considered: make each consumer plugin discover and filter models itself. This was rejected because the AI Foundation plugin should own capability interpretation and default governance.
+
+Alternative considered: store the slots in a dedicated singleton Extension. This was rejected as heavier than needed for plugin-level configuration.
 
 ### 7. Public Java API remains wrapper-oriented
 
@@ -154,7 +158,7 @@ Alternative considered: expose model profile queries publicly. This was rejected
 2. Update provider type metadata and discovery DTOs to emit model profiles and adapter recommendations.
 3. Regenerate the TypeScript API client after backend API changes.
 4. Update Console model creation/editing/discovery import to use model purpose and features.
-5. Add default-slot persistence and validation.
+5. Add Setting/ConfigMap-backed default-slot persistence and validation.
 6. Update `AiModelService` to validate selected/default model types before building language or embedding wrappers.
 7. Remove old UI constants and backend label parsing paths.
 
@@ -162,7 +166,6 @@ Rollback is simple while unreleased: revert the change branch. No compatibility 
 
 ## Open Questions
 
-- Should default model slots live in a dedicated singleton Extension, plugin settings, or a Console-only config resource?
 - Should the first pass include `modelProperties` for context window, embedding dimensions, and max output tokens, or leave those for a follow-up?
 - Should `adapterType` be persisted on `AiModel.spec`, derived at runtime from provider metadata, or persisted only when inference is ambiguous?
 - Should `image-generation` and `image-editing` be separate initial model types, or should image editing start as a feature under a broader `image` type later?

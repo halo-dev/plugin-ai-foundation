@@ -54,8 +54,9 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                 .builtIn(type.isBuiltIn())
                 .requiresBaseUrl(type.requiresBaseUrl())
                 .defaultBaseUrl(type.getDefaultBaseUrl())
-                .supportedEndpointTypes(type.getSupportedEndpointTypes())
-                .supportsEmbeddings(type.supportsEmbeddings())
+                .supportedModelTypes(type.getSupportedModelTypes())
+                .supportedFeatures(type.getSupportedFeatures())
+                .supportedAdapterTypes(type.getSupportedAdapterTypes())
                 .build())
             .sorted(Comparator
                 .comparing((ProviderTypeInfo t) -> !t.isBuiltIn())

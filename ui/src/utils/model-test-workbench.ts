@@ -1,3 +1,4 @@
+import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import type { AiModel, Message, TestChatRequest } from '@/api/generated'
 
 export type ChatRole = 'user' | 'assistant'
@@ -25,7 +26,7 @@ export interface SseParseResult<T> {
 }
 
 export function isEnabledChatModel(model: AiModel) {
-  return model.spec.enabled !== false && model.spec.capabilities?.includes('chat')
+  return model.spec.enabled !== false && model.spec.modelType === AiModelSpecModelTypeEnum.Language
 }
 
 export function filterEnabledChatModels(models: AiModel[] | undefined) {

@@ -2,10 +2,12 @@
 
 ### Requirement: Default model slots
 The system SHALL allow super administrators to configure central default model slots by model type.
+The system SHALL persist default slots in the AI Foundation plugin Setting-backed ConfigMap, not in a dedicated default-slot Extension.
 
 #### Scenario: Configure default language model
 - **WHEN** an admin selects a default language model
 - **THEN** the system SHALL persist the selected model as an `AiModel.metadata.name`
+- **AND** the value SHALL be stored in the plugin ConfigMap `defaults` group
 - **AND** the backend SHALL validate that the selected `AiModel` exists, is enabled, and has `modelType = language`
 
 #### Scenario: Configure default embedding model

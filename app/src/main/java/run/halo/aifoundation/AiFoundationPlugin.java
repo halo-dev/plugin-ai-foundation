@@ -30,7 +30,7 @@ public class AiFoundationPlugin extends BasePlugin {
             indexSpecs.add(IndexSpecs.<AiModel, String>single("spec.modelId", String.class)
                 .indexFunc(model -> model.getSpec().getModelId()));
         });
-        log.info("AI Foundation plugin started, registered AiProvider and AiModel extensions.");
+        log.info("AI Foundation plugin started, registered AI Foundation extensions.");
     }
 
     @Override

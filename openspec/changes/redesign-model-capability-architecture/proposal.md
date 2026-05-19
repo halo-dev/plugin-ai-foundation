@@ -9,7 +9,7 @@ The current model metadata mixes model purpose (`chat`, `embedding`), optional f
 - Add first-class model types for `language`, `embedding`, `rerank`, and `image-generation`, with room for later types such as image editing, speech, and moderation.
 - Treat agent support as a language-model feature set (`tool-call`, `structured-output`, `streaming`, optional `vision`/`reasoning`) rather than as a model type.
 - Extend model discovery to return candidate model profiles with source and confidence metadata, so weak OpenAI-compatible `/v1/models` heuristics are distinguishable from provider catalogs or structured provider APIs.
-- Add AI Foundation default model slots such as default language, embedding, rerank, and image-generation models, so consumer plugins can either store an explicit `AiModel.metadata.name` or fall back to centrally configured defaults.
+- Add Setting/ConfigMap-backed AI Foundation default model slots such as default language, embedding, rerank, and image-generation models, so consumer plugins can either store an explicit `AiModel.metadata.name` or fall back to centrally configured defaults.
 - Update Console model management to guide admins through model purpose and advanced features while hiding adapter details unless advanced/debugging controls are needed.
 - Keep the public Java API simple: consumer plugins continue resolving callable model wrappers by `AiModel.metadata.name`; they do not need a public capability-query API.
 
@@ -41,4 +41,5 @@ The current model metadata mixes model purpose (`chat`, `embedding`), optional f
 - Provider type API: provider metadata and discovery DTOs need regenerated OpenAPI clients after backend changes.
 - Console UI: model creation, editing, discovery import, filtering, and default model settings need updates.
 - Runtime services: language and embedding resolution should validate that the selected/default model has a compatible model type before building a wrapper.
+- Plugin configuration: default model slots live in the AI Foundation ConfigMap rather than a dedicated singleton Extension.
 - Public API: existing `languageModel(modelName)` and `embeddingModel(modelName)` stay centered on `AiModel.metadata.name`; default-slot convenience may be added without exposing capability internals.

@@ -1,3 +1,13 @@
+import {
+  AiModelSpecAdapterTypeEnum,
+  AiModelSpecDiscoveryConfidenceEnum,
+  AiModelSpecDiscoverySourceEnum,
+  AiModelSpecFeaturesEnum,
+  AiModelSpecModelTypeEnum,
+  DiscoveredModelItemAdapterTypeEnum,
+  DiscoveredModelItemConfidenceEnum,
+  DiscoveredModelItemSourceEnum,
+} from '@/api/generated'
 import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import { createModelFromDiscovered, findProviderTypeForModel } from './model'
@@ -25,24 +35,41 @@ describe('findProviderTypeForModel', () => {
 })
 
 describe('createModelFromDiscovered', () => {
-  it('uses backend suggested endpoint type when present', () => {
+  it('uses backend adapter recommendation when present', () => {
     expect(
       createModelFromDiscovered(
         'openai-prod',
-        discoveredModel('text-embedding-3-small', ['embedding'], 'openai-embedding'),
+        discoveredModel('text-embedding-3-small', AiModelSpecModelTypeEnum.Embedding, [
+          AiModelSpecFeaturesEnum.Streaming,
+        ], DiscoveredModelItemAdapterTypeEnum.OpenaiEmbedding),
       ).spec,
     ).toMatchObject({
       providerName: 'openai-prod',
       modelId: 'text-embedding-3-small',
       displayName: 'text-embedding-3-small',
       enabled: true,
-      endpointType: 'openai-embedding',
+      modelType: AiModelSpecModelTypeEnum.Embedding,
+      features: [AiModelSpecFeaturesEnum.Streaming],
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+      discoverySource: AiModelSpecDiscoverySourceEnum.Rule,
+      discoveryConfidence: AiModelSpecDiscoveryConfidenceEnum.Low,
     })
   })
 
-  it('omits endpoint type when backend provides no suggestion', () => {
-    expect(createModelFromDiscovered('openai-prod', discoveredModel('rerank', ['rerank'])).spec)
-      .not.toHaveProperty('endpointType')
+  it('allows admin profile override before import', () => {
+    expect(
+      createModelFromDiscovered(
+        'openai-prod',
+        discoveredModel('maybe-image', AiModelSpecModelTypeEnum.Language),
+        {
+          modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+          features: [],
+        },
+      ).spec,
+    ).toMatchObject({
+      modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+      features: [],
+    })
   })
 })
 
@@ -56,7 +83,9 @@ function aiModel(name: string, providerName: string): AiModel {
       modelId: name,
       displayName: name,
       enabled: true,
-      endpointType: 'openai-chat',
+      modelType: AiModelSpecModelTypeEnum.Language,
+      features: [AiModelSpecFeaturesEnum.Streaming],
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiChat,
     },
   }
 }
@@ -78,16 +107,26 @@ function providerTypeInfo(providerType: string, displayName: string): ProviderTy
   return {
     providerType,
     displayName,
-    supportedEndpointTypes: [],
+    supportedModelTypes: [],
+    supportedFeatures: [],
+    supportedAdapterTypes: [],
   }
 }
 
-function discoveredModel(modelId: string, capabilities: string[], suggestedEndpointType?: string) {
+function discoveredModel(
+  modelId: string,
+  modelType: AiModel['spec']['modelType'] = AiModelSpecModelTypeEnum.Language,
+  features = [] as AiModelSpecFeaturesEnum[],
+  adapterType?: DiscoveredModelItemAdapterTypeEnum,
+) {
   return {
     modelId,
     displayName: modelId,
     name: '',
-    capabilities,
-    suggestedEndpointType,
+    modelType,
+    features,
+    adapterType,
+    source: DiscoveredModelItemSourceEnum.Rule,
+    confidence: DiscoveredModelItemConfidenceEnum.Low,
   }
 }

@@ -1,0 +1,23 @@
+apiVersion: v1alpha1
+kind: Setting
+metadata:
+  name: ai-foundation-settings
+spec:
+  forms:
+    - group: defaults
+      label: 默认模型
+      formSchema:
+        # The visible selector UI lives in the plugin console page so backend validation can
+        # filter models by modelType. These hidden fields only define the ConfigMap shape.
+        - $formkit: hidden
+          name: languageModelName
+          value: ""
+        - $formkit: hidden
+          name: embeddingModelName
+          value: ""
+        - $formkit: hidden
+          name: rerankModelName
+          value: ""
+        - $formkit: hidden
+          name: imageGenerationModelName
+          value: ""

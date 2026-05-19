@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import type { AiProvider } from '@/api/generated'
+import { AiModelSpecDiscoveryConfidenceEnum, AiModelSpecDiscoverySourceEnum } from '@/api/generated'
+import type { AiModel, AiProvider } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import type { ModelFormState } from '@/types/form'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
@@ -37,10 +38,12 @@ const { mutate, isPending } = useMutation({
           displayName: formState.displayName,
           enabled: formState.enabled,
           group: formState.group || undefined,
-          capabilities: formState.capabilities?.length ? formState.capabilities : undefined,
-          endpointType: formState.endpointType || 'openai-chat',
-          supportedTextDelta: formState.supportedTextDelta ?? true,
-        },
+          modelType: formState.modelType,
+          features: formState.features?.length ? formState.features : undefined,
+          discoverySource: AiModelSpecDiscoverySourceEnum.Manual,
+          discoveryConfidence: AiModelSpecDiscoveryConfidenceEnum.High,
+          ...(formState.adapterType ? { adapterType: formState.adapterType } : {}),
+        } as AiModel['spec'],
       },
     })
   },

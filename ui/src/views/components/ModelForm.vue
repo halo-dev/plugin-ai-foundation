@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
-import { CAPABILITY_OPTIONS } from '@/types'
+import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
 import type { ModelFormState } from '@/types/form'
 import { submitForm } from '@formkit/core'
 import { computed } from 'vue'
@@ -16,34 +17,34 @@ const emit = defineEmits<{
 
 const isEditing = computed(() => !!props.formState)
 
-const capabilityOptions = CAPABILITY_OPTIONS.map((c) => ({
-  value: c.value,
-  label: c.label,
-}))
-
 const { data: providerTypes } = useProviderTypesFetch()
 
-function getEndpointLabel(value: string): string {
-  const labels: Record<string, string> = {
-    'openai-chat': 'OpenAI Chat',
-    'openai-embedding': 'OpenAI Embedding',
-    'ollama-chat': 'Ollama Chat',
-  }
-  return labels[value] || value
-}
-
-const endpointTypeOptions = computed(() => {
-  const type = providerTypes.value?.find((t) => t.providerType === props.providerType)
-  const types = type?.supportedEndpointTypes || []
-  return types.map((v) => ({ value: v, label: getEndpointLabel(v) }))
+const selectedProviderType = computed(() => {
+  return providerTypes.value?.find((type) => type.providerType === props.providerType)
 })
 
-const defaultEndpointType = computed(() => {
-  const options = endpointTypeOptions.value
-  if (options.length === 1) {
-    return options[0].value
-  }
-  return props.formState?.endpointType || 'openai-chat'
+const modelTypeOptions = computed(() => {
+  const supportedTypes = selectedProviderType.value?.supportedModelTypes || []
+  const options = supportedTypes.length
+    ? MODEL_TYPE_OPTIONS.filter((item) => supportedTypes.includes(item.value))
+    : MODEL_TYPE_OPTIONS
+  return options.map((item) => ({ value: item.value, label: item.label }))
+})
+
+const featureOptions = computed(() => {
+  const supportedFeatures = selectedProviderType.value?.supportedFeatures || []
+  const options = supportedFeatures.length
+    ? MODEL_FEATURE_OPTIONS.filter((item) => supportedFeatures.includes(item.value))
+    : MODEL_FEATURE_OPTIONS
+  return options.map((item) => ({ value: item.value, label: item.label }))
+})
+
+const defaultModelType = computed(() => {
+  return (
+    props.formState?.modelType ||
+    modelTypeOptions.value[0]?.value ||
+    AiModelSpecModelTypeEnum.Language
+  )
 })
 
 function onSubmit(data: ModelFormState) {
@@ -80,32 +81,25 @@ defineExpose({
       type="text"
       name="group"
       label="分组"
-      placeholder="例如: chat, embedding"
+      placeholder="例如: GPT, Embedding"
       :value="formState?.group"
     />
 
     <FormKit
-      type="checkbox"
-      name="capabilities"
-      label="能力标签"
-      :options="capabilityOptions"
-      :value="formState?.capabilities"
-    />
-
-    <FormKit
       type="select"
-      name="endpointType"
-      label="Endpoint 类型"
-      :options="endpointTypeOptions"
-      :value="formState?.endpointType || defaultEndpointType"
-      :disabled="endpointTypeOptions.length <= 1"
+      name="modelType"
+      label="模型类型"
+      validation="required"
+      :options="modelTypeOptions"
+      :value="defaultModelType"
     />
 
     <FormKit
-      type="switch"
-      name="supportedTextDelta"
-      label="支持流式输出"
-      :value="formState?.supportedTextDelta ?? true"
+      type="checkbox"
+      name="features"
+      label="高级特性"
+      :options="featureOptions"
+      :value="formState?.features"
     />
 
     <FormKit type="switch" name="enabled" label="启用" :value="formState?.enabled ?? true" />

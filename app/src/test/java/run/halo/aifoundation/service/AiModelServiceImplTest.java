@@ -3,9 +3,11 @@ package run.halo.aifoundation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import org.springframework.ai.chat.model.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,15 +17,20 @@ import org.springframework.data.domain.Sort;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import run.halo.aifoundation.DefaultModelNotConfiguredException;
+import run.halo.aifoundation.IncompatibleModelTypeException;
 import run.halo.aifoundation.ModelNotFoundException;
 import run.halo.aifoundation.ProviderDisabledException;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
+import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.plugin.ReactiveSettingFetcher;
 
 @ExtendWith(MockitoExtension.class)
 class AiModelServiceImplTest {
@@ -37,11 +44,14 @@ class AiModelServiceImplTest {
     @Mock
     SecretResolver secretResolver;
 
+    @Mock
+    ReactiveSettingFetcher settingFetcher;
+
     AiModelServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new AiModelServiceImpl(client, providerClientCache, secretResolver);
+        service = new AiModelServiceImpl(client, providerClientCache, secretResolver, settingFetcher);
     }
 
     // ---- listModels ----
@@ -161,10 +171,56 @@ class AiModelServiceImplTest {
             .verify();
     }
 
+    @Test
+    void languageModel_wrongModelType_emitsIncompatibleModelTypeException() {
+        var model = aiModel("embedding", "openai-prod", "text-embedding-3-small",
+            "Embedding", true, ModelType.EMBEDDING);
+        when(client.fetch(AiModel.class, "embedding")).thenReturn(Mono.just(model));
+
+        StepVerifier.create(service.languageModel("embedding"))
+            .expectError(IncompatibleModelTypeException.class)
+            .verify();
+    }
+
+    @Test
+    void defaultLanguageModel_missingSlot_emitsDefaultModelNotConfiguredException() {
+        when(settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class))
+            .thenReturn(Mono.empty());
+
+        StepVerifier.create(service.defaultLanguageModel())
+            .expectError(DefaultModelNotConfiguredException.class)
+            .verify();
+    }
+
+    @Test
+    void defaultLanguageModel_resolvesConfiguredModel() {
+        var slots = defaultSlots("openai-prod-gpt-4-abc", null);
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
+        var provider = aiProvider("openai-prod", "openai", true);
+        var chatModel = mock(ChatModel.class);
+
+        when(settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class))
+            .thenReturn(Mono.just(slots));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
+            .thenReturn(chatModel);
+
+        StepVerifier.create(service.defaultLanguageModel())
+            .assertNext(languageModel -> assertThat(languageModel).isNotNull())
+            .verifyComplete();
+    }
+
     // ---- helpers ----
 
     private AiModel aiModel(String name, String providerName, String modelId,
                             String displayName, boolean enabled) {
+        return aiModel(name, providerName, modelId, displayName, enabled, ModelType.LANGUAGE);
+    }
+
+    private AiModel aiModel(String name, String providerName, String modelId,
+                            String displayName, boolean enabled, ModelType modelType) {
         var model = new AiModel();
         var metadata = new Metadata();
         metadata.setName(name);
@@ -174,6 +230,7 @@ class AiModelServiceImplTest {
         spec.setModelId(modelId);
         spec.setDisplayName(displayName);
         spec.setEnabled(enabled);
+        spec.setModelType(modelType);
         model.setSpec(spec);
         return model;
     }
@@ -195,5 +252,12 @@ class AiModelServiceImplTest {
         var status = new AiProvider.AiProviderStatus();
         status.setPhase(phase);
         return status;
+    }
+
+    private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName) {
+        var slots = new DefaultModelSlots();
+        slots.setLanguageModelName(languageModelName);
+        slots.setEmbeddingModelName(embeddingModelName);
+        return slots;
     }
 }

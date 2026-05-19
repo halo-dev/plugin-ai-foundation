@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { useModelsFetch } from '@/composables/use-models-fetch'
+import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
 import {
   IconRefreshLine,
   VButton,
@@ -19,6 +20,8 @@ const { data, isLoading, isFetching, refetch } = useModelsFetch({})
 const tab = useRouteQuery<string | undefined>('tab')
 
 const keyword = ref('')
+const modelTypeFilter = ref('')
+const featureFilter = ref('')
 
 const allModels = computed(() => data.value || [])
 
@@ -29,11 +32,23 @@ const { results } = useFuse(keyword, allModels, {
   },
 })
 
-const filteredModels = computed(() => {
+const keywordModels = computed(() => {
   if (!keyword.value) {
     return allModels.value
   }
   return results.value.map((r) => r.item)
+})
+
+const filteredModels = computed(() => {
+  return keywordModels.value.filter((model) => {
+    if (modelTypeFilter.value && model.spec.modelType !== modelTypeFilter.value) {
+      return false
+    }
+    if (featureFilter.value && !(model.spec.features || []).some((item) => item === featureFilter.value)) {
+      return false
+    }
+    return true
+  })
 })
 </script>
 <template>
@@ -47,6 +62,24 @@ const filteredModels = computed(() => {
             <div class=":uno: w-full flex flex-1 items-center gap-2 sm:w-auto">
               <SearchInput sync v-model="keyword" />
             </div>
+            <select
+              v-model="modelTypeFilter"
+              class=":uno: h-8 rounded border border-gray-200 bg-white px-2 text-sm"
+            >
+              <option value="">全部类型</option>
+              <option v-for="item in MODEL_TYPE_OPTIONS" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+            <select
+              v-model="featureFilter"
+              class=":uno: h-8 rounded border border-gray-200 bg-white px-2 text-sm"
+            >
+              <option value="">全部特性</option>
+              <option v-for="item in MODEL_FEATURE_OPTIONS" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
             <VSpace spacing="lg" class=":uno: flex-wrap">
               <div class=":uno: flex flex-row gap-2">
                 <button
@@ -92,7 +125,11 @@ const filteredModels = computed(() => {
       <template #footer>
         <div class=":uno: h-8 flex items-center">
           <span class=":uno: text-sm text-gray-500">
-            {{ keyword ? `找到 ${filteredModels.length} 个模型` : `共 ${data?.length} 个模型` }}
+            {{
+              keyword || modelTypeFilter || featureFilter
+                ? `找到 ${filteredModels.length} 个模型`
+                : `共 ${allModels.length} 个模型`
+            }}
           </span>
         </div>
       </template>

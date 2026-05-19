@@ -14,6 +14,11 @@ import org.junit.jupiter.api.Test;
 import reactor.netty.transport.ProxyProvider.Proxy;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.Metadata;
 
 class AbstractAiProviderTypeTest {
@@ -45,13 +50,8 @@ class AbstractAiProviderTypeTest {
         }
 
         @Override
-        public java.util.List<String> getSupportedEndpointTypes() {
-            return java.util.List.of("openai-chat");
-        }
-
-        @Override
-        public boolean supportsEmbeddings() {
-            return false;
+        public java.util.List<AdapterType> getSupportedAdapterTypes() {
+            return java.util.List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING);
         }
 
         @Override
@@ -137,7 +137,13 @@ class AbstractAiProviderTypeTest {
             StepVerifier.create(new TestProviderType().discoverModels(provider, "key"))
                 .assertNext(models -> {
                     assertThat(models).hasSize(1);
-                    assertThat(models.getFirst().modelId()).isEqualTo("gpt-test");
+                    var model = models.getFirst();
+                    assertThat(model.modelId()).isEqualTo("gpt-test");
+                    assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
+                    assertThat(model.features()).containsExactly(ModelFeature.STREAMING);
+                    assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
+                    assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
+                    assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
                 })
                 .verifyComplete();
             assertThat(proxyHit).isCompletedWithValue(true);
@@ -145,6 +151,16 @@ class AbstractAiProviderTypeTest {
             proxyServer.close();
             proxyThread.join();
         }
+    }
+
+    @Test
+    void inferModelProfile_detectsEmbeddingModel() {
+        var profile = new TestProviderType().inferModelProfile("text-embedding-3-small");
+
+        assertThat(profile.modelType()).isEqualTo(ModelType.EMBEDDING);
+        assertThat(profile.adapterType()).isEqualTo(AdapterType.OPENAI_EMBEDDING);
+        assertThat(profile.source()).isEqualTo(DiscoverySource.RULE);
+        assertThat(profile.confidence()).isEqualTo(DiscoveryConfidence.LOW);
     }
 
     private AiProvider providerWithBaseUrl(String baseUrl) {
