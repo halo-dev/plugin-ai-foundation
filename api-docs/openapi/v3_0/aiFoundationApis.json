@@ -982,10 +982,6 @@
               "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
             }
           },
-          "group" : {
-            "type" : "string",
-            "description" : "Model group for display/filtering purposes"
-          },
           "modelId" : {
             "type" : "string",
             "description" : "Unique identifier of the model within the provider"

@@ -118,19 +118,22 @@ The Console UI SHALL display provider-scoped `AiModel` entries in the selected p
 - **THEN** the system SHALL fetch models via GET on the Console API (`/apis/console.api.aifoundation.halo.run/v1alpha1/models`) with `fieldSelector=spec.providerName={selectedProvider}`
 - **AND** the response SHALL be a non-paginated array sorted by `metadata.creationTimestamp` descending
 - **AND** each item SHALL show the model display name and underlying `providerResourceName/modelId` reference, where `providerResourceName = AiProvider.metadata.name`
-- **AND** each item SHALL show its group and capability tags when available
+- **AND** each item SHALL show capability tags when available
+- **AND** each item MUST NOT show or depend on `spec.group`
 
 ### Requirement: Model grouping and filtering
-The Console UI SHALL support browsing models with group and capability context.
+The Console UI SHALL support browsing models with capability context and SHALL NOT use a free-form model group axis.
 
-#### Scenario: Grouped model display
-- **WHEN** the selected provider has models with `spec.group`
-- **THEN** the UI SHALL group models by that value in collapsible sections
+#### Scenario: Flat model display
+- **WHEN** the selected provider has one or more models
+- **THEN** the UI SHALL render the models without grouping them by `spec.group`
+- **AND** the UI SHALL NOT create a default "未分组" section
 
 #### Scenario: Filter models by keyword or capability
 - **WHEN** an admin enters a search term or chooses a capability filter
 - **THEN** the UI SHALL narrow the displayed models within the selected provider workspace
-- **AND** filtering SHALL work with model ID, display name, group, and capability tags
+- **AND** filtering SHALL work with model ID, display name, and capability tags
+- **AND** filtering MUST NOT depend on `spec.group`
 
 ### Requirement: Add model from provider
 The Console UI SHALL allow admins to add a new `AiModel` inside the currently selected provider workspace.
@@ -147,7 +150,7 @@ The Console UI SHALL allow admins to add a new `AiModel` inside the currently se
 
 #### Scenario: Add model metadata
 - **WHEN** an admin creates or edits a model
-- **THEN** the form SHALL support editing `group`, `capabilities`, `endpointType`, and `supportedTextDelta`
+- **THEN** the form SHALL support editing `capabilities`, `endpointType`, and `supportedTextDelta`
 - **AND** these values SHALL be persisted to the `AiModel` Extension
 
 ### Requirement: Browse provider models
@@ -163,7 +166,6 @@ The Console UI SHALL allow browsing available models from a provider's API to si
 #### Scenario: Batch add discovered models
 - **WHEN** an admin selects multiple discovered models from the provider API result
 - **THEN** the UI SHALL create multiple `AiModel` entries in one batch workflow
-- **AND** the admin MAY set shared defaults such as `group` before confirming
 - **AND** the UI SHALL submit each model's backend-recommended `endpointType` when it is present
 - **AND** the UI SHALL NOT infer `endpointType` from capability or endpoint type strings
 - **AND** the UI SHALL NOT display a manual endpointType selector during batch add from discovery

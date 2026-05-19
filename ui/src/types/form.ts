@@ -18,7 +18,6 @@ export interface ModelFormState {
   modelId: string
   displayName: string
   enabled: boolean
-  group?: string
   modelType: AiModelSpecModelTypeEnum
   features?: AiModelSpecFeaturesEnum[]
   adapterType?: AiModelSpecAdapterTypeEnum

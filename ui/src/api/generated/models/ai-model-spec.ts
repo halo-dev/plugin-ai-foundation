@@ -57,12 +57,6 @@ export interface AiModelSpec {
      */
     'features'?: Array<AiModelSpecFeaturesEnum>;
     /**
-     * Model group for display/filtering purposes
-     * @type {string}
-     * @memberof AiModelSpec
-     */
-    'group'?: string;
-    /**
      * Unique identifier of the model within the provider
      * @type {string}
      * @memberof AiModelSpec

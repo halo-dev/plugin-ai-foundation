@@ -78,14 +78,6 @@ defineExpose({
     />
 
     <FormKit
-      type="text"
-      name="group"
-      label="分组"
-      placeholder="例如: GPT, Embedding"
-      :value="formState?.group"
-    />
-
-    <FormKit
       type="select"
       name="modelType"
       label="模型类型"

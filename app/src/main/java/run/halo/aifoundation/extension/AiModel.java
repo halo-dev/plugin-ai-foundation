@@ -33,8 +33,6 @@ public class AiModel extends AbstractExtension {
         private String displayName;
         @Schema(requiredMode = REQUIRED, description = "Whether the model is enabled")
         private boolean enabled = true;
-        @Schema(description = "Model group for display/filtering purposes")
-        private String group;
         @Schema(requiredMode = REQUIRED, description = "Primary model purpose")
         private ModelType modelType;
         @Schema(description = "Optional model features")

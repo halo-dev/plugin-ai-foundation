@@ -37,7 +37,6 @@ const { mutate, isPending } = useMutation({
           modelId: formState.modelId,
           displayName: formState.displayName,
           enabled: formState.enabled,
-          group: formState.group || undefined,
           modelType: formState.modelType,
           features: formState.features?.length ? formState.features : undefined,
           discoverySource: AiModelSpecDiscoverySourceEnum.Manual,

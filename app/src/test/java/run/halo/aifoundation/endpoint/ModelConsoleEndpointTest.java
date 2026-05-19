@@ -119,10 +119,9 @@ class ModelConsoleEndpointTest {
             .bodyValue(m)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(AiModel.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo(generatedName));
+            .expectBody()
+            .jsonPath("$.metadata.name").isEqualTo(generatedName)
+            .jsonPath("$.spec.group").doesNotExist();
     }
 
     @Test
