@@ -146,7 +146,7 @@ Alternative considered: expose model profile queries publicly. This was rejected
 ## Risks / Trade-offs
 
 - [Risk] The schema change touches backend Extensions, generated OpenAPI clients, and Console forms at once. -> Mitigation: implement backend schema/DTOs first, regenerate clients, then update UI in small vertical slices.
-- [Risk] Weak discovery rules may still feel too confident in the UI. -> Mitigation: always display source/confidence and require an editable confirmation path before import.
+- [Risk] Weak discovery rules may still feel too confident in the UI. -> Mitigation: persist source/confidence as discovery evidence, but keep the discovery list visually focused on editable model type and feature controls instead of duplicating evidence badges.
 - [Risk] `adapterType` may become another visible complexity leak. -> Mitigation: hide it by default and surface it only when there are multiple valid adapters or validation fails.
 - [Risk] Default model slots could be mistaken for failover. -> Mitigation: name and document them as central defaults, not automatic fallback chains.
 - [Risk] Feature names may grow without governance. -> Mitigation: keep feature values typed on the backend and introduce new values only with provider/UI support.

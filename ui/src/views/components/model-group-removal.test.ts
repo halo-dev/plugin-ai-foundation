@@ -52,4 +52,16 @@ describe('model group removal', () => {
     expect(source).not.toContain('<details')
     expect(source).not.toContain('未分组')
   })
+
+  it('keeps provider discovery rows free of duplicate profile badges', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/components/ProviderModelsDiscoveryModal.vue'),
+      'utf8',
+    )
+
+    expect(source).not.toContain('discoverySourceLabel')
+    expect(source).not.toContain('discoveryConfidenceLabel')
+    expect(source).not.toContain('modelFeatureLabel')
+    expect(source).not.toContain('modelTypeLabel')
+  })
 })

@@ -38,7 +38,7 @@
 
 - [x] 6.1 Replace model capability checkbox UI with model type selection and feature selection.
 - [x] 6.2 Hide `adapterType` from the normal model form while preserving advanced/debug visibility when needed.
-- [x] 6.3 Update provider model discovery UI to show candidate model type, features, source, and confidence.
+- [x] 6.3 Update provider model discovery UI to edit candidate model type and features while preserving source and confidence metadata in the import payload.
 - [x] 6.4 Allow admins to correct weak discovery profiles before importing discovered models.
 - [x] 6.5 Update model list display and filters to use model type and features instead of flat capability tags.
 - [x] 6.6 Add Console UI for default model slot selection with model-type-filtered selectors.

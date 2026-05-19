@@ -53,8 +53,8 @@ The Console UI SHALL allow browsing available models from a provider's API to si
 #### Scenario: Browse and add from provider API
 - **WHEN** an admin selects a provider and clicks "从供应商获取模型列表"
 - **THEN** the system SHALL call the model listing endpoint for that provider
-- **AND** display available models with their candidate model type and feature metadata
-- **AND** display each model's discovery source and confidence when available
+- **AND** display available models with editable candidate model type and feature controls
+- **AND** avoid duplicating candidate model type, feature, discovery source, or confidence badges in the model identity area
 - **AND** display the backend-recommended internal adapter only as advanced metadata
 - **AND** allow the admin to select one or more models to add as `AiModel` entries
 
@@ -73,8 +73,8 @@ The Console UI SHALL allow browsing available models from a provider's API to si
 
 #### Scenario: Weak discovery confidence
 - **WHEN** a discovered model was inferred from weak rules such as OpenAI-compatible model-name heuristics
-- **THEN** the UI SHALL indicate that the model type and features should be confirmed
-- **AND** the admin SHALL be able to correct the candidate profile before importing the model
+- **THEN** the UI SHALL allow the admin to confirm or correct the candidate model type and features before importing the model
+- **AND** the UI SHALL preserve discovery source and confidence in the import payload without presenting them as primary row badges
 
 ### Requirement: Edit model
 The Console UI SHALL allow admins to edit an existing `AiModel`'s metadata.

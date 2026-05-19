@@ -16,12 +16,6 @@ import {
   modelTypeOptionsForProviderType,
 } from '@/utils/model'
 import {
-  discoveryConfidenceLabel,
-  discoverySourceLabel,
-  modelFeatureLabel,
-  modelTypeLabel,
-} from '@/types'
-import {
   Toast,
   VButton,
   VEmpty,
@@ -228,23 +222,7 @@ onMounted(() => {
             <input @click.stop type="checkbox" v-model="selectedModels" :value="model.modelId" />
           </template>
           <template #start>
-            <VEntityField :title="model.displayName" :description="model.modelId">
-              <template #extra>
-                <span class=":uno: rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-600">
-                  {{ modelTypeLabel(profileFor(model).modelType) }}
-                </span>
-                <span
-                  v-for="feature in profileFor(model).features"
-                  :key="feature"
-                  class=":uno: ml-1 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
-                >
-                  {{ modelFeatureLabel(feature) }}
-                </span>
-                <span class=":uno: ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
-                  {{ discoverySourceLabel(model.source) }} / {{ discoveryConfidenceLabel(model.confidence) }}
-                </span>
-              </template>
-            </VEntityField>
+            <VEntityField :title="model.displayName" :description="model.modelId" />
           </template>
           <template #end>
             <div class=":uno: max-w-xl flex flex-wrap items-center justify-end gap-2" @click.stop>
