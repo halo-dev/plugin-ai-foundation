@@ -7,10 +7,19 @@ import {
   DiscoveredModelItemAdapterTypeEnum,
   DiscoveredModelItemConfidenceEnum,
   DiscoveredModelItemSourceEnum,
+  ProviderTypeInfoSupportedFeaturesEnum,
+  ProviderTypeInfoSupportedModelTypesEnum,
 } from '@/api/generated'
 import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
-import { createModelFromDiscovered, findProviderTypeForModel } from './model'
+import {
+  createModelFromDiscovered,
+  defaultModelTypeForProviderType,
+  filterModelFeaturesForProviderType,
+  findProviderTypeForModel,
+  modelFeatureOptionsForProviderType,
+  modelTypeOptionsForProviderType,
+} from './model'
 
 describe('findProviderTypeForModel', () => {
   it('matches by provider resource name instead of provider name prefix', () => {
@@ -73,6 +82,44 @@ describe('createModelFromDiscovered', () => {
   })
 })
 
+describe('provider type model options', () => {
+  it('limits model types and features to the selected provider type', () => {
+    const providerType = providerTypeInfo('openailike', 'OpenAI 兼容', {
+      supportedModelTypes: [
+        ProviderTypeInfoSupportedModelTypesEnum.Language,
+        ProviderTypeInfoSupportedModelTypesEnum.Embedding,
+      ],
+      supportedFeatures: [ProviderTypeInfoSupportedFeaturesEnum.Streaming],
+    })
+
+    expect(modelTypeOptionsForProviderType(providerType).map((item) => item.value)).toEqual([
+      AiModelSpecModelTypeEnum.Language,
+      AiModelSpecModelTypeEnum.Embedding,
+    ])
+    expect(modelFeatureOptionsForProviderType(providerType).map((item) => item.value)).toEqual([
+      AiModelSpecFeaturesEnum.Streaming,
+    ])
+    expect(
+      defaultModelTypeForProviderType(providerType, AiModelSpecModelTypeEnum.ImageGeneration),
+    ).toBe(AiModelSpecModelTypeEnum.Language)
+    expect(
+      filterModelFeaturesForProviderType(providerType, [
+        AiModelSpecFeaturesEnum.Streaming,
+        AiModelSpecFeaturesEnum.Vision,
+      ]),
+    ).toEqual([AiModelSpecFeaturesEnum.Streaming])
+  })
+
+  it('shows all options until provider type metadata is loaded', () => {
+    expect(modelTypeOptionsForProviderType(undefined).map((item) => item.value)).toContain(
+      AiModelSpecModelTypeEnum.ImageGeneration,
+    )
+    expect(modelFeatureOptionsForProviderType(undefined).map((item) => item.value)).toContain(
+      AiModelSpecFeaturesEnum.ToolCall,
+    )
+  })
+})
+
 function aiModel(name: string, providerName: string): AiModel {
   return {
     apiVersion: 'aifoundation.halo.run/v1alpha1',
@@ -103,13 +150,18 @@ function aiProvider(name: string, providerType: string): AiProvider {
   }
 }
 
-function providerTypeInfo(providerType: string, displayName: string): ProviderTypeInfo {
+function providerTypeInfo(
+  providerType: string,
+  displayName: string,
+  overrides: Partial<ProviderTypeInfo> = {},
+): ProviderTypeInfo {
   return {
     providerType,
     displayName,
     supportedModelTypes: [],
     supportedFeatures: [],
     supportedAdapterTypes: [],
+    ...overrides,
   }
 }
 

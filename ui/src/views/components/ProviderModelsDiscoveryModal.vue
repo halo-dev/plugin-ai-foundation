@@ -1,17 +1,21 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import type { AiModel, AiModelSpecFeaturesEnum, AiProvider } from '@/api/generated'
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
+import { useProviderType } from '@/composables/use-provider-types-fetch'
 import { setFocus } from '@/utils/focus'
-import { createModelFromDiscovered } from '@/utils/model'
 import {
-  MODEL_FEATURE_OPTIONS,
-  MODEL_TYPE_OPTIONS,
+  createModelFromDiscovered,
+  defaultModelTypeForProviderType,
+  filterModelFeaturesForProviderType,
+  modelFeatureOptionsForProviderType,
+  modelTypeOptionsForProviderType,
+} from '@/utils/model'
+import {
   discoveryConfidenceLabel,
   discoverySourceLabel,
   modelFeatureLabel,
@@ -30,7 +34,7 @@ import {
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, toRef } from 'vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -47,6 +51,7 @@ const modal = ref<InstanceType<typeof VModal> | null>(null)
 const providerName = computed(() => props.provider.metadata.name || '')
 
 const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
+const selectedProviderType = useProviderType(toRef(props, 'provider'))
 
 const keyword = ref('')
 
@@ -77,24 +82,54 @@ const profileOverrides = ref<
   >
 >({})
 
+const modelTypeOptions = computed(() => modelTypeOptionsForProviderType(selectedProviderType.value))
+
+const featureOptions = computed(() => modelFeatureOptionsForProviderType(selectedProviderType.value))
+
+function featuresEqual(
+  a: NonNullable<AiModel['spec']['features']>,
+  b: NonNullable<AiModel['spec']['features']>,
+) {
+  return a.length === b.length && a.every((item, index) => item === b[index])
+}
+
 function profileFor(model: DiscoveredModel) {
   const existing = profileOverrides.value[model.modelId]
-  if (existing) {
+
+  const fallback = {
+    modelType: defaultModelTypeForProviderType(
+      selectedProviderType.value,
+      existing?.modelType || model.modelType,
+    ),
+    features: filterModelFeaturesForProviderType(
+      selectedProviderType.value,
+      existing?.features || model.features || [],
+    ),
+  }
+
+  if (
+    existing &&
+    existing.modelType === fallback.modelType &&
+    featuresEqual(existing.features, fallback.features)
+  ) {
     return existing
   }
-  const fallback = {
-    modelType: model.modelType || AiModelSpecModelTypeEnum.Language,
-    features: model.features || [],
-  }
+
   profileOverrides.value[model.modelId] = fallback
   return fallback
 }
 
 function setModelType(model: DiscoveredModel, event: Event) {
-  profileFor(model).modelType = (event.target as HTMLSelectElement).value as AiModel['spec']['modelType']
+  profileFor(model).modelType = defaultModelTypeForProviderType(
+    selectedProviderType.value,
+    (event.target as HTMLSelectElement).value,
+  )
 }
 
 function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum, event: Event) {
+  if (!featureOptions.value.some((item) => item.value === feature)) {
+    return
+  }
   const profile = profileFor(model)
   const checked = (event.target as HTMLInputElement).checked
   if (checked && !profile.features.includes(feature)) {
@@ -212,18 +247,18 @@ onMounted(() => {
             </VEntityField>
           </template>
           <template #end>
-            <div class=":uno: flex max-w-xl flex-wrap items-center justify-end gap-2" @click.stop>
+            <div class=":uno: max-w-xl flex flex-wrap items-center justify-end gap-2" @click.stop>
               <select
                 :value="profileFor(model).modelType"
-                class=":uno: h-8 rounded border border-gray-200 bg-white px-2 text-sm"
+                class=":uno: h-8 border border-gray-200 rounded bg-white px-2 text-sm"
                 @change="setModelType(model, $event)"
               >
-                <option v-for="item in MODEL_TYPE_OPTIONS" :key="item.value" :value="item.value">
+                <option v-for="item in modelTypeOptions" :key="item.value" :value="item.value">
                   {{ item.label }}
                 </option>
               </select>
               <label
-                v-for="item in MODEL_FEATURE_OPTIONS"
+                v-for="item in featureOptions"
                 :key="item.value"
                 class=":uno: inline-flex items-center gap-1 text-xs text-gray-600"
               >

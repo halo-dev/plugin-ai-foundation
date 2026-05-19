@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
-import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
 import type { ModelFormState } from '@/types/form'
+import {
+  defaultModelTypeForProviderType,
+  modelFeatureOptionsForProviderType,
+  modelTypeOptionsForProviderType,
+} from '@/utils/model'
 import { submitForm } from '@formkit/core'
 import { computed } from 'vue'
 
@@ -24,27 +27,21 @@ const selectedProviderType = computed(() => {
 })
 
 const modelTypeOptions = computed(() => {
-  const supportedTypes = selectedProviderType.value?.supportedModelTypes || []
-  const options = supportedTypes.length
-    ? MODEL_TYPE_OPTIONS.filter((item) => supportedTypes.includes(item.value))
-    : MODEL_TYPE_OPTIONS
-  return options.map((item) => ({ value: item.value, label: item.label }))
+  return modelTypeOptionsForProviderType(selectedProviderType.value).map((item) => ({
+    value: item.value,
+    label: item.label,
+  }))
 })
 
 const featureOptions = computed(() => {
-  const supportedFeatures = selectedProviderType.value?.supportedFeatures || []
-  const options = supportedFeatures.length
-    ? MODEL_FEATURE_OPTIONS.filter((item) => supportedFeatures.includes(item.value))
-    : MODEL_FEATURE_OPTIONS
-  return options.map((item) => ({ value: item.value, label: item.label }))
+  return modelFeatureOptionsForProviderType(selectedProviderType.value).map((item) => ({
+    value: item.value,
+    label: item.label,
+  }))
 })
 
 const defaultModelType = computed(() => {
-  return (
-    props.formState?.modelType ||
-    modelTypeOptions.value[0]?.value ||
-    AiModelSpecModelTypeEnum.Language
-  )
+  return defaultModelTypeForProviderType(selectedProviderType.value, props.formState?.modelType)
 })
 
 function onSubmit(data: ModelFormState) {
