@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define server-side filtering for configured AI model lists.
+
+## Requirements
 
 ### Requirement: Model list supports fieldSelector and labelSelector
 The system SHALL support filtering the model list via `fieldSelector` and `labelSelector` query parameters, consistent with Halo's standard extension list API.

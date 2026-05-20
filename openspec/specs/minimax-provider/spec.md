@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define MiniMax provider registration, metadata, model construction behavior, and icon assets.
+
+## Requirements
 
 ### Requirement: MiniMax is registered as a built-in AI provider type
 The system SHALL expose MiniMax as a built-in AI provider type via the provider type discovery mechanism.

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define metadata exposed by built-in provider types.
+
+## Requirements
 
 ### Requirement: Built-in providers expose complete metadata
 Every built-in provider class extending `AbstractAiProviderType` SHALL override `getDescription()`, `getIconUrl()`, `getWebsiteUrl()`, and `getDocumentationUrl()` to return non-null, non-empty values.

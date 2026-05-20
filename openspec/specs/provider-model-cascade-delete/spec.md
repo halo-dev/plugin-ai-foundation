@@ -1,3 +1,9 @@
+## Purpose
+
+Define cleanup behavior for models associated with deleted providers.
+
+## Requirements
+
 ### Requirement: Reconciler detects deleted provider
 
 The system SHALL use a `Reconciler` to monitor `AiProvider` Extensions and detect when they are deleted.
