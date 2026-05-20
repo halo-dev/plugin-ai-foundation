@@ -6,9 +6,7 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +29,9 @@ import run.halo.aifoundation.Message;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
-import run.halo.aifoundation.provider.support.ModelCapability;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
+import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
@@ -251,6 +251,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         }
         var providerName = model.getSpec().getProviderName();
         var modelId = model.getSpec().getModelId();
+        var modelType = model.getSpec().getModelType();
 
         if (providerName == null || providerName.isBlank()) {
             return Mono.error(
@@ -260,6 +261,11 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             return Mono.error(
                 new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelId is required"));
         }
+        if (modelType == null) {
+            return Mono.error(
+                new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelType is required"));
+        }
+        normalizeProfileDefaults(model.getSpec());
 
         return client.fetch(AiProvider.class, providerName)
             .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -271,51 +277,56 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                     return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Unsupported provider type: " + providerType));
                 }
-                applyDefaultEndpointType(model, type);
-                var endpointType = model.getSpec().getEndpointType();
-                if (endpointType == null || endpointType.isBlank()) {
+                if (!type.getSupportedModelTypes().contains(modelType)) {
                     return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "endpointType is required and no supported default could be recommended"));
+                        "Model type '" + modelType.getValue()
+                            + "' is not supported by provider type '" + providerType
+                            + "'. Supported model types: " + type.getSupportedModelTypes()));
                 }
-                var supportedTypes = type.getSupportedEndpointTypes() != null
-                    ? type.getSupportedEndpointTypes() : List.<String>of();
-                if (!supportedTypes.contains(endpointType)) {
+                var unsupportedFeatures = model.getSpec().getFeatures().stream()
+                    .filter(feature -> !type.getSupportedFeatures().contains(feature))
+                    .toList();
+                if (!unsupportedFeatures.isEmpty()) {
                     return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Endpoint type '" + endpointType + "' is not supported by provider type '"
+                        "Model features " + unsupportedFeatures
+                            + " are not supported by provider type '" + providerType
+                            + "'. Supported features: " + type.getSupportedFeatures()));
+                }
+                applyDefaultAdapterType(model, type);
+                var adapterType = model.getSpec().getAdapterType();
+                if (adapterType == null) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "adapterType is required and no supported default could be recommended"));
+                }
+                var supportedTypes = type.getSupportedAdapterTypes();
+                if (!supportedTypes.contains(adapterType)) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Adapter type '" + adapterType.getValue() + "' is not supported by provider type '"
                             + providerType + "'. Supported types: " + supportedTypes));
                 }
                 return Mono.empty();
             });
     }
 
-    private void applyDefaultEndpointType(AiModel model, AiProviderType providerType) {
-        var spec = model.getSpec();
-        var endpointType = spec.getEndpointType();
-        if (endpointType != null && !endpointType.isBlank()) {
-            return;
+    private void normalizeProfileDefaults(AiModel.AiModelSpec spec) {
+        if (spec.getFeatures() == null) {
+            spec.setFeatures(List.of());
         }
-        providerType.recommendEndpointType(spec.getModelId(), modelCapabilities(model))
-            .ifPresent(spec::setEndpointType);
+        if (spec.getDiscoverySource() == null) {
+            spec.setDiscoverySource(DiscoverySource.MANUAL);
+        }
+        if (spec.getDiscoveryConfidence() == null) {
+            spec.setDiscoveryConfidence(DiscoveryConfidence.HIGH);
+        }
     }
 
-    private List<ModelCapability> modelCapabilities(AiModel model) {
-        var capabilities = new LinkedHashSet<ModelCapability>();
-        var labels = model.getSpec().getCapabilities();
-        if (labels == null) {
-            return List.of();
+    private void applyDefaultAdapterType(AiModel model, AiProviderType providerType) {
+        var spec = model.getSpec();
+        var adapterType = spec.getAdapterType();
+        if (adapterType != null) {
+            return;
         }
-        for (var label : labels) {
-            if (label == null) {
-                continue;
-            }
-            switch (label.toLowerCase(Locale.ROOT)) {
-                case "chat" -> capabilities.add(ModelCapability.CHAT);
-                case "embedding" -> capabilities.add(ModelCapability.EMBEDDING);
-                default -> {
-                }
-            }
-        }
-        return List.copyOf(capabilities);
+        providerType.recommendAdapterType(spec.getModelType()).ifPresent(spec::setAdapterType);
     }
 
     private Mono<Void> checkModelUniqueness(AiModel model, String excludeName) {

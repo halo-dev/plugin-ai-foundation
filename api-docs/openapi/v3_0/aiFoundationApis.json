@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:34096",
+    "url" : "http://localhost:51286",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -433,6 +433,52 @@
           }
         },
         "tags" : [ "AiProviderV1alpha1" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/default-model-slots" : {
+      "get" : {
+        "description" : "Get AI Foundation default model slots.",
+        "operationId" : "GetDefaultModelSlots",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DefaultModelSlots"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/DefaultModelSlot" ]
+      },
+      "put" : {
+        "description" : "Update AI Foundation default model slots.",
+        "operationId" : "UpdateDefaultModelSlots",
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DefaultModelSlots"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DefaultModelSlots"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/DefaultModelSlot" ]
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models" : {
@@ -901,16 +947,23 @@
         }
       },
       "AiModelSpec" : {
-        "required" : [ "displayName", "enabled", "endpointType", "modelId", "providerName" ],
+        "required" : [ "displayName", "enabled", "modelId", "modelType", "providerName" ],
         "type" : "object",
         "properties" : {
-          "capabilities" : {
-            "type" : "array",
-            "description" : "Capability labels (e.g., chat, embedding, vision)",
-            "items" : {
-              "type" : "string",
-              "description" : "Capability labels (e.g., chat, embedding, vision)"
-            }
+          "adapterType" : {
+            "type" : "string",
+            "description" : "Internal invocation adapter",
+            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "cohere-rerank", "ollama-chat", "ollama-embedding" ]
+          },
+          "discoveryConfidence" : {
+            "type" : "string",
+            "description" : "How reliable the discovered model profile is",
+            "enum" : [ "high", "medium", "low" ]
+          },
+          "discoverySource" : {
+            "type" : "string",
+            "description" : "How this model profile was obtained",
+            "enum" : [ "remote", "catalog", "rule", "manual" ]
           },
           "displayName" : {
             "type" : "string",
@@ -920,25 +973,27 @@
             "type" : "boolean",
             "description" : "Whether the model is enabled"
           },
-          "endpointType" : {
-            "type" : "string",
-            "description" : "Endpoint type (e.g., openai-chat, openai-embedding, ollama-chat)"
-          },
-          "group" : {
-            "type" : "string",
-            "description" : "Model group for display/filtering purposes"
+          "features" : {
+            "type" : "array",
+            "description" : "Optional model features",
+            "items" : {
+              "type" : "string",
+              "description" : "Optional model features",
+              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+            }
           },
           "modelId" : {
             "type" : "string",
             "description" : "Unique identifier of the model within the provider"
           },
+          "modelType" : {
+            "type" : "string",
+            "description" : "Primary model purpose",
+            "enum" : [ "language", "embedding", "rerank", "image-generation" ]
+          },
           "providerName" : {
             "type" : "string",
             "description" : "References AiProvider.metadata.name (provider instance resource name)"
-          },
-          "supportedTextDelta" : {
-            "type" : "boolean",
-            "description" : "Whether the model supports streaming text delta"
           }
         }
       },
@@ -1109,26 +1164,57 @@
           }
         }
       },
+      "DefaultModelSlots" : {
+        "type" : "object",
+        "properties" : {
+          "embeddingModelName" : {
+            "type" : "string"
+          },
+          "imageGenerationModelName" : {
+            "type" : "string"
+          },
+          "languageModelName" : {
+            "type" : "string"
+          },
+          "rerankModelName" : {
+            "type" : "string"
+          }
+        }
+      },
       "DiscoveredModelItem" : {
         "type" : "object",
         "properties" : {
-          "capabilities" : {
-            "type" : "array",
-            "items" : {
-              "type" : "string"
-            }
+          "adapterType" : {
+            "type" : "string",
+            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "cohere-rerank", "ollama-chat", "ollama-embedding" ]
+          },
+          "confidence" : {
+            "type" : "string",
+            "enum" : [ "high", "medium", "low" ]
           },
           "displayName" : {
             "type" : "string"
           },
+          "features" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+            }
+          },
           "modelId" : {
             "type" : "string"
+          },
+          "modelType" : {
+            "type" : "string",
+            "enum" : [ "language", "embedding", "rerank", "image-generation" ]
           },
           "name" : {
             "type" : "string"
           },
-          "suggestedEndpointType" : {
-            "type" : "string"
+          "source" : {
+            "type" : "string",
+            "enum" : [ "remote", "catalog", "rule", "manual" ]
           }
         }
       },
@@ -1283,14 +1369,26 @@
           "requiresBaseUrl" : {
             "type" : "boolean"
           },
-          "supportedEndpointTypes" : {
+          "supportedAdapterTypes" : {
             "type" : "array",
             "items" : {
-              "type" : "string"
+              "type" : "string",
+              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "cohere-rerank", "ollama-chat", "ollama-embedding" ]
             }
           },
-          "supportsEmbeddings" : {
-            "type" : "boolean"
+          "supportedFeatures" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+            }
+          },
+          "supportedModelTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "language", "embedding", "rerank", "image-generation" ]
+            }
           },
           "websiteUrl" : {
             "type" : "string"

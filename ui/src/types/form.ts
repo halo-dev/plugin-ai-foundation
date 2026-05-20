@@ -1,3 +1,9 @@
+import type {
+  AiModelSpecAdapterTypeEnum,
+  AiModelSpecFeaturesEnum,
+  AiModelSpecModelTypeEnum,
+} from '@/api/generated'
+
 export interface ProviderFormState {
   providerType: string
   displayName: string
@@ -12,8 +18,7 @@ export interface ModelFormState {
   modelId: string
   displayName: string
   enabled: boolean
-  group?: string
-  capabilities?: string[]
-  endpointType?: string
-  supportedTextDelta?: boolean
+  modelType: AiModelSpecModelTypeEnum
+  features?: AiModelSpecFeaturesEnum[]
+  adapterType?: AiModelSpecAdapterTypeEnum
 }

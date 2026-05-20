@@ -4,6 +4,7 @@
 api.ts
 api/ai-model-v1alpha1-api.ts
 api/ai-provider-v1alpha1-api.ts
+api/console-api-aifoundation-halo-run-v1alpha1-default-model-slot-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-model-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-provider-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-provider-type-api.ts
@@ -22,6 +23,7 @@ models/ai-provider-status.ts
 models/ai-provider.ts
 models/chat-chunk.ts
 models/copy-operation.ts
+models/default-model-slots.ts
 models/discovered-model-item.ts
 models/index.ts
 models/json-patch-inner.ts

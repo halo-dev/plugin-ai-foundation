@@ -4,6 +4,7 @@ import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
+import { modelFeatureLabel, modelTypeLabel } from '@/types'
 import { findProviderTypeForModel } from '@/utils/model'
 import { isEnabledChatModel } from '@/utils/model-test-workbench'
 import {
@@ -83,12 +84,15 @@ const canTest = computed(() => isEnabledChatModel(props.model))
         >
           已禁用
         </span>
+        <span class=":uno: rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-600">
+          {{ modelTypeLabel(model.spec.modelType) }}
+        </span>
         <span
-          v-for="cap in model.spec.capabilities"
-          :key="cap"
+          v-for="feature in model.spec.features"
+          :key="feature"
           class=":uno: rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
         >
-          {{ cap }}
+          {{ modelFeatureLabel(feature) }}
         </span>
         <VStatusDot v-if="model.metadata.deletionTimestamp" animate state="warning" text="删除中" />
       </div>

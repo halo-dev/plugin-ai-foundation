@@ -16,6 +16,7 @@
 
 export * from './api/ai-model-v1alpha1-api';
 export * from './api/ai-provider-v1alpha1-api';
+export * from './api/console-api-aifoundation-halo-run-v1alpha1-default-model-slot-api';
 export * from './api/console-api-aifoundation-halo-run-v1alpha1-model-api';
 export * from './api/console-api-aifoundation-halo-run-v1alpha1-provider-api';
 export * from './api/console-api-aifoundation-halo-run-v1alpha1-provider-type-api';

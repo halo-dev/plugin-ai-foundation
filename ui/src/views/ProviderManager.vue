@@ -6,6 +6,7 @@ import { useRouteQuery } from '@vueuse/router'
 import RiBrainLine from '~icons/ri/brain-line'
 import ProviderDetail from './ProviderDetail.vue'
 import AllModelList from './components/AllModelList.vue'
+import DefaultModelSlotsPanel from './components/DefaultModelSlotsPanel.vue'
 import ModelTestWorkbench from './components/ModelTestWorkbench.vue'
 import ProviderList from './components/ProviderList.vue'
 
@@ -17,6 +18,10 @@ const tabs: Tab[] = [
   {
     label: '模型列表',
     value: 'models',
+  },
+  {
+    label: '默认模型',
+    value: 'defaults',
   },
   {
     label: '测试',
@@ -49,6 +54,8 @@ const activeTab = useRouteQuery<Tab['value'] | undefined>('tab', 'config')
   </div>
 
   <AllModelList v-if="activeTab === 'models'" />
+
+  <DefaultModelSlotsPanel v-if="activeTab === 'defaults'" />
 
   <ModelTestWorkbench v-if="activeTab === 'test'" />
 </template>

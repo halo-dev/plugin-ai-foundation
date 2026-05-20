@@ -16,6 +16,7 @@ import { useRouteQuery } from '@vueuse/router'
 import { computed, ref } from 'vue'
 import ModelEditingModal from './ModelEditingModal.vue'
 import { isEnabledChatModel } from '@/utils/model-test-workbench'
+import { modelFeatureLabel, modelTypeLabel } from '@/types'
 
 const props = defineProps<{
   model: AiModel
@@ -61,12 +62,15 @@ function handleDelete() {
         >
           已禁用
         </span>
+        <span class=":uno: rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-600">
+          {{ modelTypeLabel(model.spec.modelType) }}
+        </span>
         <span
-          v-for="cap in model.spec.capabilities"
-          :key="cap"
+          v-for="feature in model.spec.features"
+          :key="feature"
           class=":uno: rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
         >
-          {{ cap }}
+          {{ modelFeatureLabel(feature) }}
         </span>
         <VStatusDot v-if="model.metadata.deletionTimestamp" animate state="warning" text="删除中" />
       </div>

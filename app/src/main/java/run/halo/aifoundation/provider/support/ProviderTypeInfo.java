@@ -23,6 +23,7 @@ public class ProviderTypeInfo {
     private boolean requiresBaseUrl;
     @Nullable
     private String defaultBaseUrl;
-    private List<String> supportedEndpointTypes;
-    private boolean supportsEmbeddings;
+    private List<ModelType> supportedModelTypes;
+    private List<ModelFeature> supportedFeatures;
+    private List<AdapterType> supportedAdapterTypes;
 }

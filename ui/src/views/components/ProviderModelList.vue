@@ -57,7 +57,11 @@ const creationModalVisible = ref(false)
     />
 
     <VEntityContainer v-else>
-      <ProviderModelListItem v-for="model in models" :key="model.metadata.name" :model="model" />
+      <ProviderModelListItem
+        v-for="model in models"
+        :key="model.metadata.name"
+        :model="model"
+      />
     </VEntityContainer>
   </VCard>
 

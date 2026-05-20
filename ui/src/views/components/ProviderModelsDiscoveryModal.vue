@@ -1,13 +1,20 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import type { AiProvider } from '@/api/generated'
+import type { AiModel, AiModelSpecFeaturesEnum, AiProvider } from '@/api/generated'
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
+import { useProviderType } from '@/composables/use-provider-types-fetch'
 import { setFocus } from '@/utils/focus'
-import { createModelFromDiscovered } from '@/utils/model'
+import {
+  createModelFromDiscovered,
+  defaultModelTypeForProviderType,
+  filterModelFeaturesForProviderType,
+  modelFeatureOptionsForProviderType,
+  modelTypeOptionsForProviderType,
+} from '@/utils/model'
 import {
   Toast,
   VButton,
@@ -21,7 +28,7 @@ import {
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, toRef } from 'vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -38,6 +45,7 @@ const modal = ref<InstanceType<typeof VModal> | null>(null)
 const providerName = computed(() => props.provider.metadata.name || '')
 
 const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
+const selectedProviderType = useProviderType(toRef(props, 'provider'))
 
 const keyword = ref('')
 
@@ -58,6 +66,74 @@ const filteredModels = computed(() => {
 })
 
 const selectedModels = ref<Set<string>>(new Set())
+const profileOverrides = ref<
+  Record<
+    string,
+    {
+      modelType: AiModel['spec']['modelType']
+      features: NonNullable<AiModel['spec']['features']>
+    }
+  >
+>({})
+
+const modelTypeOptions = computed(() => modelTypeOptionsForProviderType(selectedProviderType.value))
+
+const featureOptions = computed(() => modelFeatureOptionsForProviderType(selectedProviderType.value))
+
+function featuresEqual(
+  a: NonNullable<AiModel['spec']['features']>,
+  b: NonNullable<AiModel['spec']['features']>,
+) {
+  return a.length === b.length && a.every((item, index) => item === b[index])
+}
+
+function profileFor(model: DiscoveredModel) {
+  const existing = profileOverrides.value[model.modelId]
+
+  const fallback = {
+    modelType: defaultModelTypeForProviderType(
+      selectedProviderType.value,
+      existing?.modelType || model.modelType,
+    ),
+    features: filterModelFeaturesForProviderType(
+      selectedProviderType.value,
+      existing?.features || model.features || [],
+    ),
+  }
+
+  if (
+    existing &&
+    existing.modelType === fallback.modelType &&
+    featuresEqual(existing.features, fallback.features)
+  ) {
+    return existing
+  }
+
+  profileOverrides.value[model.modelId] = fallback
+  return fallback
+}
+
+function setModelType(model: DiscoveredModel, event: Event) {
+  profileFor(model).modelType = defaultModelTypeForProviderType(
+    selectedProviderType.value,
+    (event.target as HTMLSelectElement).value,
+  )
+}
+
+function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum, event: Event) {
+  if (!featureOptions.value.some((item) => item.value === feature)) {
+    return
+  }
+  const profile = profileFor(model)
+  const checked = (event.target as HTMLInputElement).checked
+  if (checked && !profile.features.includes(feature)) {
+    profile.features = [...profile.features, feature]
+  }
+  if (!checked) {
+    profile.features = profile.features.filter((item) => item !== feature)
+  }
+  profileOverrides.value[model.modelId] = profile
+}
 
 function toggleSelection(model: DiscoveredModel) {
   if (selectedModels.value.has(model.modelId)) {
@@ -74,7 +150,7 @@ async function handleImport() {
 
   const results = await Promise.allSettled(
     data.map(async (model) => {
-      const newModel = createModelFromDiscovered(providerName.value, model)
+      const newModel = createModelFromDiscovered(providerName.value, model, profileFor(model))
 
       await aiConsoleApiClient.model.createModel({
         aiModel: newModel,
@@ -147,6 +223,31 @@ onMounted(() => {
           </template>
           <template #start>
             <VEntityField :title="model.displayName" :description="model.modelId" />
+          </template>
+          <template #end>
+            <div class=":uno: max-w-xl flex flex-wrap items-center justify-end gap-2" @click.stop>
+              <select
+                :value="profileFor(model).modelType"
+                class=":uno: h-8 border border-gray-200 rounded bg-white px-2 text-sm"
+                @change="setModelType(model, $event)"
+              >
+                <option v-for="item in modelTypeOptions" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+              <label
+                v-for="item in featureOptions"
+                :key="item.value"
+                class=":uno: inline-flex items-center gap-1 text-xs text-gray-600"
+              >
+                <input
+                  type="checkbox"
+                  :checked="profileFor(model).features.includes(item.value)"
+                  @change="toggleFeature(model, item.value, $event)"
+                />
+                {{ item.label }}
+              </label>
+            </div>
           </template>
         </VEntity>
       </VEntityContainer>

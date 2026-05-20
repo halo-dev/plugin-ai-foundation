@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.AiServices;
+import run.halo.aifoundation.DefaultModelNotConfiguredException;
 import run.halo.aifoundation.EmbeddingModel;
+import run.halo.aifoundation.IncompatibleModelTypeException;
 import run.halo.aifoundation.LanguageModel;
 import run.halo.aifoundation.ModelDisabledException;
 import run.halo.aifoundation.ModelInfo;
@@ -20,10 +22,13 @@ import run.halo.aifoundation.ProviderInfo;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
+import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.plugin.ReactiveSettingFetcher;
 
 @Slf4j
 @Component
@@ -33,6 +38,7 @@ public class AiModelServiceImpl implements AiModelService {
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
     private final SecretResolver secretResolver;
+    private final ReactiveSettingFetcher settingFetcher;
 
     @PostConstruct
     void init() {
@@ -50,6 +56,10 @@ public class AiModelServiceImpl implements AiModelService {
             .flatMap(aiModel -> {
                 if (!aiModel.getSpec().isEnabled()) {
                     return Mono.error(new ModelDisabledException(modelName));
+                }
+                var typeError = validateModelType(aiModel, ModelType.LANGUAGE, modelName);
+                if (typeError != null) {
+                    return Mono.error(typeError);
                 }
                 var providerName = aiModel.getSpec().getProviderName();
                 var modelId = aiModel.getSpec().getModelId();
@@ -75,6 +85,10 @@ public class AiModelServiceImpl implements AiModelService {
             .flatMap(aiModel -> {
                 if (!aiModel.getSpec().isEnabled()) {
                     return Mono.error(new ModelDisabledException(modelName));
+                }
+                var typeError = validateModelType(aiModel, ModelType.EMBEDDING, modelName);
+                if (typeError != null) {
+                    return Mono.error(typeError);
                 }
                 var providerName = aiModel.getSpec().getProviderName();
                 var modelId = aiModel.getSpec().getModelId();
@@ -103,6 +117,18 @@ public class AiModelServiceImpl implements AiModelService {
                             });
                     });
             });
+    }
+
+    @Override
+    public Mono<LanguageModel> defaultLanguageModel() {
+        return defaultSlotName("language", DefaultModelSlots::getLanguageModelName)
+            .flatMap(this::languageModel);
+    }
+
+    @Override
+    public Mono<EmbeddingModel> defaultEmbeddingModel() {
+        return defaultSlotName("embedding", DefaultModelSlots::getEmbeddingModelName)
+            .flatMap(this::embeddingModel);
     }
 
     @Override
@@ -150,6 +176,28 @@ public class AiModelServiceImpl implements AiModelService {
         return client.fetch(AiProvider.class, providerName)
             .switchIfEmpty(Mono.error(new ModelNotFoundException(
                 "Provider not found: " + providerName)));
+    }
+
+    private Throwable validateModelType(AiModel model, ModelType expectedType, String modelName) {
+        var actualType = model.getSpec().getModelType();
+        if (actualType == expectedType) {
+            return null;
+        }
+        var actualValue = actualType != null ? actualType.getValue() : "null";
+        return new IncompatibleModelTypeException(modelName, expectedType.getValue(), actualValue);
+    }
+
+    private Mono<String> defaultSlotName(String slotName,
+        java.util.function.Function<DefaultModelSlots, String> extractor) {
+        return settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class)
+            .switchIfEmpty(Mono.error(new DefaultModelNotConfiguredException(slotName)))
+            .map(extractor)
+            .flatMap(modelName -> {
+                if (modelName == null || modelName.isBlank()) {
+                    return Mono.error(new DefaultModelNotConfiguredException(slotName));
+                }
+                return Mono.just(modelName);
+            });
     }
 
     private Mono<String> resolveApiKey(AiProvider provider) {

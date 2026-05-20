@@ -9,6 +9,10 @@ public interface AiModelService {
 
     Mono<EmbeddingModel> embeddingModel(String modelName);
 
+    Mono<LanguageModel> defaultLanguageModel();
+
+    Mono<EmbeddingModel> defaultEmbeddingModel();
+
     Mono<List<ModelInfo>> listModels();
 
     Mono<List<ProviderInfo>> listProviders();

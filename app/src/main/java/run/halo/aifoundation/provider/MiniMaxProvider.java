@@ -7,6 +7,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
 
 @Component
 public class MiniMaxProvider extends AbstractAiProviderType {
@@ -61,13 +62,8 @@ public class MiniMaxProvider extends AbstractAiProviderType {
     }
 
     @Override
-    public List<String> getSupportedEndpointTypes() {
-        return List.of("openai-chat");
-    }
-
-    @Override
-    public boolean supportsEmbeddings() {
-        return false;
+    public List<AdapterType> getSupportedAdapterTypes() {
+        return List.of(AdapterType.OPENAI_CHAT);
     }
 
     @Override

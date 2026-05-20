@@ -23,7 +23,6 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
-import run.halo.aifoundation.provider.support.ModelCapability;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
@@ -275,11 +274,13 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                     dm.modelId(),
                     dm.displayName(),
                     "",
-                    dm.capabilities().stream()
-                        .map(ModelCapability::name)
-                        .map(String::toLowerCase)
-                        .toList(),
-                    providerType.recommendEndpointType(dm).orElse(null)
+                    dm.modelType(),
+                    dm.features().stream().toList(),
+                    dm.source(),
+                    dm.confidence(),
+                    dm.adapterType() != null
+                        ? dm.adapterType()
+                        : providerType.recommendAdapterType(dm).orElse(null)
                 ))
                 .toList()
             )

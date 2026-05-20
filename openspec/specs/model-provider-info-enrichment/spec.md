@@ -1,3 +1,9 @@
+## Purpose
+
+Define enriched model and provider info exposed through the public service API.
+
+## Requirements
+
 ### Requirement: ModelInfo exposes enabled status
 
 The system SHALL include `enabled` in `ModelInfo` so consumer plugins can determine model availability without attempting to use the model.

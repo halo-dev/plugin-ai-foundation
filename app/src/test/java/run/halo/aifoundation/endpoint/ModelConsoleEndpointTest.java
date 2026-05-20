@@ -27,6 +27,9 @@ import run.halo.aifoundation.Message;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
@@ -43,7 +46,23 @@ class ModelConsoleEndpointTest {
     @BeforeEach
     void setUp() {
         mockType = mock(AiProviderType.class);
-        when(mockType.getSupportedEndpointTypes()).thenReturn(List.of("openai-chat"));
+        when(mockType.getSupportedModelTypes())
+            .thenReturn(List.of(ModelType.LANGUAGE, ModelType.EMBEDDING, ModelType.RERANK,
+                ModelType.IMAGE_GENERATION));
+        when(mockType.getSupportedFeatures())
+            .thenReturn(List.of(ModelFeature.STREAMING, ModelFeature.VISION,
+                ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING));
+        when(mockType.getSupportedAdapterTypes())
+            .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
+                AdapterType.COHERE_RERANK, AdapterType.OPENAI_IMAGE));
+        when(mockType.recommendAdapterType(ModelType.LANGUAGE))
+            .thenReturn(Optional.of(AdapterType.OPENAI_CHAT));
+        when(mockType.recommendAdapterType(ModelType.EMBEDDING))
+            .thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
+        when(mockType.recommendAdapterType(ModelType.RERANK))
+            .thenReturn(Optional.of(AdapterType.COHERE_RERANK));
+        when(mockType.recommendAdapterType(ModelType.IMAGE_GENERATION))
+            .thenReturn(Optional.of(AdapterType.OPENAI_IMAGE));
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
         when(providerClientCache.getProviderType("openai")).thenReturn(mockType);
 
@@ -100,21 +119,18 @@ class ModelConsoleEndpointTest {
             .bodyValue(m)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(AiModel.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getMetadata().getName())
-                    .isEqualTo(generatedName));
+            .expectBody()
+            .jsonPath("$.metadata.name").isEqualTo(generatedName)
+            .jsonPath("$.spec.group").doesNotExist();
     }
 
     @Test
-    void create_missingEndpointType_usesProviderTypeRecommendation() {
+    void create_missingAdapterType_usesProviderTypeRecommendation() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
-        m.getSpec().setEndpointType(null);
+        m.getSpec().setAdapterType(null);
         var generatedName = AiModelNameGenerator.generate("openai-prod", "gpt-4");
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(mockType.recommendEndpointType(eq("gpt-4"), any()))
-            .thenReturn(Optional.of("openai-chat"));
         when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
         when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
         when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
@@ -126,17 +142,17 @@ class ModelConsoleEndpointTest {
             .expectStatus().isOk()
             .expectBody(AiModel.class)
             .consumeWith(response ->
-                assertThat(response.getResponseBody().getSpec().getEndpointType())
-                    .isEqualTo("openai-chat"));
+                assertThat(response.getResponseBody().getSpec().getAdapterType())
+                    .isEqualTo(AdapterType.OPENAI_CHAT));
     }
 
     @Test
-    void create_missingEndpointTypeWithoutRecommendation_returns400() {
+    void create_missingAdapterTypeWithoutRecommendation_returns400() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
-        m.getSpec().setEndpointType("");
+        m.getSpec().setAdapterType(null);
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
-        when(mockType.recommendEndpointType(eq("gpt-4"), any()))
+        when(mockType.recommendAdapterType(ModelType.LANGUAGE))
             .thenReturn(Optional.empty());
 
         webTestClient.post().uri("/models")
@@ -147,9 +163,105 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
-    void create_explicitUnsupportedEndpointType_returns400() {
+    void create_explicitUnsupportedAdapterType_returns400() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
-        m.getSpec().setEndpointType("openai-embedding");
+        m.getSpec().setAdapterType(AdapterType.OLLAMA_CHAT);
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_supportedEmbeddingModel_returns200() {
+        var m = model("embedding", "openai-prod", "text-embedding-3-small");
+        m.getSpec().setModelType(ModelType.EMBEDDING);
+        m.getSpec().setFeatures(List.of());
+        m.getSpec().setAdapterType(AdapterType.OPENAI_EMBEDDING);
+        var generatedName = AiModelNameGenerator.generate("openai-prod", "text-embedding-3-small");
+
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
+        when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isOk();
+    }
+
+    @Test
+    void create_supportedRerankModel_returns200() {
+        var m = model("rerank", "openai-prod", "rerank-v1");
+        m.getSpec().setModelType(ModelType.RERANK);
+        m.getSpec().setFeatures(List.of());
+        m.getSpec().setAdapterType(AdapterType.COHERE_RERANK);
+        var generatedName = AiModelNameGenerator.generate("openai-prod", "rerank-v1");
+
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
+        when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isOk();
+    }
+
+    @Test
+    void create_supportedImageGenerationModel_returns200() {
+        var m = model("image", "openai-prod", "gpt-image-1");
+        m.getSpec().setModelType(ModelType.IMAGE_GENERATION);
+        m.getSpec().setFeatures(List.of());
+        m.getSpec().setAdapterType(AdapterType.OPENAI_IMAGE);
+        var generatedName = AiModelNameGenerator.generate("openai-prod", "gpt-image-1");
+
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+        when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
+        when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isOk();
+    }
+
+    @Test
+    void create_unsupportedModelType_returns400() {
+        var m = model("embedding", "openai-prod", "text-embedding-3-small");
+        m.getSpec().setModelType(ModelType.EMBEDDING);
+        m.getSpec().setAdapterType(AdapterType.OPENAI_EMBEDDING);
+
+        when(mockType.getSupportedModelTypes()).thenReturn(List.of(ModelType.LANGUAGE));
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_unsupportedFeature_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setFeatures(List.of(ModelFeature.TOOL_CALL));
+
+        when(mockType.getSupportedFeatures()).thenReturn(List.of(ModelFeature.STREAMING));
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
 
@@ -435,7 +547,9 @@ class ModelConsoleEndpointTest {
         spec.setProviderName(providerName);
         spec.setModelId(modelId);
         spec.setDisplayName(name);
-        spec.setEndpointType("openai-chat");
+        spec.setModelType(ModelType.LANGUAGE);
+        spec.setFeatures(List.of(ModelFeature.STREAMING));
+        spec.setAdapterType(AdapterType.OPENAI_CHAT);
         m.setSpec(spec);
         return m;
     }

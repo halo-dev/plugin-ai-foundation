@@ -1,3 +1,9 @@
+## Purpose
+
+Define console debug endpoints for provider metadata, remote discovery, connectivity checks, and model test chat.
+
+## Requirements
+
 ### Requirement: Provider type metadata is served by a dedicated endpoint
 The system SHALL expose provider type metadata via a dedicated `ProviderTypeConsoleEndpoint` separate from provider CRUD operations.
 

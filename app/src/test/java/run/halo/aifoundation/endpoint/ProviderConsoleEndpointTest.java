@@ -21,8 +21,12 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
-import run.halo.aifoundation.provider.support.ModelCapability;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.app.extension.Metadata;
@@ -239,20 +243,28 @@ class ProviderConsoleEndpointTest {
     // ---- discover models ----
 
     @Test
-    void discoverModels_returnsSuggestedEndpointTypes() {
+    void discoverModels_returnsCandidateProfiles() {
         var provider = provider("openai-prod", "openai");
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(isNull())).thenReturn(Mono.just("sk-test"));
         when(openAiType.discoverModels(provider, "sk-test")).thenReturn(Mono.just(List.of(
-            new DiscoveredModel("gpt-4", "gpt-4", Set.of(ModelCapability.CHAT)),
+            new DiscoveredModel(
+                "gpt-4",
+                "gpt-4",
+                ModelType.LANGUAGE,
+                Set.of(ModelFeature.STREAMING),
+                AdapterType.OPENAI_CHAT,
+                DiscoverySource.RULE,
+                DiscoveryConfidence.LOW),
             new DiscoveredModel("text-embedding-3-small", "text-embedding-3-small",
-                Set.of(ModelCapability.EMBEDDING))
+                ModelType.EMBEDDING,
+                Set.of(),
+                null,
+                DiscoverySource.RULE,
+                DiscoveryConfidence.LOW)
         )));
-        when(openAiType.recommendEndpointType(any(DiscoveredModel.class))).thenAnswer(invocation -> {
-            DiscoveredModel model = invocation.getArgument(0);
-            return model.capabilities().contains(ModelCapability.EMBEDDING)
-                ? Optional.of("openai-embedding") : Optional.of("openai-chat");
-        });
+        when(openAiType.recommendAdapterType(any(DiscoveredModel.class)))
+            .thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
 
         webTestClient.get().uri("/providers/openai-prod/discover-models")
             .exchange()
@@ -260,9 +272,14 @@ class ProviderConsoleEndpointTest {
             .expectBody()
             .jsonPath("$.providerName").isEqualTo("openai-prod")
             .jsonPath("$.models[0].modelId").isEqualTo("gpt-4")
-            .jsonPath("$.models[0].suggestedEndpointType").isEqualTo("openai-chat")
+            .jsonPath("$.models[0].modelType").isEqualTo("language")
+            .jsonPath("$.models[0].features[0]").isEqualTo("streaming")
+            .jsonPath("$.models[0].source").isEqualTo("rule")
+            .jsonPath("$.models[0].confidence").isEqualTo("low")
+            .jsonPath("$.models[0].adapterType").isEqualTo("openai-chat")
             .jsonPath("$.models[1].modelId").isEqualTo("text-embedding-3-small")
-            .jsonPath("$.models[1].suggestedEndpointType").isEqualTo("openai-embedding");
+            .jsonPath("$.models[1].modelType").isEqualTo("embedding")
+            .jsonPath("$.models[1].adapterType").isEqualTo("openai-embedding");
     }
 
     // ---- helpers ----

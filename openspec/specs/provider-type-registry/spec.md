@@ -1,11 +1,9 @@
 ## Purpose
 
 Define how AI provider types declare metadata, runtime behavior, discovery support, and endpoint recommendations.
-
 ## Requirements
-
 ### Requirement: AiProviderType interface definition
-The system SHALL define a `AiProviderType` interface that encapsulates identity, display metadata, configuration metadata, and behavior for an AI provider type.
+The system SHALL define a `AiProviderType` interface that encapsulates identity, display metadata, configuration metadata, supported model profile metadata, and behavior for an AI provider type.
 
 #### Scenario: Interface contract
 - **WHEN** a class implements `AiProviderType`
@@ -14,8 +12,10 @@ The system SHALL define a `AiProviderType` interface that encapsulates identity,
 - **AND** it MUST provide `isBuiltIn()` indicating whether the provider has built-in defaults
 - **AND** it MUST provide `requiresBaseUrl()` indicating whether the user must supply a base URL
 - **AND** it MUST provide `getDefaultBaseUrl()` returning the default base URL (may be null if requiresBaseUrl is true and no default exists)
-- **AND** it MUST provide `getSupportedEndpointTypes()` returning a list of supported endpoint type strings
-- **AND** it MUST provide `supportsEmbeddings()` indicating whether the provider supports embedding models
+- **AND** it MUST provide supported model type metadata for model types such as `language`, `embedding`, `rerank`, or `image-generation`
+- **AND** it MUST provide supported adapter type metadata for internal adapters such as `openai-chat`, `openai-embedding`, `openai-image`, or provider-specific equivalents
+- **AND** it MUST provide supported feature metadata when the provider type can declare model features such as `streaming`, `vision`, `tool-call`, or `structured-output`
+- **AND** it MUST NOT require the Console to hardcode provider-type-to-model-profile mappings
 
 ### Requirement: AiProviderType display metadata
 Each `AiProviderType` SHALL provide optional display metadata for UI rendering.
@@ -94,7 +94,10 @@ The system SHALL expose a console API endpoint returning metadata for all discov
 #### Scenario: List all provider types
 - **WHEN** a client sends `GET /apis/console.aifoundation.halo.run/v1alpha1/provider-types`
 - **THEN** the system SHALL return a list of `ProviderTypeInfo` objects
-- **AND** each object SHALL include `providerType`, `displayName`, `description`, `iconUrl`, `documentationUrl`, `websiteUrl`, `builtIn`, `requiresBaseUrl`, `defaultBaseUrl`, `supportedEndpointTypes`, and `supportsEmbeddings`
+- **AND** each object SHALL include `providerType`, `displayName`, `description`, `iconUrl`, `documentationUrl`, `websiteUrl`, `builtIn`, `requiresBaseUrl`, and `defaultBaseUrl`
+- **AND** each object SHALL include supported model type metadata
+- **AND** each object SHALL include supported adapter type metadata
+- **AND** each object SHALL include supported feature metadata when available
 
 #### Scenario: Provider types ordered
 - **WHEN** the provider types list is returned
@@ -111,8 +114,8 @@ The system SHALL provide `AiProviderType` implementations for all currently supp
 - **AND** `isBuiltIn()` SHALL return true
 - **AND** `requiresBaseUrl()` SHALL return false
 - **AND** `getDefaultBaseUrl()` SHALL return "https://api.openai.com"
-- **AND** `getSupportedEndpointTypes()` SHALL return ["openai-chat", "openai-embedding"]
-- **AND** `supportsEmbeddings()` SHALL return true
+- **AND** supported model types SHALL include `language` and `embedding`
+- **AND** supported adapter types SHALL include `openai-chat` and `openai-embedding`
 
 #### Scenario: Ollama provider type metadata
 - **WHEN** the Ollama provider type is queried
@@ -121,8 +124,8 @@ The system SHALL provide `AiProviderType` implementations for all currently supp
 - **AND** `isBuiltIn()` SHALL return false
 - **AND** `requiresBaseUrl()` SHALL return true
 - **AND** `getDefaultBaseUrl()` SHALL return "http://localhost:11434"
-- **AND** `getSupportedEndpointTypes()` SHALL return ["ollama-chat"]
-- **AND** `supportsEmbeddings()` SHALL return true
+- **AND** supported model types SHALL include `language`
+- **AND** supported adapter types SHALL include `ollama-chat`
 
 #### Scenario: OpenAI-Like provider type metadata
 - **WHEN** the OpenAI-Like provider type is queried
@@ -131,8 +134,8 @@ The system SHALL provide `AiProviderType` implementations for all currently supp
 - **AND** `isBuiltIn()` SHALL return false
 - **AND** `requiresBaseUrl()` SHALL return true
 - **AND** `getDefaultBaseUrl()` SHALL return null
-- **AND** `getSupportedEndpointTypes()` SHALL return ["openai-chat", "openai-embedding"]
-- **AND** `supportsEmbeddings()` SHALL return true
+- **AND** supported model types SHALL include `language` and `embedding`
+- **AND** supported adapter types SHALL include `openai-chat` and `openai-embedding`
 
 #### Scenario: DeepSeek provider type metadata
 - **WHEN** the DeepSeek provider type is queried
@@ -141,8 +144,8 @@ The system SHALL provide `AiProviderType` implementations for all currently supp
 - **AND** `isBuiltIn()` SHALL return true
 - **AND** `requiresBaseUrl()` SHALL return false
 - **AND** `getDefaultBaseUrl()` SHALL return "https://api.deepseek.com"
-- **AND** `getSupportedEndpointTypes()` SHALL return ["openai-chat"]
-- **AND** `supportsEmbeddings()` SHALL return false
+- **AND** supported model types SHALL include `language`
+- **AND** supported adapter types SHALL include `openai-chat`
 
 #### Scenario: AiHubMix provider-specific behavior
 - **WHEN** an `AiProvider` has `providerType = "aihubmix"`
@@ -151,18 +154,18 @@ The system SHALL provide `AiProviderType` implementations for all currently supp
 
 #### Scenario: DouBao non-standard API paths
 - **WHEN** an `AiProvider` has `providerType = "doubao"`
-- **THEN** the chat model SHALL use the `/v3/chat/completions` path
-- **AND** the embedding model SHALL use the `/v3/embeddings` path
+- **THEN** the language adapter SHALL use the `/v3/chat/completions` path
+- **AND** the embedding adapter SHALL use the `/v3/embeddings` path
 
 #### Scenario: Ernie non-standard API paths
 - **WHEN** an `AiProvider` has `providerType = "ernie"`
-- **THEN** the chat model SHALL use the `/v2/chat/completions` path
-- **AND** the embedding model SHALL use the `/v2/embeddings` path
+- **THEN** the language adapter SHALL use the `/v2/chat/completions` path
+- **AND** the embedding adapter SHALL use the `/v2/embeddings` path
 
 #### Scenario: ZhiPu non-standard API paths
 - **WHEN** an `AiProvider` has `providerType = "zhipuai"`
-- **THEN** the chat model SHALL use the `/paas/v4/chat/completions` path
-- **AND** the embedding model SHALL use the `/paas/v4/embeddings` path
+- **THEN** the language adapter SHALL use the `/paas/v4/chat/completions` path
+- **AND** the embedding adapter SHALL use the `/paas/v4/embeddings` path
 
 #### Scenario: Ollama model discovery endpoint
 - **WHEN** `discoverModels` is called on the Ollama provider type
@@ -174,36 +177,36 @@ The system SHALL provide `AiProviderType` implementations for all currently supp
 - **THEN** it SHALL return 32
 
 ### Requirement: Provider type endpoint recommendation
-The system SHALL use provider type behavior to recommend endpoint types for discovered models and for model creation requests that omit `spec.endpointType`.
+The system SHALL use provider type behavior to recommend internal adapter types for discovered models and for model creation requests that omit `spec.adapterType`.
 
-#### Scenario: Discovery returns recommended endpoint type
+#### Scenario: Discovery returns recommended adapter type
 - **WHEN** a client calls the provider model discovery endpoint for an `AiProvider`
-- **THEN** each discovered model item SHALL include a `suggestedEndpointType` when the provider type can map the model's capabilities to a supported endpoint type
-- **AND** the suggested endpoint type SHALL be one of the provider type's `supportedEndpointTypes`
+- **THEN** each discovered model item SHALL include a recommended adapter type when the provider type can map the candidate model profile to a supported adapter type
+- **AND** the recommended adapter type SHALL be one of the provider type's supported adapter types
 
-#### Scenario: Embedding capability maps to embedding endpoint
-- **WHEN** a discovered model has the `EMBEDDING` capability
-- **AND** the provider type supports an embedding endpoint type
-- **THEN** the backend SHALL recommend the provider type's supported embedding endpoint type
+#### Scenario: Embedding model maps to embedding adapter
+- **WHEN** a discovered model has `modelType = embedding`
+- **AND** the provider type supports an embedding adapter type
+- **THEN** the backend SHALL recommend the provider type's supported embedding adapter type
 
-#### Scenario: Chat capability maps to chat endpoint
-- **WHEN** a discovered model has the `CHAT` capability
-- **AND** the provider type supports a chat endpoint type
-- **THEN** the backend SHALL recommend the provider type's supported chat endpoint type
+#### Scenario: Language model maps to language adapter
+- **WHEN** a discovered model has `modelType = language`
+- **AND** the provider type supports a language adapter type
+- **THEN** the backend SHALL recommend the provider type's supported language adapter type
 
-#### Scenario: Model creation defaults missing endpoint type
-- **WHEN** a client creates an `AiModel` without `spec.endpointType`
+#### Scenario: Model creation defaults missing adapter type
+- **WHEN** a client creates an `AiModel` without `spec.adapterType`
 - **THEN** the backend SHALL resolve the referenced `AiProvider` by `spec.providerName`
-- **AND** apply a provider type endpoint recommendation for the model before validation
-- **AND** persist only an endpoint type supported by the provider type
+- **AND** apply a provider type adapter recommendation for the model before validation
+- **AND** persist only an adapter type supported by the provider type
 
-#### Scenario: Unsupported endpoint recommendation fails validation
-- **WHEN** the provider type cannot recommend a supported endpoint type for a model
+#### Scenario: Unsupported adapter recommendation fails validation
+- **WHEN** the provider type cannot recommend a supported adapter type for a model
 - **THEN** the backend SHALL reject model creation with a validation error
-- **AND** the backend SHALL NOT persist an `AiModel` with an unsupported or blank endpoint type
+- **AND** the backend SHALL NOT persist an `AiModel` with an unsupported or blank adapter type
 
 ### Requirement: Frontend consumes provider type API
-The frontend SHALL fetch provider type metadata from the REST API and render provider selection dynamically, eliminating all hardcoded provider type constant lists.
+The frontend SHALL fetch provider type metadata from the REST API and render provider selection, model type choices, feature choices, and adapter behavior dynamically, eliminating hardcoded provider type and adapter constant lists.
 
 #### Scenario: Provider type dropdown rendered from API
 - **WHEN** the user opens the provider creation form
@@ -217,10 +220,10 @@ The frontend SHALL fetch provider type metadata from the REST API and render pro
 - **AND** the base URL placeholder SHALL display the `defaultBaseUrl` value
 - **AND** the frontend SHALL NOT use any hardcoded `requiresBaseUrl` logic
 
-#### Scenario: Endpoint type inference driven by API
+#### Scenario: Adapter inference driven by API
 - **WHEN** the user discovers models for a provider
-- **THEN** the endpoint type SHALL be inferred from the provider type's `supportedEndpointTypes` metadata
-- **AND** the frontend SHALL NOT use any hardcoded provider-type-to-endpoint-type mapping
+- **THEN** the adapter type SHALL be inferred from the provider type metadata and backend discovery result
+- **AND** the frontend SHALL NOT use any hardcoded provider-type-to-adapter-type mapping
 
 #### Scenario: Provider list display driven by API
 - **WHEN** the provider list page renders a provider card

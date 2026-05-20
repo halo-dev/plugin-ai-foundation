@@ -1,5 +1,14 @@
 import { aiConsoleApiClient } from '@/api'
-import type { AiModel, DiscoveredModelItem, ProviderModelDiscoveryResponse } from '@/api/generated'
+import type {
+  AiModel,
+  DiscoveredModelItem,
+  DiscoveredModelItemAdapterTypeEnum,
+  DiscoveredModelItemConfidenceEnum,
+  DiscoveredModelItemFeaturesEnum,
+  DiscoveredModelItemModelTypeEnum,
+  DiscoveredModelItemSourceEnum,
+  ProviderModelDiscoveryResponse,
+} from '@/api/generated'
 import { useQuery } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
 
@@ -7,7 +16,11 @@ export type DiscoveredModel = DiscoveredModelItem & {
   modelId: string
   displayName: string
   name: string
-  capabilities: string[]
+  modelType: DiscoveredModelItemModelTypeEnum
+  features: DiscoveredModelItemFeaturesEnum[]
+  source: DiscoveredModelItemSourceEnum
+  confidence: DiscoveredModelItemConfidenceEnum
+  adapterType?: DiscoveredModelItemAdapterTypeEnum
 }
 
 type ProviderModelDiscoveryResult = Omit<ProviderModelDiscoveryResponse, 'models' | 'providerName'> & {

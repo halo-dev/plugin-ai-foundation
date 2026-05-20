@@ -12,6 +12,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
 
 @Component
 public class OpenAiLikeProvider extends AbstractAiProviderType {
@@ -56,13 +57,8 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     }
 
     @Override
-    public List<String> getSupportedEndpointTypes() {
-        return List.of("openai-chat", "openai-embedding");
-    }
-
-    @Override
-    public boolean supportsEmbeddings() {
-        return true;
+    public List<AdapterType> getSupportedAdapterTypes() {
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING);
     }
 
     @Override

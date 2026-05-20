@@ -22,8 +22,8 @@ const providerTypeOptions = computed(() => {
   }))
 })
 
-const providerType = ref()
-const displayName = ref()
+const providerType = ref(props.formState?.providerType)
+const displayName = ref(props.formState?.displayName)
 
 const selectedProviderType = computed(() => {
   return providerTypes.value?.find((t) => t.providerType === providerType.value)
@@ -32,7 +32,7 @@ const selectedProviderType = computed(() => {
 watch(
   () => providerType.value,
   (value) => {
-    if (value) {
+    if (value && !isEditing.value) {
       displayName.value = selectedProviderType.value?.displayName
     }
   },

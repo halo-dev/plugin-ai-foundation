@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -18,8 +19,12 @@ import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.transport.ProxyProvider.Proxy;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
-import run.halo.aifoundation.provider.support.ModelCapability;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 
 @Slf4j
 public abstract class AbstractAiProviderType implements AiProviderType {
@@ -112,8 +117,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
                         var modelIdObj = node.get("id");
                         var modelId = modelIdObj != null ? modelIdObj.toString() : "";
                         if (!modelId.isBlank()) {
-                            models.add(new DiscoveredModel(
-                                modelId, modelId, inferCapabilities(modelId)));
+                            models.add(inferModelProfile(modelId));
                         }
                     }
                 }
@@ -122,14 +126,35 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             });
     }
 
-    protected Set<ModelCapability> inferCapabilities(String modelId) {
-        var caps = new LinkedHashSet<ModelCapability>();
-        if (modelId.toLowerCase().contains("embed")) {
-            caps.add(ModelCapability.EMBEDDING);
-        } else {
-            caps.add(ModelCapability.CHAT);
+    protected DiscoveredModel inferModelProfile(String modelId) {
+        var modelType = inferModelType(modelId);
+        var features = inferFeatures(modelType, modelId);
+        return new DiscoveredModel(
+            modelId,
+            modelId,
+            modelType,
+            features,
+            recommendAdapterType(modelType).orElse(null),
+            DiscoverySource.RULE,
+            DiscoveryConfidence.LOW
+        );
+    }
+
+    protected ModelType inferModelType(String modelId) {
+        var normalized = modelId != null ? modelId.toLowerCase(Locale.ROOT) : "";
+        if (normalized.contains("embed")) {
+            return ModelType.EMBEDDING;
         }
-        return caps;
+        return ModelType.LANGUAGE;
+    }
+
+    protected Set<ModelFeature> inferFeatures(ModelType modelType, String modelId) {
+        if (modelType != ModelType.LANGUAGE) {
+            return Set.of();
+        }
+        var features = new LinkedHashSet<ModelFeature>();
+        features.add(ModelFeature.STREAMING);
+        return Set.copyOf(features);
     }
 
     protected void customizeDiscoveryRequest(

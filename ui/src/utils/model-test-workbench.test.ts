@@ -1,3 +1,4 @@
+import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import type { AiModel } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
@@ -13,9 +14,9 @@ describe('filterEnabledChatModels', () => {
   it('keeps only enabled chat-capable models', () => {
     expect(
       filterEnabledChatModels([
-        model('chat-enabled', true, ['chat']),
-        model('chat-disabled', false, ['chat']),
-        model('embedding', true, ['embedding']),
+        model('chat-enabled', true),
+        model('chat-disabled', false),
+        model('embedding', true, AiModelSpecModelTypeEnum.Embedding),
       ]).map((item) => item.metadata.name),
     ).toEqual(['chat-enabled'])
   })
@@ -74,7 +75,11 @@ describe('parseSseJsonLines', () => {
   })
 })
 
-function model(name: string, enabled: boolean, capabilities: string[]): AiModel {
+function model(
+  name: string,
+  enabled: boolean,
+  modelType: AiModel['spec']['modelType'] = AiModelSpecModelTypeEnum.Language,
+): AiModel {
   return {
     apiVersion: 'aifoundation.halo.run/v1alpha1',
     kind: 'AiModel',
@@ -84,8 +89,9 @@ function model(name: string, enabled: boolean, capabilities: string[]): AiModel 
       modelId: name,
       displayName: name,
       enabled,
-      endpointType: 'openai-chat',
-      capabilities,
+      modelType,
+      features: [AiModelSpecFeaturesEnum.Streaming],
+      adapterType: 'openai-chat',
     },
   }
 }

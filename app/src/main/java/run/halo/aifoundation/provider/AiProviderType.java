@@ -1,18 +1,17 @@
 package run.halo.aifoundation.provider;
 
-import java.util.Collection;
-import java.util.LinkedHashSet;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.lang.Nullable;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
-import run.halo.aifoundation.provider.support.ModelCapability;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 
 public interface AiProviderType {
 
@@ -53,9 +52,30 @@ public interface AiProviderType {
     @Nullable
     String getDefaultBaseUrl();
 
-    List<String> getSupportedEndpointTypes();
+    List<AdapterType> getSupportedAdapterTypes();
 
-    boolean supportsEmbeddings();
+    default List<ModelType> getSupportedModelTypes() {
+        var modelTypes = new ArrayList<ModelType>();
+        for (var adapterType : getSupportedAdapterTypes()) {
+            if (!modelTypes.contains(adapterType.getModelType())) {
+                modelTypes.add(adapterType.getModelType());
+            }
+        }
+        return List.copyOf(modelTypes);
+    }
+
+    default List<ModelFeature> getSupportedFeatures() {
+        if (!getSupportedModelTypes().contains(ModelType.LANGUAGE)) {
+            return List.of();
+        }
+        return List.of(
+            ModelFeature.STREAMING,
+            ModelFeature.VISION,
+            ModelFeature.TOOL_CALL,
+            ModelFeature.STRUCTURED_OUTPUT,
+            ModelFeature.REASONING
+        );
+    }
 
     // ── Behavior ──────────────────────────────────────────────
 
@@ -68,44 +88,12 @@ public interface AiProviderType {
 
     Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey);
 
-    default Optional<String> recommendEndpointType(DiscoveredModel model) {
-        return recommendEndpointType(model.modelId(), model.capabilities());
+    default Optional<AdapterType> recommendAdapterType(DiscoveredModel model) {
+        return recommendAdapterType(model.modelType());
     }
 
-    default Optional<String> recommendEndpointType(String modelId,
-        Collection<ModelCapability> capabilities) {
-        var supportedTypes = getSupportedEndpointTypes();
-        if (supportedTypes == null || supportedTypes.isEmpty()) {
-            return Optional.empty();
-        }
-
-        var normalizedCapabilities = new LinkedHashSet<>(
-            capabilities != null ? capabilities : Set.<ModelCapability>of());
-        if (normalizedCapabilities.isEmpty()) {
-            var normalizedModelId = modelId != null ? modelId.toLowerCase(Locale.ROOT) : "";
-            normalizedCapabilities.add(normalizedModelId.contains("embed")
-                ? ModelCapability.EMBEDDING : ModelCapability.CHAT);
-        }
-
-        if (normalizedCapabilities.contains(ModelCapability.EMBEDDING)) {
-            var embeddingEndpoint = findSupportedEndpointType("embedding");
-            if (embeddingEndpoint.isPresent()) {
-                return embeddingEndpoint;
-            }
-        }
-        if (normalizedCapabilities.contains(ModelCapability.CHAT)) {
-            var chatEndpoint = findSupportedEndpointType("chat");
-            if (chatEndpoint.isPresent()) {
-                return chatEndpoint;
-            }
-        }
-        return Optional.empty();
-    }
-
-    private Optional<String> findSupportedEndpointType(String token) {
-        return getSupportedEndpointTypes().stream()
-            .filter(endpointType -> endpointType.toLowerCase(Locale.ROOT).contains(token))
-            .findFirst();
+    default Optional<AdapterType> recommendAdapterType(ModelType modelType) {
+        return AdapterType.firstFor(getSupportedAdapterTypes(), modelType);
     }
 
     default int maxEmbeddingsPerCall() {
