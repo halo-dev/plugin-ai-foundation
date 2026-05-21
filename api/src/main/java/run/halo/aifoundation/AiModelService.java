@@ -1,9 +1,10 @@
 package run.halo.aifoundation;
 
 import java.util.List;
+import org.pf4j.ExtensionPoint;
 import reactor.core.publisher.Mono;
 
-public interface AiModelService {
+public interface AiModelService extends ExtensionPoint {
 
     Mono<LanguageModel> languageModel(String modelName);
 

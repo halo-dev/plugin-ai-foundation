@@ -1,7 +1,5 @@
 package run.halo.aifoundation.service;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +7,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
-import run.halo.aifoundation.AiServices;
 import run.halo.aifoundation.DefaultModelNotConfiguredException;
 import run.halo.aifoundation.EmbeddingModel;
 import run.halo.aifoundation.IncompatibleModelTypeException;
@@ -39,16 +36,6 @@ public class AiModelServiceImpl implements AiModelService {
     private final ProviderClientCache providerClientCache;
     private final SecretResolver secretResolver;
     private final ReactiveSettingFetcher settingFetcher;
-
-    @PostConstruct
-    void init() {
-        AiServices.setModelService(this);
-    }
-
-    @PreDestroy
-    void destroy() {
-        AiServices.clear();
-    }
 
     @Override
     public Mono<LanguageModel> languageModel(String modelName) {

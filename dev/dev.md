@@ -6,10 +6,11 @@
 
 - 本插件（ai-foundation）已安装并启用
 - 已至少配置一个 AI 提供商和模型（通过 Halo 控制台 > AI 基础设施）
+- 调用方插件已在 `plugin.yaml` 中声明对 `ai-foundation` 的插件依赖
 
 ## 添加依赖
 
-在你的插件 `build.gradle` 中添加对 `api` 模块的依赖：
+在你的插件 `build.gradle` 中添加对 `api` 模块的 `compileOnly` 依赖：
 
 ```gradle
 repositories {
@@ -17,20 +18,47 @@ repositories {
 }
 
 dependencies {
+    compileOnly platform('run.halo.tools.platform:plugin:2.23.0')
+    compileOnly 'run.halo.app:api'
     compileOnly 'run.halo.aifoundation:api:1.0.0-SNAPSHOT'
 }
 ```
 
-然后先在本项目根目录执行 `./gradlew :api:publishToMavenLocal`，将 SDK 发布到本地 Maven 仓库。
+如果调用方插件项目已经配置了 Halo 插件平台和 `run.halo.app:api` 依赖，只需要额外补充 `run.halo.aifoundation:api`。
+
+然后在调用方插件的 `plugin.yaml` 中声明运行时插件依赖：
+
+```yaml
+spec:
+  pluginDependencies:
+    ai-foundation: ">=1.0.0-SNAPSHOT"
+```
+
+开发环境中可以先在本项目根目录执行 `./gradlew :api:publishToMavenLocal`，将 SDK 发布到本地 Maven 仓库。
 
 ## 核心接口
 
 ### AiModelService
 
-`AiModelService` 是入口服务，由于 Halo 插件间的 Spring ApplicationContext 隔离，不能通过 `@Autowired` 注入，需通过静态定位器 `AiServices` 获取：
+`AiModelService` 是入口服务，同时也是 Halo 服务端 Extension Point。由于 Halo 插件间的 Spring ApplicationContext 隔离，调用方插件不要直接通过 `@Autowired` 注入 `AiModelService`，而是注入 Halo 提供的 `ExtensionGetter` 并获取启用的服务实现：
 
 ```java
-AiModelService aiModelService = AiServices.getModelService();
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+import run.halo.aifoundation.AiModelService;
+import run.halo.app.plugin.extensionpoint.ExtensionGetter;
+
+@Service
+@RequiredArgsConstructor
+public class MyAiService {
+
+    private final ExtensionGetter extensionGetter;
+
+    private Mono<AiModelService> aiModelService() {
+        return extensionGetter.getEnabledExtension(AiModelService.class);
+    }
+}
 ```
 
 它提供以下方法：
@@ -39,21 +67,25 @@ AiModelService aiModelService = AiServices.getModelService();
 |------|---------|------|
 | `languageModel(String modelName)` | `Mono<LanguageModel>` | 获取指定语言模型实例（需在响应式上下文中订阅） |
 | `embeddingModel(String modelName)` | `Mono<EmbeddingModel>` | 获取指定嵌入模型实例（需在响应式上下文中订阅） |
+| `defaultLanguageModel()` | `Mono<LanguageModel>` | 获取默认语言模型实例 |
+| `defaultEmbeddingModel()` | `Mono<EmbeddingModel>` | 获取默认嵌入模型实例 |
 | `listModels()` | `Mono<List<ModelInfo>>` | 列出所有已配置的模型 |
 | `listProviders()` | `Mono<List<ProviderInfo>>` | 列出所有已配置的提供商 |
 
 ### modelName 的格式
 
-`modelName` 是 **AiModel 的 metadata.name**（即 Halo Extension 资源的名称），格式为 `providerResourceName/modelId`，例如 `openai/gpt-4o`。
+`modelName` 是 **AiModel 的 metadata.name**（即 Halo Extension 资源的名称），例如 `openai-prod-gpt-4o-a7f3k`。它不是提供商侧的 `modelId`，也不是 `providerName/modelId` 这样的组合字符串。
 
 你可以通过 `listModels()` 获取所有可用模型的 `name` 字段。
 
 ## 语言模型调用
 
+以下示例中的 `aiModelService` 均来自上文通过 `ExtensionGetter` 获取到的 `AiModelService` 实例。
+
 ### 简单对话
 
 ```java
-LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat").block();
+LanguageModel model = aiModelService.languageModel("deepseek-prod-deepseek-chat").block();
 
 model.chat("你好，请介绍一下 Halo CMS")
     .subscribe(response -> {
@@ -64,7 +96,7 @@ model.chat("你好，请介绍一下 Halo CMS")
 ### 流式对话（推荐用于聊天场景）
 
 ```java
-LanguageModel model = aiModelService.languageModel("deepseek/deepseek-chat").block();
+LanguageModel model = aiModelService.languageModel("deepseek-prod-deepseek-chat").block();
 
 ChatRequest request = ChatRequest.builder()
     .messages(List.of(
@@ -114,7 +146,7 @@ Message.system("系统提示词");
 ### 简单嵌入
 
 ```java
-EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small").block();
+EmbeddingModel model = aiModelService.embeddingModel("openai-prod-text-embedding-3-small").block();
 
 model.embedQuery("这是一段需要向量化的文本")
     .subscribe(embedding -> {
@@ -126,7 +158,7 @@ model.embedQuery("这是一段需要向量化的文本")
 ### 批量嵌入
 
 ```java
-EmbeddingModel model = aiModelService.embeddingModel("openai/text-embedding-3-small").block();
+EmbeddingModel model = aiModelService.embeddingModel("openai-prod-text-embedding-3-small").block();
 
 List<String> texts = List.of("文本1", "文本2", "文本3");
 
@@ -194,17 +226,20 @@ aiModelService.listProviders()
 
 ```java
 @Service
+@RequiredArgsConstructor
 public class MyAiService {
 
+    private final ExtensionGetter extensionGetter;
+
     public Mono<String> summarize(String content) {
-        AiModelService aiModelService = AiServices.getModelService();
-        return aiModelService.languageModel("deepseek/deepseek-chat")
+        return extensionGetter.getEnabledExtension(AiModelService.class)
+            .flatMap(aiModelService -> aiModelService.languageModel("deepseek-prod-deepseek-chat"))
             .flatMap(model -> model.chat("请总结以下内容：\n" + content));
     }
 
     public Mono<float[]> vectorize(String text) {
-        AiModelService aiModelService = AiServices.getModelService();
-        return aiModelService.embeddingModel("openai/text-embedding-3-small")
+        return extensionGetter.getEnabledExtension(AiModelService.class)
+            .flatMap(aiModelService -> aiModelService.embeddingModel("openai-prod-text-embedding-3-small"))
             .flatMap(model -> model.embedQuery(text));
     }
 }
@@ -212,7 +247,7 @@ public class MyAiService {
 
 ## 注意事项
 
-1. **确保本插件已启用**：调用 `AiServices.getModelService()` 时，如果 ai-foundation 插件未启动，会抛出 `IllegalStateException`；调用 `languageModel()` 或 `embeddingModel()` 时，如果对应的提供商未启用，会通过 `Mono` error channel 抛出 `ProviderDisabledException`
+1. **确保本插件已启用**：调用方插件应在 `plugin.yaml` 中声明 `pluginDependencies.ai-foundation`，并通过 `ExtensionGetter.getEnabledExtension(AiModelService.class)` 获取服务；调用 `languageModel()` 或 `embeddingModel()` 时，如果对应的提供商未启用，会通过 `Mono` error channel 抛出 `ProviderDisabledException`
 2. **异步 API**：`languageModel()` 和 `embeddingModel()` 返回 `Mono`，需要在响应式上下文中通过 `.flatMap()` 链式调用，或在非响应式上下文中调用 `.block()` 获取实例。`chat()`、`streamChat()`、`embed()` 等方法同样返回 `Mono`/`Flux`
 3. **模型名称**：使用 `listModels()` 获取准确的 `name` 字段，不要硬编码 modelId
-4. **跨插件调用**：由于 Halo 插件 ApplicationContext 隔离，不能通过 `@Autowired` 注入 `AiModelService`，请使用 `AiServices.getModelService()` 静态方法获取
+4. **跨插件调用**：由于 Halo 插件 ApplicationContext 隔离，不能通过 `@Autowired` 注入 `AiModelService`，请使用 Halo 的 `ExtensionGetter` 获取启用的 `AiModelService` 扩展实现
