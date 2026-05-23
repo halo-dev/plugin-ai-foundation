@@ -4,6 +4,7 @@ import {
   AiProviderV1alpha1Api,
   ConsoleApiAifoundationHaloRunV1alpha1DefaultModelSlotApi,
   ConsoleApiAifoundationHaloRunV1alpha1ModelApi,
+  ConsoleApiAifoundationHaloRunV1alpha1ModelOptionApi,
   ConsoleApiAifoundationHaloRunV1alpha1ProviderApi,
   ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi,
 } from './generated'
@@ -20,6 +21,11 @@ const aiConsoleApiClient = {
     axiosInstance,
   ),
   model: new ConsoleApiAifoundationHaloRunV1alpha1ModelApi(undefined, '', axiosInstance),
+  modelOption: new ConsoleApiAifoundationHaloRunV1alpha1ModelOptionApi(
+    undefined,
+    '',
+    axiosInstance,
+  ),
   provider: new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(undefined, '', axiosInstance),
   providerType: new ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi(
     undefined,

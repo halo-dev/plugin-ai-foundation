@@ -481,6 +481,78 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/DefaultModelSlot" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/model-options" : {
+      "get" : {
+        "description" : "List aggregated AI model options for selectors.",
+        "operationId" : "ListModelOptions",
+        "parameters" : [ {
+          "description" : "Filter by model type, for example language",
+          "in" : "query",
+          "name" : "modelType",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Filter by AiProvider.metadata.name",
+          "in" : "query",
+          "name" : "providerName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Filter by AiProvider.spec.providerType",
+          "in" : "query",
+          "name" : "providerType",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Filter by AiModel.spec.enabled",
+          "in" : "query",
+          "name" : "enabled",
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "Filter by computed local availability",
+          "in" : "query",
+          "name" : "available",
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "Comma-separated all-of feature filter",
+          "in" : "query",
+          "name" : "requiredFeatures",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Case-insensitive keyword filter",
+          "in" : "query",
+          "name" : "keyword",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ModelOption"
+                  }
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ModelOption" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models" : {
       "get" : {
         "description" : "List all AI models.",
@@ -1305,6 +1377,91 @@
           }
         },
         "description" : "Metadata of Extension."
+      },
+      "ModelOption" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean",
+            "description" : "Whether this option is selectable based on local configuration state"
+          },
+          "displayName" : {
+            "type" : "string",
+            "description" : "Display name of the model"
+          },
+          "enabled" : {
+            "type" : "boolean",
+            "description" : "Whether the AiModel is enabled"
+          },
+          "features" : {
+            "type" : "array",
+            "description" : "Optional model features",
+            "items" : {
+              "type" : "string",
+              "description" : "Optional model features",
+              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+            }
+          },
+          "modelId" : {
+            "type" : "string",
+            "description" : "Provider-side model identifier"
+          },
+          "modelType" : {
+            "type" : "string",
+            "description" : "Primary model purpose",
+            "enum" : [ "language", "embedding", "rerank", "image-generation" ]
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "AiModel.metadata.name"
+          },
+          "provider" : {
+            "$ref" : "#/components/schemas/ModelOptionProvider"
+          },
+          "unavailableReason" : {
+            "type" : "string",
+            "description" : "Reason the option is not selectable",
+            "enum" : [ "model-disabled", "provider-missing", "provider-disabled" ]
+          }
+        }
+      },
+      "ModelOptionProvider" : {
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string",
+            "description" : "Display name of the provider"
+          },
+          "enabled" : {
+            "type" : "boolean",
+            "description" : "Whether the AiProvider is enabled"
+          },
+          "iconUrl" : {
+            "type" : "string",
+            "description" : "Provider type icon URL"
+          },
+          "lastCheckedAt" : {
+            "type" : "string",
+            "description" : "Provider diagnostic last checked time"
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "AiProvider.metadata.name"
+          },
+          "phase" : {
+            "type" : "string",
+            "description" : "Provider diagnostic phase"
+          },
+          "providerType" : {
+            "type" : "string",
+            "description" : "AiProvider.spec.providerType"
+          },
+          "providerTypeDisplayName" : {
+            "type" : "string",
+            "description" : "Display name of the provider type"
+          }
+        },
+        "description" : "Provider display summary"
       },
       "MoveOperation" : {
         "required" : [ "op", "from", "path" ],
