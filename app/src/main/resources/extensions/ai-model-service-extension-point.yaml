@@ -1,0 +1,19 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: ExtensionPointDefinition
+metadata:
+  name: ai-model-service
+spec:
+  className: run.halo.aifoundation.AiModelService
+  displayName: AI Model Service
+  type: SINGLETON
+  description: Provides AI model resolution and invocation service for Halo plugins.
+---
+apiVersion: plugin.halo.run/v1alpha1
+kind: ExtensionDefinition
+metadata:
+  name: ai-foundation-ai-model-service
+spec:
+  className: run.halo.aifoundation.service.AiModelServiceImpl
+  extensionPointName: ai-model-service
+  displayName: AI Foundation Model Service
+  description: Provides AI Foundation's built-in model service implementation.
