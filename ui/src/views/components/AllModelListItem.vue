@@ -4,6 +4,7 @@ import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
+import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import { modelFeatureLabel, modelTypeLabel } from '@/types'
 import { findProviderTypeForModel } from '@/utils/model'
 import { isEnabledChatModel } from '@/utils/model-test-workbench'
@@ -19,8 +20,8 @@ import {
   VTag,
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { useRouteQuery } from '@vueuse/router'
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import ModelEditingModal from './ModelEditingModal.vue'
 
 const props = defineProps<{
@@ -28,14 +29,17 @@ const props = defineProps<{
 }>()
 
 const queryClient = useQueryClient()
+const router = useRouter()
 
 const editingModalVisible = ref(false)
-const tab = useRouteQuery<string | undefined>('tab')
-const testModel = useRouteQuery<string | undefined>('model')
 
 function openWorkbench() {
-  tab.value = 'test'
-  testModel.value = props.model.metadata.name
+  void router.push({
+    name: AI_FOUNDATION_ROUTE_NAMES.TEST,
+    query: {
+      model: props.model.metadata.name,
+    },
+  })
 }
 
 function handleDelete() {
