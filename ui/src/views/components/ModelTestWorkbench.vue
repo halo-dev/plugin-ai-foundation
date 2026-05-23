@@ -1,13 +1,10 @@
 <script lang="ts" setup>
-import type { AiModel, ChatChunk } from '@/api/generated'
-import { useModelsFetch } from '@/composables/use-models-fetch'
-import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
-import { useProvidersFetch } from '@/composables/use-providers-fetch'
-import { findProviderTypeForModel } from '@/utils/model'
+import { ModelOptionModelTypeEnum } from '@/api/generated'
+import type { ChatChunk, ModelOption } from '@/api/generated'
+import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { renderMarkdown } from '@/utils/markdown'
 import {
   buildTestChatRequest,
-  filterEnabledChatModels,
   flushSseJsonBuffer,
   parseProviderOptionsJson,
   parseSseJsonLines,
@@ -15,44 +12,53 @@ import {
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading, VTag } from '@halo-dev/components'
 import { useRouteQuery } from '@vueuse/router'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 import RiStopCircleLine from '~icons/ri/stop-circle-line'
 
-const { data: models, isLoading, isFetching, refetch } = useModelsFetch({})
-const { data: providers } = useProvidersFetch()
-const { data: providerTypes } = useProviderTypesFetch()
+const languageModelType = shallowRef<string | undefined>(ModelOptionModelTypeEnum.Language)
+const availableOnly = shallowRef<boolean | undefined>(true)
+const {
+  data: modelOptions,
+  isLoading,
+  isFetching,
+  refetch,
+} = useModelOptionsFetch({
+  modelType: languageModelType,
+  available: availableOnly,
+})
 
 const selectedModelName = useRouteQuery<string | undefined>('model')
 
 const messages = ref<WorkbenchMessage[]>([])
-const input = ref('')
-const systemPrompt = ref('')
-const temperature = ref(0.7)
-const topP = ref(1)
-const maxTokens = ref(1024)
-const providerOptionsText = ref('{}')
-const providerOptionsError = ref('')
-const isStreaming = ref(false)
+const input = shallowRef('')
+const systemPrompt = shallowRef('')
+const temperature = shallowRef(0.7)
+const topP = shallowRef(1)
+const maxTokens = shallowRef(1024)
+const providerOptionsText = shallowRef('{}')
+const providerOptionsError = shallowRef('')
+const isStreaming = shallowRef(false)
 const conversationRef = ref<HTMLElement | null>(null)
 
 let abortController: AbortController | null = null
 
-const chatModels = computed(() => filterEnabledChatModels(models.value))
+const chatModels = computed(() => {
+  return (modelOptions.value || []).filter((model) => {
+    return model.name && model.modelType === ModelOptionModelTypeEnum.Language
+  })
+})
 const providerOptionsHelp = computed(() => {
   return providerOptionsError.value || '请输入 JSON 对象，例如 {"seed": 42}'
 })
 
 const selectedModel = computed(() => {
-  return chatModels.value.find((model) => model.metadata.name === selectedModelName.value)
+  return chatModels.value.find((model) => model.name === selectedModelName.value)
 })
 
-const selectedModelProviderType = computed(() => {
-  if (!selectedModel.value) {
-    return undefined
-  }
-  return findProviderTypeForModel(selectedModel.value, providers.value, providerTypes.value)
+const selectedModelProviderTypeDisplayName = computed(() => {
+  return selectedModel.value?.provider?.providerTypeDisplayName
 })
 
 watch(
@@ -62,8 +68,8 @@ watch(
       selectedModelName.value = undefined
       return
     }
-    if (!items.some((item) => item.metadata.name === selectedModelName.value)) {
-      selectedModelName.value = items[0].metadata.name
+    if (!items.some((item) => item.name === selectedModelName.value)) {
+      selectedModelName.value = items[0].name
     }
   },
   { immediate: true },
@@ -82,7 +88,8 @@ watch(
 
 async function sendMessage() {
   const content = input.value.trim()
-  if (!content || !selectedModel.value || isStreaming.value) {
+  const model = selectedModel.value
+  if (!content || !model?.name || isStreaming.value) {
     return
   }
 
@@ -113,8 +120,8 @@ async function sendMessage() {
     id: crypto.randomUUID(),
     role: 'assistant',
     content: '',
-    modelName: selectedModel.value.metadata.name,
-    modelDisplayName: selectedModel.value.spec.displayName || selectedModel.value.spec.modelId,
+    modelName: model.name,
+    modelDisplayName: modelOptionLabel(model),
     state: 'streaming',
   }
   messages.value.push(assistantMessage)
@@ -125,7 +132,7 @@ async function sendMessage() {
   try {
     const response = await fetch(
       `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(
-        selectedModel.value.metadata.name,
+        model.name,
       )}/test-chat/stream`,
       {
         method: 'POST',
@@ -223,8 +230,10 @@ function numberOrUndefined(value: number | undefined) {
   return Number.isFinite(value) ? value : undefined
 }
 
-function modelOptionLabel(model: AiModel) {
-  return `${model.spec.displayName || model.spec.modelId} / ${model.spec.modelId}`
+function modelOptionLabel(model: ModelOption) {
+  const modelName = model.displayName || model.modelId || model.name
+  const providerName = model.provider?.displayName || model.provider?.name || '-'
+  return `${modelName} / ${providerName}`
 }
 </script>
 
@@ -307,16 +316,16 @@ function modelOptionLabel(model: AiModel) {
             >
               <option
                 v-for="model in chatModels"
-                :key="model.metadata.name"
-                :value="model.metadata.name"
+                :key="model.name"
+                :value="model.name"
               >
                 {{ modelOptionLabel(model) }}
               </option>
             </select>
 
             <div class=":uno: flex items-center gap-2 text-xs text-gray-500">
-              <VTag v-if="selectedModelProviderType">{{
-                selectedModelProviderType.displayName
+              <VTag v-if="selectedModelProviderTypeDisplayName">{{
+                selectedModelProviderTypeDisplayName
               }}</VTag>
               <button
                 type="button"

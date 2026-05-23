@@ -1,48 +1,55 @@
 <script setup lang="ts">
 import { aiConsoleApiClient } from '@/api'
-import { AiModelSpecModelTypeEnum } from '@/api/generated'
-import type { AiModel, DefaultModelSlots } from '@/api/generated'
+import { ModelOptionModelTypeEnum } from '@/api/generated'
+import type { DefaultModelSlots, ModelOption } from '@/api/generated'
 import {
   QK_DEFAULT_MODEL_SLOTS,
   useDefaultModelSlotsFetch,
 } from '@/composables/use-default-model-slots-fetch'
-import { QK_MODELS, useModelsFetch } from '@/composables/use-models-fetch'
+import {
+  QK_MODEL_OPTIONS,
+  useModelOptionsFetch,
+} from '@/composables/use-model-options-fetch'
 import { modelTypeLabel } from '@/types'
 import { Toast, VButton, VCard, VEmpty, VLoading, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, shallowRef, watch } from 'vue'
 
 type SlotKey = keyof DefaultModelSlots
+type SlotModelType = NonNullable<ModelOption['modelType']>
 
 const slotDefinitions: Array<{
   key: SlotKey
   label: string
-  modelType: AiModel['spec']['modelType']
+  modelType: SlotModelType
 }> = [
   {
     key: 'languageModelName',
     label: '默认语言模型',
-    modelType: AiModelSpecModelTypeEnum.Language,
+    modelType: ModelOptionModelTypeEnum.Language,
   },
   {
     key: 'embeddingModelName',
     label: '默认 Embedding 模型',
-    modelType: AiModelSpecModelTypeEnum.Embedding,
+    modelType: ModelOptionModelTypeEnum.Embedding,
   },
   {
     key: 'rerankModelName',
     label: '默认 Rerank 模型',
-    modelType: AiModelSpecModelTypeEnum.Rerank,
+    modelType: ModelOptionModelTypeEnum.Rerank,
   },
   {
     key: 'imageGenerationModelName',
     label: '默认图像生成模型',
-    modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+    modelType: ModelOptionModelTypeEnum.ImageGeneration,
   },
 ]
 
 const queryClient = useQueryClient()
-const { data: models, isLoading: modelsLoading } = useModelsFetch({})
+const availableOnly = shallowRef(true)
+const { data: modelOptions, isLoading: modelOptionsLoading } = useModelOptionsFetch({
+  available: availableOnly,
+})
 const { data: slots, isLoading: slotsLoading } = useDefaultModelSlotsFetch()
 
 const formState = reactive<DefaultModelSlots>({})
@@ -60,16 +67,16 @@ watch(
   { immediate: true },
 )
 
-const isLoading = computed(() => modelsLoading.value || slotsLoading.value)
+const isLoading = computed(() => modelOptionsLoading.value || slotsLoading.value)
 
-function modelsForType(modelType: AiModel['spec']['modelType']) {
-  return (models.value || []).filter(
-    (model) => model.spec.enabled !== false && model.spec.modelType === modelType,
-  )
+function modelOptionsForType(modelType: SlotModelType) {
+  return (modelOptions.value || []).filter((model) => model.modelType === modelType)
 }
 
-function modelLabel(model: AiModel) {
-  return `${model.spec.displayName || model.spec.modelId} / ${model.spec.providerName}`
+function modelOptionLabel(model: ModelOption) {
+  const modelName = model.displayName || model.modelId || model.name
+  const providerName = model.provider?.displayName || model.provider?.name || '-'
+  return `${modelName} / ${providerName}`
 }
 
 function normalizeSlots(): DefaultModelSlots {
@@ -90,7 +97,7 @@ const updateMutation = useMutation({
   onSuccess: () => {
     Toast.success('默认模型已更新')
     queryClient.invalidateQueries({ queryKey: [QK_DEFAULT_MODEL_SLOTS] })
-    queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
+    queryClient.invalidateQueries({ queryKey: [QK_MODEL_OPTIONS] })
   },
   onError: (error) => {
     Toast.error('默认模型更新失败: ' + (error as Error).message)
@@ -119,15 +126,15 @@ const updateMutation = useMutation({
             >
               <option value="">不配置</option>
               <option
-                v-for="model in modelsForType(slot.modelType)"
-                :key="model.metadata.name"
-                :value="model.metadata.name"
+                v-for="model in modelOptionsForType(slot.modelType)"
+                :key="model.name"
+                :value="model.name"
               >
-                {{ modelLabel(model) }}
+                {{ modelOptionLabel(model) }}
               </option>
             </select>
             <VEmpty
-              v-if="modelsForType(slot.modelType).length === 0"
+              v-if="modelOptionsForType(slot.modelType).length === 0"
               class=":uno: mt-2"
               title="暂无可选模型"
             />

@@ -13,6 +13,8 @@ export * from './discovered-model-item';
 export * from './json-patch-inner';
 export * from './message';
 export * from './metadata';
+export * from './model-option';
+export * from './model-option-provider';
 export * from './move-operation';
 export * from './provider-model-discovery-response';
 export * from './provider-type-info';
