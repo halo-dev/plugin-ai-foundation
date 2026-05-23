@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { aiConsoleApiClient } from '@/api'
-import { ModelOptionModelTypeEnum } from '@/api/generated'
 import type { DefaultModelSlots, ModelOption } from '@/api/generated'
+import { ModelOptionModelTypeEnum } from '@/api/generated'
 import {
   QK_DEFAULT_MODEL_SLOTS,
   useDefaultModelSlotsFetch,
 } from '@/composables/use-default-model-slots-fetch'
-import {
-  QK_MODEL_OPTIONS,
-  useModelOptionsFetch,
-} from '@/composables/use-model-options-fetch'
+import { QK_MODEL_OPTIONS, useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { modelTypeLabel } from '@/types'
+import {
+  groupModelOptionsByProvider,
+  modelOptionLabel,
+  type ModelOptionGroup,
+} from '@/utils/model-options'
 import { Toast, VButton, VCard, VEmpty, VLoading, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, reactive, shallowRef, watch } from 'vue'
@@ -73,10 +75,18 @@ function modelOptionsForType(modelType: SlotModelType) {
   return (modelOptions.value || []).filter((model) => model.modelType === modelType)
 }
 
-function modelOptionLabel(model: ModelOption) {
-  const modelName = model.displayName || model.modelId || model.name
-  const providerName = model.provider?.displayName || model.provider?.name || '-'
-  return `${modelName} / ${providerName}`
+const modelOptionGroupsByType = computed(() => {
+  return slotDefinitions.reduce(
+    (groups, slot) => {
+      groups[slot.modelType] = groupModelOptionsByProvider(modelOptionsForType(slot.modelType))
+      return groups
+    },
+    {} as Record<SlotModelType, ModelOptionGroup[]>,
+  )
+})
+
+function modelOptionGroupsForType(modelType: SlotModelType) {
+  return modelOptionGroupsByType.value[modelType] || []
 }
 
 function normalizeSlots(): DefaultModelSlots {
@@ -116,25 +126,27 @@ const updateMutation = useMutation({
           class=":uno: grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-[12rem_1fr]"
         >
           <div class=":uno: min-w-0">
-            <div class=":uno: text-sm font-medium text-gray-900">{{ slot.label }}</div>
+            <div class=":uno: text-sm text-gray-900 font-medium">{{ slot.label }}</div>
             <div class=":uno: text-xs text-gray-500">{{ modelTypeLabel(slot.modelType) }}</div>
           </div>
           <div class=":uno: min-w-0">
             <select
               v-model="formState[slot.key]"
-              class=":uno: h-9 w-full rounded border border-gray-200 bg-white px-2 text-sm"
+              class=":uno: h-9 w-full border border-gray-200 rounded bg-white px-2 text-sm"
             >
               <option value="">不配置</option>
-              <option
-                v-for="model in modelOptionsForType(slot.modelType)"
-                :key="model.name"
-                :value="model.name"
+              <optgroup
+                v-for="group in modelOptionGroupsForType(slot.modelType)"
+                :key="group.key"
+                :label="group.label"
               >
-                {{ modelOptionLabel(model) }}
-              </option>
+                <option v-for="model in group.models" :key="model.name" :value="model.name">
+                  {{ modelOptionLabel(model) }}
+                </option>
+              </optgroup>
             </select>
             <VEmpty
-              v-if="modelOptionsForType(slot.modelType).length === 0"
+              v-if="modelOptionGroupsForType(slot.modelType).length === 0"
               class=":uno: mt-2"
               title="暂无可选模型"
             />

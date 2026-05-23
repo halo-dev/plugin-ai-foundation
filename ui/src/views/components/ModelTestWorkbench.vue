@@ -1,8 +1,9 @@
 <script lang="ts" setup>
+import type { ChatChunk } from '@/api/generated'
 import { ModelOptionModelTypeEnum } from '@/api/generated'
-import type { ChatChunk, ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { renderMarkdown } from '@/utils/markdown'
+import { groupModelOptionsByProvider, modelOptionLabel } from '@/utils/model-options'
 import {
   buildTestChatRequest,
   flushSseJsonBuffer,
@@ -49,6 +50,7 @@ const chatModels = computed(() => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Language
   })
 })
+const chatModelGroups = computed(() => groupModelOptionsByProvider(chatModels.value))
 const providerOptionsHelp = computed(() => {
   return providerOptionsError.value || '请输入 JSON 对象，例如 {"seed": 42}'
 })
@@ -229,12 +231,6 @@ function clearMessages() {
 function numberOrUndefined(value: number | undefined) {
   return Number.isFinite(value) ? value : undefined
 }
-
-function modelOptionLabel(model: ModelOption) {
-  const modelName = model.displayName || model.modelId || model.name
-  const providerName = model.provider?.displayName || model.provider?.name || '-'
-  return `${modelName} / ${providerName}`
-}
 </script>
 
 <template>
@@ -274,7 +270,7 @@ function modelOptionLabel(model: ModelOption) {
               :class="{ ':uno: justify-end': message.role === 'user' }"
             >
               <div
-                class=":uno: max-w-[86%] rounded-lg border px-4 py-3 text-sm leading-6 shadow-sm"
+                class=":uno: max-w-[86%] border rounded-lg px-4 py-3 text-sm leading-6 shadow-sm"
                 :class="{
                   ':uno: border-blue-200 bg-blue-50 text-blue-950': message.role === 'user',
                   ':uno: border-gray-200 bg-white text-gray-900': message.role === 'assistant',
@@ -296,8 +292,10 @@ function modelOptionLabel(model: ModelOption) {
                 </div>
                 <div
                   v-else
-                  class="ai-markdown :uno: break-words"
-                  v-html="renderMarkdown(message.content || (message.state === 'streaming' ? ' ' : ''))"
+                  class=":uno: ai-markdown break-words"
+                  v-html="
+                    renderMarkdown(message.content || (message.state === 'streaming' ? ' ' : ''))
+                  "
                 />
               </div>
             </div>
@@ -314,13 +312,11 @@ function modelOptionLabel(model: ModelOption) {
               class=":uno: h-9 min-w-0 flex-1 border border-gray-200 rounded-md bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
               :disabled="isStreaming"
             >
-              <option
-                v-for="model in chatModels"
-                :key="model.name"
-                :value="model.name"
-              >
-                {{ modelOptionLabel(model) }}
-              </option>
+              <optgroup v-for="group in chatModelGroups" :key="group.key" :label="group.label">
+                <option v-for="model in group.models" :key="model.name" :value="model.name">
+                  {{ modelOptionLabel(model) }}
+                </option>
+              </optgroup>
             </select>
 
             <div class=":uno: flex items-center gap-2 text-xs text-gray-500">
@@ -329,7 +325,7 @@ function modelOptionLabel(model: ModelOption) {
               }}</VTag>
               <button
                 type="button"
-                class=":uno: group inline-flex h-8 w-8 items-center justify-center rounded hover:bg-gray-100"
+                class=":uno: group h-8 w-8 inline-flex items-center justify-center rounded hover:bg-gray-100"
                 v-tooltip="`刷新模型`"
                 @click="refetch()"
               >
@@ -340,7 +336,7 @@ function modelOptionLabel(model: ModelOption) {
               </button>
               <button
                 type="button"
-                class=":uno: group inline-flex h-8 w-8 items-center justify-center rounded hover:bg-gray-100"
+                class=":uno: group h-8 w-8 inline-flex items-center justify-center rounded hover:bg-gray-100"
                 v-tooltip="`清空会话`"
                 @click="clearMessages"
               >
@@ -386,7 +382,7 @@ function modelOptionLabel(model: ModelOption) {
       <aside
         class=":uno: max-h-80 overflow-y-auto border-t border-gray-200 bg-white p-4 lg:max-h-none lg:w-80 lg:border-l lg:border-t-0"
       >
-        <div class=":uno: mb-4 text-sm font-medium text-gray-900">参数</div>
+        <div class=":uno: mb-4 text-sm text-gray-900 font-medium">参数</div>
 
         <FormKit type="form" :actions="false">
           <FormKit
