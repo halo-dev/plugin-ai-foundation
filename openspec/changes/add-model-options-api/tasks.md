@@ -34,6 +34,7 @@
 - [x] 5.3 Render selector labels with model display name or model ID plus provider display context while preserving `AiModel.metadata.name` as the selected value.
 - [x] 5.4 Keep provider-scoped model management lists on raw `/models?fieldSelector=spec.providerName=...`.
 - [x] 5.5 Handle empty compatible option states and unavailable option display consistently in Chinese UI copy.
+- [x] 5.6 Update the model test workbench picker to use available language model options with provider display context.
 
 ## 6. Verification
 
