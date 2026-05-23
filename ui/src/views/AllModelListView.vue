@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { useModelsFetch } from '@/composables/use-models-fetch'
+import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
 import {
   IconRefreshLine,
@@ -11,13 +12,12 @@ import {
   VSpace,
 } from '@halo-dev/components'
 import { useFuse } from '@vueuse/integrations'
-import { useRouteQuery } from '@vueuse/router'
 import { computed, ref } from 'vue'
-import AllModelListItem from './AllModelListItem.vue'
+import { useRouter } from 'vue-router'
+import AllModelListItem from './components/AllModelListItem.vue'
 
 const { data, isLoading, isFetching, refetch } = useModelsFetch({})
-
-const tab = useRouteQuery<string | undefined>('tab')
+const router = useRouter()
 
 const keyword = ref('')
 const modelTypeFilter = ref('')
@@ -44,12 +44,21 @@ const filteredModels = computed(() => {
     if (modelTypeFilter.value && model.spec.modelType !== modelTypeFilter.value) {
       return false
     }
-    if (featureFilter.value && !(model.spec.features || []).some((item) => item === featureFilter.value)) {
+    if (
+      featureFilter.value &&
+      !(model.spec.features || []).some((item) => item === featureFilter.value)
+    ) {
       return false
     }
     return true
   })
 })
+
+function openProviderConfig() {
+  void router.push({
+    name: AI_FOUNDATION_ROUTE_NAMES.PROVIDERS,
+  })
+}
 </script>
 <template>
   <div class=":uno: p-2">
@@ -106,7 +115,7 @@ const filteredModels = computed(() => {
           <template #actions>
             <VSpace>
               <VButton :loading="isFetching" @click="refetch()"> 刷新 </VButton>
-              <VButton type="secondary" @click="tab = 'config'"> 配置模型 </VButton>
+              <VButton type="secondary" @click="openProviderConfig"> 配置模型 </VButton>
             </VSpace>
           </template>
         </VEmpty>

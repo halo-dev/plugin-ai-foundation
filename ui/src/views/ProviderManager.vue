@@ -1,35 +1,47 @@
 <script setup lang="ts">
 import type { Tab } from '@/components/SegmentedTabs.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
+import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import { VPageHeader } from '@halo-dev/components'
-import { useRouteQuery } from '@vueuse/router'
+import { computed } from 'vue'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import RiBrainLine from '~icons/ri/brain-line'
-import ProviderDetail from './ProviderDetail.vue'
-import AllModelList from './components/AllModelList.vue'
-import DefaultModelSlotsPanel from './components/DefaultModelSlotsPanel.vue'
-import ModelTestWorkbench from './components/ModelTestWorkbench.vue'
-import ProviderList from './components/ProviderList.vue'
 
 const tabs: Tab[] = [
   {
     label: '配置',
-    value: 'config',
+    value: AI_FOUNDATION_ROUTE_NAMES.PROVIDERS,
   },
   {
     label: '模型列表',
-    value: 'models',
+    value: AI_FOUNDATION_ROUTE_NAMES.MODELS,
   },
   {
     label: '默认模型',
-    value: 'defaults',
+    value: AI_FOUNDATION_ROUTE_NAMES.DEFAULTS,
   },
   {
     label: '测试',
-    value: 'test',
+    value: AI_FOUNDATION_ROUTE_NAMES.TEST,
   },
 ]
 
-const activeTab = useRouteQuery<Tab['value'] | undefined>('tab', 'config')
+const route = useRoute()
+const router = useRouter()
+
+const activeRouteName = computed({
+  get: () => {
+    const matchedTab = tabs.find((item) => {
+      return route.matched.some((record) => record.name === item.value)
+    })
+    return matchedTab?.value || AI_FOUNDATION_ROUTE_NAMES.PROVIDERS
+  },
+  set: (value) => {
+    if (value !== activeRouteName.value) {
+      void router.push({ name: value })
+    }
+  },
+})
 </script>
 
 <template>
@@ -40,22 +52,8 @@ const activeTab = useRouteQuery<Tab['value'] | undefined>('tab', 'config')
   </VPageHeader>
 
   <div class=":uno: flex p-2 pb-0">
-    <SegmentedTabs v-model="activeTab" :tabs="tabs" />
+    <SegmentedTabs v-model="activeRouteName" :tabs="tabs" />
   </div>
 
-  <div v-if="activeTab === 'config'" class=":uno: h-[calc(100vh-6.5rem)] flex flex-col sm:flex-row">
-    <div class=":uno: h-64 min-h-0 flex-none p-2 sm:h-auto sm:w-72">
-      <ProviderList />
-    </div>
-
-    <div class=":uno: min-h-0 min-w-0 flex-1 shrink overflow-auto p-2">
-      <ProviderDetail />
-    </div>
-  </div>
-
-  <AllModelList v-if="activeTab === 'models'" />
-
-  <DefaultModelSlotsPanel v-if="activeTab === 'defaults'" />
-
-  <ModelTestWorkbench v-if="activeTab === 'test'" />
+  <RouterView />
 </template>

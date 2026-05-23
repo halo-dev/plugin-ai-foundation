@@ -51,6 +51,12 @@ Default model slots SHALL provide central model selection, not automatic retry o
 
 ### Requirement: Console default model settings
 The Console SHALL provide a super-admin settings surface for choosing default model slots.
+The settings surface SHALL be reachable through a dedicated AI Foundation child route instead of a query-tab state on a shared management page.
+
+#### Scenario: Open default model route
+- **WHEN** an admin opens the default model child route
+- **THEN** the Console SHALL display the default model slot settings surface
+- **AND** the active AI Foundation section SHALL be "默认模型"
 
 #### Scenario: Slot selector filters by model type
 - **WHEN** an admin configures the default language model slot

@@ -2,6 +2,9 @@
 import { aiConsoleApiClient } from '@/api'
 import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
+import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
+import { modelFeatureLabel, modelTypeLabel } from '@/types'
+import { isEnabledChatModel } from '@/utils/model-test-workbench'
 import {
   Dialog,
   Toast,
@@ -12,26 +15,27 @@ import {
   VStatusDot,
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { useRouteQuery } from '@vueuse/router'
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import ModelEditingModal from './ModelEditingModal.vue'
-import { isEnabledChatModel } from '@/utils/model-test-workbench'
-import { modelFeatureLabel, modelTypeLabel } from '@/types'
 
 const props = defineProps<{
   model: AiModel
 }>()
 
 const queryClient = useQueryClient()
+const router = useRouter()
 
 const editingModalVisible = ref(false)
-const tab = useRouteQuery<string | undefined>('tab')
-const testModel = useRouteQuery<string | undefined>('model')
 const canTest = computed(() => isEnabledChatModel(props.model))
 
 function openWorkbench() {
-  tab.value = 'test'
-  testModel.value = props.model.metadata.name
+  void router.push({
+    name: AI_FOUNDATION_ROUTE_NAMES.TEST,
+    query: {
+      model: props.model.metadata.name,
+    },
+  })
 }
 
 function handleDelete() {
