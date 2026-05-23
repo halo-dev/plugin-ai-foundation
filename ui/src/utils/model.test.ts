@@ -1,3 +1,4 @@
+import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
 import {
   AiModelSpecAdapterTypeEnum,
   AiModelSpecDiscoveryConfidenceEnum,
@@ -10,7 +11,6 @@ import {
   ProviderTypeInfoSupportedFeaturesEnum,
   ProviderTypeInfoSupportedModelTypesEnum,
 } from '@/api/generated'
-import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
   createModelFromDiscovered,
@@ -18,16 +18,16 @@ import {
   filterModelFeaturesForProviderType,
   findProviderTypeForModel,
   modelFeatureOptionsForProviderType,
+  modelImportFailureMessage,
   modelTypeOptionsForProviderType,
+  summarizeModelImportResults,
+  syncDiscoveredModelProfiles,
 } from './model'
 
 describe('findProviderTypeForModel', () => {
   it('matches by provider resource name instead of provider name prefix', () => {
     const model = aiModel('prod-east-gpt-4', 'prod-east')
-    const providers = [
-      aiProvider('prod-east', 'openailike'),
-      aiProvider('openai-prod', 'openai'),
-    ]
+    const providers = [aiProvider('prod-east', 'openailike'), aiProvider('openai-prod', 'openai')]
     const providerTypes = [
       providerTypeInfo('openai', 'OpenAI'),
       providerTypeInfo('openailike', 'OpenAI 兼容'),
@@ -48,9 +48,12 @@ describe('createModelFromDiscovered', () => {
     expect(
       createModelFromDiscovered(
         'openai-prod',
-        discoveredModel('text-embedding-3-small', AiModelSpecModelTypeEnum.Embedding, [
-          AiModelSpecFeaturesEnum.Streaming,
-        ], DiscoveredModelItemAdapterTypeEnum.OpenaiEmbedding),
+        discoveredModel(
+          'text-embedding-3-small',
+          AiModelSpecModelTypeEnum.Embedding,
+          [AiModelSpecFeaturesEnum.Streaming],
+          DiscoveredModelItemAdapterTypeEnum.OpenaiEmbedding,
+        ),
       ).spec,
     ).toMatchObject({
       providerName: 'openai-prod',
@@ -117,6 +120,54 @@ describe('provider type model options', () => {
     expect(modelFeatureOptionsForProviderType(undefined).map((item) => item.value)).toContain(
       AiModelSpecFeaturesEnum.ToolCall,
     )
+  })
+})
+
+describe('discovered model profiles', () => {
+  it('syncs discovered profiles without keeping stale entries', () => {
+    const providerType = providerTypeInfo('openailike', 'OpenAI 兼容', {
+      supportedModelTypes: [ProviderTypeInfoSupportedModelTypesEnum.Language],
+      supportedFeatures: [ProviderTypeInfoSupportedFeaturesEnum.Streaming],
+    })
+
+    const profiles = syncDiscoveredModelProfiles([discoveredModel('candidate')], providerType, {
+      candidate: {
+        modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+        features: [AiModelSpecFeaturesEnum.Streaming, AiModelSpecFeaturesEnum.Vision],
+      },
+      stale: {
+        modelType: AiModelSpecModelTypeEnum.Language,
+        features: [],
+      },
+    })
+
+    expect(Object.keys(profiles)).toEqual(['candidate'])
+    expect(profiles.candidate).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Language,
+      features: [AiModelSpecFeaturesEnum.Streaming],
+    })
+  })
+})
+
+describe('summarizeModelImportResults', () => {
+  it('keeps failed result messages aligned with the original model', () => {
+    const error = new Error('already exists')
+    const summary = summarizeModelImportResults(
+      [
+        discoveredModel('first-model'),
+        discoveredModel('second-model'),
+        discoveredModel('third-model'),
+      ],
+      [
+        { status: 'fulfilled', value: 'first-model' },
+        { status: 'rejected', reason: error },
+        { status: 'fulfilled', value: 'third-model' },
+      ],
+    )
+
+    expect(summary.succeeded).toBe(2)
+    expect(summary.failed).toEqual([{ modelId: 'second-model', reason: error }])
+    expect(modelImportFailureMessage(summary.failed[0])).toBe('second-model: already exists')
   })
 })
 

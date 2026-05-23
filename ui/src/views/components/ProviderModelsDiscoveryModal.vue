@@ -10,10 +10,13 @@ import { useProviderType } from '@/composables/use-provider-types-fetch'
 import { setFocus } from '@/utils/focus'
 import {
   createModelFromDiscovered,
-  defaultModelTypeForProviderType,
-  filterModelFeaturesForProviderType,
+  discoveredModelProfileForProviderType,
   modelFeatureOptionsForProviderType,
+  modelImportFailureMessage,
   modelTypeOptionsForProviderType,
+  summarizeModelImportResults,
+  syncDiscoveredModelProfiles,
+  type DiscoveredModelProfiles,
 } from '@/utils/model'
 import {
   Toast,
@@ -28,7 +31,7 @@ import {
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, onMounted, ref, toRef } from 'vue'
+import { computed, onMounted, ref, shallowRef, toRef, watch } from 'vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -66,19 +69,14 @@ const filteredModels = computed(() => {
 })
 
 const selectedModels = ref<Set<string>>(new Set())
-const profileOverrides = ref<
-  Record<
-    string,
-    {
-      modelType: AiModel['spec']['modelType']
-      features: NonNullable<AiModel['spec']['features']>
-    }
-  >
->({})
+const profileOverrides = ref<DiscoveredModelProfiles>({})
+const isImporting = shallowRef(false)
 
 const modelTypeOptions = computed(() => modelTypeOptionsForProviderType(selectedProviderType.value))
 
-const featureOptions = computed(() => modelFeatureOptionsForProviderType(selectedProviderType.value))
+const featureOptions = computed(() =>
+  modelFeatureOptionsForProviderType(selectedProviderType.value),
+)
 
 function featuresEqual(
   a: NonNullable<AiModel['spec']['features']>,
@@ -88,36 +86,22 @@ function featuresEqual(
 }
 
 function profileFor(model: DiscoveredModel) {
-  const existing = profileOverrides.value[model.modelId]
-
-  const fallback = {
-    modelType: defaultModelTypeForProviderType(
-      selectedProviderType.value,
-      existing?.modelType || model.modelType,
-    ),
-    features: filterModelFeaturesForProviderType(
-      selectedProviderType.value,
-      existing?.features || model.features || [],
-    ),
-  }
-
-  if (
-    existing &&
-    existing.modelType === fallback.modelType &&
-    featuresEqual(existing.features, fallback.features)
-  ) {
-    return existing
-  }
-
-  profileOverrides.value[model.modelId] = fallback
-  return fallback
+  return (
+    profileOverrides.value[model.modelId] ||
+    discoveredModelProfileForProviderType(selectedProviderType.value, model)
+  )
 }
 
 function setModelType(model: DiscoveredModel, event: Event) {
-  profileFor(model).modelType = defaultModelTypeForProviderType(
-    selectedProviderType.value,
-    (event.target as HTMLSelectElement).value,
-  )
+  const current = profileFor(model)
+  const next = discoveredModelProfileForProviderType(selectedProviderType.value, model, {
+    ...current,
+    modelType: (event.target as HTMLSelectElement).value as AiModel['spec']['modelType'],
+  })
+  profileOverrides.value = {
+    ...profileOverrides.value,
+    [model.modelId]: next,
+  }
 }
 
 function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum, event: Event) {
@@ -126,13 +110,20 @@ function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum,
   }
   const profile = profileFor(model)
   const checked = (event.target as HTMLInputElement).checked
+  let features = profile.features
   if (checked && !profile.features.includes(feature)) {
-    profile.features = [...profile.features, feature]
+    features = [...profile.features, feature]
   }
   if (!checked) {
-    profile.features = profile.features.filter((item) => item !== feature)
+    features = profile.features.filter((item) => item !== feature)
   }
-  profileOverrides.value[model.modelId] = profile
+  profileOverrides.value = {
+    ...profileOverrides.value,
+    [model.modelId]: {
+      ...profile,
+      features,
+    },
+  }
 }
 
 function toggleSelection(model: DiscoveredModel) {
@@ -144,42 +135,64 @@ function toggleSelection(model: DiscoveredModel) {
 }
 
 async function handleImport() {
-  const data = models.value?.models.filter((model) => selectedModels.value.has(model.modelId))
+  if (isImporting.value) return
 
-  if (!data || data.length === 0) return
+  const data = allModels.value.filter((model) => selectedModels.value.has(model.modelId))
 
-  const results = await Promise.allSettled(
-    data.map(async (model) => {
-      const newModel = createModelFromDiscovered(providerName.value, model, profileFor(model))
+  if (data.length === 0) return
 
-      await aiConsoleApiClient.model.createModel({
-        aiModel: newModel,
-      })
-      return model.modelId
-    }),
-  )
+  isImporting.value = true
+  try {
+    const results = await Promise.allSettled(
+      data.map(async (model) => {
+        const newModel = createModelFromDiscovered(providerName.value, model, profileFor(model))
 
-  const succeeded = results.filter((r) => r.status === 'fulfilled').length
-  const failed = results.filter((r) => r.status === 'rejected')
+        await aiConsoleApiClient.model.createModel({
+          aiModel: newModel,
+        })
+        return model.modelId
+      }),
+    )
 
-  if (failed.length > 0) {
-    const failedIds = failed
-      .map(
-        (r, i) =>
-          `${data[i].modelId}: ${(r as PromiseRejectedResult).reason?.message || '未知错误'}`,
-      )
-      .join('\n')
-    Toast.warning(`导入完成：成功 ${succeeded} 个，失败 ${failed.length} 个\n${failedIds}`)
-  } else {
-    Toast.success(`成功导入 ${succeeded} 个模型`)
-  }
+    const { succeeded, failed } = summarizeModelImportResults(data, results)
 
-  modal.value?.close()
+    if (failed.length > 0) {
+      const failedIds = failed.map(modelImportFailureMessage).join('\n')
+      Toast.warning(`导入完成：成功 ${succeeded} 个，失败 ${failed.length} 个\n${failedIds}`)
+    } else {
+      Toast.success(`成功导入 ${succeeded} 个模型`)
+    }
 
-  if (succeeded > 0) {
-    queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
+    modal.value?.close()
+
+    if (succeeded > 0) {
+      queryClient.invalidateQueries({ queryKey: [QK_MODELS] })
+    }
+  } finally {
+    isImporting.value = false
   }
 }
+
+watch(
+  [allModels, selectedProviderType],
+  ([items, providerType]) => {
+    const nextProfiles = syncDiscoveredModelProfiles(items, providerType, profileOverrides.value)
+    const isUnchanged =
+      Object.keys(nextProfiles).length === Object.keys(profileOverrides.value).length &&
+      Object.entries(nextProfiles).every(([modelId, profile]) => {
+        const existing = profileOverrides.value[modelId]
+        return (
+          existing &&
+          existing.modelType === profile.modelType &&
+          featuresEqual(existing.features, profile.features)
+        )
+      })
+    if (!isUnchanged) {
+      profileOverrides.value = nextProfiles
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   setFocus('model-discovery-search-input')
@@ -254,7 +267,12 @@ onMounted(() => {
     </div>
     <template #footer>
       <VSpace>
-        <VButton type="secondary" @click="handleImport" :disabled="selectedModels.size === 0">
+        <VButton
+          type="secondary"
+          @click="handleImport"
+          :loading="isImporting"
+          :disabled="selectedModels.size === 0 || isImporting"
+        >
           {{ selectedModels.size > 0 ? `导入 ${selectedModels.size} 个模型` : '导入' }}
         </VButton>
         <VButton @click="modal?.close()">关闭</VButton>

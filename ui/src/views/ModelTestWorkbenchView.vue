@@ -13,7 +13,7 @@ import {
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading, VTag } from '@halo-dev/components'
 import { useRouteQuery } from '@vueuse/router'
-import { computed, nextTick, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 import RiStopCircleLine from '~icons/ri/stop-circle-line'
@@ -128,7 +128,8 @@ async function sendMessage() {
   }
   messages.value.push(assistantMessage)
 
-  abortController = new AbortController()
+  const controller = new AbortController()
+  abortController = controller
   isStreaming.value = true
 
   try {
@@ -140,7 +141,7 @@ async function sendMessage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
-        signal: abortController.signal,
+        signal: controller.signal,
       },
     )
 
@@ -173,8 +174,10 @@ async function sendMessage() {
     }
     appendAssistantError(assistantMessage.id, `请求失败: ${(e as Error).message}`)
   } finally {
-    isStreaming.value = false
-    abortController = null
+    if (abortController === controller) {
+      isStreaming.value = false
+      abortController = null
+    }
   }
 }
 
@@ -213,12 +216,20 @@ function finishAssistantMessage(messageId: string, state: WorkbenchMessage['stat
 }
 
 function stopGeneration() {
-  abortController?.abort()
+  abortCurrentRequest(true)
+}
+
+function abortCurrentRequest(markStopped: boolean) {
+  const controller = abortController
+  controller?.abort()
   const streamingMessage = [...messages.value].reverse().find((item) => item.state === 'streaming')
-  if (streamingMessage) {
+  if (markStopped && streamingMessage) {
     streamingMessage.state = 'stopped'
   }
-  isStreaming.value = false
+  if (controller && abortController === controller) {
+    isStreaming.value = false
+    abortController = null
+  }
 }
 
 function clearMessages() {
@@ -231,6 +242,10 @@ function clearMessages() {
 function numberOrUndefined(value: number | undefined) {
   return Number.isFinite(value) ? value : undefined
 }
+
+onBeforeUnmount(() => {
+  abortCurrentRequest(false)
+})
 </script>
 
 <template>
