@@ -50,7 +50,7 @@ const providerName = computed(() => props.provider.metadata.name || '')
 const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
 const selectedProviderType = useProviderType(toRef(props, 'provider'))
 
-const keyword = ref('')
+const keyword = shallowRef('')
 
 const allModels = computed(() => models.value?.models || [])
 
@@ -71,6 +71,12 @@ const filteredModels = computed(() => {
 const selectedModels = ref<Set<string>>(new Set())
 const profileOverrides = ref<DiscoveredModelProfiles>({})
 const isImporting = shallowRef(false)
+const selectedModelCount = computed(() => selectedModels.value.size)
+const resultText = computed(() => {
+  return keyword.value
+    ? `找到 ${filteredModels.value.length} 个模型`
+    : `共 ${allModels.value.length} 个模型`
+})
 
 const modelTypeOptions = computed(() => modelTypeOptionsForProviderType(selectedProviderType.value))
 
@@ -209,8 +215,16 @@ onMounted(() => {
     :body-class="['!p-0']"
     @close="emit('close')"
   >
-    <div>
-      <div class=":uno: border-b border-gray-100 p-4">
+    <div class=":uno: max-h-[68vh] min-h-0 flex flex-col">
+      <div class=":uno: flex-none border-b border-gray-100 bg-white p-4">
+        <div class=":uno: mb-3 flex flex-col gap-1">
+          <div class=":uno: text-sm text-gray-950 font-semibold">
+            {{ selectedProviderType?.displayName || provider.spec.providerType }}
+          </div>
+          <div class=":uno: text-xs text-gray-500">
+            {{ resultText }}，已选择 {{ selectedModelCount }} 个
+          </div>
+        </div>
         <SearchInput
           id="model-discovery-search-input"
           sync
@@ -218,52 +232,54 @@ onMounted(() => {
           placeholder="搜索模型名称或 ID..."
         />
       </div>
-      <VLoading v-if="isLoading" />
-      <VEmpty v-else-if="allModels.length === 0" title="无数据" message="无法获取到模型列表" />
-      <VEmpty
-        v-else-if="filteredModels.length === 0"
-        title="无匹配结果"
-        message="未找到匹配的模型"
-      />
-      <VEntityContainer v-else>
-        <VEntity
-          @click="toggleSelection(model)"
-          v-for="model in filteredModels"
-          :key="model.modelId"
-        >
-          <template #checkbox>
-            <input @click.stop type="checkbox" v-model="selectedModels" :value="model.modelId" />
-          </template>
-          <template #start>
-            <VEntityField :title="model.displayName" :description="model.modelId" />
-          </template>
-          <template #end>
-            <div class=":uno: max-w-xl flex flex-wrap items-center justify-end gap-2" @click.stop>
-              <select
-                :value="profileFor(model).modelType"
-                class=":uno: h-8 border border-gray-200 rounded bg-white px-2 text-sm"
-                @change="setModelType(model, $event)"
-              >
-                <option v-for="item in modelTypeOptions" :key="item.value" :value="item.value">
+      <div class=":uno: min-h-0 flex-1 overflow-y-auto">
+        <VLoading v-if="isLoading" />
+        <VEmpty v-else-if="allModels.length === 0" title="无数据" message="无法获取到模型列表" />
+        <VEmpty
+          v-else-if="filteredModels.length === 0"
+          title="无匹配结果"
+          message="未找到匹配的模型"
+        />
+        <VEntityContainer v-else>
+          <VEntity
+            @click="toggleSelection(model)"
+            v-for="model in filteredModels"
+            :key="model.modelId"
+          >
+            <template #checkbox>
+              <input @click.stop type="checkbox" v-model="selectedModels" :value="model.modelId" />
+            </template>
+            <template #start>
+              <VEntityField :title="model.displayName" :description="model.modelId" />
+            </template>
+            <template #end>
+              <div class=":uno: max-w-xl flex flex-wrap items-center justify-end gap-2" @click.stop>
+                <select
+                  :value="profileFor(model).modelType"
+                  class=":uno: h-8 border border-gray-200 rounded-md bg-white px-2 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+                  @change="setModelType(model, $event)"
+                >
+                  <option v-for="item in modelTypeOptions" :key="item.value" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+                <label
+                  v-for="item in featureOptions"
+                  :key="item.value"
+                  class=":uno: inline-flex items-center gap-1 border border-gray-200 rounded-md bg-white px-2 py-1 text-xs text-gray-600"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="profileFor(model).features.includes(item.value)"
+                    @change="toggleFeature(model, item.value, $event)"
+                  />
                   {{ item.label }}
-                </option>
-              </select>
-              <label
-                v-for="item in featureOptions"
-                :key="item.value"
-                class=":uno: inline-flex items-center gap-1 text-xs text-gray-600"
-              >
-                <input
-                  type="checkbox"
-                  :checked="profileFor(model).features.includes(item.value)"
-                  @change="toggleFeature(model, item.value, $event)"
-                />
-                {{ item.label }}
-              </label>
-            </div>
-          </template>
-        </VEntity>
-      </VEntityContainer>
+                </label>
+              </div>
+            </template>
+          </VEntity>
+        </VEntityContainer>
+      </div>
     </div>
     <template #footer>
       <VSpace>
@@ -271,9 +287,9 @@ onMounted(() => {
           type="secondary"
           @click="handleImport"
           :loading="isImporting"
-          :disabled="selectedModels.size === 0 || isImporting"
+          :disabled="selectedModelCount === 0 || isImporting"
         >
-          {{ selectedModels.size > 0 ? `导入 ${selectedModels.size} 个模型` : '导入' }}
+          {{ selectedModelCount > 0 ? `导入 ${selectedModelCount} 个模型` : '导入' }}
         </VButton>
         <VButton @click="modal?.close()">关闭</VButton>
       </VSpace>

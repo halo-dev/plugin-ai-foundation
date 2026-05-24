@@ -9,12 +9,14 @@ import {
   Toast,
   VButton,
   VCard,
+  VEmpty,
   VLoading,
   VStatusDot,
+  VTag,
   type StatusDotState,
 } from '@halo-dev/components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, shallowRef } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiEditLine from '~icons/ri/edit-line'
 import RiTestTubeLine from '~icons/ri/test-tube-line'
@@ -41,7 +43,7 @@ const { data: provider, isLoading } = useQuery({
 
 const providerType = useProviderType(provider)
 
-const editingModalVisible = ref(false)
+const editingModalVisible = shallowRef(false)
 
 function handleDelete() {
   Dialog.warning({
@@ -84,6 +86,33 @@ const statusDot = computed(() => {
   return STATUS_DOT_MAP[provider.value?.status?.phase || AiProviderStatusPhaseEnum.Unknown]
 })
 
+const lastCheckedAtText = computed(() => {
+  return provider.value?.status?.lastCheckedAt
+    ? new Date(provider.value.status.lastCheckedAt).toLocaleString()
+    : '从未检查'
+})
+
+const baseUrlText = computed(() => {
+  return (
+    provider.value?.spec.baseUrl ||
+    providerType.value?.defaultBaseUrl ||
+    (providerType.value?.requiresBaseUrl ? '未配置' : '使用内置默认地址')
+  )
+})
+
+const proxyText = computed(() => {
+  const proxyHost = provider.value?.spec.proxyHost
+  const proxyPort = provider.value?.spec.proxyPort
+  if (!proxyHost) {
+    return '未配置'
+  }
+  return proxyPort ? `${proxyHost}:${proxyPort}` : proxyHost
+})
+
+const credentialStatusText = computed(() => {
+  return provider.value?.spec.apiKeySecretName ? '已配置' : '未配置'
+})
+
 const testConnectivityMutation = useMutation({
   mutationFn: async () => {
     if (!selectedProvider.value) {
@@ -105,12 +134,26 @@ const testConnectivityMutation = useMutation({
 
 <template>
   <VLoading v-if="isLoading" />
-  <div v-else-if="!provider">获取供应商失败</div>
+  <VEmpty v-else-if="!provider" title="未选择供应商" message="请从左侧选择一个供应商" />
   <div v-else class=":uno: space-y-4">
-    <VCard :title="provider.spec.displayName" :body-class="['!p-0']">
-      <template #actions>
-        <div class=":uno: px-4 py-2 sm:py-0">
-          <div class=":uno: flex flex-wrap items-center justify-end gap-2">
+    <VCard :body-class="['!p-0']">
+      <template #header>
+        <div class=":uno: w-full flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center">
+          <div class=":uno: min-w-0 flex-1">
+            <div class=":uno: min-w-0 flex flex-wrap items-center gap-2">
+              <img :src="providerType?.iconUrl" class=":uno: h-5 w-5 flex-none" />
+              <h2 class=":uno: min-w-0 truncate text-base text-gray-950 font-semibold">
+                {{ provider.spec.displayName }}
+              </h2>
+              <VTag v-if="provider.spec.enabled" theme="primary">已启用</VTag>
+              <VTag v-else>已禁用</VTag>
+            </div>
+            <div class=":uno: truncate text-xs text-gray-500">
+              {{ providerType?.displayName || provider.spec.providerType }} /
+              {{ provider.metadata.name }}
+            </div>
+          </div>
+          <div class=":uno: flex flex-wrap items-center gap-2 xl:justify-end">
             <VButton
               size="sm"
               :loading="testConnectivityMutation.isPending.value"
@@ -137,38 +180,54 @@ const testConnectivityMutation = useMutation({
         </div>
       </template>
 
-      <div class=":uno: grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div class=":uno: min-w-0 space-y-1">
-          <div class=":uno: text-sm text-gray-500">资源名称</div>
-          <div class=":uno: break-all text-sm font-semibold">{{ provider.metadata.name }}</div>
-        </div>
-        <div class=":uno: min-w-0 space-y-1">
-          <div class=":uno: text-sm text-gray-500">供应商类型</div>
-          <div class=":uno: min-w-0 flex items-center gap-2 text-sm font-semibold">
-            <img :src="providerType?.iconUrl" class=":uno: h-4 w-4 flex-none" />
-            <span class=":uno: min-w-0 truncate">{{ providerType?.displayName }}</span>
+      <div class=":uno: divide-y divide-gray-100">
+        <div class=":uno: grid grid-cols-1 gap-4 px-4 py-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div class=":uno: min-w-0 space-y-1">
+            <div class=":uno: text-xs text-gray-500 font-medium">状态</div>
+            <div>
+              <VStatusDot
+                v-if="testConnectivityMutation.isPending.value"
+                state="warning"
+                text="检查中..."
+                animate
+              />
+              <VStatusDot v-else :state="statusDot.state" :text="statusDot.label" />
+            </div>
+          </div>
+          <div class=":uno: min-w-0 space-y-1">
+            <div class=":uno: text-xs text-gray-500 font-medium">上次检查</div>
+            <div class=":uno: truncate text-sm text-gray-950 font-semibold">
+              {{ lastCheckedAtText }}
+            </div>
+          </div>
+          <div class=":uno: min-w-0 space-y-1">
+            <div class=":uno: text-xs text-gray-500 font-medium">凭据状态</div>
+            <div class=":uno: break-all text-sm text-gray-950 font-semibold">
+              {{ credentialStatusText }}
+            </div>
+          </div>
+          <div class=":uno: min-w-0 space-y-1">
+            <div class=":uno: text-xs text-gray-500 font-medium">代理</div>
+            <div class=":uno: break-all text-sm text-gray-950 font-semibold">
+              {{ proxyText }}
+            </div>
           </div>
         </div>
-        <div class=":uno: min-w-0 space-y-1">
-          <div class=":uno: text-sm text-gray-500">状态</div>
-          <div>
-            <VStatusDot
-              v-if="testConnectivityMutation.isPending.value"
-              state="warning"
-              text="检查中..."
-              animate
-            />
-            <VStatusDot v-else :state="statusDot.state" :text="statusDot.label" />
+
+        <div class=":uno: grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-[12rem_1fr]">
+          <div class=":uno: text-xs text-gray-500 font-medium">Base URL</div>
+          <div class=":uno: min-w-0 break-all text-xs text-gray-700 font-mono">
+            {{ baseUrlText }}
           </div>
         </div>
-        <div class=":uno: min-w-0 space-y-1">
-          <div class=":uno: text-sm text-gray-500">上次检查</div>
-          <div class=":uno: text-sm font-semibold">
-            {{
-              provider.status?.lastCheckedAt
-                ? new Date(provider.status.lastCheckedAt).toLocaleString()
-                : '从未检查'
-            }}
+
+        <div
+          v-if="provider.status?.message"
+          class=":uno: grid grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-[12rem_1fr]"
+        >
+          <div class=":uno: text-xs text-gray-500 font-medium">状态信息</div>
+          <div class=":uno: min-w-0">
+            <VStatusDot :state="statusDot.state" :text="provider.status.message" />
           </div>
         </div>
       </div>

@@ -13,7 +13,7 @@ import {
   modelOptionLabel,
   type ModelOptionGroup,
 } from '@/utils/model-options'
-import { Toast, VButton, VCard, VEmpty, VLoading, VSpace } from '@halo-dev/components'
+import { Toast, VButton, VCard, VLoading, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, reactive, shallowRef, watch } from 'vue'
 
@@ -70,6 +70,10 @@ watch(
 )
 
 const isLoading = computed(() => modelOptionsLoading.value || slotsLoading.value)
+const assignedSlotCount = computed(() => {
+  return slotDefinitions.filter((slot) => !!formState[slot.key]).length
+})
+const modelOptionCount = computed(() => modelOptions.value?.length || 0)
 
 function modelOptionsForType(modelType: SlotModelType) {
   return (modelOptions.value || []).filter((model) => model.modelType === modelType)
@@ -117,22 +121,37 @@ const updateMutation = useMutation({
 
 <template>
   <div class=":uno: p-2">
-    <VCard title="默认模型" :body-class="['!p-0']">
+    <VCard :body-class="['!p-0']">
+      <template #header>
+        <div class=":uno: w-full flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
+          <div class=":uno: min-w-0 flex-1">
+            <div class=":uno: text-sm text-gray-950 font-semibold">默认模型</div>
+            <div class=":uno: text-xs text-gray-500">
+              已配置 {{ assignedSlotCount }} / {{ slotDefinitions.length }} 个默认模型，可选模型
+              {{ modelOptionCount }} 个
+            </div>
+          </div>
+          <label class=":uno: inline-flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+            <input v-model="availableOnly" type="checkbox" class=":uno: border-gray-300 rounded" />
+            仅显示可用模型
+          </label>
+        </div>
+      </template>
       <VLoading v-if="isLoading" />
       <div v-else class=":uno: divide-y divide-gray-100">
         <div
           v-for="slot in slotDefinitions"
           :key="slot.key"
-          class=":uno: grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-[12rem_1fr]"
+          class=":uno: grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[13rem_1fr]"
         >
           <div class=":uno: min-w-0">
-            <div class=":uno: text-sm text-gray-900 font-medium">{{ slot.label }}</div>
-            <div class=":uno: text-xs text-gray-500">{{ modelTypeLabel(slot.modelType) }}</div>
+            <div class=":uno: text-sm text-gray-950 font-medium">{{ slot.label }}</div>
+            <div class=":uno: mt-1 text-xs text-gray-500">{{ modelTypeLabel(slot.modelType) }}</div>
           </div>
           <div class=":uno: min-w-0">
             <select
               v-model="formState[slot.key]"
-              class=":uno: h-9 w-full border border-gray-200 rounded bg-white px-2 text-sm"
+              class=":uno: h-9 w-full border border-gray-200 rounded-md bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
             >
               <option value="">不配置</option>
               <optgroup
@@ -145,16 +164,11 @@ const updateMutation = useMutation({
                 </option>
               </optgroup>
             </select>
-            <VEmpty
-              v-if="modelOptionGroupsForType(slot.modelType).length === 0"
-              class=":uno: mt-2"
-              title="暂无可选模型"
-            />
           </div>
         </div>
       </div>
       <template #footer>
-        <VSpace>
+        <VSpace class=":uno: justify-end">
           <VButton
             type="secondary"
             :loading="updateMutation.isPending.value"

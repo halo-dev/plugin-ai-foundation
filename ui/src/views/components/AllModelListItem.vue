@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
 import type { AiModel } from '@/api/generated'
+import ModelBadgeGroup from '@/components/ModelBadgeGroup.vue'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
-import { modelFeatureLabel, modelTypeLabel } from '@/types'
 import { findProviderTypeForModel } from '@/utils/model'
 import { isEnabledChatModel } from '@/utils/model-test-workbench'
 import {
@@ -20,7 +20,7 @@ import {
   VTag,
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import ModelEditingModal from './ModelEditingModal.vue'
 
@@ -31,7 +31,7 @@ const props = defineProps<{
 const queryClient = useQueryClient()
 const router = useRouter()
 
-const editingModalVisible = ref(false)
+const editingModalVisible = shallowRef(false)
 
 function openWorkbench() {
   void router.push({
@@ -81,23 +81,8 @@ const canTest = computed(() => isEnabledChatModel(props.model))
       </VEntityField>
     </template>
     <template #end>
-      <div class=":uno: flex items-center gap-1.5">
-        <span
-          v-if="!model.spec.enabled"
-          class=":uno: rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500"
-        >
-          已禁用
-        </span>
-        <span class=":uno: rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-600">
-          {{ modelTypeLabel(model.spec.modelType) }}
-        </span>
-        <span
-          v-for="feature in model.spec.features"
-          :key="feature"
-          class=":uno: rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
-        >
-          {{ modelFeatureLabel(feature) }}
-        </span>
+      <div class=":uno: flex flex-wrap items-center justify-end gap-2">
+        <ModelBadgeGroup :model="model" />
         <VStatusDot v-if="model.metadata.deletionTimestamp" animate state="warning" text="删除中" />
       </div>
     </template>

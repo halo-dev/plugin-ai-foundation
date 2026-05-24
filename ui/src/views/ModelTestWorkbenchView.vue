@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class=":uno: h-[calc(100vh-6.5rem)] min-h-0 p-2">
+  <div class=":uno: h-[calc(100vh-8.25rem)] min-h-[34rem] p-2">
     <VLoading v-if="isLoading" />
 
     <VEmpty
@@ -264,16 +264,63 @@ onBeforeUnmount(() => {
 
     <div
       v-else
-      class=":uno: h-full min-h-0 flex flex-col overflow-hidden border border-gray-200 rounded-lg bg-white lg:flex-row"
+      class=":uno: rounded-base grid grid-cols-1 h-full min-h-0 overflow-hidden border border-gray-200 bg-white shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem]"
     >
-      <div class=":uno: min-h-0 min-w-0 flex flex-1 flex-col">
+      <section class=":uno: min-h-0 min-w-0 flex flex-col">
+        <header
+          class=":uno: flex flex-col gap-3 border-b border-gray-200 bg-white px-3 py-3 sm:flex-row sm:items-center"
+        >
+          <select
+            id="model-test-workbench-model"
+            v-model="selectedModelName"
+            name="model"
+            aria-label="测试模型"
+            class=":uno: h-9 min-w-0 flex-1 border border-gray-200 rounded-md bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            :disabled="isStreaming"
+          >
+            <optgroup v-for="group in chatModelGroups" :key="group.key" :label="group.label">
+              <option v-for="model in group.models" :key="model.name" :value="model.name">
+                {{ modelOptionLabel(model) }}
+              </option>
+            </optgroup>
+          </select>
+
+          <div class=":uno: flex flex-none items-center gap-2">
+            <VTag v-if="selectedModelProviderTypeDisplayName">{{
+              selectedModelProviderTypeDisplayName
+            }}</VTag>
+            <button
+              type="button"
+              class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-gray-200 rounded-md bg-white hover:bg-gray-50"
+              v-tooltip="`刷新模型`"
+              @click="refetch()"
+            >
+              <IconRefreshLine
+                class=":uno: h-4 w-4 text-gray-500 group-hover:text-gray-900"
+                :class="{ ':uno: animate-spin': isFetching }"
+              />
+            </button>
+            <button
+              type="button"
+              class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-gray-200 rounded-md bg-white hover:bg-gray-50"
+              v-tooltip="`清空会话`"
+              @click="clearMessages"
+            >
+              <RiDeleteBinLine class=":uno: h-4 w-4 text-gray-500 group-hover:text-gray-900" />
+            </button>
+          </div>
+        </header>
+
         <div
-          class=":uno: min-h-0 flex-1 overflow-y-auto bg-gray-50/70 px-4 py-4"
+          class=":uno: min-h-0 flex-1 overflow-y-auto bg-gray-50/80 px-4 py-4"
           ref="conversationRef"
         >
           <div v-if="!messages.length" class=":uno: h-full flex items-center justify-center">
-            <div class=":uno: max-w-sm text-center text-sm text-gray-500">
-              选择模型后发送消息，响应会以流式 Markdown 渲染。
+            <div
+              class=":uno: rounded-base max-w-sm w-full border border-gray-200 border-dashed bg-white px-6 py-8 text-center"
+            >
+              <div class=":uno: text-sm text-gray-800 font-medium">暂无会话</div>
+              <div class=":uno: mt-1 text-xs text-gray-500">发送消息后会在这里显示响应</div>
             </div>
           </div>
 
@@ -285,9 +332,9 @@ onBeforeUnmount(() => {
               :class="{ ':uno: justify-end': message.role === 'user' }"
             >
               <div
-                class=":uno: max-w-[86%] border rounded-lg px-4 py-3 text-sm leading-6 shadow-sm"
+                class=":uno: rounded-base max-w-[86%] border px-4 py-3 text-sm leading-6 shadow-sm"
                 :class="{
-                  ':uno: border-blue-200 bg-blue-50 text-blue-950': message.role === 'user',
+                  ':uno: border-blue-200 bg-blue-600 text-white': message.role === 'user',
                   ':uno: border-gray-200 bg-white text-gray-900': message.role === 'assistant',
                   ':uno: border-red-200 bg-red-50 text-red-700': message.state === 'error',
                 }"
@@ -317,50 +364,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class=":uno: border-t border-gray-200 bg-white p-3">
-          <div class=":uno: mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              id="model-test-workbench-model"
-              v-model="selectedModelName"
-              name="model"
-              aria-label="测试模型"
-              class=":uno: h-9 min-w-0 flex-1 border border-gray-200 rounded-md bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-              :disabled="isStreaming"
-            >
-              <optgroup v-for="group in chatModelGroups" :key="group.key" :label="group.label">
-                <option v-for="model in group.models" :key="model.name" :value="model.name">
-                  {{ modelOptionLabel(model) }}
-                </option>
-              </optgroup>
-            </select>
-
-            <div class=":uno: flex items-center gap-2 text-xs text-gray-500">
-              <VTag v-if="selectedModelProviderTypeDisplayName">{{
-                selectedModelProviderTypeDisplayName
-              }}</VTag>
-              <button
-                type="button"
-                class=":uno: group h-8 w-8 inline-flex items-center justify-center rounded hover:bg-gray-100"
-                v-tooltip="`刷新模型`"
-                @click="refetch()"
-              >
-                <IconRefreshLine
-                  class=":uno: h-4 w-4 text-gray-500 group-hover:text-gray-900"
-                  :class="{ ':uno: animate-spin': isFetching }"
-                />
-              </button>
-              <button
-                type="button"
-                class=":uno: group h-8 w-8 inline-flex items-center justify-center rounded hover:bg-gray-100"
-                v-tooltip="`清空会话`"
-                @click="clearMessages"
-              >
-                <RiDeleteBinLine class=":uno: h-4 w-4 text-gray-500 group-hover:text-gray-900" />
-              </button>
-            </div>
-          </div>
-
-          <div class=":uno: flex gap-2">
+        <footer class=":uno: border-t border-gray-200 bg-white p-3">
+          <div class=":uno: flex flex-col gap-2 sm:flex-row">
             <textarea
               id="model-test-workbench-input"
               v-model="input"
@@ -368,36 +373,47 @@ onBeforeUnmount(() => {
               aria-label="输入消息"
               rows="2"
               placeholder="输入消息..."
-              class=":uno: min-h-16 flex-1 resize-none border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+              class=":uno: min-h-18 flex-1 resize-none border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
               :disabled="isStreaming"
               @keydown.meta.enter.prevent="sendMessage"
               @keydown.ctrl.enter.prevent="sendMessage"
             />
-            <VButton v-if="isStreaming" type="secondary" @click="stopGeneration">
-              <template #icon>
-                <RiStopCircleLine />
-              </template>
-              停止
-            </VButton>
-            <VButton
-              v-else
-              type="primary"
-              :disabled="!input.trim() || !selectedModel"
-              @click="sendMessage"
-            >
-              <template #icon>
-                <RiSendPlaneLine />
-              </template>
-              发送
-            </VButton>
+            <div class=":uno: flex flex-none sm:items-end">
+              <VButton
+                v-if="isStreaming"
+                type="secondary"
+                class=":uno: w-full sm:w-auto"
+                @click="stopGeneration"
+              >
+                <template #icon>
+                  <RiStopCircleLine />
+                </template>
+                停止
+              </VButton>
+              <VButton
+                v-else
+                type="primary"
+                class=":uno: w-full sm:w-auto"
+                :disabled="!input.trim() || !selectedModel"
+                @click="sendMessage"
+              >
+                <template #icon>
+                  <RiSendPlaneLine />
+                </template>
+                发送
+              </VButton>
+            </div>
           </div>
-        </div>
-      </div>
+        </footer>
+      </section>
 
       <aside
-        class=":uno: max-h-80 overflow-y-auto border-t border-gray-200 bg-white p-4 lg:max-h-none lg:w-80 lg:border-l lg:border-t-0"
+        class=":uno: max-h-80 overflow-y-auto border-t border-gray-200 bg-white p-4 lg:max-h-none lg:border-l lg:border-t-0"
       >
-        <div class=":uno: mb-4 text-sm text-gray-900 font-medium">参数</div>
+        <div class=":uno: mb-4">
+          <div class=":uno: text-sm text-gray-950 font-semibold">参数</div>
+          <div class=":uno: mt-1 text-xs text-gray-500">当前请求的可选控制项</div>
+        </div>
 
         <FormKit type="form" :actions="false">
           <FormKit

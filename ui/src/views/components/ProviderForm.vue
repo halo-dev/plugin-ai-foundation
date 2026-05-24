@@ -2,7 +2,7 @@
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import type { ProviderFormState } from '@/types/form'
 import { submitForm } from '@formkit/core'
-import { computed, ref, watch } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 
 const props = defineProps<{
   formState?: ProviderFormState
@@ -22,8 +22,8 @@ const providerTypeOptions = computed(() => {
   }))
 })
 
-const providerType = ref(props.formState?.providerType)
-const displayName = ref(props.formState?.displayName)
+const providerType = shallowRef(props.formState?.providerType)
+const displayName = shallowRef(props.formState?.displayName)
 
 const selectedProviderType = computed(() => {
   return providerTypes.value?.find((t) => t.providerType === providerType.value)
@@ -51,13 +51,6 @@ const isEditing = computed(() => !!props.formState)
 function onSubmit(data: ProviderFormState) {
   emit('submit', data)
 }
-
-const providerTypeHelp = computed(() => {
-  if (selectedProviderType.value?.documentationUrl) {
-    return `${selectedProviderType.value.displayName} 文档地址：${selectedProviderType.value.documentationUrl}`
-  }
-  return ''
-})
 
 defineExpose({
   submit: () => submitForm('provider-form'),
