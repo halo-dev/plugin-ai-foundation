@@ -47,8 +47,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set nightly version
+        run: echo "NIGHTLY_VERSION=0.0.0-$(git rev-parse --short=12 HEAD)" >> "$GITHUB_ENV"
+
       - name: Build JARs
-        run: ./gradlew build
+        run: ./gradlew build -Pversion="$NIGHTLY_VERSION"
 
       - name: Move nightly tag
         run: |
@@ -67,6 +70,8 @@ jobs:
 
           {
             echo "Automated nightly build for ${GITHUB_SHA}."
+            echo
+            echo "Version: ${NIGHTLY_VERSION}"
             echo
             echo "Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           } > "$notes_file"
