@@ -1,0 +1,99 @@
+name: Nightly Release
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub schedules use UTC; this runs at 02:00 Asia/Shanghai.
+    - cron: "0 18 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-release
+  cancel-in-progress: true
+
+env:
+  NIGHTLY_TAG: nightly
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build JARs
+        run: ./gradlew build
+
+      - name: Move nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --force "$NIGHTLY_TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$NIGHTLY_TAG"
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_date="$(TZ=Asia/Shanghai date +%Y-%m-%d)"
+          release_title="Nightly Release ${release_date}"
+          notes_file="$(mktemp)"
+
+          {
+            echo "Automated nightly build for ${GITHUB_SHA}."
+            echo
+            echo "Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > "$notes_file"
+
+          if gh release view "$NIGHTLY_TAG" > /dev/null 2>&1; then
+            gh release edit "$NIGHTLY_TAG" \
+              --title "$release_title" \
+              --notes-file "$notes_file" \
+              --prerelease
+          else
+            gh release create "$NIGHTLY_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$release_title" \
+              --notes-file "$notes_file" \
+              --prerelease \
+              --latest=false
+          fi
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mapfile -t assets < <(find app/build/libs api/build/libs -maxdepth 1 -type f -name "*.jar" | sort)
+
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No JAR files found under app/build/libs or api/build/libs." >&2
+            exit 1
+          fi
+
+          gh release upload "$NIGHTLY_TAG" "${assets[@]}" --clobber
