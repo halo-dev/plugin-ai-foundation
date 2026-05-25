@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import run.halo.aifoundation.provider.GiteeMoArkProvider;
 import run.halo.aifoundation.provider.XiaomiMiMoProvider;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 
@@ -37,6 +38,29 @@ class ProviderTypeConsoleEndpointTest {
             .jsonPath("$[0].builtIn").isEqualTo(true)
             .jsonPath("$[0].requiresBaseUrl").isEqualTo(false)
             .jsonPath("$[0].defaultBaseUrl").isEqualTo("https://api.xiaomimimo.com")
+            .jsonPath("$[0].supportedAdapterTypes[0]").isEqualTo("openai-chat");
+    }
+
+    @Test
+    void listProviderTypes_includesGiteeMoArkMetadata() {
+        when(providerClientCache.getProviderTypeMap())
+            .thenReturn(Map.of("gitee-moark", new GiteeMoArkProvider()));
+
+        webTestClient.get().uri("/provider-types")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$[0].providerType").isEqualTo("gitee-moark")
+            .jsonPath("$[0].displayName").isEqualTo("Gitee 模力方舟")
+            .jsonPath("$[0].description").isNotEmpty()
+            .jsonPath("$[0].iconUrl")
+            .isEqualTo("/plugins/ai-foundation/assets/static/brands/gitee-moark.png")
+            .jsonPath("$[0].websiteUrl").isEqualTo("https://ai.gitee.com/")
+            .jsonPath("$[0].documentationUrl")
+            .isEqualTo("https://ai.gitee.com/docs/products/apis/texts/text-generation")
+            .jsonPath("$[0].builtIn").isEqualTo(true)
+            .jsonPath("$[0].requiresBaseUrl").isEqualTo(false)
+            .jsonPath("$[0].defaultBaseUrl").isEqualTo("https://ai.gitee.com")
             .jsonPath("$[0].supportedAdapterTypes[0]").isEqualTo("openai-chat");
     }
 }
