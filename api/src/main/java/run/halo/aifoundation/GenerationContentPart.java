@@ -10,9 +10,9 @@ import lombok.NoArgsConstructor;
  * A typed content part returned by {@link GenerateTextResult} and {@link GenerationStep}.
  *
  * <p>This mirrors model output after Halo normalization. It may contain normal assistant text,
- * model-requested tool calls, server-side tool results, or server-side tool errors. Consumers that
- * only need final text can read {@link GenerateTextResult#getText()}; consumers that need richer
- * traces should inspect {@link #type}.
+ * reasoning text, model-requested tool calls, server-side tool results, or server-side tool
+ * errors. Consumers that only need final text can read {@link GenerateTextResult#getText()};
+ * consumers that need richer traces should inspect {@link #type}.
  */
 @Data
 @Builder
@@ -23,6 +23,7 @@ public class GenerationContentPart {
     public static final String TYPE_TOOL_CALL = PartType.TOOL_CALL;
     public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
     public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
+    public static final String TYPE_REASONING = PartType.REASONING;
 
     /**
      * Part discriminator. Use values from {@link PartType}.
@@ -32,6 +33,10 @@ public class GenerationContentPart {
      * Generated assistant text for {@link PartType#TEXT}.
      */
     private String text;
+    /**
+     * Optional provider signature for {@link PartType#REASONING}.
+     */
+    private String signature;
     /**
      * Tool call id for tool call/result/error parts.
      */
@@ -65,6 +70,25 @@ public class GenerationContentPart {
         return GenerationContentPart.builder()
             .type(TYPE_TEXT)
             .text(text)
+            .build();
+    }
+
+    /**
+     * Creates a reasoning content part from visible reasoning text.
+     */
+    public static GenerationContentPart reasoning(String text) {
+        return reasoning(ReasoningPart.builder().text(text).build());
+    }
+
+    /**
+     * Creates a reasoning content part preserving provider metadata needed for continuation.
+     */
+    public static GenerationContentPart reasoning(ReasoningPart reasoning) {
+        return GenerationContentPart.builder()
+            .type(TYPE_REASONING)
+            .text(reasoning.getText())
+            .signature(reasoning.getSignature())
+            .metadata(reasoning.getProviderMetadata())
             .build();
     }
 

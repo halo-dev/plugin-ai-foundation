@@ -28,9 +28,17 @@ public class GenerationStep {
      */
     private String text;
     /**
+     * Reasoning text produced by this step when available.
+     */
+    private String reasoningText;
+    /**
      * Structured content parts produced or appended during this step.
      */
     private List<GenerationContentPart> content;
+    /**
+     * Reasoning parts produced by this step when available.
+     */
+    private List<ReasoningPart> reasoning;
     /**
      * Normalized finish reason for this step.
      */

@@ -12,6 +12,8 @@ import lombok.NoArgsConstructor;
  * <p>Only a subset of fields is meaningful for each {@link #type}:
  * <ul>
  *   <li>{@link PartType#TEXT}: {@link #text}</li>
+ *   <li>{@link PartType#REASONING}: {@link #text}, {@link #signature},
+ *   {@link #providerOptions}</li>
  *   <li>{@link PartType#TOOL_CALL}: {@link #toolCallId}, {@link #toolName}, {@link #input}</li>
  *   <li>{@link PartType#TOOL_RESULT}: {@link #toolCallId}, {@link #toolName}, {@link #result}</li>
  *   <li>{@link PartType#TOOL_ERROR}: {@link #toolCallId}, {@link #toolName},
@@ -30,6 +32,7 @@ public class ModelMessagePart {
     public static final String TYPE_TOOL_CALL = PartType.TOOL_CALL;
     public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
     public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
+    public static final String TYPE_REASONING = PartType.REASONING;
 
     /**
      * Part discriminator. Use values from {@link PartType}.
@@ -39,6 +42,10 @@ public class ModelMessagePart {
      * Text content for {@link PartType#TEXT}.
      */
     private String text;
+    /**
+     * Optional provider signature for {@link PartType#REASONING}.
+     */
+    private String signature;
     /**
      * Provider or Halo generated tool call identifier. Tool result/error parts should echo the
      * same id so the model can correlate the response with the original tool call.
@@ -75,6 +82,28 @@ public class ModelMessagePart {
      */
     public static ModelMessagePart text(String text) {
         return ModelMessagePart.builder().type(TYPE_TEXT).text(text).build();
+    }
+
+    /**
+     * Creates a persisted assistant reasoning part from visible reasoning text.
+     *
+     * <p>Reasoning parts are valid only in assistant messages and should be kept separate from
+     * answer text. Provider-specific continuation fields belong in {@link #providerOptions}.
+     */
+    public static ModelMessagePart reasoning(String text) {
+        return reasoning(ReasoningPart.builder().text(text).build());
+    }
+
+    /**
+     * Creates a persisted assistant reasoning part with provider metadata.
+     */
+    public static ModelMessagePart reasoning(ReasoningPart reasoning) {
+        return ModelMessagePart.builder()
+            .type(TYPE_REASONING)
+            .text(reasoning.getText())
+            .signature(reasoning.getSignature())
+            .providerOptions(reasoning.getProviderMetadata())
+            .build();
     }
 
     /**

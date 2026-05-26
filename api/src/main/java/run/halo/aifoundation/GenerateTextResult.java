@@ -13,7 +13,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GenerateTextResult {
     private String text;
+    private String reasoningText;
     private List<GenerationContentPart> content;
+    private List<ReasoningPart> reasoning;
     private FinishReason finishReason;
     private String rawFinishReason;
     private LanguageModelUsage usage;

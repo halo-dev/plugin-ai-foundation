@@ -1,13 +1,15 @@
 package run.halo.aifoundation.provider;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.HaloReasoningOpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 
 @Component
 public class DeepSeekProvider extends AbstractAiProviderType {
@@ -84,9 +86,31 @@ public class DeepSeekProvider extends AbstractAiProviderType {
             .webClientBuilder(webClientBuilder(provider))
             .restClientBuilder(restClientBuilder(provider))
             .build();
-        return OpenAiChatModel.builder()
-            .openAiApi(openAiApi)
-            .defaultOptions(OpenAiChatOptions.builder().model(modelId).build())
-            .build();
+        return new HaloReasoningOpenAiChatModel(openAiApi,
+            OpenAiChatOptions.builder().model(modelId).build());
+    }
+
+    @Override
+    public LanguageModelProviderOptions languageModelProviderOptions() {
+        return new LanguageModelProviderOptions(
+            true,
+            true,
+            (request, toolCallbacks, toolNames) -> {
+                var builder = OpenAiChatOptions.builder()
+                    .temperature(request.getTemperature())
+                    .maxTokens(request.getMaxOutputTokens())
+                    .topP(request.getTopP())
+                    .presencePenalty(request.getPresencePenalty())
+                    .frequencyPenalty(request.getFrequencyPenalty())
+                    .stop(request.getStopSequences())
+                    .internalToolExecutionEnabled(false)
+                    .toolCallbacks(toolCallbacks)
+                    .extraBody(Map.of("thinking", Map.of("type", "disabled")));
+                if (!toolNames.isEmpty()) {
+                    builder.toolNames(toolNames);
+                }
+                return builder.build();
+            }
+        );
     }
 }

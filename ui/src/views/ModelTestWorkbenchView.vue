@@ -6,6 +6,7 @@ import { groupModelOptionsByProvider, modelOptionLabel } from '@/utils/model-opt
 import {
   buildTestChatRequest,
   flushSseJsonBuffer,
+  isRenderableReasoningDelta,
   isRenderableTextDelta,
   isTerminalTextStreamPart,
   parseProviderOptionsJson,
@@ -210,6 +211,10 @@ function handleChunks(messageId: string, chunks: TextStreamPart[]) {
       appendAssistantError(messageId, chunk.errorText || '请求失败')
       continue
     }
+    if (isRenderableReasoningDelta(chunk)) {
+      appendAssistantReasoning(messageId, chunk.delta)
+      continue
+    }
     if (isRenderableTextDelta(chunk)) {
       appendAssistantContent(messageId, chunk.delta)
       continue
@@ -231,6 +236,13 @@ function appendAssistantContent(messageId: string, content: string) {
   const message = messages.value.find((item) => item.id === messageId)
   if (message) {
     message.content += content
+  }
+}
+
+function appendAssistantReasoning(messageId: string, content: string) {
+  const message = messages.value.find((item) => item.id === messageId)
+  if (message) {
+    message.reasoningContent = `${message.reasoningContent || ''}${content}`
   }
 }
 
@@ -383,20 +395,20 @@ onBeforeUnmount(() => {
                   <VTag v-else-if="message.state === 'error'" theme="danger">错误</VTag>
                 </div>
 
-                <div v-if="message.role === 'user'" class=":uno: whitespace-pre-wrap">
-                  {{ message.content }}
-                </div>
-                <div
-                  v-else
-                  class=":uno: ai-markdown break-words"
-                  v-html="
-                    renderMarkdown(message.content || (message.state === 'streaming' ? ' ' : ''))
-                  "
-                />
+                <details
+                  v-if="message.role === 'assistant' && message.reasoningContent"
+                  class=":uno: mb-3 border-b border-gray-100 pb-2 text-xs text-gray-500"
+                  :open="message.state === 'streaming'"
+                >
+                  <summary class=":uno: cursor-pointer select-none font-medium text-gray-600">
+                    推理
+                  </summary>
+                  <div class=":uno: ai-markdown mt-2 break-words text-gray-500" v-html="renderMarkdown(message.reasoningContent)" />
+                </details>
 
                 <div
                   v-if="message.role === 'assistant' && message.toolEvents?.length"
-                  class=":uno: mt-3 space-y-1 border-t border-gray-100 pt-2"
+                  class=":uno: mb-3 space-y-1 border-b border-gray-100 pb-2"
                 >
                   <div
                     v-for="event in message.toolEvents"
@@ -420,6 +432,17 @@ onBeforeUnmount(() => {
                     </span>
                   </div>
                 </div>
+
+                <div v-if="message.role === 'user'" class=":uno: whitespace-pre-wrap">
+                  {{ message.content }}
+                </div>
+                <div
+                  v-else
+                  class=":uno: ai-markdown break-words"
+                  v-html="
+                    renderMarkdown(message.content || (message.state === 'streaming' ? ' ' : ''))
+                  "
+                />
               </div>
             </div>
           </div>

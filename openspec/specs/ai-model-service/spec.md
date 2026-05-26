@@ -347,6 +347,52 @@ The system SHALL consistently treat the argument passed to `languageModel(modelN
 - **THEN** they SHALL call it `modelName` or model reference
 - **AND** they SHALL NOT confuse it with `AiModel.spec.modelId`, which is the provider-side model identifier
 
+### Requirement: Language model reasoning API
+The system SHALL expose reasoning output through the public language model API without provider-native types.
+
+#### Scenario: Generate text result exposes reasoning
+- **WHEN** a consumer calls `languageModel.generateText(request)`
+- **AND** the provider returns reasoning content
+- **THEN** the result SHALL include reasoning parts, reasoning text, and reasoning token usage when available
+- **AND** answer text SHALL remain separate from reasoning text
+
+#### Scenario: Stream text exposes reasoning parts
+- **WHEN** a consumer calls `languageModel.streamText(request)`
+- **AND** the provider stream emits reasoning content
+- **THEN** the returned stream SHALL emit standardized reasoning stream parts
+- **AND** those parts SHALL NOT be emitted as answer text deltas
+
+#### Scenario: Provider-independent request history
+- **WHEN** a consumer sends `GenerateTextRequest.messages` containing assistant reasoning parts
+- **THEN** the request SHALL remain valid only when the target provider adapter supports reasoning history conversion
+- **AND** the public request SHALL NOT expose Spring AI or provider-native message types
+
+### Requirement: Reasoning-aware model message content
+The system SHALL support assistant reasoning content in model message history.
+
+#### Scenario: Assistant reasoning history
+- **WHEN** a request contains an assistant message with reasoning content parts
+- **THEN** the implementation SHALL preserve the order of assistant text, reasoning, and tool call parts when converting to provider messages
+- **AND** provider metadata attached to reasoning parts SHALL be available to the provider adapter
+
+#### Scenario: Unsupported reasoning input
+- **WHEN** a request contains reasoning parts for a provider that cannot accept reasoning history
+- **THEN** the request SHALL be rejected before invoking the provider
+- **AND** the error message SHALL identify reasoning content as unsupported
+
+### Requirement: Reasoning usage reporting
+The system SHALL expose reasoning token usage when providers report it.
+
+#### Scenario: Final step reasoning tokens
+- **WHEN** the final provider step reports reasoning tokens
+- **THEN** `GenerateTextResult.usage.reasoningTokens` SHALL contain the final step count
+- **AND** total usage SHALL include reasoning token counts accumulated across all steps when available
+
+#### Scenario: Stream finish reasoning tokens
+- **WHEN** a streaming provider reports reasoning tokens at step completion
+- **THEN** the `finish-step` part SHALL include reasoning token usage
+- **AND** the final `finish` part SHALL include aggregate reasoning token usage when available
+
 ### Requirement: Text generation metadata DTOs
 
 The system SHALL define provider-neutral DTOs for generation content, warnings, request metadata, response metadata, and generation steps.
@@ -418,3 +464,27 @@ The system SHALL execute server-side tools and continue generation across multip
 - **THEN** non-streaming generation SHALL fail before invoking the provider
 - **AND** streaming generation SHALL emit an `error` part before completing gracefully
 
+### Requirement: Streaming tool calls in LanguageModel
+The `LanguageModel.streamText` API SHALL support request-scoped server-side tools without degrading to buffered non-streaming output.
+
+#### Scenario: Tool stream remains progressive
+- **WHEN** a consumer calls `languageModel.streamText(request)` with tools
+- **THEN** the returned `Flux<TextStreamPart>` SHALL emit model stream parts as provider chunks arrive
+- **AND** it SHALL NOT delegate to `generateText` and replay the completed result as a synthetic stream
+
+#### Scenario: Streamed tool loop follows max steps
+- **WHEN** a streamed tool call is executable
+- **AND** `maxSteps` allows continuation
+- **THEN** `LanguageModel.streamText` SHALL execute the tool and start the next provider stream step
+- **AND** the stream SHALL stop when there are no tool calls, a tool cannot be executed, a tool fails, or `maxSteps` is reached
+
+#### Scenario: Streamed usage is aggregated across steps
+- **WHEN** a tool-enabled stream completes after multiple provider steps
+- **THEN** each `finish-step` part SHALL include that step usage when available
+- **AND** the final `finish` part SHALL include aggregate usage across streamed steps when available
+
+#### Scenario: Unsupported tool provider emits stream error
+- **WHEN** a provider or model does not support tool calling
+- **AND** a consumer calls `languageModel.streamText(request)` with tools
+- **THEN** the stream SHALL emit an `error` part before completing gracefully
+- **AND** the provider SHALL NOT be invoked

@@ -20,6 +20,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.FinishReason;
@@ -27,8 +28,11 @@ import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.ModelMessage;
 import run.halo.aifoundation.ModelMessagePart;
 import run.halo.aifoundation.ModelMessageRole;
+import run.halo.aifoundation.PartType;
+import run.halo.aifoundation.ReasoningPart;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.ToolDefinition;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 
 class LanguageModelImplTest {
 
@@ -128,6 +132,48 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_rejectsReasoningHistoryWhenProviderUnsupported() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "ollama");
+        var request = GenerateTextRequest.builder()
+            .messages(List.of(ModelMessage.assistant(List.of(
+                ModelMessagePart.reasoning("thinking")
+            ))))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("reasoning content is not supported by provider type: ollama")
+            .verify();
+    }
+
+    @Test
+    void generateText_mapsReasoningAndReasoningTokens() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            reasoningResponse("Think first.", "Answer.", "stop", 3, 5, 2)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("Answer.");
+                assertThat(result.getReasoningText()).isEqualTo("Think first.");
+                assertThat(result.getReasoning())
+                    .singleElement()
+                    .satisfies(reasoning -> {
+                        assertThat(reasoning.getText()).isEqualTo("Think first.");
+                        assertThat(reasoning.getProviderMetadata().toString())
+                            .contains("reasoning_content");
+                    });
+                assertThat(result.getContent()).extracting("type")
+                    .containsExactly(PartType.REASONING, PartType.TEXT);
+                assertThat(result.getUsage().getReasoningTokens()).isEqualTo(2);
+                assertThat(result.getTotalUsage().getReasoningTokens()).isEqualTo(2);
+                assertThat(result.getSteps().get(0).getReasoningText()).isEqualTo("Think first.");
+            })
+            .verifyComplete();
+    }
+
+    @Test
     void generateText_executesToolAndContinuesWhenMaxStepsAllows() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
@@ -179,12 +225,51 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_preservesReasoningWhenContinuingAfterToolCall() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(reasoningToolCallResponse("call_1", "weather", "{\"location\":\"SF\"}",
+                "Need weather data.", 2, 3)),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("It is 22C.", "stop", 4, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "deepseek", reasoningToolProviderOptions());
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .maxSteps(2)
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getSteps()).hasSize(2);
+                assertThat(result.getSteps().get(0).getReasoningText())
+                    .isEqualTo("Need weather data.");
+            })
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).stream(captor.capture());
+        assertThat(captor.getAllValues().get(1).getInstructions())
+            .filteredOn(message -> "assistant".equals(message.getMessageType().getValue()))
+            .singleElement()
+            .satisfies(message -> assertThat(message.getMetadata())
+                .containsEntry("reasoningContent", "Need weather data."));
+    }
+
+    @Test
     void generateText_deepSeekToolRequestsDisableThinkingMode() {
         var chatModel = mock(ChatModel.class);
-        when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3)
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3))
         );
-        var model = new LanguageModelImpl(chatModel, "deepseek");
+        var model = new LanguageModelImpl(chatModel, "deepseek", reasoningToolProviderOptions());
 
         var request = GenerateTextRequest.builder()
             .prompt("Weather in SF?")
@@ -200,7 +285,7 @@ class LanguageModelImplTest {
             .verifyComplete();
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
-        verify(chatModel).call(captor.capture());
+        verify(chatModel).stream(captor.capture());
         assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiChatOptions.class);
         var options = (OpenAiChatOptions) captor.getValue().getOptions();
         assertThat(options.getExtraBody())
@@ -388,6 +473,36 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void streamText_emitsReasoningPartsSeparately() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            reasoningResponse("Thinking", "", null, null, null, null),
+            chatResponse("Answer", null, null, null),
+            chatResponse("", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_REASONING_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Thinking");
+            })
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Answer");
+            })
+            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_END.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .verifyComplete();
+    }
+
+    @Test
     void streamText_emitsSanitizedRawDiagnosticPart() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
@@ -442,9 +557,12 @@ class LanguageModelImplTest {
     @Test
     void streamText_emitsToolEventsForToolRequests() {
         var chatModel = mock(ChatModel.class);
-        when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
-            chatResponse("It is 22C.", "stop", 4, 5)
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(
+                chatResponse("Let me check.", null, null, null),
+                toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3)
+            ),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -460,6 +578,12 @@ class LanguageModelImplTest {
         StepVerifier.create(model.streamText(request))
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Let me check.");
+            })
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_RESULT.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
@@ -473,6 +597,8 @@ class LanguageModelImplTest {
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
             .verifyComplete();
+
+        verify(chatModel, times(2)).stream(any(Prompt.class));
     }
 
     @Test
@@ -500,8 +626,8 @@ class LanguageModelImplTest {
     @Test
     void streamText_emitsToolErrorForFailedToolExecution() {
         var chatModel = mock(ChatModel.class);
-        when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{}", 2, 3)
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{}", 2, 3))
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -531,8 +657,8 @@ class LanguageModelImplTest {
     @Test
     void streamText_stopsAtMaxStepsAndEmitsAggregateUsage() {
         var chatModel = mock(ChatModel.class);
-        when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{}", 2, 3)
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{}", 2, 3))
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -562,9 +688,145 @@ class LanguageModelImplTest {
             .verifyComplete();
     }
 
+    @Test
+    void streamText_recordsToolErrorForUnknownTool() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "unknown", "{}", 2, 3))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Use tool")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(input -> reactor.core.publisher.Mono.just(Map.of()))
+                .build()))
+            .maxSteps(2)
+            .build();
+
+        StepVerifier.create(model.streamText(request))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TOOL_ERROR);
+                assertThat(part.getErrorText()).contains("Unknown tool");
+            })
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .verifyComplete();
+
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_warnsAndStopsWhenToolHasNoExecutor() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{}", 2, 3))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Use tool")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .build()))
+            .maxSteps(2)
+            .build();
+
+        StepVerifier.create(model.streamText(request))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
+                assertThat(part.getWarnings()).extracting("code").contains("tool-not-executed");
+            })
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .verifyComplete();
+
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_preservesReasoningWhenContinuingAfterToolCall() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(reasoningToolCallResponse("call_1", "weather", "{\"location\":\"SF\"}",
+                "Need weather data.", 2, 3)),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "deepseek", reasoningToolProviderOptions());
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .maxSteps(2)
+            .build();
+
+        StepVerifier.create(model.streamText(request))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_REASONING_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Need weather data.");
+            })
+            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_END.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_RESULT.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).stream(captor.capture());
+        assertThat(captor.getAllValues().get(1).getInstructions())
+            .filteredOn(message -> "assistant".equals(message.getMessageType().getValue()))
+            .singleElement()
+            .satisfies(message -> assertThat(message.getMetadata())
+                .containsEntry("reasoningContent", "Need weather data."));
+    }
+
     private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
         Integer completionTokens) {
         return chatResponse(text, finishReason, promptTokens, completionTokens, Map.of());
+    }
+
+    private ChatResponse reasoningResponse(String reasoning, String text, String finishReason,
+        Integer promptTokens, Integer completionTokens, Integer reasoningTokens) {
+        var generationMetadata = ChatGenerationMetadata.builder()
+            .finishReason(finishReason)
+            .build();
+        var metadataBuilder = ChatResponseMetadata.builder()
+            .id("resp_reasoning")
+            .model("test-model");
+        if (promptTokens != null || completionTokens != null || reasoningTokens != null) {
+            var nativeUsage = new OpenAiApi.Usage(completionTokens, promptTokens,
+                promptTokens != null && completionTokens != null ? promptTokens + completionTokens : null,
+                null,
+                new OpenAiApi.Usage.CompletionTokenDetails(reasoningTokens, null, null, null));
+            metadataBuilder.usage(new DefaultUsage(promptTokens, completionTokens,
+                nativeUsage.totalTokens(), nativeUsage));
+        }
+        var output = AssistantMessage.builder()
+            .content(text)
+            .properties(Map.of("reasoningContent", reasoning))
+            .build();
+        return new ChatResponse(
+            List.of(new Generation(output, generationMetadata)),
+            metadataBuilder.build()
+        );
     }
 
     private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
@@ -604,5 +866,46 @@ class LanguageModelImplTest {
             List.of(new Generation(output, generationMetadata)),
             metadataBuilder.build()
         );
+    }
+
+    private ChatResponse reasoningToolCallResponse(String id, String name, String arguments,
+        String reasoning, Integer promptTokens, Integer completionTokens) {
+        var generationMetadata = ChatGenerationMetadata.builder()
+            .finishReason("tool_calls")
+            .build();
+        var output = AssistantMessage.builder()
+            .content("")
+            .properties(Map.of("reasoningContent", reasoning))
+            .toolCalls(List.of(new AssistantMessage.ToolCall(id, "function", name, arguments)))
+            .build();
+        var metadataBuilder = ChatResponseMetadata.builder()
+            .id("resp_tool")
+            .model("test-model");
+        if (promptTokens != null || completionTokens != null) {
+            metadataBuilder.usage(new DefaultUsage(promptTokens, completionTokens));
+        }
+        return new ChatResponse(
+            List.of(new Generation(output, generationMetadata)),
+            metadataBuilder.build()
+        );
+    }
+
+    private LanguageModelProviderOptions reasoningToolProviderOptions() {
+        return new LanguageModelProviderOptions(true, true, (request, toolCallbacks, toolNames) -> {
+            var builder = OpenAiChatOptions.builder()
+                .temperature(request.getTemperature())
+                .maxTokens(request.getMaxOutputTokens())
+                .topP(request.getTopP())
+                .presencePenalty(request.getPresencePenalty())
+                .frequencyPenalty(request.getFrequencyPenalty())
+                .stop(request.getStopSequences())
+                .internalToolExecutionEnabled(false)
+                .toolCallbacks(toolCallbacks)
+                .extraBody(Map.of("thinking", Map.of("type", "disabled")));
+            if (!toolNames.isEmpty()) {
+                builder.toolNames(toolNames);
+            }
+            return builder.build();
+        });
     }
 }

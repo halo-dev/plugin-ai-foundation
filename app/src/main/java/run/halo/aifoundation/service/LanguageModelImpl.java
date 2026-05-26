@@ -17,12 +17,13 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.core.ParameterizedTypeReference;
@@ -43,12 +44,14 @@ import run.halo.aifoundation.ModelMessage;
 import run.halo.aifoundation.ModelMessagePart;
 import run.halo.aifoundation.ModelMessageRole;
 import run.halo.aifoundation.PartType;
+import run.halo.aifoundation.ReasoningPart;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.ToolCall;
 import run.halo.aifoundation.ToolChoice;
 import run.halo.aifoundation.ToolDefinition;
 import run.halo.aifoundation.ToolError;
 import run.halo.aifoundation.ToolResult;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -63,10 +66,19 @@ public class LanguageModelImpl implements LanguageModel {
 
     private final ChatModel chatModel;
     private final String providerType;
+    private final LanguageModelProviderOptions providerOptions;
 
     public LanguageModelImpl(ChatModel chatModel, String providerType) {
+        this(chatModel, providerType, LanguageModelProviderOptions.defaults());
+    }
+
+    public LanguageModelImpl(ChatModel chatModel, String providerType,
+        LanguageModelProviderOptions providerOptions) {
         this.chatModel = chatModel;
         this.providerType = providerType;
+        this.providerOptions = providerOptions != null
+            ? providerOptions
+            : LanguageModelProviderOptions.defaults();
     }
 
     @Override
@@ -84,9 +96,7 @@ public class LanguageModelImpl implements LanguageModel {
     @Override
     public Flux<TextStreamPart> streamText(GenerateTextRequest request) {
         if (hasTools(request)) {
-            return generateText(request)
-                .flatMapMany(this::resultToStreamParts)
-                .onErrorResume(e -> Flux.just(TextStreamPart.error(safeErrorMessage(e))));
+            return streamTextWithTools(request);
         }
         return Flux.defer(() -> {
             Prompt prompt;
@@ -98,22 +108,29 @@ public class LanguageModelImpl implements LanguageModel {
 
             var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
             var textId = "txt_" + UUID.randomUUID().toString().replace("-", "");
+            var reasoningId = "rsn_" + UUID.randomUUID().toString().replace("-", "");
             var finished = new AtomicBoolean(false);
+            var reasoningStarted = new AtomicBoolean(false);
 
             var stream = chatModel.stream(prompt)
-                .concatMap(response -> mapStreamResponse(response, textId, finished))
+                .concatMap(response -> mapStreamResponse(response, textId, reasoningId, finished,
+                    reasoningStarted))
                 .concatWith(Flux.defer(() -> {
                     if (finished.get()) {
                         return Flux.empty();
                     }
                     finished.set(true);
                     var finishReason = FinishReason.UNKNOWN;
-                    return Flux.just(
-                        TextStreamPart.textEnd(textId),
+                    var parts = new ArrayList<TextStreamPart>();
+                    if (reasoningStarted.get()) {
+                        parts.add(TextStreamPart.reasoningEnd(reasoningId));
+                    }
+                    parts.addAll(List.of(TextStreamPart.textEnd(textId),
                         TextStreamPart.finishStep(0, finishReason, null, null, List.of(), null,
                             null, Map.of()),
                         TextStreamPart.finish(finishReason, null, null)
-                    );
+                    ));
+                    return Flux.fromIterable(parts);
                 }))
                 .onErrorResume(e -> {
                     log.error("[{}] Streaming error", providerType, e);
@@ -124,6 +141,121 @@ public class LanguageModelImpl implements LanguageModel {
                 TextStreamPart.startStep(0),
                 TextStreamPart.textStart(textId)), stream);
         });
+    }
+
+    private Flux<TextStreamPart> streamTextWithTools(GenerateTextRequest request) {
+        return Flux.defer(() -> {
+            List<org.springframework.ai.chat.messages.Message> messages;
+            try {
+                validateRequest(request);
+                assertToolCallingSupported(request);
+                messages = buildMessages(request);
+            } catch (RuntimeException e) {
+                return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+            }
+            var totalUsage = new UsageAccumulator();
+            var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
+            return Flux.concat(Flux.just(TextStreamPart.start(messageId)),
+                streamToolStep(request, messages, 0, totalUsage));
+        });
+    }
+
+    private Flux<TextStreamPart> streamToolStep(GenerateTextRequest request,
+        List<org.springframework.ai.chat.messages.Message> messages, int stepIndex,
+        UsageAccumulator totalUsage) {
+        return Flux.defer(() -> {
+            var accumulator = new StreamStepAccumulator(stepIndex);
+            var prompt = new Prompt(messages, buildChatOptions(request));
+            var stream = chatModel.stream(prompt)
+                .concatMap(response -> mapToolStreamResponse(response, accumulator))
+                .onErrorResume(e -> {
+                    log.error("[{}] Tool streaming error", providerType, e);
+                    accumulator.failed = true;
+                    return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+                });
+            return Flux.concat(Flux.just(TextStreamPart.startStep(stepIndex)), stream,
+                Flux.defer(() -> completeToolStreamStep(request, messages, accumulator,
+                    totalUsage)));
+        });
+    }
+
+    private Flux<TextStreamPart> mapToolStreamResponse(ChatResponse response,
+        StreamStepAccumulator accumulator) {
+        var parts = new ArrayList<TextStreamPart>();
+        accumulator.accept(response);
+        var reasoning = extractReasoning(response);
+        if (hasText(reasoning)) {
+            if (!accumulator.reasoningStarted) {
+                accumulator.reasoningStarted = true;
+                parts.add(TextStreamPart.reasoningStart(accumulator.reasoningId));
+            }
+            var output = response.getResult() != null ? response.getResult().getOutput() : null;
+            var metadata = output != null && output.getMetadata() != null
+                ? output.getMetadata()
+                : Map.<String, Object>of();
+            parts.add(TextStreamPart.reasoningDelta(accumulator.reasoningId, reasoning,
+                reasoningProviderMetadata(reasoning, metadata)));
+        }
+        var text = extractText(response);
+        if (hasText(text)) {
+            if (!accumulator.textStarted) {
+                accumulator.textStarted = true;
+                parts.add(TextStreamPart.textStart(accumulator.textId));
+            }
+            parts.add(TextStreamPart.textDelta(accumulator.textId, text));
+        }
+        return Flux.fromIterable(parts);
+    }
+
+    private Flux<TextStreamPart> completeToolStreamStep(GenerateTextRequest request,
+        List<org.springframework.ai.chat.messages.Message> messages,
+        StreamStepAccumulator accumulator, UsageAccumulator totalUsage) {
+        if (accumulator.failed) {
+            return Flux.empty();
+        }
+        var parts = new ArrayList<TextStreamPart>();
+        if (accumulator.reasoningStarted) {
+            parts.add(TextStreamPart.reasoningEnd(accumulator.reasoningId));
+        }
+        if (accumulator.textStarted) {
+            parts.add(TextStreamPart.textEnd(accumulator.textId));
+        }
+        if (accumulator.lastResponse != null) {
+            var rawDiagnostic = sanitizedRawDiagnostic(accumulator.lastResponse);
+            if (!rawDiagnostic.isEmpty()) {
+                parts.add(TextStreamPart.raw(rawDiagnostic));
+            }
+        }
+
+        var toolCalls = accumulator.toolCalls();
+        toolCalls.forEach(toolCall -> parts.add(TextStreamPart.toolCall(toolCall)));
+        var canContinue = accumulator.stepIndex + 1 < maxSteps(request);
+        var toolResults = canContinue
+            ? executeToolCalls(toolCalls, request)
+            : maxStepsReached(toolCalls);
+        toolResults.results().forEach(result -> parts.add(TextStreamPart.toolResult(result)));
+        toolResults.errors().forEach(error -> parts.add(TextStreamPart.toolError(error)));
+
+        var warnings = new ArrayList<>(accumulator.warnings());
+        warnings.addAll(toolResults.warnings());
+        totalUsage.add(accumulator.usage());
+        parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
+            accumulator.rawFinishReason, accumulator.usage(), warnings, accumulator.request(),
+            accumulator.response(), accumulator.providerMetadata()));
+
+        if (toolCalls.isEmpty()
+            || !toolResults.errors().isEmpty()
+            || toolResults.results().isEmpty()
+            || !canContinue) {
+            parts.add(TextStreamPart.finish(accumulator.finishReason(), accumulator.rawFinishReason,
+                totalUsage.usage()));
+            return Flux.fromIterable(parts);
+        }
+
+        messages.add(accumulator.output());
+        messages.add(toolResponseMessage(toolResults.results()));
+        return Flux.concat(Flux.fromIterable(parts),
+            streamToolStep(request, messages, accumulator.stepIndex + 1, totalUsage));
     }
 
     private GenerateTextResult generateTextBlocking(GenerateTextRequest request) {
@@ -141,7 +273,7 @@ public class LanguageModelImpl implements LanguageModel {
         GenerationResponseMetadata finalResponseMetadata = null;
 
         for (var stepIndex = 0; stepIndex < maxSteps(request); stepIndex++) {
-            var response = chatModel.call(new Prompt(messages, buildChatOptions(request)));
+            var response = callProvider(request, messages);
             var step = mapStep(response, stepIndex);
             var canContinue = stepIndex + 1 < maxSteps(request);
             var toolResults = canContinue
@@ -160,7 +292,9 @@ public class LanguageModelImpl implements LanguageModel {
             var generationStep = GenerationStep.builder()
                 .stepIndex(stepIndex)
                 .text(step.text())
+                .reasoningText(step.reasoningText())
                 .content(stepContent)
+                .reasoning(step.reasoning())
                 .finishReason(step.finishReason())
                 .rawFinishReason(step.rawFinishReason())
                 .usage(step.usage())
@@ -197,10 +331,19 @@ public class LanguageModelImpl implements LanguageModel {
             .map(GenerationContentPart::getText)
             .filter(this::hasText)
             .collect(Collectors.joining());
+        var reasoning = steps.isEmpty()
+            ? List.<ReasoningPart>of()
+            : nullSafe(steps.get(steps.size() - 1).getReasoning());
+        var reasoningText = reasoning.stream()
+            .map(ReasoningPart::getText)
+            .filter(this::hasText)
+            .collect(Collectors.joining());
         var usage = steps.isEmpty() ? null : steps.get(steps.size() - 1).getUsage();
         return GenerateTextResult.builder()
             .text(text)
+            .reasoningText(hasText(reasoningText) ? reasoningText : null)
             .content(allContent)
+            .reasoning(reasoning)
             .finishReason(finalFinishReason)
             .rawFinishReason(finalRawFinishReason)
             .usage(usage)
@@ -282,6 +425,20 @@ public class LanguageModelImpl implements LanguageModel {
         if (PartType.isText(part.getType())) {
             return;
         }
+        if (PartType.isReasoning(part.getType())) {
+            if (role != ModelMessageRole.ASSISTANT) {
+                throw new IllegalArgumentException("reasoning content part is only supported for assistant messages");
+            }
+            if (!supportsReasoningHistory()) {
+                throw new IllegalArgumentException("reasoning content is not supported by provider type: "
+                    + providerType);
+            }
+            if (!hasText(part.getText()) && (part.getProviderOptions() == null
+                || part.getProviderOptions().isEmpty())) {
+                throw new IllegalArgumentException("reasoning content part must include text or provider metadata");
+            }
+            return;
+        }
         if (role == ModelMessageRole.TOOL && PartType.isToolResponse(part.getType())) {
             if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
                 throw new IllegalArgumentException("tool content part must include toolCallId and toolName");
@@ -340,17 +497,23 @@ public class LanguageModelImpl implements LanguageModel {
         return true;
     }
 
+    protected boolean supportsReasoningHistory() {
+        return providerOptions.reasoningHistorySupported();
+    }
+
     private String toolCallingUnsupportedMessage() {
         return "Tool calling is not supported by provider type: " + providerType;
     }
 
     private ChatOptions buildChatOptions(GenerateTextRequest request) {
-        if ("deepseek".equals(providerType)) {
-            return buildDeepSeekChatOptions(request);
-        }
         if (hasTools(request)
             && (request.getToolChoice() == null
             || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
+            var toolNames = toolNames(request);
+            if (providerOptions.toolCallingChatOptionsFactory() != null) {
+                return providerOptions.toolCallingChatOptionsFactory()
+                    .build(request, toolCallbacks(request), toolNames);
+            }
             var builder = DefaultToolCallingChatOptions.builder()
                 .temperature(request.getTemperature())
                 .maxTokens(request.getMaxOutputTokens())
@@ -363,7 +526,7 @@ public class LanguageModelImpl implements LanguageModel {
                 .toolCallbacks(toolCallbacks(request));
             if (request.getToolChoice() != null
                 && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
-                builder.toolNames(Set.of(request.getToolChoice().getToolName()));
+                builder.toolNames(toolNames);
             }
             return builder.build();
         }
@@ -378,31 +541,68 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
     }
 
-    private ChatOptions buildDeepSeekChatOptions(GenerateTextRequest request) {
-        var builder = OpenAiChatOptions.builder()
-            .temperature(request.getTemperature())
-            .maxTokens(request.getMaxOutputTokens())
-            .topP(request.getTopP())
-            .presencePenalty(request.getPresencePenalty())
-            .frequencyPenalty(request.getFrequencyPenalty())
-            .stop(request.getStopSequences());
-        if (hasTools(request)
-            && (request.getToolChoice() == null
-            || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
-            builder
-                .internalToolExecutionEnabled(false)
-                .toolCallbacks(toolCallbacks(request))
-                .extraBody(deepSeekToolExtraBody());
-            if (request.getToolChoice() != null
-                && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
-                builder.toolNames(Set.of(request.getToolChoice().getToolName()));
-            }
+    private ChatResponse callProvider(GenerateTextRequest request,
+        List<org.springframework.ai.chat.messages.Message> messages) {
+        var prompt = new Prompt(messages, buildChatOptions(request));
+        if (shouldUseReasoningAwareStreamCall(request)) {
+            var responses = chatModel.stream(prompt).collectList().block();
+            return aggregateStreamResponses(responses);
         }
-        return builder.build();
+        return chatModel.call(prompt);
     }
 
-    private Map<String, Object> deepSeekToolExtraBody() {
-        return Map.of("thinking", Map.of("type", "disabled"));
+    private boolean shouldUseReasoningAwareStreamCall(GenerateTextRequest request) {
+        return providerOptions.streamToolCallsForReasoning() && hasTools(request);
+    }
+
+    private ChatResponse aggregateStreamResponses(List<ChatResponse> responses) {
+        if (responses == null || responses.isEmpty()) {
+            return new ChatResponse(List.of());
+        }
+        var text = new StringBuilder();
+        var reasoning = new StringBuilder();
+        var toolCalls = new ArrayList<AssistantMessage.ToolCall>();
+        ChatResponse lastResponse = null;
+        String finishReason = null;
+        for (var response : responses) {
+            var result = response.getResult();
+            if (result == null || result.getOutput() == null) {
+                continue;
+            }
+            lastResponse = response;
+            var output = result.getOutput();
+            if (hasText(output.getText())) {
+                text.append(output.getText());
+            }
+            var reasoningContent = firstText(output.getMetadata(), "reasoningContent",
+                "reasoning_content");
+            if (hasText(reasoningContent)) {
+                reasoning.append(reasoningContent);
+            }
+            if (output.getToolCalls() != null && !output.getToolCalls().isEmpty()) {
+                toolCalls.clear();
+                toolCalls.addAll(output.getToolCalls());
+            }
+            if (result.getMetadata() != null && hasText(result.getMetadata().getFinishReason())) {
+                finishReason = result.getMetadata().getFinishReason();
+            }
+        }
+        if (lastResponse == null) {
+            return responses.get(responses.size() - 1);
+        }
+        var properties = hasText(reasoning.toString())
+            ? Map.<String, Object>of("reasoningContent", reasoning.toString())
+            : Map.<String, Object>of();
+        var output = AssistantMessage.builder()
+            .content(text.toString())
+            .properties(properties)
+            .toolCalls(toolCalls)
+            .build();
+        var generationMetadata = ChatGenerationMetadata.builder()
+            .finishReason(finishReason)
+            .build();
+        return new ChatResponse(List.of(new Generation(output, generationMetadata)),
+            lastResponse.getMetadata());
     }
 
     private org.springframework.ai.chat.messages.Message convertMessage(ModelMessage message) {
@@ -416,6 +616,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     private String textContent(ModelMessage message) {
         return message.getContent().stream()
+            .filter(part -> PartType.isText(part.getType()))
             .map(ModelMessagePart::getText)
             .reduce("", String::concat);
     }
@@ -428,8 +629,17 @@ public class LanguageModelImpl implements LanguageModel {
             .toList();
         return AssistantMessage.builder()
             .content(textContent(message))
+            .properties(assistantProperties(message))
             .toolCalls(toolCalls)
             .build();
+    }
+
+    private Map<String, Object> assistantProperties(ModelMessage message) {
+        var reasoningContent = reasoningContent(message.getContent());
+        if (!hasText(reasoningContent)) {
+            return Map.of();
+        }
+        return Map.of("reasoningContent", reasoningContent);
     }
 
     private ToolResponseMessage toolResponseMessage(ModelMessage message) {
@@ -471,15 +681,29 @@ public class LanguageModelImpl implements LanguageModel {
         return Map.of("type", "object", "properties", Map.of());
     }
 
+    private Set<String> toolNames(GenerateTextRequest request) {
+        if (request.getToolChoice() != null
+            && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
+            return Set.of(request.getToolChoice().getToolName());
+        }
+        return Set.of();
+    }
+
     private StepSnapshot mapStep(ChatResponse response, int stepIndex) {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
         var text = output != null && output.getText() != null ? output.getText() : "";
+        var reasoning = mapReasoning(output);
+        var reasoningText = reasoning.stream()
+            .map(ReasoningPart::getText)
+            .filter(this::hasText)
+            .collect(Collectors.joining());
         var rawFinishReason = result != null && result.getMetadata() != null
             ? result.getMetadata().getFinishReason()
             : null;
         var toolCalls = output != null ? mapToolCalls(output.getToolCalls()) : List.<ToolCall>of();
         var content = new ArrayList<GenerationContentPart>();
+        reasoning.stream().map(GenerationContentPart::reasoning).forEach(content::add);
         if (hasText(text)) {
             content.add(GenerationContentPart.text(text));
         }
@@ -487,17 +711,63 @@ public class LanguageModelImpl implements LanguageModel {
         return new StepSnapshot(
             stepIndex,
             text,
+            hasText(reasoningText) ? reasoningText : null,
             output != null ? output : new AssistantMessage(text),
             content,
+            reasoning,
             mapFinishReason(rawFinishReason),
             rawFinishReason,
             mapUsage(response),
             toolCalls,
             mapWarnings(response),
             mapRequestMetadata(response),
-            mapResponseMetadata(response, text),
+            mapResponseMetadata(response, text, reasoning, toolCalls),
             mapMetadata(response)
         );
+    }
+
+    private List<ReasoningPart> mapReasoning(AssistantMessage output) {
+        if (output == null || output.getMetadata() == null || output.getMetadata().isEmpty()) {
+            return List.of();
+        }
+        var reasoningContent = firstText(output.getMetadata(), "reasoningContent",
+            "reasoning_content");
+        if (!hasText(reasoningContent)) {
+            return List.of();
+        }
+        return List.of(ReasoningPart.builder()
+            .text(reasoningContent)
+            .providerMetadata(reasoningProviderMetadata(reasoningContent, output.getMetadata()))
+            .build());
+    }
+
+    @SuppressWarnings("unchecked")
+    private String firstText(Map<String, Object> metadata, String... keys) {
+        for (var key : keys) {
+            var value = metadata.get(key);
+            if (value instanceof String text && hasText(text)) {
+                return text;
+            }
+            if (value instanceof Map<?, ?> map) {
+                var nested = firstText((Map<String, Object>) sanitizeValue(map), keys);
+                if (hasText(nested)) {
+                    return nested;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Object> reasoningProviderMetadata(String reasoningContent,
+        Map<String, Object> outputMetadata) {
+        var providerValues = new LinkedHashMap<String, Object>();
+        providerValues.put("reasoning_content", reasoningContent);
+        outputMetadata.forEach((key, value) -> {
+            if (key != null && key.toLowerCase().contains("reasoning")) {
+                providerValues.put(key, sanitizeValue(value));
+            }
+        });
+        return Map.of(providerType, providerValues);
     }
 
     private List<ToolCall> mapToolCalls(List<AssistantMessage.ToolCall> toolCalls) {
@@ -590,7 +860,15 @@ public class LanguageModelImpl implements LanguageModel {
         var parts = new ArrayList<TextStreamPart>();
         parts.add(TextStreamPart.start(messageId));
         for (var step : result.getSteps()) {
+            var reasoningId = "rsn_" + UUID.randomUUID().toString().replace("-", "");
             parts.add(TextStreamPart.startStep(step.getStepIndex()));
+            if (hasText(step.getReasoningText())) {
+                parts.add(TextStreamPart.reasoningStart(reasoningId));
+                nullSafe(step.getReasoning()).forEach(reasoning ->
+                    parts.add(TextStreamPart.reasoningDelta(reasoningId, reasoning.getText(),
+                        reasoning.getProviderMetadata())));
+                parts.add(TextStreamPart.reasoningEnd(reasoningId));
+            }
             if (hasText(step.getText())) {
                 parts.add(TextStreamPart.textStart(textId));
                 parts.add(TextStreamPart.textDelta(textId, step.getText()));
@@ -621,6 +899,7 @@ public class LanguageModelImpl implements LanguageModel {
         return LanguageModelUsage.builder()
             .inputTokens(sum(left.getInputTokens(), right.getInputTokens()))
             .outputTokens(sum(left.getOutputTokens(), right.getOutputTokens()))
+            .reasoningTokens(sum(left.getReasoningTokens(), right.getReasoningTokens()))
             .totalTokens(sum(left.getTotalTokens(), right.getTotalTokens()))
             .build();
     }
@@ -659,6 +938,11 @@ public class LanguageModelImpl implements LanguageModel {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
         var text = output != null && output.getText() != null ? output.getText() : "";
+        var reasoning = mapReasoning(output);
+        var reasoningText = reasoning.stream()
+            .map(ReasoningPart::getText)
+            .filter(this::hasText)
+            .collect(Collectors.joining());
         var rawFinishReason = result != null && result.getMetadata() != null
             ? result.getMetadata().getFinishReason()
             : null;
@@ -667,12 +951,14 @@ public class LanguageModelImpl implements LanguageModel {
         var providerMetadata = mapMetadata(response);
         var warnings = mapWarnings(response);
         var requestMetadata = mapRequestMetadata(response);
-        var responseMetadata = mapResponseMetadata(response, text);
-        var content = contentParts(text);
+        var responseMetadata = mapResponseMetadata(response, text, reasoning, List.of());
+        var content = contentParts(text, reasoning);
         var step = GenerationStep.builder()
             .stepIndex(0)
             .text(text)
+            .reasoningText(hasText(reasoningText) ? reasoningText : null)
             .content(content)
+            .reasoning(reasoning)
             .finishReason(finishReason)
             .rawFinishReason(rawFinishReason)
             .usage(usage)
@@ -683,7 +969,9 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
         return GenerateTextResult.builder()
             .text(text)
+            .reasoningText(hasText(reasoningText) ? reasoningText : null)
             .content(content)
+            .reasoning(reasoning)
             .finishReason(finishReason)
             .rawFinishReason(rawFinishReason)
             .usage(usage)
@@ -697,9 +985,18 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private Flux<TextStreamPart> mapStreamResponse(ChatResponse response, String textId,
-        AtomicBoolean finished) {
+        String reasoningId, AtomicBoolean finished, AtomicBoolean reasoningStarted) {
         var parts = new ArrayList<TextStreamPart>();
         var text = extractText(response);
+        var reasoning = extractReasoning(response);
+        if (hasText(reasoning)) {
+            if (!reasoningStarted.get()) {
+                reasoningStarted.set(true);
+                parts.add(TextStreamPart.reasoningStart(reasoningId));
+            }
+            parts.add(TextStreamPart.reasoningDelta(reasoningId, reasoning,
+                reasoningProviderMetadata(reasoning, response.getResult().getOutput().getMetadata())));
+        }
         if (hasText(text)) {
             parts.add(TextStreamPart.textDelta(textId, text));
         }
@@ -713,10 +1010,14 @@ public class LanguageModelImpl implements LanguageModel {
             if (!rawDiagnostic.isEmpty()) {
                 parts.add(TextStreamPart.raw(rawDiagnostic));
             }
+            if (reasoningStarted.get()) {
+                parts.add(TextStreamPart.reasoningEnd(reasoningId));
+            }
             parts.add(TextStreamPart.textEnd(textId));
             parts.add(TextStreamPart.finishStep(0, finishReason, rawFinishReason, usage,
                 mapWarnings(response), mapRequestMetadata(response),
-                mapResponseMetadata(response, extractText(response)), mapMetadata(response)));
+                mapResponseMetadata(response, extractText(response), reasoningParts(reasoning),
+                    List.of()), mapMetadata(response)));
             parts.add(TextStreamPart.finish(finishReason, rawFinishReason, usage));
         }
         return Flux.fromIterable(parts);
@@ -728,6 +1029,21 @@ public class LanguageModelImpl implements LanguageModel {
             return "";
         }
         return result.getOutput().getText();
+    }
+
+    private String extractReasoning(ChatResponse response) {
+        var result = response.getResult();
+        if (result == null || result.getOutput() == null) {
+            return "";
+        }
+        var reasoning = mapReasoning(result.getOutput());
+        if (reasoning.isEmpty()) {
+            return "";
+        }
+        return reasoning.stream()
+            .map(ReasoningPart::getText)
+            .filter(this::hasText)
+            .collect(Collectors.joining());
     }
 
     private String extractFinishReason(ChatResponse response) {
@@ -773,6 +1089,7 @@ public class LanguageModelImpl implements LanguageModel {
         return LanguageModelUsage.builder()
             .inputTokens(input)
             .outputTokens(output)
+            .reasoningTokens(reasoningTokens(usage.getNativeUsage()))
             .totalTokens(total)
             .raw(usage.getNativeUsage())
             .build();
@@ -795,11 +1112,33 @@ public class LanguageModelImpl implements LanguageModel {
         return map;
     }
 
-    private List<GenerationContentPart> contentParts(String text) {
-        if (!hasText(text)) {
-            return List.of();
+    private Integer reasoningTokens(Object nativeUsage) {
+        if (nativeUsage == null) {
+            return null;
         }
-        return List.of(GenerationContentPart.text(text));
+        try {
+            var completionTokenDetails = nativeUsage.getClass()
+                .getMethod("completionTokenDetails")
+                .invoke(nativeUsage);
+            if (completionTokenDetails == null) {
+                return null;
+            }
+            var value = completionTokenDetails.getClass()
+                .getMethod("reasoningTokens")
+                .invoke(completionTokenDetails);
+            return value instanceof Integer integer ? integer : null;
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
+    }
+
+    private List<GenerationContentPart> contentParts(String text, List<ReasoningPart> reasoning) {
+        var content = new ArrayList<GenerationContentPart>();
+        nullSafe(reasoning).stream().map(GenerationContentPart::reasoning).forEach(content::add);
+        if (hasText(text)) {
+            content.add(GenerationContentPart.text(text));
+        }
+        return content;
     }
 
     private List<GenerationWarning> mapWarnings(ChatResponse response) {
@@ -843,14 +1182,64 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
     }
 
-    private GenerationResponseMetadata mapResponseMetadata(ChatResponse response, String text) {
+    private GenerationResponseMetadata mapResponseMetadata(ChatResponse response, String text,
+        List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
         var metadata = response.getMetadata();
         return GenerationResponseMetadata.builder()
             .id(metadata != null ? metadata.getId() : null)
             .model(metadata != null ? metadata.getModel() : null)
-            .messages(hasText(text) ? List.of(ModelMessage.assistant(text)) : List.of())
+            .messages(responseMessages(text, reasoning, toolCalls))
             .metadata(mapMetadata(response))
             .build();
+    }
+
+    private List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
+        List<ToolCall> toolCalls) {
+        var parts = new ArrayList<ModelMessagePart>();
+        nullSafe(reasoning).stream().map(ModelMessagePart::reasoning).forEach(parts::add);
+        if (hasText(text)) {
+            parts.add(ModelMessagePart.text(text));
+        }
+        nullSafe(toolCalls).stream().map(ModelMessagePart::toolCall).forEach(parts::add);
+        return parts.isEmpty() ? List.of() : List.of(ModelMessage.assistant(parts));
+    }
+
+    private String reasoningContent(List<ModelMessagePart> parts) {
+        return parts.stream()
+            .filter(part -> PartType.isReasoning(part.getType()))
+            .map(part -> {
+                var metadataReasoning = reasoningContent(part.getProviderOptions());
+                return hasText(metadataReasoning) ? metadataReasoning : part.getText();
+            })
+            .filter(this::hasText)
+            .collect(Collectors.joining());
+    }
+
+    @SuppressWarnings("unchecked")
+    private String reasoningContent(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        var direct = firstText(metadata, "reasoningContent", "reasoning_content");
+        if (hasText(direct)) {
+            return direct;
+        }
+        var provider = metadata.get(providerType);
+        if (provider instanceof Map<?, ?> providerMap) {
+            return firstText((Map<String, Object>) sanitizeValue(providerMap),
+                "reasoningContent", "reasoning_content");
+        }
+        return null;
+    }
+
+    private List<ReasoningPart> reasoningParts(String reasoning) {
+        if (!hasText(reasoning)) {
+            return List.of();
+        }
+        return List.of(ReasoningPart.builder()
+            .text(reasoning)
+            .providerMetadata(Map.of(providerType, Map.of("reasoning_content", reasoning)))
+            .build());
     }
 
     private Map<String, Object> sanitizedRawDiagnostic(ChatResponse response) {
@@ -907,11 +1296,125 @@ public class LanguageModelImpl implements LanguageModel {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
+    private final class UsageAccumulator {
+        private LanguageModelUsage usage;
+
+        void add(LanguageModelUsage next) {
+            usage = addUsage(usage, next);
+        }
+
+        LanguageModelUsage usage() {
+            return usage;
+        }
+    }
+
+    private final class StreamStepAccumulator {
+        private final int stepIndex;
+        private final String textId = "txt_" + UUID.randomUUID().toString().replace("-", "");
+        private final String reasoningId = "rsn_" + UUID.randomUUID().toString().replace("-", "");
+        private final StringBuilder text = new StringBuilder();
+        private final StringBuilder reasoning = new StringBuilder();
+        private final ArrayList<AssistantMessage.ToolCall> toolCalls = new ArrayList<>();
+        private ChatResponse lastResponse;
+        private String rawFinishReason;
+        private boolean textStarted;
+        private boolean reasoningStarted;
+        private boolean failed;
+
+        StreamStepAccumulator(int stepIndex) {
+            this.stepIndex = stepIndex;
+        }
+
+        void accept(ChatResponse response) {
+            if (response == null) {
+                return;
+            }
+            lastResponse = response;
+            var result = response.getResult();
+            if (result == null) {
+                return;
+            }
+            var output = result.getOutput();
+            if (output != null) {
+                if (hasText(output.getText())) {
+                    text.append(output.getText());
+                }
+                if (output.getMetadata() != null) {
+                    var reasoningContent = firstText(output.getMetadata(), "reasoningContent",
+                        "reasoning_content");
+                    if (hasText(reasoningContent)) {
+                        reasoning.append(reasoningContent);
+                    }
+                }
+                if (output.getToolCalls() != null && !output.getToolCalls().isEmpty()) {
+                    toolCalls.clear();
+                    toolCalls.addAll(output.getToolCalls());
+                }
+            }
+            if (result.getMetadata() != null && hasText(result.getMetadata().getFinishReason())) {
+                rawFinishReason = result.getMetadata().getFinishReason();
+            }
+        }
+
+        AssistantMessage output() {
+            var properties = hasText(reasoning.toString())
+                ? Map.<String, Object>of("reasoningContent", reasoning.toString())
+                : Map.<String, Object>of();
+            return AssistantMessage.builder()
+                .content(text.toString())
+                .properties(properties)
+                .toolCalls(toolCalls)
+                .build();
+        }
+
+        List<ToolCall> toolCalls() {
+            return mapToolCalls(toolCalls);
+        }
+
+        List<ReasoningPart> reasoningParts() {
+            return LanguageModelImpl.this.reasoningParts(reasoning.toString());
+        }
+
+        FinishReason finishReason() {
+            return mapFinishReason(rawFinishReason);
+        }
+
+        LanguageModelUsage usage() {
+            return lastResponse != null ? mapUsage(lastResponse) : null;
+        }
+
+        List<GenerationWarning> warnings() {
+            return lastResponse != null ? mapWarnings(lastResponse) : List.of();
+        }
+
+        GenerationRequestMetadata request() {
+            return lastResponse != null ? mapRequestMetadata(lastResponse)
+                : GenerationRequestMetadata.builder()
+                    .metadata(Map.of("providerType", providerType))
+                    .build();
+        }
+
+        GenerationResponseMetadata response() {
+            return lastResponse != null
+                ? mapResponseMetadata(lastResponse, text.toString(), reasoningParts(), toolCalls())
+                : GenerationResponseMetadata.builder()
+                    .messages(responseMessages(text.toString(), reasoningParts(), toolCalls()))
+                    .metadata(Map.of("providerType", providerType))
+                    .build();
+        }
+
+        Map<String, Object> providerMetadata() {
+            return lastResponse != null ? mapMetadata(lastResponse) : Map.of("providerType", providerType);
+        }
+    }
+
     private record StepSnapshot(
         int stepIndex,
         String text,
+        String reasoningText,
         AssistantMessage output,
         List<GenerationContentPart> content,
+        List<ReasoningPart> reasoning,
         FinishReason finishReason,
         String rawFinishReason,
         LanguageModelUsage usage,

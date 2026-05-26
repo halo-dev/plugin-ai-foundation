@@ -24,8 +24,10 @@ import lombok.NoArgsConstructor;
  * }</pre>
  *
  * <p>A tool-enabled stream may include {@code tool-call}, {@code tool-result}, and
- * {@code tool-error} events between step lifecycle events. Callers should ignore unknown
- * {@code type} values so newer protocol events can be introduced without breaking old clients.
+ * {@code tool-error} events between step lifecycle events. Reasoning-capable models may also emit
+ * {@code reasoning-start}, {@code reasoning-delta}, and {@code reasoning-end}; these are not
+ * answer text deltas. Callers should ignore unknown {@code type} values so newer protocol events
+ * can be introduced without breaking old clients.
  */
 @Data
 @Builder
@@ -37,6 +39,9 @@ public class TextStreamPart {
     public static final String TYPE_TEXT_START = PartType.TEXT_START;
     public static final String TYPE_TEXT_DELTA = PartType.TEXT_DELTA;
     public static final String TYPE_TEXT_END = PartType.TEXT_END;
+    public static final String TYPE_REASONING_START = PartType.REASONING_START;
+    public static final String TYPE_REASONING_DELTA = PartType.REASONING_DELTA;
+    public static final String TYPE_REASONING_END = PartType.REASONING_END;
     public static final String TYPE_TOOL_CALL = PartType.TOOL_CALL;
     public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
     public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
@@ -56,7 +61,8 @@ public class TextStreamPart {
     private String messageId;
     /**
      * Text block id for {@link PartType#TEXT_START}, {@link PartType#TEXT_DELTA}, and
-     * {@link PartType#TEXT_END}.
+     * {@link PartType#TEXT_END}; reasoning block id for {@link PartType#REASONING_START},
+     * {@link PartType#REASONING_DELTA}, and {@link PartType#REASONING_END}.
      */
     private String id;
     /**
@@ -67,6 +73,10 @@ public class TextStreamPart {
      * Incremental text for {@link PartType#TEXT_DELTA}.
      */
     private String delta;
+    /**
+     * Optional provider signature for reasoning stream events.
+     */
+    private String signature;
     /**
      * Tool call id for tool call/result/error events.
      */
@@ -154,6 +164,33 @@ public class TextStreamPart {
      */
     public static TextStreamPart textEnd(String id) {
         return TextStreamPart.builder().type(TYPE_TEXT_END).id(id).build();
+    }
+
+    /**
+     * Creates a reasoning block start event.
+     */
+    public static TextStreamPart reasoningStart(String id) {
+        return TextStreamPart.builder().type(TYPE_REASONING_START).id(id).build();
+    }
+
+    /**
+     * Creates a reasoning delta event. Reasoning deltas should not be appended to answer text.
+     */
+    public static TextStreamPart reasoningDelta(String id, String delta,
+        Map<String, Object> providerMetadata) {
+        return TextStreamPart.builder()
+            .type(TYPE_REASONING_DELTA)
+            .id(id)
+            .delta(delta)
+            .providerMetadata(providerMetadata)
+            .build();
+    }
+
+    /**
+     * Creates a reasoning block end event.
+     */
+    public static TextStreamPart reasoningEnd(String id) {
+        return TextStreamPart.builder().type(TYPE_REASONING_END).id(id).build();
     }
 
     /**

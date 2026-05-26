@@ -40,6 +40,24 @@ The system SHALL let administrators send chat-style text generation messages and
 - **THEN** the workbench SHALL NOT append those parts to the assistant text content
 - **AND** the workbench MAY display compact tool activity information associated with the active assistant message
 
+### Requirement: Workbench handles reasoning stream parts
+The model test workbench SHALL consume reasoning stream parts without mixing reasoning into assistant answer text.
+
+#### Scenario: Reasoning deltas are received
+- **WHEN** the workbench receives reasoning stream parts for the active assistant message
+- **THEN** it SHALL store or render the reasoning separately from the assistant answer content
+- **AND** it SHALL NOT append reasoning text to the Markdown-rendered answer body
+
+#### Scenario: Reasoning display is optional
+- **WHEN** the active response contains reasoning
+- **THEN** the workbench MAY show a compact reasoning section associated with the assistant message
+- **AND** the absence of a visible reasoning section SHALL NOT break streaming or answer rendering
+
+#### Scenario: Unknown reasoning metadata
+- **WHEN** a reasoning part contains provider metadata unknown to the frontend
+- **THEN** the workbench SHALL ignore the unknown metadata for rendering
+- **AND** the stream SHALL continue until `finish`, `error`, abort, or `[DONE]`
+
 #### Scenario: User stops an in-progress response
 - **WHEN** a streamed response is in progress and the administrator stops generation
 - **THEN** the workbench aborts the active stream request
@@ -98,4 +116,3 @@ The system SHALL provide a dedicated AI Foundation "测试" child route for test
 - **THEN** the system SHALL navigate to the AI Foundation test child route
 - **AND** the route SHALL include `model={name}` for the selected model
 - **AND** the selected model in the workbench SHALL be set to that model
-

@@ -154,6 +154,10 @@ model.streamText(request)
     .subscribe(part -> {
         switch (part.getType()) {
             case TextStreamPart.TYPE_TEXT_DELTA -> System.out.print(part.getDelta());
+            case TextStreamPart.TYPE_REASONING_DELTA -> {
+                // 推理内容与最终回答分离，是否展示或持久化由调用方决定。
+                System.out.println("[Reasoning] " + part.getDelta());
+            }
             case TextStreamPart.TYPE_FINISH_STEP -> {
                 if (part.getUsage() != null) {
                     System.out.println("\n[Step tokens] " + part.getUsage().getTotalTokens());
@@ -222,6 +226,10 @@ model.generateText(request)
 
 `ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到 `maxSteps` 仍有工具调用，会记录 `max-steps-reached` warning。
 
+工具调用同样支持 `streamText()`。与 `generateText()` 的一次性聚合不同，`streamText()` 会在每个模型步骤中立即转发 provider 返回的 `reasoning-delta` 和 `text-delta`；当模型步骤以工具调用结束时，再发送 `tool-call`，执行服务端工具并发送 `tool-result` 或 `tool-error`。如果 `maxSteps` 允许继续，下一次模型调用会作为新的 `start-step` 继续流式输出最终回答。
+
+因此，工具调用不会让整个流退化为非流式。工具执行期间可能会短暂停顿，但调用方可以通过已经收到的 `tool-call` 事件展示“正在执行工具”的状态。
+
 ### GenerateTextRequest 参数
 
 | 字段 | 类型 | 说明 |
@@ -269,14 +277,30 @@ ModelMessage.builder()
     .build();
 ```
 
-`TOOL` 角色消息可携带 `tool-result` 或 `tool-error` part，用于调用方自己恢复一段包含工具结果的历史。普通 `USER`、`ASSISTANT` 和 `SYSTEM` 消息仍以文本为主；`image`、`file` 等多模态 part 当前会被拒绝。
+`ASSISTANT` 角色消息还可以携带 `reasoning` part，用于恢复推理模型返回的推理内容。对于 DeepSeek 等要求后续请求回传 `reasoning_content` 的模型，保留 reasoning part 可以避免工具调用续写时丢失上下文：
+
+```java
+ModelMessage.assistant(List.of(
+    ModelMessagePart.reasoning(ReasoningPart.builder()
+        .text("需要先查询天气工具。")
+        .providerMetadata(Map.of(
+            "deepseek", Map.of("reasoning_content", "需要先查询天气工具。")
+        ))
+        .build()),
+    ModelMessagePart.text("我将查询天气。")
+));
+```
+
+`TOOL` 角色消息可携带 `tool-result` 或 `tool-error` part，用于调用方自己恢复一段包含工具结果的历史。普通 `USER` 和 `SYSTEM` 消息仍以文本为主；`image`、`file` 等多模态 part 当前会被拒绝。
 
 ### GenerateTextResult 返回值
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `text` | `String` | 完整生成文本 |
-| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，可能包含 `text`、`tool-call`、`tool-result`、`tool-error` |
+| `reasoningText` | `String` | 最后一步推理文本，模型未返回推理时为空 |
+| `reasoning` | `List<ReasoningPart>` | 最后一步推理 part 列表，可包含 provider metadata |
+| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，可能包含 `reasoning`、`text`、`tool-call`、`tool-result`、`tool-error` |
 | `finishReason` | `FinishReason` | 统一结束原因，如 `STOP`、`LENGTH`、`CONTENT_FILTER`、`UNKNOWN` |
 | `rawFinishReason` | `String` | 提供商或 Spring AI 返回的原始结束原因 |
 | `usage` | `LanguageModelUsage` | 最后一步 token 使用量，可能为空 |
@@ -287,7 +311,9 @@ ModelMessage.builder()
 | `steps` | `List<GenerationStep>` | 每次模型调用的步骤详情，包含该步文本、工具调用、工具结果、工具错误、warning 和元数据 |
 | `providerMetadata` | `Map<String, Object>` | 可序列化的提供商元数据 |
 
-`GenerationStep` 会记录 `stepIndex`、`text`、`content`、`finishReason`、`usage`、`toolCalls`、`toolResults`、`toolErrors`、`warnings`、`request`、`response` 和 `providerMetadata`。普通文本生成通常只有 `stepIndex = 0`；带工具且 `maxSteps > 1` 时，每次模型调用都会形成一个 step。
+`LanguageModelUsage` 除了 `inputTokens`、`outputTokens`、`totalTokens`，还会在提供商返回时包含 `reasoningTokens`。
+
+`GenerationStep` 会记录 `stepIndex`、`text`、`reasoningText`、`reasoning`、`content`、`finishReason`、`usage`、`toolCalls`、`toolResults`、`toolErrors`、`warnings`、`request`、`response` 和 `providerMetadata`。普通文本生成通常只有 `stepIndex = 0`；带工具且 `maxSteps > 1` 时，每次模型调用都会形成一个 step。
 
 ### TextStreamPart 事件
 
@@ -296,14 +322,17 @@ ModelMessage.builder()
 ```text
 start
 start-step
+reasoning-start?
+reasoning-delta*
+reasoning-end?
+text-start?
+text-delta*
+text-end?
 tool-call?
 tool-result?/tool-error?
 finish-step
 start-step?
-text-start
-text-delta*
-text-end
-finish-step
+...
 finish
 ```
 
@@ -314,6 +343,9 @@ finish
 | `text-start` | 一个文本块开始，包含文本块 `id` |
 | `text-delta` | 增量文本，读取 `delta` |
 | `text-end` | 文本块结束 |
+| `reasoning-start` | 一个推理块开始，包含推理块 `id` |
+| `reasoning-delta` | 增量推理内容，读取 `delta`，不要混入最终回答文本 |
+| `reasoning-end` | 推理块结束 |
 | `tool-call` | 模型请求调用工具，包含 `toolCallId`、`toolName` 和 `input` |
 | `tool-result` | 服务端工具执行成功，包含 `toolCallId`、`toolName` 和 `result` |
 | `tool-error` | 服务端工具执行失败或模型请求未知工具，包含 `toolCallId`、`toolName` 和 `errorText` |

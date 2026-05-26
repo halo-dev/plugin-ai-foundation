@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:32902",
+    "url" : "http://localhost:49887",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1453,6 +1453,10 @@
           "raw" : {
             "type" : "object"
           },
+          "reasoningTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "totalTokens" : {
             "type" : "integer",
             "format" : "int32"
@@ -1550,6 +1554,9 @@
           },
           "result" : {
             "type" : "object"
+          },
+          "signature" : {
+            "type" : "string"
           },
           "text" : {
             "type" : "string"
@@ -1841,6 +1848,9 @@
           },
           "result" : {
             "type" : "object"
+          },
+          "signature" : {
+            "type" : "string"
           },
           "stepIndex" : {
             "type" : "integer",

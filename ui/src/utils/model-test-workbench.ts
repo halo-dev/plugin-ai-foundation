@@ -7,6 +7,7 @@ export interface WorkbenchMessage {
   id: string
   role: ChatRole
   content: string
+  reasoningContent?: string
   toolEvents?: WorkbenchToolEvent[]
   modelName?: string
   modelDisplayName?: string
@@ -36,7 +37,7 @@ export interface SseParseResult<T> {
 }
 
 export interface ModelMessagePart {
-  type: 'text'
+  type: 'text' | 'reasoning'
   text: string
 }
 
@@ -62,6 +63,9 @@ export interface TextStreamPart {
     | 'text-start'
     | 'text-delta'
     | 'text-end'
+    | 'reasoning-start'
+    | 'reasoning-delta'
+    | 'reasoning-end'
     | 'tool-call'
     | 'tool-result'
     | 'tool-error'
@@ -75,6 +79,7 @@ export interface TextStreamPart {
   id?: string
   stepIndex?: number
   delta?: string
+  providerMetadata?: Record<string, unknown>
   toolCallId?: string
   toolName?: string
   input?: Record<string, unknown>
@@ -128,9 +133,15 @@ export function buildTestChatRequest(
     if (!content || (message.role === 'assistant' && message.state === 'error')) {
       continue
     }
+    const parts: ModelMessagePart[] = []
+    const reasoningContent = message.reasoningContent?.trim()
+    if (message.role === 'assistant' && reasoningContent) {
+      parts.push({ type: 'reasoning', text: reasoningContent })
+    }
+    parts.push({ type: 'text', text: content })
     requestMessages.push({
       role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
-      content: [{ type: 'text', text: content }],
+      content: parts,
     })
   }
 
@@ -183,6 +194,12 @@ export function isRenderableTextDelta(
   part: TextStreamPart,
 ): part is TextStreamPart & { type: 'text-delta'; delta: string } {
   return part.type === 'text-delta' && !!part.delta
+}
+
+export function isRenderableReasoningDelta(
+  part: TextStreamPart,
+): part is TextStreamPart & { type: 'reasoning-delta'; delta: string } {
+  return part.type === 'reasoning-delta' && !!part.delta
 }
 
 export function isTerminalTextStreamPart(part: TextStreamPart) {

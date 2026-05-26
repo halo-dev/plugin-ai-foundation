@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class LanguageModelUsage {
     private Integer inputTokens;
     private Integer outputTokens;
+    private Integer reasoningTokens;
     private Integer totalTokens;
     private Object raw;
 }

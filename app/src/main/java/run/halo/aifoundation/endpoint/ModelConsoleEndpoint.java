@@ -298,15 +298,25 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         "messages must include role and content"));
                 }
                 for (var part : message.getContent()) {
-                    if (part == null || !PartType.isText(part.getType())
-                        || part.getText() == null || part.getText().isBlank()) {
+                    if (part == null || !isSupportedTestChatPart(message.getRole(), part)) {
                         return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "messages must include non-empty text content parts"));
+                            "messages must include non-empty supported content parts"));
                     }
                 }
             }
         }
         return Mono.empty();
+    }
+
+    private boolean isSupportedTestChatPart(run.halo.aifoundation.ModelMessageRole role,
+        run.halo.aifoundation.ModelMessagePart part) {
+        if (PartType.isText(part.getType())) {
+            return part.getText() != null && !part.getText().isBlank();
+        }
+        return role == run.halo.aifoundation.ModelMessageRole.ASSISTANT
+            && PartType.isReasoning(part.getType())
+            && part.getText() != null
+            && !part.getText().isBlank();
     }
 
     private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId,

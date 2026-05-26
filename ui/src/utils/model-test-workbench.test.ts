@@ -5,6 +5,7 @@ import {
   buildTestChatRequest,
   filterEnabledChatModels,
   flushSseJsonBuffer,
+  isRenderableReasoningDelta,
   isRenderableTextDelta,
   isTerminalTextStreamPart,
   parseProviderOptionsJson,
@@ -44,7 +45,7 @@ describe('buildTestChatRequest', () => {
   it('builds messages and parameters for streaming test requests', () => {
     const messages: WorkbenchMessage[] = [
       { id: '1', role: 'user', content: 'Hello' },
-      { id: '2', role: 'assistant', content: 'Hi', state: 'done' },
+      { id: '2', role: 'assistant', content: 'Hi', reasoningContent: 'Think', state: 'done' },
       { id: '3', role: 'assistant', content: 'Failed', state: 'error' },
     ]
 
@@ -61,7 +62,13 @@ describe('buildTestChatRequest', () => {
       system: 'You are concise.',
       messages: [
         { role: 'USER', content: [{ type: 'text', text: 'Hello' }] },
-        { role: 'ASSISTANT', content: [{ type: 'text', text: 'Hi' }] },
+        {
+          role: 'ASSISTANT',
+          content: [
+            { type: 'reasoning', text: 'Think' },
+            { type: 'text', text: 'Hi' },
+          ],
+        },
       ],
       temperature: 0.2,
       topP: 0.9,
@@ -92,6 +99,7 @@ describe('parseSseJsonLines', () => {
         'data: {"type":"tool-call","toolCallId":"call_1","toolName":"weather","input":{"location":"SF"}}',
         'data: {"type":"tool-result","toolCallId":"call_1","toolName":"weather","result":{"temperature":22}}',
         'data: {"type":"tool-error","toolCallId":"call_2","toolName":"search","errorText":"failed"}',
+        'data: {"type":"reasoning-delta","delta":"Thinking","providerMetadata":{"deepseek":{}}}',
         'data: {"type":"unknown-provider-part"}',
         'data: {"type":"text-delta","delta":"**Hi**"}',
         'data: {"type":"finish"}',
@@ -105,6 +113,7 @@ describe('parseSseJsonLines', () => {
       'tool-call',
       'tool-result',
       'tool-error',
+      'reasoning-delta',
       'unknown-provider-part',
       'text-delta',
       'finish',
@@ -126,6 +135,9 @@ describe('parseSseJsonLines', () => {
     })
     expect(result.chunks.filter(isRenderableTextDelta).map((chunk) => chunk.delta)).toEqual([
       '**Hi**',
+    ])
+    expect(result.chunks.filter(isRenderableReasoningDelta).map((chunk) => chunk.delta)).toEqual([
+      'Thinking',
     ])
     expect(result.chunks.filter(isTerminalTextStreamPart).map((chunk) => chunk.type)).toEqual([
       'finish',

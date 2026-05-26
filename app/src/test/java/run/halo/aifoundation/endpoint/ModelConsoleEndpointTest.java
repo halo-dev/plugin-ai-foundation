@@ -542,6 +542,47 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
+    void testChatStream_serializesReasoningPartsAndAcceptsReasoningHistory() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(Flux.just(
+                TextStreamPart.reasoningStart("rsn_1"),
+                TextStreamPart.reasoningDelta("rsn_1", "Think", Map.of("deepseek", Map.of())),
+                TextStreamPart.reasoningEnd("rsn_1"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            ));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(
+                Map.of("role", "ASSISTANT", "content", List.of(
+                    Map.of("type", "reasoning", "text", "Previous reasoning"),
+                    Map.of("type", "text", "text", "Previous answer")
+                )),
+                Map.of("role", "USER", "content", List.of(
+                    Map.of("type", "text", "text", "Continue")
+                ))
+            )))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().valueEquals("X-Halo-AI-Stream-Protocol", "text-v1")
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"reasoning-start\"");
+                assertThat(bodyText).contains("\"type\":\"reasoning-delta\"");
+                assertThat(bodyText).contains("\"delta\":\"Think\"");
+                assertThat(bodyText).contains("data:[DONE]");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        assertThat(captor.getValue().getMessages().getFirst().getContent().getFirst().getType())
+            .isEqualTo("reasoning");
+    }
+
+    @Test
     void testChatStream_emptyMessages_returns400WithoutCallingModelService() {
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
             .contentType(MediaType.APPLICATION_JSON)
@@ -571,6 +612,34 @@ class ModelConsoleEndpointTest {
             .expectBody(String.class)
             .consumeWith(response -> {
                 var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"error\"");
+                assertThat(bodyText).contains("upstream failed");
+                assertThat(bodyText).contains("data:[DONE]");
+            });
+    }
+
+    @Test
+    void testChatStream_streamErrorAfterReasoningEmitsDone() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(Flux.concat(
+                Flux.just(TextStreamPart.reasoningDelta("rsn_1", "Think", Map.of())),
+                Flux.error(new IllegalStateException("upstream failed"))
+            ));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "Hello"))
+            ))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"reasoning-delta\"");
                 assertThat(bodyText).contains("\"type\":\"error\"");
                 assertThat(bodyText).contains("upstream failed");
                 assertThat(bodyText).contains("data:[DONE]");

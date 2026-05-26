@@ -26,6 +26,10 @@ public final class PartType {
      * {@code errorText}.
      */
     public static final String TOOL_ERROR = "tool-error";
+    /**
+     * Reasoning content part. Relevant fields: {@code text}, {@code providerMetadata}.
+     */
+    public static final String REASONING = "reasoning";
 
     /**
      * Stream event: a model response message has started. Relevant field: {@code messageId}.
@@ -48,6 +52,19 @@ public final class PartType {
      * Stream event: a text block has ended. Relevant field: {@code id}.
      */
     public static final String TEXT_END = "text-end";
+    /**
+     * Stream event: a reasoning block has started. Relevant field: {@code id}.
+     */
+    public static final String REASONING_START = "reasoning-start";
+    /**
+     * Stream event: reasoning delta for the current block. Relevant fields: {@code id},
+     * {@code delta}, {@code providerMetadata}.
+     */
+    public static final String REASONING_DELTA = "reasoning-delta";
+    /**
+     * Stream event: a reasoning block has ended. Relevant field: {@code id}.
+     */
+    public static final String REASONING_END = "reasoning-end";
     /**
      * Stream event: one model invocation step has ended. Includes finish reason, usage, warnings,
      * request metadata, response metadata, and provider metadata when available.
@@ -87,6 +104,10 @@ public final class PartType {
 
     public static boolean isToolError(String type) {
         return TOOL_ERROR.equals(type);
+    }
+
+    public static boolean isReasoning(String type) {
+        return REASONING.equals(type);
     }
 
     public static boolean isToolResponse(String type) {

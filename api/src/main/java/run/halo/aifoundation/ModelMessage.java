@@ -57,6 +57,14 @@ public class ModelMessage {
     }
 
     /**
+     * Creates an assistant message with structured content parts, such as text, reasoning, and
+     * tool calls.
+     */
+    public static ModelMessage assistant(List<ModelMessagePart> content) {
+        return new ModelMessage(ModelMessageRole.ASSISTANT, content);
+    }
+
+    /**
      * Creates a tool message. Content should contain {@link PartType#TOOL_RESULT} or
      * {@link PartType#TOOL_ERROR} parts.
      */

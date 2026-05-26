@@ -19,6 +19,7 @@ import run.halo.aifoundation.ProviderInfo;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
@@ -57,10 +58,15 @@ public class AiModelServiceImpl implements AiModelService {
                         }
                         return resolveApiKey(provider)
                             .map(apiKey -> {
+                                var providerType = providerClientCache
+                                    .getProviderType(provider.getSpec().getProviderType());
                                 var chatModel = providerClientCache
                                     .getOrCreateChatModel(provider, apiKey, modelId);
                                 return new LanguageModelImpl(
-                                    chatModel, provider.getSpec().getProviderType());
+                                    chatModel, provider.getSpec().getProviderType(),
+                                    providerType != null
+                                        ? providerType.languageModelProviderOptions()
+                                        : LanguageModelProviderOptions.defaults());
                             });
                     });
             });
