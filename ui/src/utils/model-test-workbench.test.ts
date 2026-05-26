@@ -1,8 +1,9 @@
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
-import type { AiModel } from '@/api/generated'
+import type { AiModel, OutputSpec } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
   buildTestChatRequest,
+  buildOutputSpec,
   filterEnabledChatModels,
   flushSseJsonBuffer,
   isRenderableReasoningDelta,
@@ -57,6 +58,7 @@ describe('buildTestChatRequest', () => {
         maxOutputTokens: 128,
         maxSteps: 2,
         providerOptions: { openai: { seed: 42 } },
+        output: { type: 'OBJECT', schema: { type: 'object' } } as unknown as OutputSpec,
       }),
     ).toMatchObject({
       system: 'You are concise.',
@@ -75,7 +77,33 @@ describe('buildTestChatRequest', () => {
       maxOutputTokens: 128,
       maxSteps: 2,
       providerOptions: { openai: { seed: 42 } },
+      output: { type: 'OBJECT', schema: { type: 'object' } },
     })
+  })
+})
+
+describe('buildOutputSpec', () => {
+  it('builds structured output specs from workbench controls', () => {
+    expect(
+      buildOutputSpec({
+        mode: 'OBJECT',
+        schemaText: '{ "type": "object", "properties": { "name": { "type": "string" } } }',
+      }).value,
+    ).toMatchObject({
+      type: 'OBJECT',
+      schema: { type: 'object' },
+    })
+
+    expect(buildOutputSpec({ mode: 'CHOICE', choicesText: 'yes\nno' }).value).toEqual({
+      type: 'CHOICE',
+      choices: ['yes', 'no'],
+    })
+    expect(buildOutputSpec({ mode: 'TEXT' }).value).toBeUndefined()
+  })
+
+  it('rejects invalid structured output control values', () => {
+    expect(buildOutputSpec({ mode: 'OBJECT', schemaText: '[' }).error).toBeTruthy()
+    expect(buildOutputSpec({ mode: 'CHOICE', choicesText: '' }).error).toBeTruthy()
   })
 })
 

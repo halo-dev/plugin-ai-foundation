@@ -26,8 +26,9 @@ import lombok.NoArgsConstructor;
  * <p>A tool-enabled stream may include {@code tool-call}, {@code tool-result}, and
  * {@code tool-error} events between step lifecycle events. Reasoning-capable models may also emit
  * {@code reasoning-start}, {@code reasoning-delta}, and {@code reasoning-end}; these are not
- * answer text deltas. Callers should ignore unknown {@code type} values so newer protocol events
- * can be introduced without breaking old clients.
+ * answer text deltas. Structured output requests still stream the model text normally; callers can
+ * read the JSON text from text events. Callers should ignore unknown {@code type} values so newer
+ * protocol events can be introduced without breaking old clients.
  */
 @Data
 @Builder

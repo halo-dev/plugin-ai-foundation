@@ -136,6 +136,67 @@ model.generateText(request)
     });
 ```
 
+### 结构化输出
+
+如果调用方需要稳定的 JSON 对象、数组或枚举值，可以在 `GenerateTextRequest.output` 中声明 `OutputSpec`。模型仍会返回统一的 `GenerateTextResult`，其中 `text` 保留原始文本，`output` 是解析并校验后的结构化值，`outputText` 是用于解析的原始片段。
+
+```java
+Map<String, Object> schema = Map.of(
+    "type", "object",
+    "properties", Map.of(
+        "title", Map.of("type", "string"),
+        "summary", Map.of("type", "string"),
+        "tags", Map.of(
+            "type", "array",
+            "items", Map.of("type", "string")
+        )
+    ),
+    "required", List.of("title", "summary")
+);
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("请总结 Halo CMS，并给出 3 个标签")
+    .output(OutputSpec.object(schema))
+    .build();
+
+model.generateText(request)
+    .subscribe(result -> {
+        Map<?, ?> output = (Map<?, ?>) result.getOutput();
+        System.out.println(output.get("title"));
+        System.out.println(result.getOutputText());
+    });
+```
+
+对于 Java record 或简单 Java 类，可以直接由类型生成基础 JSON Schema：
+
+```java
+record Summary(String title, String summary, List<String> tags) {
+}
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("请总结 Halo CMS，并给出 3 个标签")
+    .output(OutputSpec.object(Summary.class))
+    .build();
+```
+
+`OutputSpec.array(Class<?>)` 会把类型作为数组元素 schema；`OutputSpec.choice(List.of("yes", "no"))` 会约束模型只能返回指定字符串；`OutputSpec.json()` 只要求返回合法 JSON，不校验具体结构。
+
+流式调用时，结构化内容仍然通过 `text-delta` 输出。`streamText()` 会在结束时校验完整文本；如果文本不满足 `OutputSpec`，会发送 `error` part。流式协议不会额外携带解析后的 `output`，需要对象结果时可以使用 `generateText()`。
+
+```java
+model.streamText(request)
+    .subscribe(part -> {
+        switch (part.getType()) {
+            case TextStreamPart.TYPE_TEXT_DELTA -> System.out.print(part.getDelta());
+            case TextStreamPart.TYPE_ERROR -> System.err.println(part.getErrorText());
+            default -> {
+            }
+        }
+    });
+```
+
+本地校验当前覆盖常用 JSON Schema 子集：`type`、`enum`、`required`、`properties` 和 `items`。更复杂的格式约束可以在调用方拿到 `output` 后继续校验。
+
 ### 流式文本生成（推荐用于聊天场景）
 
 ```java
@@ -197,6 +258,15 @@ GenerateTextRequest request = GenerateTextRequest.builder()
             ),
             "required", List.of("location")
         ))
+        .outputSchema(Map.of(
+            "type", "object",
+            "properties", Map.of(
+                "location", Map.of("type", "string"),
+                "temperature", Map.of("type", "integer"),
+                "condition", Map.of("type", "string")
+            ),
+            "required", List.of("location", "temperature", "condition")
+        ))
         .executor(input -> Mono.just(Map.of(
             "location", input.get("location"),
             "temperature", 22,
@@ -224,7 +294,7 @@ model.generateText(request)
     });
 ```
 
-`ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到 `maxSteps` 仍有工具调用，会记录 `max-steps-reached` warning。
+`inputSchema` 用于约束模型生成的工具入参，`outputSchema` 用于约束 executor 返回值。`ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到 `maxSteps` 仍有工具调用，会记录 `max-steps-reached` warning。
 
 工具调用同样支持 `streamText()`。与 `generateText()` 的一次性聚合不同，`streamText()` 会在每个模型步骤中立即转发 provider 返回的 `reasoning-delta` 和 `text-delta`；当模型步骤以工具调用结束时，再发送 `tool-call`，执行服务端工具并发送 `tool-result` 或 `tool-error`。如果 `maxSteps` 允许继续，下一次模型调用会作为新的 `start-step` 继续流式输出最终回答。
 
@@ -244,9 +314,10 @@ model.generateText(request)
 | `presencePenalty` | `Double` | Presence penalty |
 | `frequencyPenalty` | `Double` | Frequency penalty |
 | `stopSequences` | `List<String>` | 停止序列 |
-| `tools` | `List<ToolDefinition>` | 请求级工具定义，包含名称、描述、输入 JSON Schema 和可选 executor |
+| `tools` | `List<ToolDefinition>` | 请求级工具定义，包含名称、描述、输入/输出 JSON Schema 和可选 executor |
 | `toolChoice` | `ToolChoice` | 工具选择策略：`AUTO`、`NONE`、`REQUIRED` 或指定 `TOOL` |
 | `maxSteps` | `Integer` | 最大模型调用步数，默认 1，最大 10 |
+| `output` | `OutputSpec` | 结构化输出声明，支持 `TEXT`、`OBJECT`、`ARRAY`、`CHOICE`、`JSON` |
 | `providerOptions` | `Map<String, Map<String, Object>>` | 按提供商命名空间分组的特定选项 |
 
 `providerOptions` 必须按提供商分组，避免不同服务商的私有参数冲突，例如：
@@ -298,9 +369,11 @@ ModelMessage.assistant(List.of(
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `text` | `String` | 完整生成文本 |
+| `output` | `Object` | 按 `OutputSpec` 解析并校验后的结构化输出；未启用结构化输出时为空 |
+| `outputText` | `String` | 用于解析结构化输出的原始文本片段 |
 | `reasoningText` | `String` | 最后一步推理文本，模型未返回推理时为空 |
 | `reasoning` | `List<ReasoningPart>` | 最后一步推理 part 列表，可包含 provider metadata |
-| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，可能包含 `reasoning`、`text`、`tool-call`、`tool-result`、`tool-error` |
+| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，可能包含 `reasoning`、`text`、`output`、`tool-call`、`tool-result`、`tool-error` |
 | `finishReason` | `FinishReason` | 统一结束原因，如 `STOP`、`LENGTH`、`CONTENT_FILTER`、`UNKNOWN` |
 | `rawFinishReason` | `String` | 提供商或 Spring AI 返回的原始结束原因 |
 | `usage` | `LanguageModelUsage` | 最后一步 token 使用量，可能为空 |
@@ -313,7 +386,7 @@ ModelMessage.assistant(List.of(
 
 `LanguageModelUsage` 除了 `inputTokens`、`outputTokens`、`totalTokens`，还会在提供商返回时包含 `reasoningTokens`。
 
-`GenerationStep` 会记录 `stepIndex`、`text`、`reasoningText`、`reasoning`、`content`、`finishReason`、`usage`、`toolCalls`、`toolResults`、`toolErrors`、`warnings`、`request`、`response` 和 `providerMetadata`。普通文本生成通常只有 `stepIndex = 0`；带工具且 `maxSteps > 1` 时，每次模型调用都会形成一个 step。
+`GenerationStep` 会记录 `stepIndex`、`text`、`output`、`outputText`、`reasoningText`、`reasoning`、`content`、`finishReason`、`usage`、`toolCalls`、`toolResults`、`toolErrors`、`warnings`、`request`、`response` 和 `providerMetadata`。普通文本生成通常只有 `stepIndex = 0`；带工具且 `maxSteps > 1` 时，每次模型调用都会形成一个 step。
 
 ### TextStreamPart 事件
 

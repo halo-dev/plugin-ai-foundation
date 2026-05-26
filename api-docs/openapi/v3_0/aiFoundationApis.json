@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:49887",
+    "url" : "http://localhost:40409",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1297,6 +1297,9 @@
               "$ref" : "#/components/schemas/ModelMessage"
             }
           },
+          "output" : {
+            "$ref" : "#/components/schemas/OutputSpec"
+          },
           "presencePenalty" : {
             "type" : "number",
             "format" : "double"
@@ -1679,6 +1682,51 @@
           }
         }
       },
+      "OutputSpec" : {
+        "type" : "object",
+        "properties" : {
+          "choices" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "elementSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "schema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "strict" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "TEXT", "OBJECT", "ARRAY", "CHOICE", "JSON" ]
+          }
+        }
+      },
       "ProviderModelDiscoveryResponse" : {
         "type" : "object",
         "properties" : {
@@ -1897,6 +1945,15 @@
           "executor" : {
             "$ref" : "#/components/schemas/ToolExecutor"
           },
+          "inputExamples" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
           "inputSchema" : {
             "type" : "object",
             "additionalProperties" : {
@@ -1905,6 +1962,12 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "outputSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
           },
           "strict" : {
             "type" : "boolean"

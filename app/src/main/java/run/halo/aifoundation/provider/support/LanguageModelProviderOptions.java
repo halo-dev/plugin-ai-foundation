@@ -6,9 +6,10 @@ package run.halo.aifoundation.provider.support;
 public record LanguageModelProviderOptions(
     boolean reasoningHistorySupported,
     boolean streamToolCallsForReasoning,
-    ToolCallingChatOptionsFactory toolCallingChatOptionsFactory
+    ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
+    StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory
 ) {
     public static LanguageModelProviderOptions defaults() {
-        return new LanguageModelProviderOptions(false, false, null);
+        return new LanguageModelProviderOptions(false, false, null, null);
     }
 }

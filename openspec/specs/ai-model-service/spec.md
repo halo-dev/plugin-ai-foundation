@@ -159,6 +159,12 @@ The system SHALL support structured text generation requests via `GenerateTextRe
 - **THEN** OpenAI-compatible provider adapters MAY parse and apply the `openai` namespace
 - **AND** non-OpenAI provider adapters SHALL ignore the `openai` namespace unless explicitly documented otherwise
 
+#### Scenario: Structured output request
+- **WHEN** a consumer sends `GenerateTextRequest.output` with a structured output specification
+- **THEN** the system SHALL represent the request with provider-neutral API DTOs
+- **AND** the provider invocation SHALL receive a provider-neutral instruction or provider-specific response-format mapping when supported
+- **AND** callers SHALL NOT need Spring AI, OpenAI, Zod, Valibot, or provider-native schema classes
+
 ### Requirement: ModelMessage content parts
 
 The system SHALL model language input messages as role-bearing messages containing content parts.
@@ -218,6 +224,12 @@ The system SHALL return a model-independent `GenerateTextResult` for non-streami
 - **THEN** `GenerateTextResult.warnings` SHALL include provider-neutral warning entries with code, message, and optional provider metadata
 - **AND** generation SHALL still complete successfully when the issue is non-fatal
 
+#### Scenario: Structured output response
+- **WHEN** `generateText` completes with a structured output request
+- **THEN** `GenerateTextResult.output` SHALL contain the parsed final structured value
+- **AND** `GenerateTextResult.outputText` SHALL contain the raw text used to parse the output when available
+- **AND** the final answer `GenerationStep` SHALL contain the same parsed structured output
+
 #### Scenario: Request and response metadata
 - **WHEN** request or response metadata is available from the provider adapter
 - **THEN** `GenerateTextResult.request` SHALL include provider-neutral request metadata such as request id or model id when available
@@ -264,6 +276,13 @@ The system SHALL emit `TextStreamPart` stream parts with standardized Halo-owned
 #### Scenario: Error during streaming
 - **WHEN** an error occurs during streaming
 - **THEN** the stream SHALL emit a part with `type = "error"` and `errorText` before completing gracefully
+
+#### Scenario: Structured output streaming
+- **WHEN** a consumer calls `languageModel.streamText(request)` with a structured output specification
+- **THEN** the stream SHALL expose the generated structured text through normal text parts
+- **AND** the system SHALL validate the complete streamed text before emitting the final `finish`
+- **AND** the stream SHALL NOT emit parsed structured output on content parts or lifecycle parts
+- **AND** if validation fails, the stream SHALL emit an `error` part with a safe validation message and complete gracefully
 
 ### Requirement: Model info listing
 
@@ -416,8 +435,15 @@ The system SHALL allow callers to define request-scoped tools for language model
 - **THEN** the tool SHALL include a unique name
 - **AND** the tool MAY include a description
 - **AND** the tool MAY include a JSON Schema input schema represented by provider-neutral JDK collection types
+- **AND** the tool MAY include a JSON Schema output schema represented by provider-neutral JDK collection types
+- **AND** the tool MAY include input examples represented by provider-neutral JDK collection types
 - **AND** the tool MAY include a strict flag
 - **AND** the tool MAY include a Reactor-based executor that accepts tool input and emits a result payload
+
+#### Scenario: Tool schema validation
+- **WHEN** the system receives model-produced tool input or executor-produced tool output
+- **THEN** it SHALL validate the payload against the corresponding tool schema when present
+- **AND** invalid payloads SHALL produce a safe `tool-error` without leaking secrets
 
 #### Scenario: Duplicate tool names
 - **WHEN** a request defines two tools with the same name

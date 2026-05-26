@@ -51,6 +51,14 @@ public class ToolDefinition {
      */
     private Map<String, Object> inputSchema;
     /**
+     * Optional JSON Schema object describing the server-side tool result.
+     */
+    private Map<String, Object> outputSchema;
+    /**
+     * Optional input examples that providers may use for tool guidance.
+     */
+    private java.util.List<Map<String, Object>> inputExamples;
+    /**
      * Whether the provider should enforce strict schema matching when supported.
      */
     private Boolean strict;

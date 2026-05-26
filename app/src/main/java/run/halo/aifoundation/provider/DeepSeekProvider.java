@@ -6,7 +6,10 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.HaloReasoningOpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.stereotype.Component;
+import run.halo.aifoundation.GenerateTextRequest;
+import run.halo.aifoundation.OutputType;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
@@ -106,11 +109,37 @@ public class DeepSeekProvider extends AbstractAiProviderType {
                     .internalToolExecutionEnabled(false)
                     .toolCallbacks(toolCallbacks)
                     .extraBody(Map.of("thinking", Map.of("type", "disabled")));
+                applyJsonObjectResponseFormat(builder, request);
                 if (!toolNames.isEmpty()) {
                     builder.toolNames(toolNames);
                 }
                 return builder.build();
-            }
+            },
+            this::buildStructuredOutputChatOptions
         );
+    }
+
+    private OpenAiChatOptions buildStructuredOutputChatOptions(GenerateTextRequest request) {
+        var builder = OpenAiChatOptions.builder()
+            .temperature(request.getTemperature())
+            .maxTokens(request.getMaxOutputTokens())
+            .topP(request.getTopP())
+            .presencePenalty(request.getPresencePenalty())
+            .frequencyPenalty(request.getFrequencyPenalty())
+            .stop(request.getStopSequences())
+            .extraBody(Map.of("thinking", Map.of("type", "disabled")));
+        applyJsonObjectResponseFormat(builder, request);
+        return builder.build();
+    }
+
+    private void applyJsonObjectResponseFormat(OpenAiChatOptions.Builder builder,
+        GenerateTextRequest request) {
+        var output = request.getOutput();
+        if (output == null || output.getType() != OutputType.OBJECT) {
+            return;
+        }
+        builder.responseFormat(ResponseFormat.builder()
+            .type(ResponseFormat.Type.JSON_OBJECT)
+            .build());
     }
 }

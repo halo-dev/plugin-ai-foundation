@@ -11,6 +11,8 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.OpenAiStructuredOutputOptions;
 
 @Component
 public class OpenAiProvider extends AbstractAiProviderType {
@@ -84,6 +86,12 @@ public class OpenAiProvider extends AbstractAiProviderType {
         return new OpenAiEmbeddingModel(openAiApi,
             org.springframework.ai.document.MetadataMode.EMBED,
             OpenAiEmbeddingOptions.builder().model(modelId).build());
+    }
+
+    @Override
+    public LanguageModelProviderOptions languageModelProviderOptions() {
+        return new LanguageModelProviderOptions(false, false, null,
+            OpenAiStructuredOutputOptions::buildBasic);
     }
 
     private OpenAiApi buildOpenAiApi(AiProvider provider, String apiKey) {

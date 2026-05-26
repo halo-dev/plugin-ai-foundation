@@ -21,6 +21,7 @@ export * from './model-message-part';
 export * from './model-option';
 export * from './model-option-provider';
 export * from './move-operation';
+export * from './output-spec';
 export * from './provider-model-discovery-response';
 export * from './provider-type-info';
 export * from './remove-operation';

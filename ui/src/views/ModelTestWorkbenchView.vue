@@ -4,6 +4,7 @@ import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { renderMarkdown } from '@/utils/markdown'
 import { groupModelOptionsByProvider, modelOptionLabel } from '@/utils/model-options'
 import {
+  buildOutputSpec,
   buildTestChatRequest,
   flushSseJsonBuffer,
   isRenderableReasoningDelta,
@@ -13,6 +14,7 @@ import {
   parseSseJsonLines,
   toToolEvent,
   type TextStreamPart,
+  type OutputMode,
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading, VTag } from '@halo-dev/components'
@@ -44,6 +46,21 @@ const topP = shallowRef(1)
 const maxTokens = shallowRef(1024)
 const maxSteps = shallowRef(1)
 const testToolEnabled = shallowRef(false)
+const outputMode = shallowRef<OutputMode>('TEXT')
+const outputSchemaText = shallowRef(`{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": ["title", "summary"]
+}`)
+const outputChoicesText = shallowRef('yes\nno')
+const outputError = shallowRef('')
 const providerOptionsText = shallowRef('{}')
 const providerOptionsError = shallowRef('')
 const isStreaming = shallowRef(false)
@@ -59,6 +76,12 @@ const chatModels = computed(() => {
 const chatModelGroups = computed(() => groupModelOptionsByProvider(chatModels.value))
 const providerOptionsHelp = computed(() => {
   return providerOptionsError.value || '请输入按服务商分组的 JSON 对象，例如 {"openai": {"seed": 42}}'
+})
+const outputSchemaHelp = computed(() => {
+  return outputError.value || (outputMode.value === 'ARRAY' ? '用于校验每个数组元素' : '用于约束最终 JSON 对象')
+})
+const outputChoicesHelp = computed(() => {
+  return outputError.value || '每行一个可选值'
 })
 
 const selectedModel = computed(() => {
@@ -113,6 +136,16 @@ async function sendMessage() {
     return
   }
   providerOptionsError.value = ''
+  const outputSpec = buildOutputSpec({
+    mode: outputMode.value,
+    schemaText: outputSchemaText.value,
+    choicesText: outputChoicesText.value,
+  })
+  if (outputSpec.error) {
+    outputError.value = outputSpec.error
+    return
+  }
+  outputError.value = ''
 
   const userMessage: WorkbenchMessage = {
     id: crypto.randomUUID(),
@@ -129,6 +162,7 @@ async function sendMessage() {
     maxOutputTokens: numberOrUndefined(maxTokens.value),
     maxSteps: numberOrUndefined(maxSteps.value),
     providerOptions: providerOptions.value,
+    output: outputSpec.value,
   })
 
   const assistantMessage: WorkbenchMessage = {
@@ -559,6 +593,44 @@ onBeforeUnmount(() => {
             name="testToolEnabled"
             label="启用测试工具"
             help="后台会注入 halo_test_info。可输入：请调用 halo_test_info 测试工具并告诉我返回内容。"
+            outer-class=":uno: mt-4"
+          />
+
+          <FormKit
+            v-model="outputMode"
+            type="select"
+            name="outputMode"
+            label="结构化输出"
+            :options="[
+              { label: '文本', value: 'TEXT' },
+              { label: 'JSON 对象', value: 'OBJECT' },
+              { label: 'JSON 数组', value: 'ARRAY' },
+              { label: '枚举选择', value: 'CHOICE' },
+              { label: '任意 JSON', value: 'JSON' },
+            ]"
+            outer-class=":uno: mt-4"
+          />
+
+          <FormKit
+            v-if="outputMode === 'OBJECT' || outputMode === 'ARRAY'"
+            v-model="outputSchemaText"
+            type="textarea"
+            name="outputSchema"
+            :label="outputMode === 'ARRAY' ? '元素 JSON Schema' : 'JSON Schema'"
+            rows="8"
+            :help="outputSchemaHelp"
+            outer-class=":uno: mt-4"
+            input-class=":uno: font-mono text-xs"
+          />
+
+          <FormKit
+            v-if="outputMode === 'CHOICE'"
+            v-model="outputChoicesText"
+            type="textarea"
+            name="outputChoices"
+            label="枚举选项"
+            rows="4"
+            :help="outputChoicesHelp"
             outer-class=":uno: mt-4"
           />
 

@@ -76,6 +76,10 @@ public class GenerateTextRequest {
      */
     private Map<String, Map<String, Object>> providerOptions;
     /**
+     * Optional structured output specification.
+     */
+    private OutputSpec output;
+    /**
      * Request-scoped tools that the model may call.
      */
     private List<ToolDefinition> tools;

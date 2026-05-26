@@ -30,7 +30,6 @@ public final class PartType {
      * Reasoning content part. Relevant fields: {@code text}, {@code providerMetadata}.
      */
     public static final String REASONING = "reasoning";
-
     /**
      * Stream event: a model response message has started. Relevant field: {@code messageId}.
      */

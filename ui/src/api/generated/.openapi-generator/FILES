@@ -38,6 +38,7 @@ models/model-message.ts
 models/model-option-provider.ts
 models/model-option.ts
 models/move-operation.ts
+models/output-spec.ts
 models/provider-model-discovery-response.ts
 models/provider-type-info.ts
 models/remove-operation.ts

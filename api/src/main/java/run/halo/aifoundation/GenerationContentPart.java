@@ -130,4 +130,5 @@ public class GenerationContentPart {
             .metadata(toolError.getProviderMetadata())
             .build();
     }
+
 }

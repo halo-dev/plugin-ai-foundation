@@ -13,6 +13,8 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.OpenAiStructuredOutputOptions;
 
 @Component
 public class OpenAiLikeProvider extends AbstractAiProviderType {
@@ -75,6 +77,12 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
         var openAiApi = buildOpenAiApi(provider, apiKey);
         return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED,
             OpenAiEmbeddingOptions.builder().model(modelId).build());
+    }
+
+    @Override
+    public LanguageModelProviderOptions languageModelProviderOptions() {
+        return new LanguageModelProviderOptions(false, false, null,
+            OpenAiStructuredOutputOptions::buildBasic);
     }
 
     private OpenAiApi buildOpenAiApi(AiProvider provider, String apiKey) {

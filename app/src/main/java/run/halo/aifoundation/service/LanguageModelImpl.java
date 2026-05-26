@@ -6,7 +6,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -44,7 +43,10 @@ import run.halo.aifoundation.ModelMessage;
 import run.halo.aifoundation.ModelMessagePart;
 import run.halo.aifoundation.ModelMessageRole;
 import run.halo.aifoundation.PartType;
+import run.halo.aifoundation.OutputSpec;
+import run.halo.aifoundation.OutputType;
 import run.halo.aifoundation.ReasoningPart;
+import run.halo.aifoundation.StructuredOutputValidationException;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.ToolCall;
 import run.halo.aifoundation.ToolChoice;
@@ -62,6 +64,8 @@ public class LanguageModelImpl implements LanguageModel {
     private static final int MAX_STEPS_LIMIT = 10;
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
+    private static final TypeReference<Object> OBJECT_TYPE = new TypeReference<>() {
     };
 
     private final ChatModel chatModel;
@@ -97,6 +101,9 @@ public class LanguageModelImpl implements LanguageModel {
     public Flux<TextStreamPart> streamText(GenerateTextRequest request) {
         if (hasTools(request)) {
             return streamTextWithTools(request);
+        }
+        if (hasStructuredOutput(request)) {
+            return streamStructuredText(request);
         }
         return Flux.defer(() -> {
             Prompt prompt;
@@ -160,6 +167,66 @@ public class LanguageModelImpl implements LanguageModel {
         });
     }
 
+    private Flux<TextStreamPart> streamStructuredText(GenerateTextRequest request) {
+        return Flux.defer(() -> {
+            List<org.springframework.ai.chat.messages.Message> messages;
+            try {
+                validateRequest(request);
+                messages = buildMessages(request);
+            } catch (RuntimeException e) {
+                return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+            }
+            var accumulator = new StreamStepAccumulator(0);
+            var totalUsage = new UsageAccumulator();
+            var prompt = new Prompt(messages, buildChatOptions(request));
+            var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
+            var stream = chatModel.stream(prompt)
+                .concatMap(response -> mapToolStreamResponse(request, response, accumulator))
+                .onErrorResume(e -> {
+                    log.error("[{}] Structured streaming error", providerType, e);
+                    accumulator.failed = true;
+                    return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+                });
+            return Flux.concat(Flux.just(TextStreamPart.start(messageId),
+                    TextStreamPart.startStep(0)),
+                stream,
+                Flux.defer(() -> completeStructuredSingleStep(request, accumulator, totalUsage)));
+        });
+    }
+
+    private Flux<TextStreamPart> completeStructuredSingleStep(GenerateTextRequest request,
+        StreamStepAccumulator accumulator, UsageAccumulator totalUsage) {
+        if (accumulator.failed) {
+            return Flux.empty();
+        }
+        var parts = new ArrayList<TextStreamPart>();
+        if (accumulator.reasoningStarted) {
+            parts.add(TextStreamPart.reasoningEnd(accumulator.reasoningId));
+        }
+        if (accumulator.textStarted) {
+            parts.add(TextStreamPart.textEnd(accumulator.textId));
+        }
+        if (accumulator.lastResponse != null) {
+            var rawDiagnostic = sanitizedRawDiagnostic(accumulator.lastResponse);
+            if (!rawDiagnostic.isEmpty()) {
+                parts.add(TextStreamPart.raw(rawDiagnostic));
+            }
+        }
+        totalUsage.add(accumulator.usage());
+        try {
+            validateFinalStructuredOutput(request, accumulator);
+        } catch (StructuredOutputValidationException e) {
+            parts.add(TextStreamPart.error(e.getMessage()));
+            return Flux.fromIterable(parts);
+        }
+        parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
+            accumulator.rawFinishReason, accumulator.usage(), accumulator.warnings(),
+            accumulator.request(), accumulator.response(), accumulator.providerMetadata()));
+        parts.add(TextStreamPart.finish(accumulator.finishReason(), accumulator.rawFinishReason,
+            totalUsage.usage()));
+        return Flux.fromIterable(parts);
+    }
+
     private Flux<TextStreamPart> streamToolStep(GenerateTextRequest request,
         List<org.springframework.ai.chat.messages.Message> messages, int stepIndex,
         UsageAccumulator totalUsage) {
@@ -167,7 +234,7 @@ public class LanguageModelImpl implements LanguageModel {
             var accumulator = new StreamStepAccumulator(stepIndex);
             var prompt = new Prompt(messages, buildChatOptions(request));
             var stream = chatModel.stream(prompt)
-                .concatMap(response -> mapToolStreamResponse(response, accumulator))
+                .concatMap(response -> mapToolStreamResponse(request, response, accumulator))
                 .onErrorResume(e -> {
                     log.error("[{}] Tool streaming error", providerType, e);
                     accumulator.failed = true;
@@ -179,7 +246,7 @@ public class LanguageModelImpl implements LanguageModel {
         });
     }
 
-    private Flux<TextStreamPart> mapToolStreamResponse(ChatResponse response,
+    private Flux<TextStreamPart> mapToolStreamResponse(GenerateTextRequest request, ChatResponse response,
         StreamStepAccumulator accumulator) {
         var parts = new ArrayList<TextStreamPart>();
         accumulator.accept(response);
@@ -239,18 +306,32 @@ public class LanguageModelImpl implements LanguageModel {
         var warnings = new ArrayList<>(accumulator.warnings());
         warnings.addAll(toolResults.warnings());
         totalUsage.add(accumulator.usage());
-        parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
-            accumulator.rawFinishReason, accumulator.usage(), warnings, accumulator.request(),
-            accumulator.response(), accumulator.providerMetadata()));
-
         if (toolCalls.isEmpty()
             || !toolResults.errors().isEmpty()
             || toolResults.results().isEmpty()
             || !canContinue) {
+            if (hasStructuredOutput(request) && toolCalls.isEmpty() && toolResults.errors().isEmpty()) {
+                try {
+                    validateFinalStructuredOutput(request, accumulator);
+                } catch (StructuredOutputValidationException e) {
+                    parts.add(TextStreamPart.error(e.getMessage()));
+                    return Flux.fromIterable(parts);
+                }
+            } else if (hasStructuredOutput(request) && (!toolCalls.isEmpty() || !canContinue)) {
+                parts.add(TextStreamPart.error("Structured output validation failed: final structured output was not produced"));
+                return Flux.fromIterable(parts);
+            }
+            parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
+                accumulator.rawFinishReason, accumulator.usage(), warnings, accumulator.request(),
+                accumulator.response(), accumulator.providerMetadata()));
             parts.add(TextStreamPart.finish(accumulator.finishReason(), accumulator.rawFinishReason,
                 totalUsage.usage()));
             return Flux.fromIterable(parts);
         }
+
+        parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
+            accumulator.rawFinishReason, accumulator.usage(), warnings, accumulator.request(),
+            accumulator.response(), accumulator.providerMetadata()));
 
         messages.add(accumulator.output());
         messages.add(toolResponseMessage(toolResults.results()));
@@ -339,8 +420,20 @@ public class LanguageModelImpl implements LanguageModel {
             .filter(this::hasText)
             .collect(Collectors.joining());
         var usage = steps.isEmpty() ? null : steps.get(steps.size() - 1).getUsage();
+        StructuredOutput structuredOutput = null;
+        if (hasStructuredOutput(request)) {
+            var outputSourceText = steps.isEmpty() ? text : steps.get(steps.size() - 1).getText();
+            structuredOutput = parseStructuredOutput(request.getOutput(), outputSourceText);
+            if (!steps.isEmpty()) {
+                var finalStep = steps.get(steps.size() - 1);
+                finalStep.setOutput(structuredOutput.output());
+                finalStep.setOutputText(structuredOutput.outputText());
+            }
+        }
         return GenerateTextResult.builder()
             .text(text)
+            .output(structuredOutput != null ? structuredOutput.output() : null)
+            .outputText(structuredOutput != null ? structuredOutput.outputText() : null)
             .reasoningText(hasText(reasoningText) ? reasoningText : null)
             .content(allContent)
             .reasoning(reasoning)
@@ -366,6 +459,10 @@ public class LanguageModelImpl implements LanguageModel {
         var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
         if (hasText(request.getSystem())) {
             messages.add(new SystemMessage(request.getSystem().trim()));
+        }
+        var outputInstruction = structuredOutputInstruction(request.getOutput());
+        if (hasText(outputInstruction)) {
+            messages.add(new SystemMessage(outputInstruction));
         }
         if (hasText(request.getPrompt())) {
             messages.add(new UserMessage(request.getPrompt().trim()));
@@ -397,6 +494,7 @@ public class LanguageModelImpl implements LanguageModel {
                 validateMessage(message);
             }
         }
+        validateOutput(request.getOutput());
         validateTools(request);
     }
 
@@ -478,12 +576,48 @@ public class LanguageModelImpl implements LanguageModel {
             if (tool.getInputSchema() != null && !(tool.getInputSchema() instanceof Map)) {
                 throw new IllegalArgumentException("tool inputSchema must be a JSON object");
             }
+            validateSchemaObject(tool.getInputSchema(), "tool inputSchema");
+            validateSchemaObject(tool.getOutputSchema(), "tool outputSchema");
         }
         var choice = request.getToolChoice();
         if (choice != null && choice.getType() == ToolChoice.Type.TOOL
             && !names.contains(choice.getToolName())) {
             throw new IllegalArgumentException("toolChoice references unknown tool: "
                 + choice.getToolName());
+        }
+    }
+
+    private void validateOutput(OutputSpec output) {
+        if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
+            return;
+        }
+        switch (output.getType()) {
+            case OBJECT -> validateRequiredSchemaObject(output.getSchema(), "output schema");
+            case ARRAY -> validateRequiredSchemaObject(output.getElementSchema(), "output elementSchema");
+            case CHOICE -> {
+                if (output.getChoices() == null || output.getChoices().isEmpty()) {
+                    throw new IllegalArgumentException("output choices must not be empty");
+                }
+                if (output.getChoices().stream().anyMatch(choice -> !hasText(choice))) {
+                    throw new IllegalArgumentException("output choices must not contain blank values");
+                }
+            }
+            case JSON -> {
+            }
+            default -> {
+            }
+        }
+    }
+
+    private void validateSchemaObject(Map<String, Object> schema, String name) {
+        if (schema == null || schema.isEmpty()) {
+            return;
+        }
+    }
+
+    private void validateRequiredSchemaObject(Map<String, Object> schema, String name) {
+        if (schema == null || schema.isEmpty()) {
+            throw new IllegalArgumentException(name + " must be a JSON object");
         }
     }
 
@@ -529,6 +663,10 @@ public class LanguageModelImpl implements LanguageModel {
                 builder.toolNames(toolNames);
             }
             return builder.build();
+        }
+        if (hasStructuredOutput(request)
+            && providerOptions.structuredOutputChatOptionsFactory() != null) {
+            return providerOptions.structuredOutputChatOptionsFactory().build(request);
         }
         return ChatOptions.builder()
             .temperature(request.getTemperature())
@@ -814,7 +952,15 @@ public class LanguageModelImpl implements LanguageModel {
                 break;
             }
             try {
+                if (tool.getInputSchema() != null && !tool.getInputSchema().isEmpty()) {
+                    validateJsonValue(toolCall.getInput(), tool.getInputSchema(),
+                        "$." + toolCall.getToolName() + ".input");
+                }
                 var value = tool.getExecutor().execute(toolCall.getInput()).block();
+                if (tool.getOutputSchema() != null && !tool.getOutputSchema().isEmpty()) {
+                    validateJsonValue(value, tool.getOutputSchema(),
+                        "$." + toolCall.getToolName() + ".output");
+                }
                 results.add(ToolResult.builder()
                     .toolCallId(toolCall.getToolCallId())
                     .toolName(toolCall.getToolName())
@@ -852,6 +998,193 @@ public class LanguageModelImpl implements LanguageModel {
         } catch (JacksonException e) {
             return Map.of("_raw", arguments);
         }
+    }
+
+    private String structuredOutputInstruction(OutputSpec output) {
+        if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
+            return null;
+        }
+        var base = "Return only the requested structured output. Do not wrap it in Markdown or "
+            + "explanatory prose.";
+        return switch (output.getType()) {
+            case OBJECT -> base + " Return a JSON object that matches this JSON Schema: "
+                + writeJson(output.getSchema());
+            case ARRAY -> base + " Return a JSON array. Each element must match this JSON Schema: "
+                + writeJson(output.getElementSchema());
+            case CHOICE -> base + " Return exactly one of these string choices: "
+                + String.join(", ", output.getChoices());
+            case JSON -> base + " Return valid JSON.";
+            case TEXT -> null;
+        };
+    }
+
+    private StructuredOutput parseStructuredOutput(OutputSpec output, String text) {
+        if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
+            return new StructuredOutput(text, text);
+        }
+        var outputText = structuredOutputText(output, text);
+        try {
+            return switch (output.getType()) {
+                case JSON -> new StructuredOutput(JSON_MAPPER.readValue(outputText, OBJECT_TYPE),
+                    outputText);
+                case OBJECT -> {
+                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
+                    if (!(value instanceof Map<?, ?> map)) {
+                        throw new StructuredOutputValidationException(
+                            "Structured output validation failed: expected JSON object");
+                    }
+                    var sanitized = sanitizeValue(map);
+                    validateJsonValue(sanitized, output.getSchema(), "$");
+                    yield new StructuredOutput(sanitized, outputText);
+                }
+                case ARRAY -> {
+                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
+                    if (!(value instanceof List<?> list)) {
+                        throw new StructuredOutputValidationException(
+                            "Structured output validation failed: expected JSON array");
+                    }
+                    for (var i = 0; i < list.size(); i++) {
+                        validateJsonValue(list.get(i), output.getElementSchema(), "$[" + i + "]");
+                    }
+                    yield new StructuredOutput(sanitizeValue(list), outputText);
+                }
+                case CHOICE -> {
+                    var choice = normalizeChoice(outputText);
+                    if (output.getChoices() == null || !output.getChoices().contains(choice)) {
+                        throw new StructuredOutputValidationException(
+                            "Structured output validation failed: expected one of "
+                                + output.getChoices());
+                    }
+                    yield new StructuredOutput(choice, outputText);
+                }
+                case TEXT -> new StructuredOutput(text, text);
+            };
+        } catch (StructuredOutputValidationException e) {
+            throw e;
+        } catch (JacksonException e) {
+            throw new StructuredOutputValidationException(
+                "Structured output validation failed: output is not valid JSON", e);
+        }
+    }
+
+    private String structuredOutputText(OutputSpec output, String text) {
+        var trimmed = text != null ? text.trim() : "";
+        if (trimmed.startsWith("```")) {
+            trimmed = trimmed.replaceFirst("^```[a-zA-Z0-9_-]*\\s*", "")
+                .replaceFirst("\\s*```$", "")
+                .trim();
+        }
+        if (output.getType() == OutputType.OBJECT
+            || output.getType() == OutputType.JSON && trimmed.startsWith("{")) {
+            var start = trimmed.indexOf('{');
+            var end = trimmed.lastIndexOf('}');
+            if (start >= 0 && end >= start) {
+                return trimmed.substring(start, end + 1);
+            }
+        }
+        if (output.getType() == OutputType.ARRAY
+            || output.getType() == OutputType.JSON && trimmed.startsWith("[")) {
+            var start = trimmed.indexOf('[');
+            var end = trimmed.lastIndexOf(']');
+            if (start >= 0 && end >= start) {
+                return trimmed.substring(start, end + 1);
+            }
+        }
+        return trimmed;
+    }
+
+    private String normalizeChoice(String outputText) {
+        try {
+            var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
+            if (value instanceof String text) {
+                return text.trim();
+            }
+        } catch (JacksonException ignored) {
+        }
+        return outputText.trim();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateJsonValue(Object value, Map<String, Object> schema, String path) {
+        if (schema == null || schema.isEmpty()) {
+            return;
+        }
+        var type = schema.get("type");
+        if (type instanceof String typeName) {
+            validateJsonType(value, typeName, path);
+        }
+        var enumValues = schema.get("enum");
+        if (enumValues instanceof Collection<?> values && !values.contains(value)) {
+            throw new StructuredOutputValidationException(
+                "Structured output validation failed: " + path + " must be one of " + values);
+        }
+        if ("object".equals(type) || schema.containsKey("properties")) {
+            if (!(value instanceof Map<?, ?> map)) {
+                throw new StructuredOutputValidationException(
+                    "Structured output validation failed: " + path + " must be an object");
+            }
+            var required = schema.get("required");
+            if (required instanceof Collection<?> requiredFields) {
+                for (var field : requiredFields) {
+                    if (!map.containsKey(field)) {
+                        throw new StructuredOutputValidationException(
+                            "Structured output validation failed: missing required field "
+                                + path + "." + field);
+                    }
+                }
+            }
+            var properties = schema.get("properties");
+            if (properties instanceof Map<?, ?> propertyMap) {
+                for (var entry : propertyMap.entrySet()) {
+                    var key = entry.getKey();
+                    if (key == null || !map.containsKey(key)) {
+                        continue;
+                    }
+                    if (entry.getValue() instanceof Map<?, ?> propertySchema) {
+                        validateJsonValue(map.get(key), (Map<String, Object>) sanitizeValue(propertySchema),
+                            path + "." + key);
+                    }
+                }
+            }
+        }
+        if ("array".equals(type) || schema.containsKey("items")) {
+            if (!(value instanceof List<?> list)) {
+                throw new StructuredOutputValidationException(
+                    "Structured output validation failed: " + path + " must be an array");
+            }
+            var items = schema.get("items");
+            if (items instanceof Map<?, ?> itemSchema) {
+                for (var i = 0; i < list.size(); i++) {
+                    validateJsonValue(list.get(i), (Map<String, Object>) sanitizeValue(itemSchema),
+                        path + "[" + i + "]");
+                }
+            }
+        }
+    }
+
+    private void validateJsonType(Object value, String type, String path) {
+        var valid = switch (type) {
+            case "object" -> value instanceof Map<?, ?>;
+            case "array" -> value instanceof List<?>;
+            case "string" -> value instanceof String;
+            case "number" -> value instanceof Number;
+            case "integer" -> value instanceof Integer || value instanceof Long;
+            case "boolean" -> value instanceof Boolean;
+            case "null" -> value == null;
+            default -> true;
+        };
+        if (!valid) {
+            throw new StructuredOutputValidationException(
+                "Structured output validation failed: " + path + " must be " + type);
+        }
+    }
+
+    private void validateFinalStructuredOutput(GenerateTextRequest request,
+        StreamStepAccumulator accumulator) {
+        if (!hasStructuredOutput(request)) {
+            return;
+        }
+        parseStructuredOutput(request.getOutput(), accumulator.text.toString());
     }
 
     private Flux<TextStreamPart> resultToStreamParts(GenerateTextResult result) {
@@ -920,6 +1253,13 @@ public class LanguageModelImpl implements LanguageModel {
 
     private boolean hasTools(GenerateTextRequest request) {
         return request != null && request.getTools() != null && !request.getTools().isEmpty();
+    }
+
+    private boolean hasStructuredOutput(GenerateTextRequest request) {
+        return request != null
+            && request.getOutput() != null
+            && request.getOutput().getType() != null
+            && request.getOutput().getType() != OutputType.TEXT;
     }
 
     private String writeJson(Object value) {
@@ -1406,6 +1746,12 @@ public class LanguageModelImpl implements LanguageModel {
         Map<String, Object> providerMetadata() {
             return lastResponse != null ? mapMetadata(lastResponse) : Map.of("providerType", providerType);
         }
+    }
+
+    private record StructuredOutput(
+        Object output,
+        String outputText
+    ) {
     }
 
     private record StepSnapshot(

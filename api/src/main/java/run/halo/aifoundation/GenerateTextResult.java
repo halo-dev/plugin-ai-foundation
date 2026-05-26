@@ -13,6 +13,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GenerateTextResult {
     private String text;
+    private Object output;
+    private String outputText;
     private String reasoningText;
     private List<GenerationContentPart> content;
     private List<ReasoningPart> reasoning;

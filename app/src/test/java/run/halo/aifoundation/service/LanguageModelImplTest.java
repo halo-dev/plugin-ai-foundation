@@ -28,6 +28,7 @@ import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.ModelMessage;
 import run.halo.aifoundation.ModelMessagePart;
 import run.halo.aifoundation.ModelMessageRole;
+import run.halo.aifoundation.OutputSpec;
 import run.halo.aifoundation.PartType;
 import run.halo.aifoundation.ReasoningPart;
 import run.halo.aifoundation.TextStreamPart;
@@ -689,6 +690,241 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_mapsStructuredObjectOutput() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("{\"name\":\"Halo\",\"labels\":[\"cms\"]}", "stop", 2, 4)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project info")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "name", Map.of("type", "string"),
+                    "labels", Map.of("type", "array", "items", Map.of("type", "string"))
+                ),
+                "required", List.of("name")
+            )))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getOutput()).isInstanceOf(Map.class);
+                assertThat((Map<String, Object>) result.getOutput())
+                    .containsEntry("name", "Halo");
+                assertThat(result.getOutputText()).isEqualTo("{\"name\":\"Halo\",\"labels\":[\"cms\"]}");
+                assertThat(result.getSteps().get(0).getOutput()).isEqualTo(result.getOutput());
+                assertThat(result.getContent()).extracting("type").containsExactly(PartType.TEXT);
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_mapsStructuredArrayAndJsonOutput() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("[{\"name\":\"Halo\"}]", "stop", 2, 4),
+            chatResponse("[\"alpha\",\"beta\"]", "stop", 2, 4)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Generate projects")
+                .output(OutputSpec.array(Map.of(
+                    "type", "object",
+                    "properties", Map.of("name", Map.of("type", "string")),
+                    "required", List.of("name")
+                )))
+                .build()))
+            .assertNext(result -> {
+                assertThat(result.getOutput()).isInstanceOf(List.class);
+                assertThat((List<?>) result.getOutput()).hasSize(1);
+            })
+            .verifyComplete();
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Generate JSON")
+                .output(OutputSpec.json())
+                .build()))
+            .assertNext(result -> assertThat(result.getOutput()).isEqualTo(List.of("alpha", "beta")))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_supportsStructuredOutputFromRecordClass() {
+        var schema = OutputSpec.object(ProjectInfo.class).getSchema();
+
+        assertThat(schema).containsEntry("type", "object");
+        assertThat((Map<String, Object>) schema.get("properties"))
+            .containsKeys("name", "labels");
+    }
+
+    @Test
+    void generateText_validatesChoiceOutput() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("sunny", "stop", 2, 4));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Classify weather")
+            .output(OutputSpec.choice(List.of("sunny", "rainy")))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getOutput()).isEqualTo("sunny"))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_failsWhenStructuredOutputIsInvalid() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("{\"age\":\"old\"}", "stop", 2, 4));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate age")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("age", Map.of("type", "integer")),
+                "required", List.of("age")
+            )))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("Structured output validation failed: $.age must be integer")
+            .verify();
+    }
+
+    @Test
+    void streamText_streamsStructuredOutputAsTextAndValidatesAtFinish() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("{\"name\":\"Halo\"}", null, null, null),
+            chatResponse("", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+
+        StepVerifier.create(model.streamText(request))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
+            })
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_parsesStructuredOutputFromFinalToolStepOnly() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
+            chatResponse("{\"answer\":\"It is 22C\"}", "stop", 4, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(Map.of("type", "object"))
+                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .maxSteps(2)
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("answer", Map.of("type", "string")),
+                "required", List.of("answer")
+            )))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getOutput()).isEqualTo(Map.of("answer", "It is 22C"));
+                assertThat(result.getSteps().get(0).getOutput()).isNull();
+                assertThat(result.getSteps().get(1).getOutput()).isEqualTo(result.getOutput());
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_validatesToolInputAndOutputSchemas() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":12}", 2, 3)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("location", Map.of("type", "string")),
+                    "required", List.of("location")
+                ))
+                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .maxSteps(2)
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getSteps().get(0).getToolErrors())
+                .singleElement()
+                .satisfies(error -> assertThat(error.getErrorText()).contains("location")))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_recordsToolErrorWhenToolOutputSchemaFails() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("location", Map.of("type", "string")),
+                    "required", List.of("location")
+                ))
+                .outputSchema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("temperature", Map.of("type", "integer")),
+                    "required", List.of("temperature")
+                ))
+                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", "hot")))
+                .build()))
+            .maxSteps(2)
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getSteps().get(0).getToolErrors())
+                .singleElement()
+                .satisfies(error -> assertThat(error.getErrorText()).contains("temperature")))
+            .verifyComplete();
+    }
+
+    @Test
     void streamText_recordsToolErrorForUnknownTool() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
@@ -906,6 +1142,9 @@ class LanguageModelImplTest {
                 builder.toolNames(toolNames);
             }
             return builder.build();
-        });
+        }, null);
+    }
+
+    private record ProjectInfo(String name, List<String> labels) {
     }
 }

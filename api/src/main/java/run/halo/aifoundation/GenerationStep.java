@@ -28,6 +28,14 @@ public class GenerationStep {
      */
     private String text;
     /**
+     * Parsed structured output for this step when requested and available.
+     */
+    private Object output;
+    /**
+     * Raw text used to parse structured output for this step.
+     */
+    private String outputText;
+    /**
      * Reasoning text produced by this step when available.
      */
     private String reasoningText;

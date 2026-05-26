@@ -1,5 +1,5 @@
 import { AiModelSpecModelTypeEnum } from '@/api/generated'
-import type { AiModel } from '@/api/generated'
+import type { AiModel, OutputSpec } from '@/api/generated'
 
 export type ChatRole = 'user' | 'assistant'
 
@@ -29,7 +29,10 @@ export interface ChatParameters {
   maxOutputTokens?: number
   maxSteps?: number
   providerOptions?: Record<string, Record<string, unknown>>
+  output?: OutputSpec
 }
+
+export type OutputMode = 'TEXT' | 'OBJECT' | 'ARRAY' | 'CHOICE' | 'JSON'
 
 export interface SseParseResult<T> {
   buffer: string
@@ -54,6 +57,7 @@ export interface GenerateTextRequest {
   maxOutputTokens?: number
   maxSteps?: number
   providerOptions?: Record<string, Record<string, unknown>>
+  output?: OutputSpec
 }
 
 export interface TextStreamPart {
@@ -120,6 +124,63 @@ export function parseProviderOptionsJson(input: string): {
   }
 }
 
+export function parseJsonSchema(input: string, label = 'JSON Schema'): {
+  value?: Record<string, unknown>
+  error?: string
+} {
+  const content = input.trim()
+  if (!content) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(content)
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      return { error: `${label} 必须是 JSON 对象` }
+    }
+    return { value: parsed as Record<string, unknown> }
+  } catch {
+    return { error: `${label} 不是有效的 JSON` }
+  }
+}
+
+export function buildOutputSpec(options: {
+  mode: OutputMode
+  schemaText?: string
+  choicesText?: string
+}): { value?: OutputSpec; error?: string } {
+  if (options.mode === 'TEXT') {
+    return {}
+  }
+  if (options.mode === 'JSON') {
+    return { value: { type: 'JSON' } }
+  }
+  if (options.mode === 'CHOICE') {
+    const choices = (options.choicesText || '')
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean)
+    if (!choices.length) {
+      return { error: '请至少填写一个枚举选项' }
+    }
+    return { value: { type: 'CHOICE', choices } }
+  }
+
+  const parsedSchema = parseJsonSchema(
+    options.schemaText || '',
+    options.mode === 'ARRAY' ? '元素 JSON Schema' : 'JSON Schema',
+  )
+  if (parsedSchema.error) {
+    return { error: parsedSchema.error }
+  }
+  if (!parsedSchema.value) {
+    return { error: options.mode === 'ARRAY' ? '请填写元素 JSON Schema' : '请填写 JSON Schema' }
+  }
+  return options.mode === 'ARRAY'
+    ? { value: { type: 'ARRAY', elementSchema: parsedSchema.value } as OutputSpec }
+    : { value: { type: 'OBJECT', schema: parsedSchema.value } as OutputSpec }
+}
+
 export function buildTestChatRequest(
   messages: WorkbenchMessage[],
   parameters: ChatParameters,
@@ -153,6 +214,7 @@ export function buildTestChatRequest(
     maxOutputTokens: parameters.maxOutputTokens,
     maxSteps: parameters.maxSteps,
     providerOptions: parameters.providerOptions,
+    output: parameters.output,
   }
 }
 
