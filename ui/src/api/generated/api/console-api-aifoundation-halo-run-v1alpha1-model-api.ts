@@ -24,9 +24,9 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { AiModel } from '../models';
 // @ts-ignore
-import type { ChatChunk } from '../models';
+import type { GenerateTextRequest } from '../models';
 // @ts-ignore
-import type { TestChatRequest } from '../models';
+import type { TextStreamPart } from '../models';
 /**
  * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - axios parameter creator
  * @export
@@ -165,13 +165,13 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             };
         },
         /**
-         * Test chat completion with streaming response.
+         * Test text generation with Halo text stream response.
          * @param {string} name Model name (AiModel.metadata.name)
-         * @param {TestChatRequest} [testChatRequest] 
+         * @param {GenerateTextRequest} [generateTextRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelChatStream: async (name: string, testChatRequest?: TestChatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        testModelChatStream: async (name: string, generateTextRequest?: GenerateTextRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
             assertParamExists('testModelChatStream', 'name', name)
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream`
@@ -202,7 +202,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(testChatRequest, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(generateTextRequest, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -304,14 +304,14 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Test chat completion with streaming response.
+         * Test text generation with Halo text stream response.
          * @param {string} name Model name (AiModel.metadata.name)
-         * @param {TestChatRequest} [testChatRequest] 
+         * @param {GenerateTextRequest} [generateTextRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async testModelChatStream(name: string, testChatRequest?: TestChatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ChatChunk>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChatStream(name, testChatRequest, options);
+        async testModelChatStream(name: string, generateTextRequest?: GenerateTextRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TextStreamPart>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChatStream(name, generateTextRequest, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelChatStream']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -367,13 +367,13 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(axios, basePath));
         },
         /**
-         * Test chat completion with streaming response.
+         * Test text generation with Halo text stream response.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<ChatChunk> {
-            return localVarFp.testModelChatStream(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(axios, basePath));
+        testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<TextStreamPart> {
+            return localVarFp.testModelChatStream(requestParameters.name, requestParameters.generateTextRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * Update an AI model.
@@ -451,10 +451,10 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStrea
 
     /**
      * 
-     * @type {TestChatRequest}
+     * @type {GenerateTextRequest}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
      */
-    readonly testChatRequest?: TestChatRequest
+    readonly generateTextRequest?: GenerateTextRequest
 }
 
 /**
@@ -519,14 +519,14 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
     }
 
     /**
-     * Test chat completion with streaming response.
+     * Test text generation with Halo text stream response.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
     public testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChatStream(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChatStream(requestParameters.name, requestParameters.generateTextRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

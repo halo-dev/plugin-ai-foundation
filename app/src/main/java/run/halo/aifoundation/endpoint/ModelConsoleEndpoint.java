@@ -7,13 +7,12 @@ import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import java.util.List;
-import java.util.Map;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -22,10 +21,9 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
-import run.halo.aifoundation.ChatChunk;
-import run.halo.aifoundation.ChatRequest;
-import run.halo.aifoundation.ChunkType;
-import run.halo.aifoundation.Message;
+import run.halo.aifoundation.GenerateTextRequest;
+import run.halo.aifoundation.ModelMessagePart;
+import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -47,6 +45,8 @@ import run.halo.app.extension.router.selector.SelectorUtil;
 public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private static final int MAX_NAME_GENERATION_ATTEMPTS = 10;
+    private static final String HALO_AI_STREAM_PROTOCOL_HEADER = "X-Halo-AI-Stream-Protocol";
+    private static final String HALO_AI_TEXT_STREAM_PROTOCOL = "text-v1";
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
@@ -111,7 +111,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             )
             .POST("models/{name}/test-chat/stream", this::testChatStream,
                 builder -> builder.operationId("TestModelChatStream")
-                    .description("Test chat completion with streaming response.")
+                    .description("Test text generation with Halo text stream response.")
                     .tag(tag)
                     .parameter(parameterBuilder()
                         .name("name")
@@ -121,9 +121,12 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .required(true))
                     .requestBody(requestBodyBuilder()
                         .required(false)
-                        .implementation(TestChatRequest.class))
+                        .implementation(GenerateTextRequest.class))
                     .response(responseBuilder()
-                        .implementation(ChatChunk.class))
+                        .description("Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. "
+                            + "Each data event contains a TextStreamPart JSON object and the stream "
+                            + "ends with data: [DONE].")
+                        .implementation(TextStreamPart.class))
             )
             .build();
     }
@@ -191,41 +194,53 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var modelName = request.pathVariable("name");
         log.info("testChatStream: modelName={}", modelName);
 
-        return request.bodyToMono(TestChatRequest.class)
-            .defaultIfEmpty(new TestChatRequest())
+        return request.bodyToMono(GenerateTextRequest.class)
+            .defaultIfEmpty(new GenerateTextRequest())
             .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
-                var chatRequest = ChatRequest.builder()
-                    .messages(body.getMessages())
-                    .temperature(body.getTemperature())
-                    .maxTokens(body.getMaxTokens())
-                    .topP(body.getTopP())
-                    .providerOptions(body.getProviderOptions())
-                    .build();
-                Flux<ChatChunk> flux = aiModelService.languageModel(modelName)
-                    .flatMapMany(languageModel -> languageModel.streamChat(chatRequest))
+                Flux<ServerSentEvent<Object>> flux = aiModelService.languageModel(modelName)
+                    .flatMapMany(languageModel -> languageModel.streamText(body))
                     .onErrorResume(e -> {
                         log.error("Stream chat failed for model: {}", modelName, e);
-                        return Flux.just(ChatChunk.builder()
-                            .type(ChunkType.ERROR)
-                            .content("Chat test failed: " + e.getMessage())
-                            .build());
-                    });
+                        return Flux.just(TextStreamPart.error("Chat test failed: " + e.getMessage()));
+                    })
+                    .map(part -> ServerSentEvent.builder((Object) part).build())
+                    .concatWith(Mono.just(ServerSentEvent.builder((Object) "[DONE]").build()));
                 return ServerResponse.ok()
                     .contentType(MediaType.TEXT_EVENT_STREAM)
-                    .body(flux, ChatChunk.class);
+                    .header(HALO_AI_STREAM_PROTOCOL_HEADER, HALO_AI_TEXT_STREAM_PROTOCOL)
+                    .body(flux, ServerSentEvent.class);
             })));
     }
 
-    private Mono<Void> validateTestChatRequest(TestChatRequest request) {
-        if (request.getMessages() == null || request.getMessages().isEmpty()) {
+    private Mono<Void> validateTestChatRequest(GenerateTextRequest request) {
+        var hasPrompt = request.getPrompt() != null && !request.getPrompt().isBlank();
+        var hasMessages = request.getMessages() != null && !request.getMessages().isEmpty();
+        if (hasPrompt == hasMessages) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "messages must not be empty"));
+                "exactly one of prompt or messages must be provided"));
         }
-        for (var message : request.getMessages()) {
-            if (message == null || message.getRole() == null || message.getRole().isBlank()
-                || message.getContent() == null || message.getContent().isBlank()) {
-                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "messages must include non-empty role and content"));
+        if (request.getPrompt() != null && request.getPrompt().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "prompt must not be blank"));
+        }
+        if (request.getSystem() != null && request.getSystem().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "system must not be blank"));
+        }
+        if (hasMessages) {
+            for (var message : request.getMessages()) {
+                if (message == null || message.getRole() == null
+                    || message.getContent() == null || message.getContent().isEmpty()) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "messages must include role and content"));
+                }
+                for (var part : message.getContent()) {
+                    if (part == null || !ModelMessagePart.TYPE_TEXT.equals(part.getType())
+                        || part.getText() == null || part.getText().isBlank()) {
+                        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "messages must include non-empty text content parts"));
+                    }
+                }
             }
         }
         return Mono.empty();
@@ -349,12 +364,4 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .switchIfEmpty(Mono.empty());
     }
 
-    @Data
-    static class TestChatRequest {
-        private List<Message> messages;
-        private Double temperature;
-        private Integer maxTokens;
-        private Double topP;
-        private Map<String, Object> providerOptions;
-    }
 }

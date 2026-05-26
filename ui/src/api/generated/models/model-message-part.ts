@@ -17,20 +17,26 @@
 /**
  * 
  * @export
- * @interface Message
+ * @interface ModelMessagePart
  */
-export interface Message {
+export interface ModelMessagePart {
+    /**
+     * 
+     * @type {{ [key: string]: object; }}
+     * @memberof ModelMessagePart
+     */
+    'providerOptions'?: { [key: string]: object; };
     /**
      * 
      * @type {string}
-     * @memberof Message
+     * @memberof ModelMessagePart
      */
-    'content'?: string;
+    'text'?: string;
     /**
      * 
      * @type {string}
-     * @memberof Message
+     * @memberof ModelMessagePart
      */
-    'role'?: string;
+    'type'?: string;
 }
 

@@ -5,7 +5,9 @@ import reactor.core.publisher.Mono;
 
 public interface LanguageModel {
 
-    Mono<String> chat(String prompt);
+    Mono<GenerateTextResult> generateText(String prompt);
 
-    Flux<ChatChunk> streamChat(ChatRequest request);
+    Mono<GenerateTextResult> generateText(GenerateTextRequest request);
+
+    Flux<TextStreamPart> streamText(GenerateTextRequest request);
 }

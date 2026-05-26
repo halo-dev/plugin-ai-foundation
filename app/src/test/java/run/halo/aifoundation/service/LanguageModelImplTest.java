@@ -9,36 +9,59 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
-import run.halo.aifoundation.ChatRequest;
-import run.halo.aifoundation.Message;
+import run.halo.aifoundation.FinishReason;
+import run.halo.aifoundation.GenerateTextRequest;
+import run.halo.aifoundation.ModelMessage;
+import run.halo.aifoundation.ModelMessagePart;
+import run.halo.aifoundation.ModelMessageRole;
+import run.halo.aifoundation.TextStreamPart;
 
 class LanguageModelImplTest {
 
     @Test
-    void streamChat_mapsMessagesAndOptionsToSpringPrompt() {
+    void generateText_mapsMessagesAndOptionsToSpringPrompt() {
         var chatModel = mock(ChatModel.class);
-        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.empty());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 3, 5));
         var model = new LanguageModelImpl(chatModel, "openai");
 
-        var request = ChatRequest.builder()
+        var request = GenerateTextRequest.builder()
+            .system("You are concise.")
             .messages(List.of(
-                Message.system("You are concise."),
-                Message.user("Hello"),
-                Message.assistant("Hi")
+                ModelMessage.user("Hello"),
+                ModelMessage.assistant("Hi")
             ))
             .temperature(0.2)
-            .maxTokens(128)
+            .maxOutputTokens(128)
             .topP(0.9)
+            .topK(40)
+            .presencePenalty(0.1)
+            .frequencyPenalty(0.3)
+            .stopSequences(List.of("END"))
             .build();
 
-        StepVerifier.create(model.streamChat(request)).verifyComplete();
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("Done");
+                assertThat(result.getFinishReason()).isEqualTo(FinishReason.STOP);
+                assertThat(result.getRawFinishReason()).isEqualTo("stop");
+                assertThat(result.getUsage().getInputTokens()).isEqualTo(3);
+                assertThat(result.getUsage().getOutputTokens()).isEqualTo(5);
+                assertThat(result.getUsage().getTotalTokens()).isEqualTo(8);
+            })
+            .verifyComplete();
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
-        verify(chatModel).stream(captor.capture());
+        verify(chatModel).call(captor.capture());
 
         var prompt = captor.getValue();
         assertThat(prompt.getInstructions())
@@ -47,5 +70,100 @@ class LanguageModelImplTest {
         assertThat(prompt.getOptions().getTemperature()).isEqualTo(0.2);
         assertThat(prompt.getOptions().getMaxTokens()).isEqualTo(128);
         assertThat(prompt.getOptions().getTopP()).isEqualTo(0.9);
+        assertThat(prompt.getOptions().getTopK()).isEqualTo(40);
+        assertThat(prompt.getOptions().getPresencePenalty()).isEqualTo(0.1);
+        assertThat(prompt.getOptions().getFrequencyPenalty()).isEqualTo(0.3);
+        assertThat(prompt.getOptions().getStopSequences()).containsExactly("END");
+    }
+
+    @Test
+    void generateText_rejectsPromptAndMessagesTogether() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+        var request = GenerateTextRequest.builder()
+            .prompt("Hello")
+            .messages(List.of(ModelMessage.user("Hi")))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("exactly one of prompt or messages must be provided")
+            .verify();
+    }
+
+    @Test
+    void generateText_rejectsUnsupportedContentPart() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+        var request = GenerateTextRequest.builder()
+            .messages(List.of(ModelMessage.builder()
+                .role(ModelMessageRole.USER)
+                .content(List.of(ModelMessagePart.builder().type("image").build()))
+                .build()))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("unsupported content part type: image")
+            .verify();
+    }
+
+    @Test
+    void streamText_emitsHaloTextStreamParts() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("Hel", null, null, null),
+            chatResponse("lo", null, null, null),
+            chatResponse("", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_START))
+            .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_START))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Hel");
+            })
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getDelta()).isEqualTo("lo");
+            })
+            .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_END))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH);
+                assertThat(part.getFinishReason()).isEqualTo(FinishReason.STOP);
+                assertThat(part.getUsage().getInputTokens()).isEqualTo(2);
+                assertThat(part.getUsage().getOutputTokens()).isEqualTo(4);
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void streamText_convertsUpstreamErrorToErrorPart() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class)))
+            .thenReturn(Flux.error(new IllegalStateException("upstream failed")));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
+                assertThat(part.getErrorText()).isEqualTo("upstream failed");
+            })
+            .verifyComplete();
+    }
+
+    private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
+        Integer completionTokens) {
+        var generationMetadata = ChatGenerationMetadata.builder()
+            .finishReason(finishReason)
+            .build();
+        var metadataBuilder = ChatResponseMetadata.builder();
+        if (promptTokens != null || completionTokens != null) {
+            metadataBuilder.usage(new DefaultUsage(promptTokens, completionTokens));
+        }
+        return new ChatResponse(
+            List.of(new Generation(new AssistantMessage(text), generationMetadata)),
+            metadataBuilder.build()
+        );
     }
 }

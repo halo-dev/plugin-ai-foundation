@@ -19,11 +19,10 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
-import run.halo.aifoundation.ChatChunk;
-import run.halo.aifoundation.ChatRequest;
-import run.halo.aifoundation.ChunkType;
+import run.halo.aifoundation.FinishReason;
+import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.LanguageModel;
-import run.halo.aifoundation.Message;
+import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -445,24 +444,27 @@ class ModelConsoleEndpointTest {
     // ---- test chat stream ----
 
     @Test
-    void testChatStream_mapsMessagesAndOptionsToChatRequest() {
+    void testChatStream_mapsMessagesAndOptionsToGenerateTextRequest() {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
-        when(languageModel.streamChat(any(ChatRequest.class)))
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
             .thenReturn(Flux.just(
-                ChatChunk.builder().type(ChunkType.TEXT).content("Hi").build(),
-                ChatChunk.builder().type(ChunkType.FINISH).last(true).finishReason("stop").build()
+                TextStreamPart.start("msg_1"),
+                TextStreamPart.textStart("txt_1"),
+                TextStreamPart.textDelta("txt_1", "Hi"),
+                TextStreamPart.textEnd("txt_1"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
             ));
 
         var body = Map.of(
+            "system", "You are concise.",
             "messages", List.of(
-                Map.of("role", "system", "content", "You are concise."),
-                Map.of("role", "user", "content", "Hello")
+                Map.of("role", "USER", "content", List.of(Map.of("type", "text", "text", "Hello")))
             ),
             "temperature", 0.2,
-            "maxTokens", 128,
+            "maxOutputTokens", 128,
             "topP", 0.9,
-            "providerOptions", Map.of("seed", 42)
+            "providerOptions", Map.of("openai", Map.of("seed", 42))
         );
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
@@ -471,24 +473,30 @@ class ModelConsoleEndpointTest {
             .exchange()
             .expectStatus().isOk()
             .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
-            .expectBodyList(ChatChunk.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .extracting(ChatChunk::getType)
-                .containsExactly(ChunkType.TEXT, ChunkType.FINISH));
+            .expectHeader().valueEquals("X-Halo-AI-Stream-Protocol", "text-v1")
+            .expectHeader().doesNotExist("x-vercel-ai-ui-message-stream")
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"start\"");
+                assertThat(bodyText).contains("\"type\":\"text-delta\"");
+                assertThat(bodyText).contains("\"delta\":\"Hi\"");
+                assertThat(bodyText).contains("data:[DONE]");
+            });
 
-        var captor = ArgumentCaptor.forClass(ChatRequest.class);
-        verify(languageModel).streamChat(captor.capture());
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
-        assertThat(request.getMessages())
-            .extracting(Message::getRole)
-            .containsExactly("system", "user");
-        assertThat(request.getMessages())
-            .extracting(Message::getContent)
-            .containsExactly("You are concise.", "Hello");
+        assertThat(request.getSystem()).isEqualTo("You are concise.");
+        assertThat(request.getMessages()).hasSize(1);
+        assertThat(request.getMessages().getFirst().getRole().name()).isEqualTo("USER");
+        assertThat(request.getMessages().getFirst().getContent().getFirst().getText())
+            .isEqualTo("Hello");
         assertThat(request.getTemperature()).isEqualTo(0.2);
-        assertThat(request.getMaxTokens()).isEqualTo(128);
+        assertThat(request.getMaxOutputTokens()).isEqualTo(128);
         assertThat(request.getTopP()).isEqualTo(0.9);
-        assertThat(request.getProviderOptions()).containsEntry("seed", 42);
+        assertThat(request.getProviderOptions()).containsKey("openai");
+        assertThat(request.getProviderOptions().get("openai")).containsEntry("seed", 42);
     }
 
     @Test
@@ -506,20 +514,24 @@ class ModelConsoleEndpointTest {
     void testChatStream_streamErrorEmitsErrorChunk() {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
-        when(languageModel.streamChat(any(ChatRequest.class)))
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
             .thenReturn(Flux.error(new IllegalStateException("upstream failed")));
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
             .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("messages", List.of(Map.of("role", "user", "content", "Hello"))))
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "Hello"))
+            ))))
             .exchange()
             .expectStatus().isOk()
-            .expectBodyList(ChatChunk.class)
+            .expectHeader().valueEquals("X-Halo-AI-Stream-Protocol", "text-v1")
+            .expectBody(String.class)
             .consumeWith(response -> {
-                assertThat(response.getResponseBody()).hasSize(1);
-                var chunk = response.getResponseBody().getFirst();
-                assertThat(chunk.getType()).isEqualTo(ChunkType.ERROR);
-                assertThat(chunk.getContent()).contains("upstream failed");
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"error\"");
+                assertThat(bodyText).contains("upstream failed");
+                assertThat(bodyText).contains("data:[DONE]");
             });
     }
 

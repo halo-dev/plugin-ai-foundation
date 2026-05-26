@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import type { ChatChunk } from '@/api/generated'
 import { ModelOptionModelTypeEnum } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { renderMarkdown } from '@/utils/markdown'
@@ -9,6 +8,7 @@ import {
   flushSseJsonBuffer,
   parseProviderOptionsJson,
   parseSseJsonLines,
+  type TextStreamPart,
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading, VTag } from '@halo-dev/components'
@@ -52,7 +52,7 @@ const chatModels = computed(() => {
 })
 const chatModelGroups = computed(() => groupModelOptionsByProvider(chatModels.value))
 const providerOptionsHelp = computed(() => {
-  return providerOptionsError.value || '请输入 JSON 对象，例如 {"seed": 42}'
+  return providerOptionsError.value || '请输入按服务商分组的 JSON 对象，例如 {"openai": {"seed": 42}}'
 })
 
 const selectedModel = computed(() => {
@@ -114,7 +114,7 @@ async function sendMessage() {
     systemPrompt: systemPrompt.value,
     temperature: numberOrUndefined(temperature.value),
     topP: numberOrUndefined(topP.value),
-    maxTokens: numberOrUndefined(maxTokens.value),
+    maxOutputTokens: numberOrUndefined(maxTokens.value),
     providerOptions: providerOptions.value,
   })
 
@@ -161,12 +161,15 @@ async function sendMessage() {
       const { done, value } = await reader.read()
       if (done) break
 
-      const parsed = parseSseJsonLines<ChatChunk>(buffer, decoder.decode(value, { stream: true }))
+      const parsed = parseSseJsonLines<TextStreamPart>(
+        buffer,
+        decoder.decode(value, { stream: true }),
+      )
       buffer = parsed.buffer
       handleChunks(assistantMessage.id, parsed.chunks)
     }
 
-    handleChunks(assistantMessage.id, flushSseJsonBuffer<ChatChunk>(buffer))
+    handleChunks(assistantMessage.id, flushSseJsonBuffer<TextStreamPart>(buffer))
     finishAssistantMessage(assistantMessage.id, 'done')
   } catch (e) {
     if ((e as Error).name === 'AbortError') {
@@ -181,14 +184,18 @@ async function sendMessage() {
   }
 }
 
-function handleChunks(messageId: string, chunks: ChatChunk[]) {
+function handleChunks(messageId: string, chunks: TextStreamPart[]) {
   for (const chunk of chunks) {
-    if (chunk.type === 'ERROR') {
-      appendAssistantError(messageId, chunk.content || '请求失败')
+    if (chunk.type === 'error') {
+      appendAssistantError(messageId, chunk.errorText || '请求失败')
       continue
     }
-    if (chunk.type === 'TEXT' && chunk.content) {
-      appendAssistantContent(messageId, chunk.content)
+    if (chunk.type === 'text-delta' && chunk.delta) {
+      appendAssistantContent(messageId, chunk.delta)
+      continue
+    }
+    if (chunk.type === 'finish') {
+      finishAssistantMessage(messageId, 'done')
     }
   }
 }

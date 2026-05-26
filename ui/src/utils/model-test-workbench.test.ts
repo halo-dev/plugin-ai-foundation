@@ -24,12 +24,15 @@ describe('filterEnabledChatModels', () => {
 
 describe('parseProviderOptionsJson', () => {
   it('parses JSON objects', () => {
-    expect(parseProviderOptionsJson('{ "seed": 42 }').value).toEqual({ seed: 42 })
+    expect(parseProviderOptionsJson('{ "openai": { "seed": 42 } }').value).toEqual({
+      openai: { seed: 42 },
+    })
   })
 
   it('rejects invalid or non-object values', () => {
     expect(parseProviderOptionsJson('{').error).toBeTruthy()
     expect(parseProviderOptionsJson('[]').error).toBeTruthy()
+    expect(parseProviderOptionsJson('{ "seed": 42 }').error).toBeTruthy()
   })
 })
 
@@ -46,19 +49,19 @@ describe('buildTestChatRequest', () => {
         systemPrompt: 'You are concise.',
         temperature: 0.2,
         topP: 0.9,
-        maxTokens: 128,
-        providerOptions: { seed: 42 },
+        maxOutputTokens: 128,
+        providerOptions: { openai: { seed: 42 } },
       }),
     ).toMatchObject({
+      system: 'You are concise.',
       messages: [
-        { role: 'system', content: 'You are concise.' },
-        { role: 'user', content: 'Hello' },
-        { role: 'assistant', content: 'Hi' },
+        { role: 'USER', content: [{ type: 'text', text: 'Hello' }] },
+        { role: 'ASSISTANT', content: [{ type: 'text', text: 'Hi' }] },
       ],
       temperature: 0.2,
       topP: 0.9,
-      maxTokens: 128,
-      providerOptions: { seed: 42 },
+      maxOutputTokens: 128,
+      providerOptions: { openai: { seed: 42 } },
     })
   })
 })
@@ -67,11 +70,11 @@ describe('parseSseJsonLines', () => {
   it('parses complete data lines and preserves partial buffer', () => {
     const result = parseSseJsonLines<{ content: string }>(
       '',
-      'data: {"content":"Hel"}\n\ndata: {"content":"lo"}',
+      'data: {"delta":"Hel"}\n\ndata: [DONE]\n\ndata: {"delta":"lo"}',
     )
 
-    expect(result.chunks).toEqual([{ content: 'Hel' }])
-    expect(flushSseJsonBuffer<{ content: string }>(result.buffer)).toEqual([{ content: 'lo' }])
+    expect(result.chunks).toEqual([{ delta: 'Hel' }])
+    expect(flushSseJsonBuffer<{ delta: string }>(result.buffer)).toEqual([{ delta: 'lo' }])
   })
 })
 

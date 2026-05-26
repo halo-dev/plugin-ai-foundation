@@ -683,7 +683,7 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream" : {
       "post" : {
-        "description" : "Test chat completion with streaming response.",
+        "description" : "Test text generation with Halo text stream response.",
         "operationId" : "TestModelChatStream",
         "parameters" : [ {
           "description" : "Model name (AiModel.metadata.name)",
@@ -698,7 +698,7 @@
           "content" : {
             "*/*" : {
               "schema" : {
-                "$ref" : "#/components/schemas/TestChatRequest"
+                "$ref" : "#/components/schemas/GenerateTextRequest"
               }
             }
           }
@@ -708,11 +708,11 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ChatChunk"
+                  "$ref" : "#/components/schemas/TextStreamPart"
                 }
               }
             },
-            "description" : "default response"
+            "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object and the stream ends with data: [DONE]."
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
@@ -1193,27 +1193,6 @@
           }
         }
       },
-      "ChatChunk" : {
-        "type" : "object",
-        "properties" : {
-          "content" : {
-            "type" : "string"
-          },
-          "finishReason" : {
-            "type" : "string"
-          },
-          "last" : {
-            "type" : "boolean"
-          },
-          "type" : {
-            "type" : "string",
-            "enum" : [ "TEXT", "REASONING", "TOOL_CALL", "ERROR", "FINISH" ]
-          },
-          "usage" : {
-            "$ref" : "#/components/schemas/Usage"
-          }
-        }
-      },
       "CopyOperation" : {
         "required" : [ "op", "from", "path" ],
         "type" : "object",
@@ -1290,6 +1269,62 @@
           }
         }
       },
+      "GenerateTextRequest" : {
+        "type" : "object",
+        "properties" : {
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessage"
+            }
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "prompt" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "JsonPatch" : {
         "minItems" : 1,
         "uniqueItems" : true,
@@ -1311,14 +1346,23 @@
           } ]
         }
       },
-      "Message" : {
+      "LanguageModelUsage" : {
         "type" : "object",
         "properties" : {
-          "content" : {
-            "type" : "string"
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "role" : {
-            "type" : "string"
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "raw" : {
+            "type" : "object"
+          },
+          "totalTokens" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -1377,6 +1421,38 @@
           }
         },
         "description" : "Metadata of Extension."
+      },
+      "ModelMessage" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessagePart"
+            }
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "SYSTEM", "USER", "ASSISTANT", "TOOL" ]
+          }
+        }
+      },
+      "ModelMessagePart" : {
+        "type" : "object",
+        "properties" : {
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
       },
       "ModelOption" : {
         "type" : "object",
@@ -1587,35 +1663,6 @@
           }
         }
       },
-      "TestChatRequest" : {
-        "type" : "object",
-        "properties" : {
-          "maxTokens" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "messages" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/Message"
-            }
-          },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "temperature" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "topP" : {
-            "type" : "number",
-            "format" : "double"
-          }
-        }
-      },
       "TestOperation" : {
         "required" : [ "op", "path", "value" ],
         "type" : "object",
@@ -1635,16 +1682,39 @@
           }
         }
       },
-      "Usage" : {
+      "TextStreamPart" : {
         "type" : "object",
         "properties" : {
-          "completionTokens" : {
-            "type" : "integer",
-            "format" : "int32"
+          "delta" : {
+            "type" : "string"
           },
-          "promptTokens" : {
-            "type" : "integer",
-            "format" : "int32"
+          "errorText" : {
+            "type" : "string"
+          },
+          "finishReason" : {
+            "type" : "string",
+            "enum" : [ "STOP", "LENGTH", "CONTENT_FILTER", "TOOL_CALLS", "ERROR", "OTHER", "UNKNOWN" ]
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "messageId" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "rawFinishReason" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/LanguageModelUsage"
           }
         }
       }

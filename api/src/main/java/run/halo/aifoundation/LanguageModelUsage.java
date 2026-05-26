@@ -9,10 +9,9 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ChatChunk {
-    private ChunkType type;
-    private String content;
-    private boolean last;
-    private String finishReason;
-    private Usage usage;
+public class LanguageModelUsage {
+    private Integer inputTokens;
+    private Integer outputTokens;
+    private Integer totalTokens;
+    private Object raw;
 }

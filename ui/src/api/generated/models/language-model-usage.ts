@@ -17,20 +17,32 @@
 /**
  * 
  * @export
- * @interface Usage
+ * @interface LanguageModelUsage
  */
-export interface Usage {
+export interface LanguageModelUsage {
     /**
      * 
      * @type {number}
-     * @memberof Usage
+     * @memberof LanguageModelUsage
      */
-    'completionTokens'?: number;
+    'inputTokens'?: number;
     /**
      * 
      * @type {number}
-     * @memberof Usage
+     * @memberof LanguageModelUsage
      */
-    'promptTokens'?: number;
+    'outputTokens'?: number;
+    /**
+     * 
+     * @type {object}
+     * @memberof LanguageModelUsage
+     */
+    'raw'?: object;
+    /**
+     * 
+     * @type {number}
+     * @memberof LanguageModelUsage
+     */
+    'totalTokens'?: number;
 }
 

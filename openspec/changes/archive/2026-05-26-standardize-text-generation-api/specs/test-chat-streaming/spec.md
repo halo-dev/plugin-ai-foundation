@@ -1,10 +1,7 @@
-## Purpose
-
-Define the Console streaming test-chat endpoint and frontend streaming behavior used by the model test workbench.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Backend exposes streaming test-chat endpoint
+
 The system SHALL provide a console endpoint `POST /models/{name}/test-chat/stream` that accepts text generation messages and generation parameters in the request body and returns Halo text stream parts as Server-Sent Events.
 
 #### Scenario: Successful streaming response
@@ -28,6 +25,7 @@ The system SHALL provide a console endpoint `POST /models/{name}/test-chat/strea
 - **AND** the stream completes gracefully with no broken protocol frame
 
 ### Requirement: Frontend progressively renders streamed content
+
 The system SHALL update the model test UI to consume Halo text stream SSE and append each received text delta to the active assistant message in real time.
 
 #### Scenario: User sends a message and sees progressive output
@@ -40,10 +38,3 @@ The system SHALL update the model test UI to consume Halo text stream SSE and ap
 - **WHEN** the SSE stream receives a `TextStreamPart` with `type = "error"`
 - **THEN** the UI displays `errorText` in the active assistant message
 - **AND** the loading indicator is removed
-
-### Requirement: Remove legacy non-streaming endpoint
-The system SHALL remove the `POST /models/{name}/test-chat` endpoint and its legacy prompt-only request DTO, as it is no longer used by any consumer.
-
-#### Scenario: Legacy endpoint no longer available
-- **WHEN** a client sends `POST /models/{name}/test-chat`
-- **THEN** the server returns `404 Not Found`
