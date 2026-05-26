@@ -22,16 +22,46 @@
 export interface ModelMessagePart {
     /**
      * 
+     * @type {string}
+     * @memberof ModelMessagePart
+     */
+    'errorText'?: string;
+    /**
+     * 
+     * @type {{ [key: string]: object; }}
+     * @memberof ModelMessagePart
+     */
+    'input'?: { [key: string]: object; };
+    /**
+     * 
      * @type {{ [key: string]: object; }}
      * @memberof ModelMessagePart
      */
     'providerOptions'?: { [key: string]: object; };
     /**
      * 
+     * @type {object}
+     * @memberof ModelMessagePart
+     */
+    'result'?: object;
+    /**
+     * 
      * @type {string}
      * @memberof ModelMessagePart
      */
     'text'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ModelMessagePart
+     */
+    'toolCallId'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ModelMessagePart
+     */
+    'toolName'?: string;
     /**
      * 
      * @type {string}

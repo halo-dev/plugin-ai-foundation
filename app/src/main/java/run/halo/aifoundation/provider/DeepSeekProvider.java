@@ -2,9 +2,9 @@ package run.halo.aifoundation.provider;
 
 import java.util.List;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.deepseek.DeepSeekChatModel;
-import org.springframework.ai.deepseek.DeepSeekChatOptions;
-import org.springframework.ai.deepseek.api.DeepSeekApi;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -13,6 +13,7 @@ import run.halo.aifoundation.provider.support.AdapterType;
 public class DeepSeekProvider extends AbstractAiProviderType {
 
     private static final String DEFAULT_BASE_URL = "https://api.deepseek.com";
+    private static final String COMPLETIONS_PATH = "/v1/chat/completions";
 
     @Override
     public String getProviderType() {
@@ -76,15 +77,16 @@ public class DeepSeekProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        var deepSeekApi = DeepSeekApi.builder()
+        var openAiApi = OpenAiApi.builder()
             .baseUrl(resolveBaseUrl(provider))
             .apiKey(apiKey)
+            .completionsPath(COMPLETIONS_PATH)
             .webClientBuilder(webClientBuilder(provider))
             .restClientBuilder(restClientBuilder(provider))
             .build();
-        return DeepSeekChatModel.builder()
-            .deepSeekApi(deepSeekApi)
-            .defaultOptions(DeepSeekChatOptions.builder().model(modelId).build())
+        return OpenAiChatModel.builder()
+            .openAiApi(openAiApi)
+            .defaultOptions(OpenAiChatOptions.builder().model(modelId).build())
             .build();
     }
 }

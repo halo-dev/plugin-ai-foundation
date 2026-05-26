@@ -7,9 +7,18 @@ export interface WorkbenchMessage {
   id: string
   role: ChatRole
   content: string
+  toolEvents?: WorkbenchToolEvent[]
   modelName?: string
   modelDisplayName?: string
   state?: 'streaming' | 'done' | 'error' | 'stopped'
+}
+
+export interface WorkbenchToolEvent {
+  id: string
+  type: 'tool-call' | 'tool-result' | 'tool-error'
+  toolCallId?: string
+  toolName?: string
+  summary: string
 }
 
 export interface ChatParameters {
@@ -17,6 +26,7 @@ export interface ChatParameters {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
+  maxSteps?: number
   providerOptions?: Record<string, Record<string, unknown>>
 }
 
@@ -41,6 +51,7 @@ export interface GenerateTextRequest {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
+  maxSteps?: number
   providerOptions?: Record<string, Record<string, unknown>>
 }
 
@@ -51,6 +62,9 @@ export interface TextStreamPart {
     | 'text-start'
     | 'text-delta'
     | 'text-end'
+    | 'tool-call'
+    | 'tool-result'
+    | 'tool-error'
     | 'finish-step'
     | 'finish'
     | 'raw'
@@ -61,6 +75,10 @@ export interface TextStreamPart {
   id?: string
   stepIndex?: number
   delta?: string
+  toolCallId?: string
+  toolName?: string
+  input?: Record<string, unknown>
+  result?: unknown
   errorText?: string
 }
 
@@ -122,6 +140,7 @@ export function buildTestChatRequest(
     temperature: parameters.temperature,
     topP: parameters.topP,
     maxOutputTokens: parameters.maxOutputTokens,
+    maxSteps: parameters.maxSteps,
     providerOptions: parameters.providerOptions,
   }
 }
@@ -168,4 +187,49 @@ export function isRenderableTextDelta(
 
 export function isTerminalTextStreamPart(part: TextStreamPart) {
   return part.type === 'finish' || part.type === 'error' || part.type === 'abort'
+}
+
+export function toToolEvent(part: TextStreamPart): WorkbenchToolEvent | undefined {
+  if (!isToolStreamPartType(part.type)) {
+    return undefined
+  }
+
+  return {
+    id: `${part.type}-${part.toolCallId || crypto.randomUUID()}`,
+    type: part.type,
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    summary: toolEventSummary(part),
+  }
+}
+
+function isToolStreamPartType(type: TextStreamPart['type']): type is WorkbenchToolEvent['type'] {
+  return type === 'tool-call' || type === 'tool-result' || type === 'tool-error'
+}
+
+function toolEventSummary(part: TextStreamPart) {
+  switch (part.type) {
+    case 'tool-call':
+      return stringifyCompact(part.input)
+    case 'tool-result':
+      return stringifyCompact(part.result)
+    case 'tool-error':
+      return part.errorText || '工具执行失败'
+    default:
+      return ''
+  }
+}
+
+function stringifyCompact(value: unknown) {
+  if (value === undefined || value === null) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
 }

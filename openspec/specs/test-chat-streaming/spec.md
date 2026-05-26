@@ -12,7 +12,7 @@ The system SHALL provide a console endpoint `POST /models/{name}/test-chat/strea
 - **AND** the endpoint SHALL NOT set `x-vercel-ai-ui-message-stream`
 - **AND** the endpoint passes the request into `LanguageModel.streamText()`
 - **AND** each emitted `TextStreamPart` is serialized as a JSON `data:` line in the SSE stream
-- **AND** the stream may include message lifecycle, step lifecycle, text, finish, raw diagnostic, and error part types
+- **AND** the stream may include message lifecycle, step lifecycle, text, tool call, tool result, tool error, finish, raw diagnostic, and error part types
 - **AND** the stream ends with `data: [DONE]`
 
 #### Scenario: Empty message validation
@@ -36,9 +36,9 @@ The system SHALL update the model test UI to consume Halo text stream SSE and ap
 - **AND** the loading indicator is removed when `finish`, `error`, abort, or `[DONE]` is received
 
 #### Scenario: Rich stream parts are tolerated
-- **WHEN** the SSE stream receives `start`, `start-step`, `text-start`, `text-end`, `finish-step`, `raw`, or another non-renderable `TextStreamPart`
+- **WHEN** the SSE stream receives `start`, `start-step`, `text-start`, `text-end`, `finish-step`, `tool-call`, `tool-result`, `tool-error`, `raw`, or another non-renderable `TextStreamPart`
 - **THEN** the UI SHALL keep the stream parser alive
-- **AND** the UI SHALL NOT append those parts to the visible assistant message text
+- **AND** the UI SHALL NOT append those parts to the visible assistant message text unless the UI explicitly renders a tool activity row
 - **AND** unknown part types SHALL be ignored unless they are documented as fatal
 
 #### Scenario: Error during streaming

@@ -6,26 +6,60 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * A provider-neutral language model message.
+ *
+ * <p>For simple text conversations, use {@link #system(String)}, {@link #user(String)}, and
+ * {@link #assistant(String)}. The {@link #tool(List)} factory is mainly for advanced callers that
+ * persist and later replay tool results.
+ *
+ * <pre>{@code
+ * List<ModelMessage> messages = List.of(
+ *     ModelMessage.user("Hello"),
+ *     ModelMessage.assistant("Hi!"),
+ *     ModelMessage.user("Summarize Halo CMS")
+ * );
+ * }</pre>
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ModelMessage {
+    /**
+     * Message role.
+     */
     private ModelMessageRole role;
+    /**
+     * Message content parts.
+     */
     private List<ModelMessagePart> content;
 
+    /**
+     * Creates a system text message.
+     */
     public static ModelMessage system(String text) {
         return of(ModelMessageRole.SYSTEM, text);
     }
 
+    /**
+     * Creates a user text message.
+     */
     public static ModelMessage user(String text) {
         return of(ModelMessageRole.USER, text);
     }
 
+    /**
+     * Creates an assistant text message.
+     */
     public static ModelMessage assistant(String text) {
         return of(ModelMessageRole.ASSISTANT, text);
     }
 
+    /**
+     * Creates a tool message. Content should contain {@link PartType#TOOL_RESULT} or
+     * {@link PartType#TOOL_ERROR} parts.
+     */
     public static ModelMessage tool(List<ModelMessagePart> content) {
         return new ModelMessage(ModelMessageRole.TOOL, content);
     }

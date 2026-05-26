@@ -6,7 +6,9 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -22,8 +24,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.ModelMessagePart;
+import run.halo.aifoundation.PartType;
 import run.halo.aifoundation.TextStreamPart;
+import run.halo.aifoundation.ToolDefinition;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -47,6 +50,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private static final int MAX_NAME_GENERATION_ATTEMPTS = 10;
     private static final String HALO_AI_STREAM_PROTOCOL_HEADER = "X-Halo-AI-Stream-Protocol";
     private static final String HALO_AI_TEXT_STREAM_PROTOCOL = "text-v1";
+    private static final String CONSOLE_TEST_TOOL_NAME = "halo_test_info";
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
@@ -119,14 +123,22 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .description("Model name (AiModel.metadata.name)")
                         .implementation(String.class)
                         .required(true))
+                    .parameter(parameterBuilder()
+                        .name("enableTestTool")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject the console-only halo_test_info tool for "
+                            + "tool calling tests.")
+                        .implementation(Boolean.class)
+                        .required(false))
                     .requestBody(requestBodyBuilder()
                         .required(false)
                         .implementation(GenerateTextRequest.class))
                     .response(responseBuilder()
                         .description("Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. "
                             + "Each data event contains a TextStreamPart JSON object. The stream can "
-                            + "include message lifecycle, step lifecycle, text, finish, sanitized raw "
-                            + "diagnostic, and error parts, then ends with data: [DONE].")
+                            + "include message lifecycle, step lifecycle, text, tool call, tool result, "
+                            + "tool error, finish, sanitized raw diagnostic, and error parts, then ends "
+                            + "with data: [DONE].")
                         .implementation(TextStreamPart.class))
             )
             .build();
@@ -198,8 +210,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return request.bodyToMono(GenerateTextRequest.class)
             .defaultIfEmpty(new GenerateTextRequest())
             .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
+                var chatRequest = withConsoleTestTool(body, consoleTestToolEnabled(request));
                 Flux<ServerSentEvent<Object>> flux = aiModelService.languageModel(modelName)
-                    .flatMapMany(languageModel -> languageModel.streamText(body))
+                    .flatMapMany(languageModel -> languageModel.streamText(chatRequest))
                     .onErrorResume(e -> {
                         log.error("Stream chat failed for model: {}", modelName, e);
                         return Flux.just(TextStreamPart.error("Chat test failed: " + e.getMessage()));
@@ -211,6 +224,55 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                     .header(HALO_AI_STREAM_PROTOCOL_HEADER, HALO_AI_TEXT_STREAM_PROTOCOL)
                     .body(flux, ServerSentEvent.class);
             })));
+    }
+
+    private boolean consoleTestToolEnabled(ServerRequest request) {
+        return request.queryParam("enableTestTool")
+            .map(Boolean::parseBoolean)
+            .orElse(false);
+    }
+
+    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request, boolean enabled) {
+        if (!enabled) {
+            return request;
+        }
+        var tools = new ArrayList<ToolDefinition>();
+        if (request.getTools() != null) {
+            tools.addAll(request.getTools());
+        }
+        var hasTestTool = tools.stream()
+            .anyMatch(tool -> CONSOLE_TEST_TOOL_NAME.equals(tool.getName()));
+        if (!hasTestTool) {
+            tools.add(consoleTestTool());
+        }
+        request.setTools(List.copyOf(tools));
+        if (request.getMaxSteps() == null || request.getMaxSteps() < 2) {
+            request.setMaxSteps(2);
+        }
+        return request;
+    }
+
+    private ToolDefinition consoleTestTool() {
+        return ToolDefinition.builder()
+            .name(CONSOLE_TEST_TOOL_NAME)
+            .description("Halo 控制台模型测试工具。用于验证工具调用链路；当用户要求测试工具、"
+                + "回显输入、获取 Halo 测试信息时调用。")
+            .inputSchema(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "query", Map.of(
+                        "type", "string",
+                        "description", "用户想让测试工具回显或处理的文本"
+                    )
+                )
+            ))
+            .executor(input -> Mono.just(Map.of(
+                "tool", CONSOLE_TEST_TOOL_NAME,
+                "message", "Halo console test tool executed successfully.",
+                "query", input != null ? input.getOrDefault("query", "") : "",
+                "nextAction", "Answer the user using this tool result."
+            )))
+            .build();
     }
 
     private Mono<Void> validateTestChatRequest(GenerateTextRequest request) {
@@ -236,7 +298,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         "messages must include role and content"));
                 }
                 for (var part : message.getContent()) {
-                    if (part == null || !ModelMessagePart.TYPE_TEXT.equals(part.getType())
+                    if (part == null || !PartType.isText(part.getType())
                         || part.getText() == null || part.getText().isBlank()) {
                         return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "messages must include non-empty text content parts"));

@@ -7,6 +7,7 @@ public class TextPart extends ModelMessagePart {
     }
 
     public TextPart(String text) {
-        super(TYPE_TEXT, text, null);
+        setType(TYPE_TEXT);
+        setText(text);
     }
 }

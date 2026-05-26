@@ -27,3 +27,5 @@ export * from './remove-operation';
 export * from './replace-operation';
 export * from './test-operation';
 export * from './text-stream-part';
+export * from './tool-choice';
+export * from './tool-definition';

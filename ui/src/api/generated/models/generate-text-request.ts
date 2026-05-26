@@ -16,6 +16,12 @@
 // May contain unused imports in some cases
 // @ts-ignore
 import type { ModelMessage } from './model-message';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ToolChoice } from './tool-choice';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ToolDefinition } from './tool-definition';
 
 /**
  * 
@@ -35,6 +41,12 @@ export interface GenerateTextRequest {
      * @memberof GenerateTextRequest
      */
     'maxOutputTokens'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof GenerateTextRequest
+     */
+    'maxSteps'?: number;
     /**
      * 
      * @type {Array<ModelMessage>}
@@ -77,6 +89,18 @@ export interface GenerateTextRequest {
      * @memberof GenerateTextRequest
      */
     'temperature'?: number;
+    /**
+     * 
+     * @type {ToolChoice}
+     * @memberof GenerateTextRequest
+     */
+    'toolChoice'?: ToolChoice;
+    /**
+     * 
+     * @type {Array<ToolDefinition>}
+     * @memberof GenerateTextRequest
+     */
+    'tools'?: Array<ToolDefinition>;
     /**
      * 
      * @type {number}

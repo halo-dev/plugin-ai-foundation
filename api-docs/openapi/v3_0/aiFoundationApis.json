@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:39480",
+    "url" : "http://localhost:32902",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -693,6 +693,13 @@
           "schema" : {
             "type" : "string"
           }
+        }, {
+          "description" : "Whether to inject the console-only halo_test_info tool for tool calling tests.",
+          "in" : "query",
+          "name" : "enableTestTool",
+          "schema" : {
+            "type" : "boolean"
+          }
         } ],
         "requestBody" : {
           "content" : {
@@ -712,7 +719,7 @@
                 }
               }
             },
-            "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object. The stream can include message lifecycle, step lifecycle, text, finish, sanitized raw diagnostic, and error parts, then ends with data: [DONE]."
+            "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object. The stream can include message lifecycle, step lifecycle, text, tool call, tool result, tool error, finish, sanitized raw diagnostic, and error parts, then ends with data: [DONE]."
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
@@ -1280,6 +1287,10 @@
             "type" : "integer",
             "format" : "int32"
           },
+          "maxSteps" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "messages" : {
             "type" : "array",
             "items" : {
@@ -1314,6 +1325,15 @@
           "temperature" : {
             "type" : "number",
             "format" : "double"
+          },
+          "toolChoice" : {
+            "$ref" : "#/components/schemas/ToolChoice"
+          },
+          "tools" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ToolDefinition"
+            }
           },
           "topK" : {
             "type" : "integer",
@@ -1513,13 +1533,31 @@
       "ModelMessagePart" : {
         "type" : "object",
         "properties" : {
+          "errorText" : {
+            "type" : "string"
+          },
+          "input" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
           "providerOptions" : {
             "type" : "object",
             "additionalProperties" : {
               "type" : "object"
             }
           },
+          "result" : {
+            "type" : "object"
+          },
           "text" : {
+            "type" : "string"
+          },
+          "toolCallId" : {
+            "type" : "string"
+          },
+          "toolName" : {
             "type" : "string"
           },
           "type" : {
@@ -1771,6 +1809,12 @@
           "id" : {
             "type" : "string"
           },
+          "input" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
           "messageId" : {
             "type" : "string"
           },
@@ -1795,9 +1839,18 @@
           "response" : {
             "$ref" : "#/components/schemas/GenerationResponseMetadata"
           },
+          "result" : {
+            "type" : "object"
+          },
           "stepIndex" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "toolCallId" : {
+            "type" : "string"
+          },
+          "toolName" : {
+            "type" : "string"
           },
           "type" : {
             "type" : "string"
@@ -1812,6 +1865,44 @@
             }
           }
         }
+      },
+      "ToolChoice" : {
+        "type" : "object",
+        "properties" : {
+          "toolName" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "AUTO", "NONE", "REQUIRED", "TOOL" ]
+          }
+        }
+      },
+      "ToolDefinition" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "executor" : {
+            "$ref" : "#/components/schemas/ToolExecutor"
+          },
+          "inputSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "strict" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ToolExecutor" : {
+        "type" : "object"
       }
     },
     "securitySchemes" : {

@@ -7,20 +7,85 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Provider-neutral request for text generation.
+ *
+ * <p>Use either {@link #prompt} for a single user message or {@link #messages} for a conversation,
+ * but not both. {@link #system} is a top-level system instruction and can be used with either
+ * input style.
+ *
+ * <pre>{@code
+ * GenerateTextRequest request = GenerateTextRequest.builder()
+ *     .system("You are concise.")
+ *     .messages(List.of(
+ *         ModelMessage.user("What is Halo CMS?")
+ *     ))
+ *     .temperature(0.7)
+ *     .maxOutputTokens(1024)
+ *     .build();
+ * }</pre>
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class GenerateTextRequest {
+    /**
+     * Optional system instruction applied before prompt or messages.
+     */
     private String system;
+    /**
+     * Single-turn user prompt. Mutually exclusive with {@link #messages}.
+     */
     private String prompt;
+    /**
+     * Conversation messages. Mutually exclusive with {@link #prompt}.
+     */
     private List<ModelMessage> messages;
+    /**
+     * Maximum number of output tokens requested from the provider.
+     */
     private Integer maxOutputTokens;
+    /**
+     * Sampling temperature.
+     */
     private Double temperature;
+    /**
+     * Nucleus sampling value.
+     */
     private Double topP;
+    /**
+     * Top-k sampling value.
+     */
     private Integer topK;
+    /**
+     * Presence penalty when supported by the provider.
+     */
     private Double presencePenalty;
+    /**
+     * Frequency penalty when supported by the provider.
+     */
     private Double frequencyPenalty;
+    /**
+     * Stop sequences. Generation should stop when any sequence is produced.
+     */
     private List<String> stopSequences;
+    /**
+     * Provider-specific options grouped by provider namespace, for example
+     * {@code Map.of("openai", Map.of("seed", 42))}.
+     */
     private Map<String, Map<String, Object>> providerOptions;
+    /**
+     * Request-scoped tools that the model may call.
+     */
+    private List<ToolDefinition> tools;
+    /**
+     * Tool selection behavior for this request.
+     */
+    private ToolChoice toolChoice;
+    /**
+     * Maximum number of model invocation steps. Defaults to 1. Set this above 1 to allow Halo to
+     * execute model-requested tools and continue generation with tool results.
+     */
+    private Integer maxSteps;
 }

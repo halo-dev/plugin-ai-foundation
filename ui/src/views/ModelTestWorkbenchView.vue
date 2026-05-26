@@ -10,6 +10,7 @@ import {
   isTerminalTextStreamPart,
   parseProviderOptionsJson,
   parseSseJsonLines,
+  toToolEvent,
   type TextStreamPart,
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
@@ -40,6 +41,8 @@ const systemPrompt = shallowRef('')
 const temperature = shallowRef(0.7)
 const topP = shallowRef(1)
 const maxTokens = shallowRef(1024)
+const maxSteps = shallowRef(1)
+const testToolEnabled = shallowRef(false)
 const providerOptionsText = shallowRef('{}')
 const providerOptionsError = shallowRef('')
 const isStreaming = shallowRef(false)
@@ -90,6 +93,12 @@ watch(
   { deep: true },
 )
 
+watch(testToolEnabled, (enabled) => {
+  if (enabled && (!Number.isFinite(maxSteps.value) || maxSteps.value < 2)) {
+    maxSteps.value = 2
+  }
+})
+
 async function sendMessage() {
   const content = input.value.trim()
   const model = selectedModel.value
@@ -117,6 +126,7 @@ async function sendMessage() {
     temperature: numberOrUndefined(temperature.value),
     topP: numberOrUndefined(topP.value),
     maxOutputTokens: numberOrUndefined(maxTokens.value),
+    maxSteps: numberOrUndefined(maxSteps.value),
     providerOptions: providerOptions.value,
   })
 
@@ -135,10 +145,13 @@ async function sendMessage() {
   isStreaming.value = true
 
   try {
+    const params = new URLSearchParams()
+    if (testToolEnabled.value) {
+      params.set('enableTestTool', 'true')
+    }
+    const query = params.toString()
     const response = await fetch(
-      `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(
-        model.name,
-      )}/test-chat/stream`,
+      `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(model.name)}/test-chat/stream${query ? `?${query}` : ''}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -188,6 +201,11 @@ async function sendMessage() {
 
 function handleChunks(messageId: string, chunks: TextStreamPart[]) {
   for (const chunk of chunks) {
+    const toolEvent = toToolEvent(chunk)
+    if (toolEvent) {
+      appendToolEvent(messageId, toolEvent)
+      continue
+    }
     if (chunk.type === 'error') {
       appendAssistantError(messageId, chunk.errorText || '请求失败')
       continue
@@ -199,6 +217,13 @@ function handleChunks(messageId: string, chunks: TextStreamPart[]) {
     if (isTerminalTextStreamPart(chunk)) {
       finishAssistantMessage(messageId, 'done')
     }
+  }
+}
+
+function appendToolEvent(messageId: string, event: NonNullable<ReturnType<typeof toToolEvent>>) {
+  const message = messages.value.find((item) => item.id === messageId)
+  if (message) {
+    message.toolEvents = [...(message.toolEvents || []), event]
   }
 }
 
@@ -368,6 +393,33 @@ onBeforeUnmount(() => {
                     renderMarkdown(message.content || (message.state === 'streaming' ? ' ' : ''))
                   "
                 />
+
+                <div
+                  v-if="message.role === 'assistant' && message.toolEvents?.length"
+                  class=":uno: mt-3 space-y-1 border-t border-gray-100 pt-2"
+                >
+                  <div
+                    v-for="event in message.toolEvents"
+                    :key="event.id"
+                    class=":uno: rounded-md bg-gray-50 px-2 py-1 text-xs text-gray-600"
+                  >
+                    <span class=":uno: font-medium">
+                      {{
+                        event.type === "tool-call"
+                          ? "工具调用"
+                          : event.type === "tool-result"
+                            ? "工具结果"
+                            : "工具错误"
+                      }}
+                    </span>
+                    <span v-if="event.toolName" class=":uno: ml-1 font-mono">
+                      {{ event.toolName }}
+                    </span>
+                    <span v-if="event.summary" class=":uno: ml-1 break-all">
+                      {{ event.summary }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -464,6 +516,27 @@ onBeforeUnmount(() => {
             label="Max Tokens"
             min="1"
             step="1"
+          />
+
+          <FormKit
+            v-model="maxSteps"
+            type="number"
+            number
+            name="maxSteps"
+            label="Max Steps"
+            min="1"
+            max="10"
+            step="1"
+            help="启用工具时建议至少为 2"
+          />
+
+          <FormKit
+            v-model="testToolEnabled"
+            type="checkbox"
+            name="testToolEnabled"
+            label="启用测试工具"
+            help="后台会注入 halo_test_info。可输入：请调用 halo_test_info 测试工具并告诉我返回内容。"
+            outer-class=":uno: mt-4"
           />
 
           <FormKit

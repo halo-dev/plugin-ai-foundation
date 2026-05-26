@@ -44,3 +44,5 @@ models/remove-operation.ts
 models/replace-operation.ts
 models/test-operation.ts
 models/text-stream-part.ts
+models/tool-choice.ts
+models/tool-definition.ts

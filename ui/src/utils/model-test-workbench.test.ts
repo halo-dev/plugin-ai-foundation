@@ -9,6 +9,7 @@ import {
   isTerminalTextStreamPart,
   parseProviderOptionsJson,
   parseSseJsonLines,
+  toToolEvent,
   type TextStreamPart,
   type WorkbenchMessage,
 } from './model-test-workbench'
@@ -53,6 +54,7 @@ describe('buildTestChatRequest', () => {
         temperature: 0.2,
         topP: 0.9,
         maxOutputTokens: 128,
+        maxSteps: 2,
         providerOptions: { openai: { seed: 42 } },
       }),
     ).toMatchObject({
@@ -64,6 +66,7 @@ describe('buildTestChatRequest', () => {
       temperature: 0.2,
       topP: 0.9,
       maxOutputTokens: 128,
+      maxSteps: 2,
       providerOptions: { openai: { seed: 42 } },
     })
   })
@@ -86,6 +89,9 @@ describe('parseSseJsonLines', () => {
       [
         'data: {"type":"start-step","stepIndex":0}',
         'data: {"type":"raw","metadata":{"safe":"ok"}}',
+        'data: {"type":"tool-call","toolCallId":"call_1","toolName":"weather","input":{"location":"SF"}}',
+        'data: {"type":"tool-result","toolCallId":"call_1","toolName":"weather","result":{"temperature":22}}',
+        'data: {"type":"tool-error","toolCallId":"call_2","toolName":"search","errorText":"failed"}',
         'data: {"type":"unknown-provider-part"}',
         'data: {"type":"text-delta","delta":"**Hi**"}',
         'data: {"type":"finish"}',
@@ -96,16 +102,54 @@ describe('parseSseJsonLines', () => {
     expect(result.chunks.map((chunk) => chunk.type)).toEqual([
       'start-step',
       'raw',
+      'tool-call',
+      'tool-result',
+      'tool-error',
       'unknown-provider-part',
       'text-delta',
       'finish',
     ])
+    expect(result.chunks[2]).toMatchObject({
+      toolCallId: 'call_1',
+      toolName: 'weather',
+      input: { location: 'SF' },
+    })
+    expect(result.chunks[3]).toMatchObject({
+      toolCallId: 'call_1',
+      toolName: 'weather',
+      result: { temperature: 22 },
+    })
+    expect(result.chunks[4]).toMatchObject({
+      toolCallId: 'call_2',
+      toolName: 'search',
+      errorText: 'failed',
+    })
     expect(result.chunks.filter(isRenderableTextDelta).map((chunk) => chunk.delta)).toEqual([
       '**Hi**',
     ])
     expect(result.chunks.filter(isTerminalTextStreamPart).map((chunk) => chunk.type)).toEqual([
       'finish',
     ])
+  })
+})
+
+describe('toToolEvent', () => {
+  it('converts tool stream parts to compact workbench events', () => {
+    expect(
+      toToolEvent({
+        type: 'tool-call',
+        toolCallId: 'call_1',
+        toolName: 'halo_test_info',
+        input: { query: 'hello' },
+      }),
+    ).toMatchObject({
+      type: 'tool-call',
+      toolCallId: 'call_1',
+      toolName: 'halo_test_info',
+      summary: '{"query":"hello"}',
+    })
+
+    expect(toToolEvent({ type: 'text-delta', delta: 'hello' })).toBeUndefined()
   })
 })
 

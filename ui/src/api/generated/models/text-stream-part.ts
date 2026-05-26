@@ -58,6 +58,12 @@ export interface TextStreamPart {
     'id'?: string;
     /**
      * 
+     * @type {{ [key: string]: object; }}
+     * @memberof TextStreamPart
+     */
+    'input'?: { [key: string]: object; };
+    /**
+     * 
      * @type {string}
      * @memberof TextStreamPart
      */
@@ -94,10 +100,28 @@ export interface TextStreamPart {
     'response'?: GenerationResponseMetadata;
     /**
      * 
+     * @type {object}
+     * @memberof TextStreamPart
+     */
+    'result'?: object;
+    /**
+     * 
      * @type {number}
      * @memberof TextStreamPart
      */
     'stepIndex'?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof TextStreamPart
+     */
+    'toolCallId'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof TextStreamPart
+     */
+    'toolName'?: string;
     /**
      * 
      * @type {string}

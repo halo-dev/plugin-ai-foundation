@@ -497,6 +497,48 @@ class ModelConsoleEndpointTest {
         assertThat(request.getTopP()).isEqualTo(0.9);
         assertThat(request.getProviderOptions()).containsKey("openai");
         assertThat(request.getProviderOptions().get("openai")).containsEntry("seed", 42);
+        assertThat(request.getTools()).isNull();
+    }
+
+    @Test
+    void testChatStream_withConsoleTestTool_injectsToolAndMaxSteps() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(Flux.just(
+                TextStreamPart.toolCall(run.halo.aifoundation.ToolCall.builder()
+                    .toolCallId("call_1")
+                    .toolName("halo_test_info")
+                    .input(Map.of("query", "hello"))
+                    .build()),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            ));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream?enableTestTool=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "请调用测试工具"))
+            ))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"tool-call\"");
+                assertThat(bodyText).contains("halo_test_info");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getMaxSteps()).isEqualTo(2);
+        assertThat(request.getTools())
+            .singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getName()).isEqualTo("halo_test_info");
+                assertThat(tool.getExecutor()).isNotNull();
+            });
     }
 
     @Test

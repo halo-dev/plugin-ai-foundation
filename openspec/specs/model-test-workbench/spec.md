@@ -35,6 +35,11 @@ The system SHALL let administrators send chat-style text generation messages and
 - **THEN** the workbench SHALL keep the active assistant message in progress
 - **AND** the workbench SHALL NOT append those parts to the assistant message content
 
+#### Scenario: Tool activity events
+- **WHEN** the workbench receives `tool-call`, `tool-result`, or `tool-error` stream parts
+- **THEN** the workbench SHALL NOT append those parts to the assistant text content
+- **AND** the workbench MAY display compact tool activity information associated with the active assistant message
+
 #### Scenario: User stops an in-progress response
 - **WHEN** a streamed response is in progress and the administrator stops generation
 - **THEN** the workbench aborts the active stream request

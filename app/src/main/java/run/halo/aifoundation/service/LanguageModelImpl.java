@@ -2,19 +2,30 @@ package run.halo.aifoundation.service;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.function.FunctionToolCallback;
+import org.springframework.core.ParameterizedTypeReference;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -31,10 +42,24 @@ import run.halo.aifoundation.LanguageModelUsage;
 import run.halo.aifoundation.ModelMessage;
 import run.halo.aifoundation.ModelMessagePart;
 import run.halo.aifoundation.ModelMessageRole;
+import run.halo.aifoundation.PartType;
 import run.halo.aifoundation.TextStreamPart;
+import run.halo.aifoundation.ToolCall;
+import run.halo.aifoundation.ToolChoice;
+import run.halo.aifoundation.ToolDefinition;
+import run.halo.aifoundation.ToolError;
+import run.halo.aifoundation.ToolResult;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
 public class LanguageModelImpl implements LanguageModel {
+    private static final int DEFAULT_MAX_STEPS = 1;
+    private static final int MAX_STEPS_LIMIT = 10;
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
 
     private final ChatModel chatModel;
     private final String providerType;
@@ -51,13 +76,18 @@ public class LanguageModelImpl implements LanguageModel {
 
     @Override
     public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
-        return Mono.fromCallable(() -> chatModel.call(buildPrompt(request)))
+        return Mono.fromCallable(() -> generateTextBlocking(request))
             .subscribeOn(Schedulers.boundedElastic())
-            .map(this::mapResult);
+            ;
     }
 
     @Override
     public Flux<TextStreamPart> streamText(GenerateTextRequest request) {
+        if (hasTools(request)) {
+            return generateText(request)
+                .flatMapMany(this::resultToStreamParts)
+                .onErrorResume(e -> Flux.just(TextStreamPart.error(safeErrorMessage(e))));
+        }
         return Flux.defer(() -> {
             Prompt prompt;
             try {
@@ -96,8 +126,100 @@ public class LanguageModelImpl implements LanguageModel {
         });
     }
 
+    private GenerateTextResult generateTextBlocking(GenerateTextRequest request) {
+        validateRequest(request);
+        assertToolCallingSupported(request);
+        var messages = buildMessages(request);
+        var steps = new ArrayList<GenerationStep>();
+        var allContent = new ArrayList<GenerationContentPart>();
+        var allWarnings = new ArrayList<GenerationWarning>();
+        LanguageModelUsage totalUsage = null;
+        var finalFinishReason = FinishReason.UNKNOWN;
+        String finalRawFinishReason = null;
+        Map<String, Object> finalProviderMetadata = Map.of();
+        GenerationRequestMetadata finalRequestMetadata = null;
+        GenerationResponseMetadata finalResponseMetadata = null;
+
+        for (var stepIndex = 0; stepIndex < maxSteps(request); stepIndex++) {
+            var response = chatModel.call(new Prompt(messages, buildChatOptions(request)));
+            var step = mapStep(response, stepIndex);
+            var canContinue = stepIndex + 1 < maxSteps(request);
+            var toolResults = canContinue
+                ? executeToolCalls(step.toolCalls(), request)
+                : maxStepsReached(step.toolCalls());
+            var stepContent = new ArrayList<>(step.content());
+            toolResults.results().stream()
+                .map(GenerationContentPart::toolResult)
+                .forEach(stepContent::add);
+            toolResults.errors().stream()
+                .map(GenerationContentPart::toolError)
+                .forEach(stepContent::add);
+
+            var stepWarnings = new ArrayList<>(step.warnings());
+            stepWarnings.addAll(toolResults.warnings());
+            var generationStep = GenerationStep.builder()
+                .stepIndex(stepIndex)
+                .text(step.text())
+                .content(stepContent)
+                .finishReason(step.finishReason())
+                .rawFinishReason(step.rawFinishReason())
+                .usage(step.usage())
+                .toolCalls(step.toolCalls())
+                .toolResults(toolResults.results())
+                .toolErrors(toolResults.errors())
+                .warnings(stepWarnings)
+                .request(step.request())
+                .response(step.response())
+                .providerMetadata(step.providerMetadata())
+                .build();
+            steps.add(generationStep);
+            allContent.addAll(stepContent);
+            allWarnings.addAll(stepWarnings);
+            totalUsage = addUsage(totalUsage, step.usage());
+            finalFinishReason = step.finishReason();
+            finalRawFinishReason = step.rawFinishReason();
+            finalProviderMetadata = step.providerMetadata();
+            finalRequestMetadata = step.request();
+            finalResponseMetadata = step.response();
+
+            if (step.toolCalls().isEmpty()
+                || !toolResults.errors().isEmpty()
+                || toolResults.results().isEmpty()
+                || !canContinue) {
+                break;
+            }
+            messages.add(step.output());
+            messages.add(toolResponseMessage(toolResults.results()));
+        }
+
+        var text = allContent.stream()
+            .filter(part -> PartType.isText(part.getType()))
+            .map(GenerationContentPart::getText)
+            .filter(this::hasText)
+            .collect(Collectors.joining());
+        var usage = steps.isEmpty() ? null : steps.get(steps.size() - 1).getUsage();
+        return GenerateTextResult.builder()
+            .text(text)
+            .content(allContent)
+            .finishReason(finalFinishReason)
+            .rawFinishReason(finalRawFinishReason)
+            .usage(usage)
+            .totalUsage(totalUsage)
+            .warnings(allWarnings)
+            .request(finalRequestMetadata)
+            .response(finalResponseMetadata)
+            .steps(steps)
+            .providerMetadata(finalProviderMetadata)
+            .build();
+    }
+
     private Prompt buildPrompt(GenerateTextRequest request) {
         validateRequest(request);
+        return new Prompt(buildMessages(request), buildChatOptions(request));
+    }
+
+    private List<org.springframework.ai.chat.messages.Message> buildMessages(
+        GenerateTextRequest request) {
         var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
         if (hasText(request.getSystem())) {
             messages.add(new SystemMessage(request.getSystem().trim()));
@@ -109,7 +231,7 @@ public class LanguageModelImpl implements LanguageModel {
                 .map(this::convertMessage)
                 .forEach(messages::add);
         }
-        return new Prompt(messages, buildChatOptions(request));
+        return messages;
     }
 
     private void validateRequest(GenerateTextRequest request) {
@@ -132,6 +254,7 @@ public class LanguageModelImpl implements LanguageModel {
                 validateMessage(message);
             }
         }
+        validateTools(request);
     }
 
     private void validateMessage(ModelMessage message) {
@@ -141,30 +264,109 @@ public class LanguageModelImpl implements LanguageModel {
         if (message.getRole() == null) {
             throw new IllegalArgumentException("message role must not be null");
         }
-        if (message.getRole() == ModelMessageRole.TOOL) {
-            throw new IllegalArgumentException("unsupported message role: TOOL");
-        }
         if (message.getContent() == null || message.getContent().isEmpty()) {
             throw new IllegalArgumentException("message content must not be empty");
         }
         for (var part : message.getContent()) {
-            validatePart(part);
+            validatePart(message.getRole(), part);
         }
     }
 
-    private void validatePart(ModelMessagePart part) {
+    private void validatePart(ModelMessageRole role, ModelMessagePart part) {
         if (part == null) {
             throw new IllegalArgumentException("message content must not contain null parts");
         }
-        if (!ModelMessagePart.TYPE_TEXT.equals(part.getType())) {
-            throw new IllegalArgumentException("unsupported content part type: " + part.getType());
-        }
-        if (!hasText(part.getText())) {
+        if (PartType.isText(part.getType()) && !hasText(part.getText())) {
             throw new IllegalArgumentException("text content part must not be blank");
+        }
+        if (PartType.isText(part.getType())) {
+            return;
+        }
+        if (role == ModelMessageRole.TOOL && PartType.isToolResponse(part.getType())) {
+            if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
+                throw new IllegalArgumentException("tool content part must include toolCallId and toolName");
+            }
+            return;
+        }
+        throw new IllegalArgumentException("unsupported content part type: " + part.getType());
+    }
+
+    private void validateTools(GenerateTextRequest request) {
+        if (request.getMaxSteps() != null && request.getMaxSteps() < 1) {
+            throw new IllegalArgumentException("maxSteps must be greater than or equal to 1");
+        }
+        if (request.getMaxSteps() != null && request.getMaxSteps() > MAX_STEPS_LIMIT) {
+            throw new IllegalArgumentException("maxSteps must be less than or equal to "
+                + MAX_STEPS_LIMIT);
+        }
+        var tools = request.getTools();
+        if (tools == null || tools.isEmpty()) {
+            if (request.getToolChoice() != null
+                && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
+                throw new IllegalArgumentException("toolChoice toolName requires tools");
+            }
+            return;
+        }
+        var names = new HashSet<String>();
+        for (var tool : tools) {
+            if (tool == null) {
+                throw new IllegalArgumentException("tools must not contain null items");
+            }
+            if (!hasText(tool.getName()) || !tool.getName().matches("[A-Za-z0-9_-]+")) {
+                throw new IllegalArgumentException("tool name must contain only letters, numbers, '_' or '-'");
+            }
+            if (!names.add(tool.getName())) {
+                throw new IllegalArgumentException("duplicate tool name: " + tool.getName());
+            }
+            if (tool.getInputSchema() != null && !(tool.getInputSchema() instanceof Map)) {
+                throw new IllegalArgumentException("tool inputSchema must be a JSON object");
+            }
+        }
+        var choice = request.getToolChoice();
+        if (choice != null && choice.getType() == ToolChoice.Type.TOOL
+            && !names.contains(choice.getToolName())) {
+            throw new IllegalArgumentException("toolChoice references unknown tool: "
+                + choice.getToolName());
         }
     }
 
+    private void assertToolCallingSupported(GenerateTextRequest request) {
+        if (hasTools(request) && !supportsToolCalling()) {
+            throw new IllegalArgumentException(toolCallingUnsupportedMessage());
+        }
+    }
+
+    protected boolean supportsToolCalling() {
+        return true;
+    }
+
+    private String toolCallingUnsupportedMessage() {
+        return "Tool calling is not supported by provider type: " + providerType;
+    }
+
     private ChatOptions buildChatOptions(GenerateTextRequest request) {
+        if ("deepseek".equals(providerType)) {
+            return buildDeepSeekChatOptions(request);
+        }
+        if (hasTools(request)
+            && (request.getToolChoice() == null
+            || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
+            var builder = DefaultToolCallingChatOptions.builder()
+                .temperature(request.getTemperature())
+                .maxTokens(request.getMaxOutputTokens())
+                .topP(request.getTopP())
+                .topK(request.getTopK())
+                .presencePenalty(request.getPresencePenalty())
+                .frequencyPenalty(request.getFrequencyPenalty())
+                .stopSequences(request.getStopSequences())
+                .internalToolExecutionEnabled(false)
+                .toolCallbacks(toolCallbacks(request));
+            if (request.getToolChoice() != null
+                && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
+                builder.toolNames(Set.of(request.getToolChoice().getToolName()));
+            }
+            return builder.build();
+        }
         return ChatOptions.builder()
             .temperature(request.getTemperature())
             .maxTokens(request.getMaxOutputTokens())
@@ -176,13 +378,39 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
     }
 
+    private ChatOptions buildDeepSeekChatOptions(GenerateTextRequest request) {
+        var builder = OpenAiChatOptions.builder()
+            .temperature(request.getTemperature())
+            .maxTokens(request.getMaxOutputTokens())
+            .topP(request.getTopP())
+            .presencePenalty(request.getPresencePenalty())
+            .frequencyPenalty(request.getFrequencyPenalty())
+            .stop(request.getStopSequences());
+        if (hasTools(request)
+            && (request.getToolChoice() == null
+            || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
+            builder
+                .internalToolExecutionEnabled(false)
+                .toolCallbacks(toolCallbacks(request))
+                .extraBody(deepSeekToolExtraBody());
+            if (request.getToolChoice() != null
+                && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
+                builder.toolNames(Set.of(request.getToolChoice().getToolName()));
+            }
+        }
+        return builder.build();
+    }
+
+    private Map<String, Object> deepSeekToolExtraBody() {
+        return Map.of("thinking", Map.of("type", "disabled"));
+    }
+
     private org.springframework.ai.chat.messages.Message convertMessage(ModelMessage message) {
-        var content = textContent(message);
         return switch (message.getRole()) {
-            case SYSTEM -> new SystemMessage(content);
-            case ASSISTANT -> new AssistantMessage(content);
-            case USER -> new UserMessage(content);
-            case TOOL -> throw new IllegalArgumentException("unsupported message role: TOOL");
+            case SYSTEM -> new SystemMessage(textContent(message));
+            case ASSISTANT -> assistantMessage(message);
+            case USER -> new UserMessage(textContent(message));
+            case TOOL -> toolResponseMessage(message);
         };
     }
 
@@ -190,6 +418,241 @@ public class LanguageModelImpl implements LanguageModel {
         return message.getContent().stream()
             .map(ModelMessagePart::getText)
             .reduce("", String::concat);
+    }
+
+    private AssistantMessage assistantMessage(ModelMessage message) {
+        var toolCalls = message.getContent().stream()
+            .filter(part -> PartType.isToolCall(part.getType()))
+            .map(part -> new AssistantMessage.ToolCall(part.getToolCallId(), "function",
+                part.getToolName(), writeJson(part.getInput())))
+            .toList();
+        return AssistantMessage.builder()
+            .content(textContent(message))
+            .toolCalls(toolCalls)
+            .build();
+    }
+
+    private ToolResponseMessage toolResponseMessage(ModelMessage message) {
+        var responses = message.getContent().stream()
+            .filter(part -> PartType.isToolResponse(part.getType()))
+            .map(part -> new ToolResponseMessage.ToolResponse(part.getToolCallId(),
+                part.getToolName(), PartType.isToolError(part.getType())
+                ? part.getErrorText()
+                : writeJson(part.getResult())))
+            .toList();
+        return ToolResponseMessage.builder().responses(responses).build();
+    }
+
+    private ToolResponseMessage toolResponseMessage(List<ToolResult> results) {
+        var responses = results.stream()
+            .map(result -> new ToolResponseMessage.ToolResponse(result.getToolCallId(),
+                result.getToolName(), writeJson(result.getResult())))
+            .toList();
+        return ToolResponseMessage.builder().responses(responses).build();
+    }
+
+    private List<ToolCallback> toolCallbacks(GenerateTextRequest request) {
+        return request.getTools().stream()
+            .map(tool -> FunctionToolCallback
+                .builder(tool.getName(), (Function<Map<String, Object>, Object>) input -> Map.of())
+                .description(tool.getDescription())
+                .inputSchema(writeJson(defaultInputSchema(tool)))
+                .inputType(new ParameterizedTypeReference<Map<String, Object>>() {
+                })
+                .build())
+            .map(ToolCallback.class::cast)
+            .toList();
+    }
+
+    private Map<String, Object> defaultInputSchema(ToolDefinition tool) {
+        if (tool.getInputSchema() != null && !tool.getInputSchema().isEmpty()) {
+            return tool.getInputSchema();
+        }
+        return Map.of("type", "object", "properties", Map.of());
+    }
+
+    private StepSnapshot mapStep(ChatResponse response, int stepIndex) {
+        var result = response.getResult();
+        var output = result != null ? result.getOutput() : null;
+        var text = output != null && output.getText() != null ? output.getText() : "";
+        var rawFinishReason = result != null && result.getMetadata() != null
+            ? result.getMetadata().getFinishReason()
+            : null;
+        var toolCalls = output != null ? mapToolCalls(output.getToolCalls()) : List.<ToolCall>of();
+        var content = new ArrayList<GenerationContentPart>();
+        if (hasText(text)) {
+            content.add(GenerationContentPart.text(text));
+        }
+        toolCalls.stream().map(GenerationContentPart::toolCall).forEach(content::add);
+        return new StepSnapshot(
+            stepIndex,
+            text,
+            output != null ? output : new AssistantMessage(text),
+            content,
+            mapFinishReason(rawFinishReason),
+            rawFinishReason,
+            mapUsage(response),
+            toolCalls,
+            mapWarnings(response),
+            mapRequestMetadata(response),
+            mapResponseMetadata(response, text),
+            mapMetadata(response)
+        );
+    }
+
+    private List<ToolCall> mapToolCalls(List<AssistantMessage.ToolCall> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return List.of();
+        }
+        return toolCalls.stream()
+            .map(toolCall -> ToolCall.builder()
+                .toolCallId(toolCall.id())
+                .toolName(toolCall.name())
+                .input(parseToolInput(toolCall.arguments()))
+                .rawInput(toolCall.arguments())
+                .providerMetadata(Map.of("type", toolCall.type()))
+                .build())
+            .toList();
+    }
+
+    private ToolExecutionBatch executeToolCalls(List<ToolCall> toolCalls,
+        GenerateTextRequest request) {
+        if (toolCalls.isEmpty()) {
+            return new ToolExecutionBatch(List.of(), List.of(), List.of());
+        }
+        var toolsByName = request.getTools() == null ? Map.<String, ToolDefinition>of()
+            : request.getTools().stream()
+                .collect(Collectors.toMap(ToolDefinition::getName, Function.identity()));
+        var results = new ArrayList<ToolResult>();
+        var errors = new ArrayList<ToolError>();
+        var warnings = new ArrayList<GenerationWarning>();
+        for (var toolCall : toolCalls) {
+            var tool = toolsByName.get(toolCall.getToolName());
+            if (tool == null) {
+                errors.add(ToolError.builder()
+                    .toolCallId(toolCall.getToolCallId())
+                    .toolName(toolCall.getToolName())
+                    .errorText("Unknown tool: " + toolCall.getToolName())
+                    .build());
+                break;
+            }
+            if (tool.getExecutor() == null) {
+                warnings.add(GenerationWarning.builder()
+                    .code("tool-not-executed")
+                    .message("Tool has no executor: " + tool.getName())
+                    .build());
+                break;
+            }
+            try {
+                var value = tool.getExecutor().execute(toolCall.getInput()).block();
+                results.add(ToolResult.builder()
+                    .toolCallId(toolCall.getToolCallId())
+                    .toolName(toolCall.getToolName())
+                    .result(value)
+                    .build());
+            } catch (RuntimeException e) {
+                errors.add(ToolError.builder()
+                    .toolCallId(toolCall.getToolCallId())
+                    .toolName(toolCall.getToolName())
+                    .errorText(safeErrorMessage(e))
+                    .build());
+                break;
+            }
+        }
+        return new ToolExecutionBatch(results, errors, warnings);
+    }
+
+    private ToolExecutionBatch maxStepsReached(List<ToolCall> toolCalls) {
+        if (toolCalls.isEmpty()) {
+            return new ToolExecutionBatch(List.of(), List.of(), List.of());
+        }
+        return new ToolExecutionBatch(List.of(), List.of(), List.of(GenerationWarning.builder()
+            .code("max-steps-reached")
+            .message("Tool calls were not executed because maxSteps was reached")
+            .build()));
+    }
+
+    private Map<String, Object> parseToolInput(String arguments) {
+        if (!hasText(arguments)) {
+            return Map.of();
+        }
+        try {
+            var parsed = JSON_MAPPER.readValue(arguments, MAP_TYPE);
+            return parsed != null ? parsed : Map.of();
+        } catch (JacksonException e) {
+            return Map.of("_raw", arguments);
+        }
+    }
+
+    private Flux<TextStreamPart> resultToStreamParts(GenerateTextResult result) {
+        var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
+        var textId = "txt_" + UUID.randomUUID().toString().replace("-", "");
+        var parts = new ArrayList<TextStreamPart>();
+        parts.add(TextStreamPart.start(messageId));
+        for (var step : result.getSteps()) {
+            parts.add(TextStreamPart.startStep(step.getStepIndex()));
+            if (hasText(step.getText())) {
+                parts.add(TextStreamPart.textStart(textId));
+                parts.add(TextStreamPart.textDelta(textId, step.getText()));
+                parts.add(TextStreamPart.textEnd(textId));
+            }
+            nullSafe(step.getToolCalls())
+                .forEach(toolCall -> parts.add(TextStreamPart.toolCall(toolCall)));
+            nullSafe(step.getToolResults())
+                .forEach(toolResult -> parts.add(TextStreamPart.toolResult(toolResult)));
+            nullSafe(step.getToolErrors())
+                .forEach(toolError -> parts.add(TextStreamPart.toolError(toolError)));
+            parts.add(TextStreamPart.finishStep(step.getStepIndex(), step.getFinishReason(),
+                step.getRawFinishReason(), step.getUsage(), step.getWarnings(), step.getRequest(),
+                step.getResponse(), step.getProviderMetadata()));
+        }
+        parts.add(TextStreamPart.finish(result.getFinishReason(), result.getRawFinishReason(),
+            result.getTotalUsage()));
+        return Flux.fromIterable(parts);
+    }
+
+    private LanguageModelUsage addUsage(LanguageModelUsage left, LanguageModelUsage right) {
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        return LanguageModelUsage.builder()
+            .inputTokens(sum(left.getInputTokens(), right.getInputTokens()))
+            .outputTokens(sum(left.getOutputTokens(), right.getOutputTokens()))
+            .totalTokens(sum(left.getTotalTokens(), right.getTotalTokens()))
+            .build();
+    }
+
+    private Integer sum(Integer left, Integer right) {
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        return left + right;
+    }
+
+    private int maxSteps(GenerateTextRequest request) {
+        return request.getMaxSteps() != null ? request.getMaxSteps() : DEFAULT_MAX_STEPS;
+    }
+
+    private boolean hasTools(GenerateTextRequest request) {
+        return request != null && request.getTools() != null && !request.getTools().isEmpty();
+    }
+
+    private String writeJson(Object value) {
+        try {
+            return JSON_MAPPER.writeValueAsString(value != null ? value : Map.of());
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("failed to serialize JSON value", e);
+        }
+    }
+
+    private <T> List<T> nullSafe(List<T> list) {
+        return list != null ? list : List.of();
     }
 
     private GenerateTextResult mapResult(ChatResponse response) {
@@ -442,5 +905,28 @@ public class LanguageModelImpl implements LanguageModel {
 
     private String safeErrorMessage(Throwable e) {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+    }
+
+    private record StepSnapshot(
+        int stepIndex,
+        String text,
+        AssistantMessage output,
+        List<GenerationContentPart> content,
+        FinishReason finishReason,
+        String rawFinishReason,
+        LanguageModelUsage usage,
+        List<ToolCall> toolCalls,
+        List<GenerationWarning> warnings,
+        GenerationRequestMetadata request,
+        GenerationResponseMetadata response,
+        Map<String, Object> providerMetadata
+    ) {
+    }
+
+    private record ToolExecutionBatch(
+        List<ToolResult> results,
+        List<ToolError> errors,
+        List<GenerationWarning> warnings
+    ) {
     }
 }

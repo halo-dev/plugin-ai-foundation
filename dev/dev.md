@@ -174,6 +174,54 @@ model.streamText(request)
     });
 ```
 
+### 服务端工具调用与多步骤生成
+
+工具调用采用请求级定义，调用方负责提供工具名称、描述、输入 JSON Schema 和服务端 executor。默认 `maxSteps = 1`，模型返回工具调用时只会记录 `tool-call` 并给出 `max-steps-reached` warning，不会执行工具。需要自动执行工具并把结果继续交给模型时，显式设置 `maxSteps` 为 2 或更高。
+
+```java
+LanguageModel model = aiModelService.languageModel("deepseek-prod-deepseek-chat").block();
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("请查询旧金山天气，并用中文简短回答")
+    .tools(List.of(ToolDefinition.builder()
+        .name("weather")
+        .description("查询指定城市当前天气")
+        .inputSchema(Map.of(
+            "type", "object",
+            "properties", Map.of(
+                "location", Map.of("type", "string", "description", "城市名称")
+            ),
+            "required", List.of("location")
+        ))
+        .executor(input -> Mono.just(Map.of(
+            "location", input.get("location"),
+            "temperature", 22,
+            "condition", "sunny"
+        )))
+        .build()))
+    .toolChoice(ToolChoice.auto())
+    .maxSteps(2)
+    .build();
+
+model.generateText(request)
+    .subscribe(result -> {
+        System.out.println(result.getText());
+        for (GenerationStep step : result.getSteps()) {
+            step.getToolCalls().forEach(call ->
+                System.out.println("[Tool call] " + call.getToolName() + " " + call.getInput())
+            );
+            step.getToolResults().forEach(toolResult ->
+                System.out.println("[Tool result] " + toolResult.getToolName() + " " + toolResult.getResult())
+            );
+            step.getToolErrors().forEach(error ->
+                System.err.println("[Tool error] " + error.getToolName() + " " + error.getErrorText())
+            );
+        }
+    });
+```
+
+`ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到 `maxSteps` 仍有工具调用，会记录 `max-steps-reached` warning。
+
 ### GenerateTextRequest 参数
 
 | 字段 | 类型 | 说明 |
@@ -188,6 +236,9 @@ model.streamText(request)
 | `presencePenalty` | `Double` | Presence penalty |
 | `frequencyPenalty` | `Double` | Frequency penalty |
 | `stopSequences` | `List<String>` | 停止序列 |
+| `tools` | `List<ToolDefinition>` | 请求级工具定义，包含名称、描述、输入 JSON Schema 和可选 executor |
+| `toolChoice` | `ToolChoice` | 工具选择策略：`AUTO`、`NONE`、`REQUIRED` 或指定 `TOOL` |
+| `maxSteps` | `Integer` | 最大模型调用步数，默认 1，最大 10 |
 | `providerOptions` | `Map<String, Map<String, Object>>` | 按提供商命名空间分组的特定选项 |
 
 `providerOptions` 必须按提供商分组，避免不同服务商的私有参数冲突，例如：
@@ -201,7 +252,7 @@ Map.of(
 
 ### ModelMessage 构造
 
-V1 的消息内容采用类似 AI SDK `ModelMessage` 的 parts 结构，但当前只支持文本 part。简单文本消息可以直接使用工厂方法：
+消息内容采用类似 AI SDK `ModelMessage` 的 parts 结构。简单文本消息可以直接使用工厂方法：
 
 ```java
 ModelMessage.user("用户消息");
@@ -218,14 +269,14 @@ ModelMessage.builder()
     .build();
 ```
 
-注意：`image`、`file`、`tool-call`、`tool-result` 等非文本 part 是后续扩展方向，V1 调用时会被拒绝。
+`TOOL` 角色消息可携带 `tool-result` 或 `tool-error` part，用于调用方自己恢复一段包含工具结果的历史。普通 `USER`、`ASSISTANT` 和 `SYSTEM` 消息仍以文本为主；`image`、`file` 等多模态 part 当前会被拒绝。
 
 ### GenerateTextResult 返回值
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `text` | `String` | 完整生成文本 |
-| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，当前主要包含 `type = "text"` 的文本 part |
+| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，可能包含 `text`、`tool-call`、`tool-result`、`tool-error` |
 | `finishReason` | `FinishReason` | 统一结束原因，如 `STOP`、`LENGTH`、`CONTENT_FILTER`、`UNKNOWN` |
 | `rawFinishReason` | `String` | 提供商或 Spring AI 返回的原始结束原因 |
 | `usage` | `LanguageModelUsage` | 最后一步 token 使用量，可能为空 |
@@ -233,10 +284,10 @@ ModelMessage.builder()
 | `warnings` | `List<GenerationWarning>` | 非致命警告，例如提供商忽略或不支持某些设置 |
 | `request` | `GenerationRequestMetadata` | 请求侧元数据，例如模型或 provider 信息 |
 | `response` | `GenerationResponseMetadata` | 响应侧元数据，例如响应 ID、模型、响应消息、headers/body 摘要等 |
-| `steps` | `List<GenerationStep>` | 每次模型调用的步骤详情；当前普通文本生成会返回单个 step |
+| `steps` | `List<GenerationStep>` | 每次模型调用的步骤详情，包含该步文本、工具调用、工具结果、工具错误、warning 和元数据 |
 | `providerMetadata` | `Map<String, Object>` | 可序列化的提供商元数据 |
 
-`GenerationStep` 会记录 `stepIndex`、`text`、`content`、`finishReason`、`usage`、`warnings`、`request`、`response` 和 `providerMetadata`。当前还不执行工具调用，因此通常只有 `stepIndex = 0` 的单步结果；该结构主要用于后续扩展多步生成和工具调用。
+`GenerationStep` 会记录 `stepIndex`、`text`、`content`、`finishReason`、`usage`、`toolCalls`、`toolResults`、`toolErrors`、`warnings`、`request`、`response` 和 `providerMetadata`。普通文本生成通常只有 `stepIndex = 0`；带工具且 `maxSteps > 1` 时，每次模型调用都会形成一个 step。
 
 ### TextStreamPart 事件
 
@@ -245,6 +296,10 @@ ModelMessage.builder()
 ```text
 start
 start-step
+tool-call?
+tool-result?/tool-error?
+finish-step
+start-step?
 text-start
 text-delta*
 text-end
@@ -259,6 +314,9 @@ finish
 | `text-start` | 一个文本块开始，包含文本块 `id` |
 | `text-delta` | 增量文本，读取 `delta` |
 | `text-end` | 文本块结束 |
+| `tool-call` | 模型请求调用工具，包含 `toolCallId`、`toolName` 和 `input` |
+| `tool-result` | 服务端工具执行成功，包含 `toolCallId`、`toolName` 和 `result` |
+| `tool-error` | 服务端工具执行失败或模型请求未知工具，包含 `toolCallId`、`toolName` 和 `errorText` |
 | `finish-step` | 当前步骤结束，包含 `finishReason`、可选 `usage`、`warnings`、`request`、`response` 和 `providerMetadata` |
 | `finish` | 整体生成结束，包含 `finishReason` 和可选累计 `usage` |
 | `raw` | 脱敏后的原始诊断信息，只有适配器提供安全数据时才会出现 |
