@@ -5,8 +5,11 @@ import {
   buildTestChatRequest,
   filterEnabledChatModels,
   flushSseJsonBuffer,
+  isRenderableTextDelta,
+  isTerminalTextStreamPart,
   parseProviderOptionsJson,
   parseSseJsonLines,
+  type TextStreamPart,
   type WorkbenchMessage,
 } from './model-test-workbench'
 
@@ -75,6 +78,34 @@ describe('parseSseJsonLines', () => {
 
     expect(result.chunks).toEqual([{ delta: 'Hel' }])
     expect(flushSseJsonBuffer<{ delta: string }>(result.buffer)).toEqual([{ delta: 'lo' }])
+  })
+
+  it('keeps rich stream parts for the caller to classify', () => {
+    const result = parseSseJsonLines<TextStreamPart>(
+      '',
+      [
+        'data: {"type":"start-step","stepIndex":0}',
+        'data: {"type":"raw","metadata":{"safe":"ok"}}',
+        'data: {"type":"unknown-provider-part"}',
+        'data: {"type":"text-delta","delta":"**Hi**"}',
+        'data: {"type":"finish"}',
+        '',
+      ].join('\n'),
+    )
+
+    expect(result.chunks.map((chunk) => chunk.type)).toEqual([
+      'start-step',
+      'raw',
+      'unknown-provider-part',
+      'text-delta',
+      'finish',
+    ])
+    expect(result.chunks.filter(isRenderableTextDelta).map((chunk) => chunk.delta)).toEqual([
+      '**Hi**',
+    ])
+    expect(result.chunks.filter(isTerminalTextStreamPart).map((chunk) => chunk.type)).toEqual([
+      'finish',
+    ])
   })
 })
 

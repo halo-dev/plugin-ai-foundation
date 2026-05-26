@@ -6,6 +6,8 @@ import { groupModelOptionsByProvider, modelOptionLabel } from '@/utils/model-opt
 import {
   buildTestChatRequest,
   flushSseJsonBuffer,
+  isRenderableTextDelta,
+  isTerminalTextStreamPart,
   parseProviderOptionsJson,
   parseSseJsonLines,
   type TextStreamPart,
@@ -190,11 +192,11 @@ function handleChunks(messageId: string, chunks: TextStreamPart[]) {
       appendAssistantError(messageId, chunk.errorText || '请求失败')
       continue
     }
-    if (chunk.type === 'text-delta' && chunk.delta) {
+    if (isRenderableTextDelta(chunk)) {
       appendAssistantContent(messageId, chunk.delta)
       continue
     }
-    if (chunk.type === 'finish') {
+    if (isTerminalTextStreamPart(chunk)) {
       finishAssistantMessage(messageId, 'done')
     }
   }

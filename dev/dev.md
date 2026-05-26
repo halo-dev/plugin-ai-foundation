@@ -124,10 +124,14 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 model.generateText(request)
     .subscribe(result -> {
         System.out.println(result.getText());
+        System.out.println("Steps: " + result.getSteps().size());
         if (result.getUsage() != null) {
             System.out.println("Input tokens: " + result.getUsage().getInputTokens());
             System.out.println("Output tokens: " + result.getUsage().getOutputTokens());
             System.out.println("Total tokens: " + result.getUsage().getTotalTokens());
+        }
+        if (result.getResponse() != null) {
+            System.out.println("Response model: " + result.getResponse().getModel());
         }
     });
 ```
@@ -150,6 +154,11 @@ model.streamText(request)
     .subscribe(part -> {
         switch (part.getType()) {
             case TextStreamPart.TYPE_TEXT_DELTA -> System.out.print(part.getDelta());
+            case TextStreamPart.TYPE_FINISH_STEP -> {
+                if (part.getUsage() != null) {
+                    System.out.println("\n[Step tokens] " + part.getUsage().getTotalTokens());
+                }
+            }
             case TextStreamPart.TYPE_FINISH -> {
                 System.out.println("\n[生成结束] " + part.getFinishReason());
                 if (part.getUsage() != null) {
@@ -159,7 +168,7 @@ model.streamText(request)
             }
             case TextStreamPart.TYPE_ERROR -> System.err.println("Error: " + part.getErrorText());
             default -> {
-                // start、text-start、text-end 等协议事件通常无需处理
+                // start、start-step、text-start、text-end、raw 等协议事件通常无需处理
             }
         }
     });
@@ -216,10 +225,18 @@ ModelMessage.builder()
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `text` | `String` | 完整生成文本 |
+| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，当前主要包含 `type = "text"` 的文本 part |
 | `finishReason` | `FinishReason` | 统一结束原因，如 `STOP`、`LENGTH`、`CONTENT_FILTER`、`UNKNOWN` |
 | `rawFinishReason` | `String` | 提供商或 Spring AI 返回的原始结束原因 |
-| `usage` | `LanguageModelUsage` | token 使用量，可能为空 |
+| `usage` | `LanguageModelUsage` | 最后一步 token 使用量，可能为空 |
+| `totalUsage` | `LanguageModelUsage` | 所有步骤累计 token 使用量；当前单步调用通常与 `usage` 相同 |
+| `warnings` | `List<GenerationWarning>` | 非致命警告，例如提供商忽略或不支持某些设置 |
+| `request` | `GenerationRequestMetadata` | 请求侧元数据，例如模型或 provider 信息 |
+| `response` | `GenerationResponseMetadata` | 响应侧元数据，例如响应 ID、模型、响应消息、headers/body 摘要等 |
+| `steps` | `List<GenerationStep>` | 每次模型调用的步骤详情；当前普通文本生成会返回单个 step |
 | `providerMetadata` | `Map<String, Object>` | 可序列化的提供商元数据 |
+
+`GenerationStep` 会记录 `stepIndex`、`text`、`content`、`finishReason`、`usage`、`warnings`、`request`、`response` 和 `providerMetadata`。当前还不执行工具调用，因此通常只有 `stepIndex = 0` 的单步结果；该结构主要用于后续扩展多步生成和工具调用。
 
 ### TextStreamPart 事件
 
@@ -227,19 +244,25 @@ ModelMessage.builder()
 
 ```text
 start
+start-step
 text-start
 text-delta*
 text-end
+finish-step
 finish
 ```
 
 | `type` | 说明 |
 |--------|------|
 | `start` | 一条模型响应开始，包含 `messageId` |
+| `start-step` | 一次模型调用步骤开始，包含 `stepIndex` |
 | `text-start` | 一个文本块开始，包含文本块 `id` |
 | `text-delta` | 增量文本，读取 `delta` |
 | `text-end` | 文本块结束 |
-| `finish` | 生成结束，包含 `finishReason` 和可选 `usage` |
+| `finish-step` | 当前步骤结束，包含 `finishReason`、可选 `usage`、`warnings`、`request`、`response` 和 `providerMetadata` |
+| `finish` | 整体生成结束，包含 `finishReason` 和可选累计 `usage` |
+| `raw` | 脱敏后的原始诊断信息，只有适配器提供安全数据时才会出现 |
+| `abort` | 调用被中止时的协议事件，调用方可按结束事件处理 |
 | `error` | 流式生成出错，读取 `errorText` |
 
 ## 嵌入模型调用

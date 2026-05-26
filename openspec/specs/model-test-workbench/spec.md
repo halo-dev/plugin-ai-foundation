@@ -30,6 +30,11 @@ The system SHALL let administrators send chat-style text generation messages and
 - **THEN** the assistant message records the `AiModel.metadata.name` and display name of the selected model at the time of the request
 - **AND** changing the selected model later MUST NOT change the attribution displayed on existing assistant messages
 
+#### Scenario: Rich stream lifecycle events do not alter visible content
+- **WHEN** the workbench receives stream lifecycle or diagnostic parts such as `start`, `start-step`, `text-start`, `text-end`, `finish-step`, or `raw`
+- **THEN** the workbench SHALL keep the active assistant message in progress
+- **AND** the workbench SHALL NOT append those parts to the assistant message content
+
 #### Scenario: User stops an in-progress response
 - **WHEN** a streamed response is in progress and the administrator stops generation
 - **THEN** the workbench aborts the active stream request
@@ -65,6 +70,11 @@ The system SHALL render assistant response content as Markdown while it is strea
 - **THEN** the workbench displays `errorText` in the assistant message
 - **AND** the workbench marks the request as no longer loading
 
+#### Scenario: Unknown stream part
+- **WHEN** the SSE stream emits an unknown `TextStreamPart.type`
+- **THEN** the workbench SHALL ignore the part for rendering
+- **AND** the active stream SHALL continue until `finish`, `error`, abort, or `[DONE]`
+
 ### Requirement: Console test route exposes a model test workbench
 The system SHALL provide a dedicated AI Foundation "测试" child route for testing configured chat models.
 
@@ -83,3 +93,4 @@ The system SHALL provide a dedicated AI Foundation "测试" child route for test
 - **THEN** the system SHALL navigate to the AI Foundation test child route
 - **AND** the route SHALL include `model={name}` for the selected model
 - **AND** the selected model in the workbench SHALL be set to that model
+

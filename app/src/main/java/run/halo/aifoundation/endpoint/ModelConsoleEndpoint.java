@@ -124,8 +124,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(GenerateTextRequest.class))
                     .response(responseBuilder()
                         .description("Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. "
-                            + "Each data event contains a TextStreamPart JSON object and the stream "
-                            + "ends with data: [DONE].")
+                            + "Each data event contains a TextStreamPart JSON object. The stream can "
+                            + "include message lifecycle, step lifecycle, text, finish, sanitized raw "
+                            + "diagnostic, and error parts, then ends with data: [DONE].")
                         .implementation(TextStreamPart.class))
             )
             .build();

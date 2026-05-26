@@ -15,6 +15,15 @@
 
 // May contain unused imports in some cases
 // @ts-ignore
+import type { GenerationRequestMetadata } from './generation-request-metadata';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { GenerationResponseMetadata } from './generation-response-metadata';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { GenerationWarning } from './generation-warning';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { LanguageModelUsage } from './language-model-usage';
 
 /**
@@ -61,10 +70,34 @@ export interface TextStreamPart {
     'metadata'?: { [key: string]: object; };
     /**
      * 
+     * @type {{ [key: string]: object; }}
+     * @memberof TextStreamPart
+     */
+    'providerMetadata'?: { [key: string]: object; };
+    /**
+     * 
      * @type {string}
      * @memberof TextStreamPart
      */
     'rawFinishReason'?: string;
+    /**
+     * 
+     * @type {GenerationRequestMetadata}
+     * @memberof TextStreamPart
+     */
+    'request'?: GenerationRequestMetadata;
+    /**
+     * 
+     * @type {GenerationResponseMetadata}
+     * @memberof TextStreamPart
+     */
+    'response'?: GenerationResponseMetadata;
+    /**
+     * 
+     * @type {number}
+     * @memberof TextStreamPart
+     */
+    'stepIndex'?: number;
     /**
      * 
      * @type {string}
@@ -77,6 +110,12 @@ export interface TextStreamPart {
      * @memberof TextStreamPart
      */
     'usage'?: LanguageModelUsage;
+    /**
+     * 
+     * @type {Array<GenerationWarning>}
+     * @memberof TextStreamPart
+     */
+    'warnings'?: Array<GenerationWarning>;
 }
 
 export const TextStreamPartFinishReasonEnum = {

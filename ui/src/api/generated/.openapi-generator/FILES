@@ -26,6 +26,9 @@ models/copy-operation.ts
 models/default-model-slots.ts
 models/discovered-model-item.ts
 models/generate-text-request.ts
+models/generation-request-metadata.ts
+models/generation-response-metadata.ts
+models/generation-warning.ts
 models/index.ts
 models/json-patch-inner.ts
 models/language-model-usage.ts

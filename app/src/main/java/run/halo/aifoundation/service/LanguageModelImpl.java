@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import run.halo.aifoundation.FinishReason;
+import run.halo.aifoundation.GenerationContentPart;
+import run.halo.aifoundation.GenerationRequestMetadata;
+import run.halo.aifoundation.GenerationResponseMetadata;
+import run.halo.aifoundation.GenerationStep;
+import run.halo.aifoundation.GenerationWarning;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.GenerateTextResult;
 import run.halo.aifoundation.LanguageModel;
@@ -71,9 +77,12 @@ public class LanguageModelImpl implements LanguageModel {
                         return Flux.empty();
                     }
                     finished.set(true);
+                    var finishReason = FinishReason.UNKNOWN;
                     return Flux.just(
                         TextStreamPart.textEnd(textId),
-                        TextStreamPart.finish(FinishReason.UNKNOWN, null, null)
+                        TextStreamPart.finishStep(0, finishReason, null, null, List.of(), null,
+                            null, Map.of()),
+                        TextStreamPart.finish(finishReason, null, null)
                     );
                 }))
                 .onErrorResume(e -> {
@@ -82,6 +91,7 @@ public class LanguageModelImpl implements LanguageModel {
                 });
 
             return Flux.concat(Flux.just(TextStreamPart.start(messageId),
+                TextStreamPart.startStep(0),
                 TextStreamPart.textStart(textId)), stream);
         });
     }
@@ -189,12 +199,37 @@ public class LanguageModelImpl implements LanguageModel {
         var rawFinishReason = result != null && result.getMetadata() != null
             ? result.getMetadata().getFinishReason()
             : null;
+        var finishReason = mapFinishReason(rawFinishReason);
+        var usage = mapUsage(response);
+        var providerMetadata = mapMetadata(response);
+        var warnings = mapWarnings(response);
+        var requestMetadata = mapRequestMetadata(response);
+        var responseMetadata = mapResponseMetadata(response, text);
+        var content = contentParts(text);
+        var step = GenerationStep.builder()
+            .stepIndex(0)
+            .text(text)
+            .content(content)
+            .finishReason(finishReason)
+            .rawFinishReason(rawFinishReason)
+            .usage(usage)
+            .warnings(warnings)
+            .request(requestMetadata)
+            .response(responseMetadata)
+            .providerMetadata(providerMetadata)
+            .build();
         return GenerateTextResult.builder()
             .text(text)
-            .finishReason(mapFinishReason(rawFinishReason))
+            .content(content)
+            .finishReason(finishReason)
             .rawFinishReason(rawFinishReason)
-            .usage(mapUsage(response))
-            .providerMetadata(mapMetadata(response))
+            .usage(usage)
+            .totalUsage(usage)
+            .warnings(warnings)
+            .request(requestMetadata)
+            .response(responseMetadata)
+            .steps(List.of(step))
+            .providerMetadata(providerMetadata)
             .build();
     }
 
@@ -209,9 +244,17 @@ public class LanguageModelImpl implements LanguageModel {
         var rawFinishReason = extractFinishReason(response);
         if (isFinish(rawFinishReason)) {
             finished.set(true);
+            var finishReason = mapFinishReason(rawFinishReason);
+            var usage = mapUsage(response);
+            var rawDiagnostic = sanitizedRawDiagnostic(response);
+            if (!rawDiagnostic.isEmpty()) {
+                parts.add(TextStreamPart.raw(rawDiagnostic));
+            }
             parts.add(TextStreamPart.textEnd(textId));
-            parts.add(TextStreamPart.finish(mapFinishReason(rawFinishReason), rawFinishReason,
-                mapUsage(response)));
+            parts.add(TextStreamPart.finishStep(0, finishReason, rawFinishReason, usage,
+                mapWarnings(response), mapRequestMetadata(response),
+                mapResponseMetadata(response, extractText(response)), mapMetadata(response)));
+            parts.add(TextStreamPart.finish(finishReason, rawFinishReason, usage));
         }
         return Flux.fromIterable(parts);
     }
@@ -278,14 +321,119 @@ public class LanguageModelImpl implements LanguageModel {
             return Map.of();
         }
         var map = new LinkedHashMap<String, Object>();
+        map.put("providerType", providerType);
         if (hasText(metadata.getId())) {
             map.put("id", metadata.getId());
         }
         if (hasText(metadata.getModel())) {
             map.put("model", metadata.getModel());
         }
-        metadata.entrySet().forEach(entry -> map.put(entry.getKey(), entry.getValue()));
+        metadata.entrySet().forEach(entry -> map.put(entry.getKey(), sanitizeValue(entry.getValue())));
         return map;
+    }
+
+    private List<GenerationContentPart> contentParts(String text) {
+        if (!hasText(text)) {
+            return List.of();
+        }
+        return List.of(GenerationContentPart.text(text));
+    }
+
+    private List<GenerationWarning> mapWarnings(ChatResponse response) {
+        var metadata = response.getMetadata();
+        if (metadata == null || !metadata.containsKey("warnings")) {
+            return List.of();
+        }
+        var warnings = metadata.get("warnings");
+        if (warnings instanceof Collection<?> collection) {
+            return collection.stream()
+                .map(this::mapWarning)
+                .toList();
+        }
+        return List.of(mapWarning(warnings));
+    }
+
+    @SuppressWarnings("unchecked")
+    private GenerationWarning mapWarning(Object value) {
+        if (value instanceof GenerationWarning warning) {
+            return warning;
+        }
+        if (value instanceof Map<?, ?> map) {
+            var code = map.get("code");
+            var message = map.get("message");
+            return GenerationWarning.builder()
+                .code(code != null ? code.toString() : null)
+                .message(message != null ? message.toString() : null)
+                .providerMetadata((Map<String, Object>) sanitizeValue(map))
+                .build();
+        }
+        return GenerationWarning.builder()
+            .message(value != null ? value.toString() : null)
+            .build();
+    }
+
+    private GenerationRequestMetadata mapRequestMetadata(ChatResponse response) {
+        var metadata = response.getMetadata();
+        return GenerationRequestMetadata.builder()
+            .model(metadata != null ? metadata.getModel() : null)
+            .metadata(Map.of("providerType", providerType))
+            .build();
+    }
+
+    private GenerationResponseMetadata mapResponseMetadata(ChatResponse response, String text) {
+        var metadata = response.getMetadata();
+        return GenerationResponseMetadata.builder()
+            .id(metadata != null ? metadata.getId() : null)
+            .model(metadata != null ? metadata.getModel() : null)
+            .messages(hasText(text) ? List.of(ModelMessage.assistant(text)) : List.of())
+            .metadata(mapMetadata(response))
+            .build();
+    }
+
+    private Map<String, Object> sanitizedRawDiagnostic(ChatResponse response) {
+        var metadata = response.getMetadata();
+        if (metadata == null) {
+            return Map.of();
+        }
+        var raw = new LinkedHashMap<String, Object>();
+        metadata.entrySet().forEach(entry -> {
+            var key = entry.getKey();
+            if (key != null && isRawDiagnosticKey(key)) {
+                raw.put(key, sanitizeValue(entry.getValue()));
+            }
+        });
+        return raw;
+    }
+
+    private boolean isRawDiagnosticKey(String key) {
+        var normalized = key.toLowerCase();
+        return normalized.contains("raw") || normalized.contains("native");
+    }
+
+    private Object sanitizeValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            var sanitized = new LinkedHashMap<String, Object>();
+            map.forEach((key, nestedValue) -> {
+                var keyString = key != null ? key.toString() : "";
+                sanitized.put(keyString, isSensitiveKey(keyString) ? "[REDACTED]"
+                    : sanitizeValue(nestedValue));
+            });
+            return sanitized;
+        }
+        if (value instanceof Collection<?> collection) {
+            return collection.stream().map(this::sanitizeValue).toList();
+        }
+        return value;
+    }
+
+    private boolean isSensitiveKey(String key) {
+        var normalized = key.toLowerCase();
+        return normalized.contains("apikey")
+            || normalized.contains("api_key")
+            || normalized.contains("authorization")
+            || normalized.contains("token")
+            || normalized.contains("secret")
+            || normalized.contains("password");
     }
 
     private boolean hasText(String value) {

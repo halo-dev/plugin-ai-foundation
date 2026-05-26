@@ -45,9 +45,21 @@ export interface GenerateTextRequest {
 }
 
 export interface TextStreamPart {
-  type?: 'start' | 'text-start' | 'text-delta' | 'text-end' | 'finish' | 'error'
+  type?:
+    | 'start'
+    | 'start-step'
+    | 'text-start'
+    | 'text-delta'
+    | 'text-end'
+    | 'finish-step'
+    | 'finish'
+    | 'raw'
+    | 'abort'
+    | 'error'
+    | (string & {})
   messageId?: string
   id?: string
+  stepIndex?: number
   delta?: string
   errorText?: string
 }
@@ -146,4 +158,14 @@ export function flushSseJsonBuffer<T>(buffer: string) {
   }
   const data = line.slice(5).trim()
   return data && data !== '[DONE]' ? [JSON.parse(data) as T] : []
+}
+
+export function isRenderableTextDelta(
+  part: TextStreamPart,
+): part is TextStreamPart & { type: 'text-delta'; delta: string } {
+  return part.type === 'text-delta' && !!part.delta
+}
+
+export function isTerminalTextStreamPart(part: TextStreamPart) {
+  return part.type === 'finish' || part.type === 'error' || part.type === 'abort'
 }

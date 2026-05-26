@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:51286",
+    "url" : "http://localhost:39480",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -712,7 +712,7 @@
                 }
               }
             },
-            "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object and the stream ends with data: [DONE]."
+            "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object. The stream can include message lifecycle, step lifecycle, text, finish, sanitized raw diagnostic, and error parts, then ends with data: [DONE]."
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
@@ -1325,6 +1325,79 @@
           }
         }
       },
+      "GenerationRequestMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          }
+        }
+      },
+      "GenerationResponseMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "body" : {
+            "type" : "object"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessage"
+            }
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "GenerationWarning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          }
+        }
+      },
       "JsonPatch" : {
         "minItems" : 1,
         "uniqueItems" : true,
@@ -1707,14 +1780,36 @@
               "type" : "object"
             }
           },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
           "rawFinishReason" : {
             "type" : "string"
+          },
+          "request" : {
+            "$ref" : "#/components/schemas/GenerationRequestMetadata"
+          },
+          "response" : {
+            "$ref" : "#/components/schemas/GenerationResponseMetadata"
+          },
+          "stepIndex" : {
+            "type" : "integer",
+            "format" : "int32"
           },
           "type" : {
             "type" : "string"
           },
           "usage" : {
             "$ref" : "#/components/schemas/LanguageModelUsage"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GenerationWarning"
+            }
           }
         }
       }

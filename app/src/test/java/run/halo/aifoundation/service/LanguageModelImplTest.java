@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -52,11 +53,30 @@ class LanguageModelImplTest {
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> {
                 assertThat(result.getText()).isEqualTo("Done");
+                assertThat(result.getContent())
+                    .singleElement()
+                    .satisfies(part -> {
+                        assertThat(part.getType()).isEqualTo("text");
+                        assertThat(part.getText()).isEqualTo("Done");
+                    });
                 assertThat(result.getFinishReason()).isEqualTo(FinishReason.STOP);
                 assertThat(result.getRawFinishReason()).isEqualTo("stop");
                 assertThat(result.getUsage().getInputTokens()).isEqualTo(3);
                 assertThat(result.getUsage().getOutputTokens()).isEqualTo(5);
                 assertThat(result.getUsage().getTotalTokens()).isEqualTo(8);
+                assertThat(result.getTotalUsage().getTotalTokens()).isEqualTo(8);
+                assertThat(result.getRequest().getMetadata()).containsEntry("providerType", "openai");
+                assertThat(result.getResponse().getMessages())
+                    .singleElement()
+                    .satisfies(message -> assertThat(message.getRole())
+                        .isEqualTo(run.halo.aifoundation.ModelMessageRole.ASSISTANT));
+                assertThat(result.getSteps())
+                    .singleElement()
+                    .satisfies(step -> {
+                        assertThat(step.getStepIndex()).isZero();
+                        assertThat(step.getText()).isEqualTo("Done");
+                        assertThat(step.getUsage().getTotalTokens()).isEqualTo(8);
+                    });
             })
             .verifyComplete();
 
@@ -116,6 +136,10 @@ class LanguageModelImplTest {
 
         StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
             .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_START))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_START_STEP);
+                assertThat(part.getStepIndex()).isZero();
+            })
             .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_START))
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
@@ -127,11 +151,52 @@ class LanguageModelImplTest {
             })
             .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_END))
             .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
+                assertThat(part.getStepIndex()).isZero();
+                assertThat(part.getFinishReason()).isEqualTo(FinishReason.STOP);
+                assertThat(part.getUsage().getInputTokens()).isEqualTo(2);
+                assertThat(part.getUsage().getOutputTokens()).isEqualTo(4);
+            })
+            .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH);
                 assertThat(part.getFinishReason()).isEqualTo(FinishReason.STOP);
                 assertThat(part.getUsage().getInputTokens()).isEqualTo(2);
                 assertThat(part.getUsage().getOutputTokens()).isEqualTo(4);
             })
+            .verifyComplete();
+    }
+
+    @Test
+    void streamText_emitsSanitizedRawDiagnosticPart() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("Hi", null, null, null),
+            chatResponse("",
+                "stop",
+                1,
+                2,
+                Map.of("rawResponse", Map.of(
+                    "apiKey", "secret-value",
+                    "nested", Map.of("authorization", "Bearer token", "safe", "ok")
+                )))
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_RAW);
+                assertThat(part.getMetadata()).containsKey("rawResponse");
+                assertThat(part.getMetadata().toString()).doesNotContain("secret-value");
+                assertThat(part.getMetadata().toString()).doesNotContain("Bearer token");
+                assertThat(part.getMetadata().toString()).contains("[REDACTED]");
+            })
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
             .verifyComplete();
     }
 
@@ -144,6 +209,7 @@ class LanguageModelImplTest {
 
         StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
@@ -154,10 +220,18 @@ class LanguageModelImplTest {
 
     private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
         Integer completionTokens) {
+        return chatResponse(text, finishReason, promptTokens, completionTokens, Map.of());
+    }
+
+    private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
+        Integer completionTokens, Map<String, Object> metadata) {
         var generationMetadata = ChatGenerationMetadata.builder()
             .finishReason(finishReason)
             .build();
-        var metadataBuilder = ChatResponseMetadata.builder();
+        var metadataBuilder = ChatResponseMetadata.builder()
+            .id("resp_1")
+            .model("test-model")
+            .metadata(metadata);
         if (promptTokens != null || completionTokens != null) {
             metadataBuilder.usage(new DefaultUsage(promptTokens, completionTokens));
         }
