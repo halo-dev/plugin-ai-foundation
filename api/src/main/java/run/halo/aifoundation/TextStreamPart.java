@@ -43,9 +43,13 @@ public class TextStreamPart {
     public static final String TYPE_REASONING_START = PartType.REASONING_START;
     public static final String TYPE_REASONING_DELTA = PartType.REASONING_DELTA;
     public static final String TYPE_REASONING_END = PartType.REASONING_END;
+    public static final String TYPE_TOOL_INPUT_START = PartType.TOOL_INPUT_START;
+    public static final String TYPE_TOOL_INPUT_DELTA = PartType.TOOL_INPUT_DELTA;
     public static final String TYPE_TOOL_CALL = PartType.TOOL_CALL;
     public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
     public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
+    public static final String TYPE_SOURCE = PartType.SOURCE;
+    public static final String TYPE_FILE = PartType.FILE;
     public static final String TYPE_FINISH_STEP = PartType.FINISH_STEP;
     public static final String TYPE_FINISH = PartType.FINISH;
     public static final String TYPE_RAW = PartType.RAW;
@@ -128,6 +132,22 @@ public class TextStreamPart {
      */
     private String errorText;
     /**
+     * Source URL or generated file URL.
+     */
+    private String url;
+    /**
+     * Source or generated file title/name.
+     */
+    private String title;
+    /**
+     * Generated file media type.
+     */
+    private String mediaType;
+    /**
+     * Generated file data when available.
+     */
+    private Object data;
+    /**
      * Sanitized diagnostic metadata for {@link PartType#RAW}.
      */
     private Map<String, Object> metadata;
@@ -195,6 +215,32 @@ public class TextStreamPart {
     }
 
     /**
+     * Creates a tool input block start event.
+     */
+    public static TextStreamPart toolInputStart(String id, String toolCallId, String toolName) {
+        return TextStreamPart.builder()
+            .type(TYPE_TOOL_INPUT_START)
+            .id(id)
+            .toolCallId(toolCallId)
+            .toolName(toolName)
+            .build();
+    }
+
+    /**
+     * Creates a tool input delta event.
+     */
+    public static TextStreamPart toolInputDelta(String id, String toolCallId, String toolName,
+        String delta) {
+        return TextStreamPart.builder()
+            .type(TYPE_TOOL_INPUT_DELTA)
+            .id(id)
+            .toolCallId(toolCallId)
+            .toolName(toolName)
+            .delta(delta)
+            .build();
+    }
+
+    /**
      * Creates a stream event for a model-requested tool call.
      */
     public static TextStreamPart toolCall(ToolCall toolCall) {
@@ -230,6 +276,34 @@ public class TextStreamPart {
             .toolName(toolError.getToolName())
             .errorText(toolError.getErrorText())
             .providerMetadata(toolError.getProviderMetadata())
+            .build();
+    }
+
+    /**
+     * Creates a source reference event.
+     */
+    public static TextStreamPart source(GenerationContentPart source) {
+        return TextStreamPart.builder()
+            .type(TYPE_SOURCE)
+            .id(source.getId())
+            .url(source.getUrl())
+            .title(source.getTitle())
+            .providerMetadata(source.getMetadata())
+            .build();
+    }
+
+    /**
+     * Creates a generated file event.
+     */
+    public static TextStreamPart file(GenerationContentPart file) {
+        return TextStreamPart.builder()
+            .type(TYPE_FILE)
+            .id(file.getId())
+            .url(file.getUrl())
+            .title(file.getTitle())
+            .mediaType(file.getMediaType())
+            .data(file.getData())
+            .providerMetadata(file.getMetadata())
             .build();
     }
 

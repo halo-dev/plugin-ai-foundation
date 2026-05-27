@@ -87,15 +87,35 @@ The system SHALL expose complete parsed structured output for streamed generatio
 - **THEN** `StreamTextResult.partialOutputStream()` SHALL complete without emitting structured values
 - **AND** `StreamTextResult.elementStream()` SHALL complete without emitting structured values
 
+#### Scenario: Object output streams JSON text
+- **WHEN** a request uses object output and the model streams JSON text
+- **THEN** `textStream()` MUST emit the JSON text deltas and `output()` MUST resolve the parsed validated object after completion
+
+#### Scenario: Choice output streams answer text
+- **WHEN** a request uses choice output
+- **THEN** `textStream()` MUST emit the selected choice text and `output()` MUST resolve only if the final value is one of the allowed choices
+
+#### Scenario: Partial object is incomplete
+- **WHEN** a streamed partial object is missing required final schema fields
+- **THEN** `partialOutputStream()` MAY emit that partial value and MUST NOT mark final validation as successful
+
+#### Scenario: Completed element validates
+- **WHEN** an array output stream completes an element that matches the element schema
+- **THEN** `elementStream()` MUST emit that element
+
+#### Scenario: Invalid completed element fails
+- **WHEN** an array output stream completes an element that violates the element schema
+- **THEN** `elementStream()` MUST fail with structured validation error details
+
 ### Requirement: Structured output with tool calling
 The system SHALL support structured output and server-side tools in the same request.
 
 #### Scenario: Tool steps before structured final answer
-- **WHEN** a structured output request also includes tools and `maxSteps` allows continuation
+- **WHEN** a structured output request also includes tools and `stopWhen` allows continuation
 - **THEN** tool-call steps SHALL execute normally
 - **AND** structured output SHALL be parsed and validated from the final answer step
 
-#### Scenario: Max steps reached before structured output
-- **WHEN** tool calling reaches `maxSteps` before a final structured answer is produced
-- **THEN** the result or stream SHALL include the existing max-step warning
+#### Scenario: Stop condition reached before structured output
+- **WHEN** tool calling reaches the step limit before a final structured answer is produced
+- **THEN** the result or stream SHALL include the existing stop-condition warning
 - **AND** structured output validation SHALL fail if no valid final structured output exists

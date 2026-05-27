@@ -187,10 +187,9 @@ The system SHALL support structured text generation requests via `GenerateTextRe
 - **THEN** the system SHALL pass supported options to the underlying provider client through the model implementation
 
 #### Scenario: Tool generation options
-- **WHEN** a consumer sends `tools`, `toolChoice`, or `maxSteps`
-- **THEN** the system SHALL validate those fields before invoking the provider
-- **AND** `maxSteps` SHALL default to `1` when omitted
-- **AND** values below `1` SHALL be rejected
+- **WHEN** a consumer sends `tools`, `toolChoice`, or `stopWhen`
+- **THEN** the system SHALL validate provider-serializable tool fields before invoking the provider
+- **AND** the system SHALL perform at most one provider call when `stopWhen` is omitted
 
 #### Scenario: Namespaced provider options
 - **WHEN** a consumer sends `providerOptions = {"openai": {"logitBias": {"50256": -100}}}`
@@ -202,6 +201,14 @@ The system SHALL support structured text generation requests via `GenerateTextRe
 - **THEN** the system SHALL represent the request with provider-neutral API DTOs
 - **AND** the provider invocation SHALL receive a provider-neutral instruction or provider-specific response-format mapping when supported
 - **AND** callers SHALL NOT need Spring AI, OpenAI, Zod, Valibot, or provider-native schema classes
+
+#### Scenario: Java caller sets stop condition
+- **WHEN** a Java caller builds a text generation request with a stop condition
+- **THEN** the language model service MUST apply that condition during generation
+
+#### Scenario: Java caller sets prepare callback
+- **WHEN** a Java caller builds a text generation request with a prepare-step callback
+- **THEN** the language model service MUST invoke the callback before each model step
 
 ### Requirement: ModelMessage content parts
 
@@ -267,6 +274,14 @@ The system SHALL return a model-independent `GenerateTextResult` for non-streami
 - **THEN** `GenerateTextResult.output` SHALL contain the parsed final structured value
 - **AND** `GenerateTextResult.outputText` SHALL contain the raw text used to parse the output when available
 - **AND** the final answer `GenerationStep` SHALL contain the same parsed structured output
+
+#### Scenario: Provider returns sources
+- **WHEN** a provider response includes source references
+- **THEN** the generated result content MUST expose those sources through provider-neutral content parts
+
+#### Scenario: Provider returns files
+- **WHEN** a provider response includes generated files
+- **THEN** the generated result content MUST expose those files through provider-neutral content parts
 
 #### Scenario: Request and response metadata
 - **WHEN** request or response metadata is available from the provider adapter
@@ -496,16 +511,16 @@ The system SHALL allow callers to define request-scoped tools for language model
 The system SHALL execute server-side tools and continue generation across multiple provider calls when requested.
 
 #### Scenario: Single-step default
-- **WHEN** a request omits `maxSteps`
+- **WHEN** a request omits `stopWhen`
 - **THEN** the system SHALL perform at most one provider call
-- **AND** if the model returns a tool call, the system SHALL record the tool call but SHALL NOT execute another provider step unless `maxSteps` allows it
+- **AND** if the model returns a tool call, the system SHALL record the tool call but SHALL NOT execute another provider step unless `stopWhen` allows it
 
 #### Scenario: Tool call with executor
 - **WHEN** a provider returns a tool call whose name matches a request tool with an executor
-- **AND** `maxSteps` allows another step
+- **AND** `stopWhen` allows another step
 - **THEN** the system SHALL execute the tool
 - **AND** append a tool result message to the next provider call
-- **AND** continue generation until there are no executable tool calls or `maxSteps` is reached
+- **AND** continue generation until there are no executable tool calls or `stopWhen` stops the loop
 
 #### Scenario: Tool call without executor
 - **WHEN** a provider returns a tool call whose name matches a request tool without an executor
@@ -536,11 +551,11 @@ The `LanguageModel.streamText` API SHALL support request-scoped server-side tool
 - **THEN** the returned `Flux<TextStreamPart>` SHALL emit model stream parts as provider chunks arrive
 - **AND** it SHALL NOT delegate to `generateText` and replay the completed result as a synthetic stream
 
-#### Scenario: Streamed tool loop follows max steps
+#### Scenario: Streamed tool loop follows stop condition
 - **WHEN** a streamed tool call is executable
-- **AND** `maxSteps` allows continuation
+- **AND** `stopWhen` allows continuation
 - **THEN** `LanguageModel.streamText` SHALL execute the tool and start the next provider stream step
-- **AND** the stream SHALL stop when there are no tool calls, a tool cannot be executed, a tool fails, or `maxSteps` is reached
+- **AND** the stream SHALL stop when there are no tool calls, a tool cannot be executed, a tool fails, or `stopWhen` stops the loop
 
 #### Scenario: Streamed usage is aggregated across steps
 - **WHEN** a tool-enabled stream completes after multiple provider steps

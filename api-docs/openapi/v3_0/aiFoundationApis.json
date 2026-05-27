@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:62748",
+    "url" : "http://localhost:31439",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1287,10 +1287,6 @@
             "type" : "integer",
             "format" : "int32"
           },
-          "maxSteps" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
           "messages" : {
             "type" : "array",
             "items" : {
@@ -1851,6 +1847,9 @@
       "TextStreamPart" : {
         "type" : "object",
         "properties" : {
+          "data" : {
+            "type" : "object"
+          },
           "delta" : {
             "type" : "string"
           },
@@ -1869,6 +1868,9 @@
             "additionalProperties" : {
               "type" : "object"
             }
+          },
+          "mediaType" : {
+            "type" : "string"
           },
           "messageId" : {
             "type" : "string"
@@ -1904,6 +1906,9 @@
             "type" : "integer",
             "format" : "int32"
           },
+          "title" : {
+            "type" : "string"
+          },
           "toolCallId" : {
             "type" : "string"
           },
@@ -1911,6 +1916,9 @@
             "type" : "string"
           },
           "type" : {
+            "type" : "string"
+          },
+          "url" : {
             "type" : "string"
           },
           "usage" : {

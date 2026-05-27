@@ -56,7 +56,6 @@ describe('buildTestChatRequest', () => {
         temperature: 0.2,
         topP: 0.9,
         maxOutputTokens: 128,
-        maxSteps: 2,
         providerOptions: { openai: { seed: 42 } },
         output: { type: 'OBJECT', schema: { type: 'object' } } as unknown as OutputSpec,
       }),
@@ -66,18 +65,30 @@ describe('buildTestChatRequest', () => {
         { role: 'USER', content: [{ type: 'text', text: 'Hello' }] },
         {
           role: 'ASSISTANT',
-          content: [
-            { type: 'reasoning', text: 'Think' },
-            { type: 'text', text: 'Hi' },
-          ],
+          content: [{ type: 'text', text: 'Hi' }],
         },
       ],
       temperature: 0.2,
       topP: 0.9,
       maxOutputTokens: 128,
-      maxSteps: 2,
       providerOptions: { openai: { seed: 42 } },
       output: { type: 'OBJECT', schema: { type: 'object' } },
+    })
+  })
+
+  it('does not send displayed reasoning back as chat history', () => {
+    expect(
+      buildTestChatRequest([
+        { id: '1', role: 'user', content: 'Hello' },
+        { id: '2', role: 'assistant', content: 'Hi', reasoningContent: 'Think', state: 'done' },
+        { id: '3', role: 'user', content: 'Continue' },
+      ], {}),
+    ).toMatchObject({
+      messages: [
+        { role: 'USER', content: [{ type: 'text', text: 'Hello' }] },
+        { role: 'ASSISTANT', content: [{ type: 'text', text: 'Hi' }] },
+        { role: 'USER', content: [{ type: 'text', text: 'Continue' }] },
+      ],
     })
   })
 })
@@ -125,8 +136,12 @@ describe('parseSseJsonLines', () => {
         'data: {"type":"start-step","stepIndex":0}',
         'data: {"type":"raw","metadata":{"safe":"ok"}}',
         'data: {"type":"tool-call","toolCallId":"call_1","toolName":"weather","input":{"location":"SF"}}',
+        'data: {"type":"tool-input-start","toolCallId":"call_3","toolName":"weather","id":"input_1"}',
+        'data: {"type":"tool-input-delta","toolCallId":"call_3","toolName":"weather","id":"input_1","delta":"{\\"location\\""}',
         'data: {"type":"tool-result","toolCallId":"call_1","toolName":"weather","result":{"temperature":22}}',
         'data: {"type":"tool-error","toolCallId":"call_2","toolName":"search","errorText":"failed"}',
+        'data: {"type":"source","id":"src_1","url":"https://example.com","title":"Example"}',
+        'data: {"type":"file","id":"file_1","title":"answer.txt","mediaType":"text/plain"}',
         'data: {"type":"reasoning-delta","delta":"Thinking","providerMetadata":{"deepseek":{}}}',
         'data: {"type":"unknown-provider-part"}',
         'data: {"type":"text-delta","delta":"**Hi**"}',
@@ -139,8 +154,12 @@ describe('parseSseJsonLines', () => {
       'start-step',
       'raw',
       'tool-call',
+      'tool-input-start',
+      'tool-input-delta',
       'tool-result',
       'tool-error',
+      'source',
+      'file',
       'reasoning-delta',
       'unknown-provider-part',
       'text-delta',
@@ -151,15 +170,25 @@ describe('parseSseJsonLines', () => {
       toolName: 'weather',
       input: { location: 'SF' },
     })
-    expect(result.chunks[3]).toMatchObject({
+    expect(result.chunks[5]).toMatchObject({
       toolCallId: 'call_1',
       toolName: 'weather',
       result: { temperature: 22 },
     })
-    expect(result.chunks[4]).toMatchObject({
+    expect(result.chunks[6]).toMatchObject({
       toolCallId: 'call_2',
       toolName: 'search',
       errorText: 'failed',
+    })
+    expect(result.chunks[7]).toMatchObject({
+      type: 'source',
+      url: 'https://example.com',
+      title: 'Example',
+    })
+    expect(result.chunks[8]).toMatchObject({
+      type: 'file',
+      title: 'answer.txt',
+      mediaType: 'text/plain',
     })
     expect(result.chunks.filter(isRenderableTextDelta).map((chunk) => chunk.delta)).toEqual([
       '**Hi**',

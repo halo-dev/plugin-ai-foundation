@@ -122,6 +122,14 @@ The Console test-chat streaming endpoint SHALL preserve its SSE protocol while c
 - **THEN** the endpoint SHALL emit a safe `error` part when needed
 - **AND** the stream SHALL end with `data: [DONE]`
 
+#### Scenario: Reasoning appears before answer text
+- **WHEN** the model emits reasoning before final answer text
+- **THEN** the endpoint MUST send reasoning parts before text parts in the same order as `fullStream()`
+
+#### Scenario: Tool call appears before final answer
+- **WHEN** a stream executes a tool before the final answer
+- **THEN** the endpoint MUST send tool call and tool result parts before the final answer text parts that depend on them
+
 ### Requirement: Workbench tolerates structured stream views
 The model test workbench SHALL continue rendering the full Halo stream while structured output is enabled.
 
@@ -129,3 +137,7 @@ The model test workbench SHALL continue rendering the full Halo stream while str
 - **WHEN** a structured output test returns JSON text in `text-delta` parts
 - **THEN** the workbench SHALL append that JSON to the assistant answer text
 - **AND** it SHALL NOT require final parsed `output` to render the answer
+
+#### Scenario: Tool input delta event
+- **WHEN** the UI receives tool input delta events before a tool call
+- **THEN** the parser MUST keep the final tool call display associated with the same tool call id

@@ -32,7 +32,27 @@ The system SHALL expose streaming text generation as a provider-neutral result o
 - **THEN** `StreamTextResult.result()` SHALL complete with the same model-independent fields available from `GenerateTextResult`
 - **AND** `StreamTextResult.output()` SHALL complete with the parsed structured output when structured output was requested
 
+#### Scenario: Caller reads final text directly
+- **WHEN** a caller subscribes to `StreamTextResult.text()`
+- **THEN** the system MUST resolve the complete generated answer text after the stream finishes
+
+#### Scenario: Caller reads final usage directly
+- **WHEN** a caller subscribes to `StreamTextResult.totalUsage()`
+- **THEN** the system MUST resolve aggregate usage across all completed steps
+
+#### Scenario: Caller reads tool results directly
+- **WHEN** a multi-step stream executes tools
+- **THEN** the system MUST expose the final step tool calls, final step tool results, and aggregated step details through convenience projections
+
+#### Scenario: Late final result subscriber
+- **WHEN** a caller subscribes to a final projection after the full stream has completed
+- **THEN** the system MUST return the cached final result without invoking the provider again
+
 #### Scenario: Final stream error access
 - **WHEN** a streamed generation fails before a valid final result is available
 - **THEN** `StreamTextResult.fullStream()` SHALL emit a safe `error` part when the protocol can still complete gracefully
 - **AND** `StreamTextResult.result()` and `StreamTextResult.output()` SHALL fail with the typed cause when applicable
+
+#### Scenario: Final projection observes failure
+- **WHEN** the provider fails during streaming
+- **THEN** final projections MUST terminate with the corresponding sanitized generation exception

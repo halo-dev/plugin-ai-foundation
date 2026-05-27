@@ -34,6 +34,12 @@ import type { LanguageModelUsage } from './language-model-usage';
 export interface TextStreamPart {
     /**
      *
+     * @type {object}
+     * @memberof TextStreamPart
+     */
+    'data'?: object;
+    /**
+     *
      * @type {string}
      * @memberof TextStreamPart
      */
@@ -62,6 +68,12 @@ export interface TextStreamPart {
      * @memberof TextStreamPart
      */
     'input'?: { [key: string]: object; };
+    /**
+     *
+     * @type {string}
+     * @memberof TextStreamPart
+     */
+    'mediaType'?: string;
     /**
      *
      * @type {string}
@@ -121,6 +133,12 @@ export interface TextStreamPart {
      * @type {string}
      * @memberof TextStreamPart
      */
+    'title'?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof TextStreamPart
+     */
     'toolCallId'?: string;
     /**
      *
@@ -134,6 +152,12 @@ export interface TextStreamPart {
      * @memberof TextStreamPart
      */
     'type'?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof TextStreamPart
+     */
+    'url'?: string;
     /**
      *
      * @type {LanguageModelUsage}

@@ -27,7 +27,6 @@ export interface ChatParameters {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
-  maxSteps?: number
   providerOptions?: Record<string, Record<string, unknown>>
   output?: OutputSpec
 }
@@ -55,7 +54,6 @@ export interface GenerateTextRequest {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
-  maxSteps?: number
   providerOptions?: Record<string, Record<string, unknown>>
   output?: OutputSpec
 }
@@ -70,9 +68,13 @@ export interface TextStreamPart {
     | 'reasoning-start'
     | 'reasoning-delta'
     | 'reasoning-end'
+    | 'tool-input-start'
+    | 'tool-input-delta'
     | 'tool-call'
     | 'tool-result'
     | 'tool-error'
+    | 'source'
+    | 'file'
     | 'finish-step'
     | 'finish'
     | 'raw'
@@ -89,6 +91,10 @@ export interface TextStreamPart {
   input?: Record<string, unknown>
   result?: unknown
   errorText?: string
+  url?: string
+  title?: string
+  mediaType?: string
+  data?: unknown
 }
 
 export function isEnabledChatModel(model: AiModel) {
@@ -195,10 +201,6 @@ export function buildTestChatRequest(
       continue
     }
     const parts: ModelMessagePart[] = []
-    const reasoningContent = message.reasoningContent?.trim()
-    if (message.role === 'assistant' && reasoningContent) {
-      parts.push({ type: 'reasoning', text: reasoningContent })
-    }
     parts.push({ type: 'text', text: content })
     requestMessages.push({
       role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
@@ -212,7 +214,6 @@ export function buildTestChatRequest(
     temperature: parameters.temperature,
     topP: parameters.topP,
     maxOutputTokens: parameters.maxOutputTokens,
-    maxSteps: parameters.maxSteps,
     providerOptions: parameters.providerOptions,
     output: parameters.output,
   }

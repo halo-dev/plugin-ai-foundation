@@ -20,7 +20,7 @@ The system SHALL keep language model streaming progressive when request-scoped s
 
 #### Scenario: Server-side tool result continues generation
 - **WHEN** a streamed step returns an executable tool call
-- **AND** `maxSteps` allows another provider step
+- **AND** `stopWhen` allows another provider step
 - **THEN** the system SHALL execute the tool server-side
 - **AND** emit a `tool-result` part after the executor completes
 - **AND** append assistant tool-call history plus tool result history before starting the next streamed provider step
@@ -33,11 +33,11 @@ The system SHALL expose each streamed provider call as a separate generation ste
 - **THEN** the stream SHALL emit `start-step` and `finish-step` for each provider step using zero-based step indexes
 - **AND** the final `finish` part SHALL be emitted only after the last streamed step completes or the loop stops
 
-#### Scenario: Max steps reached with tool call
+#### Scenario: Stop condition reached with tool call
 - **WHEN** a streamed step returns a tool call
-- **AND** `maxSteps` does not allow another provider step
+- **AND** the configured stop condition does not allow another provider step
 - **THEN** the stream SHALL emit the `tool-call` part
-- **AND** the `finish-step` part SHALL include a warning that max steps were reached
+- **AND** the `finish-step` part SHALL include a warning that the stop condition was reached
 - **AND** the system SHALL NOT execute the tool
 
 #### Scenario: Tool execution failure stops stream loop
@@ -103,3 +103,40 @@ The streaming tool-call loop SHALL remain progressive when exposed through `Stre
 #### Scenario: Tool execution is not duplicated
 - **WHEN** both `fullStream()` and `textStream()` are consumed from the same `StreamTextResult`
 - **THEN** each server-side tool call SHALL be executed at most once
+
+### Requirement: Tool loops use resolved step control
+The system SHALL use the resolved `stopWhen` and `prepareStep` controls when executing streaming and non-streaming tool loops.
+
+#### Scenario: Tool loop continues by stop condition
+- **WHEN** a step emits executable tool calls and the resolved stop condition allows another step
+- **THEN** the system MUST execute tool callbacks, append tool results, and invoke the next model step
+
+#### Scenario: Tool loop stops by stop condition
+- **WHEN** a step emits executable tool calls but the resolved stop condition rejects another step
+- **THEN** the system MUST finish generation without executing another model step
+
+#### Scenario: Omitted stop condition stays single-step
+- **WHEN** a request does not set `stopWhen`
+- **THEN** the system MUST perform at most one model step
+
+### Requirement: Prepared active tools constrain provider tools
+The system SHALL honor per-step active tool overrides before converting tools to provider callbacks.
+
+#### Scenario: Active tools selects one tool
+- **WHEN** `prepareStep` returns only tool `weather` as active
+- **THEN** the provider request for that step MUST include `weather` and MUST NOT include other request tools
+
+#### Scenario: Active tools references missing tool
+- **WHEN** `prepareStep` references a tool name not present in the request
+- **THEN** the system MUST fail the request with a validation error before invoking the provider for that step
+
+### Requirement: Tool execution metadata is preserved per step
+The system SHALL record tool calls, tool results, tool errors, duration metadata, and provider metadata in the step that produced them.
+
+#### Scenario: Tool succeeds
+- **WHEN** a server-side tool executor returns successfully
+- **THEN** the full stream MUST emit `tool-result` and the corresponding generation step MUST include that result
+
+#### Scenario: Tool fails
+- **WHEN** a server-side tool executor fails
+- **THEN** the full stream MUST emit `tool-error` and the corresponding generation step MUST include that tool error

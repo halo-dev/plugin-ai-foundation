@@ -1,5 +1,6 @@
 package run.halo.aifoundation;
 
+import java.beans.Transient;
 import java.util.List;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -88,8 +89,22 @@ public class GenerateTextRequest {
      */
     private ToolChoice toolChoice;
     /**
-     * Maximum number of model invocation steps. Defaults to 1. Set this above 1 to allow Halo to
-     * execute model-requested tools and continue generation with tool results.
+     * Step continuation rule. If omitted, generation runs a single model step.
      */
-    private Integer maxSteps;
+    private transient StopCondition stopWhen;
+    /**
+     * Optional callback that can override messages, tool choice, active tools, and settings before
+     * each model step.
+     */
+    private transient PrepareStepCallback prepareStep;
+
+    @Transient
+    public StopCondition getStopWhen() {
+        return stopWhen;
+    }
+
+    @Transient
+    public PrepareStepCallback getPrepareStep() {
+        return prepareStep;
+    }
 }

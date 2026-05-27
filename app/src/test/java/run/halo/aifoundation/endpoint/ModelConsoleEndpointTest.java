@@ -533,7 +533,7 @@ class ModelConsoleEndpointTest {
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
         verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
-        assertThat(request.getMaxSteps()).isEqualTo(2);
+        assertThat(request.getStopWhen()).isNotNull();
         assertThat(request.getTools())
             .singleElement()
             .satisfies(tool -> {

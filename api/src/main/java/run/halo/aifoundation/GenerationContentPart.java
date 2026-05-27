@@ -24,6 +24,8 @@ public class GenerationContentPart {
     public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
     public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
     public static final String TYPE_REASONING = PartType.REASONING;
+    public static final String TYPE_SOURCE = PartType.SOURCE;
+    public static final String TYPE_FILE = PartType.FILE;
 
     /**
      * Part discriminator. Use values from {@link PartType}.
@@ -57,6 +59,27 @@ public class GenerationContentPart {
      * Server-side tool execution error text for {@link PartType#TOOL_ERROR}.
      */
     private String errorText;
+    /**
+     * Source or file id when the provider returns one.
+     */
+    private String id;
+    /**
+     * Source URL or file download URL.
+     */
+    private String url;
+    /**
+     * Source or file title/name.
+     */
+    private String title;
+    /**
+     * File media type when available.
+     */
+    private String mediaType;
+    /**
+     * Generated file bytes or text payload when available. Values should be serializable, for
+     * example a base64 string.
+     */
+    private Object data;
     /**
      * Provider or Halo metadata associated with this content part. Values should be sanitized and
      * serializable.
@@ -131,4 +154,33 @@ public class GenerationContentPart {
             .build();
     }
 
+    /**
+     * Creates a source reference content part.
+     */
+    public static GenerationContentPart source(String id, String url, String title,
+        Map<String, Object> metadata) {
+        return GenerationContentPart.builder()
+            .type(TYPE_SOURCE)
+            .id(id)
+            .url(url)
+            .title(title)
+            .metadata(metadata)
+            .build();
+    }
+
+    /**
+     * Creates a generated file content part.
+     */
+    public static GenerationContentPart file(String id, String url, String title, String mediaType,
+        Object data, Map<String, Object> metadata) {
+        return GenerationContentPart.builder()
+            .type(TYPE_FILE)
+            .id(id)
+            .url(url)
+            .title(title)
+            .mediaType(mediaType)
+            .data(data)
+            .metadata(metadata)
+            .build();
+    }
 }

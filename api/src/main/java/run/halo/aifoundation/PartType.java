@@ -31,6 +31,14 @@ public final class PartType {
      */
     public static final String REASONING = "reasoning";
     /**
+     * Source reference content or stream part.
+     */
+    public static final String SOURCE = "source";
+    /**
+     * Generated file content or stream part.
+     */
+    public static final String FILE = "file";
+    /**
      * Stream event: a model response message has started. Relevant field: {@code messageId}.
      */
     public static final String START = "start";
@@ -64,6 +72,16 @@ public final class PartType {
      * Stream event: a reasoning block has ended. Relevant field: {@code id}.
      */
     public static final String REASONING_END = "reasoning-end";
+    /**
+     * Stream event: incremental tool input has started. Relevant fields: {@code toolCallId},
+     * {@code toolName}, {@code id}.
+     */
+    public static final String TOOL_INPUT_START = "tool-input-start";
+    /**
+     * Stream event: incremental tool input delta. Relevant fields: {@code toolCallId},
+     * {@code toolName}, {@code id}, {@code delta}.
+     */
+    public static final String TOOL_INPUT_DELTA = "tool-input-delta";
     /**
      * Stream event: one model invocation step has ended. Includes finish reason, usage, warnings,
      * request metadata, response metadata, and provider metadata when available.
@@ -107,6 +125,14 @@ public final class PartType {
 
     public static boolean isReasoning(String type) {
         return REASONING.equals(type);
+    }
+
+    public static boolean isSource(String type) {
+        return SOURCE.equals(type);
+    }
+
+    public static boolean isFile(String type) {
+        return FILE.equals(type);
     }
 
     public static boolean isToolResponse(String type) {

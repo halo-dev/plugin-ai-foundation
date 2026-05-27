@@ -1,5 +1,7 @@
 package run.halo.aifoundation;
 
+import java.util.List;
+import java.util.Map;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -87,5 +89,69 @@ public class StreamTextResult {
      */
     public Mono<GenerateTextResult> result() {
         return result;
+    }
+
+    public Mono<String> text() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getText()));
+    }
+
+    public Mono<String> reasoningText() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getReasoningText()));
+    }
+
+    public Mono<List<GenerationContentPart>> content() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getContent()));
+    }
+
+    public Mono<List<ReasoningPart>> reasoning() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getReasoning()));
+    }
+
+    public Mono<FinishReason> finishReason() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getFinishReason()));
+    }
+
+    public Mono<String> rawFinishReason() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getRawFinishReason()));
+    }
+
+    public Mono<LanguageModelUsage> usage() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getUsage()));
+    }
+
+    public Mono<LanguageModelUsage> totalUsage() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getTotalUsage()));
+    }
+
+    public Mono<List<GenerationWarning>> warnings() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getWarnings()));
+    }
+
+    public Mono<GenerationRequestMetadata> request() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getRequest()));
+    }
+
+    public Mono<GenerationResponseMetadata> response() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getResponse()));
+    }
+
+    public Mono<List<GenerationStep>> steps() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getSteps()));
+    }
+
+    public Mono<List<ToolCall>> toolCalls() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getToolCalls()));
+    }
+
+    public Mono<List<ToolResult>> toolResults() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getToolResults()));
+    }
+
+    public Mono<List<ToolError>> toolErrors() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getToolErrors()));
+    }
+
+    public Mono<Map<String, Object>> providerMetadata() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getProviderMetadata()));
     }
 }

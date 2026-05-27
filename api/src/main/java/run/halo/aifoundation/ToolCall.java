@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
  * <p>Tool calls appear in {@link GenerationStep#getToolCalls()}, {@link GenerationContentPart}
  * with {@link PartType#TOOL_CALL}, and {@link TextStreamPart} with {@link PartType#TOOL_CALL}.
  * Halo executes a matching {@link ToolDefinition#getExecutor()} when one is available and the
- * request has remaining {@link GenerateTextRequest#getMaxSteps()} budget.
+ * request's {@link GenerateTextRequest#getStopWhen()} condition allows another step.
  */
 @Data
 @Builder

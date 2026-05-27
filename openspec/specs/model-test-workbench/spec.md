@@ -53,6 +53,11 @@ The model test workbench SHALL consume reasoning stream parts without mixing rea
 - **THEN** the workbench MAY show a compact reasoning section associated with the assistant message
 - **AND** the absence of a visible reasoning section SHALL NOT break streaming or answer rendering
 
+#### Scenario: Displayed reasoning is not replayed as history
+- **WHEN** the workbench builds the next test request from visible conversation history
+- **THEN** assistant reasoning shown in the UI SHALL NOT be sent back as a chat history content part
+- **AND** assistant answer text SHALL remain in the history message
+
 #### Scenario: Unknown reasoning metadata
 - **WHEN** a reasoning part contains provider metadata unknown to the frontend
 - **THEN** the workbench SHALL ignore the unknown metadata for rendering

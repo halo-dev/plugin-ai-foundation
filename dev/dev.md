@@ -272,7 +272,7 @@ model.streamText(request).fullStream()
 
 ### 服务端工具调用与多步骤生成
 
-工具调用采用请求级定义，调用方负责提供工具名称、描述、输入 JSON Schema 和服务端 executor。默认 `maxSteps = 1`，模型返回工具调用时只会记录 `tool-call` 并给出 `max-steps-reached` warning，不会执行工具。需要自动执行工具并把结果继续交给模型时，显式设置 `maxSteps` 为 2 或更高。
+工具调用采用请求级定义，调用方负责提供工具名称、描述、输入 JSON Schema 和服务端 executor。默认只执行一个模型步骤。需要自动执行工具并把结果继续交给模型时，显式设置 `stopWhen`，例如 `StopCondition.stepCountIs(2)`。
 
 ```java
 LanguageModel model = aiModelService.languageModel("deepseek-prod-deepseek-chat").block();
@@ -303,9 +303,9 @@ GenerateTextRequest request = GenerateTextRequest.builder()
             "temperature", 22,
             "condition", "sunny"
         )))
-        .build()))
+    .build()))
     .toolChoice(ToolChoice.auto())
-    .maxSteps(2)
+    .stopWhen(StopCondition.stepCountIs(2))
     .build();
 
 model.generateText(request)
@@ -325,11 +325,82 @@ model.generateText(request)
     });
 ```
 
-`inputSchema` 用于约束模型生成的工具入参，`outputSchema` 用于约束 executor 返回值。`ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。executor 会收到 `ToolExecutionContext`，其中包含 `toolCallId`、`toolName`、解析后的 `input`、`stepIndex`、当前步骤消息和 provider metadata，方便调用方关联流式事件、审计日志或嵌套模型调用。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到 `maxSteps` 仍有工具调用，会记录 `max-steps-reached` warning。
+`inputSchema` 用于约束模型生成的工具入参，`outputSchema` 用于约束 executor 返回值。`ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。executor 会收到 `ToolExecutionContext`，其中包含 `toolCallId`、`toolName`、解析后的 `input`、`stepIndex`、当前步骤消息和 provider metadata，方便调用方关联流式事件、审计日志或嵌套模型调用。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到步骤限制仍有工具调用，会记录 `stop-condition-reached` warning。
 
-工具调用同样支持 `streamText()`。与 `generateText()` 的一次性聚合不同，`streamText()` 会在每个模型步骤中立即转发 provider 返回的 `reasoning-delta` 和 `text-delta`；当模型步骤以工具调用结束时，再发送 `tool-call`，执行服务端工具并发送 `tool-result` 或 `tool-error`。如果 `maxSteps` 允许继续，下一次模型调用会作为新的 `start-step` 继续流式输出最终回答。
+工具调用同样支持 `streamText()`。与 `generateText()` 的一次性聚合不同，`streamText()` 会在每个模型步骤中立即转发 provider 返回的 `reasoning-delta` 和 `text-delta`；当模型步骤以工具调用结束时，再发送 `tool-call`，执行服务端工具并发送 `tool-result` 或 `tool-error`。如果 `stopWhen` 允许继续，下一次模型调用会作为新的 `start-step` 继续流式输出最终回答。
 
 因此，工具调用不会让整个流退化为非流式。工具执行期间可能会短暂停顿，但调用方可以通过已经收到的 `tool-call` 事件展示“正在执行工具”的状态。
+
+### 停止与取消生成
+
+SDK 调用方有三类“停止”方式，作用层级不同：
+
+1. `stopWhen`：控制多步骤生成是否继续进入下一次模型调用，主要用于工具循环。
+2. `stopSequences`：传给模型提供商，要求模型在生成到指定文本序列时停止当前回答。
+3. Reactor 取消订阅：取消当前 HTTP/流式请求，适合用户点击“停止生成”。
+
+`stopWhen` 不会中断正在进行的模型调用，它只在一个步骤结束后决定是否开启下一步。默认不设置时只执行一个模型步骤。需要限制工具循环步数时：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("请查询天气并回答")
+    .tools(List.of(weatherTool))
+    .stopWhen(StopCondition.stepCountIs(2))
+    .build();
+```
+
+如果希望只有在工具调用成功时才继续，可以使用：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("必要时调用工具")
+    .tools(List.of(weatherTool))
+    .stopWhen(StopCondition.toolCalls(3))
+    .build();
+```
+
+也可以自定义条件：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("必要时调用工具")
+    .tools(List.of(weatherTool))
+    .stopWhen(context -> context.getStepIndex() < 2
+        && context.getStep() != null
+        && !context.getStep().getToolCalls().isEmpty()
+        && context.getStep().getToolErrors().isEmpty())
+    .build();
+```
+
+如果要取消正在进行的流式生成，保留订阅并调用 `dispose()`：
+
+```java
+Disposable disposable = model.streamText(request)
+    .fullStream()
+    .subscribe(part -> {
+        // 渲染 text-delta、reasoning-delta、tool-call 等事件
+    });
+
+// 用户点击停止时
+disposable.dispose();
+```
+
+如果调用方使用 WebFlux 返回 SSE，可以直接返回 `Flux`；客户端断开连接时，订阅会被取消：
+
+```java
+return model.streamText(request).fullStream();
+```
+
+对于非流式 `generateText()`，同样可以取消订阅，但调用方通常只能在 Reactor 链路层取消等待；具体提供商是否立即中止远端请求取决于底层 HTTP 客户端和 provider 实现：
+
+```java
+Disposable disposable = model.generateText(request)
+    .subscribe(result -> {
+        // 处理最终结果
+    });
+
+disposable.dispose();
+```
 
 ### GenerateTextRequest 参数
 
@@ -347,7 +418,7 @@ model.generateText(request)
 | `stopSequences` | `List<String>` | 停止序列 |
 | `tools` | `List<ToolDefinition>` | 请求级工具定义，包含名称、描述、输入/输出 JSON Schema 和可选 executor |
 | `toolChoice` | `ToolChoice` | 工具选择策略：`AUTO`、`NONE`、`REQUIRED` 或指定 `TOOL` |
-| `maxSteps` | `Integer` | 最大模型调用步数，默认 1，最大 10 |
+| `stopWhen` | `StopCondition` | Java 调用方的步骤继续条件；未设置时只执行一个模型步骤。该字段不会进入 OpenAPI/HTTP schema |
 | `output` | `OutputSpec` | 结构化输出声明，支持 `TEXT`、`OBJECT`、`ARRAY`、`CHOICE`、`JSON` |
 | `providerOptions` | `Map<String, Map<String, Object>>` | 按提供商命名空间分组的特定选项 |
 
@@ -420,7 +491,7 @@ ModelMessage.assistant(List.of(
 
 `LanguageModelUsage` 除了 `inputTokens`、`outputTokens`、`totalTokens`，还会在提供商返回时包含 `reasoningTokens`。
 
-`GenerationStep` 会记录 `stepIndex`、`text`、`output`、`outputText`、`reasoningText`、`reasoning`、`content`、`finishReason`、`usage`、`toolCalls`、`toolResults`、`toolErrors`、`warnings`、`request`、`response` 和 `providerMetadata`。普通文本生成通常只有 `stepIndex = 0`；带工具且 `maxSteps > 1` 时，每次模型调用都会形成一个 step。
+`GenerationStep` 会记录 `stepIndex`、`text`、`output`、`outputText`、`reasoningText`、`reasoning`、`content`、`finishReason`、`usage`、`toolCalls`、`toolResults`、`toolErrors`、`warnings`、`request`、`response` 和 `providerMetadata`。普通文本生成通常只有 `stepIndex = 0`；带工具且 `stopWhen` 允许继续时，每次模型调用都会形成一个 step。
 
 ### TextStreamPart 事件
 

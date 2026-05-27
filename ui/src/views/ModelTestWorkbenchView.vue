@@ -44,7 +44,6 @@ const systemPrompt = shallowRef('')
 const temperature = shallowRef(0.7)
 const topP = shallowRef(1)
 const maxTokens = shallowRef(1024)
-const maxSteps = shallowRef(1)
 const testToolEnabled = shallowRef(false)
 const outputMode = shallowRef<OutputMode>('TEXT')
 const outputSchemaText = shallowRef(`{
@@ -117,12 +116,6 @@ watch(
   { deep: true },
 )
 
-watch(testToolEnabled, (enabled) => {
-  if (enabled && (!Number.isFinite(maxSteps.value) || maxSteps.value < 2)) {
-    maxSteps.value = 2
-  }
-})
-
 async function sendMessage() {
   const content = input.value.trim()
   const model = selectedModel.value
@@ -160,7 +153,6 @@ async function sendMessage() {
     temperature: numberOrUndefined(temperature.value),
     topP: numberOrUndefined(topP.value),
     maxOutputTokens: numberOrUndefined(maxTokens.value),
-    maxSteps: numberOrUndefined(maxSteps.value),
     providerOptions: providerOptions.value,
     output: outputSpec.value,
   })
@@ -573,18 +565,6 @@ onBeforeUnmount(() => {
             label="Max Tokens"
             min="1"
             step="1"
-          />
-
-          <FormKit
-            v-model="maxSteps"
-            type="number"
-            number
-            name="maxSteps"
-            label="Max Steps"
-            min="1"
-            max="10"
-            step="1"
-            help="启用工具时建议至少为 2"
           />
 
           <FormKit

@@ -25,6 +25,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.PartType;
+import run.halo.aifoundation.StopCondition;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.ToolDefinition;
 import run.halo.aifoundation.extension.AiModel;
@@ -246,9 +247,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             tools.add(consoleTestTool());
         }
         request.setTools(List.copyOf(tools));
-        if (request.getMaxSteps() == null || request.getMaxSteps() < 2) {
-            request.setMaxSteps(2);
-        }
+        request.setStopWhen(StopCondition.stepCountIs(2));
         return request;
     }
 

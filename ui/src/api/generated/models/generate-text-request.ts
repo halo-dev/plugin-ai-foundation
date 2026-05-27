@@ -46,12 +46,6 @@ export interface GenerateTextRequest {
     'maxOutputTokens'?: number;
     /**
      *
-     * @type {number}
-     * @memberof GenerateTextRequest
-     */
-    'maxSteps'?: number;
-    /**
-     *
      * @type {Array<ModelMessage>}
      * @memberof GenerateTextRequest
      */

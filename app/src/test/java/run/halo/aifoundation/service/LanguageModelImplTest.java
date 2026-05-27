@@ -33,7 +33,9 @@ import run.halo.aifoundation.ModelMessagePart;
 import run.halo.aifoundation.ModelMessageRole;
 import run.halo.aifoundation.OutputSpec;
 import run.halo.aifoundation.PartType;
+import run.halo.aifoundation.PreparedStep;
 import run.halo.aifoundation.ReasoningPart;
+import run.halo.aifoundation.StopCondition;
 import run.halo.aifoundation.StructuredOutputValidationException;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.ToolDefinition;
@@ -203,7 +205,7 @@ class LanguageModelImplTest {
                     ));
                 })
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -262,7 +264,7 @@ class LanguageModelImplTest {
                     return reactor.core.publisher.Mono.just(Map.of("ok", true));
                 })
                 .build()))
-            .maxSteps(3)
+            .stopWhen(StopCondition.stepCountIs(3))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -303,7 +305,7 @@ class LanguageModelImplTest {
                 .name("weather")
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -337,7 +339,7 @@ class LanguageModelImplTest {
                 .name("weather")
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
-            .maxSteps(1)
+            .stopWhen(StopCondition.stepCountIs(1))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -374,11 +376,90 @@ class LanguageModelImplTest {
                 assertThat(result.getSteps().get(0).getToolResults()).isEmpty();
                 assertThat(result.getWarnings())
                     .extracting("code")
-                    .contains("max-steps-reached");
+                    .contains("stop-condition-reached");
             })
             .verifyComplete();
 
         verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_stopWhenControlsToolLoopWithoutMaxSteps() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
+            chatResponse("It is 22C.", "stop", 4, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getSteps()).hasSize(2);
+                assertThat(result.getText()).isEqualTo("It is 22C.");
+                assertThat(result.getToolResults()).hasSize(1);
+            })
+            .verifyComplete();
+
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_prepareStepLimitsActiveTools() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(
+                ToolDefinition.builder()
+                    .name("weather")
+                    .executor(context -> reactor.core.publisher.Mono.just(Map.of()))
+                    .build(),
+                ToolDefinition.builder()
+                    .name("search")
+                    .executor(context -> reactor.core.publisher.Mono.just(Map.of()))
+                    .build()
+            ))
+            .prepareStep(context -> PreparedStep.builder()
+                .activeTools(List.of("search"))
+                .build())
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getSteps().get(0).getToolErrors())
+                .singleElement()
+                .satisfies(error -> assertThat(error.getErrorText()).contains("Unknown tool")))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_rejectsUnknownPreparedActiveTool() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+        var request = GenerateTextRequest.builder()
+            .prompt("Use tool")
+            .tools(List.of(ToolDefinition.builder().name("weather").build()))
+            .prepareStep(context -> PreparedStep.builder()
+                .activeTools(List.of("missing"))
+                .build())
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("prepareStep activeTools references unknown tool: missing")
+            .verify();
     }
 
     @Test
@@ -395,7 +476,7 @@ class LanguageModelImplTest {
                 .name("weather")
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of()))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -418,7 +499,7 @@ class LanguageModelImplTest {
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -449,7 +530,7 @@ class LanguageModelImplTest {
                 .executor(context -> reactor.core.publisher.Mono.error(
                     new IllegalStateException("tool failed")))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -558,6 +639,64 @@ class LanguageModelImplTest {
             .verifyComplete();
 
         assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void streamText_exposesConvenienceResultProjections() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("Hello", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var result = model.streamText(GenerateTextRequest.builder().prompt("Hi").build());
+
+        StepVerifier.create(result.text())
+            .expectNext("Hello")
+            .verifyComplete();
+        StepVerifier.create(result.finishReason())
+            .expectNext(FinishReason.STOP)
+            .verifyComplete();
+        StepVerifier.create(result.totalUsage())
+            .assertNext(usage -> assertThat(usage.getTotalTokens()).isEqualTo(6))
+            .verifyComplete();
+        StepVerifier.create(result.steps())
+            .assertNext(steps -> assertThat(steps).hasSize(1))
+            .verifyComplete();
+
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_mapsSourceAndFileMetadataParts() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("See source", "stop", 2, 4, Map.of(
+                "sources", List.of(Map.of("id", "src_1", "url", "https://example.com",
+                    "title", "Example")),
+                "files", List.of(Map.of("id", "file_1", "filename", "answer.txt",
+                    "mediaType", "text/plain", "data", "SGVsbG8="))
+            ))
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var result = model.streamText(GenerateTextRequest.builder().prompt("Hi").build());
+
+        StepVerifier.create(result.fullStream()
+                .filter(part -> TextStreamPart.TYPE_SOURCE.equals(part.getType())
+                    || TextStreamPart.TYPE_FILE.equals(part.getType())))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_SOURCE);
+                assertThat(part.getUrl()).isEqualTo("https://example.com");
+                assertThat(part.getTitle()).isEqualTo("Example");
+            })
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FILE);
+                assertThat(part.getTitle()).isEqualTo("answer.txt");
+                assertThat(part.getMediaType()).isEqualTo("text/plain");
+                assertThat(part.getData()).isEqualTo("SGVsbG8=");
+            })
+            .verifyComplete();
     }
 
     @Test
@@ -708,6 +847,28 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void streamProtocolNormalizerClosesOverlappingBlocks() {
+        var parts = StreamProtocolNormalizer.normalize(Flux.just(
+            TextStreamPart.textStart("txt_1"),
+            TextStreamPart.textDelta("txt_1", "Answer"),
+            TextStreamPart.reasoningStart("rsn_1"),
+            TextStreamPart.reasoningDelta("rsn_1", "Thinking", Map.of()),
+            TextStreamPart.finish(FinishReason.STOP, "stop", null)
+        )).collectList().block();
+
+        assertThat(parts).extracting(TextStreamPart::getType).containsExactly(
+            TextStreamPart.TYPE_TEXT_START,
+            TextStreamPart.TYPE_TEXT_DELTA,
+            TextStreamPart.TYPE_TEXT_END,
+            TextStreamPart.TYPE_REASONING_START,
+            TextStreamPart.TYPE_REASONING_DELTA,
+            TextStreamPart.TYPE_REASONING_END,
+            TextStreamPart.TYPE_FINISH
+        );
+        assertNoOverlappingStreamBlocks(parts);
+    }
+
+    @Test
     void streamText_emitsSanitizedRawDiagnosticPart() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
@@ -776,7 +937,7 @@ class LanguageModelImplTest {
                 .name("weather")
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
@@ -842,7 +1003,7 @@ class LanguageModelImplTest {
                 .executor(context -> reactor.core.publisher.Mono.error(
                     new IllegalStateException("tool failed")))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
@@ -859,7 +1020,7 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void streamText_stopsAtMaxStepsAndEmitsAggregateUsage() {
+    void streamText_stopsWhenConditionRejectsNextStepAndEmitsAggregateUsage() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
             Flux.just(toolCallResponse("call_1", "weather", "{}", 2, 3))
@@ -872,16 +1033,16 @@ class LanguageModelImplTest {
                 .name("weather")
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
-            .maxSteps(1)
+            .stopWhen(StopCondition.stepCountIs(1))
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_RESULT.equals(part.getType()))
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
-                assertThat(part.getWarnings()).extracting("code").contains("max-steps-reached");
             })
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH);
@@ -1088,7 +1249,7 @@ class LanguageModelImplTest {
                 .inputSchema(Map.of("type", "object"))
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .output(OutputSpec.object(Map.of(
                 "type", "object",
                 "properties", Map.of("answer", Map.of("type", "string")),
@@ -1124,7 +1285,7 @@ class LanguageModelImplTest {
                 ))
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -1158,7 +1319,7 @@ class LanguageModelImplTest {
                 ))
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", "hot")))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
@@ -1182,7 +1343,7 @@ class LanguageModelImplTest {
                 .name("weather")
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of()))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
@@ -1213,7 +1374,7 @@ class LanguageModelImplTest {
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
@@ -1246,7 +1407,7 @@ class LanguageModelImplTest {
                 .name("weather")
                 .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
-            .maxSteps(2)
+            .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         var stream = model.streamText(request);
