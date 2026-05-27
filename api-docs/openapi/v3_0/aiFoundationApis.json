@@ -725,6 +725,44 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-embedding" : {
+      "post" : {
+        "description" : "Test embedding generation with embedding settings and diagnostics.",
+        "operationId" : "TestModelEmbedding",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestEmbeddingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TestEmbeddingResponse"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/provider-types" : {
       "get" : {
         "description" : "List all available provider types with metadata.",
@@ -1273,6 +1311,88 @@
           "source" : {
             "type" : "string",
             "enum" : [ "remote", "catalog", "rule", "manual" ]
+          }
+        }
+      },
+      "EmbeddingPreview" : {
+        "type" : "object",
+        "properties" : {
+          "dimensions" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "preview" : {
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "float"
+            }
+          }
+        }
+      },
+      "EmbeddingResponseMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "body" : {
+            "type" : "object"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "EmbeddingUsage" : {
+        "type" : "object",
+        "properties" : {
+          "raw" : {
+            "type" : "object"
+          },
+          "tokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "EmbeddingWarning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
           }
         }
       },
@@ -1834,6 +1954,85 @@
           },
           "value" : {
             "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "TestEmbeddingRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dimensions" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "inputs" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "maxBatchSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxParallelCalls" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          }
+        }
+      },
+      "TestEmbeddingResponse" : {
+        "type" : "object",
+        "properties" : {
+          "embeddings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EmbeddingPreview"
+            }
+          },
+          "embeddingsCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "firstPairSimilarity" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "response" : {
+            "$ref" : "#/components/schemas/EmbeddingResponseMetadata"
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/EmbeddingUsage"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EmbeddingWarning"
+            }
           }
         }
       },

@@ -2,18 +2,18 @@ package run.halo.aifoundation.provider;
 
 import java.util.List;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.OpenAiEmbeddingModel;
-import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.OpenAiCompatibleEmbeddingModel;
+import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.OpenAiStructuredOutputOptions;
 
 @Component
@@ -75,14 +75,19 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var openAiApi = buildOpenAiApi(provider, apiKey);
-        return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED,
-            OpenAiEmbeddingOptions.builder().model(modelId).build());
+        return new OpenAiCompatibleEmbeddingModel(openAiApi, modelId);
     }
 
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         return new LanguageModelProviderOptions(false, false, null,
             OpenAiStructuredOutputOptions::buildBasic);
+    }
+
+    @Override
+    public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
+        return new EmbeddingModelProviderOptions("openai", false,
+            OpenAiEmbeddingOptionsFactory::build);
     }
 
     private OpenAiApi buildOpenAiApi(AiProvider provider, String apiKey) {

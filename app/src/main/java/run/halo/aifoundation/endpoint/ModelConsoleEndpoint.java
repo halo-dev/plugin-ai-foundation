@@ -9,6 +9,10 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -23,6 +27,11 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
+import run.halo.aifoundation.EmbeddingRequest;
+import run.halo.aifoundation.EmbeddingResponseMetadata;
+import run.halo.aifoundation.EmbeddingUsage;
+import run.halo.aifoundation.EmbeddingUtils;
+import run.halo.aifoundation.EmbeddingWarning;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.PartType;
 import run.halo.aifoundation.StopCondition;
@@ -142,6 +151,21 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                             + "with data: [DONE].")
                         .implementation(TextStreamPart.class))
             )
+            .POST("models/{name}/test-embedding", this::testEmbedding,
+                builder -> builder.operationId("TestModelEmbedding")
+                    .description("Test embedding generation with embedding settings and diagnostics.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(TestEmbeddingRequest.class))
+                    .response(responseBuilder().implementation(TestEmbeddingResponse.class))
+            )
             .build();
     }
 
@@ -227,6 +251,26 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             })));
     }
 
+    private Mono<ServerResponse> testEmbedding(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testEmbedding: modelName={}", modelName);
+        return request.bodyToMono(TestEmbeddingRequest.class)
+            .flatMap(body -> validateTestEmbeddingRequest(body)
+                .then(aiModelService.embeddingModel(modelName))
+                .flatMap(model -> model.embed(EmbeddingRequest.builder()
+                        .inputs(body.getInputs())
+                        .dimensions(body.getDimensions())
+                        .maxBatchSize(body.getMaxBatchSize())
+                        .maxParallelCalls(body.getMaxParallelCalls())
+                        .maxRetries(body.getMaxRetries())
+                        .providerOptions(body.getProviderOptions())
+                        .headers(body.getHeaders())
+                        .metadata(Map.of("source", "console-test"))
+                        .build())
+                    .map(TestEmbeddingResponse::from)))
+            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+    }
+
     private boolean consoleTestToolEnabled(ServerRequest request) {
         return request.queryParam("enableTestTool")
             .map(Boolean::parseBoolean)
@@ -304,6 +348,24 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                             "messages must include non-empty supported content parts"));
                     }
                 }
+            }
+        }
+        return Mono.empty();
+    }
+
+    private Mono<Void> validateTestEmbeddingRequest(TestEmbeddingRequest request) {
+        if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At least one input is required"));
+        }
+        if (request.getInputs().size() > 20) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At most 20 inputs can be tested at once"));
+        }
+        for (var input : request.getInputs()) {
+            if (input == null || input.isBlank()) {
+                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Embedding inputs must not be blank"));
             }
         }
         return Mono.empty();
@@ -436,6 +498,91 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 "A model with providerName='" + providerName
                     + "' and modelId='" + modelId + "' already exists")))
             .switchIfEmpty(Mono.empty());
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestEmbeddingRequest {
+        private List<String> inputs;
+        private Integer dimensions;
+        private Integer maxBatchSize;
+        private Integer maxParallelCalls;
+        private Integer maxRetries;
+        private Map<String, Map<String, Object>> providerOptions;
+        private Map<String, String> headers;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestEmbeddingResponse {
+        private int embeddingsCount;
+        private List<EmbeddingPreview> embeddings;
+        private Double firstPairSimilarity;
+        private EmbeddingUsage usage;
+        private EmbeddingResponseMetadata response;
+        private List<EmbeddingWarning> warnings;
+        private Map<String, Object> providerMetadata;
+
+        static TestEmbeddingResponse from(run.halo.aifoundation.EmbeddingResponse response) {
+            var vectors = response.getEmbeddings() != null
+                ? response.getEmbeddings()
+                : List.<float[]>of();
+            return TestEmbeddingResponse.builder()
+                .embeddingsCount(vectors.size())
+                .embeddings(previews(vectors))
+                .firstPairSimilarity(similarity(vectors))
+                .usage(response.getUsage())
+                .response(response.getResponse())
+                .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
+                .providerMetadata(response.getProviderMetadata())
+                .build();
+        }
+
+        private static List<EmbeddingPreview> previews(List<float[]> vectors) {
+            var result = new ArrayList<EmbeddingPreview>();
+            for (int i = 0; i < vectors.size(); i++) {
+                var vector = vectors.get(i);
+                result.add(EmbeddingPreview.builder()
+                    .index(i)
+                    .dimensions(vector != null ? vector.length : 0)
+                    .preview(preview(vector))
+                    .build());
+            }
+            return List.copyOf(result);
+        }
+
+        private static List<Float> preview(float[] vector) {
+            if (vector == null) {
+                return List.of();
+            }
+            var size = Math.min(vector.length, 8);
+            var values = new ArrayList<Float>();
+            for (int i = 0; i < size; i++) {
+                values.add(vector[i]);
+            }
+            return List.copyOf(values);
+        }
+
+        private static Double similarity(List<float[]> vectors) {
+            if (vectors.size() < 2) {
+                return null;
+            }
+            return EmbeddingUtils.cosineSimilarity(vectors.get(0), vectors.get(1));
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EmbeddingPreview {
+        private int index;
+        private int dimensions;
+        private List<Float> preview;
     }
 
 }

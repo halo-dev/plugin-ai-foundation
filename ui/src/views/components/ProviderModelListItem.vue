@@ -4,7 +4,7 @@ import type { AiModel } from '@/api/generated'
 import ModelBadgeGroup from '@/components/ModelBadgeGroup.vue'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
-import { isEnabledChatModel } from '@/utils/model-test-workbench'
+import { isEnabledTestableModel } from '@/utils/model-test-workbench'
 import {
   Dialog,
   Toast,
@@ -27,7 +27,7 @@ const queryClient = useQueryClient()
 const router = useRouter()
 
 const editingModalVisible = shallowRef(false)
-const canTest = computed(() => isEnabledChatModel(props.model))
+const canTest = computed(() => isEnabledTestableModel(props.model))
 
 function openWorkbench() {
   void router.push({

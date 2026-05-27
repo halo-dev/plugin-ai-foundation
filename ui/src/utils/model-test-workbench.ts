@@ -101,6 +101,14 @@ export function isEnabledChatModel(model: AiModel) {
   return model.spec.enabled !== false && model.spec.modelType === AiModelSpecModelTypeEnum.Language
 }
 
+export function isEnabledTestableModel(model: AiModel) {
+  return (
+    model.spec.enabled !== false &&
+    (model.spec.modelType === AiModelSpecModelTypeEnum.Language ||
+      model.spec.modelType === AiModelSpecModelTypeEnum.Embedding)
+  )
+}
+
 export function filterEnabledChatModels(models: AiModel[] | undefined) {
   return (models || []).filter(isEnabledChatModel)
 }

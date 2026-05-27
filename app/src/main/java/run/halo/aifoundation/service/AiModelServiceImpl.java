@@ -105,7 +105,8 @@ public class AiModelServiceImpl implements AiModelService {
                                     springEmbeddingModel,
                                     provider.getSpec().getProviderType(),
                                     type.maxEmbeddingsPerCall(),
-                                    type.supportsParallelCalls()
+                                    type.supportsParallelCalls(),
+                                    type.embeddingModelProviderOptions()
                                 );
                             });
                     });

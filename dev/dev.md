@@ -673,7 +673,15 @@ EmbeddingRequest request = EmbeddingRequest.builder()
     .inputs(List.of("文本1", "文本2"))
     .dimensions(1536)          // 指定输出维度
     .maxBatchSize(100)         // 每批最大数量
-    .providerOptions(Map.of()) // 提供商特定选项
+    .maxParallelCalls(2)       // 最多同时发起 2 个批次调用
+    .maxRetries(2)             // 每个批次最多重试 2 次；设置为 0 可禁用重试
+    .headers(Map.of("X-Trace-Id", traceId)) // 提供商支持时透传请求头
+    .providerOptions(Map.of(   // 按提供商命名空间分组的特定选项
+        "openai", Map.of(
+            "dimensions", 512,
+            "user", "user-123"
+        )
+    ))
     .timeouts(GenerationTimeouts.total(Duration.ofSeconds(30)))
     .metadata(Map.of("traceId", traceId))
     .lifecycle(new EmbeddingLifecycle() {
@@ -687,15 +695,49 @@ EmbeddingRequest request = EmbeddingRequest.builder()
 
 model.embed(request)
     .subscribe(response -> {
-        // 处理结果
+        List<float[]> embeddings = response.getEmbeddings();
+        EmbeddingUsage usage = response.getUsage();
+        EmbeddingResponseMetadata metadata = response.getResponse();
+        List<EmbeddingWarning> warnings = response.getWarnings();
     });
 ```
+
+高级嵌入请求中的 settings 与 AI SDK Core 的 Embeddings settings 对应：
+
+| 字段 | 说明 |
+| --- | --- |
+| `providerOptions` | 按提供商命名空间分组的特定选项，例如 `openai.dimensions` |
+| `maxParallelCalls` | 批量嵌入时最多并发调用多少个 provider batch |
+| `maxRetries` | 每个可重试 provider batch 的最大重试次数，`0` 表示不重试 |
+| `timeouts` | Java 侧的超时设置，对应 AI SDK 中的 timeout/abort 场景 |
+| `cancellationToken` | Java 侧的中止信号，对应 AI SDK 的 `abortSignal` |
+| `headers` | 请求级自定义请求头；若当前提供商适配器无法应用，会返回 warning |
+
+`EmbeddingResponse` 会在提供商可用时返回：
+
+| 字段 | 说明 |
+| --- | --- |
+| `embeddings` | 与输入顺序一致的向量列表，即使内部拆分批次或并发调用也保持顺序 |
+| `usage` | 嵌入 token 使用量 |
+| `response` | 响应元数据，例如模型、响应 ID、headers/body 摘要等 |
+| `warnings` | 未支持、被忽略或降级的设置说明 |
+| `providerMetadata` | 安全的提供商侧诊断信息，例如批次元数据 |
 
 ### EmbeddingModel 辅助方法
 
 ```java
 int maxBatch = model.maxEmbeddingsPerCall();  // 每次调用最大嵌入数量
 boolean parallel = model.supportsParallelCalls(); // 是否支持并行调用
+```
+
+计算两个向量的相似度：
+
+```java
+EmbeddingResponse response = model.embed(List.of("Halo", "AI Foundation")).block();
+double similarity = EmbeddingUtils.cosineSimilarity(
+    response.getEmbeddings().get(0),
+    response.getEmbeddings().get(1)
+);
 ```
 
 ## 列出模型和提供商
