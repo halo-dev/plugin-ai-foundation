@@ -26,5 +26,8 @@ public class GenerateTextResult {
     private GenerationRequestMetadata request;
     private GenerationResponseMetadata response;
     private List<GenerationStep> steps;
+    private List<ToolCall> toolCalls;
+    private List<ToolResult> toolResults;
+    private List<ToolError> toolErrors;
     private Map<String, Object> providerMetadata;
 }

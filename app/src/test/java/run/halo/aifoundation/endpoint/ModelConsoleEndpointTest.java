@@ -22,6 +22,7 @@ import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.FinishReason;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.LanguageModel;
+import run.halo.aifoundation.StreamTextResult;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
@@ -448,13 +449,13 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(Flux.just(
+            .thenReturn(streamResult(Flux.just(
                 TextStreamPart.start("msg_1"),
                 TextStreamPart.textStart("txt_1"),
                 TextStreamPart.textDelta("txt_1", "Hi"),
                 TextStreamPart.textEnd("txt_1"),
                 TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            ));
+            )));
 
         var body = Map.of(
             "system", "You are concise.",
@@ -505,14 +506,14 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(Flux.just(
+            .thenReturn(streamResult(Flux.just(
                 TextStreamPart.toolCall(run.halo.aifoundation.ToolCall.builder()
                     .toolCallId("call_1")
                     .toolName("halo_test_info")
                     .input(Map.of("query", "hello"))
                     .build()),
                 TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            ));
+            )));
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream?enableTestTool=true")
             .contentType(MediaType.APPLICATION_JSON)
@@ -546,12 +547,12 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(Flux.just(
+            .thenReturn(streamResult(Flux.just(
                 TextStreamPart.reasoningStart("rsn_1"),
                 TextStreamPart.reasoningDelta("rsn_1", "Think", Map.of("deepseek", Map.of())),
                 TextStreamPart.reasoningEnd("rsn_1"),
                 TextStreamPart.finish(FinishReason.STOP, "stop", null)
-            ));
+            )));
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
             .contentType(MediaType.APPLICATION_JSON)
@@ -598,7 +599,7 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(Flux.error(new IllegalStateException("upstream failed")));
+            .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream failed"))));
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
             .contentType(MediaType.APPLICATION_JSON)
@@ -623,10 +624,10 @@ class ModelConsoleEndpointTest {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
-            .thenReturn(Flux.concat(
+            .thenReturn(streamResult(Flux.concat(
                 Flux.just(TextStreamPart.reasoningDelta("rsn_1", "Think", Map.of())),
                 Flux.error(new IllegalStateException("upstream failed"))
-            ));
+            )));
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
             .contentType(MediaType.APPLICATION_JSON)
@@ -647,6 +648,19 @@ class ModelConsoleEndpointTest {
     }
 
     // ---- helpers ----
+
+    private StreamTextResult streamResult(Flux<TextStreamPart> fullStream) {
+        var shared = fullStream.cache();
+        return new StreamTextResult(
+            shared,
+            shared.filter(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
+                .map(TextStreamPart::getDelta),
+            Flux.empty(),
+            Flux.empty(),
+            Mono.empty(),
+            Mono.empty()
+        );
+    }
 
     private AiProvider provider(String name, String providerType) {
         var p = new AiProvider();

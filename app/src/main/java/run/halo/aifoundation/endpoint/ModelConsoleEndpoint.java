@@ -212,7 +212,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
                 var chatRequest = withConsoleTestTool(body, consoleTestToolEnabled(request));
                 Flux<ServerSentEvent<Object>> flux = aiModelService.languageModel(modelName)
-                    .flatMapMany(languageModel -> languageModel.streamText(chatRequest))
+                    .flatMapMany(languageModel -> languageModel.streamText(chatRequest).fullStream())
                     .onErrorResume(e -> {
                         log.error("Stream chat failed for model: {}", modelName, e);
                         return Flux.just(TextStreamPart.error("Chat test failed: " + e.getMessage()));
@@ -266,10 +266,12 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                     )
                 )
             ))
-            .executor(input -> Mono.just(Map.of(
+            .executor(context -> Mono.just(Map.of(
                 "tool", CONSOLE_TEST_TOOL_NAME,
                 "message", "Halo console test tool executed successfully.",
-                "query", input != null ? input.getOrDefault("query", "") : "",
+                "query", context.getInput() != null
+                    ? context.getInput().getOrDefault("query", "")
+                    : "",
                 "nextAction", "Answer the user using this tool result."
             )))
             .build();

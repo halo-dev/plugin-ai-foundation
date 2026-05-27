@@ -1,6 +1,5 @@
 package run.halo.aifoundation;
 
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 public interface LanguageModel {
@@ -9,5 +8,5 @@ public interface LanguageModel {
 
     Mono<GenerateTextResult> generateText(GenerateTextRequest request);
 
-    Flux<TextStreamPart> streamText(GenerateTextRequest request);
+    StreamTextResult streamText(GenerateTextRequest request);
 }

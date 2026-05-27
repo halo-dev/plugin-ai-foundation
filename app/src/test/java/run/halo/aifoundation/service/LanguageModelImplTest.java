@@ -7,8 +7,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -31,8 +34,10 @@ import run.halo.aifoundation.ModelMessageRole;
 import run.halo.aifoundation.OutputSpec;
 import run.halo.aifoundation.PartType;
 import run.halo.aifoundation.ReasoningPart;
+import run.halo.aifoundation.StructuredOutputValidationException;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.ToolDefinition;
+import run.halo.aifoundation.ToolExecutionContext;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 
 class LanguageModelImplTest {
@@ -182,6 +187,7 @@ class LanguageModelImplTest {
             chatResponse("It is 22C.", "stop", 4, 5)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
+        var toolContext = new AtomicReference<ToolExecutionContext>();
 
         var request = GenerateTextRequest.builder()
             .prompt("Weather in SF?")
@@ -189,10 +195,13 @@ class LanguageModelImplTest {
                 .name("weather")
                 .description("Get weather")
                 .inputSchema(Map.of("type", "object"))
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of(
-                    "location", input.get("location"),
-                    "temperature", 22
-                )))
+                .executor(context -> {
+                    toolContext.set(context);
+                    return reactor.core.publisher.Mono.just(Map.of(
+                        "location", context.getInput().get("location"),
+                        "temperature", 22
+                    ));
+                })
                 .build()))
             .maxSteps(2)
             .build();
@@ -215,14 +224,64 @@ class LanguageModelImplTest {
                     .singleElement()
                     .satisfies(toolResult -> assertThat(toolResult.getResult().toString())
                         .contains("temperature=22"));
+                assertThat(result.getToolCalls()).hasSize(1);
+                assertThat(result.getToolResults()).hasSize(1);
+                assertThat(result.getToolErrors()).isEmpty();
             })
             .verifyComplete();
+
+        assertThat(toolContext.get().getToolCallId()).isEqualTo("call_1");
+        assertThat(toolContext.get().getToolName()).isEqualTo("weather");
+        assertThat(toolContext.get().getStepIndex()).isZero();
+        assertThat(toolContext.get().getMessages()).isNotEmpty();
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel, times(2)).call(captor.capture());
         assertThat(captor.getAllValues().get(1).getInstructions())
             .extracting(message -> message.getMessageType().getValue())
             .contains("tool");
+    }
+
+    @Test
+    void generateText_toolContextIncludesPriorToolHistoryForLaterSteps() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
+            toolCallResponse("call_2", "weather", "{\"location\":\"NYC\"}", 4, 5),
+            chatResponse("Done", "stop", 6, 7)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var contexts = new ArrayList<ToolExecutionContext>();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Compare weather")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(context -> {
+                    contexts.add(context);
+                    return reactor.core.publisher.Mono.just(Map.of("ok", true));
+                })
+                .build()))
+            .maxSteps(3)
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getToolCalls()).hasSize(2);
+                assertThat(result.getToolResults()).hasSize(2);
+                assertThat(result.getText()).isEqualTo("Done");
+            })
+            .verifyComplete();
+
+        assertThat(contexts).hasSize(2);
+        assertThat(contexts.get(1).getStepIndex()).isEqualTo(1);
+        assertThat(contexts.get(1).getMessages())
+            .extracting(ModelMessage::getRole)
+            .contains(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL);
+        assertThat(contexts.get(1).getMessages().stream()
+            .flatMap(message -> message.getContent().stream())
+            .map(ModelMessagePart::getType))
+            .contains(PartType.TOOL_CALL, PartType.TOOL_RESULT);
     }
 
     @Test
@@ -242,7 +301,7 @@ class LanguageModelImplTest {
             .prompt("Weather in SF?")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .maxSteps(2)
             .build();
@@ -276,7 +335,7 @@ class LanguageModelImplTest {
             .prompt("Weather in SF?")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .maxSteps(1)
             .build();
@@ -305,7 +364,7 @@ class LanguageModelImplTest {
             .prompt("Weather in SF?")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .build();
 
@@ -334,7 +393,7 @@ class LanguageModelImplTest {
             .prompt("Use tool")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of()))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of()))
                 .build()))
             .maxSteps(2)
             .build();
@@ -387,7 +446,7 @@ class LanguageModelImplTest {
             .prompt("Use tool")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.error(
+                .executor(context -> reactor.core.publisher.Mono.error(
                     new IllegalStateException("tool failed")))
                 .build()))
             .maxSteps(2)
@@ -441,7 +500,7 @@ class LanguageModelImplTest {
         ));
         var model = new LanguageModelImpl(chatModel, "openai");
 
-        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()).fullStream())
             .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_START))
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_START_STEP);
@@ -474,6 +533,147 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void streamText_resultViewsShareSingleExecution() {
+        var calls = new AtomicInteger();
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenAnswer(invocation -> Flux.defer(() -> {
+            calls.incrementAndGet();
+            return Flux.just(
+                chatResponse("Hel", null, null, null),
+                chatResponse("lo", "stop", 2, 4)
+            );
+        }));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var result = model.streamText(GenerateTextRequest.builder().prompt("Hi").build());
+
+        StepVerifier.create(result.textStream())
+            .expectNext("Hel", "lo")
+            .verifyComplete();
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> assertThat(finalResult.getText()).isEqualTo("Hello"))
+            .verifyComplete();
+        StepVerifier.create(result.fullStream().filter(part -> TextStreamPart.TYPE_FINISH.equals(part.getType())))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void streamText_exposesPartialOutputStreamForObject() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("{\"name\":\"Halo\"}", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.partialOutputStream())
+            .expectNext(Map.of("name", "Halo"))
+            .verifyComplete();
+        StepVerifier.create(result.output())
+            .expectNext(Map.of("name", "Halo"))
+            .verifyComplete();
+    }
+
+    @Test
+    void streamText_exposesValidatedElementStreamForArray() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("[", null, null, null),
+            chatResponse("{\"name\":\"Halo\"},", null, null, null),
+            chatResponse("{\"name\":\"CMS\"}]", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate projects")
+            .output(OutputSpec.array(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.elementStream())
+            .expectNext(Map.of("name", "Halo"))
+            .expectNext(Map.of("name", "CMS"))
+            .verifyComplete();
+        StepVerifier.create(result.output())
+            .expectNext(List.of(Map.of("name", "Halo"), Map.of("name", "CMS")))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_warnsWhenStructuredOutputFallsBackToPromptGuidance() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("{\"name\":\"Halo\"}", "stop", 2, 4)
+        );
+        var model = new LanguageModelImpl(chatModel, "generic");
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.builder()
+                .type(run.halo.aifoundation.OutputType.OBJECT)
+                .schema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("name", Map.of("type", "string")),
+                    "required", List.of("name")
+                ))
+                .strict(true)
+                .build())
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getWarnings()).extracting("code")
+                .contains("structured-output-prompt-guidance",
+                    "structured-output-strict-not-guaranteed"))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_structuredValidationErrorContainsSafeContext() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("{}", "stop", 2, 4)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(StructuredOutputValidationException.class);
+                var validationError = (StructuredOutputValidationException) error;
+                assertThat(validationError.getOutputType())
+                    .isEqualTo(run.halo.aifoundation.OutputType.OBJECT);
+                assertThat(validationError.getOutputText()).isEqualTo("{}");
+                assertThat(validationError.getValidationPath()).isEqualTo("$.name");
+                assertThat(validationError.getStepIndex()).isZero();
+                assertThat(validationError.getUsage().getTotalTokens()).isEqualTo(6);
+                assertThat(validationError.getResponse()).isNotNull();
+            })
+            .verify();
+    }
+
+    @Test
     void streamText_emitsReasoningPartsSeparately() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
@@ -483,24 +683,28 @@ class LanguageModelImplTest {
         ));
         var model = new LanguageModelImpl(chatModel, "openai");
 
-        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+        var stream = model.streamText(GenerateTextRequest.builder().prompt("Hi").build());
+
+        StepVerifier.create(stream.fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_START.equals(part.getType()))
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_REASONING_DELTA);
                 assertThat(part.getDelta()).isEqualTo("Thinking");
             })
+            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_END.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
                 assertThat(part.getDelta()).isEqualTo("Answer");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_END.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
             .verifyComplete();
+
+        assertNoOverlappingStreamBlocks(stream.fullStream().collectList().block());
     }
 
     @Test
@@ -519,7 +723,7 @@ class LanguageModelImplTest {
         ));
         var model = new LanguageModelImpl(chatModel, "openai");
 
-        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
@@ -544,10 +748,9 @@ class LanguageModelImplTest {
             .thenReturn(Flux.error(new IllegalStateException("upstream failed")));
         var model = new LanguageModelImpl(chatModel, "openai");
 
-        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()))
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
                 assertThat(part.getErrorText()).isEqualTo("upstream failed");
@@ -571,12 +774,12 @@ class LanguageModelImplTest {
             .prompt("Weather in SF?")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .maxSteps(2)
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
@@ -615,7 +818,7 @@ class LanguageModelImplTest {
             .tools(List.of(ToolDefinition.builder().name("weather").build()))
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        StepVerifier.create(model.streamText(request).fullStream())
             .assertNext(part -> {
                 assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
                 assertThat(part.getErrorText())
@@ -636,13 +839,13 @@ class LanguageModelImplTest {
             .prompt("Weather in SF?")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.error(
+                .executor(context -> reactor.core.publisher.Mono.error(
                     new IllegalStateException("tool failed")))
                 .build()))
             .maxSteps(2)
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
@@ -667,12 +870,12 @@ class LanguageModelImplTest {
             .prompt("Weather in SF?")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .maxSteps(1)
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
@@ -815,7 +1018,7 @@ class LanguageModelImplTest {
             )))
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
@@ -826,6 +1029,47 @@ class LanguageModelImplTest {
             })
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
             .verifyComplete();
+    }
+
+    @Test
+    void streamText_structuredValidationErrorFailsResultAndOutputWithContext() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("{}", null, null, null),
+            chatResponse("", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream())
+            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
+                assertThat(part.getErrorText()).contains("missing required field");
+                assertThat(part.getProviderMetadata()).containsEntry("validationPath", "$.name");
+            })
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .expectErrorSatisfies(this::assertStructuredStreamValidationError)
+            .verify();
+        StepVerifier.create(result.output())
+            .expectErrorSatisfies(this::assertStructuredStreamValidationError)
+            .verify();
     }
 
     @Test
@@ -842,7 +1086,7 @@ class LanguageModelImplTest {
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
                 .inputSchema(Map.of("type", "object"))
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .maxSteps(2)
             .output(OutputSpec.object(Map.of(
@@ -878,7 +1122,7 @@ class LanguageModelImplTest {
                     "properties", Map.of("location", Map.of("type", "string")),
                     "required", List.of("location")
                 ))
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .maxSteps(2)
             .build();
@@ -912,7 +1156,7 @@ class LanguageModelImplTest {
                     "properties", Map.of("temperature", Map.of("type", "integer")),
                     "required", List.of("temperature")
                 ))
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", "hot")))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", "hot")))
                 .build()))
             .maxSteps(2)
             .build();
@@ -936,12 +1180,12 @@ class LanguageModelImplTest {
             .prompt("Use tool")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of()))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of()))
                 .build()))
             .maxSteps(2)
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
@@ -972,7 +1216,7 @@ class LanguageModelImplTest {
             .maxSteps(2)
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
@@ -1000,12 +1244,14 @@ class LanguageModelImplTest {
             .prompt("Weather in SF?")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .executor(input -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
+                .executor(context -> reactor.core.publisher.Mono.just(Map.of("temperature", 22)))
                 .build()))
             .maxSteps(2)
             .build();
 
-        StepVerifier.create(model.streamText(request))
+        var stream = model.streamText(request);
+
+        StepVerifier.create(stream.fullStream())
             .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_START.equals(part.getType()))
@@ -1024,6 +1270,8 @@ class LanguageModelImplTest {
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
             .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
             .verifyComplete();
+
+        assertNoOverlappingStreamBlocks(stream.fullStream().collectList().block());
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel, times(2)).stream(captor.capture());
@@ -1143,6 +1391,53 @@ class LanguageModelImplTest {
             }
             return builder.build();
         }, null);
+    }
+
+    private void assertStructuredStreamValidationError(Throwable error) {
+        assertThat(error).isInstanceOf(StructuredOutputValidationException.class);
+        var validationError = (StructuredOutputValidationException) error;
+        assertThat(validationError.getOutputType())
+            .isEqualTo(run.halo.aifoundation.OutputType.OBJECT);
+        assertThat(validationError.getOutputText()).isEqualTo("{}");
+        assertThat(validationError.getValidationPath()).isEqualTo("$.name");
+        assertThat(validationError.getStepIndex()).isZero();
+        assertThat(validationError.getUsage().getTotalTokens()).isEqualTo(6);
+        assertThat(validationError.getResponse()).isNotNull();
+    }
+
+    private void assertNoOverlappingStreamBlocks(List<TextStreamPart> parts) {
+        String activeBlock = null;
+        for (var part : parts) {
+            switch (part.getType()) {
+                case TextStreamPart.TYPE_TEXT_START -> {
+                    assertThat(activeBlock)
+                        .as("text-start must not open while another stream block is active")
+                        .isNull();
+                    activeBlock = TextStreamPart.TYPE_TEXT_START;
+                }
+                case TextStreamPart.TYPE_TEXT_END -> {
+                    assertThat(activeBlock)
+                        .as("text-end must close an active text block")
+                        .isEqualTo(TextStreamPart.TYPE_TEXT_START);
+                    activeBlock = null;
+                }
+                case TextStreamPart.TYPE_REASONING_START -> {
+                    assertThat(activeBlock)
+                        .as("reasoning-start must not open while another stream block is active")
+                        .isNull();
+                    activeBlock = TextStreamPart.TYPE_REASONING_START;
+                }
+                case TextStreamPart.TYPE_REASONING_END -> {
+                    assertThat(activeBlock)
+                        .as("reasoning-end must close an active reasoning block")
+                        .isEqualTo(TextStreamPart.TYPE_REASONING_START);
+                    activeBlock = null;
+                }
+                default -> {
+                }
+            }
+        }
+        assertThat(activeBlock).as("stream block must be closed").isNull();
     }
 
     private record ProjectInfo(String name, List<String> labels) {

@@ -26,8 +26,8 @@ import lombok.NoArgsConstructor;
  *         ),
  *         "required", List.of("location")
  *     ))
- *     .executor(input -> Mono.just(Map.of(
- *         "location", input.get("location"),
+ *     .executor(context -> Mono.just(Map.of(
+ *         "location", context.getInput().get("location"),
  *         "temperature", 22
  *     )))
  *     .build();

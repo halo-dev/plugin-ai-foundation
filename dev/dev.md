@@ -181,10 +181,12 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 
 `OutputSpec.array(Class<?>)` 会把类型作为数组元素 schema；`OutputSpec.choice(List.of("yes", "no"))` 会约束模型只能返回指定字符串；`OutputSpec.json()` 只要求返回合法 JSON，不校验具体结构。
 
-流式调用时，结构化内容仍然通过 `text-delta` 输出。`streamText()` 会在结束时校验完整文本；如果文本不满足 `OutputSpec`，会发送 `error` part。流式协议不会额外携带解析后的 `output`，需要对象结果时可以使用 `generateText()`。
+流式调用时，结构化内容仍然通过 `text-delta` 输出，完整协议事件可从 `fullStream()` 读取。`streamText()` 返回的 `StreamTextResult` 还会基于同一次模型调用提供结构化视图：`partialOutputStream()` 会在对象或通用 JSON 文本可安全解析时发出快照，`elementStream()` 会在数组元素完整且通过元素 schema 校验后发出元素，`output()` 会在结束后返回最终解析并校验的结构化结果。最终校验仍然是权威结果；部分快照只适合用于渐进式 UI。
 
 ```java
-model.streamText(request)
+StreamTextResult stream = model.streamText(request);
+
+stream.fullStream()
     .subscribe(part -> {
         switch (part.getType()) {
             case TextStreamPart.TYPE_TEXT_DELTA -> System.out.print(part.getDelta());
@@ -193,6 +195,35 @@ model.streamText(request)
             }
         }
     });
+
+stream.output()
+    .cast(Map.class)
+    .subscribe(output -> System.out.println(output.get("title")));
+```
+
+如果 `output` 是对象或通用 JSON，可以订阅部分输出快照：
+
+```java
+model.streamText(request)
+    .partialOutputStream()
+    .subscribe(snapshot -> System.out.println("partial = " + snapshot));
+```
+
+如果 `output` 是数组，可以订阅已经完成并通过元素 schema 校验的元素：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("生成 3 个文章标题，返回 JSON 数组")
+    .output(OutputSpec.array(Map.of(
+        "type", "object",
+        "properties", Map.of("title", Map.of("type", "string")),
+        "required", List.of("title")
+    )))
+    .build();
+
+model.streamText(request)
+    .elementStream()
+    .subscribe(element -> System.out.println("element = " + element));
 ```
 
 本地校验当前覆盖常用 JSON Schema 子集：`type`、`enum`、`required`、`properties` 和 `items`。更复杂的格式约束可以在调用方拿到 `output` 后继续校验。
@@ -211,7 +242,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .maxOutputTokens(2048)
     .build();
 
-model.streamText(request)
+model.streamText(request).fullStream()
     .subscribe(part -> {
         switch (part.getType()) {
             case TextStreamPart.TYPE_TEXT_DELTA -> System.out.print(part.getDelta());
@@ -267,8 +298,8 @@ GenerateTextRequest request = GenerateTextRequest.builder()
             ),
             "required", List.of("location", "temperature", "condition")
         ))
-        .executor(input -> Mono.just(Map.of(
-            "location", input.get("location"),
+        .executor(context -> Mono.just(Map.of(
+            "location", context.getInput().get("location"),
             "temperature", 22,
             "condition", "sunny"
         )))
@@ -294,7 +325,7 @@ model.generateText(request)
     });
 ```
 
-`inputSchema` 用于约束模型生成的工具入参，`outputSchema` 用于约束 executor 返回值。`ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到 `maxSteps` 仍有工具调用，会记录 `max-steps-reached` warning。
+`inputSchema` 用于约束模型生成的工具入参，`outputSchema` 用于约束 executor 返回值。`ToolDefinition.executor` 是服务端运行逻辑，属于调用方进程内代码，不会序列化到 HTTP/OpenAPI schema 中。executor 会收到 `ToolExecutionContext`，其中包含 `toolCallId`、`toolName`、解析后的 `input`、`stepIndex`、当前步骤消息和 provider metadata，方便调用方关联流式事件、审计日志或嵌套模型调用。若模型请求了未定义工具，会记录 `ToolError` 并停止后续步骤；若工具没有 executor，会记录 `tool-not-executed` warning 并停止后续步骤；若达到 `maxSteps` 仍有工具调用，会记录 `max-steps-reached` warning。
 
 工具调用同样支持 `streamText()`。与 `generateText()` 的一次性聚合不同，`streamText()` 会在每个模型步骤中立即转发 provider 返回的 `reasoning-delta` 和 `text-delta`；当模型步骤以工具调用结束时，再发送 `tool-call`，执行服务端工具并发送 `tool-result` 或 `tool-error`。如果 `maxSteps` 允许继续，下一次模型调用会作为新的 `start-step` 继续流式输出最终回答。
 
@@ -373,7 +404,7 @@ ModelMessage.assistant(List.of(
 | `outputText` | `String` | 用于解析结构化输出的原始文本片段 |
 | `reasoningText` | `String` | 最后一步推理文本，模型未返回推理时为空 |
 | `reasoning` | `List<ReasoningPart>` | 最后一步推理 part 列表，可包含 provider metadata |
-| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，可能包含 `reasoning`、`text`、`output`、`tool-call`、`tool-result`、`tool-error` |
+| `content` | `List<GenerationContentPart>` | 生成内容 part 列表，可能包含 `reasoning`、`text`、`tool-call`、`tool-result`、`tool-error` |
 | `finishReason` | `FinishReason` | 统一结束原因，如 `STOP`、`LENGTH`、`CONTENT_FILTER`、`UNKNOWN` |
 | `rawFinishReason` | `String` | 提供商或 Spring AI 返回的原始结束原因 |
 | `usage` | `LanguageModelUsage` | 最后一步 token 使用量，可能为空 |
@@ -382,6 +413,9 @@ ModelMessage.assistant(List.of(
 | `request` | `GenerationRequestMetadata` | 请求侧元数据，例如模型或 provider 信息 |
 | `response` | `GenerationResponseMetadata` | 响应侧元数据，例如响应 ID、模型、响应消息、headers/body 摘要等 |
 | `steps` | `List<GenerationStep>` | 每次模型调用的步骤详情，包含该步文本、工具调用、工具结果、工具错误、warning 和元数据 |
+| `toolCalls` | `List<ToolCall>` | 所有步骤中的工具调用聚合，便于调用方直接读取完整工具轨迹 |
+| `toolResults` | `List<ToolResult>` | 所有步骤中的工具执行结果聚合 |
+| `toolErrors` | `List<ToolError>` | 所有步骤中的工具执行错误聚合 |
 | `providerMetadata` | `Map<String, Object>` | 可序列化的提供商元数据 |
 
 `LanguageModelUsage` 除了 `inputTokens`、`outputTokens`、`totalTokens`，还会在提供商返回时包含 `reasoningTokens`。
@@ -390,7 +424,19 @@ ModelMessage.assistant(List.of(
 
 ### TextStreamPart 事件
 
-`streamText()` 返回 `Flux<TextStreamPart>`，常见事件顺序如下：
+`streamText()` 返回 `StreamTextResult`。对于 Console SSE 或需要完整 Halo 协议的调用方，读取 `fullStream()`；只需要最终回答文本时读取 `textStream()`；需要结构化流式视图时读取 `partialOutputStream()` 或 `elementStream()`；需要最终聚合结果时读取 `result()`。
+
+```java
+StreamTextResult stream = model.streamText(request);
+
+stream.textStream()
+    .subscribe(System.out::print);
+
+stream.result()
+    .subscribe(result -> System.out.println(result.getFinishReason()));
+```
+
+`fullStream()` 的常见事件顺序如下：
 
 ```text
 start
@@ -508,6 +554,9 @@ aiModelService.listProviders()
 | `ModelNotFoundException` | 模型不存在 | 检查 modelName 是否正确，或引导用户配置模型 |
 | `ProviderDisabledException` | 提供商未启用 | 提示用户启用对应提供商 |
 | `ProviderApiException` | 提供商 API 调用失败 | 通常为网络或密钥问题，记录日志并提示用户检查配置 |
+| `StructuredOutputValidationException` | 模型文本或工具结果不满足 `OutputSpec`/工具 schema | 读取 `outputType`、`validationPath`、`stepIndex`、`usage` 和 `response` 定位问题；不要把部分输出快照当作最终成功 |
+
+对于非致命降级，`GenerateTextResult.warnings`、`GenerationStep.warnings` 和流式 `finish-step.warnings` 会携带稳定 `code`。常见 warning 包括结构化输出只能通过 prompt 引导、strict schema 不能由 provider 原生保证、`toolChoice=REQUIRED` 不能由默认工具适配器强制执行、工具 input examples 被忽略等。调用方可以记录这些 warning，或在对确定性要求较高的场景主动失败。
 
 ## 完整示例
 
@@ -536,6 +585,6 @@ public class MyAiService {
 ## 注意事项
 
 1. **确保本插件已启用**：调用方插件应在 `plugin.yaml` 中声明 `pluginDependencies.ai-foundation`，并通过 `ExtensionGetter.getEnabledExtension(AiModelService.class)` 获取服务；调用 `languageModel()` 或 `embeddingModel()` 时，如果对应的提供商未启用，会通过 `Mono` error channel 抛出 `ProviderDisabledException`
-2. **异步 API**：`languageModel()` 和 `embeddingModel()` 返回 `Mono`，需要在响应式上下文中通过 `.flatMap()` 链式调用，或在非响应式上下文中调用 `.block()` 获取实例。`generateText()`、`streamText()`、`embed()` 等方法同样返回 `Mono`/`Flux`
+2. **异步 API**：`languageModel()` 和 `embeddingModel()` 返回 `Mono`，需要在响应式上下文中通过 `.flatMap()` 链式调用，或在非响应式上下文中调用 `.block()` 获取实例。`generateText()`、`embed()` 等方法返回 `Mono`/`Flux`；`streamText()` 会立即返回 `StreamTextResult`，其中的各个视图再通过 `Flux`/`Mono` 订阅
 3. **模型名称**：使用 `listModels()` 获取准确的 `name` 字段，不要硬编码 modelId
 4. **跨插件调用**：由于 Halo 插件 ApplicationContext 隔离，不能通过 `@Autowired` 注入 `AiModelService`，请使用 Halo 的 `ExtensionGetter` 获取启用的 `AiModelService` 扩展实现
