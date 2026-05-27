@@ -77,6 +77,14 @@ public class GenerateTextRequest {
      */
     private Map<String, Map<String, Object>> providerOptions;
     /**
+     * Caller metadata exposed to lifecycle callbacks. This data is not added to model prompts.
+     */
+    private Map<String, Object> metadata;
+    /**
+     * Caller context exposed to lifecycle callbacks. This data is not added to model prompts.
+     */
+    private Map<String, Object> context;
+    /**
      * Optional structured output specification.
      */
     private OutputSpec output;
@@ -97,6 +105,18 @@ public class GenerateTextRequest {
      * each model step.
      */
     private transient PrepareStepCallback prepareStep;
+    /**
+     * Request-scoped lifecycle observer. Callback failures are reported as generation warnings.
+     */
+    private transient GenerationLifecycle lifecycle;
+    /**
+     * Request-scoped cancellation signal.
+     */
+    private transient CancellationToken cancellationToken;
+    /**
+     * Request-scoped timeout controls for total generation, provider steps, and tools.
+     */
+    private transient GenerationTimeouts timeouts;
 
     @Transient
     public StopCondition getStopWhen() {
@@ -106,5 +126,20 @@ public class GenerateTextRequest {
     @Transient
     public PrepareStepCallback getPrepareStep() {
         return prepareStep;
+    }
+
+    @Transient
+    public GenerationLifecycle getLifecycle() {
+        return lifecycle;
+    }
+
+    @Transient
+    public CancellationToken getCancellationToken() {
+        return cancellationToken;
+    }
+
+    @Transient
+    public GenerationTimeouts getTimeouts() {
+        return timeouts;
     }
 }

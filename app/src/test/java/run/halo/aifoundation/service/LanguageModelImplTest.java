@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -25,8 +26,17 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import run.halo.aifoundation.AiGenerationCancelledException;
+import run.halo.aifoundation.CancellationSource;
 import run.halo.aifoundation.FinishReason;
+import run.halo.aifoundation.GenerationLifecycle;
+import run.halo.aifoundation.GenerationStepFinishEvent;
+import run.halo.aifoundation.GenerationStepStartEvent;
+import run.halo.aifoundation.GenerationTimeouts;
+import run.halo.aifoundation.GenerationToolCallFinishEvent;
+import run.halo.aifoundation.GenerationToolCallStartEvent;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.ModelMessage;
 import run.halo.aifoundation.ModelMessagePart;
@@ -1441,6 +1451,182 @@ class LanguageModelImplTest {
             .singleElement()
             .satisfies(message -> assertThat(message.getMetadata())
                 .containsEntry("reasoningContent", "Need weather data."));
+    }
+
+    @Test
+    void generateText_invokesLifecycleCallbacksForMultiStepToolCall() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
+            chatResponse("It is 22C.", "stop", 4, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var events = new ArrayList<String>();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .metadata(Map.of("requestId", "req-1"))
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(context -> Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .lifecycle(new GenerationLifecycle() {
+                @Override
+                public Mono<Void> onStart(run.halo.aifoundation.GenerationStartEvent event) {
+                    events.add("start:" + event.getMetadata().get("requestId"));
+                    return Mono.empty();
+                }
+
+                @Override
+                public Mono<Void> onStepStart(GenerationStepStartEvent event) {
+                    events.add("step-start:" + event.getStepIndex());
+                    return Mono.empty();
+                }
+
+                @Override
+                public Mono<Void> onToolCallStart(GenerationToolCallStartEvent event) {
+                    events.add("tool-start:" + event.getToolName());
+                    return Mono.empty();
+                }
+
+                @Override
+                public Mono<Void> onToolCallFinish(GenerationToolCallFinishEvent event) {
+                    events.add("tool-finish:" + event.getToolName());
+                    assertThat(event.getDuration()).isNotNull();
+                    return Mono.empty();
+                }
+
+                @Override
+                public Mono<Void> onStepFinish(GenerationStepFinishEvent event) {
+                    events.add("step-finish:" + event.getStepIndex());
+                    return Mono.empty();
+                }
+
+                @Override
+                public Mono<Void> onFinish(run.halo.aifoundation.GenerationFinishEvent event) {
+                    events.add("finish:" + event.getResult().getText());
+                    return Mono.empty();
+                }
+            })
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("It is 22C."))
+            .verifyComplete();
+
+        assertThat(events).containsExactly(
+            "start:req-1",
+            "step-start:0",
+            "tool-start:weather",
+            "tool-finish:weather",
+            "step-finish:0",
+            "step-start:1",
+            "step-finish:1",
+            "finish:It is 22C."
+        );
+    }
+
+    @Test
+    void streamText_invokesLifecycleOnceAcrossMultipleProjections() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class)))
+            .thenReturn(Flux.just(chatResponse("Done", "stop", 3, 5)));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var starts = new AtomicInteger();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Hello")
+            .lifecycle(new GenerationLifecycle() {
+                @Override
+                public Mono<Void> onStart(run.halo.aifoundation.GenerationStartEvent event) {
+                    starts.incrementAndGet();
+                    return Mono.empty();
+                }
+            })
+            .build();
+
+        var stream = model.streamText(request);
+
+        StepVerifier.create(stream.textStream())
+            .expectNext("Done")
+            .verifyComplete();
+        StepVerifier.create(stream.result())
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        assertThat(starts).hasValue(1);
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_capturesCallbackFailureAsWarning() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 3, 5));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Hello")
+            .lifecycle(new GenerationLifecycle() {
+                @Override
+                public Mono<Void> onStepStart(GenerationStepStartEvent event) {
+                    return Mono.error(new IllegalStateException("callback unavailable"));
+                }
+            })
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getWarnings())
+                .anySatisfy(warning -> {
+                    assertThat(warning.getCode()).isEqualTo("lifecycle-callback-failed");
+                    assertThat(warning.getMessage()).contains("onStepStart");
+                }))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_failsBeforeProviderWhenCancelled() {
+        var chatModel = mock(ChatModel.class);
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var source = new CancellationSource();
+        source.cancel();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Hello")
+            .cancellationToken(source.token())
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectError(AiGenerationCancelledException.class)
+            .verify();
+
+        verify(chatModel, times(0)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_recordsToolTimeoutAsToolError() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenReturn(toolCallResponse("call_1", "slow", "{}", 2, 3));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Call slow")
+            .tools(List.of(ToolDefinition.builder()
+                .name("slow")
+                .executor(context -> Mono.never())
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .timeouts(GenerationTimeouts.builder()
+                .toolTimeout(Duration.ofMillis(20))
+                .build())
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getToolErrors())
+                .singleElement()
+                .satisfies(error -> assertThat(error.getErrorText()).contains("tool timed out")))
+            .verifyComplete();
     }
 
     private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,

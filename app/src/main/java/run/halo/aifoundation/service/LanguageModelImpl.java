@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -30,11 +33,22 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import run.halo.aifoundation.FinishReason;
+import run.halo.aifoundation.AiGenerationCancelledException;
+import run.halo.aifoundation.AiGenerationTimeoutException;
+import run.halo.aifoundation.GenerationErrorEvent;
 import run.halo.aifoundation.GenerationContentPart;
+import run.halo.aifoundation.GenerationFinishEvent;
+import run.halo.aifoundation.GenerationLifecycle;
 import run.halo.aifoundation.GenerationRequestMetadata;
 import run.halo.aifoundation.GenerationResponseMetadata;
+import run.halo.aifoundation.GenerationStartEvent;
 import run.halo.aifoundation.GenerationStep;
+import run.halo.aifoundation.GenerationStepFinishEvent;
+import run.halo.aifoundation.GenerationStepStartEvent;
+import run.halo.aifoundation.GenerationToolCallFinishEvent;
+import run.halo.aifoundation.GenerationToolCallStartEvent;
 import run.halo.aifoundation.GenerationWarning;
+import run.halo.aifoundation.GenerationTimeouts;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.GenerateTextResult;
 import run.halo.aifoundation.LanguageModel;
@@ -105,14 +119,24 @@ public class LanguageModelImpl implements LanguageModel {
 
     @Override
     public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
-        return Mono.fromCallable(() -> generateTextBlocking(request))
+        var run = new GenerationRun(request);
+        return Mono.fromCallable(() -> generateTextBlocking(request, run))
             .subscribeOn(Schedulers.boundedElastic())
-            ;
+            .transform(mono -> withTotalTimeout(mono, request))
+            .doOnError(error -> run.error(error, null, List.of()));
     }
 
     @Override
     public StreamTextResult streamText(GenerateTextRequest request) {
-        var fullStream = StreamProtocolNormalizer.normalize(streamTextParts(request)).cache();
+        var run = new GenerationRun(request);
+        var fullStream = StreamProtocolNormalizer.normalize(
+            streamTextParts(request, run)
+                .transform(stream -> withTotalTimeout(stream, request))
+                .onErrorResume(error -> {
+                    run.error(error, null, List.of());
+                    return Flux.just(terminalErrorPart(error));
+                })
+        ).cache();
         var textStream = fullStream
             .filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
             .map(TextStreamPart::getDelta)
@@ -133,18 +157,23 @@ public class LanguageModelImpl implements LanguageModel {
         );
     }
 
-    private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request) {
+    private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request, GenerationRun run) {
         if (hasTools(request)) {
-            return streamTextWithTools(request);
+            return streamTextWithTools(request, run);
         }
         if (hasStructuredOutput(request)) {
-            return streamStructuredText(request);
+            return streamStructuredText(request, run);
         }
         return Flux.defer(() -> {
             Prompt prompt;
             try {
+                checkCancellation(request);
                 prompt = buildPrompt(request);
+                run.start();
+                run.stepStart(0, request, initialExecutionMessages(request), List.of(),
+                    resolvedStopCondition(request));
             } catch (RuntimeException e) {
+                run.error(e, 0, List.of());
                 return Flux.just(TextStreamPart.error(e.getMessage()));
             }
 
@@ -156,7 +185,16 @@ public class LanguageModelImpl implements LanguageModel {
             var reasoningStarted = new AtomicBoolean(false);
 
             var stream = chatModel.stream(prompt)
-                .concatMap(response -> mapStreamResponse(request, response, textId, reasoningId,
+                .transform(flux -> withStepTimeout(flux, request))
+                .<ChatResponse>handle((response, sink) -> {
+                    try {
+                        checkCancellation(request);
+                        sink.next(response);
+                    } catch (RuntimeException e) {
+                        sink.error(e);
+                    }
+                })
+                .concatMap(response -> mapStreamResponse(request, run, response, textId, reasoningId,
                     finished, textStarted, reasoningStarted))
                 .concatWith(Flux.defer(() -> {
                     if (finished.get()) {
@@ -171,14 +209,28 @@ public class LanguageModelImpl implements LanguageModel {
                     if (textStarted.get()) {
                         parts.add(TextStreamPart.textEnd(textId));
                     }
-                    parts.add(TextStreamPart.finishStep(0, finishReason, null, null, List.of(), null,
+                    var step = GenerationStep.builder()
+                        .stepIndex(0)
+                        .finishReason(finishReason)
+                        .warnings(run.warnings())
+                        .providerMetadata(Map.of())
+                        .build();
+                    run.stepFinish(0, step, List.of(step));
+                    var result = GenerateTextResult.builder()
+                        .finishReason(finishReason)
+                        .warnings(run.warnings())
+                        .steps(List.of(step))
+                        .build();
+                    run.finish(result);
+                    parts.add(TextStreamPart.finishStep(0, finishReason, null, null, run.warnings(), null,
                         null, Map.of()));
                     parts.add(TextStreamPart.finish(finishReason, null, null));
                     return Flux.fromIterable(parts);
                 }))
                 .onErrorResume(e -> {
                     log.error("[{}] Streaming error", providerType, e);
-                    return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+                    run.error(e, 0, List.of());
+                    return Flux.just(terminalErrorPart(e));
                 });
 
             return Flux.concat(Flux.just(TextStreamPart.start(messageId),
@@ -186,15 +238,18 @@ public class LanguageModelImpl implements LanguageModel {
         });
     }
 
-    private Flux<TextStreamPart> streamTextWithTools(GenerateTextRequest request) {
+    private Flux<TextStreamPart> streamTextWithTools(GenerateTextRequest request, GenerationRun run) {
         return Flux.defer(() -> {
             List<org.springframework.ai.chat.messages.Message> messages;
             try {
+                checkCancellation(request);
                 validateRequest(request);
                 assertToolCallingSupported(request);
                 messages = buildMessages(request);
+                run.start();
             } catch (RuntimeException e) {
-                return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+                run.error(e, null, List.of());
+                return Flux.just(terminalErrorPart(e));
             }
             var executionMessages = initialExecutionMessages(request);
             var totalUsage = new UsageAccumulator();
@@ -203,39 +258,54 @@ public class LanguageModelImpl implements LanguageModel {
             var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
             return Flux.concat(Flux.just(TextStreamPart.start(messageId)),
                 streamToolStep(request, messages, executionMessages, 0, totalUsage, steps,
-                    stopWhen));
+                    stopWhen, run));
         });
     }
 
-    private Flux<TextStreamPart> streamStructuredText(GenerateTextRequest request) {
+    private Flux<TextStreamPart> streamStructuredText(GenerateTextRequest request, GenerationRun run) {
         return Flux.defer(() -> {
             List<org.springframework.ai.chat.messages.Message> messages;
             try {
+                checkCancellation(request);
                 validateRequest(request);
                 messages = buildMessages(request);
+                run.start();
+                run.stepStart(0, request, initialExecutionMessages(request), List.of(),
+                    resolvedStopCondition(request));
             } catch (RuntimeException e) {
-                return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+                run.error(e, 0, List.of());
+                return Flux.just(terminalErrorPart(e));
             }
             var accumulator = new StreamStepAccumulator(0);
             var totalUsage = new UsageAccumulator();
             var prompt = new Prompt(messages, buildChatOptions(request));
             var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
             var stream = chatModel.stream(prompt)
+                .transform(flux -> withStepTimeout(flux, request))
+                .<ChatResponse>handle((response, sink) -> {
+                    try {
+                        checkCancellation(request);
+                        sink.next(response);
+                    } catch (RuntimeException e) {
+                        sink.error(e);
+                    }
+                })
                 .concatMap(response -> mapToolStreamResponse(request, response, accumulator))
                 .onErrorResume(e -> {
                     log.error("[{}] Structured streaming error", providerType, e);
                     accumulator.failed = true;
-                    return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+                    run.error(e, 0, List.of());
+                    return Flux.just(terminalErrorPart(e));
                 });
             return Flux.concat(Flux.just(TextStreamPart.start(messageId),
                     TextStreamPart.startStep(0)),
                 stream,
-                Flux.defer(() -> completeStructuredSingleStep(request, accumulator, totalUsage)));
+                Flux.defer(() -> completeStructuredSingleStep(request, run, accumulator, totalUsage)));
         });
     }
 
     private Flux<TextStreamPart> completeStructuredSingleStep(GenerateTextRequest request,
-        StreamStepAccumulator accumulator, UsageAccumulator totalUsage) {
+        GenerationRun run, StreamStepAccumulator accumulator, UsageAccumulator totalUsage) {
         if (accumulator.failed) {
             return Flux.empty();
         }
@@ -261,34 +331,58 @@ public class LanguageModelImpl implements LanguageModel {
         }
         var warnings = new ArrayList<>(accumulator.warnings());
         warnings.addAll(requestWarnings(request));
+        warnings.addAll(run.warnings());
+        var generationStep = streamGenerationStep(accumulator, accumulator.toolCalls(),
+            new ToolExecutionBatch(List.of(), List.of(), List.of()), warnings);
+        run.stepFinish(accumulator.stepIndex, generationStep, List.of(generationStep));
         parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
             accumulator.rawFinishReason, accumulator.usage(), warnings,
             accumulator.request(), accumulator.response(), accumulator.providerMetadata()));
         parts.add(TextStreamPart.finish(accumulator.finishReason(), accumulator.rawFinishReason,
             totalUsage.usage()));
+        run.finish(resultFromSteps(List.of(generationStep), totalUsage.usage()));
         return Flux.fromIterable(parts);
     }
 
     private Flux<TextStreamPart> streamToolStep(GenerateTextRequest request,
         List<org.springframework.ai.chat.messages.Message> messages,
         List<ModelMessage> executionMessages, int stepIndex, UsageAccumulator totalUsage,
-        List<GenerationStep> completedSteps, StopCondition stopWhen) {
+        List<GenerationStep> completedSteps, StopCondition stopWhen, GenerationRun run) {
         return Flux.defer(() -> {
-            var prepared = prepareInvocation(request, messages, executionMessages, completedSteps,
-                null, stepIndex, stopWhen);
+            PreparedInvocation prepared;
+            try {
+                checkCancellation(request);
+                prepared = prepareInvocation(request, messages, executionMessages, completedSteps,
+                    null, stepIndex, stopWhen);
+                run.stepStart(stepIndex, prepared.request(), prepared.executionMessages(),
+                    completedSteps, prepared.stopWhen());
+            } catch (RuntimeException e) {
+                run.error(e, stepIndex, completedSteps);
+                return Flux.just(terminalErrorPart(e));
+            }
             var accumulator = new StreamStepAccumulator(stepIndex);
             var prompt = new Prompt(prepared.messages(), buildChatOptions(prepared.request()));
             var stream = chatModel.stream(prompt)
+                .transform(flux -> withStepTimeout(flux, prepared.request()))
+                .<ChatResponse>handle((response, sink) -> {
+                    try {
+                        checkCancellation(prepared.request());
+                        sink.next(response);
+                    } catch (RuntimeException e) {
+                        sink.error(e);
+                    }
+                })
                 .concatMap(response -> mapToolStreamResponse(prepared.request(), response, accumulator))
                 .onErrorResume(e -> {
                     log.error("[{}] Tool streaming error", providerType, e);
                     accumulator.failed = true;
-                    return Flux.just(TextStreamPart.error(safeErrorMessage(e)));
+                    run.error(e, stepIndex, completedSteps);
+                    return Flux.just(terminalErrorPart(e));
                 });
             return Flux.concat(Flux.just(TextStreamPart.startStep(stepIndex)), stream,
                 Flux.defer(() -> completeToolStreamStep(prepared.request(), prepared.messages(),
                     accumulator, prepared.executionMessages(), totalUsage, completedSteps,
-                    prepared.stopWhen())));
+                    prepared.stopWhen(), run)));
         });
     }
 
@@ -334,7 +428,8 @@ public class LanguageModelImpl implements LanguageModel {
     private Flux<TextStreamPart> completeToolStreamStep(GenerateTextRequest request,
         List<org.springframework.ai.chat.messages.Message> messages,
         StreamStepAccumulator accumulator, List<ModelMessage> executionMessages,
-        UsageAccumulator totalUsage, List<GenerationStep> completedSteps, StopCondition stopWhen) {
+        UsageAccumulator totalUsage, List<GenerationStep> completedSteps, StopCondition stopWhen,
+        GenerationRun run) {
         if (accumulator.failed) {
             return Flux.empty();
         }
@@ -357,7 +452,7 @@ public class LanguageModelImpl implements LanguageModel {
         var toolExecutionAllowed = accumulator.stepIndex + 1 < resolvedStepLimit(request);
         var toolResults = toolExecutionAllowed
             ? executeToolCalls(toolCalls, request, accumulator.stepIndex, executionMessages,
-                accumulator.providerMetadata())
+                accumulator.providerMetadata(), run)
             : stepLimitReached(toolCalls);
         toolResults.results().forEach(result -> parts.add(TextStreamPart.toolResult(result)));
         toolResults.errors().forEach(error -> parts.add(TextStreamPart.toolError(error)));
@@ -365,9 +460,11 @@ public class LanguageModelImpl implements LanguageModel {
         var warnings = new ArrayList<>(accumulator.warnings());
         warnings.addAll(toolResults.warnings());
         warnings.addAll(requestWarnings(request));
+        warnings.addAll(run.warnings());
         totalUsage.add(accumulator.usage());
         var generationStep = streamGenerationStep(accumulator, toolCalls, toolResults, warnings);
         completedSteps.add(generationStep);
+        run.stepFinish(accumulator.stepIndex, generationStep, List.copyOf(completedSteps));
         var shouldContinue = stopWhen.shouldContinue(StepContext.builder()
             .stepIndex(accumulator.stepIndex)
             .step(generationStep)
@@ -399,6 +496,7 @@ public class LanguageModelImpl implements LanguageModel {
                 accumulator.response(), accumulator.providerMetadata()));
             parts.add(TextStreamPart.finish(accumulator.finishReason(), accumulator.rawFinishReason,
                 totalUsage.usage()));
+            run.finish(resultFromSteps(completedSteps, totalUsage.usage()));
             return Flux.fromIterable(parts);
         }
 
@@ -416,7 +514,7 @@ public class LanguageModelImpl implements LanguageModel {
         }
         return Flux.concat(Flux.fromIterable(parts),
             streamToolStep(request, messages, executionMessages, accumulator.stepIndex + 1,
-                totalUsage, completedSteps, stopWhen));
+                totalUsage, completedSteps, stopWhen, run));
     }
 
     private GenerationStep streamGenerationStep(StreamStepAccumulator accumulator,
@@ -453,9 +551,11 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
     }
 
-    private GenerateTextResult generateTextBlocking(GenerateTextRequest request) {
+    private GenerateTextResult generateTextBlocking(GenerateTextRequest request, GenerationRun run) {
+        checkCancellation(request);
         validateRequest(request);
         assertToolCallingSupported(request);
+        run.start();
         var messages = buildMessages(request);
         var executionMessages = initialExecutionMessages(request);
         var steps = new ArrayList<GenerationStep>();
@@ -473,16 +573,19 @@ public class LanguageModelImpl implements LanguageModel {
         var stopWhen = resolvedStopCondition(request);
 
         for (var stepIndex = 0; stepIndex < resolvedStepLimit(request); stepIndex++) {
+            checkCancellation(request);
             var prepared = prepareInvocation(request, messages, executionMessages, steps, null,
                 stepIndex, stopWhen);
             var stepRequest = prepared.request();
             stopWhen = prepared.stopWhen();
+            run.stepStart(stepIndex, stepRequest, prepared.executionMessages(), steps, stopWhen);
+            checkCancellation(stepRequest);
             var response = callProvider(stepRequest, prepared.messages());
             var step = mapStep(response, stepIndex);
             var toolExecutionAllowed = stepIndex + 1 < resolvedStepLimit(stepRequest);
             var toolResults = toolExecutionAllowed
                 ? executeToolCalls(step.toolCalls(), stepRequest, stepIndex, prepared.executionMessages(),
-                    step.providerMetadata())
+                    step.providerMetadata(), run)
                 : stepLimitReached(step.toolCalls());
             var stepContent = new ArrayList<>(step.content());
             toolResults.results().stream()
@@ -513,6 +616,7 @@ public class LanguageModelImpl implements LanguageModel {
                 .providerMetadata(step.providerMetadata())
                 .build();
             steps.add(generationStep);
+            run.stepFinish(stepIndex, generationStep, List.copyOf(steps));
             allContent.addAll(stepContent);
             allWarnings.addAll(stepWarnings);
             allToolCalls.addAll(step.toolCalls());
@@ -540,6 +644,7 @@ public class LanguageModelImpl implements LanguageModel {
                 || !shouldContinue) {
                 break;
             }
+            checkCancellation(stepRequest);
             messages = new ArrayList<>(prepared.messages());
             messages.add(step.output());
             messages.add(toolResponseMessage(toolResults.results()));
@@ -581,7 +686,8 @@ public class LanguageModelImpl implements LanguageModel {
                 finalStep.setOutputText(structuredOutput.outputText());
             }
         }
-        return GenerateTextResult.builder()
+        allWarnings.addAll(run.warnings());
+        var result = GenerateTextResult.builder()
             .text(text)
             .output(structuredOutput != null ? structuredOutput.output() : null)
             .outputText(structuredOutput != null ? structuredOutput.outputText() : null)
@@ -601,6 +707,9 @@ public class LanguageModelImpl implements LanguageModel {
             .toolErrors(allToolErrors)
             .providerMetadata(finalProviderMetadata)
             .build();
+        run.finish(result);
+        result.setWarnings(mergeWarnings(result.getWarnings(), run.warnings()));
+        return result;
     }
 
     private Prompt buildPrompt(GenerateTextRequest request) {
@@ -693,6 +802,8 @@ public class LanguageModelImpl implements LanguageModel {
             .providerOptions(prepared.getProviderOptions() != null
                 ? prepared.getProviderOptions()
                 : request.getProviderOptions())
+            .metadata(request.getMetadata())
+            .context(request.getContext())
             .output(request.getOutput())
             .tools(tools)
             .toolChoice(prepared.getToolChoice() != null
@@ -700,6 +811,9 @@ public class LanguageModelImpl implements LanguageModel {
                 : request.getToolChoice())
             .stopWhen(prepared.getStopWhen() != null ? prepared.getStopWhen() : request.getStopWhen())
             .prepareStep(request.getPrepareStep())
+            .lifecycle(request.getLifecycle())
+            .cancellationToken(request.getCancellationToken())
+            .timeouts(request.getTimeouts())
             .build();
     }
 
@@ -935,12 +1049,15 @@ public class LanguageModelImpl implements LanguageModel {
 
     private ChatResponse callProvider(GenerateTextRequest request,
         List<org.springframework.ai.chat.messages.Message> messages) {
-        var prompt = new Prompt(messages, buildChatOptions(request));
-        if (shouldUseReasoningAwareStreamCall(request)) {
-            var responses = chatModel.stream(prompt).collectList().block();
-            return aggregateStreamResponses(responses);
-        }
-        return chatModel.call(prompt);
+        return withStepTimeout(Mono.fromCallable(() -> {
+            checkCancellation(request);
+            var prompt = new Prompt(messages, buildChatOptions(request));
+            if (shouldUseReasoningAwareStreamCall(request)) {
+                var responses = chatModel.stream(prompt).collectList().block();
+                return aggregateStreamResponses(responses);
+            }
+            return chatModel.call(prompt);
+        }), request).block();
     }
 
     private boolean shouldUseReasoningAwareStreamCall(GenerateTextRequest request) {
@@ -1180,7 +1297,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     private ToolExecutionBatch executeToolCalls(List<ToolCall> toolCalls,
         GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata) {
+        Map<String, Object> stepProviderMetadata, GenerationRun run) {
         if (toolCalls.isEmpty()) {
             return new ToolExecutionBatch(List.of(), List.of(), List.of());
         }
@@ -1208,6 +1325,7 @@ public class LanguageModelImpl implements LanguageModel {
                 break;
             }
             try {
+                checkCancellation(request);
                 if (tool.getInputSchema() != null && !tool.getInputSchema().isEmpty()) {
                     validateJsonValue(toolCall.getInput(), tool.getInputSchema(),
                         "$." + toolCall.getToolName() + ".input");
@@ -1221,26 +1339,46 @@ public class LanguageModelImpl implements LanguageModel {
                     .providerMetadata(mergeProviderMetadata(stepProviderMetadata,
                         toolCall.getProviderMetadata()))
                     .build();
-                var value = tool.getExecutor().execute(context).block();
+                run.toolCallStart(stepIndex, toolCall, context.getProviderMetadata());
+                var started = Instant.now();
+                Object value;
+                try {
+                    value = withToolTimeout(tool.getExecutor().execute(context), request).block();
+                    checkCancellation(request);
+                } catch (RuntimeException e) {
+                    var error = toolError(toolCall, e);
+                    run.toolCallFinish(stepIndex, null, error, started,
+                        context.getProviderMetadata());
+                    errors.add(error);
+                    break;
+                }
                 if (tool.getOutputSchema() != null && !tool.getOutputSchema().isEmpty()) {
                     validateJsonValue(value, tool.getOutputSchema(),
                         "$." + toolCall.getToolName() + ".output");
                 }
-                results.add(ToolResult.builder()
+                var result = ToolResult.builder()
                     .toolCallId(toolCall.getToolCallId())
                     .toolName(toolCall.getToolName())
                     .result(value)
-                    .build());
+                    .build();
+                run.toolCallFinish(stepIndex, result, null, started,
+                    context.getProviderMetadata());
+                results.add(result);
             } catch (RuntimeException e) {
-                errors.add(ToolError.builder()
-                    .toolCallId(toolCall.getToolCallId())
-                    .toolName(toolCall.getToolName())
-                    .errorText(safeErrorMessage(e))
-                    .build());
+                var error = toolError(toolCall, e);
+                errors.add(error);
                 break;
             }
         }
         return new ToolExecutionBatch(results, errors, warnings);
+    }
+
+    private ToolError toolError(ToolCall toolCall, RuntimeException e) {
+        return ToolError.builder()
+            .toolCallId(toolCall.getToolCallId())
+            .toolName(toolCall.getToolName())
+            .errorText(safeErrorMessage(e))
+            .build();
     }
 
     private Map<String, Object> mergeProviderMetadata(Map<String, Object> left,
@@ -1506,6 +1644,12 @@ public class LanguageModelImpl implements LanguageModel {
             builder.accept(part);
         }
         if (builder.errorText != null) {
+            if ("cancelled".equals(builder.errorType)) {
+                throw new AiGenerationCancelledException(builder.errorText);
+            }
+            if ("timeout".equals(builder.errorType)) {
+                throw new AiGenerationTimeoutException("stream", builder.errorText);
+            }
             if (hasStructuredOutput(request)) {
                 throw new StructuredOutputValidationException(builder.errorText, null,
                     request.getOutput().getType(), builder.finalStepText(),
@@ -1596,6 +1740,54 @@ public class LanguageModelImpl implements LanguageModel {
         return Flux.fromIterable(parts);
     }
 
+    private GenerateTextResult resultFromSteps(List<GenerationStep> steps,
+        LanguageModelUsage totalUsage) {
+        var safeSteps = List.copyOf(nullSafe(steps));
+        var finalStep = safeSteps.isEmpty() ? null : safeSteps.get(safeSteps.size() - 1);
+        var content = safeSteps.stream()
+            .flatMap(step -> nullSafe(step.getContent()).stream())
+            .toList();
+        var warnings = safeSteps.stream()
+            .flatMap(step -> nullSafe(step.getWarnings()).stream())
+            .toList();
+        var toolCalls = safeSteps.stream()
+            .flatMap(step -> nullSafe(step.getToolCalls()).stream())
+            .toList();
+        var toolResults = safeSteps.stream()
+            .flatMap(step -> nullSafe(step.getToolResults()).stream())
+            .toList();
+        var toolErrors = safeSteps.stream()
+            .flatMap(step -> nullSafe(step.getToolErrors()).stream())
+            .toList();
+        var text = safeSteps.stream()
+            .map(GenerationStep::getText)
+            .filter(this::hasText)
+            .collect(Collectors.joining());
+        var reasoning = finalStep != null ? nullSafe(finalStep.getReasoning()) : List.<ReasoningPart>of();
+        var reasoningText = reasoning.stream()
+            .map(ReasoningPart::getText)
+            .filter(this::hasText)
+            .collect(Collectors.joining());
+        return GenerateTextResult.builder()
+            .text(text)
+            .reasoningText(hasText(reasoningText) ? reasoningText : null)
+            .content(content)
+            .reasoning(reasoning)
+            .finishReason(finalStep != null ? finalStep.getFinishReason() : FinishReason.UNKNOWN)
+            .rawFinishReason(finalStep != null ? finalStep.getRawFinishReason() : null)
+            .usage(finalStep != null ? finalStep.getUsage() : null)
+            .totalUsage(totalUsage)
+            .warnings(warnings)
+            .request(finalStep != null ? finalStep.getRequest() : null)
+            .response(finalStep != null ? finalStep.getResponse() : null)
+            .steps(safeSteps)
+            .toolCalls(toolCalls)
+            .toolResults(toolResults)
+            .toolErrors(toolErrors)
+            .providerMetadata(finalStep != null ? finalStep.getProviderMetadata() : Map.of())
+            .build();
+    }
+
     private LanguageModelUsage addUsage(LanguageModelUsage left, LanguageModelUsage right) {
         if (left == null) {
             return right;
@@ -1608,6 +1800,92 @@ public class LanguageModelImpl implements LanguageModel {
             .outputTokens(sum(left.getOutputTokens(), right.getOutputTokens()))
             .reasoningTokens(sum(left.getReasoningTokens(), right.getReasoningTokens()))
             .totalTokens(sum(left.getTotalTokens(), right.getTotalTokens()))
+            .build();
+    }
+
+    private <T> Mono<T> withTotalTimeout(Mono<T> mono, GenerateTextRequest request) {
+        var timeout = totalTimeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return mono;
+        }
+        return mono.timeout(timeout)
+            .onErrorMap(TimeoutException.class,
+                error -> new AiGenerationTimeoutException("total", timeout, error));
+    }
+
+    private <T> Flux<T> withTotalTimeout(Flux<T> flux, GenerateTextRequest request) {
+        var timeout = totalTimeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return flux;
+        }
+        return flux.timeout(timeout)
+            .onErrorMap(TimeoutException.class,
+                error -> new AiGenerationTimeoutException("total", timeout, error));
+    }
+
+    private <T> Mono<T> withStepTimeout(Mono<T> mono, GenerateTextRequest request) {
+        var timeout = stepTimeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return mono;
+        }
+        return mono.timeout(timeout)
+            .onErrorMap(TimeoutException.class,
+                error -> new AiGenerationTimeoutException("step", timeout, error));
+    }
+
+    private <T> Flux<T> withStepTimeout(Flux<T> flux, GenerateTextRequest request) {
+        var timeout = stepTimeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return flux;
+        }
+        return flux.timeout(timeout)
+            .onErrorMap(TimeoutException.class,
+                error -> new AiGenerationTimeoutException("step", timeout, error));
+    }
+
+    private <T> Mono<T> withToolTimeout(Mono<T> mono, GenerateTextRequest request) {
+        var timeout = toolTimeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return mono;
+        }
+        return mono.timeout(timeout)
+            .onErrorMap(TimeoutException.class,
+                error -> new AiGenerationTimeoutException("tool", timeout, error));
+    }
+
+    private Duration totalTimeout(GenerateTextRequest request) {
+        return request != null && request.getTimeouts() != null
+            ? request.getTimeouts().getTotalTimeout()
+            : null;
+    }
+
+    private Duration stepTimeout(GenerateTextRequest request) {
+        return request != null && request.getTimeouts() != null
+            ? request.getTimeouts().getStepTimeout()
+            : null;
+    }
+
+    private Duration toolTimeout(GenerateTextRequest request) {
+        return request != null && request.getTimeouts() != null
+            ? request.getTimeouts().getToolTimeout()
+            : null;
+    }
+
+    private void checkCancellation(GenerateTextRequest request) {
+        if (request != null && request.getCancellationToken() != null
+            && request.getCancellationToken().isCancellationRequested()) {
+            throw new AiGenerationCancelledException("Generation was cancelled");
+        }
+    }
+
+    private TextStreamPart terminalErrorPart(Throwable error) {
+        var type = error instanceof AiGenerationCancelledException
+            ? "cancelled"
+            : error instanceof AiGenerationTimeoutException ? "timeout" : "error";
+        return TextStreamPart.builder()
+            .type(TextStreamPart.TYPE_ERROR)
+            .errorText(safeErrorMessage(error))
+            .providerMetadata(Map.of("exceptionType", type))
             .build();
     }
 
@@ -1706,8 +1984,8 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
     }
 
-    private Flux<TextStreamPart> mapStreamResponse(GenerateTextRequest request, ChatResponse response,
-        String textId, String reasoningId, AtomicBoolean finished,
+    private Flux<TextStreamPart> mapStreamResponse(GenerateTextRequest request, GenerationRun run,
+        ChatResponse response, String textId, String reasoningId, AtomicBoolean finished,
         AtomicBoolean textStarted, AtomicBoolean reasoningStarted) {
         var parts = new ArrayList<TextStreamPart>();
         var text = extractText(response);
@@ -1757,9 +2035,39 @@ public class LanguageModelImpl implements LanguageModel {
                 parts.add(TextStreamPart.textEnd(textId));
             }
             parts.add(TextStreamPart.finishStep(0, finishReason, rawFinishReason, usage,
-                mergeWarnings(mapWarnings(response), requestWarnings(request)), mapRequestMetadata(response),
+                mergeWarnings(mergeWarnings(mapWarnings(response), requestWarnings(request)),
+                    run.warnings()), mapRequestMetadata(response),
                 mapResponseMetadata(response, extractText(response), reasoningParts(reasoning),
                     List.of()), mapMetadata(response)));
+            var step = GenerationStep.builder()
+                .stepIndex(0)
+                .text(text)
+                .reasoningText(hasText(reasoning) ? reasoning : null)
+                .reasoning(reasoningParts(reasoning))
+                .finishReason(finishReason)
+                .rawFinishReason(rawFinishReason)
+                .usage(usage)
+                .warnings(mergeWarnings(mergeWarnings(mapWarnings(response), requestWarnings(request)),
+                    run.warnings()))
+                .request(mapRequestMetadata(response))
+                .response(mapResponseMetadata(response, extractText(response), reasoningParts(reasoning),
+                    List.of()))
+                .providerMetadata(mapMetadata(response))
+                .build();
+            run.stepFinish(0, step, List.of(step));
+            run.finish(GenerateTextResult.builder()
+                .text(text)
+                .reasoningText(hasText(reasoning) ? reasoning : null)
+                .finishReason(finishReason)
+                .rawFinishReason(rawFinishReason)
+                .usage(usage)
+                .totalUsage(usage)
+                .warnings(step.getWarnings())
+                .request(step.getRequest())
+                .response(step.getResponse())
+                .steps(List.of(step))
+                .providerMetadata(step.getProviderMetadata())
+                .build());
             parts.add(TextStreamPart.finish(finishReason, rawFinishReason, usage));
         }
         return Flux.fromIterable(parts);
@@ -2179,6 +2487,158 @@ public class LanguageModelImpl implements LanguageModel {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
+    private final class GenerationRun {
+        private final GenerateTextRequest request;
+        private final ArrayList<GenerationWarning> lifecycleWarnings = new ArrayList<>();
+        private boolean started;
+        private boolean finished;
+        private boolean errorNotified;
+
+        GenerationRun(GenerateTextRequest request) {
+            this.request = request;
+        }
+
+        List<GenerationWarning> warnings() {
+            return List.copyOf(lifecycleWarnings);
+        }
+
+        void start() {
+            if (started) {
+                return;
+            }
+            started = true;
+            invoke("onStart", lifecycle -> lifecycle.onStart(GenerationStartEvent.builder()
+                .request(request)
+                .requestMetadata(GenerationRequestMetadata.builder()
+                    .metadata(Map.of("providerType", providerType))
+                    .build())
+                .metadata(metadata(request))
+                .context(context(request))
+                .tools(nullSafe(request != null ? request.getTools() : null))
+                .toolChoice(request != null ? request.getToolChoice() : null)
+                .stopWhen(resolvedStopCondition(request))
+                .timeouts(request != null ? request.getTimeouts() : null)
+                .build()));
+        }
+
+        void stepStart(int stepIndex, GenerateTextRequest stepRequest, List<ModelMessage> messages,
+            List<GenerationStep> previousSteps, StopCondition stopWhen) {
+            invoke("onStepStart", lifecycle -> lifecycle.onStepStart(GenerationStepStartEvent.builder()
+                .stepIndex(stepIndex)
+                .request(stepRequest)
+                .messages(List.copyOf(nullSafe(messages)))
+                .previousSteps(List.copyOf(nullSafe(previousSteps)))
+                .tools(nullSafe(stepRequest != null ? stepRequest.getTools() : null))
+                .toolChoice(stepRequest != null ? stepRequest.getToolChoice() : null)
+                .stopWhen(stopWhen)
+                .providerOptions(stepRequest != null ? stepRequest.getProviderOptions() : null)
+                .timeouts(stepRequest != null ? stepRequest.getTimeouts() : null)
+                .metadata(metadata(stepRequest))
+                .context(context(stepRequest))
+                .build()));
+        }
+
+        void toolCallStart(int stepIndex, ToolCall toolCall,
+            Map<String, Object> providerMetadata) {
+            invoke("onToolCallStart", lifecycle -> lifecycle.onToolCallStart(
+                GenerationToolCallStartEvent.builder()
+                    .stepIndex(stepIndex)
+                    .toolCallId(toolCall.getToolCallId())
+                    .toolName(toolCall.getToolName())
+                    .input(toolCall.getInput())
+                    .providerMetadata(providerMetadata)
+                    .metadata(metadata(request))
+                    .context(context(request))
+                    .build()));
+        }
+
+        void toolCallFinish(int stepIndex, ToolResult result, ToolError error, Instant startedAt,
+            Map<String, Object> providerMetadata) {
+            var duration = startedAt != null ? Duration.between(startedAt, Instant.now()) : null;
+            invoke("onToolCallFinish", lifecycle -> lifecycle.onToolCallFinish(
+                GenerationToolCallFinishEvent.builder()
+                    .stepIndex(stepIndex)
+                    .toolCallId(result != null ? result.getToolCallId() : error.getToolCallId())
+                    .toolName(result != null ? result.getToolName() : error.getToolName())
+                    .result(result)
+                    .error(error)
+                    .duration(duration)
+                    .providerMetadata(providerMetadata)
+                    .metadata(metadata(request))
+                    .context(context(request))
+                    .build()));
+        }
+
+        void stepFinish(int stepIndex, GenerationStep step, List<GenerationStep> steps) {
+            invoke("onStepFinish", lifecycle -> lifecycle.onStepFinish(
+                GenerationStepFinishEvent.builder()
+                    .stepIndex(stepIndex)
+                    .step(step)
+                    .steps(List.copyOf(nullSafe(steps)))
+                    .metadata(metadata(request))
+                    .context(context(request))
+                    .build()));
+        }
+
+        void finish(GenerateTextResult result) {
+            if (finished) {
+                return;
+            }
+            finished = true;
+            invoke("onFinish", lifecycle -> lifecycle.onFinish(GenerationFinishEvent.builder()
+                .result(result)
+                .metadata(metadata(request))
+                .context(context(request))
+                .build()));
+        }
+
+        void error(Throwable error, Integer stepIndex, List<GenerationStep> steps) {
+            if (errorNotified || finished) {
+                return;
+            }
+            errorNotified = true;
+            invoke("onError", lifecycle -> lifecycle.onError(GenerationErrorEvent.builder()
+                .error(error)
+                .stepIndex(stepIndex)
+                .steps(List.copyOf(nullSafe(steps)))
+                .metadata(metadata(request))
+                .context(context(request))
+                .build()));
+        }
+
+        private void invoke(String callbackName,
+            Function<GenerationLifecycle, Mono<Void>> callback) {
+            var lifecycle = request != null ? request.getLifecycle() : null;
+            if (lifecycle == null) {
+                return;
+            }
+            try {
+                var mono = callback.apply(lifecycle);
+                if (mono != null) {
+                    mono.block();
+                }
+            } catch (RuntimeException e) {
+                lifecycleWarnings.add(GenerationWarning.builder()
+                    .code("lifecycle-callback-failed")
+                    .message(callbackName + " callback failed: " + safeErrorMessage(e))
+                    .providerMetadata(Map.of("providerType", providerType))
+                    .build());
+            }
+        }
+
+        private Map<String, Object> metadata(GenerateTextRequest request) {
+            return request != null && request.getMetadata() != null
+                ? Map.copyOf(request.getMetadata())
+                : Map.of();
+        }
+
+        private Map<String, Object> context(GenerateTextRequest request) {
+            return request != null && request.getContext() != null
+                ? Map.copyOf(request.getContext())
+                : Map.of();
+        }
+    }
+
     private final class UsageAccumulator {
         private LanguageModelUsage usage;
 
@@ -2400,6 +2860,7 @@ public class LanguageModelImpl implements LanguageModel {
         private GenerationResponseMetadata response;
         private Map<String, Object> providerMetadata = Map.of();
         private String errorText;
+        private String errorType;
 
         void accept(TextStreamPart part) {
             if (part == null || part.getType() == null) {
@@ -2468,6 +2929,10 @@ public class LanguageModelImpl implements LanguageModel {
                     }
                     if (part.getProviderMetadata() != null) {
                         providerMetadata = part.getProviderMetadata();
+                        var exceptionType = part.getProviderMetadata().get("exceptionType");
+                        if (exceptionType != null) {
+                            errorType = exceptionType.toString();
+                        }
                     }
                 }
                 default -> {

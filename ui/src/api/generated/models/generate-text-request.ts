@@ -34,6 +34,12 @@ import type { ToolDefinition } from './tool-definition';
 export interface GenerateTextRequest {
     /**
      *
+     * @type {{ [key: string]: object; }}
+     * @memberof GenerateTextRequest
+     */
+    'context'?: { [key: string]: object; };
+    /**
+     *
      * @type {number}
      * @memberof GenerateTextRequest
      */
@@ -50,6 +56,12 @@ export interface GenerateTextRequest {
      * @memberof GenerateTextRequest
      */
     'messages'?: Array<ModelMessage>;
+    /**
+     *
+     * @type {{ [key: string]: object; }}
+     * @memberof GenerateTextRequest
+     */
+    'metadata'?: { [key: string]: object; };
     /**
      *
      * @type {OutputSpec}

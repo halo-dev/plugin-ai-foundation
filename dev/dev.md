@@ -333,11 +333,13 @@ model.generateText(request)
 
 ### 停止与取消生成
 
-SDK 调用方有三类“停止”方式，作用层级不同：
+SDK 调用方有五类“停止”方式，作用层级不同：
 
 1. `stopWhen`：控制多步骤生成是否继续进入下一次模型调用，主要用于工具循环。
 2. `stopSequences`：传给模型提供商，要求模型在生成到指定文本序列时停止当前回答。
-3. Reactor 取消订阅：取消当前 HTTP/流式请求，适合用户点击“停止生成”。
+3. `GenerationTimeouts`：限制整次调用、单个模型步骤或服务端工具执行的最长时间。
+4. `CancellationToken`：由 Java SDK 调用方主动取消生成或嵌入请求。
+5. Reactor 取消订阅：取消当前 HTTP/流式请求，适合用户点击“停止生成”。
 
 `stopWhen` 不会中断正在进行的模型调用，它只在一个步骤结束后决定是否开启下一步。默认不设置时只执行一个模型步骤。需要限制工具循环步数时：
 
@@ -402,6 +404,90 @@ Disposable disposable = model.generateText(request)
 disposable.dispose();
 ```
 
+如果需要让业务层主动取消同一个请求，可以使用 `CancellationSource`。显式取消会通过 typed exception 暴露；流式协议会发出安全的 `error` 事件，最终 `result()` 会失败而不是把部分内容当作成功结果：
+
+```java
+CancellationSource source = new CancellationSource();
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("请进行一次较长的分析")
+    .cancellationToken(source.token())
+    .build();
+
+StreamTextResult stream = model.streamText(request);
+
+Disposable disposable = stream.fullStream()
+    .subscribe(part -> {
+        // 渲染完整流协议
+    });
+
+source.cancel();
+disposable.dispose();
+
+stream.result()
+    .doOnError(AiGenerationCancelledException.class, error -> {
+        // 记录用户主动停止
+    })
+    .subscribe();
+```
+
+超时可以分层设置。`totalTimeout` 约束整次生成，`stepTimeout` 约束每次 provider 模型调用，`toolTimeout` 约束每次服务端工具 executor：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("必要时调用工具")
+    .tools(List.of(weatherTool))
+    .stopWhen(StopCondition.stepCountIs(2))
+    .timeouts(GenerationTimeouts.builder()
+        .totalTimeout(Duration.ofMinutes(2))
+        .stepTimeout(Duration.ofSeconds(45))
+        .toolTimeout(Duration.ofSeconds(10))
+        .build())
+    .build();
+
+model.generateText(request)
+    .doOnError(AiGenerationTimeoutException.class, error -> {
+        System.err.println("超时范围: " + error.getScope());
+    })
+    .subscribe();
+```
+
+### 生命周期回调
+
+`GenerateTextRequest.lifecycle` 可以观察真实执行路径，不会触发额外 provider 调用。回调失败不会让一次成功生成失败，而是以 `lifecycle-callback-failed` warning 暴露在结果中。回调适合记录审计日志、埋点、调试步骤和工具耗时；不要在回调中执行很重的阻塞逻辑。
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("请查询天气并回答")
+    .tools(List.of(weatherTool))
+    .stopWhen(StopCondition.stepCountIs(2))
+    .metadata(Map.of("traceId", traceId))
+    .context(Map.of("operator", "console-test"))
+    .lifecycle(new GenerationLifecycle() {
+        @Override
+        public Mono<Void> onStepStart(GenerationStepStartEvent event) {
+            log.info("step {} start, trace={}", event.getStepIndex(),
+                event.getMetadata().get("traceId"));
+            return Mono.empty();
+        }
+
+        @Override
+        public Mono<Void> onToolCallFinish(GenerationToolCallFinishEvent event) {
+            log.info("tool {} finished in {}", event.getToolName(), event.getDuration());
+            return Mono.empty();
+        }
+
+        @Override
+        public Mono<Void> onFinish(GenerationFinishEvent event) {
+            log.info("finish={}, steps={}",
+                event.getResult().getFinishReason(),
+                event.getResult().getSteps().size());
+            return Mono.empty();
+        }
+    })
+    .build();
+```
+
 ### GenerateTextRequest 参数
 
 | 字段 | 类型 | 说明 |
@@ -421,6 +507,11 @@ disposable.dispose();
 | `stopWhen` | `StopCondition` | Java 调用方的步骤继续条件；未设置时只执行一个模型步骤。该字段不会进入 OpenAPI/HTTP schema |
 | `output` | `OutputSpec` | 结构化输出声明，支持 `TEXT`、`OBJECT`、`ARRAY`、`CHOICE`、`JSON` |
 | `providerOptions` | `Map<String, Map<String, Object>>` | 按提供商命名空间分组的特定选项 |
+| `metadata` | `Map<String, Object>` | 调用方元数据，只进入生命周期事件，不会加入 prompt |
+| `context` | `Map<String, Object>` | 调用方上下文，只进入生命周期事件，不会加入 prompt |
+| `lifecycle` | `GenerationLifecycle` | Java-only 生命周期回调；不会进入 OpenAPI/HTTP schema |
+| `cancellationToken` | `CancellationToken` | Java-only 显式取消信号；不会进入 OpenAPI/HTTP schema |
+| `timeouts` | `GenerationTimeouts` | Java-only 超时配置；不会进入 OpenAPI/HTTP schema |
 
 `providerOptions` 必须按提供商分组，避免不同服务商的私有参数冲突，例如：
 
@@ -583,6 +674,15 @@ EmbeddingRequest request = EmbeddingRequest.builder()
     .dimensions(1536)          // 指定输出维度
     .maxBatchSize(100)         // 每批最大数量
     .providerOptions(Map.of()) // 提供商特定选项
+    .timeouts(GenerationTimeouts.total(Duration.ofSeconds(30)))
+    .metadata(Map.of("traceId", traceId))
+    .lifecycle(new EmbeddingLifecycle() {
+        @Override
+        public Mono<Void> onFinish(EmbeddingFinishEvent event) {
+            log.info("embedded {} item(s)", event.getEmbeddingsCount());
+            return Mono.empty();
+        }
+    })
     .build();
 
 model.embed(request)

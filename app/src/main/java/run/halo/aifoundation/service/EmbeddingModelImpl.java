@@ -2,13 +2,22 @@ package run.halo.aifoundation.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import run.halo.aifoundation.EmbeddingCancelledException;
+import run.halo.aifoundation.EmbeddingErrorEvent;
+import run.halo.aifoundation.EmbeddingFinishEvent;
+import run.halo.aifoundation.EmbeddingLifecycle;
 import run.halo.aifoundation.EmbeddingModel;
 import run.halo.aifoundation.EmbeddingRequest;
 import run.halo.aifoundation.EmbeddingResponse;
+import run.halo.aifoundation.EmbeddingStartEvent;
+import run.halo.aifoundation.EmbeddingTimeoutException;
 
 @Slf4j
 public class EmbeddingModelImpl implements EmbeddingModel {
@@ -62,35 +71,49 @@ public class EmbeddingModelImpl implements EmbeddingModel {
 
     @Override
     public Mono<EmbeddingResponse> embed(EmbeddingRequest request) {
-        if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
-            return Mono.just(EmbeddingResponse.builder().embeddings(List.of()).build());
-        }
-        int batchSize = request.getMaxBatchSize() != null && request.getMaxBatchSize() > 0
-            ? Math.min(request.getMaxBatchSize(), maxEmbeddingsPerCall > 0 ? maxEmbeddingsPerCall : Integer.MAX_VALUE)
-            : (maxEmbeddingsPerCall > 0 ? maxEmbeddingsPerCall : request.getInputs().size());
+        var lifecycle = request != null ? request.getLifecycle() : null;
+        return Mono.defer(() -> {
+                checkCancellation(request);
+                if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
+                    var empty = EmbeddingResponse.builder().embeddings(List.of()).build();
+                    return invokeStart(lifecycle, request)
+                        .then(invokeFinish(lifecycle, request, empty))
+                        .thenReturn(empty);
+                }
+                int batchSize = request.getMaxBatchSize() != null && request.getMaxBatchSize() > 0
+                    ? Math.min(request.getMaxBatchSize(),
+                        maxEmbeddingsPerCall > 0 ? maxEmbeddingsPerCall : Integer.MAX_VALUE)
+                    : (maxEmbeddingsPerCall > 0 ? maxEmbeddingsPerCall : request.getInputs().size());
 
-        var batches = partition(request.getInputs(), batchSize);
-
-        final var springOptions = buildEmbeddingOptions(request);
-        if (supportsParallelCalls) {
-            return Flux.fromIterable(batches)
-                .flatMap(batch -> Mono.fromCallable(
-                        () -> embedBatch(batch, springOptions)).subscribeOn(Schedulers.boundedElastic()))
-                .collectList()
-                .map(batchResults -> {
-                    var all = batchResults.stream().flatMap(List::stream).toList();
-                    return EmbeddingResponse.builder().embeddings(all).build();
-                });
-        } else {
-            return Flux.fromIterable(batches)
-                .concatMap(batch -> Mono.fromCallable(
-                        () -> embedBatch(batch, springOptions)).subscribeOn(Schedulers.boundedElastic()))
-                .collectList()
-                .map(batchResults -> {
-                    var all = batchResults.stream().flatMap(List::stream).toList();
-                    return EmbeddingResponse.builder().embeddings(all).build();
-                });
-        }
+                var batches = partition(request.getInputs(), batchSize);
+                final var springOptions = buildEmbeddingOptions(request);
+                var batchFlux = Flux.fromIterable(batches)
+                    .concatMap(batch -> Mono.fromCallable(() -> {
+                            checkCancellation(request);
+                            return embedBatch(batch, springOptions);
+                        })
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .transform(mono -> withEmbeddingTimeout(mono, request)));
+                if (supportsParallelCalls) {
+                    batchFlux = Flux.fromIterable(batches)
+                        .flatMap(batch -> Mono.fromCallable(() -> {
+                                checkCancellation(request);
+                                return embedBatch(batch, springOptions);
+                            })
+                            .subscribeOn(Schedulers.boundedElastic())
+                            .transform(mono -> withEmbeddingTimeout(mono, request)));
+                }
+                return invokeStart(lifecycle, request)
+                    .thenMany(batchFlux)
+                    .collectList()
+                    .map(batchResults -> {
+                        var all = batchResults.stream().flatMap(List::stream).toList();
+                        return EmbeddingResponse.builder().embeddings(all).build();
+                    })
+                    .flatMap(response -> invokeFinish(lifecycle, request, response).thenReturn(response));
+            })
+            .transform(mono -> withEmbeddingTimeout(mono, request))
+            .onErrorResume(error -> invokeError(lifecycle, request, error).then(Mono.error(error)));
     }
 
     @Override
@@ -137,6 +160,84 @@ public class EmbeddingModelImpl implements EmbeddingModel {
                 return request.getDimensions();
             }
         };
+    }
+
+    private void checkCancellation(EmbeddingRequest request) {
+        if (request != null && request.getCancellationToken() != null
+            && request.getCancellationToken().isCancellationRequested()) {
+            throw new EmbeddingCancelledException("Embedding was cancelled");
+        }
+    }
+
+    private <T> Mono<T> withEmbeddingTimeout(Mono<T> mono, EmbeddingRequest request) {
+        var timeout = timeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return mono;
+        }
+        return mono.timeout(timeout)
+            .onErrorMap(TimeoutException.class, error -> new EmbeddingTimeoutException(timeout, error));
+    }
+
+    private Duration timeout(EmbeddingRequest request) {
+        return request != null && request.getTimeouts() != null
+            ? request.getTimeouts().getTotalTimeout()
+            : null;
+    }
+
+    private Mono<Void> invokeStart(EmbeddingLifecycle lifecycle, EmbeddingRequest request) {
+        if (lifecycle == null) {
+            return Mono.empty();
+        }
+        return lifecycle.onStart(EmbeddingStartEvent.builder()
+                .request(request)
+                .inputs(request != null && request.getInputs() != null
+                    ? List.copyOf(request.getInputs())
+                    : List.of())
+                .metadata(metadata(request))
+                .context(context(request))
+                .build())
+            .onErrorResume(error -> Mono.empty());
+    }
+
+    private Mono<Void> invokeFinish(EmbeddingLifecycle lifecycle, EmbeddingRequest request,
+        EmbeddingResponse response) {
+        if (lifecycle == null) {
+            return Mono.empty();
+        }
+        return lifecycle.onFinish(EmbeddingFinishEvent.builder()
+                .response(response)
+                .embeddingsCount(response != null && response.getEmbeddings() != null
+                    ? response.getEmbeddings().size()
+                    : 0)
+                .metadata(metadata(request))
+                .context(context(request))
+                .build())
+            .onErrorResume(error -> Mono.empty());
+    }
+
+    private Mono<Void> invokeError(EmbeddingLifecycle lifecycle, EmbeddingRequest request,
+        Throwable error) {
+        if (lifecycle == null) {
+            return Mono.empty();
+        }
+        return lifecycle.onError(EmbeddingErrorEvent.builder()
+                .error(error)
+                .metadata(metadata(request))
+                .context(context(request))
+                .build())
+            .onErrorResume(ignored -> Mono.empty());
+    }
+
+    private Map<String, Object> metadata(EmbeddingRequest request) {
+        return request != null && request.getMetadata() != null
+            ? Map.copyOf(request.getMetadata())
+            : Map.of();
+    }
+
+    private Map<String, Object> context(EmbeddingRequest request) {
+        return request != null && request.getContext() != null
+            ? Map.copyOf(request.getContext())
+            : Map.of();
     }
 
     private <T> List<List<T>> partition(List<T> list, int size) {

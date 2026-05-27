@@ -1279,6 +1279,12 @@
       "GenerateTextRequest" : {
         "type" : "object",
         "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
           "frequencyPenalty" : {
             "type" : "number",
             "format" : "double"
@@ -1291,6 +1297,12 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/ModelMessage"
+            }
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
             }
           },
           "output" : {
