@@ -2,7 +2,7 @@
 
 The text generation API now has a richer result shape with `content`, `steps`, `warnings`, request/response metadata, and step lifecycle stream parts. Today, however, every call is still a single provider invocation. `GenerationStep` records the provider call that happened, but Halo cannot yet let a model call tools, execute those tools, and continue generation with tool results.
 
-AI SDK Core treats tools as model-callable capabilities with a description, input schema, optional strict mode, and optional executor. It also makes multi-step generation opt-in through a stopping condition. Halo should borrow that product shape while staying Java-native, Reactor-friendly, and independent of AI SDK or Spring AI public types.
+provider-neutral AI API treats tools as model-callable capabilities with a description, input schema, optional strict mode, and optional executor. It also makes multi-step generation opt-in through a stopping condition. Halo should borrow that product shape while staying Java-native, Reactor-friendly, and independent of provider-neutral AI API or Spring AI public types.
 
 ## Goals / Non-Goals
 
@@ -17,7 +17,7 @@ AI SDK Core treats tools as model-callable capabilities with a description, inpu
 
 **Non-Goals:**
 
-- AI SDK UI protocol compatibility.
+- third-party UI stream protocol protocol compatibility.
 - Human approval or client-side tool execution workflows.
 - Tool registry resources in Halo Extension storage.
 - MCP integration.

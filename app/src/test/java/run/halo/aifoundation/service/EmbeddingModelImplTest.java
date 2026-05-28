@@ -23,10 +23,10 @@ import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import run.halo.aifoundation.CancellationSource;
-import run.halo.aifoundation.EmbeddingCancelledException;
-import run.halo.aifoundation.EmbeddingLifecycle;
-import run.halo.aifoundation.GenerationTimeouts;
+import run.halo.aifoundation.control.CancellationSource;
+import run.halo.aifoundation.exception.EmbeddingCancelledException;
+import run.halo.aifoundation.embedding.EmbeddingLifecycle;
+import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
@@ -41,7 +41,7 @@ class EmbeddingModelImplTest {
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {2.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false);
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first", "second"))
             .dimensions(256)
             .maxBatchSize(1)
@@ -70,7 +70,7 @@ class EmbeddingModelImplTest {
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
             new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .providerOptions(Map.of("openai", Map.of(
                 "dimensions", 512,
@@ -98,7 +98,7 @@ class EmbeddingModelImplTest {
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
             new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .headers(Map.of("X-Trace-Id", "trace-1"))
             .build();
@@ -121,7 +121,7 @@ class EmbeddingModelImplTest {
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
             new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .providerOptions(Map.of(
                 "openai", Map.of("unknown", true),
@@ -131,7 +131,7 @@ class EmbeddingModelImplTest {
 
         StepVerifier.create(model.embed(request))
             .assertNext(response -> assertThat(response.getWarnings())
-                .extracting(run.halo.aifoundation.EmbeddingWarning::getCode)
+                .extracting(run.halo.aifoundation.embedding.EmbeddingWarning::getCode)
                 .contains(
                     "unsupported-provider-option",
                     "ignored-provider-option-namespace"
@@ -166,7 +166,7 @@ class EmbeddingModelImplTest {
         });
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, true);
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first", "second", "third"))
             .maxBatchSize(1)
             .maxParallelCalls(2)
@@ -188,7 +188,7 @@ class EmbeddingModelImplTest {
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false);
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .maxRetries(1)
             .build();
@@ -206,7 +206,7 @@ class EmbeddingModelImplTest {
             .thenThrow(new RuntimeException("temporary"));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false);
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .maxRetries(0)
             .build();
@@ -243,7 +243,7 @@ class EmbeddingModelImplTest {
     void embed_rejectsInvalidRequestBeforeProviderCall() {
         var springModel = mock(EmbeddingModel.class);
         var model = new EmbeddingModelImpl(springModel, "openai", 96, true);
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .maxParallelCalls(0)
             .build();
@@ -262,18 +262,18 @@ class EmbeddingModelImplTest {
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false);
         var events = new ArrayList<String>();
 
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .dimensions(256)
             .lifecycle(new EmbeddingLifecycle() {
                 @Override
-                public Mono<Void> onStart(run.halo.aifoundation.EmbeddingStartEvent event) {
+                public Mono<Void> onStart(run.halo.aifoundation.embedding.EmbeddingStartEvent event) {
                     events.add("start:" + event.getInputs().size());
                     return Mono.empty();
                 }
 
                 @Override
-                public Mono<Void> onFinish(run.halo.aifoundation.EmbeddingFinishEvent event) {
+                public Mono<Void> onFinish(run.halo.aifoundation.embedding.EmbeddingFinishEvent event) {
                     events.add("finish:" + event.getEmbeddingsCount());
                     return Mono.empty();
                 }
@@ -294,7 +294,7 @@ class EmbeddingModelImplTest {
         var source = new CancellationSource();
         source.cancel();
 
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .cancellationToken(source.token())
             .build();
@@ -313,14 +313,14 @@ class EmbeddingModelImplTest {
         });
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false);
 
-        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .dimensions(256)
             .timeouts(GenerationTimeouts.total(Duration.ofMillis(20)))
             .build();
 
         StepVerifier.create(model.embed(request))
-            .expectError(run.halo.aifoundation.EmbeddingTimeoutException.class)
+            .expectError(run.halo.aifoundation.exception.EmbeddingTimeoutException.class)
             .verify();
     }
 

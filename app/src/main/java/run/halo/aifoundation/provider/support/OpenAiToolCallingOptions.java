@@ -5,8 +5,8 @@ import java.util.Set;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.tool.ToolCallback;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.ToolChoice;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.tool.ToolChoice;
 
 /**
  * Builds OpenAI-compatible tool calling options from the public SDK request shape.

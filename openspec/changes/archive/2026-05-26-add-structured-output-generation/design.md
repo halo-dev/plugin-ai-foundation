@@ -2,7 +2,7 @@
 
 AI Foundation already exposes model-independent text generation, reasoning parts, stream parts, and server-side tool calling. The remaining gap for many plugin integrations is deterministic JSON-shaped output: callers currently have to prompt for JSON, parse the final text, validate it manually, and handle provider-specific response format options themselves.
 
-AI SDK Core models structured data as an `output` option on `generateText` and `streamText`, with output modes for plain text, objects, arrays, choices, and arbitrary JSON. Tool definitions also rely on schemas for inputs and can use strict mode. Halo should adopt the same product shape while staying Java- and provider-neutral.
+provider-neutral AI API models structured data as an `output` option on `generateText` and `streamText`, with output modes for plain text, objects, arrays, choices, and arbitrary JSON. Tool definitions also rely on schemas for inputs and can use strict mode. Halo should adopt the same product shape while staying Java- and provider-neutral.
 
 ## Goals / Non-Goals
 
@@ -17,8 +17,8 @@ AI SDK Core models structured data as an `output` option on `generateText` and `
 
 **Non-Goals:**
 
-- No Zod, Valibot, TypeScript schema, or provider-native schema type in the Java API.
-- No compatibility layer for AI SDK UI streams.
+- No TypeScript schema, or provider-native schema type in the Java API.
+- No compatibility layer for third-party UI stream protocol streams.
 - No provider-specific branching inside `LanguageModelImpl`.
 - No image/audio/video output generation in this change.
 
@@ -28,7 +28,7 @@ AI SDK Core models structured data as an `output` option on `generateText` and `
 
    Public DTOs will represent schemas as `Map<String, Object>`. This matches current tool `inputSchema` conventions, keeps the API serializable through OpenAPI, and avoids bringing Java validation libraries or TypeScript-specific schema systems into the public API.
 
-   To make the Java developer experience closer to Zod/Valibot, `OutputSpec` should also provide convenience factories such as `OutputSpec.object(MyRecord.class)` and `OutputSpec.array(MyRecord.class)`. These factories generate a JSON Schema map from Java records/classes using reflection. The generated schema remains the public contract, while the Java class is a transient local convenience and is not serialized over OpenAPI.
+   To make the Java developer experience closer to TypeScript schema, `OutputSpec` should also provide convenience factories such as `OutputSpec.object(MyRecord.class)` and `OutputSpec.array(MyRecord.class)`. These factories generate a JSON Schema map from Java records/classes using reflection. The generated schema remains the public contract, while the Java class is a transient local convenience and is not serialized over OpenAPI.
 
    Alternative considered: add typed schema builder classes. That would improve ergonomics later, but it expands API surface before the core provider behavior is proven.
 
@@ -36,7 +36,7 @@ AI SDK Core models structured data as an `output` option on `generateText` and `
 
 2. Add `OutputSpec` to `GenerateTextRequest` instead of separate `generateObject` methods first.
 
-   AI SDK treats structured output as part of text generation, and this keeps tool calling, reasoning, steps, usage, and streaming in one execution pipeline. Convenience helpers can be added after the contract is stable.
+   provider-neutral AI API treats structured output as part of text generation, and this keeps tool calling, reasoning, steps, usage, and streaming in one execution pipeline. Convenience helpers can be added after the contract is stable.
 
    Alternative considered: create `generateObject` / `streamObject` APIs immediately. This duplicates most of `GenerateTextRequest` and would delay alignment of the main `generateText` path.
 
@@ -48,7 +48,7 @@ AI SDK Core models structured data as an `output` option on `generateText` and `
 
 4. Stream partial output as best-effort, final output as authoritative.
 
-   Partial structured output can be invalid while it is being generated. The stream should emit partial output parts when parseable or adapter-provided, but only the final structured output is validation-authoritative. This mirrors AI SDK's warning that partial stream output cannot be fully schema-validated until complete.
+   Partial structured output can be invalid while it is being generated. The stream should emit partial output parts when parseable or adapter-provided, but only the final structured output is validation-authoritative. This mirrors provider-neutral AI API's warning that partial stream output cannot be fully schema-validated until complete.
 
 5. Tool schemas validate both sides of executor boundaries.
 

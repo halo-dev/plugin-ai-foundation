@@ -10,11 +10,11 @@
 - Implement multi-step `generateText()` execution for providers that expose tool calls through Spring AI.
 - Extend `streamText()` to emit tool call, tool result, and multiple `start-step` / `finish-step` lifecycles when multi-step execution is active.
 - Add warnings or typed errors for providers/models that cannot support tools.
-- Keep this as Halo-native Java/Reactor API behavior with no AI SDK UI compatibility endpoint.
+- Keep this as Halo-native Java/Reactor API behavior with no third-party UI stream protocol compatibility endpoint.
 
 Non-goals:
 
-- No AI SDK UI stream protocol compatibility mode.
+- No third-party UI stream protocol stream protocol compatibility mode.
 - No provider-native or Spring AI types in the public API.
 - No human approval workflow for tool execution.
 - No frontend tool execution or generative UI support.

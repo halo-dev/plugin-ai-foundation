@@ -29,28 +29,28 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import run.halo.aifoundation.AiGenerationCancelledException;
-import run.halo.aifoundation.CancellationSource;
-import run.halo.aifoundation.FinishReason;
-import run.halo.aifoundation.GenerationLifecycle;
-import run.halo.aifoundation.GenerationStepFinishEvent;
-import run.halo.aifoundation.GenerationStepStartEvent;
-import run.halo.aifoundation.GenerationTimeouts;
-import run.halo.aifoundation.GenerationToolCallFinishEvent;
-import run.halo.aifoundation.GenerationToolCallStartEvent;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.ModelMessage;
-import run.halo.aifoundation.ModelMessagePart;
-import run.halo.aifoundation.ModelMessageRole;
-import run.halo.aifoundation.OutputSpec;
-import run.halo.aifoundation.PartType;
-import run.halo.aifoundation.PreparedStep;
-import run.halo.aifoundation.ReasoningPart;
-import run.halo.aifoundation.StopCondition;
-import run.halo.aifoundation.StructuredOutputValidationException;
-import run.halo.aifoundation.TextStreamPart;
-import run.halo.aifoundation.ToolDefinition;
-import run.halo.aifoundation.ToolExecutionContext;
+import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.control.CancellationSource;
+import run.halo.aifoundation.chat.FinishReason;
+import run.halo.aifoundation.lifecycle.GenerationLifecycle;
+import run.halo.aifoundation.lifecycle.GenerationStepFinishEvent;
+import run.halo.aifoundation.lifecycle.GenerationStepStartEvent;
+import run.halo.aifoundation.chat.GenerationTimeouts;
+import run.halo.aifoundation.lifecycle.GenerationToolCallFinishEvent;
+import run.halo.aifoundation.lifecycle.GenerationToolCallStartEvent;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.message.ModelMessageRole;
+import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.chat.PreparedStep;
+import run.halo.aifoundation.part.ReasoningPart;
+import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.exception.StructuredOutputValidationException;
+import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.tool.ToolExecutionContext;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 
 class LanguageModelImplTest {
@@ -95,7 +95,7 @@ class LanguageModelImplTest {
                 assertThat(result.getResponse().getMessages())
                     .singleElement()
                     .satisfies(message -> assertThat(message.getRole())
-                        .isEqualTo(run.halo.aifoundation.ModelMessageRole.ASSISTANT));
+                        .isEqualTo(run.halo.aifoundation.message.ModelMessageRole.ASSISTANT));
                 assertThat(result.getSteps())
                     .singleElement()
                     .satisfies(step -> {
@@ -766,7 +766,7 @@ class LanguageModelImplTest {
         var request = GenerateTextRequest.builder()
             .prompt("Generate project")
             .output(OutputSpec.builder()
-                .type(run.halo.aifoundation.OutputType.OBJECT)
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
                 .schema(Map.of(
                     "type", "object",
                     "properties", Map.of("name", Map.of("type", "string")),
@@ -804,7 +804,7 @@ class LanguageModelImplTest {
                 assertThat(error).isInstanceOf(StructuredOutputValidationException.class);
                 var validationError = (StructuredOutputValidationException) error;
                 assertThat(validationError.getOutputType())
-                    .isEqualTo(run.halo.aifoundation.OutputType.OBJECT);
+                    .isEqualTo(run.halo.aifoundation.schema.OutputType.OBJECT);
                 assertThat(validationError.getOutputText()).isEqualTo("{}");
                 assertThat(validationError.getValidationPath()).isEqualTo("$.name");
                 assertThat(validationError.getStepIndex()).isZero();
@@ -1465,7 +1465,7 @@ class LanguageModelImplTest {
             .stopWhen(StopCondition.stepCountIs(2))
             .lifecycle(new GenerationLifecycle() {
                 @Override
-                public Mono<Void> onStart(run.halo.aifoundation.GenerationStartEvent event) {
+                public Mono<Void> onStart(run.halo.aifoundation.lifecycle.GenerationStartEvent event) {
                     events.add("start:" + event.getMetadata().get("requestId"));
                     return Mono.empty();
                 }
@@ -1496,7 +1496,7 @@ class LanguageModelImplTest {
                 }
 
                 @Override
-                public Mono<Void> onFinish(run.halo.aifoundation.GenerationFinishEvent event) {
+                public Mono<Void> onFinish(run.halo.aifoundation.lifecycle.GenerationFinishEvent event) {
                     events.add("finish:" + event.getResult().getText());
                     return Mono.empty();
                 }
@@ -1531,7 +1531,7 @@ class LanguageModelImplTest {
             .prompt("Hello")
             .lifecycle(new GenerationLifecycle() {
                 @Override
-                public Mono<Void> onStart(run.halo.aifoundation.GenerationStartEvent event) {
+                public Mono<Void> onStart(run.halo.aifoundation.lifecycle.GenerationStartEvent event) {
                     starts.incrementAndGet();
                     return Mono.empty();
                 }
@@ -1741,7 +1741,7 @@ class LanguageModelImplTest {
         assertThat(error).isInstanceOf(StructuredOutputValidationException.class);
         var validationError = (StructuredOutputValidationException) error;
         assertThat(validationError.getOutputType())
-            .isEqualTo(run.halo.aifoundation.OutputType.OBJECT);
+            .isEqualTo(run.halo.aifoundation.schema.OutputType.OBJECT);
         assertThat(validationError.getOutputText()).isEqualTo("{}");
         assertThat(validationError.getValidationPath()).isEqualTo("$.name");
         assertThat(validationError.getStepIndex()).isZero();

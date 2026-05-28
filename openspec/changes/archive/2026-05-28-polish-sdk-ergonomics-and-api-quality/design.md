@@ -1,6 +1,6 @@
 ## Context
 
-The plugin has reached a broad functional baseline for text generation, streaming, tools, structured output, lifecycle controls, and embeddings. The remaining risk is that the public Java SDK can look aligned with AI SDK Core while still forcing callers into raw maps, magic strings, and under-documented request fields, and that large implementation classes make behavioral guarantees hard to maintain.
+The plugin has reached a broad functional baseline for text generation, streaming, tools, structured output, lifecycle controls, and embeddings. The remaining risk is that the public Java SDK can look aligned with provider-neutral AI API while still forcing callers into raw maps, magic strings, and under-documented request fields, and that large implementation classes make behavioral guarantees hard to maintain.
 
 The API module is the product surface for other Halo plugins. It must be IDE-discoverable, Java-oriented, and provider-neutral. The app module should keep Spring AI as an implementation detail and use focused collaborators to enforce the SDK contract.
 

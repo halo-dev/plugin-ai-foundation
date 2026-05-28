@@ -59,7 +59,7 @@ The system SHALL preserve reasoning content required for provider follow-up requ
 - **AND** answer content SHALL be emitted only through text stream parts
 
 ### Requirement: Streaming tool lifecycle compatibility
-The system SHALL model tool lifecycle events in Halo-owned stream parts while following AI SDK-style ordering semantics.
+The system SHALL model tool lifecycle events in Halo-owned stream parts while following external provider-neutral ordering semantics.
 
 #### Scenario: No synthetic partial tool input deltas
 - **WHEN** the provider adapter exposes only completed tool calls

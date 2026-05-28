@@ -7,10 +7,10 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.OutputSpec;
-import run.halo.aifoundation.ToolChoice;
-import run.halo.aifoundation.ToolDefinition;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.tool.ToolChoice;
+import run.halo.aifoundation.tool.ToolDefinition;
 
 class DeepSeekProviderTest {
 

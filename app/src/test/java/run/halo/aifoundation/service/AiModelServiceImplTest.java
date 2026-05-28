@@ -17,10 +17,10 @@ import org.springframework.data.domain.Sort;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import run.halo.aifoundation.DefaultModelNotConfiguredException;
-import run.halo.aifoundation.IncompatibleModelTypeException;
-import run.halo.aifoundation.ModelNotFoundException;
-import run.halo.aifoundation.ProviderDisabledException;
+import run.halo.aifoundation.exception.DefaultModelNotConfiguredException;
+import run.halo.aifoundation.exception.IncompatibleModelTypeException;
+import run.halo.aifoundation.exception.ModelNotFoundException;
+import run.halo.aifoundation.exception.ProviderDisabledException;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -140,7 +140,7 @@ class AiModelServiceImplTest {
 
         StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
             .expectErrorSatisfies(e -> assertThat(e)
-                .isInstanceOf(run.halo.aifoundation.ModelDisabledException.class)
+                .isInstanceOf(run.halo.aifoundation.exception.ModelDisabledException.class)
                 .hasMessageContaining("openai-prod-gpt-4-abc"))
             .verify();
     }

@@ -15,6 +15,31 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
+tasks.register('verifySdkPackageLayout') {
+    group = 'verification'
+    description = 'Verifies that public SDK API types live in their domain packages.'
+
+    def sdkRoot = layout.projectDirectory.dir('src/main/java/run/halo/aifoundation')
+    def allowedRootFiles = ['AiModelService.java', 'package-info.java'] as Set
+
+    inputs.dir(sdkRoot)
+
+    doLast {
+        def misplacedRootFiles = fileTree(sdkRoot).matching {
+            include '*.java'
+        }.files.findAll { !allowedRootFiles.contains(it.name) }
+
+        if (!misplacedRootFiles.empty) {
+            throw new GradleException('Public SDK types must not remain in run.halo.aifoundation root package: '
+                + misplacedRootFiles.collect { it.name }.sort().join(', '))
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifySdkPackageLayout')
+}
+
 dependencies {
     compileOnly platform('run.halo.tools.platform:plugin:2.23.0')
     compileOnly 'run.halo.app:api'

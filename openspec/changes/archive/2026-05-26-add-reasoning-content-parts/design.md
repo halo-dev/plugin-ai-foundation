@@ -2,7 +2,7 @@
 
 The text generation API now has model-independent text parts, tool calls, tool results, multi-step execution, and Halo-owned stream parts. Reasoning-capable models introduce another content channel: they may produce answer text and reasoning text in the same assistant turn, and some OpenAI-compatible providers require that reasoning content be passed back when continuing the conversation after tool calls.
 
-AI SDK treats reasoning as a first-class output: generated content can include reasoning parts, stream output can emit reasoning deltas, step results expose reasoning arrays and aggregated reasoning text, and usage may include reasoning token counts. Halo should follow that shape conceptually while keeping its own DTO names, stream protocol header, and provider-neutral public API.
+provider-neutral AI API treats reasoning as a first-class output: generated content can include reasoning parts, stream output can emit reasoning deltas, step results expose reasoning arrays and aggregated reasoning text, and usage may include reasoning token counts. Halo should follow that shape conceptually while keeping its own DTO names, stream protocol header, and provider-neutral public API.
 
 ## Goals / Non-Goals
 
@@ -31,7 +31,7 @@ Alternative considered: store all reasoning in provider metadata. That would sol
 
 2. Keep `reasoningText` as a convenience aggregate.
 
-`GenerateTextResult` and `GenerationStep` will expose both an ordered reasoning part list and a `reasoningText` convenience field. The list preserves metadata and future extensibility; the string gives callers an easy API that matches AI SDK's ergonomics.
+`GenerateTextResult` and `GenerationStep` will expose both an ordered reasoning part list and a `reasoningText` convenience field. The list preserves metadata and future extensibility; the string gives callers an easy API that matches provider-neutral AI API's ergonomics.
 
 Alternative considered: only expose the part list. That is more precise, but unnecessarily awkward for common display and logging use cases.
 

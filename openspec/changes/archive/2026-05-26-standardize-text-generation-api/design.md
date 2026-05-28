@@ -2,7 +2,7 @@
 
 AI Foundation is a shared SDK for other Halo plugins. The public API must make model invocation feel stable even when the configured provider changes from OpenAI-compatible providers to DeepSeek, Ollama, or future adapters. The embedding side already follows a useful two-layer pattern: convenience methods plus structured request/response DTOs. The language-model side should receive the same treatment.
 
-AI SDK is a strong reference for caller ergonomics:
+provider-neutral AI API is a strong reference for caller ergonomics:
 
 ```text
 generateText(request)  -> complete result
@@ -11,7 +11,7 @@ ModelMessage           -> role + content parts
 providerOptions        -> provider-keyed namespaces
 ```
 
-However, Halo should not copy AI SDK UI's Vercel-specific HTTP identity. Halo owns the API and protocol version. The useful part to borrow is the stream grammar:
+However, Halo should not copy third-party UI stream protocol's vendor-specific HTTP identity. Halo owns the API and protocol version. The useful part to borrow is the stream grammar:
 
 ```text
 message start
@@ -27,7 +27,7 @@ done marker for HTTP transport
 **Goals:**
 
 - Give Java callers a model-independent text generation contract.
-- Align language-model naming with AI SDK: `generateText` and `streamText`.
+- Align language-model naming with provider-neutral AI API: `generateText` and `streamText`.
 - Use a request shape that can evolve toward tools and multimodal input without another API break.
 - Keep V1 implementation text-only and practical with current Spring AI support.
 - Separate Java stream events from HTTP/SSE encoding.
@@ -35,7 +35,7 @@ done marker for HTTP transport
 
 **Non-Goals:**
 
-- Full AI SDK compatibility.
+- Full provider-neutral AI API compatibility.
 - Tool execution, automatic multi-step generation, structured output, or multimodal provider mapping in V1.
 - Runtime compatibility with old chat DTOs.
 
@@ -90,7 +90,7 @@ Parameter semantics:
 
 ## Message Model
 
-Use an AI SDK-inspired content-parts model from V1:
+Use an external provider-neutral content-parts model from V1:
 
 ```text
 ModelMessage
@@ -292,7 +292,7 @@ The workbench parser should:
 - [Risk] Spring AI may not expose all provider metadata or usage consistently. -> Mitigation: make usage nullable and preserve raw finish reason when available.
 - [Risk] `TOOL` role exists before tool support. -> Mitigation: reject unsupported role/part combinations clearly in V1 rather than silently degrading.
 - [Risk] Console path name still says `test-chat`. -> Mitigation: keep the path for product continuity but update operation names and docs to "text generation stream"; a future UI routing cleanup can rename it if desired.
-- [Risk] HTTP clients might assume AI SDK UI wire compatibility. -> Mitigation: use Halo-specific header and document that the protocol is inspired by, not compatible with, AI SDK UI.
+- [Risk] HTTP clients might assume third-party UI stream protocol wire compatibility. -> Mitigation: use Halo-specific header and document that the protocol is inspired by, not compatible with, third-party UI stream protocol.
 
 ## Open Questions
 

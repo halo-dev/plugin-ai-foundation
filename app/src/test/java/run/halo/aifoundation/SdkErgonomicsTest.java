@@ -6,6 +6,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.options.ProviderOptions;
+import run.halo.aifoundation.part.GenerationContentPart;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.schema.JsonSchema;
+import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.schema.OutputType;
+import run.halo.aifoundation.tool.ToolDefinition;
 
 class SdkErgonomicsTest {
 

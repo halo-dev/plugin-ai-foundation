@@ -1,16 +1,16 @@
 ## Purpose
 
-Define AI SDK Core-aligned embedding controls, diagnostics, batching behavior, similarity utility, and console verification workflow.
+Define provider-neutral AI API-aligned embedding controls, diagnostics, batching behavior, similarity utility, and console verification workflow.
 ## Requirements
-### Requirement: AI SDK aligned embedding controls
-The system SHALL provide provider-neutral embedding settings comparable to AI SDK Core embeddings, including namespaced provider options, parallel call limit, retry budget, timeout/cancellation, and request headers.
+### Requirement: provider-neutral embedding controls
+The system SHALL provide provider-neutral embedding settings comparable to provider-neutral AI API embeddings, including namespaced provider options, parallel call limit, retry budget, timeout/cancellation, and request headers.
 
 #### Scenario: Advanced request carries embedding settings
 - **WHEN** a Java caller builds an `EmbeddingRequest` with inputs, provider options, headers, max retries, max parallel calls, timeouts, and a cancellation token
 - **THEN** the public request type SHALL represent those controls without exposing Spring AI or provider-native request classes
 
-#### Scenario: AI SDK settings are represented
-- **WHEN** a caller needs the AI SDK embedding settings for provider options, parallel requests, retries, abort or timeout, and custom headers
+#### Scenario: provider-neutral settings are represented
+- **WHEN** a caller needs the provider-neutral embedding settings for provider options, parallel requests, retries, abort or timeout, and custom headers
 - **THEN** `EmbeddingRequest` SHALL provide equivalent Java fields or controls for each setting
 - **AND** timeout and abort behavior SHALL be represented by Halo's timeout and cancellation token types
 

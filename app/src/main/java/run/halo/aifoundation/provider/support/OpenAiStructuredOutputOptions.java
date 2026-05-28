@@ -2,8 +2,8 @@ package run.halo.aifoundation.provider.support;
 
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.OutputType;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.schema.OutputType;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

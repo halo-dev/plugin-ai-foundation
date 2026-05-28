@@ -49,7 +49,7 @@ The system SHALL expose final structured output on generation results without re
 - **AND** the error SHALL include a safe explanation without leaking provider credentials or raw secrets
 
 ### Requirement: Structured output streaming
-The system SHALL stream structured output as normal generated text while also exposing AI SDK-aligned structured stream views.
+The system SHALL stream structured output as normal generated text while also exposing external provider-neutral structured stream views.
 
 #### Scenario: Structured output remains text in full stream
 - **WHEN** a structured stream emits generated content

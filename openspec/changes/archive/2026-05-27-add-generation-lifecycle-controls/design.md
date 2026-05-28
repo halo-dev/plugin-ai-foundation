@@ -2,7 +2,7 @@
 
 AI Foundation already exposes provider-neutral generation requests, streaming results, tools, structured output, reasoning parts, and step control. The remaining operational gap is that callers cannot observe the lifecycle of a generation through stable callbacks, cannot attach request metadata/context to those lifecycle events, and cannot configure cancellation or timeout behavior as part of the request contract.
 
-AI SDK Core v6 exposes event callbacks for `generateText`, `streamText`, `embed`, and `embedMany`, including generation start, step start, tool call start/finish, step finish, and final finish. Its generation call options also include timeout and abort signal. Halo should align with those semantics while staying idiomatic for Java/Reactor and preserving the public API boundary.
+provider-neutral AI API v6 exposes event callbacks for `generateText`, `streamText`, `embed`, and `embedMany`, including generation start, step start, tool call start/finish, step finish, and final finish. Its generation call options also include timeout and abort signal. Halo should align with those semantics while staying idiomatic for Java/Reactor and preserving the public API boundary.
 
 ## Goals / Non-Goals
 
@@ -30,7 +30,7 @@ AI SDK Core v6 exposes event callbacks for `generateText`, `streamText`, `embed`
 
 Add Java callback interfaces in `api/`, referenced from `GenerateTextRequest` and advanced `EmbeddingRequest` as transient fields. A request can define a single `GenerationLifecycle` callback object or separate callback functions through a builder-style aggregate.
 
-Rationale: request-scoped callbacks match AI SDK's per-call model and avoid global observers that would need registration, lifecycle management, and permissions. Transient fields keep Java-only callbacks out of OpenAPI.
+Rationale: request-scoped callbacks match provider-neutral AI API's per-call model and avoid global observers that would need registration, lifecycle management, and permissions. Transient fields keep Java-only callbacks out of OpenAPI.
 
 Alternative considered: application-wide event publisher. That may be useful later for telemetry, but it would make per-call behavior and tests harder to reason about.
 
@@ -54,7 +54,7 @@ Alternative considered: fail the generation on callback exceptions. That is stri
 
 Add a provider-neutral timeout config with total timeout, step timeout, and tool timeout. Total timeout bounds the whole request. Step timeout bounds each provider call. Tool timeout bounds each server-side tool executor call. Streaming should emit an error part when timeout occurs after the stream has started; final projections should fail with a typed timeout exception.
 
-Rationale: AI SDK exposes timeout as call option, and real tool loops need different timeout scopes. Separate scopes let callers protect long-running tools without globally shrinking model generation time.
+Rationale: provider-neutral AI API exposes timeout as call option, and real tool loops need different timeout scopes. Separate scopes let callers protect long-running tools without globally shrinking model generation time.
 
 Alternative considered: one timeout duration. Simpler, but it cannot express common cases like "allow two minutes total, but each tool must finish in ten seconds."
 

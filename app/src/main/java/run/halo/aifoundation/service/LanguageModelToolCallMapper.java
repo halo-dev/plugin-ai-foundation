@@ -3,7 +3,7 @@ package run.halo.aifoundation.service;
 import java.util.List;
 import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
-import run.halo.aifoundation.ToolCall;
+import run.halo.aifoundation.tool.ToolCall;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;

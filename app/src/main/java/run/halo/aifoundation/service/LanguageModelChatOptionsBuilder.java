@@ -8,9 +8,9 @@ import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.core.ParameterizedTypeReference;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.ToolChoice;
-import run.halo.aifoundation.ToolDefinition;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.tool.ToolChoice;
+import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 
 final class LanguageModelChatOptionsBuilder {
@@ -126,7 +126,7 @@ final class LanguageModelChatOptionsBuilder {
     private boolean hasStructuredOutput(GenerateTextRequest request) {
         return request != null && request.getOutput() != null
             && request.getOutput().getType() != null
-            && request.getOutput().getType() != run.halo.aifoundation.OutputType.TEXT;
+            && request.getOutput().getType() != run.halo.aifoundation.schema.OutputType.TEXT;
     }
 
     private String writeJson(Object value) {

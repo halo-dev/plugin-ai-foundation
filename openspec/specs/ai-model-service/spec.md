@@ -226,7 +226,7 @@ The system SHALL support structured text generation requests via `GenerateTextRe
 - **WHEN** a consumer sends `GenerateTextRequest.output` with a structured output specification
 - **THEN** the system SHALL represent the request with provider-neutral API DTOs
 - **AND** the provider invocation SHALL receive a provider-neutral instruction or provider-specific response-format mapping when supported
-- **AND** callers SHALL NOT need Spring AI, OpenAI, Zod, Valibot, or provider-native schema classes
+- **AND** callers SHALL NOT need Spring AI, OpenAI, or provider-native schema classes
 
 #### Scenario: Java caller sets stop condition
 - **WHEN** a Java caller builds a text generation request with a stop condition

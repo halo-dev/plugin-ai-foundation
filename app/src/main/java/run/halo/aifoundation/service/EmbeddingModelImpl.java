@@ -17,17 +17,17 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
-import run.halo.aifoundation.EmbeddingCancelledException;
-import run.halo.aifoundation.EmbeddingErrorEvent;
-import run.halo.aifoundation.EmbeddingFinishEvent;
-import run.halo.aifoundation.EmbeddingLifecycle;
-import run.halo.aifoundation.EmbeddingModel;
-import run.halo.aifoundation.EmbeddingRequest;
-import run.halo.aifoundation.EmbeddingResponse;
-import run.halo.aifoundation.EmbeddingStartEvent;
-import run.halo.aifoundation.EmbeddingTimeoutException;
-import run.halo.aifoundation.EmbeddingUsage;
-import run.halo.aifoundation.EmbeddingWarning;
+import run.halo.aifoundation.exception.EmbeddingCancelledException;
+import run.halo.aifoundation.embedding.EmbeddingErrorEvent;
+import run.halo.aifoundation.embedding.EmbeddingFinishEvent;
+import run.halo.aifoundation.embedding.EmbeddingLifecycle;
+import run.halo.aifoundation.embedding.EmbeddingModel;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
+import run.halo.aifoundation.embedding.EmbeddingResponse;
+import run.halo.aifoundation.embedding.EmbeddingStartEvent;
+import run.halo.aifoundation.exception.EmbeddingTimeoutException;
+import run.halo.aifoundation.embedding.EmbeddingUsage;
+import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 
@@ -386,13 +386,13 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         return null;
     }
 
-    private run.halo.aifoundation.EmbeddingResponseMetadata mapResponseMetadata(
+    private run.halo.aifoundation.embedding.EmbeddingResponseMetadata mapResponseMetadata(
         ResponseMetadata metadata) {
         if (metadata == null) {
             return null;
         }
         var values = responseMetadataMap(metadata);
-        return run.halo.aifoundation.EmbeddingResponseMetadata.builder()
+        return run.halo.aifoundation.embedding.EmbeddingResponseMetadata.builder()
             .id(stringValue(values.get("id")))
             .model(model(metadata))
             .timestamp(Instant.now())

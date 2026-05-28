@@ -27,22 +27,21 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
-import run.halo.aifoundation.EmbeddingRequest;
-import run.halo.aifoundation.EmbeddingResponseMetadata;
-import run.halo.aifoundation.EmbeddingUsage;
-import run.halo.aifoundation.EmbeddingUtils;
-import run.halo.aifoundation.EmbeddingWarning;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.PartType;
-import run.halo.aifoundation.StopCondition;
-import run.halo.aifoundation.TextStreamPart;
-import run.halo.aifoundation.ToolDefinition;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
+import run.halo.aifoundation.embedding.EmbeddingResponseMetadata;
+import run.halo.aifoundation.embedding.EmbeddingUsage;
+import run.halo.aifoundation.embedding.EmbeddingUtils;
+import run.halo.aifoundation.embedding.EmbeddingWarning;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
-import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
@@ -370,12 +369,12 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return Mono.empty();
     }
 
-    private boolean isSupportedTestChatPart(run.halo.aifoundation.ModelMessageRole role,
-        run.halo.aifoundation.ModelMessagePart part) {
+    private boolean isSupportedTestChatPart(run.halo.aifoundation.message.ModelMessageRole role,
+        run.halo.aifoundation.message.ModelMessagePart part) {
         if (PartType.isText(part.getType())) {
             return part.getText() != null && !part.getText().isBlank();
         }
-        return role == run.halo.aifoundation.ModelMessageRole.ASSISTANT
+        return role == run.halo.aifoundation.message.ModelMessageRole.ASSISTANT
             && PartType.isReasoning(part.getType())
             && part.getText() != null
             && !part.getText().isBlank();
@@ -525,7 +524,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private List<EmbeddingWarning> warnings;
         private Map<String, Object> providerMetadata;
 
-        static TestEmbeddingResponse from(run.halo.aifoundation.EmbeddingResponse response) {
+        static TestEmbeddingResponse from(run.halo.aifoundation.embedding.EmbeddingResponse response) {
             var vectors = response.getEmbeddings() != null
                 ? response.getEmbeddings()
                 : List.<float[]>of();

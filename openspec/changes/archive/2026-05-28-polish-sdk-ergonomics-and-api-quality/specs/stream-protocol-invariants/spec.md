@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Stream Parts Are Type-Safe And Protocol-Compatible
-Stream part APIs SHALL use Java-oriented abstractions or factories for each stream part kind while preserving the AI SDK-compatible lifecycle protocol.
+Stream part APIs SHALL use Java-oriented abstractions or factories for each stream part kind while preserving the provider-neutral lifecycle protocol.
 
 #### Scenario: Text stream lifecycle
 - **WHEN** a provider emits text deltas

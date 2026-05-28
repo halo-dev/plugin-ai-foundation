@@ -3,8 +3,8 @@ package run.halo.aifoundation.service;
 import java.util.ArrayList;
 import java.util.List;
 import reactor.core.publisher.Flux;
-import run.halo.aifoundation.PartType;
-import run.halo.aifoundation.TextStreamPart;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.part.TextStreamPart;
 
 final class StreamProtocolNormalizer {
 

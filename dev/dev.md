@@ -61,6 +61,24 @@ public class MyAiService {
 }
 ```
 
+常用 SDK 类型按能力分包，编码时建议按需导入具体类型：
+
+```java
+import run.halo.aifoundation.AiModelService;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.control.CancellationSource;
+import run.halo.aifoundation.embedding.EmbeddingModel;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.options.ProviderOptions;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.schema.JsonSchema;
+import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.tool.ToolChoice;
+import run.halo.aifoundation.tool.ToolDefinition;
+```
+
 它提供以下方法：
 
 | 方法 | 返回类型 | 说明 |
@@ -535,7 +553,7 @@ ProviderOptions.of(
 
 ### ModelMessage 构造
 
-消息内容采用类似 AI SDK `ModelMessage` 的 parts 结构。简单文本消息可以直接使用工厂方法：
+消息内容使用 role/content parts 结构表示消息内容。简单文本消息可以直接使用工厂方法：
 
 ```java
 ModelMessage.user("用户消息");
@@ -713,15 +731,15 @@ model.embed(request)
     });
 ```
 
-高级嵌入请求中的 settings 与 AI SDK Core 的 Embeddings settings 对应：
+高级嵌入请求中的 settings 与 provider-neutral AI API 的 Embeddings settings 对应：
 
 | 字段 | 说明 |
 | --- | --- |
 | `providerOptions` | 按提供商命名空间分组的特定选项，例如 `openai.dimensions` |
 | `maxParallelCalls` | 批量嵌入时最多并发调用多少个 provider batch |
 | `maxRetries` | 每个可重试 provider batch 的最大重试次数，`0` 表示不重试 |
-| `timeouts` | Java 侧的超时设置，对应 AI SDK 中的 timeout/abort 场景 |
-| `cancellationToken` | Java 侧的中止信号，对应 AI SDK 的 `abortSignal` |
+| `timeouts` | Java 侧的超时设置，用于限制 Java 侧调用耗时 |
+| `cancellationToken` | Java 侧的中止信号，用于主动取消 Java 侧调用 |
 
 `EmbeddingResponse` 会在提供商可用时返回：
 

@@ -1,10 +1,10 @@
 ## Why
 
-AI Foundation now has model-independent text, reasoning, streaming, and tool calling primitives, but callers still need to parse and validate JSON responses themselves. AI SDK Core treats structured output as part of `generateText` and `streamText`, and this change brings the same provider-neutral contract to Halo so plugins can ask for typed JSON-shaped results without depending on a model vendor.
+AI Foundation now has model-independent text, reasoning, streaming, and tool calling primitives, but callers still need to parse and validate JSON responses themselves. provider-neutral AI API treats structured output as part of `generateText` and `streamText`, and this change brings the same provider-neutral contract to Halo so plugins can ask for typed JSON-shaped results without depending on a model vendor.
 
 ## What Changes
 
-- Add provider-neutral structured output request types for `GenerateTextRequest`, modeled after AI SDK `Output.text()`, `Output.object()`, `Output.array()`, `Output.choice()`, and `Output.json()`.
+- Add provider-neutral structured output request types for `GenerateTextRequest`, modeled after provider-neutral AI API `Output.text()`, `Output.object()`, `Output.array()`, `Output.choice()`, and `Output.json()`.
 - Add structured output fields to `GenerateTextResult`, `GenerationStep`, and stream parts so callers can access final output and, when possible, partial streamed output.
 - Validate final structured output against JSON Schema for object/array/choice modes before returning success.
 - Support structured output together with tools and multi-step generation: tool steps still run normally, and structured output applies to the final answer step unless explicitly documented otherwise.
@@ -13,8 +13,8 @@ AI Foundation now has model-independent text, reasoning, streaming, and tool cal
 
 Non-goals:
 
-- Do not introduce Zod, Valibot, or TypeScript-specific schema types into the Java API.
-- Do not implement AI SDK UI protocol compatibility or Vercel headers.
+- Do not introduce or TypeScript-specific schema types into the Java API.
+- Do not implement third-party UI stream protocol protocol compatibility or third-party headers.
 - Do not add provider-specific branches in `LanguageModelImpl`; provider-specific response-format mapping belongs behind provider options/adapters.
 - Do not implement image/audio/video generation in this change.
 

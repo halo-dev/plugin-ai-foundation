@@ -3,8 +3,8 @@ package run.halo.aifoundation.provider.support;
 import java.util.List;
 import java.util.Map;
 import org.springframework.ai.embedding.EmbeddingOptions;
-import run.halo.aifoundation.EmbeddingRequest;
-import run.halo.aifoundation.EmbeddingWarning;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
+import run.halo.aifoundation.embedding.EmbeddingWarning;
 
 /**
  * Provider-specific switches used by the generic embedding model implementation.

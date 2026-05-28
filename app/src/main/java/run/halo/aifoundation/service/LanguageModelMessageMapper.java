@@ -8,12 +8,12 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import run.halo.aifoundation.ModelMessage;
-import run.halo.aifoundation.ModelMessagePart;
-import run.halo.aifoundation.PartType;
-import run.halo.aifoundation.ReasoningPart;
-import run.halo.aifoundation.ToolCall;
-import run.halo.aifoundation.ToolResult;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.part.ReasoningPart;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolResult;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 

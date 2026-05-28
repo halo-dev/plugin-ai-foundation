@@ -8,14 +8,14 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import reactor.core.publisher.Mono;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.GenerationWarning;
-import run.halo.aifoundation.ModelMessage;
-import run.halo.aifoundation.ToolCall;
-import run.halo.aifoundation.ToolDefinition;
-import run.halo.aifoundation.ToolError;
-import run.halo.aifoundation.ToolExecutionContext;
-import run.halo.aifoundation.ToolResult;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerationWarning;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.tool.ToolError;
+import run.halo.aifoundation.tool.ToolExecutionContext;
+import run.halo.aifoundation.tool.ToolResult;
 
 final class LanguageModelToolExecutor {
     private final JsonSchemaValidator schemaValidator;

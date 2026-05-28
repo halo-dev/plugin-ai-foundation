@@ -1,6 +1,6 @@
 ## Why
 
-The current Java SDK already covers many AI SDK Core concepts, but several public APIs are still stringly typed or map-heavy, and some implementation paths are large enough that correctness is hard to reason about. Before adding more feature surface, this change closes the loop on existing capabilities so callers get IDE-discoverable, standard, and fully usable APIs rather than shape-only compatibility.
+The current Java SDK already covers many provider-neutral AI API concepts, but several public APIs are still stringly typed or map-heavy, and some implementation paths are large enough that correctness is hard to reason about. Before adding more feature surface, this change closes the loop on existing capabilities so callers get IDE-discoverable, standard, and fully usable APIs rather than shape-only compatibility.
 
 ## What Changes
 
@@ -30,7 +30,7 @@ The current Java SDK already covers many AI SDK Core concepts, but several publi
 - `ai-model-service`: Requires public text-generation APIs to expose type-safe message/content/part construction, documented request/result objects, and supported fields with real behavior.
 - `structured-tool-io`: Requires tool schema and tool-call APIs to support typed SDK construction instead of caller-authored raw JSON schema maps for normal cases.
 - `structured-output-generation`: Requires structured output schemas and output specs to be builder-friendly, documented, and behaviorally tested.
-- `stream-protocol-invariants`: Requires stream Part abstractions to preserve AI SDK-compatible lifecycle ordering while avoiding invalid nested or mixed Part states.
+- `stream-protocol-invariants`: Requires stream Part abstractions to preserve provider-neutral lifecycle ordering while avoiding invalid nested or mixed Part states.
 - `embedding-core-alignment`: Requires embedding request settings and provider options to be documented, type-safe where practical, and either fully supported or removed.
 
 ## Impact

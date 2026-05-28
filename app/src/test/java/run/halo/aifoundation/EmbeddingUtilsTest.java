@@ -6,6 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import run.halo.aifoundation.embedding.EmbeddingResponse;
+import run.halo.aifoundation.embedding.EmbeddingResponseMetadata;
+import run.halo.aifoundation.embedding.EmbeddingUsage;
+import run.halo.aifoundation.embedding.EmbeddingUtils;
+import run.halo.aifoundation.embedding.EmbeddingWarning;
 
 class EmbeddingUtilsTest {
 

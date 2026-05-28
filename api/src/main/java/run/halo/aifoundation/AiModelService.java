@@ -3,6 +3,10 @@ package run.halo.aifoundation;
 import java.util.List;
 import org.pf4j.ExtensionPoint;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.embedding.EmbeddingModel;
+import run.halo.aifoundation.model.ModelInfo;
+import run.halo.aifoundation.model.ProviderInfo;
 
 /**
  * Cross-plugin entry point for resolving AI models managed by plugin-ai-foundation.

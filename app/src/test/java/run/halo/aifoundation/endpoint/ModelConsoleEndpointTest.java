@@ -19,12 +19,12 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
-import run.halo.aifoundation.FinishReason;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.LanguageModel;
-import run.halo.aifoundation.PartType;
-import run.halo.aifoundation.StreamTextResult;
-import run.halo.aifoundation.TextStreamPart;
+import run.halo.aifoundation.chat.FinishReason;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.chat.StreamTextResult;
+import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -508,7 +508,7 @@ class ModelConsoleEndpointTest {
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(languageModel.streamText(any(GenerateTextRequest.class)))
             .thenReturn(streamResult(Flux.just(
-                TextStreamPart.toolCall(run.halo.aifoundation.ToolCall.builder()
+                TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
                     .toolCallId("call_1")
                     .toolName("halo_test_info")
                     .input(Map.of("query", "hello"))

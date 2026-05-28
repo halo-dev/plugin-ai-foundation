@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.tool.ToolCallback;
-import run.halo.aifoundation.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerateTextRequest;
 
 /**
  * Builds provider-specific chat options for tool-calling requests.

@@ -17,7 +17,7 @@ The public language model API SHALL expose structured output capabilities throug
 
 #### Scenario: Provider-neutral structured output
 - **WHEN** a consumer defines a structured output schema
-- **THEN** the public API SHALL represent it without Spring AI, OpenAI, Zod, Valibot, or provider-native types
+- **THEN** the public API SHALL represent it without Spring AI, OpenAI, or provider-native types
 
 ### Requirement: Structured output validation errors
 The public language model API SHALL report structured output validation failures consistently.

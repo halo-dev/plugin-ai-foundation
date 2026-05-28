@@ -1,6 +1,6 @@
 ## Why
 
-The text-generation API now covers the main generate/stream/tool/structured-output surface, but callers still lack first-class controls for observing lifecycle events, cancelling long-running work, and enforcing timeouts. AI SDK Core treats these as per-call primitives, so adding them now will make the already implemented text-generation path more usable and easier to operate in real plugins.
+The text-generation API now covers the main generate/stream/tool/structured-output surface, but callers still lack first-class controls for observing lifecycle events, cancelling long-running work, and enforcing timeouts. provider-neutral AI API treats these as per-call primitives, so adding them now will make the already implemented text-generation path more usable and easier to operate in real plugins.
 
 ## What Changes
 

@@ -12,7 +12,7 @@ Halo CMS 插件生态系统目前缺乏集中式的 AI 基础设施。现有的 
 - `plugin-ai-assistant`（`../plugin-ai-assistant/`）：要迁移的提供商实现来源
 - `plugin-app-store`（`../plugin-app-store/`）：带 Maven 发布 API 的多模块 Gradle 模式
 - `plugin-feed`（`../plugin-feed/`）：多模块 Gradle 模式（`api`、`app`、`ui`）
-- `../ai/`：一个成熟 AI SDK 的实现，作为 provider 抽象架构、能力分离接口、流式 Part 标准化、`providerOptions` 透传机制与错误类型体系的设计参考
+- `../ai/`：一个成熟 provider-neutral AI API 的实现，作为 provider 抽象架构、能力分离接口、流式 Part 标准化、`providerOptions` 透传机制与错误类型体系的设计参考
 - 一个多 provider 工作台应用：作为 provider workspace 交互、模型能力标签、模型分组与批量管理体验的设计参考
 
 ## 目标 / 非目标

@@ -1,14 +1,14 @@
 package run.halo.aifoundation.service;
 
 import java.util.HashSet;
-import run.halo.aifoundation.GenerateTextRequest;
-import run.halo.aifoundation.ModelMessage;
-import run.halo.aifoundation.ModelMessagePart;
-import run.halo.aifoundation.ModelMessageRole;
-import run.halo.aifoundation.OutputSpec;
-import run.halo.aifoundation.OutputType;
-import run.halo.aifoundation.PartType;
-import run.halo.aifoundation.ToolChoice;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.message.ModelMessageRole;
+import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.schema.OutputType;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.tool.ToolChoice;
 
 final class LanguageModelRequestValidator {
 
