@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.mapping;
 
 import java.util.HashSet;
 import run.halo.aifoundation.chat.GenerateTextRequest;
@@ -10,17 +10,17 @@ import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.tool.ToolChoice;
 
-final class LanguageModelRequestValidator {
+public final class LanguageModelRequestValidator {
 
     private final String providerType;
     private final boolean reasoningHistorySupported;
 
-    LanguageModelRequestValidator(String providerType, boolean reasoningHistorySupported) {
+    public LanguageModelRequestValidator(String providerType, boolean reasoningHistorySupported) {
         this.providerType = providerType;
         this.reasoningHistorySupported = reasoningHistorySupported;
     }
 
-    void validate(GenerateTextRequest request) {
+    public void validate(GenerateTextRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("request must not be null");
         }
@@ -44,7 +44,7 @@ final class LanguageModelRequestValidator {
         validateTools(request);
     }
 
-    void validateTools(GenerateTextRequest request) {
+    public void validateTools(GenerateTextRequest request) {
         var tools = request.getTools();
         if (tools == null || tools.isEmpty()) {
             if (request.getToolChoice() != null

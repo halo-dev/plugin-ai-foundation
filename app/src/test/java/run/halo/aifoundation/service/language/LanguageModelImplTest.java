@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,6 +52,7 @@ import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolExecutionContext;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
 
 class LanguageModelImplTest {
 

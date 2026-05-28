@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.mapping;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -17,17 +17,17 @@ import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolCall;
 
-final class LanguageModelResponseMapper {
+public final class LanguageModelResponseMapper {
 
     private final String providerType;
     private final LanguageModelMessageMapper messageMapper;
 
-    LanguageModelResponseMapper(String providerType, LanguageModelMessageMapper messageMapper) {
+    public LanguageModelResponseMapper(String providerType, LanguageModelMessageMapper messageMapper) {
         this.providerType = providerType;
         this.messageMapper = messageMapper;
     }
 
-    String extractText(ChatResponse response) {
+    public String extractText(ChatResponse response) {
         var result = response.getResult();
         if (result == null || result.getOutput() == null || result.getOutput().getText() == null) {
             return "";
@@ -35,7 +35,7 @@ final class LanguageModelResponseMapper {
         return result.getOutput().getText();
     }
 
-    String extractFinishReason(ChatResponse response) {
+    public String extractFinishReason(ChatResponse response) {
         var result = response.getResult();
         if (result == null || result.getMetadata() == null) {
             return null;
@@ -43,12 +43,12 @@ final class LanguageModelResponseMapper {
         return result.getMetadata().getFinishReason();
     }
 
-    boolean isFinish(String rawFinishReason) {
+    public boolean isFinish(String rawFinishReason) {
         return rawFinishReason != null && !rawFinishReason.isBlank()
             && !"null".equalsIgnoreCase(rawFinishReason);
     }
 
-    FinishReason mapFinishReason(String rawFinishReason) {
+    public FinishReason mapFinishReason(String rawFinishReason) {
         if (rawFinishReason == null || rawFinishReason.isBlank()
             || "null".equalsIgnoreCase(rawFinishReason)) {
             return FinishReason.UNKNOWN;
@@ -63,7 +63,7 @@ final class LanguageModelResponseMapper {
         };
     }
 
-    LanguageModelUsage mapUsage(ChatResponse response) {
+    public LanguageModelUsage mapUsage(ChatResponse response) {
         var metadata = response.getMetadata();
         if (metadata == null || metadata.getUsage() == null) {
             return null;
@@ -84,7 +84,7 @@ final class LanguageModelResponseMapper {
             .build();
     }
 
-    Map<String, Object> mapMetadata(ChatResponse response) {
+    public Map<String, Object> mapMetadata(ChatResponse response) {
         var metadata = response.getMetadata();
         if (metadata == null) {
             return Map.of();
@@ -101,7 +101,7 @@ final class LanguageModelResponseMapper {
         return map;
     }
 
-    List<GenerationContentPart> contentParts(String text, List<ReasoningPart> reasoning) {
+    public List<GenerationContentPart> contentParts(String text, List<ReasoningPart> reasoning) {
         var content = new ArrayList<GenerationContentPart>();
         nullSafe(reasoning).stream().map(GenerationContentPart::reasoning).forEach(content::add);
         if (hasText(text)) {
@@ -110,7 +110,7 @@ final class LanguageModelResponseMapper {
         return content;
     }
 
-    TextStreamPart streamPart(GenerationContentPart part) {
+    public TextStreamPart streamPart(GenerationContentPart part) {
         if (PartType.isSource(part.getType())) {
             return TextStreamPart.source(part);
         }
@@ -120,7 +120,7 @@ final class LanguageModelResponseMapper {
         return TextStreamPart.raw(Map.of("ignoredPartType", part.getType()));
     }
 
-    List<GenerationContentPart> sourceAndFileParts(ChatResponse response) {
+    public List<GenerationContentPart> sourceAndFileParts(ChatResponse response) {
         var metadata = responseMetadataValues(response);
         if (metadata.isEmpty()) {
             return List.of();
@@ -133,7 +133,7 @@ final class LanguageModelResponseMapper {
         return parts;
     }
 
-    List<GenerationWarning> mapWarnings(ChatResponse response) {
+    public List<GenerationWarning> mapWarnings(ChatResponse response) {
         var metadata = response.getMetadata();
         if (metadata == null || !metadata.containsKey("warnings")) {
             return List.of();
@@ -147,7 +147,7 @@ final class LanguageModelResponseMapper {
         return List.of(mapWarning(warnings));
     }
 
-    GenerationRequestMetadata mapRequestMetadata(ChatResponse response) {
+    public GenerationRequestMetadata mapRequestMetadata(ChatResponse response) {
         var metadata = response.getMetadata();
         return GenerationRequestMetadata.builder()
             .model(metadata != null ? metadata.getModel() : null)
@@ -155,7 +155,7 @@ final class LanguageModelResponseMapper {
             .build();
     }
 
-    GenerationResponseMetadata mapResponseMetadata(ChatResponse response, String text,
+    public GenerationResponseMetadata mapResponseMetadata(ChatResponse response, String text,
         List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
         var metadata = response.getMetadata();
         return GenerationResponseMetadata.builder()
@@ -166,7 +166,7 @@ final class LanguageModelResponseMapper {
             .build();
     }
 
-    List<ReasoningPart> reasoningParts(String reasoning) {
+    public List<ReasoningPart> reasoningParts(String reasoning) {
         if (!hasText(reasoning)) {
             return List.of();
         }
@@ -176,7 +176,7 @@ final class LanguageModelResponseMapper {
             .build());
     }
 
-    Map<String, Object> sanitizedRawDiagnostic(ChatResponse response) {
+    public Map<String, Object> sanitizedRawDiagnostic(ChatResponse response) {
         var metadata = response.getMetadata();
         if (metadata == null) {
             return Map.of();
@@ -191,7 +191,7 @@ final class LanguageModelResponseMapper {
         return raw;
     }
 
-    Object sanitizeValue(Object value) {
+    public Object sanitizeValue(Object value) {
         if (value instanceof Map<?, ?> map) {
             var sanitized = new LinkedHashMap<String, Object>();
             map.forEach((key, nestedValue) -> {

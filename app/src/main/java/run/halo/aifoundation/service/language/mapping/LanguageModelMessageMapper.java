@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.mapping;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,17 +17,17 @@ import run.halo.aifoundation.tool.ToolResult;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
-final class LanguageModelMessageMapper {
+public final class LanguageModelMessageMapper {
 
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final String providerType;
 
-    LanguageModelMessageMapper(String providerType) {
+    public LanguageModelMessageMapper(String providerType) {
         this.providerType = providerType;
     }
 
-    org.springframework.ai.chat.messages.Message convert(ModelMessage message) {
+    public org.springframework.ai.chat.messages.Message convert(ModelMessage message) {
         return switch (message.getRole()) {
             case SYSTEM -> new SystemMessage(textContent(message));
             case ASSISTANT -> assistantMessage(message);
@@ -36,7 +36,7 @@ final class LanguageModelMessageMapper {
         };
     }
 
-    ToolResponseMessage toolResponseMessage(List<ToolResult> results) {
+    public ToolResponseMessage toolResponseMessage(List<ToolResult> results) {
         var responses = results.stream()
             .map(result -> new ToolResponseMessage.ToolResponse(result.getToolCallId(),
                 result.getToolName(), writeJson(result.getResult())))
@@ -44,7 +44,7 @@ final class LanguageModelMessageMapper {
         return ToolResponseMessage.builder().responses(responses).build();
     }
 
-    List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
+    public List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
         List<ToolCall> toolCalls) {
         var parts = new ArrayList<ModelMessagePart>();
         nullSafe(reasoning).stream().map(ModelMessagePart::reasoning).forEach(parts::add);

@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.stream;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -19,8 +19,9 @@ import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
+import run.halo.aifoundation.service.language.structured.StructuredOutput;
 
-final class LanguageModelStreamResultBuilder {
+public final class LanguageModelStreamResultBuilder {
     private final LinkedHashMap<Integer, StepBuild> steps = new LinkedHashMap<>();
     private Integer currentStepIndex = 0;
     private FinishReason finishReason = FinishReason.UNKNOWN;
@@ -32,7 +33,7 @@ final class LanguageModelStreamResultBuilder {
     private String errorText;
     private String errorType;
 
-    void accept(TextStreamPart part) {
+    public void accept(TextStreamPart part) {
         if (part == null || part.getType() == null) {
             return;
         }
@@ -110,27 +111,27 @@ final class LanguageModelStreamResultBuilder {
         }
     }
 
-    String errorText() {
+    public String errorText() {
         return errorText;
     }
 
-    String errorType() {
+    public String errorType() {
         return errorType;
     }
 
-    Integer currentStepIndex() {
+    public Integer currentStepIndex() {
         return currentStepIndex;
     }
 
-    LanguageModelUsage usage() {
+    public LanguageModelUsage usage() {
         return usage;
     }
 
-    GenerationResponseMetadata response() {
+    public GenerationResponseMetadata response() {
         return response;
     }
 
-    String errorValidationPath() {
+    public String errorValidationPath() {
         if (providerMetadata == null) {
             return null;
         }
@@ -138,7 +139,7 @@ final class LanguageModelStreamResultBuilder {
         return validationPath != null ? validationPath.toString() : null;
     }
 
-    String finalStepText() {
+    public String finalStepText() {
         if (steps.isEmpty()) {
             return "";
         }
@@ -148,7 +149,7 @@ final class LanguageModelStreamResultBuilder {
             .orElse("");
     }
 
-    GenerateTextResult build(StructuredOutput structuredOutput) {
+    public GenerateTextResult build(StructuredOutput structuredOutput) {
         var generationSteps = steps.entrySet().stream()
             .map(entry -> entry.getValue().build(entry.getKey(), structuredOutput,
                 isFinalStep(entry.getKey())))

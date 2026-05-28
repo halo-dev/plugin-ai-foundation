@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.tool;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,19 +17,19 @@ import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolExecutionContext;
 import run.halo.aifoundation.tool.ToolResult;
 
-final class LanguageModelToolExecutor {
+public final class LanguageModelToolExecutor {
     private final JsonSchemaValidator schemaValidator;
     private final CancellationChecker cancellationChecker;
     private final ToolTimeout toolTimeout;
 
-    LanguageModelToolExecutor(JsonSchemaValidator schemaValidator,
+    public LanguageModelToolExecutor(JsonSchemaValidator schemaValidator,
         CancellationChecker cancellationChecker, ToolTimeout toolTimeout) {
         this.schemaValidator = schemaValidator;
         this.cancellationChecker = cancellationChecker;
         this.toolTimeout = toolTimeout;
     }
 
-    ToolExecutionBatch execute(List<ToolCall> toolCalls, GenerateTextRequest request,
+    public ToolExecutionBatch execute(List<ToolCall> toolCalls, GenerateTextRequest request,
         int stepIndex, List<ModelMessage> executionMessages,
         Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle) {
         if (toolCalls.isEmpty()) {
@@ -107,7 +107,7 @@ final class LanguageModelToolExecutor {
         return new ToolExecutionBatch(results, errors, warnings);
     }
 
-    ToolExecutionBatch stepLimitReached(List<ToolCall> toolCalls) {
+    public ToolExecutionBatch stepLimitReached(List<ToolCall> toolCalls) {
         if (toolCalls.isEmpty()) {
             return new ToolExecutionBatch(List.of(), List.of(), List.of());
         }
@@ -142,21 +142,21 @@ final class LanguageModelToolExecutor {
     }
 
     @FunctionalInterface
-    interface JsonSchemaValidator {
+    public interface JsonSchemaValidator {
         void validate(Object value, Map<String, Object> schema, String path);
     }
 
     @FunctionalInterface
-    interface CancellationChecker {
+    public interface CancellationChecker {
         void check(GenerateTextRequest request);
     }
 
     @FunctionalInterface
-    interface ToolTimeout {
+    public interface ToolTimeout {
         Mono<Object> apply(Mono<Object> mono, GenerateTextRequest request);
     }
 
-    interface ToolLifecycle {
+    public interface ToolLifecycle {
         void toolCallStart(int stepIndex, ToolCall toolCall, Map<String, Object> metadata);
 
         void toolCallFinish(int stepIndex, ToolResult result, ToolError error, Instant startedAt,

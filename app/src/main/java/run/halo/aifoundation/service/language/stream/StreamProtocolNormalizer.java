@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.stream;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,12 +6,12 @@ import reactor.core.publisher.Flux;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.TextStreamPart;
 
-final class StreamProtocolNormalizer {
+public final class StreamProtocolNormalizer {
 
     private StreamProtocolNormalizer() {
     }
 
-    static Flux<TextStreamPart> normalize(Flux<TextStreamPart> source) {
+    public static Flux<TextStreamPart> normalize(Flux<TextStreamPart> source) {
         return Flux.defer(() -> {
             var state = new State();
             return source.concatMap(part -> Flux.fromIterable(state.accept(part)))

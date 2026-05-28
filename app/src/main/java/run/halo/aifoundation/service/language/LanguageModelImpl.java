@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -50,6 +50,17 @@ import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.service.language.mapping.LanguageModelChatOptionsBuilder;
+import run.halo.aifoundation.service.language.mapping.LanguageModelMessageMapper;
+import run.halo.aifoundation.service.language.mapping.LanguageModelRequestValidator;
+import run.halo.aifoundation.service.language.mapping.LanguageModelResponseMapper;
+import run.halo.aifoundation.service.language.mapping.LanguageModelToolCallMapper;
+import run.halo.aifoundation.service.language.stream.LanguageModelStreamResultBuilder;
+import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
+import run.halo.aifoundation.service.language.structured.LanguageModelStructuredOutputHandler;
+import run.halo.aifoundation.service.language.structured.StructuredOutput;
+import run.halo.aifoundation.service.language.tool.LanguageModelToolExecutor;
+import run.halo.aifoundation.service.language.tool.ToolExecutionBatch;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 

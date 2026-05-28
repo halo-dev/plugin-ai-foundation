@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.structured;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -11,11 +11,12 @@ import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
+import run.halo.aifoundation.service.language.mapping.LanguageModelResponseMapper;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
-final class LanguageModelStructuredOutputHandler {
+public final class LanguageModelStructuredOutputHandler {
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
     private static final TypeReference<Object> OBJECT_TYPE = new TypeReference<>() {
     };
@@ -23,13 +24,13 @@ final class LanguageModelStructuredOutputHandler {
     private final LanguageModelResponseMapper responseMapper;
     private final JsonWriter jsonWriter;
 
-    LanguageModelStructuredOutputHandler(LanguageModelResponseMapper responseMapper,
+    public LanguageModelStructuredOutputHandler(LanguageModelResponseMapper responseMapper,
         JsonWriter jsonWriter) {
         this.responseMapper = responseMapper;
         this.jsonWriter = jsonWriter;
     }
 
-    String instruction(OutputSpec output) {
+    public String instruction(OutputSpec output) {
         if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
             return null;
         }
@@ -47,7 +48,7 @@ final class LanguageModelStructuredOutputHandler {
         };
     }
 
-    StructuredOutput parse(OutputSpec output, String text) {
+    public StructuredOutput parse(OutputSpec output, String text) {
         if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
             return new StructuredOutput(text, text);
         }
@@ -97,7 +98,7 @@ final class LanguageModelStructuredOutputHandler {
         }
     }
 
-    Flux<Object> partialOutputStream(GenerateTextRequest request, Flux<String> textStream) {
+    public Flux<Object> partialOutputStream(GenerateTextRequest request, Flux<String> textStream) {
         if (!hasStructuredOutput(request)
             || (request.getOutput().getType() != OutputType.OBJECT
             && request.getOutput().getType() != OutputType.JSON)) {
@@ -114,7 +115,7 @@ final class LanguageModelStructuredOutputHandler {
         });
     }
 
-    Flux<Object> elementStream(GenerateTextRequest request, Flux<String> textStream) {
+    public Flux<Object> elementStream(GenerateTextRequest request, Flux<String> textStream) {
         if (!hasStructuredOutput(request) || request.getOutput().getType() != OutputType.ARRAY) {
             return Flux.empty();
         }
@@ -124,7 +125,7 @@ final class LanguageModelStructuredOutputHandler {
         });
     }
 
-    StructuredOutputValidationException enrich(StructuredOutputValidationException error,
+    public StructuredOutputValidationException enrich(StructuredOutputValidationException error,
         OutputSpec output, String outputText, Integer stepIndex, LanguageModelUsage usage,
         GenerationResponseMetadata response) {
         return new StructuredOutputValidationException(error.getMessage(), error,
@@ -134,7 +135,7 @@ final class LanguageModelStructuredOutputHandler {
     }
 
     @SuppressWarnings("unchecked")
-    void validateJsonValue(Object value, Map<String, Object> schema, String path) {
+    public void validateJsonValue(Object value, Map<String, Object> schema, String path) {
         if (schema == null || schema.isEmpty()) {
             return;
         }
@@ -266,7 +267,7 @@ final class LanguageModelStructuredOutputHandler {
     }
 
     @FunctionalInterface
-    interface JsonWriter {
+    public interface JsonWriter {
         String write(Object value);
     }
 

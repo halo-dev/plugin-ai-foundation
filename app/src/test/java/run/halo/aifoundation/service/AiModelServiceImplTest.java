@@ -23,9 +23,14 @@ import run.halo.aifoundation.exception.ModelNotFoundException;
 import run.halo.aifoundation.exception.ProviderDisabledException;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
+import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
+import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
+import run.halo.aifoundation.service.model.DefaultAiModelResolver;
 import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
@@ -51,7 +56,12 @@ class AiModelServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new AiModelServiceImpl(client, providerClientCache, secretResolver, settingFetcher);
+        service = new AiModelServiceImpl(
+            client,
+            new DefaultAiModelResolver(client, providerClientCache, secretResolver, settingFetcher),
+            new DefaultLanguageModelFactory(providerClientCache),
+            new DefaultEmbeddingModelFactory(providerClientCache)
+        );
     }
 
     // ---- listModels ----
@@ -198,12 +208,14 @@ class AiModelServiceImplTest {
         var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
         var provider = aiProvider("openai-prod", "openai", true);
         var chatModel = mock(ChatModel.class);
+        var providerType = languageProviderType();
 
         when(settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class))
             .thenReturn(Mono.just(slots));
         when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
         when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
             .thenReturn(chatModel);
 
@@ -259,5 +271,11 @@ class AiModelServiceImplTest {
         slots.setLanguageModelName(languageModelName);
         slots.setEmbeddingModelName(embeddingModelName);
         return slots;
+    }
+
+    private AiProviderType languageProviderType() {
+        var type = mock(AiProviderType.class);
+        when(type.languageModelProviderOptions()).thenReturn(LanguageModelProviderOptions.defaults());
+        return type;
     }
 }

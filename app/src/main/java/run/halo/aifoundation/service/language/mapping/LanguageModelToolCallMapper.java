@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.mapping;
 
 import java.util.List;
 import java.util.Map;
@@ -8,12 +8,12 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
-final class LanguageModelToolCallMapper {
+public final class LanguageModelToolCallMapper {
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
-    List<ToolCall> mapToolCalls(List<AssistantMessage.ToolCall> toolCalls) {
+    public List<ToolCall> mapToolCalls(List<AssistantMessage.ToolCall> toolCalls) {
         if (toolCalls == null || toolCalls.isEmpty()) {
             return List.of();
         }

@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -25,6 +25,7 @@ import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
+import run.halo.aifoundation.service.language.tool.LanguageModelToolExecutor;
 
 final class LanguageModelGenerationRun implements LanguageModelToolExecutor.ToolLifecycle {
     private final GenerateTextRequest request;

@@ -1,18 +1,12 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.embedding;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.embedding.EmbeddingOptions;
-import org.springframework.ai.embedding.EmbeddingResponseMetadata;
-import org.springframework.ai.model.ResponseMetadata;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -26,7 +20,6 @@ import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingResponse;
 import run.halo.aifoundation.embedding.EmbeddingStartEvent;
 import run.halo.aifoundation.exception.EmbeddingTimeoutException;
-import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
@@ -34,13 +27,13 @@ import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 @Slf4j
 public class EmbeddingModelImpl implements EmbeddingModel {
 
-    private static final int DEFAULT_MAX_RETRIES = 2;
-
     private final org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel;
     private final String providerType;
     private final int maxEmbeddingsPerCall;
     private final boolean supportsParallelCalls;
     private final EmbeddingModelProviderOptions providerOptions;
+    private final EmbeddingBatchPlanner batchPlanner;
+    private final EmbeddingResponseAggregator responseAggregator;
 
     public EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
@@ -64,6 +57,8 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         this.providerOptions = providerOptions != null
             ? providerOptions
             : EmbeddingModelProviderOptions.defaults(providerType);
+        this.batchPlanner = new EmbeddingBatchPlanner(maxEmbeddingsPerCall, supportsParallelCalls);
+        this.responseAggregator = new EmbeddingResponseAggregator(providerType);
     }
 
     @Override
@@ -91,17 +86,17 @@ public class EmbeddingModelImpl implements EmbeddingModel {
                 var warnings = new ArrayList<EmbeddingWarning>();
                 warnings.addAll(requestWarnings(request));
                 var springOptions = providerOptions.buildOptions(request, warnings);
-                var batches = indexedBatches(request);
-                var concurrency = concurrency(request);
+                var batches = batchPlanner.indexedBatches(request);
+                var concurrency = batchPlanner.concurrency(request);
                 var batchFlux = Flux.fromIterable(batches);
-                Flux<BatchResult> results = supportsParallelCalls && concurrency > 1
+                Flux<EmbeddingBatchResult> results = supportsParallelCalls && concurrency > 1
                     ? batchFlux.flatMap(batch -> batchCall(request, batch, springOptions), concurrency)
                     : batchFlux.concatMap(batch -> batchCall(request, batch, springOptions));
 
                 return invokeStart(lifecycle, request)
                     .thenMany(results)
                     .collectList()
-                    .map(batchResults -> aggregate(batchResults, warnings))
+                    .map(batchResults -> responseAggregator.aggregate(batchResults, warnings))
                     .flatMap(response -> invokeFinish(lifecycle, request, response).thenReturn(response));
             })
             .transform(mono -> withEmbeddingTimeout(mono, request))
@@ -124,7 +119,8 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         return supportsParallelCalls;
     }
 
-    private Mono<BatchResult> batchCall(EmbeddingRequest request, IndexedBatch batch,
+    private Mono<EmbeddingBatchResult> batchCall(EmbeddingRequest request,
+        EmbeddingBatchPlanner.IndexedBatch batch,
         EmbeddingOptions options) {
         var call = Mono.fromCallable(() -> {
                 checkCancellation(request);
@@ -133,14 +129,15 @@ public class EmbeddingModelImpl implements EmbeddingModel {
             .subscribeOn(Schedulers.boundedElastic())
             .transform(mono -> withEmbeddingTimeout(mono, request));
 
-        var maxRetries = maxRetries(request);
+        var maxRetries = batchPlanner.maxRetries(request);
         if (maxRetries <= 0) {
             return call;
         }
         return call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
     }
 
-    private BatchResult embedBatch(EmbeddingRequest request, IndexedBatch batch,
+    private EmbeddingBatchResult embedBatch(EmbeddingRequest request,
+        EmbeddingBatchPlanner.IndexedBatch batch,
         EmbeddingOptions options) {
         var springRequest =
             new org.springframework.ai.embedding.EmbeddingRequest(batch.inputs(), options);
@@ -151,50 +148,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         var embeddings = response.getResults().stream()
             .map(org.springframework.ai.embedding.Embedding::getOutput)
             .toList();
-        return new BatchResult(batch.index(), embeddings, response.getMetadata());
-    }
-
-    private EmbeddingResponse aggregate(List<BatchResult> batchResults,
-        List<EmbeddingWarning> requestWarnings) {
-        var sorted = batchResults.stream()
-            .sorted(Comparator.comparingInt(BatchResult::index))
-            .toList();
-        var embeddings = sorted.stream()
-            .flatMap(batch -> batch.embeddings().stream())
-            .toList();
-        var warnings = new ArrayList<>(requestWarnings);
-        var usageAccumulator = new UsageAccumulator();
-        ResponseMetadata lastMetadata = null;
-        var batchMetadata = new ArrayList<Map<String, Object>>();
-
-        for (var batch : sorted) {
-            lastMetadata = batch.metadata();
-            var usage = usage(batch.metadata());
-            if (usage != null) {
-                usageAccumulator.add(usage);
-            }
-            batchMetadata.add(Map.of(
-                "index", batch.index(),
-                "response", responseMetadataMap(batch.metadata())
-            ));
-        }
-
-        var usage = usageAccumulator.usage();
-        if (usage == null) {
-            warnings.add(warning("missing-embedding-usage",
-                "The provider response did not include embedding token usage."));
-        }
-
-        return EmbeddingResponse.builder()
-            .embeddings(embeddings)
-            .usage(usage)
-            .response(mapResponseMetadata(lastMetadata))
-            .warnings(List.copyOf(warnings))
-            .providerMetadata(Map.of(
-                "providerType", providerType,
-                "batches", List.copyOf(batchMetadata)
-            ))
-            .build();
+        return new EmbeddingBatchResult(batch.index(), embeddings, response.getMetadata());
     }
 
     private void validateRequest(EmbeddingRequest request) {
@@ -237,42 +191,6 @@ public class EmbeddingModelImpl implements EmbeddingModel {
                 .build());
         }
         return warnings;
-    }
-
-    private List<IndexedBatch> indexedBatches(EmbeddingRequest request) {
-        var batchSize = batchSize(request);
-        var batches = new ArrayList<IndexedBatch>();
-        var inputs = request.getInputs();
-        for (int index = 0, start = 0; start < inputs.size(); index++, start += batchSize) {
-            batches.add(new IndexedBatch(index, inputs.subList(start,
-                Math.min(start + batchSize, inputs.size()))));
-        }
-        return batches;
-    }
-
-    private int batchSize(EmbeddingRequest request) {
-        if (request.getMaxBatchSize() != null) {
-            return Math.min(request.getMaxBatchSize(),
-                maxEmbeddingsPerCall > 0 ? maxEmbeddingsPerCall : Integer.MAX_VALUE);
-        }
-        return maxEmbeddingsPerCall > 0 ? maxEmbeddingsPerCall : request.getInputs().size();
-    }
-
-    private int concurrency(EmbeddingRequest request) {
-        if (!supportsParallelCalls) {
-            return 1;
-        }
-        var requested = request != null ? request.getMaxParallelCalls() : null;
-        if (requested != null) {
-            return requested;
-        }
-        return Integer.MAX_VALUE;
-    }
-
-    private int maxRetries(EmbeddingRequest request) {
-        return request != null && request.getMaxRetries() != null
-            ? request.getMaxRetries()
-            : DEFAULT_MAX_RETRIES;
     }
 
     private boolean isRetryable(Throwable error) {
@@ -358,124 +276,4 @@ public class EmbeddingModelImpl implements EmbeddingModel {
             : Map.of();
     }
 
-    private EmbeddingUsage mapUsage(Usage usage) {
-        if (usage == null) {
-            return null;
-        }
-        var total = usage.getTotalTokens();
-        if (total == null) {
-            var prompt = usage.getPromptTokens();
-            var completion = usage.getCompletionTokens();
-            if (prompt != null || completion != null) {
-                total = safe(prompt) + safe(completion);
-            }
-        }
-        if (total == null && usage.getNativeUsage() == null) {
-            return null;
-        }
-        return EmbeddingUsage.builder()
-            .tokens(total)
-            .raw(usage.getNativeUsage())
-            .build();
-    }
-
-    private Usage usage(ResponseMetadata metadata) {
-        if (metadata instanceof EmbeddingResponseMetadata embeddingMetadata) {
-            return embeddingMetadata.getUsage();
-        }
-        return null;
-    }
-
-    private run.halo.aifoundation.embedding.EmbeddingResponseMetadata mapResponseMetadata(
-        ResponseMetadata metadata) {
-        if (metadata == null) {
-            return null;
-        }
-        var values = responseMetadataMap(metadata);
-        return run.halo.aifoundation.embedding.EmbeddingResponseMetadata.builder()
-            .id(stringValue(values.get("id")))
-            .model(model(metadata))
-            .timestamp(Instant.now())
-            .metadata(values)
-            .build();
-    }
-
-    private String model(ResponseMetadata metadata) {
-        if (metadata instanceof EmbeddingResponseMetadata embeddingMetadata) {
-            return embeddingMetadata.getModel();
-        }
-        var value = metadata.get("model");
-        return stringValue(value);
-    }
-
-    private Map<String, Object> responseMetadataMap(ResponseMetadata metadata) {
-        if (metadata == null || metadata.isEmpty()) {
-            return Map.of();
-        }
-        var values = new LinkedHashMap<String, Object>();
-        for (var entry : metadata.entrySet()) {
-            if (entry.getKey() != null && entry.getValue() != null) {
-                values.put(entry.getKey(), entry.getValue());
-            }
-        }
-        if (metadata instanceof EmbeddingResponseMetadata embeddingMetadata) {
-            if (embeddingMetadata.getModel() != null) {
-                values.put("model", embeddingMetadata.getModel());
-            }
-            if (embeddingMetadata.getUsage() != null) {
-                values.put("usage", embeddingMetadata.getUsage());
-            }
-        }
-        return Map.copyOf(values);
-    }
-
-    private EmbeddingWarning warning(String code, String message) {
-        return EmbeddingWarning.builder()
-            .code(code)
-            .message(message)
-            .providerMetadata(Map.of("providerType", providerType))
-            .build();
-    }
-
-    private Integer safe(Integer value) {
-        return value != null ? value : 0;
-    }
-
-    private String stringValue(Object value) {
-        return value != null ? value.toString() : null;
-    }
-
-    private record IndexedBatch(int index, List<String> inputs) {
-    }
-
-    private record BatchResult(int index, List<float[]> embeddings, ResponseMetadata metadata) {
-    }
-
-    private final class UsageAccumulator {
-        private Integer tokens;
-        private Object raw;
-
-        void add(Usage usage) {
-            var mapped = mapUsage(usage);
-            if (mapped == null) {
-                return;
-            }
-            if (mapped.getTokens() != null) {
-                tokens = safe(tokens) + mapped.getTokens();
-            }
-            if (mapped.getRaw() != null) {
-                raw = mapped.getRaw();
-            }
-        }
-
-        EmbeddingUsage usage() {
-            if (tokens == null && raw == null) {
-                return null;
-            }
-            return EmbeddingUsage.builder()
-                .tokens(tokens)
-                .raw(raw)
-                .build();
-        }
-    }
 }

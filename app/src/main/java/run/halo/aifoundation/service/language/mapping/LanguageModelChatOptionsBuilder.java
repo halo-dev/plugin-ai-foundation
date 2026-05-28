@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service;
+package run.halo.aifoundation.service.language.mapping;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -13,20 +13,20 @@ import run.halo.aifoundation.tool.ToolChoice;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 
-final class LanguageModelChatOptionsBuilder {
+public final class LanguageModelChatOptionsBuilder {
 
     private final String providerType;
     private final LanguageModelProviderOptions providerOptions;
     private final Function<Object, String> jsonWriter;
 
-    LanguageModelChatOptionsBuilder(String providerType,
+    public LanguageModelChatOptionsBuilder(String providerType,
         LanguageModelProviderOptions providerOptions, Function<Object, String> jsonWriter) {
         this.providerType = providerType;
         this.providerOptions = providerOptions;
         this.jsonWriter = jsonWriter;
     }
 
-    void assertRequestSupported(GenerateTextRequest request, boolean supportsToolCalling,
+    public void assertRequestSupported(GenerateTextRequest request, boolean supportsToolCalling,
         String toolCallingUnsupportedMessage) {
         if (hasTools(request) && !supportsToolCalling) {
             throw new IllegalArgumentException(toolCallingUnsupportedMessage);
@@ -47,7 +47,7 @@ final class LanguageModelChatOptionsBuilder {
         }
     }
 
-    ChatOptions build(GenerateTextRequest request) {
+    public ChatOptions build(GenerateTextRequest request) {
         if (hasTools(request)
             && (request.getToolChoice() == null
             || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
