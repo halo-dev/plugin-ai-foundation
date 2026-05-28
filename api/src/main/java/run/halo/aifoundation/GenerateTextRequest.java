@@ -77,6 +77,11 @@ public class GenerateTextRequest {
      */
     private Map<String, Map<String, Object>> providerOptions;
     /**
+     * Request-scoped HTTP headers sent to providers when the selected provider adapter supports
+     * dynamic request headers.
+     */
+    private Map<String, String> headers;
+    /**
      * Caller metadata exposed to lifecycle callbacks. This data is not added to model prompts.
      */
     private Map<String, Object> metadata;
@@ -141,5 +146,18 @@ public class GenerateTextRequest {
     @Transient
     public GenerationTimeouts getTimeouts() {
         return timeouts;
+    }
+
+    public static class GenerateTextRequestBuilder {
+        public GenerateTextRequestBuilder providerOptions(
+            Map<String, Map<String, Object>> providerOptions) {
+            this.providerOptions = providerOptions;
+            return this;
+        }
+
+        public GenerateTextRequestBuilder providerOptions(ProviderOptions.NamespaceOptions... options) {
+            this.providerOptions = ProviderOptions.of(options);
+            return this;
+        }
     }
 }

@@ -46,7 +46,8 @@ public class EmbeddingRequest {
     private Map<String, Map<String, Object>> providerOptions;
 
     /**
-     * Request-scoped HTTP headers for providers that support them.
+     * Request-scoped HTTP headers sent to providers when the selected provider adapter supports
+     * dynamic request headers.
      */
     private Map<String, String> headers;
 
@@ -60,7 +61,13 @@ public class EmbeddingRequest {
      */
     private Integer maxParallelCalls;
 
+    /**
+     * Caller metadata exposed to lifecycle callbacks. This data is not sent to providers.
+     */
     private Map<String, Object> metadata;
+    /**
+     * Caller context exposed to lifecycle callbacks. This data is not sent to providers.
+     */
     private Map<String, Object> context;
 
     /**
@@ -92,5 +99,18 @@ public class EmbeddingRequest {
     @Transient
     public GenerationTimeouts getTimeouts() {
         return timeouts;
+    }
+
+    public static class EmbeddingRequestBuilder {
+        public EmbeddingRequestBuilder providerOptions(
+            Map<String, Map<String, Object>> providerOptions) {
+            this.providerOptions = providerOptions;
+            return this;
+        }
+
+        public EmbeddingRequestBuilder providerOptions(ProviderOptions.NamespaceOptions... options) {
+            this.providerOptions = ProviderOptions.of(options);
+            return this;
+        }
     }
 }

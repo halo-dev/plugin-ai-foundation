@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -136,17 +137,9 @@ class LanguageModelImplTest {
 
     @Test
     void generateText_rejectsUnsupportedContentPart() {
-        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
-        var request = GenerateTextRequest.builder()
-            .messages(List.of(ModelMessage.builder()
-                .role(ModelMessageRole.USER)
-                .content(List.of(ModelMessagePart.builder().type("image").build()))
-                .build()))
-            .build();
-
-        StepVerifier.create(model.generateText(request))
-            .expectErrorMessage("unsupported content part type: image")
-            .verify();
+        assertThatThrownBy(() -> ModelMessagePart.builder().type("image").build())
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("unsupported message part type: image");
     }
 
     @Test
@@ -336,7 +329,7 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void generateText_deepSeekToolRequestsDisableThinkingMode() {
+    void generateText_deepSeekToolRequestsDoNotDisableThinkingModeByDefault() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
             Flux.just(toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3))
@@ -360,8 +353,7 @@ class LanguageModelImplTest {
         verify(chatModel).stream(captor.capture());
         assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiChatOptions.class);
         var options = (OpenAiChatOptions) captor.getValue().getOptions();
-        assertThat(options.getExtraBody())
-            .containsEntry("thinking", Map.of("type", "disabled"));
+        assertThat(options.getExtraBody()).isNullOrEmpty();
     }
 
     @Test
@@ -592,30 +584,30 @@ class LanguageModelImplTest {
         var model = new LanguageModelImpl(chatModel, "openai");
 
         StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()).fullStream())
-            .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_START))
+            .assertNext(part -> assertThat(part.getType()).isEqualTo(PartType.START))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_START_STEP);
+                assertThat(part.getType()).isEqualTo(PartType.START_STEP);
                 assertThat(part.getStepIndex()).isZero();
             })
-            .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_START))
+            .assertNext(part -> assertThat(part.getType()).isEqualTo(PartType.TEXT_START))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
                 assertThat(part.getDelta()).isEqualTo("Hel");
             })
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
                 assertThat(part.getDelta()).isEqualTo("lo");
             })
-            .assertNext(part -> assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_END))
+            .assertNext(part -> assertThat(part.getType()).isEqualTo(PartType.TEXT_END))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
+                assertThat(part.getType()).isEqualTo(PartType.FINISH_STEP);
                 assertThat(part.getStepIndex()).isZero();
                 assertThat(part.getFinishReason()).isEqualTo(FinishReason.STOP);
                 assertThat(part.getUsage().getInputTokens()).isEqualTo(2);
                 assertThat(part.getUsage().getOutputTokens()).isEqualTo(4);
             })
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH);
+                assertThat(part.getType()).isEqualTo(PartType.FINISH);
                 assertThat(part.getFinishReason()).isEqualTo(FinishReason.STOP);
                 assertThat(part.getUsage().getInputTokens()).isEqualTo(2);
                 assertThat(part.getUsage().getOutputTokens()).isEqualTo(4);
@@ -644,7 +636,7 @@ class LanguageModelImplTest {
         StepVerifier.create(result.result())
             .assertNext(finalResult -> assertThat(finalResult.getText()).isEqualTo("Hello"))
             .verifyComplete();
-        StepVerifier.create(result.fullStream().filter(part -> TextStreamPart.TYPE_FINISH.equals(part.getType())))
+        StepVerifier.create(result.fullStream().filter(part -> PartType.FINISH.equals(part.getType())))
             .expectNextCount(1)
             .verifyComplete();
 
@@ -693,15 +685,15 @@ class LanguageModelImplTest {
         var result = model.streamText(GenerateTextRequest.builder().prompt("Hi").build());
 
         StepVerifier.create(result.fullStream()
-                .filter(part -> TextStreamPart.TYPE_SOURCE.equals(part.getType())
-                    || TextStreamPart.TYPE_FILE.equals(part.getType())))
+                .filter(part -> PartType.SOURCE.equals(part.getType())
+                    || PartType.FILE.equals(part.getType())))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_SOURCE);
+                assertThat(part.getType()).isEqualTo(PartType.SOURCE);
                 assertThat(part.getUrl()).isEqualTo("https://example.com");
                 assertThat(part.getTitle()).isEqualTo("Example");
             })
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FILE);
+                assertThat(part.getType()).isEqualTo(PartType.FILE);
                 assertThat(part.getTitle()).isEqualTo("answer.txt");
                 assertThat(part.getMediaType()).isEqualTo("text/plain");
                 assertThat(part.getData()).isEqualTo("SGVsbG8=");
@@ -835,22 +827,22 @@ class LanguageModelImplTest {
         var stream = model.streamText(GenerateTextRequest.builder().prompt("Hi").build());
 
         StepVerifier.create(stream.fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.REASONING_START.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_REASONING_DELTA);
+                assertThat(part.getType()).isEqualTo(PartType.REASONING_DELTA);
                 assertThat(part.getDelta()).isEqualTo("Thinking");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_END.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.REASONING_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
                 assertThat(part.getDelta()).isEqualTo("Answer");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
         assertNoOverlappingStreamBlocks(stream.fullStream().collectList().block());
@@ -867,13 +859,13 @@ class LanguageModelImplTest {
         )).collectList().block();
 
         assertThat(parts).extracting(TextStreamPart::getType).containsExactly(
-            TextStreamPart.TYPE_TEXT_START,
-            TextStreamPart.TYPE_TEXT_DELTA,
-            TextStreamPart.TYPE_TEXT_END,
-            TextStreamPart.TYPE_REASONING_START,
-            TextStreamPart.TYPE_REASONING_DELTA,
-            TextStreamPart.TYPE_REASONING_END,
-            TextStreamPart.TYPE_FINISH
+            PartType.TEXT_START,
+            PartType.TEXT_DELTA,
+            PartType.TEXT_END,
+            PartType.REASONING_START,
+            PartType.REASONING_DELTA,
+            PartType.REASONING_END,
+            PartType.FINISH
         );
         assertNoOverlappingStreamBlocks(parts);
     }
@@ -895,20 +887,20 @@ class LanguageModelImplTest {
         var model = new LanguageModelImpl(chatModel, "openai");
 
         StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_RAW);
+                assertThat(part.getType()).isEqualTo(PartType.RAW);
                 assertThat(part.getMetadata()).containsKey("rawResponse");
                 assertThat(part.getMetadata().toString()).doesNotContain("secret-value");
                 assertThat(part.getMetadata().toString()).doesNotContain("Bearer token");
                 assertThat(part.getMetadata().toString()).contains("[REDACTED]");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
     }
 
@@ -920,10 +912,10 @@ class LanguageModelImplTest {
         var model = new LanguageModelImpl(chatModel, "openai");
 
         StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build()).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
+                assertThat(part.getType()).isEqualTo(PartType.ERROR);
                 assertThat(part.getErrorText()).isEqualTo("upstream failed");
             })
             .verifyComplete();
@@ -951,26 +943,26 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
                 assertThat(part.getDelta()).isEqualTo("Let me check.");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_RESULT.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_RESULT.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TEXT_DELTA);
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
                 assertThat(part.getDelta()).isEqualTo("It is 22C.");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
         verify(chatModel, times(2)).stream(any(Prompt.class));
@@ -991,7 +983,7 @@ class LanguageModelImplTest {
 
         StepVerifier.create(model.streamText(request).fullStream())
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
+                assertThat(part.getType()).isEqualTo(PartType.ERROR);
                 assertThat(part.getErrorText())
                     .isEqualTo("Tool calling is not supported by provider type: simple");
             })
@@ -1017,15 +1009,15 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TOOL_ERROR);
+                assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
                 assertThat(part.getErrorText()).isEqualTo("tool failed");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
     }
 
@@ -1047,15 +1039,15 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_RESULT.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_RESULT.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
+                assertThat(part.getType()).isEqualTo(PartType.FINISH_STEP);
             })
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH);
+                assertThat(part.getType()).isEqualTo(PartType.FINISH);
                 assertThat(part.getUsage().getInputTokens()).isEqualTo(2);
                 assertThat(part.getUsage().getOutputTokens()).isEqualTo(3);
                 assertThat(part.getUsage().getTotalTokens()).isEqualTo(5);
@@ -1190,15 +1182,15 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
+                assertThat(part.getType()).isEqualTo(PartType.FINISH_STEP);
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
     }
 
@@ -1223,13 +1215,13 @@ class LanguageModelImplTest {
         var result = model.streamText(request);
 
         StepVerifier.create(result.fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_ERROR);
+                assertThat(part.getType()).isEqualTo(PartType.ERROR);
                 assertThat(part.getErrorText()).contains("missing required field");
                 assertThat(part.getProviderMetadata()).containsEntry("validationPath", "$.name");
             })
@@ -1357,15 +1349,15 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_TOOL_ERROR);
+                assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
                 assertThat(part.getErrorText()).contains("Unknown tool");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
         verify(chatModel).stream(any(Prompt.class));
@@ -1388,14 +1380,14 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.streamText(request).fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_FINISH_STEP);
+                assertThat(part.getType()).isEqualTo(PartType.FINISH_STEP);
                 assertThat(part.getWarnings()).extracting("code").contains("tool-not-executed");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
         verify(chatModel).stream(any(Prompt.class));
@@ -1423,23 +1415,23 @@ class LanguageModelImplTest {
         var stream = model.streamText(request);
 
         StepVerifier.create(stream.fullStream())
-            .expectNextMatches(part -> TextStreamPart.TYPE_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.REASONING_START.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(TextStreamPart.TYPE_REASONING_DELTA);
+                assertThat(part.getType()).isEqualTo(PartType.REASONING_DELTA);
                 assertThat(part.getDelta()).isEqualTo("Need weather data.");
             })
-            .expectNextMatches(part -> TextStreamPart.TYPE_REASONING_END.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_CALL.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TOOL_RESULT.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_START.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_TEXT_END.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH_STEP.equals(part.getType()))
-            .expectNextMatches(part -> TextStreamPart.TYPE_FINISH.equals(part.getType()))
+            .expectNextMatches(part -> PartType.REASONING_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_RESULT.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
         assertNoOverlappingStreamBlocks(stream.fullStream().collectList().block());
@@ -1731,8 +1723,13 @@ class LanguageModelImplTest {
                 .frequencyPenalty(request.getFrequencyPenalty())
                 .stop(request.getStopSequences())
                 .internalToolExecutionEnabled(false)
-                .toolCallbacks(toolCallbacks)
-                .extraBody(Map.of("thinking", Map.of("type", "disabled")));
+                .toolCallbacks(toolCallbacks);
+            var providerOptions = request.getProviderOptions() != null
+                ? request.getProviderOptions().get("deepseek")
+                : null;
+            if (providerOptions != null && !providerOptions.isEmpty()) {
+                builder.extraBody(Map.copyOf(providerOptions));
+            }
             if (!toolNames.isEmpty()) {
                 builder.toolNames(toolNames);
             }
@@ -1756,28 +1753,28 @@ class LanguageModelImplTest {
         String activeBlock = null;
         for (var part : parts) {
             switch (part.getType()) {
-                case TextStreamPart.TYPE_TEXT_START -> {
+                case PartType.TEXT_START -> {
                     assertThat(activeBlock)
                         .as("text-start must not open while another stream block is active")
                         .isNull();
-                    activeBlock = TextStreamPart.TYPE_TEXT_START;
+                    activeBlock = PartType.TEXT_START;
                 }
-                case TextStreamPart.TYPE_TEXT_END -> {
+                case PartType.TEXT_END -> {
                     assertThat(activeBlock)
                         .as("text-end must close an active text block")
-                        .isEqualTo(TextStreamPart.TYPE_TEXT_START);
+                        .isEqualTo(PartType.TEXT_START);
                     activeBlock = null;
                 }
-                case TextStreamPart.TYPE_REASONING_START -> {
+                case PartType.REASONING_START -> {
                     assertThat(activeBlock)
                         .as("reasoning-start must not open while another stream block is active")
                         .isNull();
-                    activeBlock = TextStreamPart.TYPE_REASONING_START;
+                    activeBlock = PartType.REASONING_START;
                 }
-                case TextStreamPart.TYPE_REASONING_END -> {
+                case PartType.REASONING_END -> {
                     assertThat(activeBlock)
                         .as("reasoning-end must close an active reasoning block")
-                        .isEqualTo(TextStreamPart.TYPE_REASONING_START);
+                        .isEqualTo(PartType.REASONING_START);
                     activeBlock = null;
                 }
                 default -> {

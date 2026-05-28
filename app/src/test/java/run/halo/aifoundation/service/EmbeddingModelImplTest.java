@@ -29,6 +29,7 @@ import run.halo.aifoundation.EmbeddingLifecycle;
 import run.halo.aifoundation.GenerationTimeouts;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 
 class EmbeddingModelImplTest {
 
@@ -68,8 +69,7 @@ class EmbeddingModelImplTest {
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", false,
-                OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
         var request = run.halo.aifoundation.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .providerOptions(Map.of("openai", Map.of(
@@ -91,17 +91,38 @@ class EmbeddingModelImplTest {
     }
 
     @Test
-    void embed_warnsForUnsupportedHeadersAndUnknownProviderOptions() {
+    void embed_appliesRequestHeadersWhenAdapterSupportsThem() {
+        var springModel = mock(HeaderAwareEmbeddingModel.class);
+        when(springModel.call(any(EmbeddingRequest.class), any()))
+            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
+
+        var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
+            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+        var request = run.halo.aifoundation.EmbeddingRequest.builder()
+            .inputs(List.of("first"))
+            .headers(Map.of("X-Trace-Id", "trace-1"))
+            .build();
+
+        StepVerifier.create(model.embed(request))
+            .assertNext(response -> assertThat(response.getEmbeddings()).hasSize(1))
+            .verifyComplete();
+
+        var headersCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(springModel).call(any(EmbeddingRequest.class), headersCaptor.capture());
+        assertThat(headersCaptor.getValue().get("X-Trace-Id")).isEqualTo("trace-1");
+        verify(springModel, org.mockito.Mockito.never()).call(any(EmbeddingRequest.class));
+    }
+
+    @Test
+    void embed_warnsForUnknownProviderOptions() {
         var springModel = mock(EmbeddingModel.class);
         when(springModel.call(any(EmbeddingRequest.class)))
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", false,
-                OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
         var request = run.halo.aifoundation.EmbeddingRequest.builder()
             .inputs(List.of("first"))
-            .headers(Map.of("X-Test", "value"))
             .providerOptions(Map.of(
                 "openai", Map.of("unknown", true),
                 "google", Map.of("taskType", "CLASSIFICATION")
@@ -112,7 +133,6 @@ class EmbeddingModelImplTest {
             .assertNext(response -> assertThat(response.getWarnings())
                 .extracting(run.halo.aifoundation.EmbeddingWarning::getCode)
                 .contains(
-                    "unsupported-request-headers",
                     "unsupported-provider-option",
                     "ignored-provider-option-namespace"
                 ))
@@ -302,5 +322,9 @@ class EmbeddingModelImplTest {
         StepVerifier.create(model.embed(request))
             .expectError(run.halo.aifoundation.EmbeddingTimeoutException.class)
             .verify();
+    }
+
+    private interface HeaderAwareEmbeddingModel
+        extends EmbeddingModel, RequestHeaderAwareEmbeddingModel {
     }
 }

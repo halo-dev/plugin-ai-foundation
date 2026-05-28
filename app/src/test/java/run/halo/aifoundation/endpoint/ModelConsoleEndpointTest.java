@@ -22,6 +22,7 @@ import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.FinishReason;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.LanguageModel;
+import run.halo.aifoundation.PartType;
 import run.halo.aifoundation.StreamTextResult;
 import run.halo.aifoundation.TextStreamPart;
 import run.halo.aifoundation.extension.AiModel;
@@ -653,7 +654,7 @@ class ModelConsoleEndpointTest {
         var shared = fullStream.cache();
         return new StreamTextResult(
             shared,
-            shared.filter(part -> TextStreamPart.TYPE_TEXT_DELTA.equals(part.getType()))
+            shared.filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
                 .map(TextStreamPart::getDelta),
             Flux.empty(),
             Flux.empty(),

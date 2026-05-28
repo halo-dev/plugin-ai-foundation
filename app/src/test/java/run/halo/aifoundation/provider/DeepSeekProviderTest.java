@@ -9,6 +9,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
 import run.halo.aifoundation.GenerateTextRequest;
 import run.halo.aifoundation.OutputSpec;
+import run.halo.aifoundation.ToolChoice;
 import run.halo.aifoundation.ToolDefinition;
 
 class DeepSeekProviderTest {
@@ -33,7 +34,7 @@ class DeepSeekProviderTest {
         assertThat(options.getResponseFormat()).isNotNull();
         assertThat(options.getResponseFormat().getType()).isEqualTo(ResponseFormat.Type.JSON_OBJECT);
         assertThat(options.getResponseFormat().getJsonSchema()).isNull();
-        assertThat(options.getExtraBody()).containsKey("thinking");
+        assertThat(options.getExtraBody()).isNullOrEmpty();
     }
 
     @Test
@@ -58,6 +59,48 @@ class DeepSeekProviderTest {
         assertThat(options.getResponseFormat()).isNotNull();
         assertThat(options.getResponseFormat().getType()).isEqualTo(ResponseFormat.Type.JSON_OBJECT);
         assertThat(options.getResponseFormat().getJsonSchema()).isNull();
-        assertThat(options.getExtraBody()).containsKey("thinking");
+        assertThat(options.getExtraBody()).isNullOrEmpty();
+    }
+
+    @Test
+    void toolOptions_applyRequiredToolChoiceAndHeaders() {
+        var request = GenerateTextRequest.builder()
+            .prompt("Use a tool")
+            .headers(Map.of("X-Trace-Id", "trace-1"))
+            .tools(List.of(ToolDefinition.builder()
+                .name("halo_test_info")
+                .inputSchema(Map.of("type", "object"))
+                .build()))
+            .toolChoice(ToolChoice.required())
+            .build();
+
+        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+            .toolCallingChatOptionsFactory()
+            .build(request, List.of(), java.util.Set.of());
+
+        assertThat(options.getToolChoice()).isEqualTo("required");
+        assertThat(options.getHttpHeaders()).containsEntry("X-Trace-Id", "trace-1");
+    }
+
+    @Test
+    void options_applyExplicitDeepSeekThinkingProviderOption() {
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate JSON")
+            .providerOptions(Map.of("deepseek", Map.of(
+                "thinking", Map.of("type", "disabled")
+            )))
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("answer", Map.of("type", "string")),
+                "required", List.of("answer")
+            )))
+            .build();
+
+        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+            .structuredOutputChatOptionsFactory()
+            .build(request);
+
+        assertThat(options.getExtraBody())
+            .containsEntry("thinking", Map.of("type", "disabled"));
     }
 }

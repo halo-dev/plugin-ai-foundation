@@ -5,6 +5,9 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.Value;
 
+/**
+ * Lifecycle event emitted before an embedding request starts.
+ */
 @Value
 @Builder
 public class EmbeddingStartEvent {

@@ -1,6 +1,7 @@
 package run.halo.aifoundation.provider.support;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.metadata.EmptyUsage;
 import org.springframework.ai.document.Document;
@@ -12,13 +13,14 @@ import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.http.HttpHeaders;
 import org.springframework.util.Assert;
 
 /**
  * OpenAI-compatible embedding model adapter that avoids Spring AI's
  * AbstractEmbeddingModel static classpath resource initialization.
  */
-public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel {
+public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEmbeddingModel {
 
     private final OpenAiApi openAiApi;
     private final OpenAiEmbeddingOptions defaultOptions;
@@ -37,6 +39,12 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel {
 
     @Override
     public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request) {
+        return call(request, Map.of());
+    }
+
+    @Override
+    public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request,
+        Map<String, String> headers) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
         var options = mergeOptions(request.getOptions());
         var apiRequest = new OpenAiApi.EmbeddingRequest<>(
@@ -46,7 +54,10 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel {
             options.getDimensions(),
             options.getUser()
         );
-        var responseEntity = openAiApi.embeddings(apiRequest);
+        var api = headers == null || headers.isEmpty()
+            ? openAiApi
+            : openAiApi.mutate().headers(httpHeaders(headers)).build();
+        var responseEntity = api.embeddings(apiRequest);
         var response = responseEntity.getBody();
         if (response == null || response.data() == null) {
             return new EmbeddingResponse(List.of());
@@ -90,5 +101,15 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel {
 
     private static <T> T firstNonNull(T value, T fallback) {
         return value != null ? value : fallback;
+    }
+
+    private HttpHeaders httpHeaders(Map<String, String> headers) {
+        var httpHeaders = new HttpHeaders();
+        headers.forEach((name, value) -> {
+            if (name != null && !name.isBlank() && value != null) {
+                httpHeaders.set(name, value);
+            }
+        });
+        return httpHeaders;
     }
 }

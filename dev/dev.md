@@ -116,8 +116,10 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .temperature(0.7)
     .maxOutputTokens(2048)
     .topP(0.9)
-    .providerOptions(Map.of(
-        "openai", Map.of("seed", 42)
+    .providerOptions(ProviderOptions.of(
+        ProviderOptions.namespace("openai")
+            .option("seed", 42)
+            .build()
     ))
     .build();
 
@@ -141,18 +143,12 @@ model.generateText(request)
 如果调用方需要稳定的 JSON 对象、数组或枚举值，可以在 `GenerateTextRequest.output` 中声明 `OutputSpec`。模型仍会返回统一的 `GenerateTextResult`，其中 `text` 保留原始文本，`output` 是解析并校验后的结构化值，`outputText` 是用于解析的原始片段。
 
 ```java
-Map<String, Object> schema = Map.of(
-    "type", "object",
-    "properties", Map.of(
-        "title", Map.of("type", "string"),
-        "summary", Map.of("type", "string"),
-        "tags", Map.of(
-            "type", "array",
-            "items", Map.of("type", "string")
-        )
-    ),
-    "required", List.of("title", "summary")
-);
+JsonSchema schema = JsonSchema.object()
+    .property("title", JsonSchema.string())
+    .property("summary", JsonSchema.string())
+    .property("tags", JsonSchema.array(JsonSchema.string().build()))
+    .required("title", "summary")
+    .build();
 
 GenerateTextRequest request = GenerateTextRequest.builder()
     .prompt("请总结 Halo CMS，并给出 3 个标签")
@@ -189,8 +185,8 @@ StreamTextResult stream = model.streamText(request);
 stream.fullStream()
     .subscribe(part -> {
         switch (part.getType()) {
-            case TextStreamPart.TYPE_TEXT_DELTA -> System.out.print(part.getDelta());
-            case TextStreamPart.TYPE_ERROR -> System.err.println(part.getErrorText());
+            case PartType.TEXT_DELTA -> System.out.print(part.getDelta());
+            case PartType.ERROR -> System.err.println(part.getErrorText());
             default -> {
             }
         }
@@ -214,11 +210,9 @@ model.streamText(request)
 ```java
 GenerateTextRequest request = GenerateTextRequest.builder()
     .prompt("生成 3 个文章标题，返回 JSON 数组")
-    .output(OutputSpec.array(Map.of(
-        "type", "object",
-        "properties", Map.of("title", Map.of("type", "string")),
-        "required", List.of("title")
-    )))
+    .output(OutputSpec.array(JsonSchema.object()
+        .property("title", JsonSchema.string())
+        .required("title")))
     .build();
 
 model.streamText(request)
@@ -245,24 +239,24 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 model.streamText(request).fullStream()
     .subscribe(part -> {
         switch (part.getType()) {
-            case TextStreamPart.TYPE_TEXT_DELTA -> System.out.print(part.getDelta());
-            case TextStreamPart.TYPE_REASONING_DELTA -> {
+            case PartType.TEXT_DELTA -> System.out.print(part.getDelta());
+            case PartType.REASONING_DELTA -> {
                 // 推理内容与最终回答分离，是否展示或持久化由调用方决定。
                 System.out.println("[Reasoning] " + part.getDelta());
             }
-            case TextStreamPart.TYPE_FINISH_STEP -> {
+            case PartType.FINISH_STEP -> {
                 if (part.getUsage() != null) {
                     System.out.println("\n[Step tokens] " + part.getUsage().getTotalTokens());
                 }
             }
-            case TextStreamPart.TYPE_FINISH -> {
+            case PartType.FINISH -> {
                 System.out.println("\n[生成结束] " + part.getFinishReason());
                 if (part.getUsage() != null) {
                     System.out.println("Input tokens: " + part.getUsage().getInputTokens());
                     System.out.println("Output tokens: " + part.getUsage().getOutputTokens());
                 }
             }
-            case TextStreamPart.TYPE_ERROR -> System.err.println("Error: " + part.getErrorText());
+            case PartType.ERROR -> System.err.println("Error: " + part.getErrorText());
             default -> {
                 // start、start-step、text-start、text-end、raw 等协议事件通常无需处理
             }
@@ -503,10 +497,11 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 | `frequencyPenalty` | `Double` | Frequency penalty |
 | `stopSequences` | `List<String>` | 停止序列 |
 | `tools` | `List<ToolDefinition>` | 请求级工具定义，包含名称、描述、输入/输出 JSON Schema 和可选 executor |
-| `toolChoice` | `ToolChoice` | 工具选择策略：`AUTO`、`NONE`、`REQUIRED` 或指定 `TOOL` |
+| `toolChoice` | `ToolChoice` | 工具选择策略：`AUTO`、`REQUIRED`、`NONE` 或指定 `TOOL` |
 | `stopWhen` | `StopCondition` | Java 调用方的步骤继续条件；未设置时只执行一个模型步骤。该字段不会进入 OpenAPI/HTTP schema |
 | `output` | `OutputSpec` | 结构化输出声明，支持 `TEXT`、`OBJECT`、`ARRAY`、`CHOICE`、`JSON` |
 | `providerOptions` | `Map<String, Map<String, Object>>` | 按提供商命名空间分组的特定选项 |
+| `headers` | `Map<String, String>` | 请求级 HTTP headers，仅在 provider adapter 能真实传递时可用 |
 | `metadata` | `Map<String, Object>` | 调用方元数据，只进入生命周期事件，不会加入 prompt |
 | `context` | `Map<String, Object>` | 调用方上下文，只进入生命周期事件，不会加入 prompt |
 | `lifecycle` | `GenerationLifecycle` | Java-only 生命周期回调；不会进入 OpenAPI/HTTP schema |
@@ -516,9 +511,25 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 `providerOptions` 必须按提供商分组，避免不同服务商的私有参数冲突，例如：
 
 ```java
-Map.of(
-    "openai", Map.of("seed", 42),
-    "ollama", Map.of("num_ctx", 4096)
+ProviderOptions.of(
+    ProviderOptions.namespace("openai")
+        .option("seed", 42)
+        .build(),
+    ProviderOptions.namespace("ollama")
+        .option("num_ctx", 4096)
+        .build()
+)
+```
+
+对于 SDK 尚未建模的 provider 私有参数，可以使用
+`ProviderOptions.namespace("provider").option("key", value)` 作为显式逃生口。
+例如 DeepSeek 的 thinking 开关由调用方显式决定：
+
+```java
+ProviderOptions.of(
+    ProviderOptions.namespace("deepseek")
+        .option("thinking", Map.of("type", "disabled"))
+        .build()
 )
 ```
 
@@ -675,12 +686,12 @@ EmbeddingRequest request = EmbeddingRequest.builder()
     .maxBatchSize(100)         // 每批最大数量
     .maxParallelCalls(2)       // 最多同时发起 2 个批次调用
     .maxRetries(2)             // 每个批次最多重试 2 次；设置为 0 可禁用重试
-    .headers(Map.of("X-Trace-Id", traceId)) // 提供商支持时透传请求头
-    .providerOptions(Map.of(   // 按提供商命名空间分组的特定选项
-        "openai", Map.of(
-            "dimensions", 512,
-            "user", "user-123"
-        )
+    .headers(Map.of("X-Trace-Id", traceId)) // provider adapter 支持时发送到 provider
+    .providerOptions(ProviderOptions.of( // 按提供商命名空间分组的特定选项
+        ProviderOptions.namespace("openai")
+            .option("dimensions", 512)
+            .option("user", "user-123")
+            .build()
     ))
     .timeouts(GenerationTimeouts.total(Duration.ofSeconds(30)))
     .metadata(Map.of("traceId", traceId))
@@ -711,7 +722,6 @@ model.embed(request)
 | `maxRetries` | 每个可重试 provider batch 的最大重试次数，`0` 表示不重试 |
 | `timeouts` | Java 侧的超时设置，对应 AI SDK 中的 timeout/abort 场景 |
 | `cancellationToken` | Java 侧的中止信号，对应 AI SDK 的 `abortSignal` |
-| `headers` | 请求级自定义请求头；若当前提供商适配器无法应用，会返回 warning |
 
 `EmbeddingResponse` 会在提供商可用时返回：
 
@@ -769,7 +779,7 @@ aiModelService.listProviders()
 | `ProviderApiException` | 提供商 API 调用失败 | 通常为网络或密钥问题，记录日志并提示用户检查配置 |
 | `StructuredOutputValidationException` | 模型文本或工具结果不满足 `OutputSpec`/工具 schema | 读取 `outputType`、`validationPath`、`stepIndex`、`usage` 和 `response` 定位问题；不要把部分输出快照当作最终成功 |
 
-对于非致命降级，`GenerateTextResult.warnings`、`GenerationStep.warnings` 和流式 `finish-step.warnings` 会携带稳定 `code`。常见 warning 包括结构化输出只能通过 prompt 引导、strict schema 不能由 provider 原生保证、`toolChoice=REQUIRED` 不能由默认工具适配器强制执行、工具 input examples 被忽略等。调用方可以记录这些 warning，或在对确定性要求较高的场景主动失败。
+对于非致命降级，`GenerateTextResult.warnings`、`GenerationStep.warnings` 和流式 `finish-step.warnings` 会携带稳定 `code`。常见 warning 包括结构化输出只能通过 prompt 引导、strict schema 不能由 provider 原生保证、工具 input examples 被忽略等。调用方可以记录这些 warning，或在对确定性要求较高的场景主动失败。
 
 ## 完整示例
 

@@ -31,31 +31,11 @@ import lombok.NoArgsConstructor;
  * protocol events can be introduced without breaking old clients.
  */
 @Data
-@Builder
+@Builder(buildMethodName = "uncheckedBuild")
 @NoArgsConstructor
 @AllArgsConstructor
 public class TextStreamPart {
-    public static final String TYPE_START = PartType.START;
-    public static final String TYPE_START_STEP = PartType.START_STEP;
-    public static final String TYPE_TEXT_START = PartType.TEXT_START;
-    public static final String TYPE_TEXT_DELTA = PartType.TEXT_DELTA;
-    public static final String TYPE_TEXT_END = PartType.TEXT_END;
-    public static final String TYPE_REASONING_START = PartType.REASONING_START;
-    public static final String TYPE_REASONING_DELTA = PartType.REASONING_DELTA;
-    public static final String TYPE_REASONING_END = PartType.REASONING_END;
-    public static final String TYPE_TOOL_INPUT_START = PartType.TOOL_INPUT_START;
-    public static final String TYPE_TOOL_INPUT_DELTA = PartType.TOOL_INPUT_DELTA;
-    public static final String TYPE_TOOL_CALL = PartType.TOOL_CALL;
-    public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
-    public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
-    public static final String TYPE_SOURCE = PartType.SOURCE;
-    public static final String TYPE_FILE = PartType.FILE;
-    public static final String TYPE_FINISH_STEP = PartType.FINISH_STEP;
-    public static final String TYPE_FINISH = PartType.FINISH;
-    public static final String TYPE_RAW = PartType.RAW;
-    public static final String TYPE_ABORT = PartType.ABORT;
-    public static final String TYPE_ERROR = PartType.ERROR;
-
+                                                                                
     /**
      * Event discriminator. Use values from {@link PartType}.
      */
@@ -156,42 +136,42 @@ public class TextStreamPart {
      * Creates a stream start event.
      */
     public static TextStreamPart start(String messageId) {
-        return TextStreamPart.builder().type(TYPE_START).messageId(messageId).build();
+        return TextStreamPart.builder().type(PartType.START).messageId(messageId).build();
     }
 
     /**
      * Creates a step start event.
      */
     public static TextStreamPart startStep(Integer stepIndex) {
-        return TextStreamPart.builder().type(TYPE_START_STEP).stepIndex(stepIndex).build();
+        return TextStreamPart.builder().type(PartType.START_STEP).stepIndex(stepIndex).build();
     }
 
     /**
      * Creates a text block start event.
      */
     public static TextStreamPart textStart(String id) {
-        return TextStreamPart.builder().type(TYPE_TEXT_START).id(id).build();
+        return TextStreamPart.builder().type(PartType.TEXT_START).id(id).build();
     }
 
     /**
      * Creates a text delta event.
      */
     public static TextStreamPart textDelta(String id, String delta) {
-        return TextStreamPart.builder().type(TYPE_TEXT_DELTA).id(id).delta(delta).build();
+        return TextStreamPart.builder().type(PartType.TEXT_DELTA).id(id).delta(delta).build();
     }
 
     /**
      * Creates a text block end event.
      */
     public static TextStreamPart textEnd(String id) {
-        return TextStreamPart.builder().type(TYPE_TEXT_END).id(id).build();
+        return TextStreamPart.builder().type(PartType.TEXT_END).id(id).build();
     }
 
     /**
      * Creates a reasoning block start event.
      */
     public static TextStreamPart reasoningStart(String id) {
-        return TextStreamPart.builder().type(TYPE_REASONING_START).id(id).build();
+        return TextStreamPart.builder().type(PartType.REASONING_START).id(id).build();
     }
 
     /**
@@ -200,7 +180,7 @@ public class TextStreamPart {
     public static TextStreamPart reasoningDelta(String id, String delta,
         Map<String, Object> providerMetadata) {
         return TextStreamPart.builder()
-            .type(TYPE_REASONING_DELTA)
+            .type(PartType.REASONING_DELTA)
             .id(id)
             .delta(delta)
             .providerMetadata(providerMetadata)
@@ -211,7 +191,7 @@ public class TextStreamPart {
      * Creates a reasoning block end event.
      */
     public static TextStreamPart reasoningEnd(String id) {
-        return TextStreamPart.builder().type(TYPE_REASONING_END).id(id).build();
+        return TextStreamPart.builder().type(PartType.REASONING_END).id(id).build();
     }
 
     /**
@@ -219,7 +199,7 @@ public class TextStreamPart {
      */
     public static TextStreamPart toolInputStart(String id, String toolCallId, String toolName) {
         return TextStreamPart.builder()
-            .type(TYPE_TOOL_INPUT_START)
+            .type(PartType.TOOL_INPUT_START)
             .id(id)
             .toolCallId(toolCallId)
             .toolName(toolName)
@@ -232,7 +212,7 @@ public class TextStreamPart {
     public static TextStreamPart toolInputDelta(String id, String toolCallId, String toolName,
         String delta) {
         return TextStreamPart.builder()
-            .type(TYPE_TOOL_INPUT_DELTA)
+            .type(PartType.TOOL_INPUT_DELTA)
             .id(id)
             .toolCallId(toolCallId)
             .toolName(toolName)
@@ -245,7 +225,7 @@ public class TextStreamPart {
      */
     public static TextStreamPart toolCall(ToolCall toolCall) {
         return TextStreamPart.builder()
-            .type(TYPE_TOOL_CALL)
+            .type(PartType.TOOL_CALL)
             .toolCallId(toolCall.getToolCallId())
             .toolName(toolCall.getToolName())
             .input(toolCall.getInput())
@@ -258,7 +238,7 @@ public class TextStreamPart {
      */
     public static TextStreamPart toolResult(ToolResult toolResult) {
         return TextStreamPart.builder()
-            .type(TYPE_TOOL_RESULT)
+            .type(PartType.TOOL_RESULT)
             .toolCallId(toolResult.getToolCallId())
             .toolName(toolResult.getToolName())
             .result(toolResult.getResult())
@@ -271,7 +251,7 @@ public class TextStreamPart {
      */
     public static TextStreamPart toolError(ToolError toolError) {
         return TextStreamPart.builder()
-            .type(TYPE_TOOL_ERROR)
+            .type(PartType.TOOL_ERROR)
             .toolCallId(toolError.getToolCallId())
             .toolName(toolError.getToolName())
             .errorText(toolError.getErrorText())
@@ -284,7 +264,7 @@ public class TextStreamPart {
      */
     public static TextStreamPart source(GenerationContentPart source) {
         return TextStreamPart.builder()
-            .type(TYPE_SOURCE)
+            .type(PartType.SOURCE)
             .id(source.getId())
             .url(source.getUrl())
             .title(source.getTitle())
@@ -297,7 +277,7 @@ public class TextStreamPart {
      */
     public static TextStreamPart file(GenerationContentPart file) {
         return TextStreamPart.builder()
-            .type(TYPE_FILE)
+            .type(PartType.FILE)
             .id(file.getId())
             .url(file.getUrl())
             .title(file.getTitle())
@@ -315,7 +295,7 @@ public class TextStreamPart {
         GenerationRequestMetadata request, GenerationResponseMetadata response,
         Map<String, Object> providerMetadata) {
         return TextStreamPart.builder()
-            .type(TYPE_FINISH_STEP)
+            .type(PartType.FINISH_STEP)
             .stepIndex(stepIndex)
             .finishReason(finishReason)
             .rawFinishReason(rawFinishReason)
@@ -333,7 +313,7 @@ public class TextStreamPart {
     public static TextStreamPart finish(FinishReason finishReason, String rawFinishReason,
         LanguageModelUsage usage) {
         return TextStreamPart.builder()
-            .type(TYPE_FINISH)
+            .type(PartType.FINISH)
             .finishReason(finishReason)
             .rawFinishReason(rawFinishReason)
             .usage(usage)
@@ -344,13 +324,70 @@ public class TextStreamPart {
      * Creates a sanitized raw diagnostic event.
      */
     public static TextStreamPart raw(Map<String, Object> metadata) {
-        return TextStreamPart.builder().type(TYPE_RAW).metadata(metadata).build();
+        return TextStreamPart.builder().type(PartType.RAW).metadata(metadata).build();
     }
 
     /**
      * Creates a stream error event.
      */
     public static TextStreamPart error(String errorText) {
-        return TextStreamPart.builder().type(TYPE_ERROR).errorText(errorText).build();
+        return TextStreamPart.builder().type(PartType.ERROR).errorText(errorText).build();
+    }
+
+    private TextStreamPart validate() {
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException("stream part type must not be blank");
+        }
+        switch (type) {
+            case PartType.START -> requireText(messageId, "start stream part messageId");
+            case PartType.START_STEP -> requirePresent(stepIndex, "start-step stream part stepIndex");
+            case PartType.TEXT_START, PartType.TEXT_END, PartType.REASONING_START,
+                PartType.REASONING_END -> requireText(id, type + " stream part id");
+            case PartType.TEXT_DELTA, PartType.REASONING_DELTA -> {
+                requireText(id, type + " stream part id");
+                requirePresent(delta, type + " stream part delta");
+            }
+            case PartType.TOOL_INPUT_START -> {
+                requireText(id, "tool-input-start stream part id");
+                requireText(toolCallId, "tool-input-start stream part toolCallId");
+                requireText(toolName, "tool-input-start stream part toolName");
+            }
+            case PartType.TOOL_INPUT_DELTA -> {
+                requireText(id, "tool-input-delta stream part id");
+                requireText(toolCallId, "tool-input-delta stream part toolCallId");
+                requireText(toolName, "tool-input-delta stream part toolName");
+                requirePresent(delta, "tool-input-delta stream part delta");
+            }
+            case PartType.TOOL_CALL, PartType.TOOL_RESULT, PartType.TOOL_ERROR -> {
+                requireText(toolCallId, type + " stream part toolCallId");
+                requireText(toolName, type + " stream part toolName");
+            }
+            case PartType.SOURCE, PartType.FILE -> requireText(id, type + " stream part id");
+            case PartType.FINISH_STEP -> requirePresent(stepIndex,
+                "finish-step stream part stepIndex");
+            case PartType.FINISH, PartType.RAW, PartType.ABORT -> {
+            }
+            case PartType.ERROR -> requireText(errorText, "error stream part errorText");
+            default -> throw new IllegalArgumentException("unsupported stream part type: " + type);
+        }
+        return this;
+    }
+
+    private static void requireText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
+    }
+
+    private static void requirePresent(Object value, String name) {
+        if (value == null) {
+            throw new IllegalArgumentException(name + " must not be null");
+        }
+    }
+
+    public static class TextStreamPartBuilder {
+        public TextStreamPart build() {
+            return uncheckedBuild().validate();
+        }
     }
 }

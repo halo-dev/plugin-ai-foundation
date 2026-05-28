@@ -24,16 +24,11 @@ import lombok.NoArgsConstructor;
  * {@link #toolResult(ToolResult)} over manually setting {@code type}.
  */
 @Data
-@Builder
+@Builder(buildMethodName = "uncheckedBuild")
 @NoArgsConstructor
 @AllArgsConstructor
 public class ModelMessagePart {
-    public static final String TYPE_TEXT = PartType.TEXT;
-    public static final String TYPE_TOOL_CALL = PartType.TOOL_CALL;
-    public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
-    public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
-    public static final String TYPE_REASONING = PartType.REASONING;
-
+                    
     /**
      * Part discriminator. Use values from {@link PartType}.
      */
@@ -81,7 +76,7 @@ public class ModelMessagePart {
      * @return a text part
      */
     public static ModelMessagePart text(String text) {
-        return ModelMessagePart.builder().type(TYPE_TEXT).text(text).build();
+        return ModelMessagePart.builder().type(PartType.TEXT).text(text).build();
     }
 
     /**
@@ -99,7 +94,7 @@ public class ModelMessagePart {
      */
     public static ModelMessagePart reasoning(ReasoningPart reasoning) {
         return ModelMessagePart.builder()
-            .type(TYPE_REASONING)
+            .type(PartType.REASONING)
             .text(reasoning.getText())
             .signature(reasoning.getSignature())
             .providerOptions(reasoning.getProviderMetadata())
@@ -114,7 +109,7 @@ public class ModelMessagePart {
      */
     public static ModelMessagePart toolCall(ToolCall toolCall) {
         return ModelMessagePart.builder()
-            .type(TYPE_TOOL_CALL)
+            .type(PartType.TOOL_CALL)
             .toolCallId(toolCall.getToolCallId())
             .toolName(toolCall.getToolName())
             .input(toolCall.getInput())
@@ -132,7 +127,7 @@ public class ModelMessagePart {
      */
     public static ModelMessagePart toolResult(ToolResult toolResult) {
         return ModelMessagePart.builder()
-            .type(TYPE_TOOL_RESULT)
+            .type(PartType.TOOL_RESULT)
             .toolCallId(toolResult.getToolCallId())
             .toolName(toolResult.getToolName())
             .result(toolResult.getResult())
@@ -144,10 +139,70 @@ public class ModelMessagePart {
      */
     public static ModelMessagePart toolError(ToolError toolError) {
         return ModelMessagePart.builder()
-            .type(TYPE_TOOL_ERROR)
+            .type(PartType.TOOL_ERROR)
             .toolCallId(toolError.getToolCallId())
             .toolName(toolError.getToolName())
             .errorText(toolError.getErrorText())
             .build();
+    }
+
+    private ModelMessagePart validate() {
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException("message part type must not be blank");
+        }
+        switch (type) {
+            case PartType.TEXT -> rejectFields("text", signature, toolCallId, toolName, input,
+                result, errorText, providerOptions);
+            case PartType.REASONING -> {
+                if ((text == null || text.isBlank())
+                    && (providerOptions == null || providerOptions.isEmpty())) {
+                    throw new IllegalArgumentException(
+                        "reasoning message part must include text or provider options");
+                }
+                rejectFields("reasoning", toolCallId, toolName, input, result,
+                    errorText);
+            }
+            case PartType.TOOL_CALL -> {
+                requireText(toolCallId, "tool-call message part toolCallId");
+                requireText(toolName, "tool-call message part toolName");
+                rejectFields("tool-call", text, signature, result, errorText,
+                    providerOptions);
+            }
+            case PartType.TOOL_RESULT -> {
+                requireText(toolCallId, "tool-result message part toolCallId");
+                requireText(toolName, "tool-result message part toolName");
+                rejectFields("tool-result", text, signature, input, errorText,
+                    providerOptions);
+            }
+            case PartType.TOOL_ERROR -> {
+                requireText(toolCallId, "tool-error message part toolCallId");
+                requireText(toolName, "tool-error message part toolName");
+                requireText(errorText, "tool-error message part errorText");
+                rejectFields("tool-error", text, signature, input, result,
+                    providerOptions);
+            }
+            default -> throw new IllegalArgumentException("unsupported message part type: " + type);
+        }
+        return this;
+    }
+
+    private static void requireText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
+    }
+
+    private static void rejectFields(String partName, Object... disallowed) {
+        for (var value : disallowed) {
+            if (value != null) {
+                throw new IllegalArgumentException(partName + " message part has invalid fields");
+            }
+        }
+    }
+
+    public static class ModelMessagePartBuilder {
+        public ModelMessagePart build() {
+            return uncheckedBuild().validate();
+        }
     }
 }

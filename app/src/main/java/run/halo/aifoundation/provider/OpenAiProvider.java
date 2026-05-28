@@ -14,6 +14,7 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.OpenAiCompatibleEmbeddingModel;
 import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.OpenAiStructuredOutputOptions;
+import run.halo.aifoundation.provider.support.OpenAiToolCallingOptions;
 
 @Component
 public class OpenAiProvider extends AbstractAiProviderType {
@@ -89,14 +90,13 @@ public class OpenAiProvider extends AbstractAiProviderType {
 
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
-        return new LanguageModelProviderOptions(false, false, null,
+        return new LanguageModelProviderOptions(false, false, OpenAiToolCallingOptions::build,
             OpenAiStructuredOutputOptions::buildBasic);
     }
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("openai", false,
-            OpenAiEmbeddingOptionsFactory::build);
+        return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
     }
 
     private OpenAiApi buildOpenAiApi(AiProvider provider, String apiKey) {

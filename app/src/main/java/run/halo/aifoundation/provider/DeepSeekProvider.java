@@ -13,6 +13,7 @@ import run.halo.aifoundation.OutputType;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.OpenAiToolCallingOptions;
 
 @Component
 public class DeepSeekProvider extends AbstractAiProviderType {
@@ -108,11 +109,11 @@ public class DeepSeekProvider extends AbstractAiProviderType {
                     .stop(request.getStopSequences())
                     .internalToolExecutionEnabled(false)
                     .toolCallbacks(toolCallbacks)
-                    .extraBody(Map.of("thinking", Map.of("type", "disabled")));
+                    .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
+                applyDeepSeekExtraBody(builder, request);
                 applyJsonObjectResponseFormat(builder, request);
-                if (!toolNames.isEmpty()) {
-                    builder.toolNames(toolNames);
-                }
+                OpenAiToolCallingOptions.applyToolChoice(builder, request.getToolChoice(),
+                    toolNames);
                 return builder.build();
             },
             this::buildStructuredOutputChatOptions
@@ -127,9 +128,20 @@ public class DeepSeekProvider extends AbstractAiProviderType {
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
             .stop(request.getStopSequences())
-            .extraBody(Map.of("thinking", Map.of("type", "disabled")));
+            .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
+        applyDeepSeekExtraBody(builder, request);
         applyJsonObjectResponseFormat(builder, request);
         return builder.build();
+    }
+
+    private void applyDeepSeekExtraBody(OpenAiChatOptions.Builder builder,
+        GenerateTextRequest request) {
+        var options = request.getProviderOptions() != null
+            ? request.getProviderOptions().get(getProviderType())
+            : null;
+        if (options != null && !options.isEmpty()) {
+            builder.extraBody(Map.copyOf(options));
+        }
     }
 
     private void applyJsonObjectResponseFormat(OpenAiChatOptions.Builder builder,

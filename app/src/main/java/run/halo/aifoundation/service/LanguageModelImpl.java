@@ -1,7 +1,6 @@
 package run.halo.aifoundation.service;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,10 +8,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -23,30 +20,17 @@ import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.function.FunctionToolCallback;
-import org.springframework.core.ParameterizedTypeReference;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import run.halo.aifoundation.FinishReason;
 import run.halo.aifoundation.AiGenerationCancelledException;
 import run.halo.aifoundation.AiGenerationTimeoutException;
-import run.halo.aifoundation.GenerationErrorEvent;
 import run.halo.aifoundation.GenerationContentPart;
-import run.halo.aifoundation.GenerationFinishEvent;
-import run.halo.aifoundation.GenerationLifecycle;
 import run.halo.aifoundation.GenerationRequestMetadata;
 import run.halo.aifoundation.GenerationResponseMetadata;
-import run.halo.aifoundation.GenerationStartEvent;
 import run.halo.aifoundation.GenerationStep;
-import run.halo.aifoundation.GenerationStepFinishEvent;
-import run.halo.aifoundation.GenerationStepStartEvent;
-import run.halo.aifoundation.GenerationToolCallFinishEvent;
-import run.halo.aifoundation.GenerationToolCallStartEvent;
 import run.halo.aifoundation.GenerationWarning;
 import run.halo.aifoundation.GenerationTimeouts;
 import run.halo.aifoundation.GenerateTextRequest;
@@ -57,7 +41,6 @@ import run.halo.aifoundation.ModelMessage;
 import run.halo.aifoundation.ModelMessagePart;
 import run.halo.aifoundation.ModelMessageRole;
 import run.halo.aifoundation.PartType;
-import run.halo.aifoundation.OutputSpec;
 import run.halo.aifoundation.OutputType;
 import run.halo.aifoundation.ReasoningPart;
 import run.halo.aifoundation.PreparedStep;
@@ -70,11 +53,9 @@ import run.halo.aifoundation.ToolCall;
 import run.halo.aifoundation.ToolChoice;
 import run.halo.aifoundation.ToolDefinition;
 import run.halo.aifoundation.ToolError;
-import run.halo.aifoundation.ToolExecutionContext;
 import run.halo.aifoundation.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
@@ -85,19 +66,20 @@ public class LanguageModelImpl implements LanguageModel {
         "structured-output-prompt-guidance";
     private static final String WARNING_STRUCTURED_OUTPUT_STRICT_NOT_GUARANTEED =
         "structured-output-strict-not-guaranteed";
-    private static final String WARNING_TOOL_CHOICE_REQUIRED_UNSUPPORTED =
-        "tool-choice-required-unsupported";
     private static final String WARNING_TOOL_INPUT_EXAMPLES_IGNORED =
         "tool-input-examples-ignored";
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
-    };
-    private static final TypeReference<Object> OBJECT_TYPE = new TypeReference<>() {
-    };
 
     private final ChatModel chatModel;
     private final String providerType;
     private final LanguageModelProviderOptions providerOptions;
+    private final LanguageModelRequestValidator requestValidator;
+    private final LanguageModelMessageMapper messageMapper;
+    private final LanguageModelChatOptionsBuilder chatOptionsBuilder;
+    private final LanguageModelResponseMapper responseMapper;
+    private final LanguageModelToolCallMapper toolCallMapper;
+    private final LanguageModelToolExecutor toolExecutor;
+    private final LanguageModelStructuredOutputHandler structuredOutputHandler;
 
     public LanguageModelImpl(ChatModel chatModel, String providerType) {
         this(chatModel, providerType, LanguageModelProviderOptions.defaults());
@@ -110,6 +92,17 @@ public class LanguageModelImpl implements LanguageModel {
         this.providerOptions = providerOptions != null
             ? providerOptions
             : LanguageModelProviderOptions.defaults();
+        this.requestValidator = new LanguageModelRequestValidator(providerType,
+            this.providerOptions.reasoningHistorySupported());
+        this.messageMapper = new LanguageModelMessageMapper(providerType);
+        this.chatOptionsBuilder = new LanguageModelChatOptionsBuilder(providerType,
+            this.providerOptions, this::writeJson);
+        this.responseMapper = new LanguageModelResponseMapper(providerType, messageMapper);
+        this.toolCallMapper = new LanguageModelToolCallMapper();
+        this.structuredOutputHandler =
+            new LanguageModelStructuredOutputHandler(responseMapper, this::writeJson);
+        this.toolExecutor = new LanguageModelToolExecutor(structuredOutputHandler::validateJsonValue,
+            this::checkCancellation, this::withToolTimeout);
     }
 
     @Override
@@ -119,7 +112,8 @@ public class LanguageModelImpl implements LanguageModel {
 
     @Override
     public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
-        var run = new GenerationRun(request);
+        var run = new LanguageModelGenerationRun(request, providerType,
+            resolvedStopCondition(request));
         return Mono.fromCallable(() -> generateTextBlocking(request, run))
             .subscribeOn(Schedulers.boundedElastic())
             .transform(mono -> withTotalTimeout(mono, request))
@@ -128,7 +122,8 @@ public class LanguageModelImpl implements LanguageModel {
 
     @Override
     public StreamTextResult streamText(GenerateTextRequest request) {
-        var run = new GenerationRun(request);
+        var run = new LanguageModelGenerationRun(request, providerType,
+            resolvedStopCondition(request));
         var fullStream = StreamProtocolNormalizer.normalize(
             streamTextParts(request, run)
                 .transform(stream -> withTotalTimeout(stream, request))
@@ -150,14 +145,15 @@ public class LanguageModelImpl implements LanguageModel {
         return new StreamTextResult(
             fullStream,
             textStream,
-            partialOutputStream(request, textStream),
-            elementStream(request, textStream),
+            structuredOutputHandler.partialOutputStream(request, textStream),
+            structuredOutputHandler.elementStream(request, textStream),
             output,
             result
         );
     }
 
-    private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request, GenerationRun run) {
+    private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request,
+        LanguageModelGenerationRun run) {
         if (hasTools(request)) {
             return streamTextWithTools(request, run);
         }
@@ -238,7 +234,8 @@ public class LanguageModelImpl implements LanguageModel {
         });
     }
 
-    private Flux<TextStreamPart> streamTextWithTools(GenerateTextRequest request, GenerationRun run) {
+    private Flux<TextStreamPart> streamTextWithTools(GenerateTextRequest request,
+        LanguageModelGenerationRun run) {
         return Flux.defer(() -> {
             List<org.springframework.ai.chat.messages.Message> messages;
             try {
@@ -262,7 +259,8 @@ public class LanguageModelImpl implements LanguageModel {
         });
     }
 
-    private Flux<TextStreamPart> streamStructuredText(GenerateTextRequest request, GenerationRun run) {
+    private Flux<TextStreamPart> streamStructuredText(GenerateTextRequest request,
+        LanguageModelGenerationRun run) {
         return Flux.defer(() -> {
             List<org.springframework.ai.chat.messages.Message> messages;
             try {
@@ -305,7 +303,8 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private Flux<TextStreamPart> completeStructuredSingleStep(GenerateTextRequest request,
-        GenerationRun run, StreamStepAccumulator accumulator, UsageAccumulator totalUsage) {
+        LanguageModelGenerationRun run, StreamStepAccumulator accumulator,
+        UsageAccumulator totalUsage) {
         if (accumulator.failed) {
             return Flux.empty();
         }
@@ -317,7 +316,7 @@ public class LanguageModelImpl implements LanguageModel {
             parts.add(TextStreamPart.textEnd(accumulator.textId));
         }
         if (accumulator.lastResponse != null) {
-            var rawDiagnostic = sanitizedRawDiagnostic(accumulator.lastResponse);
+            var rawDiagnostic = responseMapper.sanitizedRawDiagnostic(accumulator.lastResponse);
             if (!rawDiagnostic.isEmpty()) {
                 parts.add(TextStreamPart.raw(rawDiagnostic));
             }
@@ -347,7 +346,7 @@ public class LanguageModelImpl implements LanguageModel {
     private Flux<TextStreamPart> streamToolStep(GenerateTextRequest request,
         List<org.springframework.ai.chat.messages.Message> messages,
         List<ModelMessage> executionMessages, int stepIndex, UsageAccumulator totalUsage,
-        List<GenerationStep> completedSteps, StopCondition stopWhen, GenerationRun run) {
+        List<GenerationStep> completedSteps, StopCondition stopWhen, LanguageModelGenerationRun run) {
         return Flux.defer(() -> {
             PreparedInvocation prepared;
             try {
@@ -407,7 +406,7 @@ public class LanguageModelImpl implements LanguageModel {
             parts.add(TextStreamPart.reasoningDelta(accumulator.reasoningId, reasoning,
                 reasoningProviderMetadata(reasoning, metadata)));
         }
-        var text = extractText(response);
+        var text = responseMapper.extractText(response);
         if (hasText(text)) {
             if (accumulator.reasoningStarted) {
                 accumulator.reasoningStarted = false;
@@ -419,8 +418,8 @@ public class LanguageModelImpl implements LanguageModel {
             }
             parts.add(TextStreamPart.textDelta(accumulator.textId, text));
         }
-        sourceAndFileParts(response).stream()
-            .map(this::streamPart)
+        responseMapper.sourceAndFileParts(response).stream()
+            .map(responseMapper::streamPart)
             .forEach(parts::add);
         return Flux.fromIterable(parts);
     }
@@ -429,7 +428,7 @@ public class LanguageModelImpl implements LanguageModel {
         List<org.springframework.ai.chat.messages.Message> messages,
         StreamStepAccumulator accumulator, List<ModelMessage> executionMessages,
         UsageAccumulator totalUsage, List<GenerationStep> completedSteps, StopCondition stopWhen,
-        GenerationRun run) {
+        LanguageModelGenerationRun run) {
         if (accumulator.failed) {
             return Flux.empty();
         }
@@ -441,7 +440,7 @@ public class LanguageModelImpl implements LanguageModel {
             parts.add(TextStreamPart.textEnd(accumulator.textId));
         }
         if (accumulator.lastResponse != null) {
-            var rawDiagnostic = sanitizedRawDiagnostic(accumulator.lastResponse);
+            var rawDiagnostic = responseMapper.sanitizedRawDiagnostic(accumulator.lastResponse);
             if (!rawDiagnostic.isEmpty()) {
                 parts.add(TextStreamPart.raw(rawDiagnostic));
             }
@@ -451,9 +450,9 @@ public class LanguageModelImpl implements LanguageModel {
         toolCalls.forEach(toolCall -> parts.add(TextStreamPart.toolCall(toolCall)));
         var toolExecutionAllowed = accumulator.stepIndex + 1 < resolvedStepLimit(request);
         var toolResults = toolExecutionAllowed
-            ? executeToolCalls(toolCalls, request, accumulator.stepIndex, executionMessages,
+                ? toolExecutor.execute(toolCalls, request, accumulator.stepIndex, executionMessages,
                 accumulator.providerMetadata(), run)
-            : stepLimitReached(toolCalls);
+                : toolExecutor.stepLimitReached(toolCalls);
         toolResults.results().forEach(result -> parts.add(TextStreamPart.toolResult(result)));
         toolResults.errors().forEach(error -> parts.add(TextStreamPart.toolError(error)));
 
@@ -505,7 +504,7 @@ public class LanguageModelImpl implements LanguageModel {
             accumulator.response(), accumulator.providerMetadata()));
 
         messages.add(accumulator.output());
-        messages.add(toolResponseMessage(toolResults.results()));
+        messages.add(messageMapper.toolResponseMessage(toolResults.results()));
         executionMessages.addAll(accumulator.response().getMessages());
         if (!toolResults.results().isEmpty()) {
             executionMessages.add(ModelMessage.tool(toolResults.results().stream()
@@ -551,7 +550,8 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
     }
 
-    private GenerateTextResult generateTextBlocking(GenerateTextRequest request, GenerationRun run) {
+    private GenerateTextResult generateTextBlocking(GenerateTextRequest request,
+        LanguageModelGenerationRun run) {
         checkCancellation(request);
         validateRequest(request);
         assertToolCallingSupported(request);
@@ -584,9 +584,9 @@ public class LanguageModelImpl implements LanguageModel {
             var step = mapStep(response, stepIndex);
             var toolExecutionAllowed = stepIndex + 1 < resolvedStepLimit(stepRequest);
             var toolResults = toolExecutionAllowed
-                ? executeToolCalls(step.toolCalls(), stepRequest, stepIndex, prepared.executionMessages(),
-                    step.providerMetadata(), run)
-                : stepLimitReached(step.toolCalls());
+                ? toolExecutor.execute(step.toolCalls(), stepRequest, stepIndex,
+                prepared.executionMessages(), step.providerMetadata(), run)
+                : toolExecutor.stepLimitReached(step.toolCalls());
             var stepContent = new ArrayList<>(step.content());
             toolResults.results().stream()
                 .map(GenerationContentPart::toolResult)
@@ -647,7 +647,7 @@ public class LanguageModelImpl implements LanguageModel {
             checkCancellation(stepRequest);
             messages = new ArrayList<>(prepared.messages());
             messages.add(step.output());
-            messages.add(toolResponseMessage(toolResults.results()));
+            messages.add(messageMapper.toolResponseMessage(toolResults.results()));
             executionMessages = new ArrayList<>(prepared.executionMessages());
             executionMessages.addAll(step.response().getMessages());
             if (!toolResults.results().isEmpty()) {
@@ -674,9 +674,10 @@ public class LanguageModelImpl implements LanguageModel {
         if (hasStructuredOutput(request)) {
             var outputSourceText = steps.isEmpty() ? text : steps.get(steps.size() - 1).getText();
             try {
-                structuredOutput = parseStructuredOutput(request.getOutput(), outputSourceText);
+                structuredOutput = structuredOutputHandler.parse(request.getOutput(),
+                    outputSourceText);
             } catch (StructuredOutputValidationException e) {
-                throw enrichStructuredError(e, request.getOutput(), outputSourceText,
+                throw structuredOutputHandler.enrich(e, request.getOutput(), outputSourceText,
                     steps.isEmpty() ? null : steps.get(steps.size() - 1).getStepIndex(),
                     usage, finalResponseMetadata);
             }
@@ -723,7 +724,7 @@ public class LanguageModelImpl implements LanguageModel {
         if (hasText(request.getSystem())) {
             messages.add(new SystemMessage(request.getSystem().trim()));
         }
-        var outputInstruction = structuredOutputInstruction(request.getOutput());
+        var outputInstruction = structuredOutputHandler.instruction(request.getOutput());
         if (hasText(outputInstruction)) {
             messages.add(new SystemMessage(outputInstruction));
         }
@@ -731,7 +732,7 @@ public class LanguageModelImpl implements LanguageModel {
             messages.add(new UserMessage(request.getPrompt().trim()));
         } else {
             request.getMessages().stream()
-                .map(this::convertMessage)
+                .map(messageMapper::convert)
                 .forEach(messages::add);
         }
         return messages;
@@ -758,7 +759,7 @@ public class LanguageModelImpl implements LanguageModel {
         }
         var stepRequest = applyPreparedStep(baseRequest, prepared);
         validateActiveTools(baseRequest, prepared);
-        validateTools(stepRequest);
+        requestValidator.validateTools(stepRequest);
         List<ModelMessage> executionMessages = prepared.getMessages() != null
             ? new ArrayList<>(prepared.getMessages())
             : new ArrayList<>(nullSafe(currentExecutionMessages));
@@ -802,6 +803,7 @@ public class LanguageModelImpl implements LanguageModel {
             .providerOptions(prepared.getProviderOptions() != null
                 ? prepared.getProviderOptions()
                 : request.getProviderOptions())
+            .headers(request.getHeaders())
             .metadata(request.getMetadata())
             .context(request.getContext())
             .output(request.getOutput())
@@ -837,7 +839,7 @@ public class LanguageModelImpl implements LanguageModel {
         if (hasText(request.getSystem())) {
             messages.add(ModelMessage.system(request.getSystem().trim()));
         }
-        var outputInstruction = structuredOutputInstruction(request.getOutput());
+        var outputInstruction = structuredOutputHandler.instruction(request.getOutput());
         if (hasText(outputInstruction)) {
             messages.add(ModelMessage.system(outputInstruction));
         }
@@ -850,149 +852,12 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private void validateRequest(GenerateTextRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("request must not be null");
-        }
-        if (request.getSystem() != null && request.getSystem().isBlank()) {
-            throw new IllegalArgumentException("system must not be blank");
-        }
-        var hasPrompt = hasText(request.getPrompt());
-        var hasMessages = request.getMessages() != null && !request.getMessages().isEmpty();
-        if (hasPrompt == hasMessages) {
-            throw new IllegalArgumentException("exactly one of prompt or messages must be provided");
-        }
-        if (request.getPrompt() != null && !hasPrompt) {
-            throw new IllegalArgumentException("prompt must not be blank");
-        }
-        if (hasMessages) {
-            for (var message : request.getMessages()) {
-                validateMessage(message);
-            }
-        }
-        validateOutput(request.getOutput());
-        validateTools(request);
-    }
-
-    private void validateMessage(ModelMessage message) {
-        if (message == null) {
-            throw new IllegalArgumentException("messages must not contain null items");
-        }
-        if (message.getRole() == null) {
-            throw new IllegalArgumentException("message role must not be null");
-        }
-        if (message.getContent() == null || message.getContent().isEmpty()) {
-            throw new IllegalArgumentException("message content must not be empty");
-        }
-        for (var part : message.getContent()) {
-            validatePart(message.getRole(), part);
-        }
-    }
-
-    private void validatePart(ModelMessageRole role, ModelMessagePart part) {
-        if (part == null) {
-            throw new IllegalArgumentException("message content must not contain null parts");
-        }
-        if (PartType.isText(part.getType()) && !hasText(part.getText())) {
-            throw new IllegalArgumentException("text content part must not be blank");
-        }
-        if (PartType.isText(part.getType())) {
-            return;
-        }
-        if (PartType.isReasoning(part.getType())) {
-            if (role != ModelMessageRole.ASSISTANT) {
-                throw new IllegalArgumentException("reasoning content part is only supported for assistant messages");
-            }
-            if (!supportsReasoningHistory()) {
-                throw new IllegalArgumentException("reasoning content is not supported by provider type: "
-                    + providerType);
-            }
-            if (!hasText(part.getText()) && (part.getProviderOptions() == null
-                || part.getProviderOptions().isEmpty())) {
-                throw new IllegalArgumentException("reasoning content part must include text or provider metadata");
-            }
-            return;
-        }
-        if (role == ModelMessageRole.TOOL && PartType.isToolResponse(part.getType())) {
-            if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
-                throw new IllegalArgumentException("tool content part must include toolCallId and toolName");
-            }
-            return;
-        }
-        throw new IllegalArgumentException("unsupported content part type: " + part.getType());
-    }
-
-    private void validateTools(GenerateTextRequest request) {
-        var tools = request.getTools();
-        if (tools == null || tools.isEmpty()) {
-            if (request.getToolChoice() != null
-                && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
-                throw new IllegalArgumentException("toolChoice toolName requires tools");
-            }
-            return;
-        }
-        var names = new HashSet<String>();
-        for (var tool : tools) {
-            if (tool == null) {
-                throw new IllegalArgumentException("tools must not contain null items");
-            }
-            if (!hasText(tool.getName()) || !tool.getName().matches("[A-Za-z0-9_-]+")) {
-                throw new IllegalArgumentException("tool name must contain only letters, numbers, '_' or '-'");
-            }
-            if (!names.add(tool.getName())) {
-                throw new IllegalArgumentException("duplicate tool name: " + tool.getName());
-            }
-            if (tool.getInputSchema() != null && !(tool.getInputSchema() instanceof Map)) {
-                throw new IllegalArgumentException("tool inputSchema must be a JSON object");
-            }
-            validateSchemaObject(tool.getInputSchema(), "tool inputSchema");
-            validateSchemaObject(tool.getOutputSchema(), "tool outputSchema");
-        }
-        var choice = request.getToolChoice();
-        if (choice != null && choice.getType() == ToolChoice.Type.TOOL
-            && !names.contains(choice.getToolName())) {
-            throw new IllegalArgumentException("toolChoice references unknown tool: "
-                + choice.getToolName());
-        }
-    }
-
-    private void validateOutput(OutputSpec output) {
-        if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
-            return;
-        }
-        switch (output.getType()) {
-            case OBJECT -> validateRequiredSchemaObject(output.getSchema(), "output schema");
-            case ARRAY -> validateRequiredSchemaObject(output.getElementSchema(), "output elementSchema");
-            case CHOICE -> {
-                if (output.getChoices() == null || output.getChoices().isEmpty()) {
-                    throw new IllegalArgumentException("output choices must not be empty");
-                }
-                if (output.getChoices().stream().anyMatch(choice -> !hasText(choice))) {
-                    throw new IllegalArgumentException("output choices must not contain blank values");
-                }
-            }
-            case JSON -> {
-            }
-            default -> {
-            }
-        }
-    }
-
-    private void validateSchemaObject(Map<String, Object> schema, String name) {
-        if (schema == null || schema.isEmpty()) {
-            return;
-        }
-    }
-
-    private void validateRequiredSchemaObject(Map<String, Object> schema, String name) {
-        if (schema == null || schema.isEmpty()) {
-            throw new IllegalArgumentException(name + " must be a JSON object");
-        }
+        requestValidator.validate(request);
     }
 
     private void assertToolCallingSupported(GenerateTextRequest request) {
-        if (hasTools(request) && !supportsToolCalling()) {
-            throw new IllegalArgumentException(toolCallingUnsupportedMessage());
-        }
+        chatOptionsBuilder.assertRequestSupported(request, supportsToolCalling(),
+            toolCallingUnsupportedMessage());
     }
 
     protected boolean supportsToolCalling() {
@@ -1007,44 +872,9 @@ public class LanguageModelImpl implements LanguageModel {
         return "Tool calling is not supported by provider type: " + providerType;
     }
 
-    private ChatOptions buildChatOptions(GenerateTextRequest request) {
-        if (hasTools(request)
-            && (request.getToolChoice() == null
-            || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
-            var toolNames = toolNames(request);
-            if (providerOptions.toolCallingChatOptionsFactory() != null) {
-                return providerOptions.toolCallingChatOptionsFactory()
-                    .build(request, toolCallbacks(request), toolNames);
-            }
-            var builder = DefaultToolCallingChatOptions.builder()
-                .temperature(request.getTemperature())
-                .maxTokens(request.getMaxOutputTokens())
-                .topP(request.getTopP())
-                .topK(request.getTopK())
-                .presencePenalty(request.getPresencePenalty())
-                .frequencyPenalty(request.getFrequencyPenalty())
-                .stopSequences(request.getStopSequences())
-                .internalToolExecutionEnabled(false)
-                .toolCallbacks(toolCallbacks(request));
-            if (request.getToolChoice() != null
-                && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
-                builder.toolNames(toolNames);
-            }
-            return builder.build();
-        }
-        if (hasStructuredOutput(request)
-            && providerOptions.structuredOutputChatOptionsFactory() != null) {
-            return providerOptions.structuredOutputChatOptionsFactory().build(request);
-        }
-        return ChatOptions.builder()
-            .temperature(request.getTemperature())
-            .maxTokens(request.getMaxOutputTokens())
-            .topP(request.getTopP())
-            .topK(request.getTopK())
-            .presencePenalty(request.getPresencePenalty())
-            .frequencyPenalty(request.getFrequencyPenalty())
-            .stopSequences(request.getStopSequences())
-            .build();
+    private org.springframework.ai.chat.prompt.ChatOptions buildChatOptions(
+        GenerateTextRequest request) {
+        return chatOptionsBuilder.build(request);
     }
 
     private ChatResponse callProvider(GenerateTextRequest request,
@@ -1114,90 +944,6 @@ public class LanguageModelImpl implements LanguageModel {
             lastResponse.getMetadata());
     }
 
-    private org.springframework.ai.chat.messages.Message convertMessage(ModelMessage message) {
-        return switch (message.getRole()) {
-            case SYSTEM -> new SystemMessage(textContent(message));
-            case ASSISTANT -> assistantMessage(message);
-            case USER -> new UserMessage(textContent(message));
-            case TOOL -> toolResponseMessage(message);
-        };
-    }
-
-    private String textContent(ModelMessage message) {
-        return message.getContent().stream()
-            .filter(part -> PartType.isText(part.getType()))
-            .map(ModelMessagePart::getText)
-            .reduce("", String::concat);
-    }
-
-    private AssistantMessage assistantMessage(ModelMessage message) {
-        var toolCalls = message.getContent().stream()
-            .filter(part -> PartType.isToolCall(part.getType()))
-            .map(part -> new AssistantMessage.ToolCall(part.getToolCallId(), "function",
-                part.getToolName(), writeJson(part.getInput())))
-            .toList();
-        return AssistantMessage.builder()
-            .content(textContent(message))
-            .properties(assistantProperties(message))
-            .toolCalls(toolCalls)
-            .build();
-    }
-
-    private Map<String, Object> assistantProperties(ModelMessage message) {
-        var reasoningContent = reasoningContent(message.getContent());
-        if (!hasText(reasoningContent)) {
-            return Map.of();
-        }
-        return Map.of("reasoningContent", reasoningContent);
-    }
-
-    private ToolResponseMessage toolResponseMessage(ModelMessage message) {
-        var responses = message.getContent().stream()
-            .filter(part -> PartType.isToolResponse(part.getType()))
-            .map(part -> new ToolResponseMessage.ToolResponse(part.getToolCallId(),
-                part.getToolName(), PartType.isToolError(part.getType())
-                ? part.getErrorText()
-                : writeJson(part.getResult())))
-            .toList();
-        return ToolResponseMessage.builder().responses(responses).build();
-    }
-
-    private ToolResponseMessage toolResponseMessage(List<ToolResult> results) {
-        var responses = results.stream()
-            .map(result -> new ToolResponseMessage.ToolResponse(result.getToolCallId(),
-                result.getToolName(), writeJson(result.getResult())))
-            .toList();
-        return ToolResponseMessage.builder().responses(responses).build();
-    }
-
-    private List<ToolCallback> toolCallbacks(GenerateTextRequest request) {
-        return request.getTools().stream()
-            .map(tool -> FunctionToolCallback
-                .builder(tool.getName(), (Function<Map<String, Object>, Object>) input -> Map.of())
-                .description(tool.getDescription())
-                .inputSchema(writeJson(defaultInputSchema(tool)))
-                .inputType(new ParameterizedTypeReference<Map<String, Object>>() {
-                })
-                .build())
-            .map(ToolCallback.class::cast)
-            .toList();
-    }
-
-    private Map<String, Object> defaultInputSchema(ToolDefinition tool) {
-        if (tool.getInputSchema() != null && !tool.getInputSchema().isEmpty()) {
-            return tool.getInputSchema();
-        }
-        return Map.of("type", "object", "properties", Map.of());
-    }
-
-    private Set<String> toolNames(GenerateTextRequest request) {
-        if (request.getToolChoice() != null
-            && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
-            return Set.of(request.getToolChoice().getToolName());
-        }
-        return Set.of();
-    }
-
     private StepSnapshot mapStep(ChatResponse response, int stepIndex) {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
@@ -1210,13 +956,14 @@ public class LanguageModelImpl implements LanguageModel {
         var rawFinishReason = result != null && result.getMetadata() != null
             ? result.getMetadata().getFinishReason()
             : null;
-        var toolCalls = output != null ? mapToolCalls(output.getToolCalls()) : List.<ToolCall>of();
+        var toolCalls = output != null ? toolCallMapper.mapToolCalls(output.getToolCalls())
+            : List.<ToolCall>of();
         var content = new ArrayList<GenerationContentPart>();
         reasoning.stream().map(GenerationContentPart::reasoning).forEach(content::add);
         if (hasText(text)) {
             content.add(GenerationContentPart.text(text));
         }
-        content.addAll(sourceAndFileParts(response));
+        content.addAll(responseMapper.sourceAndFileParts(response));
         toolCalls.stream().map(GenerationContentPart::toolCall).forEach(content::add);
         return new StepSnapshot(
             stepIndex,
@@ -1225,14 +972,14 @@ public class LanguageModelImpl implements LanguageModel {
             output != null ? output : new AssistantMessage(text),
             content,
             reasoning,
-            mapFinishReason(rawFinishReason),
+            responseMapper.mapFinishReason(rawFinishReason),
             rawFinishReason,
-            mapUsage(response),
+            responseMapper.mapUsage(response),
             toolCalls,
-            mapWarnings(response),
-            mapRequestMetadata(response),
-            mapResponseMetadata(response, text, reasoning, toolCalls),
-            mapMetadata(response)
+            responseMapper.mapWarnings(response),
+            responseMapper.mapRequestMetadata(response),
+            responseMapper.mapResponseMetadata(response, text, reasoning, toolCalls),
+            responseMapper.mapMetadata(response)
         );
     }
 
@@ -1259,7 +1006,7 @@ public class LanguageModelImpl implements LanguageModel {
                 return text;
             }
             if (value instanceof Map<?, ?> map) {
-                var nested = firstText((Map<String, Object>) sanitizeValue(map), keys);
+                var nested = firstText((Map<String, Object>) responseMapper.sanitizeValue(map), keys);
                 if (hasText(nested)) {
                     return nested;
                 }
@@ -1274,332 +1021,10 @@ public class LanguageModelImpl implements LanguageModel {
         providerValues.put("reasoning_content", reasoningContent);
         outputMetadata.forEach((key, value) -> {
             if (key != null && key.toLowerCase().contains("reasoning")) {
-                providerValues.put(key, sanitizeValue(value));
+                providerValues.put(key, responseMapper.sanitizeValue(value));
             }
         });
         return Map.of(providerType, providerValues);
-    }
-
-    private List<ToolCall> mapToolCalls(List<AssistantMessage.ToolCall> toolCalls) {
-        if (toolCalls == null || toolCalls.isEmpty()) {
-            return List.of();
-        }
-        return toolCalls.stream()
-            .map(toolCall -> ToolCall.builder()
-                .toolCallId(toolCall.id())
-                .toolName(toolCall.name())
-                .input(parseToolInput(toolCall.arguments()))
-                .rawInput(toolCall.arguments())
-                .providerMetadata(Map.of("type", toolCall.type()))
-                .build())
-            .toList();
-    }
-
-    private ToolExecutionBatch executeToolCalls(List<ToolCall> toolCalls,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, GenerationRun run) {
-        if (toolCalls.isEmpty()) {
-            return new ToolExecutionBatch(List.of(), List.of(), List.of());
-        }
-        var toolsByName = request.getTools() == null ? Map.<String, ToolDefinition>of()
-            : request.getTools().stream()
-                .collect(Collectors.toMap(ToolDefinition::getName, Function.identity()));
-        var results = new ArrayList<ToolResult>();
-        var errors = new ArrayList<ToolError>();
-        var warnings = new ArrayList<GenerationWarning>();
-        for (var toolCall : toolCalls) {
-            var tool = toolsByName.get(toolCall.getToolName());
-            if (tool == null) {
-                errors.add(ToolError.builder()
-                    .toolCallId(toolCall.getToolCallId())
-                    .toolName(toolCall.getToolName())
-                    .errorText("Unknown tool: " + toolCall.getToolName())
-                    .build());
-                break;
-            }
-            if (tool.getExecutor() == null) {
-                warnings.add(GenerationWarning.builder()
-                    .code("tool-not-executed")
-                    .message("Tool has no executor: " + tool.getName())
-                    .build());
-                break;
-            }
-            try {
-                checkCancellation(request);
-                if (tool.getInputSchema() != null && !tool.getInputSchema().isEmpty()) {
-                    validateJsonValue(toolCall.getInput(), tool.getInputSchema(),
-                        "$." + toolCall.getToolName() + ".input");
-                }
-                var context = ToolExecutionContext.builder()
-                    .toolCallId(toolCall.getToolCallId())
-                    .toolName(toolCall.getToolName())
-                    .input(toolCall.getInput())
-                    .stepIndex(stepIndex)
-                    .messages(List.copyOf(executionMessages))
-                    .providerMetadata(mergeProviderMetadata(stepProviderMetadata,
-                        toolCall.getProviderMetadata()))
-                    .build();
-                run.toolCallStart(stepIndex, toolCall, context.getProviderMetadata());
-                var started = Instant.now();
-                Object value;
-                try {
-                    value = withToolTimeout(tool.getExecutor().execute(context), request).block();
-                    checkCancellation(request);
-                } catch (RuntimeException e) {
-                    var error = toolError(toolCall, e);
-                    run.toolCallFinish(stepIndex, null, error, started,
-                        context.getProviderMetadata());
-                    errors.add(error);
-                    break;
-                }
-                if (tool.getOutputSchema() != null && !tool.getOutputSchema().isEmpty()) {
-                    validateJsonValue(value, tool.getOutputSchema(),
-                        "$." + toolCall.getToolName() + ".output");
-                }
-                var result = ToolResult.builder()
-                    .toolCallId(toolCall.getToolCallId())
-                    .toolName(toolCall.getToolName())
-                    .result(value)
-                    .build();
-                run.toolCallFinish(stepIndex, result, null, started,
-                    context.getProviderMetadata());
-                results.add(result);
-            } catch (RuntimeException e) {
-                var error = toolError(toolCall, e);
-                errors.add(error);
-                break;
-            }
-        }
-        return new ToolExecutionBatch(results, errors, warnings);
-    }
-
-    private ToolError toolError(ToolCall toolCall, RuntimeException e) {
-        return ToolError.builder()
-            .toolCallId(toolCall.getToolCallId())
-            .toolName(toolCall.getToolName())
-            .errorText(safeErrorMessage(e))
-            .build();
-    }
-
-    private Map<String, Object> mergeProviderMetadata(Map<String, Object> left,
-        Map<String, Object> right) {
-        var merged = new LinkedHashMap<String, Object>();
-        if (left != null) {
-            merged.putAll(left);
-        }
-        if (right != null) {
-            merged.putAll(right);
-        }
-        return merged;
-    }
-
-    private ToolExecutionBatch stepLimitReached(List<ToolCall> toolCalls) {
-        if (toolCalls.isEmpty()) {
-            return new ToolExecutionBatch(List.of(), List.of(), List.of());
-        }
-        return new ToolExecutionBatch(List.of(), List.of(), List.of(GenerationWarning.builder()
-            .code("stop-condition-reached")
-            .message("Tool calls were not executed because the generation step limit was reached")
-            .build()));
-    }
-
-    private Map<String, Object> parseToolInput(String arguments) {
-        if (!hasText(arguments)) {
-            return Map.of();
-        }
-        try {
-            var parsed = JSON_MAPPER.readValue(arguments, MAP_TYPE);
-            return parsed != null ? parsed : Map.of();
-        } catch (JacksonException e) {
-            return Map.of("_raw", arguments);
-        }
-    }
-
-    private String structuredOutputInstruction(OutputSpec output) {
-        if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
-            return null;
-        }
-        var base = "Return only the requested structured output. Do not wrap it in Markdown or "
-            + "explanatory prose.";
-        return switch (output.getType()) {
-            case OBJECT -> base + " Return a JSON object that matches this JSON Schema: "
-                + writeJson(output.getSchema());
-            case ARRAY -> base + " Return a JSON array. Each element must match this JSON Schema: "
-                + writeJson(output.getElementSchema());
-            case CHOICE -> base + " Return exactly one of these string choices: "
-                + String.join(", ", output.getChoices());
-            case JSON -> base + " Return valid JSON.";
-            case TEXT -> null;
-        };
-    }
-
-    private StructuredOutput parseStructuredOutput(OutputSpec output, String text) {
-        if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
-            return new StructuredOutput(text, text);
-        }
-        var outputText = structuredOutputText(output, text);
-        try {
-            return switch (output.getType()) {
-                case JSON -> new StructuredOutput(JSON_MAPPER.readValue(outputText, OBJECT_TYPE),
-                    outputText);
-                case OBJECT -> {
-                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
-                    if (!(value instanceof Map<?, ?> map)) {
-                        throw structuredValidationError(
-                            "Structured output validation failed: expected JSON object", "$");
-                    }
-                    var sanitized = sanitizeValue(map);
-                    validateJsonValue(sanitized, output.getSchema(), "$");
-                    yield new StructuredOutput(sanitized, outputText);
-                }
-                case ARRAY -> {
-                    var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
-                    if (!(value instanceof List<?> list)) {
-                        throw structuredValidationError(
-                            "Structured output validation failed: expected JSON array", "$");
-                    }
-                    for (var i = 0; i < list.size(); i++) {
-                        validateJsonValue(list.get(i), output.getElementSchema(), "$[" + i + "]");
-                    }
-                    yield new StructuredOutput(sanitizeValue(list), outputText);
-                }
-                case CHOICE -> {
-                    var choice = normalizeChoice(outputText);
-                    if (output.getChoices() == null || !output.getChoices().contains(choice)) {
-                        throw structuredValidationError(
-                            "Structured output validation failed: expected one of "
-                                + output.getChoices(), "$");
-                    }
-                    yield new StructuredOutput(choice, outputText);
-                }
-                case TEXT -> new StructuredOutput(text, text);
-            };
-        } catch (StructuredOutputValidationException e) {
-            throw e;
-        } catch (JacksonException e) {
-            throw new StructuredOutputValidationException(
-                "Structured output validation failed: output is not valid JSON", e,
-                null, null, "$", null, null, null);
-        }
-    }
-
-    private String structuredOutputText(OutputSpec output, String text) {
-        var trimmed = text != null ? text.trim() : "";
-        if (trimmed.startsWith("```")) {
-            trimmed = trimmed.replaceFirst("^```[a-zA-Z0-9_-]*\\s*", "")
-                .replaceFirst("\\s*```$", "")
-                .trim();
-        }
-        if (output.getType() == OutputType.OBJECT
-            || output.getType() == OutputType.JSON && trimmed.startsWith("{")) {
-            var start = trimmed.indexOf('{');
-            var end = trimmed.lastIndexOf('}');
-            if (start >= 0 && end >= start) {
-                return trimmed.substring(start, end + 1);
-            }
-        }
-        if (output.getType() == OutputType.ARRAY
-            || output.getType() == OutputType.JSON && trimmed.startsWith("[")) {
-            var start = trimmed.indexOf('[');
-            var end = trimmed.lastIndexOf(']');
-            if (start >= 0 && end >= start) {
-                return trimmed.substring(start, end + 1);
-            }
-        }
-        return trimmed;
-    }
-
-    private String normalizeChoice(String outputText) {
-        try {
-            var value = JSON_MAPPER.readValue(outputText, OBJECT_TYPE);
-            if (value instanceof String text) {
-                return text.trim();
-            }
-        } catch (JacksonException ignored) {
-        }
-        return outputText.trim();
-    }
-
-    @SuppressWarnings("unchecked")
-    private void validateJsonValue(Object value, Map<String, Object> schema, String path) {
-        if (schema == null || schema.isEmpty()) {
-            return;
-        }
-        var type = schema.get("type");
-        if (type instanceof String typeName) {
-            validateJsonType(value, typeName, path);
-        }
-        var enumValues = schema.get("enum");
-        if (enumValues instanceof Collection<?> values && !values.contains(value)) {
-            throw structuredValidationError(
-                "Structured output validation failed: " + path + " must be one of " + values,
-                path);
-        }
-        if ("object".equals(type) || schema.containsKey("properties")) {
-            if (!(value instanceof Map<?, ?> map)) {
-                throw structuredValidationError(
-                    "Structured output validation failed: " + path + " must be an object", path);
-            }
-            var required = schema.get("required");
-            if (required instanceof Collection<?> requiredFields) {
-                for (var field : requiredFields) {
-                    if (!map.containsKey(field)) {
-                        throw structuredValidationError(
-                            "Structured output validation failed: missing required field "
-                                + path + "." + field, path + "." + field);
-                    }
-                }
-            }
-            var properties = schema.get("properties");
-            if (properties instanceof Map<?, ?> propertyMap) {
-                for (var entry : propertyMap.entrySet()) {
-                    var key = entry.getKey();
-                    if (key == null || !map.containsKey(key)) {
-                        continue;
-                    }
-                    if (entry.getValue() instanceof Map<?, ?> propertySchema) {
-                        validateJsonValue(map.get(key), (Map<String, Object>) sanitizeValue(propertySchema),
-                            path + "." + key);
-                    }
-                }
-            }
-        }
-        if ("array".equals(type) || schema.containsKey("items")) {
-            if (!(value instanceof List<?> list)) {
-                throw structuredValidationError(
-                    "Structured output validation failed: " + path + " must be an array", path);
-            }
-            var items = schema.get("items");
-            if (items instanceof Map<?, ?> itemSchema) {
-                for (var i = 0; i < list.size(); i++) {
-                    validateJsonValue(list.get(i), (Map<String, Object>) sanitizeValue(itemSchema),
-                        path + "[" + i + "]");
-                }
-            }
-        }
-    }
-
-    private void validateJsonType(Object value, String type, String path) {
-        var valid = switch (type) {
-            case "object" -> value instanceof Map<?, ?>;
-            case "array" -> value instanceof List<?>;
-            case "string" -> value instanceof String;
-            case "number" -> value instanceof Number;
-            case "integer" -> value instanceof Integer || value instanceof Long;
-            case "boolean" -> value instanceof Boolean;
-            case "null" -> value == null;
-            default -> true;
-        };
-        if (!valid) {
-            throw structuredValidationError(
-                "Structured output validation failed: " + path + " must be " + type, path);
-        }
-    }
-
-    private StructuredOutputValidationException structuredValidationError(String message,
-        String validationPath) {
-        return new StructuredOutputValidationException(message, null, null, null, validationPath,
-            null, null, null);
     }
 
     private void validateFinalStructuredOutput(GenerateTextRequest request,
@@ -1607,76 +1032,41 @@ public class LanguageModelImpl implements LanguageModel {
         if (!hasStructuredOutput(request)) {
             return;
         }
-        parseStructuredOutput(request.getOutput(), accumulator.text.toString());
-    }
-
-    private Flux<Object> partialOutputStream(GenerateTextRequest request, Flux<String> textStream) {
-        if (!hasStructuredOutput(request)
-            || (request.getOutput().getType() != OutputType.OBJECT
-            && request.getOutput().getType() != OutputType.JSON)) {
-            return Flux.empty();
-        }
-        return Flux.defer(() -> {
-            var observer = new StructuredStreamObserver(request.getOutput());
-            return textStream.handle((delta, sink) -> {
-                var partial = observer.partial(delta);
-                if (partial != null) {
-                    sink.next(partial);
-                }
-            });
-        });
-    }
-
-    private Flux<Object> elementStream(GenerateTextRequest request, Flux<String> textStream) {
-        if (!hasStructuredOutput(request) || request.getOutput().getType() != OutputType.ARRAY) {
-            return Flux.empty();
-        }
-        return Flux.defer(() -> {
-            var observer = new StructuredStreamObserver(request.getOutput());
-            return textStream.concatMap(delta -> Flux.fromIterable(observer.elements(delta)));
-        });
+        structuredOutputHandler.parse(request.getOutput(), accumulator.text.toString());
     }
 
     private GenerateTextResult resultFromStreamParts(GenerateTextRequest request,
         List<TextStreamPart> parts) {
-        var builder = new StreamResultBuilder();
+        var builder = new LanguageModelStreamResultBuilder();
         for (var part : parts) {
             builder.accept(part);
         }
-        if (builder.errorText != null) {
-            if ("cancelled".equals(builder.errorType)) {
-                throw new AiGenerationCancelledException(builder.errorText);
+        if (builder.errorText() != null) {
+            if ("cancelled".equals(builder.errorType())) {
+                throw new AiGenerationCancelledException(builder.errorText());
             }
-            if ("timeout".equals(builder.errorType)) {
-                throw new AiGenerationTimeoutException("stream", builder.errorText);
+            if ("timeout".equals(builder.errorType())) {
+                throw new AiGenerationTimeoutException("stream", builder.errorText());
             }
             if (hasStructuredOutput(request)) {
-                throw new StructuredOutputValidationException(builder.errorText, null,
+                throw new StructuredOutputValidationException(builder.errorText(), null,
                     request.getOutput().getType(), builder.finalStepText(),
                     builder.errorValidationPath(),
-                    builder.currentStepIndex, builder.usage, builder.response);
+                    builder.currentStepIndex(), builder.usage(), builder.response());
             }
-            throw new IllegalStateException(builder.errorText);
+            throw new IllegalStateException(builder.errorText());
         }
         StructuredOutput structuredOutput = null;
         if (hasStructuredOutput(request)) {
             try {
-                structuredOutput = parseStructuredOutput(request.getOutput(), builder.finalStepText());
+                structuredOutput = structuredOutputHandler.parse(request.getOutput(),
+                    builder.finalStepText());
             } catch (StructuredOutputValidationException e) {
-                throw enrichStructuredError(e, request.getOutput(), builder.finalStepText(),
-                    builder.currentStepIndex, builder.usage, builder.response);
+                throw structuredOutputHandler.enrich(e, request.getOutput(), builder.finalStepText(),
+                    builder.currentStepIndex(), builder.usage(), builder.response());
             }
         }
         return builder.build(structuredOutput);
-    }
-
-    private StructuredOutputValidationException enrichStructuredError(
-        StructuredOutputValidationException error, OutputSpec output, String outputText,
-        Integer stepIndex, LanguageModelUsage usage, GenerationResponseMetadata response) {
-        return new StructuredOutputValidationException(error.getMessage(), error,
-            output != null ? output.getType() : error.getOutputType(),
-            error.getOutputText() != null ? error.getOutputText() : outputText,
-            error.getValidationPath(), stepIndex, usage, response);
     }
 
     private TextStreamPart structuredValidationErrorPart(StructuredOutputValidationException error,
@@ -1692,52 +1082,13 @@ public class LanguageModelImpl implements LanguageModel {
             metadata.put("validationPath", validationPath);
         }
         return TextStreamPart.builder()
-            .type(TextStreamPart.TYPE_ERROR)
+            .type(PartType.ERROR)
             .errorText(message)
             .stepIndex(accumulator.stepIndex)
             .usage(accumulator.usage())
             .response(accumulator.response())
             .providerMetadata(metadata)
             .build();
-    }
-
-    private Flux<TextStreamPart> resultToStreamParts(GenerateTextResult result) {
-        var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
-        var textId = "txt_" + UUID.randomUUID().toString().replace("-", "");
-        var parts = new ArrayList<TextStreamPart>();
-        parts.add(TextStreamPart.start(messageId));
-        for (var step : result.getSteps()) {
-            var reasoningId = "rsn_" + UUID.randomUUID().toString().replace("-", "");
-            parts.add(TextStreamPart.startStep(step.getStepIndex()));
-            if (hasText(step.getReasoningText())) {
-                parts.add(TextStreamPart.reasoningStart(reasoningId));
-                nullSafe(step.getReasoning()).forEach(reasoning ->
-                    parts.add(TextStreamPart.reasoningDelta(reasoningId, reasoning.getText(),
-                        reasoning.getProviderMetadata())));
-                parts.add(TextStreamPart.reasoningEnd(reasoningId));
-            }
-            if (hasText(step.getText())) {
-                parts.add(TextStreamPart.textStart(textId));
-                parts.add(TextStreamPart.textDelta(textId, step.getText()));
-                parts.add(TextStreamPart.textEnd(textId));
-            }
-            nullSafe(step.getToolCalls())
-                .forEach(toolCall -> parts.add(TextStreamPart.toolCall(toolCall)));
-            nullSafe(step.getToolResults())
-                .forEach(toolResult -> parts.add(TextStreamPart.toolResult(toolResult)));
-            nullSafe(step.getToolErrors())
-                .forEach(toolError -> parts.add(TextStreamPart.toolError(toolError)));
-            nullSafe(step.getContent()).stream()
-                .filter(part -> PartType.isSource(part.getType()) || PartType.isFile(part.getType()))
-                .map(this::streamPart)
-                .forEach(parts::add);
-            parts.add(TextStreamPart.finishStep(step.getStepIndex(), step.getFinishReason(),
-                step.getRawFinishReason(), step.getUsage(), step.getWarnings(), step.getRequest(),
-                step.getResponse(), step.getProviderMetadata()));
-        }
-        parts.add(TextStreamPart.finish(result.getFinishReason(), result.getRawFinishReason(),
-            result.getTotalUsage()));
-        return Flux.fromIterable(parts);
     }
 
     private GenerateTextResult resultFromSteps(List<GenerationStep> steps,
@@ -1883,7 +1234,7 @@ public class LanguageModelImpl implements LanguageModel {
             ? "cancelled"
             : error instanceof AiGenerationTimeoutException ? "timeout" : "error";
         return TextStreamPart.builder()
-            .type(TextStreamPart.TYPE_ERROR)
+            .type(PartType.ERROR)
             .errorText(safeErrorMessage(error))
             .providerMetadata(Map.of("exceptionType", type))
             .build();
@@ -1933,62 +1284,12 @@ public class LanguageModelImpl implements LanguageModel {
         return list != null ? list : List.of();
     }
 
-    private GenerateTextResult mapResult(ChatResponse response) {
-        var result = response.getResult();
-        var output = result != null ? result.getOutput() : null;
-        var text = output != null && output.getText() != null ? output.getText() : "";
-        var reasoning = mapReasoning(output);
-        var reasoningText = reasoning.stream()
-            .map(ReasoningPart::getText)
-            .filter(this::hasText)
-            .collect(Collectors.joining());
-        var rawFinishReason = result != null && result.getMetadata() != null
-            ? result.getMetadata().getFinishReason()
-            : null;
-        var finishReason = mapFinishReason(rawFinishReason);
-        var usage = mapUsage(response);
-        var providerMetadata = mapMetadata(response);
-        var warnings = mapWarnings(response);
-        var requestMetadata = mapRequestMetadata(response);
-        var responseMetadata = mapResponseMetadata(response, text, reasoning, List.of());
-        var content = contentParts(text, reasoning);
-        content.addAll(sourceAndFileParts(response));
-        var step = GenerationStep.builder()
-            .stepIndex(0)
-            .text(text)
-            .reasoningText(hasText(reasoningText) ? reasoningText : null)
-            .content(content)
-            .reasoning(reasoning)
-            .finishReason(finishReason)
-            .rawFinishReason(rawFinishReason)
-            .usage(usage)
-            .warnings(warnings)
-            .request(requestMetadata)
-            .response(responseMetadata)
-            .providerMetadata(providerMetadata)
-            .build();
-        return GenerateTextResult.builder()
-            .text(text)
-            .reasoningText(hasText(reasoningText) ? reasoningText : null)
-            .content(content)
-            .reasoning(reasoning)
-            .finishReason(finishReason)
-            .rawFinishReason(rawFinishReason)
-            .usage(usage)
-            .totalUsage(usage)
-            .warnings(warnings)
-            .request(requestMetadata)
-            .response(responseMetadata)
-            .steps(List.of(step))
-            .providerMetadata(providerMetadata)
-            .build();
-    }
-
-    private Flux<TextStreamPart> mapStreamResponse(GenerateTextRequest request, GenerationRun run,
+    private Flux<TextStreamPart> mapStreamResponse(GenerateTextRequest request,
+        LanguageModelGenerationRun run,
         ChatResponse response, String textId, String reasoningId, AtomicBoolean finished,
         AtomicBoolean textStarted, AtomicBoolean reasoningStarted) {
         var parts = new ArrayList<TextStreamPart>();
-        var text = extractText(response);
+        var text = responseMapper.extractText(response);
         var reasoning = extractReasoning(response);
         if (hasText(reasoning)) {
             if (textStarted.get()) {
@@ -2013,16 +1314,16 @@ public class LanguageModelImpl implements LanguageModel {
             }
             parts.add(TextStreamPart.textDelta(textId, text));
         }
-        sourceAndFileParts(response).stream()
-            .map(this::streamPart)
+        responseMapper.sourceAndFileParts(response).stream()
+            .map(responseMapper::streamPart)
             .forEach(parts::add);
 
-        var rawFinishReason = extractFinishReason(response);
-        if (isFinish(rawFinishReason)) {
+        var rawFinishReason = responseMapper.extractFinishReason(response);
+        if (responseMapper.isFinish(rawFinishReason)) {
             finished.set(true);
-            var finishReason = mapFinishReason(rawFinishReason);
-            var usage = mapUsage(response);
-            var rawDiagnostic = sanitizedRawDiagnostic(response);
+            var finishReason = responseMapper.mapFinishReason(rawFinishReason);
+            var usage = responseMapper.mapUsage(response);
+            var rawDiagnostic = responseMapper.sanitizedRawDiagnostic(response);
             if (!rawDiagnostic.isEmpty()) {
                 parts.add(TextStreamPart.raw(rawDiagnostic));
             }
@@ -2035,24 +1336,24 @@ public class LanguageModelImpl implements LanguageModel {
                 parts.add(TextStreamPart.textEnd(textId));
             }
             parts.add(TextStreamPart.finishStep(0, finishReason, rawFinishReason, usage,
-                mergeWarnings(mergeWarnings(mapWarnings(response), requestWarnings(request)),
-                    run.warnings()), mapRequestMetadata(response),
-                mapResponseMetadata(response, extractText(response), reasoningParts(reasoning),
-                    List.of()), mapMetadata(response)));
+                mergeWarnings(mergeWarnings(responseMapper.mapWarnings(response), requestWarnings(request)),
+                    run.warnings()), responseMapper.mapRequestMetadata(response),
+                responseMapper.mapResponseMetadata(response, responseMapper.extractText(response), responseMapper.reasoningParts(reasoning),
+                    List.of()), responseMapper.mapMetadata(response)));
             var step = GenerationStep.builder()
                 .stepIndex(0)
                 .text(text)
                 .reasoningText(hasText(reasoning) ? reasoning : null)
-                .reasoning(reasoningParts(reasoning))
+                .reasoning(responseMapper.reasoningParts(reasoning))
                 .finishReason(finishReason)
                 .rawFinishReason(rawFinishReason)
                 .usage(usage)
-                .warnings(mergeWarnings(mergeWarnings(mapWarnings(response), requestWarnings(request)),
+                .warnings(mergeWarnings(mergeWarnings(responseMapper.mapWarnings(response), requestWarnings(request)),
                     run.warnings()))
-                .request(mapRequestMetadata(response))
-                .response(mapResponseMetadata(response, extractText(response), reasoningParts(reasoning),
+                .request(responseMapper.mapRequestMetadata(response))
+                .response(responseMapper.mapResponseMetadata(response, responseMapper.extractText(response), responseMapper.reasoningParts(reasoning),
                     List.of()))
-                .providerMetadata(mapMetadata(response))
+                .providerMetadata(responseMapper.mapMetadata(response))
                 .build();
             run.stepFinish(0, step, List.of(step));
             run.finish(GenerateTextResult.builder()
@@ -2073,14 +1374,6 @@ public class LanguageModelImpl implements LanguageModel {
         return Flux.fromIterable(parts);
     }
 
-    private String extractText(ChatResponse response) {
-        var result = response.getResult();
-        if (result == null || result.getOutput() == null || result.getOutput().getText() == null) {
-            return "";
-        }
-        return result.getOutput().getText();
-    }
-
     private String extractReasoning(ChatResponse response) {
         var result = response.getResult();
         if (result == null || result.getOutput() == null) {
@@ -2094,223 +1387,6 @@ public class LanguageModelImpl implements LanguageModel {
             .map(ReasoningPart::getText)
             .filter(this::hasText)
             .collect(Collectors.joining());
-    }
-
-    private String extractFinishReason(ChatResponse response) {
-        var result = response.getResult();
-        if (result == null || result.getMetadata() == null) {
-            return null;
-        }
-        return result.getMetadata().getFinishReason();
-    }
-
-    private boolean isFinish(String rawFinishReason) {
-        return rawFinishReason != null && !rawFinishReason.isBlank()
-            && !"null".equalsIgnoreCase(rawFinishReason);
-    }
-
-    private FinishReason mapFinishReason(String rawFinishReason) {
-        if (rawFinishReason == null || rawFinishReason.isBlank()
-            || "null".equalsIgnoreCase(rawFinishReason)) {
-            return FinishReason.UNKNOWN;
-        }
-        return switch (rawFinishReason.trim().toLowerCase()) {
-            case "stop" -> FinishReason.STOP;
-            case "length", "max_tokens" -> FinishReason.LENGTH;
-            case "content_filter", "safety" -> FinishReason.CONTENT_FILTER;
-            case "tool_calls", "tool-call" -> FinishReason.TOOL_CALLS;
-            case "error" -> FinishReason.ERROR;
-            default -> FinishReason.OTHER;
-        };
-    }
-
-    private LanguageModelUsage mapUsage(ChatResponse response) {
-        var metadata = response.getMetadata();
-        if (metadata == null || metadata.getUsage() == null) {
-            return null;
-        }
-        var usage = metadata.getUsage();
-        var input = usage.getPromptTokens();
-        var output = usage.getCompletionTokens();
-        var total = usage.getTotalTokens();
-        if (input == null && output == null && total == null && usage.getNativeUsage() == null) {
-            return null;
-        }
-        return LanguageModelUsage.builder()
-            .inputTokens(input)
-            .outputTokens(output)
-            .reasoningTokens(reasoningTokens(usage.getNativeUsage()))
-            .totalTokens(total)
-            .raw(usage.getNativeUsage())
-            .build();
-    }
-
-    private Map<String, Object> mapMetadata(ChatResponse response) {
-        var metadata = response.getMetadata();
-        if (metadata == null) {
-            return Map.of();
-        }
-        var map = new LinkedHashMap<String, Object>();
-        map.put("providerType", providerType);
-        if (hasText(metadata.getId())) {
-            map.put("id", metadata.getId());
-        }
-        if (hasText(metadata.getModel())) {
-            map.put("model", metadata.getModel());
-        }
-        metadata.entrySet().forEach(entry -> map.put(entry.getKey(), sanitizeValue(entry.getValue())));
-        return map;
-    }
-
-    private Integer reasoningTokens(Object nativeUsage) {
-        if (nativeUsage == null) {
-            return null;
-        }
-        try {
-            var completionTokenDetails = nativeUsage.getClass()
-                .getMethod("completionTokenDetails")
-                .invoke(nativeUsage);
-            if (completionTokenDetails == null) {
-                return null;
-            }
-            var value = completionTokenDetails.getClass()
-                .getMethod("reasoningTokens")
-                .invoke(completionTokenDetails);
-            return value instanceof Integer integer ? integer : null;
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
-    }
-
-    private List<GenerationContentPart> contentParts(String text, List<ReasoningPart> reasoning) {
-        var content = new ArrayList<GenerationContentPart>();
-        nullSafe(reasoning).stream().map(GenerationContentPart::reasoning).forEach(content::add);
-        if (hasText(text)) {
-            content.add(GenerationContentPart.text(text));
-        }
-        return content;
-    }
-
-    private TextStreamPart streamPart(GenerationContentPart part) {
-        if (PartType.isSource(part.getType())) {
-            return TextStreamPart.source(part);
-        }
-        if (PartType.isFile(part.getType())) {
-            return TextStreamPart.file(part);
-        }
-        return TextStreamPart.raw(Map.of("ignoredPartType", part.getType()));
-    }
-
-    private List<GenerationContentPart> sourceAndFileParts(ChatResponse response) {
-        var metadata = responseMetadataValues(response);
-        if (metadata.isEmpty()) {
-            return List.of();
-        }
-        var parts = new ArrayList<GenerationContentPart>();
-        addSourceParts(parts, metadata.get("sources"));
-        addSourceParts(parts, metadata.get("source"));
-        addFileParts(parts, metadata.get("files"));
-        addFileParts(parts, metadata.get("file"));
-        return parts;
-    }
-
-    private Map<String, Object> responseMetadataValues(ChatResponse response) {
-        var values = new LinkedHashMap<String, Object>();
-        if (response == null) {
-            return values;
-        }
-        if (response.getMetadata() != null) {
-            response.getMetadata().entrySet()
-                .forEach(entry -> values.put(entry.getKey(), sanitizeValue(entry.getValue())));
-        }
-        var result = response.getResult();
-        var output = result != null ? result.getOutput() : null;
-        if (output != null && output.getMetadata() != null) {
-            output.getMetadata()
-                .forEach((key, value) -> values.put(key, sanitizeValue(value)));
-        }
-        return values;
-    }
-
-    private void addSourceParts(List<GenerationContentPart> parts, Object value) {
-        for (var item : metadataItems(value)) {
-            var id = stringValue(item.get("id"));
-            var url = firstString(item, "url", "uri", "sourceUrl");
-            var title = firstString(item, "title", "name");
-            parts.add(GenerationContentPart.source(id, url, title, item));
-        }
-    }
-
-    private void addFileParts(List<GenerationContentPart> parts, Object value) {
-        for (var item : metadataItems(value)) {
-            var id = stringValue(item.get("id"));
-            var url = firstString(item, "url", "uri", "downloadUrl");
-            var title = firstString(item, "title", "name", "filename");
-            var mediaType = firstString(item, "mediaType", "mimeType", "contentType");
-            var data = item.get("data");
-            parts.add(GenerationContentPart.file(id, url, title, mediaType, data, item));
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> metadataItems(Object value) {
-        if (value instanceof Collection<?> collection) {
-            return collection.stream()
-                .filter(Map.class::isInstance)
-                .map(item -> (Map<String, Object>) sanitizeValue(item))
-                .toList();
-        }
-        if (value instanceof Map<?, ?> map) {
-            return List.of((Map<String, Object>) sanitizeValue(map));
-        }
-        return List.of();
-    }
-
-    private String firstString(Map<String, Object> map, String... keys) {
-        for (var key : keys) {
-            var value = stringValue(map.get(key));
-            if (hasText(value)) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private String stringValue(Object value) {
-        return value != null ? value.toString() : null;
-    }
-
-    private List<GenerationWarning> mapWarnings(ChatResponse response) {
-        var metadata = response.getMetadata();
-        if (metadata == null || !metadata.containsKey("warnings")) {
-            return List.of();
-        }
-        var warnings = metadata.get("warnings");
-        if (warnings instanceof Collection<?> collection) {
-            return collection.stream()
-                .map(this::mapWarning)
-                .toList();
-        }
-        return List.of(mapWarning(warnings));
-    }
-
-    @SuppressWarnings("unchecked")
-    private GenerationWarning mapWarning(Object value) {
-        if (value instanceof GenerationWarning warning) {
-            return warning;
-        }
-        if (value instanceof Map<?, ?> map) {
-            var code = map.get("code");
-            var message = map.get("message");
-            return GenerationWarning.builder()
-                .code(code != null ? code.toString() : null)
-                .message(message != null ? message.toString() : null)
-                .providerMetadata((Map<String, Object>) sanitizeValue(map))
-                .build();
-        }
-        return GenerationWarning.builder()
-            .message(value != null ? value.toString() : null)
-            .build();
     }
 
     private List<GenerationWarning> requestWarnings(GenerateTextRequest request) {
@@ -2327,13 +1403,6 @@ public class LanguageModelImpl implements LanguageModel {
             warnings.add(warning(WARNING_STRUCTURED_OUTPUT_STRICT_NOT_GUARANTEED,
                 "Strict structured output was requested, but provider-native strict schema "
                     + "enforcement is not available for this adapter."));
-        }
-        if (request != null
-            && request.getToolChoice() != null
-            && request.getToolChoice().getType() == ToolChoice.Type.REQUIRED
-            && providerOptions.toolCallingChatOptionsFactory() == null) {
-            warnings.add(warning(WARNING_TOOL_CHOICE_REQUIRED_UNSUPPORTED,
-                "toolChoice=REQUIRED is not enforced by the default tool adapter."));
         }
         if (request != null && request.getTools() != null
             && providerOptions.toolCallingChatOptionsFactory() == null
@@ -2365,278 +1434,12 @@ public class LanguageModelImpl implements LanguageModel {
             .build();
     }
 
-    private GenerationRequestMetadata mapRequestMetadata(ChatResponse response) {
-        var metadata = response.getMetadata();
-        return GenerationRequestMetadata.builder()
-            .model(metadata != null ? metadata.getModel() : null)
-            .metadata(Map.of("providerType", providerType))
-            .build();
-    }
-
-    private GenerationResponseMetadata mapResponseMetadata(ChatResponse response, String text,
-        List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
-        var metadata = response.getMetadata();
-        return GenerationResponseMetadata.builder()
-            .id(metadata != null ? metadata.getId() : null)
-            .model(metadata != null ? metadata.getModel() : null)
-            .messages(responseMessages(text, reasoning, toolCalls))
-            .metadata(mapMetadata(response))
-            .build();
-    }
-
-    private List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
-        List<ToolCall> toolCalls) {
-        var parts = new ArrayList<ModelMessagePart>();
-        nullSafe(reasoning).stream().map(ModelMessagePart::reasoning).forEach(parts::add);
-        if (hasText(text)) {
-            parts.add(ModelMessagePart.text(text));
-        }
-        nullSafe(toolCalls).stream().map(ModelMessagePart::toolCall).forEach(parts::add);
-        return parts.isEmpty() ? List.of() : List.of(ModelMessage.assistant(parts));
-    }
-
-    private String reasoningContent(List<ModelMessagePart> parts) {
-        return parts.stream()
-            .filter(part -> PartType.isReasoning(part.getType()))
-            .map(part -> {
-                var metadataReasoning = reasoningContent(part.getProviderOptions());
-                return hasText(metadataReasoning) ? metadataReasoning : part.getText();
-            })
-            .filter(this::hasText)
-            .collect(Collectors.joining());
-    }
-
-    @SuppressWarnings("unchecked")
-    private String reasoningContent(Map<String, Object> metadata) {
-        if (metadata == null || metadata.isEmpty()) {
-            return null;
-        }
-        var direct = firstText(metadata, "reasoningContent", "reasoning_content");
-        if (hasText(direct)) {
-            return direct;
-        }
-        var provider = metadata.get(providerType);
-        if (provider instanceof Map<?, ?> providerMap) {
-            return firstText((Map<String, Object>) sanitizeValue(providerMap),
-                "reasoningContent", "reasoning_content");
-        }
-        return null;
-    }
-
-    private List<ReasoningPart> reasoningParts(String reasoning) {
-        if (!hasText(reasoning)) {
-            return List.of();
-        }
-        return List.of(ReasoningPart.builder()
-            .text(reasoning)
-            .providerMetadata(Map.of(providerType, Map.of("reasoning_content", reasoning)))
-            .build());
-    }
-
-    private Map<String, Object> sanitizedRawDiagnostic(ChatResponse response) {
-        var metadata = response.getMetadata();
-        if (metadata == null) {
-            return Map.of();
-        }
-        var raw = new LinkedHashMap<String, Object>();
-        metadata.entrySet().forEach(entry -> {
-            var key = entry.getKey();
-            if (key != null && isRawDiagnosticKey(key)) {
-                raw.put(key, sanitizeValue(entry.getValue()));
-            }
-        });
-        return raw;
-    }
-
-    private boolean isRawDiagnosticKey(String key) {
-        var normalized = key.toLowerCase();
-        return normalized.contains("raw") || normalized.contains("native");
-    }
-
-    private Object sanitizeValue(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            var sanitized = new LinkedHashMap<String, Object>();
-            map.forEach((key, nestedValue) -> {
-                var keyString = key != null ? key.toString() : "";
-                sanitized.put(keyString, isSensitiveKey(keyString) ? "[REDACTED]"
-                    : sanitizeValue(nestedValue));
-            });
-            return sanitized;
-        }
-        if (value instanceof Collection<?> collection) {
-            return collection.stream().map(this::sanitizeValue).toList();
-        }
-        return value;
-    }
-
-    private boolean isSensitiveKey(String key) {
-        var normalized = key.toLowerCase();
-        return normalized.contains("apikey")
-            || normalized.contains("api_key")
-            || normalized.contains("authorization")
-            || normalized.contains("token")
-            || normalized.contains("secret")
-            || normalized.contains("password");
-    }
-
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
 
     private String safeErrorMessage(Throwable e) {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-    }
-
-    private final class GenerationRun {
-        private final GenerateTextRequest request;
-        private final ArrayList<GenerationWarning> lifecycleWarnings = new ArrayList<>();
-        private boolean started;
-        private boolean finished;
-        private boolean errorNotified;
-
-        GenerationRun(GenerateTextRequest request) {
-            this.request = request;
-        }
-
-        List<GenerationWarning> warnings() {
-            return List.copyOf(lifecycleWarnings);
-        }
-
-        void start() {
-            if (started) {
-                return;
-            }
-            started = true;
-            invoke("onStart", lifecycle -> lifecycle.onStart(GenerationStartEvent.builder()
-                .request(request)
-                .requestMetadata(GenerationRequestMetadata.builder()
-                    .metadata(Map.of("providerType", providerType))
-                    .build())
-                .metadata(metadata(request))
-                .context(context(request))
-                .tools(nullSafe(request != null ? request.getTools() : null))
-                .toolChoice(request != null ? request.getToolChoice() : null)
-                .stopWhen(resolvedStopCondition(request))
-                .timeouts(request != null ? request.getTimeouts() : null)
-                .build()));
-        }
-
-        void stepStart(int stepIndex, GenerateTextRequest stepRequest, List<ModelMessage> messages,
-            List<GenerationStep> previousSteps, StopCondition stopWhen) {
-            invoke("onStepStart", lifecycle -> lifecycle.onStepStart(GenerationStepStartEvent.builder()
-                .stepIndex(stepIndex)
-                .request(stepRequest)
-                .messages(List.copyOf(nullSafe(messages)))
-                .previousSteps(List.copyOf(nullSafe(previousSteps)))
-                .tools(nullSafe(stepRequest != null ? stepRequest.getTools() : null))
-                .toolChoice(stepRequest != null ? stepRequest.getToolChoice() : null)
-                .stopWhen(stopWhen)
-                .providerOptions(stepRequest != null ? stepRequest.getProviderOptions() : null)
-                .timeouts(stepRequest != null ? stepRequest.getTimeouts() : null)
-                .metadata(metadata(stepRequest))
-                .context(context(stepRequest))
-                .build()));
-        }
-
-        void toolCallStart(int stepIndex, ToolCall toolCall,
-            Map<String, Object> providerMetadata) {
-            invoke("onToolCallStart", lifecycle -> lifecycle.onToolCallStart(
-                GenerationToolCallStartEvent.builder()
-                    .stepIndex(stepIndex)
-                    .toolCallId(toolCall.getToolCallId())
-                    .toolName(toolCall.getToolName())
-                    .input(toolCall.getInput())
-                    .providerMetadata(providerMetadata)
-                    .metadata(metadata(request))
-                    .context(context(request))
-                    .build()));
-        }
-
-        void toolCallFinish(int stepIndex, ToolResult result, ToolError error, Instant startedAt,
-            Map<String, Object> providerMetadata) {
-            var duration = startedAt != null ? Duration.between(startedAt, Instant.now()) : null;
-            invoke("onToolCallFinish", lifecycle -> lifecycle.onToolCallFinish(
-                GenerationToolCallFinishEvent.builder()
-                    .stepIndex(stepIndex)
-                    .toolCallId(result != null ? result.getToolCallId() : error.getToolCallId())
-                    .toolName(result != null ? result.getToolName() : error.getToolName())
-                    .result(result)
-                    .error(error)
-                    .duration(duration)
-                    .providerMetadata(providerMetadata)
-                    .metadata(metadata(request))
-                    .context(context(request))
-                    .build()));
-        }
-
-        void stepFinish(int stepIndex, GenerationStep step, List<GenerationStep> steps) {
-            invoke("onStepFinish", lifecycle -> lifecycle.onStepFinish(
-                GenerationStepFinishEvent.builder()
-                    .stepIndex(stepIndex)
-                    .step(step)
-                    .steps(List.copyOf(nullSafe(steps)))
-                    .metadata(metadata(request))
-                    .context(context(request))
-                    .build()));
-        }
-
-        void finish(GenerateTextResult result) {
-            if (finished) {
-                return;
-            }
-            finished = true;
-            invoke("onFinish", lifecycle -> lifecycle.onFinish(GenerationFinishEvent.builder()
-                .result(result)
-                .metadata(metadata(request))
-                .context(context(request))
-                .build()));
-        }
-
-        void error(Throwable error, Integer stepIndex, List<GenerationStep> steps) {
-            if (errorNotified || finished) {
-                return;
-            }
-            errorNotified = true;
-            invoke("onError", lifecycle -> lifecycle.onError(GenerationErrorEvent.builder()
-                .error(error)
-                .stepIndex(stepIndex)
-                .steps(List.copyOf(nullSafe(steps)))
-                .metadata(metadata(request))
-                .context(context(request))
-                .build()));
-        }
-
-        private void invoke(String callbackName,
-            Function<GenerationLifecycle, Mono<Void>> callback) {
-            var lifecycle = request != null ? request.getLifecycle() : null;
-            if (lifecycle == null) {
-                return;
-            }
-            try {
-                var mono = callback.apply(lifecycle);
-                if (mono != null) {
-                    mono.block();
-                }
-            } catch (RuntimeException e) {
-                lifecycleWarnings.add(GenerationWarning.builder()
-                    .code("lifecycle-callback-failed")
-                    .message(callbackName + " callback failed: " + safeErrorMessage(e))
-                    .providerMetadata(Map.of("providerType", providerType))
-                    .build());
-            }
-        }
-
-        private Map<String, Object> metadata(GenerateTextRequest request) {
-            return request != null && request.getMetadata() != null
-                ? Map.copyOf(request.getMetadata())
-                : Map.of();
-        }
-
-        private Map<String, Object> context(GenerateTextRequest request) {
-            return request != null && request.getContext() != null
-                ? Map.copyOf(request.getContext())
-                : Map.of();
-        }
     }
 
     private final class UsageAccumulator {
@@ -2711,27 +1514,27 @@ public class LanguageModelImpl implements LanguageModel {
         }
 
         List<ToolCall> toolCalls() {
-            return mapToolCalls(toolCalls);
+            return toolCallMapper.mapToolCalls(toolCalls);
         }
 
         List<ReasoningPart> reasoningParts() {
-            return LanguageModelImpl.this.reasoningParts(reasoning.toString());
+            return responseMapper.reasoningParts(reasoning.toString());
         }
 
         FinishReason finishReason() {
-            return mapFinishReason(rawFinishReason);
+            return responseMapper.mapFinishReason(rawFinishReason);
         }
 
         LanguageModelUsage usage() {
-            return lastResponse != null ? mapUsage(lastResponse) : null;
+            return lastResponse != null ? responseMapper.mapUsage(lastResponse) : null;
         }
 
         List<GenerationWarning> warnings() {
-            return lastResponse != null ? mapWarnings(lastResponse) : List.of();
+            return lastResponse != null ? responseMapper.mapWarnings(lastResponse) : List.of();
         }
 
         GenerationRequestMetadata request() {
-            return lastResponse != null ? mapRequestMetadata(lastResponse)
+            return lastResponse != null ? responseMapper.mapRequestMetadata(lastResponse)
                 : GenerationRequestMetadata.builder()
                     .metadata(Map.of("providerType", providerType))
                     .build();
@@ -2739,344 +1542,17 @@ public class LanguageModelImpl implements LanguageModel {
 
         GenerationResponseMetadata response() {
             return lastResponse != null
-                ? mapResponseMetadata(lastResponse, text.toString(), reasoningParts(), toolCalls())
+                ? responseMapper.mapResponseMetadata(lastResponse, text.toString(), reasoningParts(), toolCalls())
                 : GenerationResponseMetadata.builder()
-                    .messages(responseMessages(text.toString(), reasoningParts(), toolCalls()))
+                    .messages(messageMapper.responseMessages(text.toString(), reasoningParts(),
+                        toolCalls()))
                     .metadata(Map.of("providerType", providerType))
                     .build();
         }
 
         Map<String, Object> providerMetadata() {
-            return lastResponse != null ? mapMetadata(lastResponse) : Map.of("providerType", providerType);
+            return lastResponse != null ? responseMapper.mapMetadata(lastResponse) : Map.of("providerType", providerType);
         }
-    }
-
-    private final class StructuredStreamObserver {
-        private final OutputSpec output;
-        private final StringBuilder text = new StringBuilder();
-        private String lastPartialJson;
-        private int emittedElements;
-
-        StructuredStreamObserver(OutputSpec output) {
-            this.output = output;
-        }
-
-        Object partial(String delta) {
-            text.append(delta);
-            var candidate = structuredOutputText(output, text.toString());
-            if (!hasText(candidate) || candidate.equals(lastPartialJson)) {
-                return null;
-            }
-            try {
-                var value = JSON_MAPPER.readValue(candidate, OBJECT_TYPE);
-                lastPartialJson = candidate;
-                return sanitizeValue(value);
-            } catch (JacksonException ignored) {
-                return null;
-            }
-        }
-
-        List<Object> elements(String delta) {
-            text.append(delta);
-            var elements = completedArrayElements(text.toString());
-            if (elements.size() <= emittedElements) {
-                return List.of();
-            }
-            var next = new ArrayList<Object>();
-            for (var i = emittedElements; i < elements.size(); i++) {
-                var value = elements.get(i);
-                validateJsonValue(value, output.getElementSchema(), "$[" + i + "]");
-                next.add(sanitizeValue(value));
-            }
-            emittedElements = elements.size();
-            return next;
-        }
-
-        private List<Object> completedArrayElements(String source) {
-            var trimmed = source != null ? source.trim() : "";
-            var start = trimmed.indexOf('[');
-            if (start < 0) {
-                return List.of();
-            }
-            var elements = new ArrayList<Object>();
-            var elementStart = start + 1;
-            var depth = 1;
-            var inString = false;
-            var escaped = false;
-            for (var i = start + 1; i < trimmed.length(); i++) {
-                var c = trimmed.charAt(i);
-                if (inString) {
-                    if (escaped) {
-                        escaped = false;
-                    } else if (c == '\\') {
-                        escaped = true;
-                    } else if (c == '"') {
-                        inString = false;
-                    }
-                    continue;
-                }
-                if (c == '"') {
-                    inString = true;
-                    continue;
-                }
-                if (c == '{' || c == '[') {
-                    depth++;
-                    continue;
-                }
-                if (c == '}' || c == ']') {
-                    depth--;
-                    if (depth == 0) {
-                        addCompletedElement(elements, trimmed.substring(elementStart, i).trim());
-                        return elements;
-                    }
-                    continue;
-                }
-                if (c == ',' && depth == 1) {
-                    addCompletedElement(elements, trimmed.substring(elementStart, i).trim());
-                    elementStart = i + 1;
-                }
-            }
-            return elements;
-        }
-
-        private void addCompletedElement(List<Object> elements, String json) {
-            if (!hasText(json)) {
-                return;
-            }
-            try {
-                elements.add(JSON_MAPPER.readValue(json, OBJECT_TYPE));
-            } catch (JacksonException ignored) {
-            }
-        }
-    }
-
-    private final class StreamResultBuilder {
-        private final LinkedHashMap<Integer, StepBuild> steps = new LinkedHashMap<>();
-        private Integer currentStepIndex = 0;
-        private FinishReason finishReason = FinishReason.UNKNOWN;
-        private String rawFinishReason;
-        private LanguageModelUsage usage;
-        private GenerationRequestMetadata request;
-        private GenerationResponseMetadata response;
-        private Map<String, Object> providerMetadata = Map.of();
-        private String errorText;
-        private String errorType;
-
-        void accept(TextStreamPart part) {
-            if (part == null || part.getType() == null) {
-                return;
-            }
-            switch (part.getType()) {
-                case PartType.START_STEP -> {
-                    currentStepIndex = part.getStepIndex() != null ? part.getStepIndex() : 0;
-                    step(currentStepIndex);
-                }
-                case PartType.TEXT_DELTA -> step(currentStepIndex).text.append(part.getDelta());
-                case PartType.REASONING_DELTA -> step(currentStepIndex).reasoning.add(
-                    ReasoningPart.builder()
-                        .text(part.getDelta())
-                        .signature(part.getSignature())
-                        .providerMetadata(part.getProviderMetadata())
-                        .build());
-                case PartType.TOOL_CALL -> step(currentStepIndex).toolCalls.add(ToolCall.builder()
-                    .toolCallId(part.getToolCallId())
-                    .toolName(part.getToolName())
-                    .input(part.getInput())
-                    .providerMetadata(part.getProviderMetadata())
-                    .build());
-                case PartType.TOOL_RESULT -> step(currentStepIndex).toolResults.add(ToolResult.builder()
-                    .toolCallId(part.getToolCallId())
-                    .toolName(part.getToolName())
-                    .result(part.getResult())
-                    .providerMetadata(part.getProviderMetadata())
-                    .build());
-                case PartType.TOOL_ERROR -> step(currentStepIndex).toolErrors.add(ToolError.builder()
-                    .toolCallId(part.getToolCallId())
-                    .toolName(part.getToolName())
-                    .errorText(part.getErrorText())
-                    .providerMetadata(part.getProviderMetadata())
-                    .build());
-                case PartType.SOURCE -> step(currentStepIndex).content.add(GenerationContentPart.source(
-                    part.getId(), part.getUrl(), part.getTitle(), part.getProviderMetadata()));
-                case PartType.FILE -> step(currentStepIndex).content.add(GenerationContentPart.file(
-                    part.getId(), part.getUrl(), part.getTitle(), part.getMediaType(),
-                    part.getData(), part.getProviderMetadata()));
-                case PartType.FINISH_STEP -> {
-                    var step = step(part.getStepIndex() != null ? part.getStepIndex() : currentStepIndex);
-                    step.finishReason = part.getFinishReason();
-                    step.rawFinishReason = part.getRawFinishReason();
-                    step.usage = part.getUsage();
-                    step.warnings.addAll(nullSafe(part.getWarnings()));
-                    step.request = part.getRequest();
-                    step.response = part.getResponse();
-                    step.providerMetadata = part.getProviderMetadata();
-                }
-                case PartType.FINISH -> {
-                    finishReason = part.getFinishReason();
-                    rawFinishReason = part.getRawFinishReason();
-                    usage = part.getUsage();
-                }
-                case PartType.ERROR -> {
-                    errorText = part.getErrorText();
-                    if (part.getStepIndex() != null) {
-                        currentStepIndex = part.getStepIndex();
-                    }
-                    if (part.getUsage() != null) {
-                        usage = part.getUsage();
-                    }
-                    if (part.getResponse() != null) {
-                        response = part.getResponse();
-                    }
-                    if (part.getProviderMetadata() != null) {
-                        providerMetadata = part.getProviderMetadata();
-                        var exceptionType = part.getProviderMetadata().get("exceptionType");
-                        if (exceptionType != null) {
-                            errorType = exceptionType.toString();
-                        }
-                    }
-                }
-                default -> {
-                }
-            }
-        }
-
-        String errorValidationPath() {
-            if (providerMetadata == null) {
-                return null;
-            }
-            var validationPath = providerMetadata.get("validationPath");
-            return validationPath != null ? validationPath.toString() : null;
-        }
-
-        String finalStepText() {
-            if (steps.isEmpty()) {
-                return "";
-            }
-            return steps.values().stream()
-                .reduce((first, second) -> second)
-                .map(step -> step.text.toString())
-                .orElse("");
-        }
-
-        GenerateTextResult build(StructuredOutput structuredOutput) {
-            var generationSteps = steps.entrySet().stream()
-                .map(entry -> entry.getValue().build(entry.getKey(), structuredOutput,
-                    isFinalStep(entry.getKey())))
-                .toList();
-            var content = generationSteps.stream()
-                .flatMap(step -> nullSafe(step.getContent()).stream())
-                .toList();
-            var warnings = generationSteps.stream()
-                .flatMap(step -> nullSafe(step.getWarnings()).stream())
-                .toList();
-            var toolCalls = generationSteps.stream()
-                .flatMap(step -> nullSafe(step.getToolCalls()).stream())
-                .toList();
-            var toolResults = generationSteps.stream()
-                .flatMap(step -> nullSafe(step.getToolResults()).stream())
-                .toList();
-            var toolErrors = generationSteps.stream()
-                .flatMap(step -> nullSafe(step.getToolErrors()).stream())
-                .toList();
-            var finalStep = generationSteps.isEmpty() ? null : generationSteps.get(generationSteps.size() - 1);
-            var text = generationSteps.stream()
-                .map(GenerationStep::getText)
-                .filter(LanguageModelImpl.this::hasText)
-                .collect(Collectors.joining());
-            var reasoning = finalStep != null ? nullSafe(finalStep.getReasoning()) : List.<ReasoningPart>of();
-            var reasoningText = reasoning.stream()
-                .map(ReasoningPart::getText)
-                .filter(LanguageModelImpl.this::hasText)
-                .collect(Collectors.joining());
-            return GenerateTextResult.builder()
-                .text(text)
-                .output(structuredOutput != null ? structuredOutput.output() : null)
-                .outputText(structuredOutput != null ? structuredOutput.outputText() : null)
-                .reasoningText(hasText(reasoningText) ? reasoningText : null)
-                .content(content)
-                .reasoning(reasoning)
-                .finishReason(finishReason)
-                .rawFinishReason(rawFinishReason)
-                .usage(finalStep != null ? finalStep.getUsage() : null)
-                .totalUsage(usage)
-                .warnings(warnings)
-                .request(finalStep != null ? finalStep.getRequest() : request)
-                .response(finalStep != null ? finalStep.getResponse() : response)
-                .steps(generationSteps)
-                .toolCalls(toolCalls)
-                .toolResults(toolResults)
-                .toolErrors(toolErrors)
-                .providerMetadata(finalStep != null ? finalStep.getProviderMetadata() : providerMetadata)
-                .build();
-        }
-
-        private StepBuild step(Integer stepIndex) {
-            var index = stepIndex != null ? stepIndex : 0;
-            return steps.computeIfAbsent(index, ignored -> new StepBuild());
-        }
-
-        private boolean isFinalStep(Integer stepIndex) {
-            return !steps.isEmpty() && stepIndex.equals(steps.keySet().stream()
-                .reduce((first, second) -> second)
-                .orElse(stepIndex));
-        }
-    }
-
-    private final class StepBuild {
-        private final StringBuilder text = new StringBuilder();
-        private final ArrayList<ReasoningPart> reasoning = new ArrayList<>();
-        private final ArrayList<ToolCall> toolCalls = new ArrayList<>();
-        private final ArrayList<ToolResult> toolResults = new ArrayList<>();
-        private final ArrayList<ToolError> toolErrors = new ArrayList<>();
-        private final ArrayList<GenerationContentPart> content = new ArrayList<>();
-        private final ArrayList<GenerationWarning> warnings = new ArrayList<>();
-        private FinishReason finishReason = FinishReason.UNKNOWN;
-        private String rawFinishReason;
-        private LanguageModelUsage usage;
-        private GenerationRequestMetadata request;
-        private GenerationResponseMetadata response;
-        private Map<String, Object> providerMetadata = Map.of();
-
-        GenerationStep build(Integer stepIndex, StructuredOutput structuredOutput, boolean finalStep) {
-            var content = new ArrayList<GenerationContentPart>();
-            reasoning.stream().map(GenerationContentPart::reasoning).forEach(content::add);
-            if (hasText(text.toString())) {
-                content.add(GenerationContentPart.text(text.toString()));
-            }
-            content.addAll(this.content);
-            toolCalls.stream().map(GenerationContentPart::toolCall).forEach(content::add);
-            toolResults.stream().map(GenerationContentPart::toolResult).forEach(content::add);
-            toolErrors.stream().map(GenerationContentPart::toolError).forEach(content::add);
-            var reasoningText = reasoning.stream()
-                .map(ReasoningPart::getText)
-                .filter(LanguageModelImpl.this::hasText)
-                .collect(Collectors.joining());
-            return GenerationStep.builder()
-                .stepIndex(stepIndex)
-                .text(text.toString())
-                .output(finalStep && structuredOutput != null ? structuredOutput.output() : null)
-                .outputText(finalStep && structuredOutput != null ? structuredOutput.outputText() : null)
-                .reasoningText(hasText(reasoningText) ? reasoningText : null)
-                .content(content)
-                .reasoning(reasoning)
-                .finishReason(finishReason)
-                .rawFinishReason(rawFinishReason)
-                .usage(usage)
-                .toolCalls(toolCalls)
-                .toolResults(toolResults)
-                .toolErrors(toolErrors)
-                .warnings(warnings)
-                .request(request)
-                .response(response)
-                .providerMetadata(providerMetadata)
-                .build();
-        }
-    }
-
-    private record StructuredOutput(
-        Object output,
-        String outputText
-    ) {
     }
 
     private record StepSnapshot(
@@ -3094,13 +1570,6 @@ public class LanguageModelImpl implements LanguageModel {
         GenerationRequestMetadata request,
         GenerationResponseMetadata response,
         Map<String, Object> providerMetadata
-    ) {
-    }
-
-    private record ToolExecutionBatch(
-        List<ToolResult> results,
-        List<ToolError> errors,
-        List<GenerationWarning> warnings
     ) {
     }
 

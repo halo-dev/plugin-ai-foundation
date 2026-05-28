@@ -1,9 +1,7 @@
 ## Purpose
 
 Define provider-neutral structured output generation semantics for language model calls.
-
 ## Requirements
-
 ### Requirement: Structured output request
 The system SHALL allow callers to request provider-neutral structured output from language model generation.
 
@@ -119,3 +117,26 @@ The system SHALL support structured output and server-side tools in the same req
 - **WHEN** tool calling reaches the step limit before a final structured answer is produced
 - **THEN** the result or stream SHALL include the existing stop-condition warning
 - **AND** structured output validation SHALL fail if no valid final structured output exists
+
+### Requirement: Structured Output Uses Typed Output Specs
+Structured output APIs SHALL provide typed builders or factories for output specs and schemas so callers can request object, enum, array, or no-schema output without raw maps for normal cases.
+
+#### Scenario: Caller requests object output
+- **WHEN** a plugin author requests structured object output
+- **THEN** the author can build the schema with SDK helpers and pass it through an output spec builder
+
+#### Scenario: Caller requests enum output
+- **WHEN** a plugin author requests one value from a fixed set
+- **THEN** the SDK provides a typed way to express enum output and documents the expected result shape
+
+### Requirement: Structured Output Examples Match Runtime Behavior
+Structured output documentation and tests SHALL reflect the actual text/result behavior returned by the SDK.
+
+#### Scenario: Final text is structured
+- **WHEN** the provider returns structured JSON text
+- **THEN** SDK examples treat the model text as the authoritative structured content unless an explicitly documented parsed helper is used
+
+#### Scenario: Partial output is streamed
+- **WHEN** structured output streaming is enabled
+- **THEN** tests verify partial or element streams use the documented stream parts and do not inject extra final content parts beyond the protocol
+

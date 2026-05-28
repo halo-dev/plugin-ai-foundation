@@ -19,13 +19,10 @@ import lombok.NoArgsConstructor;
  * ToolDefinition weather = ToolDefinition.builder()
  *     .name("weather")
  *     .description("Get current weather for a city")
- *     .inputSchema(Map.of(
- *         "type", "object",
- *         "properties", Map.of(
- *             "location", Map.of("type", "string")
- *         ),
- *         "required", List.of("location")
- *     ))
+ *     .inputSchema(JsonSchema.object()
+ *         .property("location", JsonSchema.string().description("City name"))
+ *         .required("location")
+ *         .build())
  *     .executor(context -> Mono.just(Map.of(
  *         "location", context.getInput().get("location"),
  *         "temperature", 22
@@ -66,4 +63,49 @@ public class ToolDefinition {
      * Server-side tool implementation. Return values should be JSON serializable.
      */
     private transient ToolExecutor executor;
+
+    /**
+     * Creates a tool definition with typed schema helpers.
+     */
+    public static ToolDefinition of(String name, String description, JsonSchema inputSchema,
+        ToolExecutor executor) {
+        return ToolDefinition.builder()
+            .name(name)
+            .description(description)
+            .inputSchema(inputSchema)
+            .executor(executor)
+            .build();
+    }
+
+    public static class ToolDefinitionBuilder {
+        public ToolDefinitionBuilder inputSchema(Map<String, Object> schema) {
+            this.inputSchema = schema;
+            return this;
+        }
+
+        public ToolDefinitionBuilder inputSchema(JsonSchema schema) {
+            this.inputSchema = schema != null ? schema.toMap() : null;
+            return this;
+        }
+
+        public ToolDefinitionBuilder inputSchema(JsonSchema.Builder<?> schema) {
+            this.inputSchema = schema != null ? schema.toMap() : null;
+            return this;
+        }
+
+        public ToolDefinitionBuilder outputSchema(Map<String, Object> schema) {
+            this.outputSchema = schema;
+            return this;
+        }
+
+        public ToolDefinitionBuilder outputSchema(JsonSchema schema) {
+            this.outputSchema = schema != null ? schema.toMap() : null;
+            return this;
+        }
+
+        public ToolDefinitionBuilder outputSchema(JsonSchema.Builder<?> schema) {
+            this.outputSchema = schema != null ? schema.toMap() : null;
+            return this;
+        }
+    }
 }

@@ -2,6 +2,9 @@ package run.halo.aifoundation;
 
 import java.time.Duration;
 
+/**
+ * Raised when an embedding request exceeds its configured timeout.
+ */
 public class EmbeddingTimeoutException extends AiFoundationException {
 
     private final Duration timeout;

@@ -29,6 +29,7 @@ import run.halo.aifoundation.EmbeddingTimeoutException;
 import run.halo.aifoundation.EmbeddingUsage;
 import run.halo.aifoundation.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 
 @Slf4j
 public class EmbeddingModelImpl implements EmbeddingModel {
@@ -127,7 +128,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         EmbeddingOptions options) {
         var call = Mono.fromCallable(() -> {
                 checkCancellation(request);
-                return embedBatch(batch, options);
+                return embedBatch(request, batch, options);
             })
             .subscribeOn(Schedulers.boundedElastic())
             .transform(mono -> withEmbeddingTimeout(mono, request));
@@ -139,9 +140,14 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         return call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
     }
 
-    private BatchResult embedBatch(IndexedBatch batch, EmbeddingOptions options) {
-        var request = new org.springframework.ai.embedding.EmbeddingRequest(batch.inputs(), options);
-        var response = springEmbeddingModel.call(request);
+    private BatchResult embedBatch(EmbeddingRequest request, IndexedBatch batch,
+        EmbeddingOptions options) {
+        var springRequest =
+            new org.springframework.ai.embedding.EmbeddingRequest(batch.inputs(), options);
+        var response = request.getHeaders() != null && !request.getHeaders().isEmpty()
+            && springEmbeddingModel instanceof RequestHeaderAwareEmbeddingModel headerAware
+            ? headerAware.call(springRequest, request.getHeaders())
+            : springEmbeddingModel.call(springRequest);
         var embeddings = response.getResults().stream()
             .map(org.springframework.ai.embedding.Embedding::getOutput)
             .toList();
@@ -214,18 +220,15 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
             throw new IllegalArgumentException("Embedding maxRetries must not be negative");
         }
+        if (request.getHeaders() != null && !request.getHeaders().isEmpty()
+            && !(springEmbeddingModel instanceof RequestHeaderAwareEmbeddingModel)) {
+            throw new IllegalArgumentException("Embedding request headers are not supported by provider type: "
+                + providerType);
+        }
     }
 
     private List<EmbeddingWarning> requestWarnings(EmbeddingRequest request) {
         var warnings = new ArrayList<EmbeddingWarning>();
-        if (request != null && request.getHeaders() != null && !request.getHeaders().isEmpty()
-            && !providerOptions.requestHeadersSupported()) {
-            warnings.add(EmbeddingWarning.builder()
-                .code("unsupported-request-headers")
-                .message("Request-scoped embedding headers are not supported by this provider.")
-                .providerMetadata(Map.of("providerType", providerType))
-                .build());
-        }
         if (request != null && request.getMaxParallelCalls() != null && !supportsParallelCalls) {
             warnings.add(EmbeddingWarning.builder()
                 .code("parallel-calls-not-supported")

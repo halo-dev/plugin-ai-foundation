@@ -264,7 +264,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .maxParallelCalls(body.getMaxParallelCalls())
                         .maxRetries(body.getMaxRetries())
                         .providerOptions(body.getProviderOptions())
-                        .headers(body.getHeaders())
                         .metadata(Map.of("source", "console-test"))
                         .build())
                     .map(TestEmbeddingResponse::from)))
@@ -511,7 +510,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Integer maxParallelCalls;
         private Integer maxRetries;
         private Map<String, Map<String, Object>> providerOptions;
-        private Map<String, String> headers;
     }
 
     @Data

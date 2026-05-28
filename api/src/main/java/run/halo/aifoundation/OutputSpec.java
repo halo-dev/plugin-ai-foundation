@@ -82,6 +82,14 @@ public class OutputSpec {
         return OutputSpec.builder().type(OutputType.OBJECT).schema(schema).build();
     }
 
+    public static OutputSpec object(JsonSchema schema) {
+        return object(schema != null ? schema.toMap() : null);
+    }
+
+    public static OutputSpec object(JsonSchema.Builder<?> schema) {
+        return object(schema != null ? schema.toMap() : null);
+    }
+
     public static OutputSpec object(Class<?> outputClass) {
         return OutputSpec.builder()
             .type(OutputType.OBJECT)
@@ -94,6 +102,14 @@ public class OutputSpec {
         return OutputSpec.builder().type(OutputType.ARRAY).elementSchema(elementSchema).build();
     }
 
+    public static OutputSpec array(JsonSchema elementSchema) {
+        return array(elementSchema != null ? elementSchema.toMap() : null);
+    }
+
+    public static OutputSpec array(JsonSchema.Builder<?> elementSchema) {
+        return array(elementSchema != null ? elementSchema.toMap() : null);
+    }
+
     public static OutputSpec array(Class<?> elementClass) {
         return OutputSpec.builder()
             .type(OutputType.ARRAY)
@@ -104,5 +120,37 @@ public class OutputSpec {
 
     public static OutputSpec choice(List<String> choices) {
         return OutputSpec.builder().type(OutputType.CHOICE).choices(choices).build();
+    }
+
+    public static class OutputSpecBuilder {
+        public OutputSpecBuilder schema(Map<String, Object> schema) {
+            this.schema = schema;
+            return this;
+        }
+
+        public OutputSpecBuilder schema(JsonSchema schema) {
+            this.schema = schema != null ? schema.toMap() : null;
+            return this;
+        }
+
+        public OutputSpecBuilder schema(JsonSchema.Builder<?> schema) {
+            this.schema = schema != null ? schema.toMap() : null;
+            return this;
+        }
+
+        public OutputSpecBuilder elementSchema(Map<String, Object> schema) {
+            this.elementSchema = schema;
+            return this;
+        }
+
+        public OutputSpecBuilder elementSchema(JsonSchema schema) {
+            this.elementSchema = schema != null ? schema.toMap() : null;
+            return this;
+        }
+
+        public OutputSpecBuilder elementSchema(JsonSchema.Builder<?> schema) {
+            this.elementSchema = schema != null ? schema.toMap() : null;
+            return this;
+        }
     }
 }

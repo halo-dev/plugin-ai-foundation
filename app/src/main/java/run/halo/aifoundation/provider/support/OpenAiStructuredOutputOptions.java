@@ -61,7 +61,8 @@ public final class OpenAiStructuredOutputOptions {
             .topP(request.getTopP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
-            .stop(request.getStopSequences());
+            .stop(request.getStopSequences())
+            .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
         apply(builder, request);
         return builder.build();
     }

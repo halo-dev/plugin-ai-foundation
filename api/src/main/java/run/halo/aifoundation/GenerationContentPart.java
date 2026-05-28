@@ -15,18 +15,11 @@ import lombok.NoArgsConstructor;
  * consumers that need richer traces should inspect {@link #type}.
  */
 @Data
-@Builder
+@Builder(buildMethodName = "uncheckedBuild")
 @NoArgsConstructor
 @AllArgsConstructor
 public class GenerationContentPart {
-    public static final String TYPE_TEXT = PartType.TEXT;
-    public static final String TYPE_TOOL_CALL = PartType.TOOL_CALL;
-    public static final String TYPE_TOOL_RESULT = PartType.TOOL_RESULT;
-    public static final String TYPE_TOOL_ERROR = PartType.TOOL_ERROR;
-    public static final String TYPE_REASONING = PartType.REASONING;
-    public static final String TYPE_SOURCE = PartType.SOURCE;
-    public static final String TYPE_FILE = PartType.FILE;
-
+                            
     /**
      * Part discriminator. Use values from {@link PartType}.
      */
@@ -91,7 +84,7 @@ public class GenerationContentPart {
      */
     public static GenerationContentPart text(String text) {
         return GenerationContentPart.builder()
-            .type(TYPE_TEXT)
+            .type(PartType.TEXT)
             .text(text)
             .build();
     }
@@ -108,7 +101,7 @@ public class GenerationContentPart {
      */
     public static GenerationContentPart reasoning(ReasoningPart reasoning) {
         return GenerationContentPart.builder()
-            .type(TYPE_REASONING)
+            .type(PartType.REASONING)
             .text(reasoning.getText())
             .signature(reasoning.getSignature())
             .metadata(reasoning.getProviderMetadata())
@@ -120,7 +113,7 @@ public class GenerationContentPart {
      */
     public static GenerationContentPart toolCall(ToolCall toolCall) {
         return GenerationContentPart.builder()
-            .type(TYPE_TOOL_CALL)
+            .type(PartType.TOOL_CALL)
             .toolCallId(toolCall.getToolCallId())
             .toolName(toolCall.getToolName())
             .input(toolCall.getInput())
@@ -133,7 +126,7 @@ public class GenerationContentPart {
      */
     public static GenerationContentPart toolResult(ToolResult toolResult) {
         return GenerationContentPart.builder()
-            .type(TYPE_TOOL_RESULT)
+            .type(PartType.TOOL_RESULT)
             .toolCallId(toolResult.getToolCallId())
             .toolName(toolResult.getToolName())
             .result(toolResult.getResult())
@@ -146,7 +139,7 @@ public class GenerationContentPart {
      */
     public static GenerationContentPart toolError(ToolError toolError) {
         return GenerationContentPart.builder()
-            .type(TYPE_TOOL_ERROR)
+            .type(PartType.TOOL_ERROR)
             .toolCallId(toolError.getToolCallId())
             .toolName(toolError.getToolName())
             .errorText(toolError.getErrorText())
@@ -160,7 +153,7 @@ public class GenerationContentPart {
     public static GenerationContentPart source(String id, String url, String title,
         Map<String, Object> metadata) {
         return GenerationContentPart.builder()
-            .type(TYPE_SOURCE)
+            .type(PartType.SOURCE)
             .id(id)
             .url(url)
             .title(title)
@@ -174,7 +167,7 @@ public class GenerationContentPart {
     public static GenerationContentPart file(String id, String url, String title, String mediaType,
         Object data, Map<String, Object> metadata) {
         return GenerationContentPart.builder()
-            .type(TYPE_FILE)
+            .type(PartType.FILE)
             .id(id)
             .url(url)
             .title(title)
@@ -182,5 +175,63 @@ public class GenerationContentPart {
             .data(data)
             .metadata(metadata)
             .build();
+    }
+
+    private GenerationContentPart validate() {
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException("generation content part type must not be blank");
+        }
+        switch (type) {
+            case PartType.TEXT -> rejectFields("text", signature, toolCallId, toolName, input,
+                result, errorText, id, url, title, mediaType, data);
+            case PartType.REASONING -> rejectFields("reasoning",
+                toolCallId, toolName, input, result, errorText, id, url, title, mediaType, data);
+            case PartType.TOOL_CALL -> {
+                requireText(toolCallId, "tool-call content part toolCallId");
+                requireText(toolName, "tool-call content part toolName");
+                rejectFields("tool-call", text, signature, result, errorText, id,
+                    url, title, mediaType, data);
+            }
+            case PartType.TOOL_RESULT -> {
+                requireText(toolCallId, "tool-result content part toolCallId");
+                requireText(toolName, "tool-result content part toolName");
+                rejectFields("tool-result", text, signature, input, errorText, id,
+                    url, title, mediaType, data);
+            }
+            case PartType.TOOL_ERROR -> {
+                requireText(toolCallId, "tool-error content part toolCallId");
+                requireText(toolName, "tool-error content part toolName");
+                requireText(errorText, "tool-error content part errorText");
+                rejectFields("tool-error", text, signature, input, result, id,
+                    url, title, mediaType, data);
+            }
+            case PartType.SOURCE -> rejectFields("source", text,
+                signature, toolCallId, toolName, input, result, errorText, mediaType, data);
+            case PartType.FILE -> rejectFields("file",
+                text, signature, toolCallId, toolName, input, result, errorText);
+            default -> throw new IllegalArgumentException("unsupported generation content part type: "
+                + type);
+        }
+        return this;
+    }
+
+    private static void requireText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
+    }
+
+    private static void rejectFields(String partName, Object... disallowed) {
+        for (var value : disallowed) {
+            if (value != null) {
+                throw new IllegalArgumentException(partName + " generation content part has invalid fields");
+            }
+        }
+    }
+
+    public static class GenerationContentPartBuilder {
+        public GenerationContentPart build() {
+            return uncheckedBuild().validate();
+        }
     }
 }

@@ -25,6 +25,13 @@ public final class StructuredSchema {
         return schemaForType(type);
     }
 
+    /**
+     * Derives a typed schema helper from a Java record or simple POJO.
+     */
+    public static JsonSchema schema(Class<?> type) {
+        return JsonSchema.fromMap(fromClass(type));
+    }
+
     private static Map<String, Object> schemaForType(Type type) {
         if (type instanceof Class<?> clazz) {
             if (clazz == String.class || clazz.isEnum()) {

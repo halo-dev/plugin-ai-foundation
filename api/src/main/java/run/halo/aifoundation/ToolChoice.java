@@ -30,7 +30,8 @@ public class ToolChoice {
          */
         NONE,
         /**
-         * Require the model to call at least one tool when the provider supports this mode.
+         * Require the model to call at least one available tool when the provider supports this
+         * mode.
          */
         REQUIRED,
         /**
@@ -63,7 +64,7 @@ public class ToolChoice {
     }
 
     /**
-     * Creates a choice that requires tool use when supported.
+     * Creates a choice that requires the model to call one of the provided tools.
      */
     public static ToolChoice required() {
         return ToolChoice.builder().type(Type.REQUIRED).build();

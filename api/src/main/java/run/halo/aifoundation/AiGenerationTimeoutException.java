@@ -2,6 +2,9 @@ package run.halo.aifoundation;
 
 import java.time.Duration;
 
+/**
+ * Raised when text generation exceeds a configured total, step, or tool timeout.
+ */
 public class AiGenerationTimeoutException extends AiFoundationException {
 
     private final String scope;

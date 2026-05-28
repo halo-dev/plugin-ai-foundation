@@ -95,8 +95,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("openai", false,
-            OpenAiEmbeddingOptionsFactory::build);
+        return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
     }
 
     private OpenAiApi buildOpenAiApi(AiProvider provider, String apiKey) {

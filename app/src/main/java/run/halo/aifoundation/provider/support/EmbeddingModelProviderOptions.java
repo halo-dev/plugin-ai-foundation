@@ -11,11 +11,10 @@ import run.halo.aifoundation.EmbeddingWarning;
  */
 public record EmbeddingModelProviderOptions(
     String providerOptionsNamespace,
-    boolean requestHeadersSupported,
     EmbeddingOptionsFactory embeddingOptionsFactory
 ) {
     public static EmbeddingModelProviderOptions defaults(String providerType) {
-        return new EmbeddingModelProviderOptions(providerType, false, null);
+        return new EmbeddingModelProviderOptions(providerType, null);
     }
 
     public EmbeddingOptions buildOptions(EmbeddingRequest request,

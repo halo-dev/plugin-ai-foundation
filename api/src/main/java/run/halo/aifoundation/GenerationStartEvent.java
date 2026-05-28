@@ -5,6 +5,9 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.Value;
 
+/**
+ * Lifecycle event emitted before text generation begins.
+ */
 @Value
 @Builder
 public class GenerationStartEvent {

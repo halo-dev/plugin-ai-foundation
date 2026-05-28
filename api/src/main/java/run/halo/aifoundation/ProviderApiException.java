@@ -1,5 +1,8 @@
 package run.halo.aifoundation;
 
+/**
+ * Raised when a provider HTTP API returns a failed response.
+ */
 public class ProviderApiException extends AiFoundationException {
 
     private final int statusCode;
