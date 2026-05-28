@@ -270,14 +270,68 @@ class LanguageModelImplTest {
                     .singleElement()
                     .satisfies(reasoning -> {
                         assertThat(reasoning.getText()).isEqualTo("Think first.");
-                        assertThat(reasoning.getProviderMetadata().toString())
-                            .contains("reasoning_content");
+                        assertThat(reasoning.getProviderMetadata()).isEmpty();
                     });
                 assertThat(result.getContent()).extracting("type")
                     .containsExactly(PartType.REASONING, PartType.TEXT);
                 assertThat(result.getUsage().getReasoningTokens()).isEqualTo(2);
                 assertThat(result.getTotalUsage().getReasoningTokens()).isEqualTo(2);
                 assertThat(result.getSteps().get(0).getReasoningText()).isEqualTo("Think first.");
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_extractsTaggedReasoningFromNonStreamingText() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("<think>Think first.</think>Answer.", "stop", 3, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("Answer.");
+                assertThat(result.getReasoningText()).isEqualTo("Think first.");
+                assertThat(result.getReasoning()).singleElement()
+                    .satisfies(reasoning -> assertThat(reasoning.getText())
+                        .isEqualTo("Think first."));
+                assertThat(result.getContent()).extracting("type")
+                    .containsExactly(PartType.REASONING, PartType.TEXT);
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_keepsUnbalancedReasoningTagAsAnswerText() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("<think>still open Answer.", "stop", 3, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("<think>still open Answer.");
+                assertThat(result.getReasoningText()).isNull();
+                assertThat(result.getReasoning()).isEmpty();
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_prefersMetadataReasoningAndStripsTaggedText() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            assistantResponse("<think>tagged reasoning</think>Answer.",
+                Map.of("reasoningContent", "metadata reasoning"), "stop", 3, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("Answer.");
+                assertThat(result.getReasoningText()).isEqualTo("metadata reasoning");
             })
             .verifyComplete();
     }
@@ -1258,7 +1312,8 @@ class LanguageModelImplTest {
     void generateText_mapsStructuredObjectOutput() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
-            chatResponse("{\"name\":\"Halo\",\"labels\":[\"cms\"]}", "stop", 2, 4)
+            chatResponse("<think>Use JSON.</think>{\"name\":\"Halo\",\"labels\":[\"cms\"]}",
+                "stop", 2, 4)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -1280,8 +1335,10 @@ class LanguageModelImplTest {
                 assertThat((Map<String, Object>) result.getOutput())
                     .containsEntry("name", "Halo");
                 assertThat(result.getOutputText()).isEqualTo("{\"name\":\"Halo\",\"labels\":[\"cms\"]}");
+                assertThat(result.getReasoningText()).isEqualTo("Use JSON.");
                 assertThat(result.getSteps().get(0).getOutput()).isEqualTo(result.getOutput());
-                assertThat(result.getContent()).extracting("type").containsExactly(PartType.TEXT);
+                assertThat(result.getContent()).extracting("type")
+                    .containsExactly(PartType.REASONING, PartType.TEXT);
             })
             .verifyComplete();
     }
@@ -1290,8 +1347,8 @@ class LanguageModelImplTest {
     void generateText_mapsStructuredArrayAndJsonOutput() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
-            chatResponse("[{\"name\":\"Halo\"}]", "stop", 2, 4),
-            chatResponse("[\"alpha\",\"beta\"]", "stop", 2, 4)
+            chatResponse("<think>Return array.</think>[{\"name\":\"Halo\"}]", "stop", 2, 4),
+            chatResponse("<reasoning>Return json.</reasoning>[\"alpha\",\"beta\"]", "stop", 2, 4)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -1306,6 +1363,7 @@ class LanguageModelImplTest {
             .assertNext(result -> {
                 assertThat(result.getOutput()).isInstanceOf(List.class);
                 assertThat((List<?>) result.getOutput()).hasSize(1);
+                assertThat(result.getReasoningText()).isEqualTo("Return array.");
             })
             .verifyComplete();
 
@@ -1313,7 +1371,10 @@ class LanguageModelImplTest {
                 .prompt("Generate JSON")
                 .output(OutputSpec.json())
                 .build()))
-            .assertNext(result -> assertThat(result.getOutput()).isEqualTo(List.of("alpha", "beta")))
+            .assertNext(result -> {
+                assertThat(result.getOutput()).isEqualTo(List.of("alpha", "beta"));
+                assertThat(result.getReasoningText()).isEqualTo("Return json.");
+            })
             .verifyComplete();
     }
 
@@ -1329,7 +1390,8 @@ class LanguageModelImplTest {
     @Test
     void generateText_validatesChoiceOutput() {
         var chatModel = mock(ChatModel.class);
-        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("sunny", "stop", 2, 4));
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("<think>Pick one.</think>sunny", "stop", 2, 4));
         var model = new LanguageModelImpl(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
@@ -1338,7 +1400,36 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .assertNext(result -> assertThat(result.getOutput()).isEqualTo("sunny"))
+            .assertNext(result -> {
+                assertThat(result.getOutput()).isEqualTo("sunny");
+                assertThat(result.getReasoningText()).isEqualTo("Pick one.");
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_keepsProviderMetadataProviderSpecific() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("Answer.", "stop", 2, 4, Map.of(
+                "native", "value",
+                "id", "metadata-id",
+                "model", "metadata-model",
+                "providerType", "metadata-provider",
+                "reasoning_content", "metadata reasoning"
+            ))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .assertNext(result -> {
+                assertThat(result.getProviderMetadata()).containsEntry("native", "value");
+                assertThat(result.getProviderMetadata())
+                    .doesNotContainKeys("providerType", "id", "model", "reasoning_content",
+                        "reasoningContent");
+                assertThat(result.getResponse().getId()).isEqualTo("resp_1");
+                assertThat(result.getResponse().getModel()).isEqualTo("test-model");
+            })
             .verifyComplete();
     }
 
@@ -1844,6 +1935,27 @@ class LanguageModelImplTest {
         var output = AssistantMessage.builder()
             .content(text)
             .properties(Map.of("reasoningContent", reasoning))
+            .build();
+        return new ChatResponse(
+            List.of(new Generation(output, generationMetadata)),
+            metadataBuilder.build()
+        );
+    }
+
+    private ChatResponse assistantResponse(String text, Map<String, Object> properties,
+        String finishReason, Integer promptTokens, Integer completionTokens) {
+        var generationMetadata = ChatGenerationMetadata.builder()
+            .finishReason(finishReason)
+            .build();
+        var metadataBuilder = ChatResponseMetadata.builder()
+            .id("resp_1")
+            .model("test-model");
+        if (promptTokens != null || completionTokens != null) {
+            metadataBuilder.usage(new DefaultUsage(promptTokens, completionTokens));
+        }
+        var output = AssistantMessage.builder()
+            .content(text)
+            .properties(properties)
             .build();
         return new ChatResponse(
             List.of(new Generation(output, generationMetadata)),

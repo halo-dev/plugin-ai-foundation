@@ -147,9 +147,12 @@ return model.generateText(request)
 | `text` | 汇总后的文本 |
 | `content` | 标准化后的内容 part |
 | `reasoningText` | 模型返回的推理文本，如果存在 |
+| `reasoning` | 推理内容 part 列表，可读取每段推理文本和 provider 附加信息 |
 | `output` | 结构化输出解析结果 |
 | `usage` / `totalUsage` | Token 使用量 |
 | `warnings` | 可恢复问题或供应方能力差异提示 |
+| `request` / `response` | 本次调用的标准化请求和响应元数据 |
+| `providerMetadata` | provider 原生元数据，不包含标准化的模型 ID、响应 ID 等字段 |
 | `steps` | 多步骤调用明细 |
 
 ### 输入方式
@@ -192,6 +195,33 @@ return model.generateText(request)
         return result.getText();
     });
 ```
+
+### 推理结果
+
+如果模型返回推理内容，SDK 会把推理和最终回答分开。调用方正常读取：
+
+```java
+return model.generateText(request)
+    .map(result -> {
+        String answer = result.getText();
+        String thinking = result.getReasoningText();
+        return answer;
+    });
+```
+
+`getText()` 始终表示最终回答；已识别的推理内容不会混在回答文本中。需要更细粒度信息时读取 `getReasoning()`，其中每个 `ReasoningPart` 都有 `getText()`。不要依赖 provider 原生字段名读取推理内容，provider 原生字段只用于底层适配和必要的续写上下文。
+
+### 结果元数据
+
+结果中的元数据分为两层：
+
+| 字段 | 使用方式 |
+| --- | --- |
+| `getRequest()` | 标准化请求元数据，例如本次调用使用的模型信息和 SDK 诊断信息 |
+| `getResponse()` | 标准化响应元数据，例如响应 ID、模型 ID、响应消息、headers/body |
+| `getProviderMetadata()` | provider 原生附加信息，字段形态由 provider 决定 |
+
+业务代码需要响应 ID 或模型 ID 时优先读取 `result.getResponse().getId()` 和 `result.getResponse().getModel()`。`providerMetadata` 只适合调试或 provider 特有能力，不应作为标准字段来源。
 
 如果请求包含工具调用，`steps` 会记录每一步模型输出、工具调用、工具结果和 usage。最终 `text` 是最后汇总后的文本。
 

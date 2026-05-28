@@ -11,18 +11,14 @@ import lombok.NoArgsConstructor;
  *
  * <p>Reasoning is kept separate from final answer text. Some providers expose it as visible
  * thinking text, while others use it mainly as state that must be passed back when continuing a
- * tool-calling conversation. Provider-specific values such as DeepSeek/OpenAI-compatible
- * {@code reasoning_content} belong in {@link #providerMetadata}; callers should treat them as
- * opaque unless the provider documents otherwise.
+ * tool-calling conversation. Normal callers should read {@link #text}; provider-specific metadata
+ * is optional, namespaced, and opaque unless the provider documents otherwise.
  *
  * <pre>{@code
  * var request = GenerateTextRequest.builder()
  *     .messages(List.of(ModelMessage.assistant(List.of(
  *         ModelMessagePart.reasoning(ReasoningPart.builder()
  *             .text("I need to look up the weather.")
- *             .providerMetadata(Map.of("openai", Map.of(
- *                 "reasoning_content", "I need to look up the weather."
- *             )))
  *             .build()),
  *         ModelMessagePart.toolCall(toolCall)
  *     ))))

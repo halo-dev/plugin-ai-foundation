@@ -90,14 +90,11 @@ public final class LanguageModelResponseMapper {
             return Map.of();
         }
         var map = new LinkedHashMap<String, Object>();
-        map.put("providerType", providerType);
-        if (hasText(metadata.getId())) {
-            map.put("id", metadata.getId());
-        }
-        if (hasText(metadata.getModel())) {
-            map.put("model", metadata.getModel());
-        }
-        metadata.entrySet().forEach(entry -> map.put(entry.getKey(), sanitizeValue(entry.getValue())));
+        metadata.entrySet().forEach(entry -> {
+            if (!isNormalizedMetadataKey(entry.getKey())) {
+                map.put(entry.getKey(), sanitizeValue(entry.getValue()));
+            }
+        });
         return map;
     }
 
@@ -172,7 +169,7 @@ public final class LanguageModelResponseMapper {
         }
         return List.of(ReasoningPart.builder()
             .text(reasoning)
-            .providerMetadata(Map.of(providerType, Map.of("reasoning_content", reasoning)))
+            .providerMetadata(Map.of())
             .build());
     }
 
@@ -325,6 +322,17 @@ public final class LanguageModelResponseMapper {
             || normalized.contains("token")
             || normalized.contains("secret")
             || normalized.contains("password");
+    }
+
+    private boolean isNormalizedMetadataKey(String key) {
+        if (key == null) {
+            return false;
+        }
+        return switch (key) {
+            case "providerType", "id", "model", "reasoning", "reasoningContent",
+                "reasoning_content" -> true;
+            default -> false;
+        };
     }
 
     private boolean hasText(String value) {

@@ -57,6 +57,7 @@ import run.halo.aifoundation.service.language.mapping.LanguageModelMessageMapper
 import run.halo.aifoundation.service.language.mapping.LanguageModelRequestValidator;
 import run.halo.aifoundation.service.language.mapping.LanguageModelResponseMapper;
 import run.halo.aifoundation.service.language.mapping.LanguageModelToolCallMapper;
+import run.halo.aifoundation.service.language.reasoning.ReasoningContentExtractor;
 import run.halo.aifoundation.service.language.stream.LanguageModelStreamResultBuilder;
 import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
 import run.halo.aifoundation.service.language.structured.LanguageModelStructuredOutputHandler;
@@ -91,6 +92,7 @@ public class LanguageModelImpl implements LanguageModel {
     private final LanguageModelToolCallMapper toolCallMapper;
     private final LanguageModelToolExecutor toolExecutor;
     private final LanguageModelStructuredOutputHandler structuredOutputHandler;
+    private final ReasoningContentExtractor reasoningExtractor;
 
     public LanguageModelImpl(ChatModel chatModel, String providerType) {
         this(chatModel, providerType, LanguageModelProviderOptions.defaults());
@@ -109,6 +111,8 @@ public class LanguageModelImpl implements LanguageModel {
         this.chatOptionsBuilder = new LanguageModelChatOptionsBuilder(providerType,
             this.providerOptions, this::writeJson);
         this.responseMapper = new LanguageModelResponseMapper(providerType, messageMapper);
+        this.reasoningExtractor =
+            new ReasoningContentExtractor(providerType, this.responseMapper::sanitizeValue);
         this.toolCallMapper = new LanguageModelToolCallMapper();
         this.structuredOutputHandler =
             new LanguageModelStructuredOutputHandler(responseMapper, this::writeJson);
@@ -948,10 +952,9 @@ public class LanguageModelImpl implements LanguageModel {
             if (hasText(output.getText())) {
                 text.append(output.getText());
             }
-            var reasoningContent = firstText(output.getMetadata(), "reasoningContent",
-                "reasoning_content");
-            if (hasText(reasoningContent)) {
-                reasoning.append(reasoningContent);
+            var extraction = reasoningExtractor.extract("", output.getMetadata());
+            if (hasText(extraction.reasoningText())) {
+                reasoning.append(extraction.reasoningText());
             }
             if (output.getToolCalls() != null && !output.getToolCalls().isEmpty()) {
                 toolCalls.clear();
@@ -964,11 +967,14 @@ public class LanguageModelImpl implements LanguageModel {
         if (lastResponse == null) {
             return responses.get(responses.size() - 1);
         }
-        var properties = hasText(reasoning.toString())
-            ? Map.<String, Object>of("reasoningContent", reasoning.toString())
+        var extraction = reasoningExtractor.extract(text.toString(), hasText(reasoning.toString())
+            ? Map.of("reasoning", reasoning.toString())
+            : Map.of());
+        var properties = hasText(extraction.reasoningText())
+            ? Map.<String, Object>of("reasoningContent", extraction.reasoningText())
             : Map.<String, Object>of();
         var output = AssistantMessage.builder()
-            .content(text.toString())
+            .content(extraction.text())
             .properties(properties)
             .toolCalls(toolCalls)
             .build();
@@ -983,8 +989,11 @@ public class LanguageModelImpl implements LanguageModel {
         GenerateTextRequest request) {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
-        var text = output != null && output.getText() != null ? output.getText() : "";
-        var reasoning = mapReasoning(output);
+        var originalText = output != null && output.getText() != null ? output.getText() : "";
+        var extraction = reasoningExtractor.extract(originalText,
+            output != null ? output.getMetadata() : Map.of());
+        var text = extraction.text();
+        var reasoning = extraction.reasoning();
         var reasoningText = reasoning.stream()
             .map(ReasoningPart::getText)
             .filter(this::hasText)
@@ -1021,48 +1030,12 @@ public class LanguageModelImpl implements LanguageModel {
         );
     }
 
-    private List<ReasoningPart> mapReasoning(AssistantMessage output) {
-        if (output == null || output.getMetadata() == null || output.getMetadata().isEmpty()) {
-            return List.of();
-        }
-        var reasoningContent = firstText(output.getMetadata(), "reasoningContent",
-            "reasoning_content");
-        if (!hasText(reasoningContent)) {
-            return List.of();
-        }
-        return List.of(ReasoningPart.builder()
-            .text(reasoningContent)
-            .providerMetadata(reasoningProviderMetadata(reasoningContent, output.getMetadata()))
-            .build());
-    }
-
-    @SuppressWarnings("unchecked")
-    private String firstText(Map<String, Object> metadata, String... keys) {
-        for (var key : keys) {
-            var value = metadata.get(key);
-            if (value instanceof String text && hasText(text)) {
-                return text;
-            }
-            if (value instanceof Map<?, ?> map) {
-                var nested = firstText((Map<String, Object>) responseMapper.sanitizeValue(map), keys);
-                if (hasText(nested)) {
-                    return nested;
-                }
-            }
-        }
-        return null;
-    }
-
     private Map<String, Object> reasoningProviderMetadata(String reasoningContent,
         Map<String, Object> outputMetadata) {
-        var providerValues = new LinkedHashMap<String, Object>();
-        providerValues.put("reasoning_content", reasoningContent);
-        outputMetadata.forEach((key, value) -> {
-            if (key != null && key.toLowerCase().contains("reasoning")) {
-                providerValues.put(key, responseMapper.sanitizeValue(value));
-            }
-        });
-        return Map.of(providerType, providerValues);
+        return reasoningExtractor.extract("", outputMetadata).reasoning().stream()
+            .findFirst()
+            .map(ReasoningPart::getProviderMetadata)
+            .orElse(Map.of());
     }
 
     private void validateFinalStructuredOutput(GenerateTextRequest request,
@@ -1420,7 +1393,7 @@ public class LanguageModelImpl implements LanguageModel {
         if (result == null || result.getOutput() == null) {
             return "";
         }
-        var reasoning = mapReasoning(result.getOutput());
+        var reasoning = reasoningExtractor.extract("", result.getOutput().getMetadata()).reasoning();
         if (reasoning.isEmpty()) {
             return "";
         }
@@ -1484,7 +1457,7 @@ public class LanguageModelImpl implements LanguageModel {
         return GenerationWarning.builder()
             .code(code)
             .message(message)
-            .providerMetadata(Map.of("providerType", providerType))
+            .providerMetadata(Map.of())
             .build();
     }
 
@@ -1540,10 +1513,9 @@ public class LanguageModelImpl implements LanguageModel {
                     text.append(output.getText());
                 }
                 if (output.getMetadata() != null) {
-                    var reasoningContent = firstText(output.getMetadata(), "reasoningContent",
-                        "reasoning_content");
-                    if (hasText(reasoningContent)) {
-                        reasoning.append(reasoningContent);
+                    var extraction = reasoningExtractor.extract("", output.getMetadata());
+                    if (hasText(extraction.reasoningText())) {
+                        reasoning.append(extraction.reasoningText());
                     }
                 }
                 if (output.getToolCalls() != null && !output.getToolCalls().isEmpty()) {
@@ -1605,7 +1577,7 @@ public class LanguageModelImpl implements LanguageModel {
         }
 
         Map<String, Object> providerMetadata() {
-            return lastResponse != null ? responseMapper.mapMetadata(lastResponse) : Map.of("providerType", providerType);
+            return lastResponse != null ? responseMapper.mapMetadata(lastResponse) : Map.of();
         }
     }
 
