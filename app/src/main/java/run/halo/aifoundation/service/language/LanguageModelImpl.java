@@ -34,6 +34,7 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelUsage;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.part.PartType;
@@ -74,6 +75,8 @@ public class LanguageModelImpl implements LanguageModel {
         "structured-output-strict-not-guaranteed";
     private static final String WARNING_TOOL_INPUT_EXAMPLES_IGNORED =
         "tool-input-examples-ignored";
+    private static final String WARNING_REASONING_RETURNED_WHILE_DISABLED =
+        "reasoning-returned-while-disabled";
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final ChatModel chatModel;
@@ -587,7 +590,7 @@ public class LanguageModelImpl implements LanguageModel {
             run.stepStart(stepIndex, stepRequest, prepared.executionMessages(), steps, stopWhen);
             checkCancellation(stepRequest);
             var response = callProvider(stepRequest, prepared.messages());
-            var step = mapStep(response, stepIndex);
+            var step = mapStep(response, stepIndex, stepRequest);
             var toolExecutionAllowed = stepIndex + 1 < resolvedStepLimit(stepRequest);
             var toolResults = toolExecutionAllowed
                 ? toolExecutor.execute(step.toolCalls(), stepRequest, stepIndex,
@@ -809,6 +812,7 @@ public class LanguageModelImpl implements LanguageModel {
             .providerOptions(prepared.getProviderOptions() != null
                 ? prepared.getProviderOptions()
                 : request.getProviderOptions())
+            .reasoning(request.getReasoning())
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
             .context(request.getContext())
@@ -950,7 +954,8 @@ public class LanguageModelImpl implements LanguageModel {
             lastResponse.getMetadata());
     }
 
-    private StepSnapshot mapStep(ChatResponse response, int stepIndex) {
+    private StepSnapshot mapStep(ChatResponse response, int stepIndex,
+        GenerateTextRequest request) {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
         var text = output != null && output.getText() != null ? output.getText() : "";
@@ -971,6 +976,8 @@ public class LanguageModelImpl implements LanguageModel {
         }
         content.addAll(responseMapper.sourceAndFileParts(response));
         toolCalls.stream().map(GenerationContentPart::toolCall).forEach(content::add);
+        var warnings = new ArrayList<>(responseMapper.mapWarnings(response));
+        warnings.addAll(reasoningReturnedWhileDisabledWarnings(request, reasoning));
         return new StepSnapshot(
             stepIndex,
             text,
@@ -982,7 +989,7 @@ public class LanguageModelImpl implements LanguageModel {
             rawFinishReason,
             responseMapper.mapUsage(response),
             toolCalls,
-            responseMapper.mapWarnings(response),
+            warnings,
             responseMapper.mapRequestMetadata(response),
             responseMapper.mapResponseMetadata(response, text, reasoning, toolCalls),
             responseMapper.mapMetadata(response)
@@ -1341,23 +1348,26 @@ public class LanguageModelImpl implements LanguageModel {
                 textStarted.set(false);
                 parts.add(TextStreamPart.textEnd(textId));
             }
+            var reasoningParts = responseMapper.reasoningParts(reasoning);
+            var warnings = mergeWarnings(
+                mergeWarnings(responseMapper.mapWarnings(response), requestWarnings(request)),
+                mergeWarnings(run.warnings(),
+                    reasoningReturnedWhileDisabledWarnings(request, reasoningParts)));
             parts.add(TextStreamPart.finishStep(0, finishReason, rawFinishReason, usage,
-                mergeWarnings(mergeWarnings(responseMapper.mapWarnings(response), requestWarnings(request)),
-                    run.warnings()), responseMapper.mapRequestMetadata(response),
-                responseMapper.mapResponseMetadata(response, responseMapper.extractText(response), responseMapper.reasoningParts(reasoning),
+                warnings, responseMapper.mapRequestMetadata(response),
+                responseMapper.mapResponseMetadata(response, responseMapper.extractText(response), reasoningParts,
                     List.of()), responseMapper.mapMetadata(response)));
             var step = GenerationStep.builder()
                 .stepIndex(0)
                 .text(text)
                 .reasoningText(hasText(reasoning) ? reasoning : null)
-                .reasoning(responseMapper.reasoningParts(reasoning))
+                .reasoning(reasoningParts)
                 .finishReason(finishReason)
                 .rawFinishReason(rawFinishReason)
                 .usage(usage)
-                .warnings(mergeWarnings(mergeWarnings(responseMapper.mapWarnings(response), requestWarnings(request)),
-                    run.warnings()))
+                .warnings(warnings)
                 .request(responseMapper.mapRequestMetadata(response))
-                .response(responseMapper.mapResponseMetadata(response, responseMapper.extractText(response), responseMapper.reasoningParts(reasoning),
+                .response(responseMapper.mapResponseMetadata(response, responseMapper.extractText(response), reasoningParts,
                     List.of()))
                 .providerMetadata(responseMapper.mapMetadata(response))
                 .build();
@@ -1419,6 +1429,19 @@ public class LanguageModelImpl implements LanguageModel {
                 "Tool input examples are ignored by the default tool adapter."));
         }
         return warnings;
+    }
+
+    private List<GenerationWarning> reasoningReturnedWhileDisabledWarnings(
+        GenerateTextRequest request, List<ReasoningPart> reasoning) {
+        if (request == null
+            || request.getReasoning() == null
+            || request.getReasoning().getMode() != ReasoningOptions.Mode.DISABLED
+            || reasoning == null
+            || reasoning.isEmpty()) {
+            return List.of();
+        }
+        return List.of(warning(WARNING_REASONING_RETURNED_WHILE_DISABLED,
+            "Reasoning content was returned even though reasoning was explicitly disabled."));
     }
 
     private List<GenerationWarning> mergeWarnings(List<GenerationWarning> left,

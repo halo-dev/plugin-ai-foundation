@@ -15,9 +15,13 @@ import org.springframework.ai.ollama.management.ModelManagementOptions;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import org.springframework.ai.tool.ToolCallback;
+import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Slf4j
 @Component
@@ -96,6 +100,17 @@ public class OllamaProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public LanguageModelProviderOptions languageModelProviderOptions() {
+        var reasoningControlOptions = ReasoningControlOptions.ollama();
+        return new LanguageModelProviderOptions(false, false,
+            this::buildChatOptions,
+            (request, toolCallbacks, toolNames) -> buildToolCallingChatOptions(request,
+                toolCallbacks, toolNames),
+            this::buildChatOptions,
+            reasoningControlOptions);
+    }
+
+    @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var ollamaApi = buildOllamaApi(provider);
         return OllamaEmbeddingModel.builder()
@@ -143,5 +158,55 @@ public class OllamaProvider extends AbstractAiProviderType {
             .webClientBuilder(webClientBuilder(provider))
             .restClientBuilder(restClientBuilder(provider))
             .build();
+    }
+
+    private OllamaChatOptions buildChatOptions(GenerateTextRequest request) {
+        var builder = baseChatOptionsBuilder(request);
+        applyReasoning(builder, request);
+        return builder.build();
+    }
+
+    private OllamaChatOptions buildToolCallingChatOptions(GenerateTextRequest request,
+        List<ToolCallback> toolCallbacks, java.util.Set<String> toolNames) {
+        var builder = baseChatOptionsBuilder(request)
+            .internalToolExecutionEnabled(false)
+            .toolCallbacks(toolCallbacks);
+        if (toolNames != null && !toolNames.isEmpty()) {
+            builder.toolNames(toolNames);
+        }
+        applyReasoning(builder, request);
+        return builder.build();
+    }
+
+    private OllamaChatOptions.Builder baseChatOptionsBuilder(GenerateTextRequest request) {
+        return OllamaChatOptions.builder()
+            .temperature(request.getTemperature())
+            .numPredict(request.getMaxOutputTokens())
+            .topP(request.getTopP())
+            .topK(request.getTopK())
+            .presencePenalty(request.getPresencePenalty())
+            .frequencyPenalty(request.getFrequencyPenalty())
+            .stop(request.getStopSequences());
+    }
+
+    private void applyReasoning(OllamaChatOptions.Builder builder, GenerateTextRequest request) {
+        var reasoning = request.getReasoning();
+        if (reasoning == null || !reasoning.isExplicit()) {
+            return;
+        }
+        if (reasoning.getEffort() != null) {
+            switch (reasoning.getEffort()) {
+                case LOW -> builder.thinkLow();
+                case MEDIUM -> builder.thinkMedium();
+                case HIGH -> builder.thinkHigh();
+            }
+            return;
+        }
+        switch (reasoning.getMode()) {
+            case ENABLED -> builder.enableThinking();
+            case DISABLED -> builder.disableThinking();
+            default -> {
+            }
+        }
     }
 }

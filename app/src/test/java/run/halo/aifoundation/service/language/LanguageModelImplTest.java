@@ -39,6 +39,7 @@ import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.lifecycle.GenerationToolCallFinishEvent;
 import run.halo.aifoundation.lifecycle.GenerationToolCallStartEvent;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
@@ -52,6 +53,7 @@ import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolExecutionContext;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
 
 class LanguageModelImplTest {
@@ -181,6 +183,82 @@ class LanguageModelImplTest {
                 assertThat(result.getUsage().getReasoningTokens()).isEqualTo(2);
                 assertThat(result.getTotalUsage().getReasoningTokens()).isEqualTo(2);
                 assertThat(result.getSteps().get(0).getReasoningText()).isEqualTo("Think first.");
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_rejectsUnsupportedExplicitReasoning() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "ollama");
+        var request = GenerateTextRequest.builder()
+            .prompt("Fast")
+            .reasoning(ReasoningOptions.disabled())
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("disabled reasoning is not supported by provider type: ollama")
+            .verify();
+    }
+
+    @Test
+    void generateText_rejectsReasoningProviderOptionConflict() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "deepseek",
+            new LanguageModelProviderOptions(true, true, null, null, null,
+                ReasoningControlOptions.deepSeek((builder, request) -> {
+                })));
+        var request = GenerateTextRequest.builder()
+            .prompt("Fast")
+            .reasoning(ReasoningOptions.disabled())
+            .providerOptions(Map.of("deepseek", Map.of(
+                "thinking", Map.of("type", "enabled")
+            )))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("reasoning setting conflicts with providerOptions.deepseek.thinking; "
+                + "use either typed reasoning or raw provider options, not both")
+            .verify();
+    }
+
+    @Test
+    void generateText_rejectsDisabledReasoningWithReasoningHistory() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "deepseek",
+            new LanguageModelProviderOptions(true, true, null, null, null,
+                ReasoningControlOptions.deepSeek((builder, request) -> {
+                })));
+        var request = GenerateTextRequest.builder()
+            .messages(List.of(
+                ModelMessage.assistant(List.of(ModelMessagePart.reasoning("thinking"))),
+                ModelMessage.user("Continue")
+            ))
+            .reasoning(ReasoningOptions.disabled())
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("disabled reasoning cannot be combined with assistant reasoning "
+                + "history for provider type: deepseek")
+            .verify();
+    }
+
+    @Test
+    void generateText_warnsWhenReasoningReturnsAfterDisabledRequest() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            reasoningResponse("Still thinking.", "Answer.", "stop", 3, 5, 2)
+        );
+        var model = new LanguageModelImpl(chatModel, "deepseek",
+            new LanguageModelProviderOptions(true, true, null, null, null,
+                ReasoningControlOptions.deepSeek((builder, request) -> {
+                })));
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Fast")
+                .reasoning(ReasoningOptions.disabled())
+                .build()))
+            .assertNext(result -> {
+                assertThat(result.getReasoningText()).isEqualTo("Still thinking.");
+                assertThat(result.getWarnings()).extracting("code")
+                    .contains("reasoning-returned-while-disabled");
             })
             .verifyComplete();
     }
@@ -847,6 +925,31 @@ class LanguageModelImplTest {
             .verifyComplete();
 
         assertNoOverlappingStreamBlocks(stream.fullStream().collectList().block());
+    }
+
+    @Test
+    void streamText_warnsWhenReasoningReturnsAfterDisabledRequest() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            reasoningResponse("Thinking", "Answer", "stop", 2, 4, 1)
+        ));
+        var model = new LanguageModelImpl(chatModel, "deepseek",
+            new LanguageModelProviderOptions(true, true, null, null, null,
+                ReasoningControlOptions.deepSeek((builder, request) -> {
+                })));
+
+        var parts = model.streamText(GenerateTextRequest.builder()
+                .prompt("Fast")
+                .reasoning(ReasoningOptions.disabled())
+                .build())
+            .fullStream()
+            .collectList()
+            .block();
+
+        assertThat(parts).filteredOn(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .singleElement()
+            .satisfies(part -> assertThat(part.getWarnings()).extracting("code")
+                .contains("reasoning-returned-while-disabled"));
     }
 
     @Test

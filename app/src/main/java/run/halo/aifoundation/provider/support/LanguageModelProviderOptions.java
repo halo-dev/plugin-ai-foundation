@@ -6,10 +6,22 @@ package run.halo.aifoundation.provider.support;
 public record LanguageModelProviderOptions(
     boolean reasoningHistorySupported,
     boolean streamToolCallsForReasoning,
+    ChatOptionsFactory chatOptionsFactory,
     ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
-    StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory
+    StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory,
+    ReasoningControlOptions reasoningControlOptions
 ) {
+    public LanguageModelProviderOptions(boolean reasoningHistorySupported,
+        boolean streamToolCallsForReasoning,
+        ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
+        StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory) {
+        this(reasoningHistorySupported, streamToolCallsForReasoning, null,
+            toolCallingChatOptionsFactory, structuredOutputChatOptionsFactory,
+            ReasoningControlOptions.unsupported());
+    }
+
     public static LanguageModelProviderOptions defaults() {
-        return new LanguageModelProviderOptions(false, false, null, null);
+        return new LanguageModelProviderOptions(false, false, null, null, null,
+            ReasoningControlOptions.unsupported());
     }
 }

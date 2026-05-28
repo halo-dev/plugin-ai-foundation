@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolChoice;
 import run.halo.aifoundation.tool.ToolDefinition;
@@ -102,5 +103,35 @@ class DeepSeekProviderTest {
 
         assertThat(options.getExtraBody())
             .containsEntry("thinking", Map.of("type", "disabled"));
+    }
+
+    @Test
+    void options_applyTypedDisabledReasoning() {
+        var request = GenerateTextRequest.builder()
+            .prompt("Fast")
+            .reasoning(ReasoningOptions.disabled())
+            .build();
+
+        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+            .chatOptionsFactory()
+            .build(request);
+
+        assertThat(options.getExtraBody())
+            .containsEntry("thinking", Map.of("type", "disabled"));
+    }
+
+    @Test
+    void options_applyTypedEnabledReasoning() {
+        var request = GenerateTextRequest.builder()
+            .prompt("Think")
+            .reasoning(ReasoningOptions.enabled())
+            .build();
+
+        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+            .structuredOutputChatOptionsFactory()
+            .build(request);
+
+        assertThat(options.getExtraBody())
+            .containsEntry("thinking", Map.of("type", "enabled"));
     }
 }

@@ -4,6 +4,7 @@ import { describe, expect, it } from '@rstest/core'
 import {
   buildTestChatRequest,
   buildOutputSpec,
+  buildReasoningOptions,
   filterEnabledChatModels,
   flushSseJsonBuffer,
   isRenderableReasoningDelta,
@@ -56,6 +57,7 @@ describe('buildTestChatRequest', () => {
         temperature: 0.2,
         topP: 0.9,
         maxOutputTokens: 128,
+        reasoning: buildReasoningOptions({ mode: 'DISABLED' }),
         providerOptions: { openai: { seed: 42 } },
         output: { type: 'OBJECT', schema: { type: 'object' } } as unknown as OutputSpec,
       }),
@@ -71,6 +73,7 @@ describe('buildTestChatRequest', () => {
       temperature: 0.2,
       topP: 0.9,
       maxOutputTokens: 128,
+      reasoning: { mode: 'DISABLED' },
       providerOptions: { openai: { seed: 42 } },
       output: { type: 'OBJECT', schema: { type: 'object' } },
     })
@@ -89,6 +92,18 @@ describe('buildTestChatRequest', () => {
         { role: 'ASSISTANT', content: [{ type: 'text', text: 'Hi' }] },
         { role: 'USER', content: [{ type: 'text', text: 'Continue' }] },
       ],
+    })
+  })
+})
+
+describe('buildReasoningOptions', () => {
+  it('builds typed reasoning payloads', () => {
+    expect(buildReasoningOptions({ mode: 'DEFAULT' })).toBeUndefined()
+    expect(buildReasoningOptions({ mode: 'ENABLED' })).toEqual({ mode: 'ENABLED' })
+    expect(buildReasoningOptions({ mode: 'DISABLED' })).toEqual({ mode: 'DISABLED' })
+    expect(buildReasoningOptions({ mode: 'EFFORT', effort: 'HIGH' })).toEqual({
+      mode: 'ENABLED',
+      effort: 'HIGH',
     })
   })
 })

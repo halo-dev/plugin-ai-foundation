@@ -28,6 +28,7 @@ public final class LanguageModelChatOptionsBuilder {
 
     public void assertRequestSupported(GenerateTextRequest request, boolean supportsToolCalling,
         String toolCallingUnsupportedMessage) {
+        providerOptions.reasoningControlOptions().validate(providerType, request);
         if (hasTools(request) && !supportsToolCalling) {
             throw new IllegalArgumentException(toolCallingUnsupportedMessage);
         }
@@ -39,6 +40,7 @@ public final class LanguageModelChatOptionsBuilder {
                 + providerType);
         }
         if (request != null && request.getHeaders() != null && !request.getHeaders().isEmpty()
+            && providerOptions.chatOptionsFactory() == null
             && providerOptions.structuredOutputChatOptionsFactory() == null
             && (request.getTools() == null || request.getTools().isEmpty()
             || providerOptions.toolCallingChatOptionsFactory() == null)) {
@@ -79,6 +81,9 @@ public final class LanguageModelChatOptionsBuilder {
         if (request.getHeaders() != null && !request.getHeaders().isEmpty()
             && providerOptions.structuredOutputChatOptionsFactory() != null) {
             return providerOptions.structuredOutputChatOptionsFactory().build(request);
+        }
+        if (providerOptions.chatOptionsFactory() != null) {
+            return providerOptions.chatOptionsFactory().build(request);
         }
         return ChatOptions.builder()
             .temperature(request.getTemperature())

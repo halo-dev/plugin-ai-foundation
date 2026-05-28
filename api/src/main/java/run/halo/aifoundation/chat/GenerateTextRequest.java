@@ -81,8 +81,18 @@ public class GenerateTextRequest {
     /**
      * Provider-specific options grouped by provider namespace, for example
      * {@code Map.of("openai", Map.of("seed", 42))}.
+     *
+     * <p>For reasoning behavior, prefer {@link #reasoning} unless a provider-native option is
+     * intentionally needed. Explicit typed reasoning settings must not be combined with known
+     * provider-native reasoning keys in this map.
      */
     private Map<String, Map<String, Object>> providerOptions;
+    /**
+     * Optional request-scoped reasoning behavior. When unset or set to
+     * {@link ReasoningOptions#providerDefault()}, generation uses the selected provider and model
+     * default behavior without adding generic provider-native reasoning parameters.
+     */
+    private ReasoningOptions reasoning;
     /**
      * Request-scoped HTTP headers sent to providers when the selected provider adapter supports
      * dynamic request headers.

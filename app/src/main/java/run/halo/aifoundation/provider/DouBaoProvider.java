@@ -10,8 +10,12 @@ import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.OpenAiCompatibleEmbeddingModel;
 import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.support.OpenAiThinkingOptions;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Component
 public class DouBaoProvider extends AbstractAiProviderType {
@@ -88,6 +92,20 @@ public class DouBaoProvider extends AbstractAiProviderType {
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
         return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
+    }
+
+    @Override
+    public LanguageModelProviderOptions languageModelProviderOptions() {
+        var reasoningControlOptions = ReasoningControlOptions.thinkingType();
+        return new LanguageModelProviderOptions(false, false,
+            request -> OpenAiChatOptionsSupport.buildBasic(request, getProviderType(),
+                reasoningControlOptions, OpenAiThinkingOptions::applyThinkingType),
+            (request, toolCallbacks, toolNames) -> OpenAiChatOptionsSupport.buildToolCalling(
+                request, toolCallbacks, toolNames, getProviderType(), reasoningControlOptions,
+                OpenAiThinkingOptions::applyThinkingType),
+            request -> OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
+                reasoningControlOptions, OpenAiThinkingOptions::applyThinkingType),
+            reasoningControlOptions);
     }
 
     private OpenAiApi buildOpenAiApi(AiProvider provider, String apiKey) {

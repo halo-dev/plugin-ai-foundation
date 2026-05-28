@@ -1,5 +1,6 @@
 package run.halo.aifoundation.provider;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.ai.chat.model.ChatModel;
@@ -14,6 +15,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.OpenAiToolCallingOptions;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Component
 public class DeepSeekProvider extends AbstractAiProviderType {
@@ -99,6 +101,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
         return new LanguageModelProviderOptions(
             true,
             true,
+            this::buildBasicChatOptions,
             (request, toolCallbacks, toolNames) -> {
                 var builder = OpenAiChatOptions.builder()
                     .temperature(request.getTemperature())
@@ -116,8 +119,22 @@ public class DeepSeekProvider extends AbstractAiProviderType {
                     toolNames);
                 return builder.build();
             },
-            this::buildStructuredOutputChatOptions
+            this::buildStructuredOutputChatOptions,
+            ReasoningControlOptions.deepSeek(this::applyDeepSeekReasoning)
         );
+    }
+
+    private OpenAiChatOptions buildBasicChatOptions(GenerateTextRequest request) {
+        var builder = OpenAiChatOptions.builder()
+            .temperature(request.getTemperature())
+            .maxTokens(request.getMaxOutputTokens())
+            .topP(request.getTopP())
+            .presencePenalty(request.getPresencePenalty())
+            .frequencyPenalty(request.getFrequencyPenalty())
+            .stop(request.getStopSequences())
+            .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
+        applyDeepSeekExtraBody(builder, request);
+        return builder.build();
     }
 
     private OpenAiChatOptions buildStructuredOutputChatOptions(GenerateTextRequest request) {
@@ -140,7 +157,38 @@ public class DeepSeekProvider extends AbstractAiProviderType {
             ? request.getProviderOptions().get(getProviderType())
             : null;
         if (options != null && !options.isEmpty()) {
-            builder.extraBody(Map.copyOf(options));
+            var extraBody = new LinkedHashMap<>(options);
+            applyDeepSeekReasoning(extraBody, request);
+            builder.extraBody(Map.copyOf(extraBody));
+            return;
+        }
+        var extraBody = new LinkedHashMap<String, Object>();
+        applyDeepSeekReasoning(extraBody, request);
+        if (!extraBody.isEmpty()) {
+            builder.extraBody(Map.copyOf(extraBody));
+        }
+    }
+
+    private void applyDeepSeekReasoning(OpenAiChatOptions.Builder builder,
+        GenerateTextRequest request) {
+        var extraBody = new LinkedHashMap<String, Object>();
+        applyDeepSeekReasoning(extraBody, request);
+        if (!extraBody.isEmpty()) {
+            builder.extraBody(Map.copyOf(extraBody));
+        }
+    }
+
+    private void applyDeepSeekReasoning(Map<String, Object> extraBody,
+        GenerateTextRequest request) {
+        var reasoning = request.getReasoning();
+        if (reasoning == null || reasoning.getMode() == null) {
+            return;
+        }
+        switch (reasoning.getMode()) {
+            case ENABLED -> extraBody.put("thinking", Map.of("type", "enabled"));
+            case DISABLED -> extraBody.put("thinking", Map.of("type", "disabled"));
+            default -> {
+            }
         }
     }
 

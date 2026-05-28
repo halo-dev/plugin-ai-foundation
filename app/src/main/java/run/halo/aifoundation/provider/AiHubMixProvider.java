@@ -12,8 +12,12 @@ import org.springframework.web.reactive.function.client.WebClient;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.OpenAiCompatibleEmbeddingModel;
 import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.support.OpenAiReasoningOptions;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Component
 public class AiHubMixProvider extends AbstractAiProviderType {
@@ -86,6 +90,21 @@ public class AiHubMixProvider extends AbstractAiProviderType {
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var openAiApi = buildOpenAiApi(provider, apiKey);
         return new OpenAiCompatibleEmbeddingModel(openAiApi, modelId);
+    }
+
+    @Override
+    public LanguageModelProviderOptions languageModelProviderOptions() {
+        var reasoningControlOptions =
+            ReasoningControlOptions.openAiCompatibleEffort(OpenAiReasoningOptions::applyEffort);
+        return new LanguageModelProviderOptions(false, false,
+            request -> OpenAiChatOptionsSupport.buildBasic(request, getProviderType(),
+                reasoningControlOptions, null),
+            (request, toolCallbacks, toolNames) -> OpenAiChatOptionsSupport.buildToolCalling(
+                request, toolCallbacks, toolNames, getProviderType(), reasoningControlOptions,
+                null),
+            request -> OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
+                reasoningControlOptions, null),
+            reasoningControlOptions);
     }
 
     @Override

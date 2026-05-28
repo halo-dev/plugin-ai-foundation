@@ -18,6 +18,12 @@ public final class OpenAiToolCallingOptions {
 
     public static OpenAiChatOptions build(GenerateTextRequest request,
         java.util.List<ToolCallback> toolCallbacks, Set<String> toolNames) {
+        return build(request, toolCallbacks, toolNames, ReasoningControlOptions.unsupported());
+    }
+
+    public static OpenAiChatOptions build(GenerateTextRequest request,
+        java.util.List<ToolCallback> toolCallbacks, Set<String> toolNames,
+        ReasoningControlOptions reasoningControlOptions) {
         var builder = OpenAiChatOptions.builder()
             .temperature(request.getTemperature())
             .maxTokens(request.getMaxOutputTokens())
@@ -28,6 +34,7 @@ public final class OpenAiToolCallingOptions {
             .internalToolExecutionEnabled(false)
             .toolCallbacks(toolCallbacks)
             .httpHeaders(headers(request));
+        reasoningControlOptions.apply(builder, request);
         applyToolChoice(builder, request.getToolChoice(), toolNames);
         OpenAiStructuredOutputOptions.apply(builder, request);
         return builder.build();

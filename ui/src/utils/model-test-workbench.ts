@@ -12,6 +12,12 @@ export interface WorkbenchMessage {
   modelName?: string
   modelDisplayName?: string
   state?: 'streaming' | 'done' | 'error' | 'stopped'
+  warnings?: WorkbenchWarning[]
+}
+
+export interface WorkbenchWarning {
+  code?: string
+  message?: string
 }
 
 export interface WorkbenchToolEvent {
@@ -27,11 +33,19 @@ export interface ChatParameters {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
+  reasoning?: ReasoningOptions
   providerOptions?: Record<string, Record<string, unknown>>
   output?: OutputSpec
 }
 
 export type OutputMode = 'TEXT' | 'OBJECT' | 'ARRAY' | 'CHOICE' | 'JSON'
+export type ReasoningMode = 'DEFAULT' | 'ENABLED' | 'DISABLED' | 'EFFORT'
+export type ReasoningEffort = 'LOW' | 'MEDIUM' | 'HIGH'
+
+export interface ReasoningOptions {
+  mode?: 'DEFAULT' | 'ENABLED' | 'DISABLED'
+  effort?: ReasoningEffort
+}
 
 export interface SseParseResult<T> {
   buffer: string
@@ -54,6 +68,7 @@ export interface GenerateTextRequest {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
+  reasoning?: ReasoningOptions
   providerOptions?: Record<string, Record<string, unknown>>
   output?: OutputSpec
 }
@@ -95,6 +110,7 @@ export interface TextStreamPart {
   title?: string
   mediaType?: string
   data?: unknown
+  warnings?: WorkbenchWarning[]
 }
 
 export function isEnabledChatModel(model: AiModel) {
@@ -195,6 +211,22 @@ export function buildOutputSpec(options: {
     : { value: { type: 'OBJECT', schema: parsedSchema.value } as OutputSpec }
 }
 
+export function buildReasoningOptions(options: {
+  mode: ReasoningMode
+  effort?: ReasoningEffort
+}): ReasoningOptions | undefined {
+  switch (options.mode) {
+    case 'ENABLED':
+      return { mode: 'ENABLED' }
+    case 'DISABLED':
+      return { mode: 'DISABLED' }
+    case 'EFFORT':
+      return { mode: 'ENABLED', effort: options.effort || 'MEDIUM' }
+    default:
+      return undefined
+  }
+}
+
 export function buildTestChatRequest(
   messages: WorkbenchMessage[],
   parameters: ChatParameters,
@@ -222,6 +254,7 @@ export function buildTestChatRequest(
     temperature: parameters.temperature,
     topP: parameters.topP,
     maxOutputTokens: parameters.maxOutputTokens,
+    reasoning: parameters.reasoning,
     providerOptions: parameters.providerOptions,
     output: parameters.output,
   }

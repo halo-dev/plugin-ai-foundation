@@ -67,6 +67,7 @@ public class MyAiService {
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.control.CancellationSource;
 import run.halo.aifoundation.embedding.EmbeddingModel;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
@@ -134,6 +135,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .temperature(0.7)
     .maxOutputTokens(2048)
     .topP(0.9)
+    .reasoning(ReasoningOptions.disabled())
     .providerOptions(ProviderOptions.of(
         ProviderOptions.namespace("openai")
             .option("seed", 42)
@@ -514,6 +516,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 | `presencePenalty` | `Double` | Presence penalty |
 | `frequencyPenalty` | `Double` | Frequency penalty |
 | `stopSequences` | `List<String>` | 停止序列 |
+| `reasoning` | `ReasoningOptions` | 请求级推理控制。未设置或 `providerDefault()` 表示使用 provider 和模型默认行为；`enabled()`、`disabled()`、`effort(...)` 需要所选 provider adapter 支持 |
 | `tools` | `List<ToolDefinition>` | 请求级工具定义，包含名称、描述、输入/输出 JSON Schema 和可选 executor |
 | `toolChoice` | `ToolChoice` | 工具选择策略：`AUTO`、`REQUIRED`、`NONE` 或指定 `TOOL` |
 | `stopWhen` | `StopCondition` | Java 调用方的步骤继续条件；未设置时只执行一个模型步骤。该字段不会进入 OpenAPI/HTTP schema |
@@ -539,9 +542,36 @@ ProviderOptions.of(
 )
 ```
 
+延迟敏感的调用优先使用 typed SDK API 表达意图：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("请用一句话总结这段内容")
+    .reasoning(ReasoningOptions.disabled())
+    .build();
+```
+
+当前内置 provider 的 typed 推理控制映射如下：
+
+| Provider | `disabled()` / `enabled()` | `effort(LOW/MEDIUM/HIGH)` | 原生参数 |
+|----------|----------------------------|---------------------------|----------|
+| `openai` | 不支持显式开关 | 支持 | `reasoning_effort` |
+| `openailike` | 不支持显式开关 | 支持 | `reasoning_effort` |
+| `aihubmix` | 不支持显式开关 | 支持 | `reasoning_effort` |
+| `deepseek` | 支持 | 不支持 | `thinking.type` |
+| `doubao` | 支持 | 不支持 | `thinking.type` |
+| `kimi` | 支持 | 不支持 | `thinking.type` |
+| `zhipuai` | 支持 | 不支持 | `thinking.type` |
+| `mimo` | 支持 | 不支持 | `thinking.type` |
+| `ernie` | 支持 | 不支持 | `enable_thinking` |
+| `siliconflow` | 支持 | 不支持 | `enable_thinking` |
+| `ollama` | 支持 | 支持 | `think` |
+| `minimax` | 不支持 | 不支持 | 可通过 `providerOptions.minimax` 传入 provider 私有参数 |
+
 对于 SDK 尚未建模的 provider 私有参数，可以使用
-`ProviderOptions.namespace("provider").option("key", value)` 作为显式逃生口。
-例如 DeepSeek 的 thinking 开关由调用方显式决定：
+`ProviderOptions.namespace("provider").option("key", value)` 作为高级逃生口。
+不要把 typed `reasoning` 与 provider 原生 reasoning key 同时传入；如果两者冲突，
+请求会在调用 provider 前失败。比如确实需要直接传入 DeepSeek 私有 thinking 结构时：
 
 ```java
 ProviderOptions.of(

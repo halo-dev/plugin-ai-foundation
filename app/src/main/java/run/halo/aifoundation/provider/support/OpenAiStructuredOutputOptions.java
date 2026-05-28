@@ -55,6 +55,11 @@ public final class OpenAiStructuredOutputOptions {
     }
 
     public static OpenAiChatOptions buildBasic(GenerateTextRequest request) {
+        return buildBasic(request, ReasoningControlOptions.unsupported());
+    }
+
+    public static OpenAiChatOptions buildBasic(GenerateTextRequest request,
+        ReasoningControlOptions reasoningControlOptions) {
         var builder = OpenAiChatOptions.builder()
             .temperature(request.getTemperature())
             .maxTokens(request.getMaxOutputTokens())
@@ -63,6 +68,7 @@ public final class OpenAiStructuredOutputOptions {
             .frequencyPenalty(request.getFrequencyPenalty())
             .stop(request.getStopSequences())
             .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
+        reasoningControlOptions.apply(builder, request);
         apply(builder, request);
         return builder.build();
     }

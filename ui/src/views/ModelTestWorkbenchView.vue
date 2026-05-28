@@ -6,6 +6,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { groupModelOptionsByProvider, modelOptionLabel } from '@/utils/model-options'
 import {
   buildOutputSpec,
+  buildReasoningOptions,
   buildTestChatRequest,
   flushSseJsonBuffer,
   isRenderableReasoningDelta,
@@ -16,6 +17,8 @@ import {
   toToolEvent,
   type TextStreamPart,
   type OutputMode,
+  type ReasoningEffort,
+  type ReasoningMode,
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading, VTag } from '@halo-dev/components'
@@ -46,6 +49,8 @@ const systemPrompt = shallowRef('')
 const temperature = shallowRef(0.7)
 const topP = shallowRef(1)
 const maxTokens = shallowRef(1024)
+const reasoningMode = shallowRef<ReasoningMode>('DEFAULT')
+const reasoningEffort = shallowRef<ReasoningEffort>('MEDIUM')
 const testToolEnabled = shallowRef(false)
 const outputMode = shallowRef<OutputMode>('TEXT')
 const outputSchemaText = shallowRef(`{
@@ -190,6 +195,10 @@ async function sendMessage() {
     temperature: numberOrUndefined(temperature.value),
     topP: numberOrUndefined(topP.value),
     maxOutputTokens: numberOrUndefined(maxTokens.value),
+    reasoning: buildReasoningOptions({
+      mode: reasoningMode.value,
+      effort: reasoningEffort.value,
+    }),
     providerOptions: providerOptions.value,
     output: outputSpec.value,
   })
@@ -282,6 +291,10 @@ function handleChunks(messageId: string, chunks: TextStreamPart[]) {
       appendAssistantContent(messageId, chunk.delta)
       continue
     }
+    if (chunk.type === 'finish-step' && chunk.warnings?.length) {
+      appendAssistantWarnings(messageId, chunk.warnings)
+      continue
+    }
     if (isTerminalTextStreamPart(chunk)) {
       finishAssistantMessage(messageId, 'done')
     }
@@ -306,6 +319,13 @@ function appendAssistantReasoning(messageId: string, content: string) {
   const message = messages.value.find((item) => item.id === messageId)
   if (message) {
     message.reasoningContent = `${message.reasoningContent || ''}${content}`
+  }
+}
+
+function appendAssistantWarnings(messageId: string, warnings: NonNullable<TextStreamPart['warnings']>) {
+  const message = messages.value.find((item) => item.id === messageId)
+  if (message) {
+    message.warnings = [...(message.warnings || []), ...warnings]
   }
 }
 
@@ -589,6 +609,22 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
 
+                <div
+                  v-if="message.role === 'assistant' && message.warnings?.length"
+                  class=":uno: mb-3 rounded-md border border-yellow-200 bg-yellow-50 px-2 py-1.5"
+                >
+                  <div class=":uno: text-xs font-medium text-yellow-800">Warnings</div>
+                  <ul class=":uno: mt-1 space-y-1 text-xs text-yellow-800">
+                    <li
+                      v-for="warning in message.warnings"
+                      :key="`${warning.code}-${warning.message}`"
+                    >
+                      <span class=":uno: font-mono">{{ warning.code }}</span>
+                      <span v-if="warning.message">: {{ warning.message }}</span>
+                    </li>
+                  </ul>
+                </div>
+
                 <div v-if="message.role === 'user'" class=":uno: whitespace-pre-wrap">
                   {{ message.content }}
                 </div>
@@ -798,6 +834,35 @@ onBeforeUnmount(() => {
             label="Max Tokens"
             min="1"
             step="1"
+          />
+
+          <FormKit
+            v-model="reasoningMode"
+            type="select"
+            name="reasoningMode"
+            label="推理控制"
+            :options="[
+              { label: '默认', value: 'DEFAULT' },
+              { label: '启用', value: 'ENABLED' },
+              { label: '禁用', value: 'DISABLED' },
+              { label: '按 effort', value: 'EFFORT' },
+            ]"
+            help="默认表示不传 provider 原生推理参数；启用、禁用和 effort 需要当前 provider 支持。"
+            outer-class=":uno: mt-4"
+          />
+
+          <FormKit
+            v-if="reasoningMode === 'EFFORT'"
+            v-model="reasoningEffort"
+            type="select"
+            name="reasoningEffort"
+            label="推理 Effort"
+            :options="[
+              { label: 'Low', value: 'LOW' },
+              { label: 'Medium', value: 'MEDIUM' },
+              { label: 'High', value: 'HIGH' },
+            ]"
+            outer-class=":uno: mt-4"
           />
 
           <FormKit

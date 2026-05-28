@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.options.ProviderOptions;
 import run.halo.aifoundation.part.GenerationContentPart;
@@ -15,6 +17,7 @@ import run.halo.aifoundation.schema.JsonSchema;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.tool.ToolDefinition;
+import tools.jackson.databind.json.JsonMapper;
 
 class SdkErgonomicsTest {
 
@@ -84,6 +87,40 @@ class SdkErgonomicsTest {
             .containsEntry("seed", 42)
             .containsEntry("dimensions", 512)
             .containsEntry("encodingFormat", "float");
+    }
+
+    @Test
+    void reasoningOptions_buildTypedSettings() {
+        assertThat(ReasoningOptions.providerDefault().isExplicit()).isFalse();
+        assertThat(ReasoningOptions.enabled().getMode())
+            .isEqualTo(ReasoningOptions.Mode.ENABLED);
+        assertThat(ReasoningOptions.disabled().getMode())
+            .isEqualTo(ReasoningOptions.Mode.DISABLED);
+        assertThat(ReasoningOptions.effort(ReasoningOptions.Effort.LOW).getEffort())
+            .isEqualTo(ReasoningOptions.Effort.LOW);
+        assertThat(GenerateTextRequest.builder()
+            .prompt("fast")
+            .reasoning(ReasoningOptions.disabled())
+            .build()
+            .getReasoning()
+            .isExplicit()).isTrue();
+        assertThat(GenerateTextRequest.builder().prompt("default").build().getReasoning())
+            .isNull();
+    }
+
+    @Test
+    void reasoningOptions_areJsonSerializable() throws Exception {
+        var mapper = JsonMapper.builder().build();
+        var request = GenerateTextRequest.builder()
+            .prompt("fast")
+            .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
+            .build();
+
+        var json = mapper.writeValueAsString(request);
+        var restored = mapper.readValue(json, GenerateTextRequest.class);
+
+        assertThat(restored.getReasoning().getMode()).isEqualTo(ReasoningOptions.Mode.ENABLED);
+        assertThat(restored.getReasoning().getEffort()).isEqualTo(ReasoningOptions.Effort.HIGH);
     }
 
     @Test
