@@ -40,6 +40,9 @@ public final class LanguageModelRequestValidator {
                 validateMessage(message);
             }
         }
+        if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
+            throw new IllegalArgumentException("maxRetries must not be negative");
+        }
         validateOutput(request.getOutput());
         validateTools(request);
     }

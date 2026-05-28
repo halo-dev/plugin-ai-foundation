@@ -44,9 +44,10 @@ class ReasoningProviderOptionsTest {
             .build(GenerateTextRequest.builder()
                 .prompt("Fast")
                 .reasoning(ReasoningOptions.disabled())
-                .build());
+            .build());
 
         assertThat(disabledOptions.getThinkOption().toJsonValue()).isEqualTo(false);
+        assertThat(disabledOptions.getSeed()).isNull();
 
         var effortOptions = (OllamaChatOptions) new OllamaProvider()
             .languageModelProviderOptions()
@@ -54,9 +55,11 @@ class ReasoningProviderOptionsTest {
             .build(GenerateTextRequest.builder()
                 .prompt("Think")
                 .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
+                .seed(99)
                 .build());
 
         assertThat(effortOptions.getThinkOption().toJsonValue()).isEqualTo("high");
+        assertThat(effortOptions.getSeed()).isEqualTo(99);
     }
 
     @Test

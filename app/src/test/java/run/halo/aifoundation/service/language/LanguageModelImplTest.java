@@ -126,6 +126,101 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_retriesRetryableProviderFailures() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new IllegalStateException("temporary outage"))
+            .thenReturn(chatResponse("Recovered", "stop", 1, 1));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(1)
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Recovered"))
+            .verifyComplete();
+
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_disablesRetriesWhenMaxRetriesIsZero() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new IllegalStateException("temporary outage"));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(0)
+                .build()))
+            .expectErrorMessage("temporary outage")
+            .verify();
+
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_rejectsNegativeMaxRetries() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(-1)
+                .build()))
+            .expectErrorMessage("maxRetries must not be negative")
+            .verify();
+    }
+
+    @Test
+    void generateText_rejectsSeedWhenProviderCannotMapIt() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "simple");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .seed(42)
+                .build()))
+            .expectErrorMessage("seed is not supported by provider type: simple")
+            .verify();
+    }
+
+    @Test
+    void generateText_prepareStepCanOverrideSeedAndRetryBudget() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var providerOptions = new LanguageModelProviderOptions(false, false,
+            request -> OpenAiChatOptions.builder()
+                .temperature(request.getTemperature())
+                .maxTokens(request.getMaxOutputTokens())
+                .seed(request.getSeed())
+                .build(),
+            null,
+            null,
+            ReasoningControlOptions.unsupported());
+        var model = new LanguageModelImpl(chatModel, "openai", providerOptions);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .seed(1)
+                .maxRetries(2)
+                .prepareStep(context -> {
+                    assertThat(context.getSeed()).isEqualTo(1);
+                    assertThat(context.getMaxRetries()).isEqualTo(2);
+                    return PreparedStep.builder()
+                        .seed(42)
+                        .maxRetries(0)
+                        .build();
+                })
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        assertThat(((OpenAiChatOptions) captor.getValue().getOptions()).getSeed()).isEqualTo(42);
+    }
+
+    @Test
     void generateText_rejectsPromptAndMessagesTogether() {
         var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
         var request = GenerateTextRequest.builder()

@@ -79,8 +79,18 @@ public class GenerateTextRequest {
      */
     private List<String> stopSequences;
     /**
+     * Optional deterministic sampling seed. Providers and models may differ in how strictly they
+     * honor this value.
+     */
+    private Integer seed;
+    /**
+     * Maximum retry attempts for retryable non-streaming provider calls. Set to {@code 0} to
+     * disable retries for this request.
+     */
+    private Integer maxRetries;
+    /**
      * Provider-specific options grouped by provider namespace, for example
-     * {@code Map.of("openai", Map.of("seed", 42))}.
+     * {@code Map.of("openai", Map.of("response_format", "..."))}.
      *
      * <p>For reasoning behavior, prefer {@link #reasoning} unless a provider-native option is
      * intentionally needed. Explicit typed reasoning settings must not be combined with known

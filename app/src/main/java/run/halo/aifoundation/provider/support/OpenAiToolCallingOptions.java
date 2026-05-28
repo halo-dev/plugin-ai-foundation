@@ -30,6 +30,7 @@ public final class OpenAiToolCallingOptions {
             .topP(request.getTopP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .seed(request.getSeed())
             .stop(request.getStopSequences())
             .internalToolExecutionEnabled(false)
             .toolCallbacks(toolCallbacks)

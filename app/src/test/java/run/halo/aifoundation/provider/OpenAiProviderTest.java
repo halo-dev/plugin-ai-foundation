@@ -16,6 +16,7 @@ class OpenAiProviderTest {
         var request = GenerateTextRequest.builder()
             .prompt("Think carefully")
             .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
+            .seed(42)
             .build();
 
         var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
@@ -23,5 +24,6 @@ class OpenAiProviderTest {
             .build(request);
 
         assertThat(options.getReasoningEffort()).isEqualTo("high");
+        assertThat(options.getSeed()).isEqualTo(42);
     }
 }

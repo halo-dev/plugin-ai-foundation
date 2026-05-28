@@ -22,6 +22,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.retry.Retry;
 import run.halo.aifoundation.chat.FinishReason;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.exception.AiGenerationTimeoutException;
@@ -69,6 +70,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class LanguageModelImpl implements LanguageModel {
     private static final int DEFAULT_STEP_LIMIT = 1;
     private static final int MAX_STEP_LIMIT = 10;
+    private static final int DEFAULT_MAX_RETRIES = 2;
     private static final String WARNING_STRUCTURED_OUTPUT_PROMPT_GUIDANCE =
         "structured-output-prompt-guidance";
     private static final String WARNING_STRUCTURED_OUTPUT_STRICT_NOT_GUARANTEED =
@@ -758,6 +760,8 @@ public class LanguageModelImpl implements LanguageModel {
             .messages(List.copyOf(nullSafe(currentExecutionMessages)))
             .tools(nullSafe(baseRequest.getTools()))
             .stopWhen(currentStopWhen)
+            .seed(baseRequest.getSeed())
+            .maxRetries(baseRequest.getMaxRetries())
             .providerOptions(baseRequest.getProviderOptions())
             .build();
         var prepared = baseRequest.getPrepareStep() != null
@@ -809,6 +813,10 @@ public class LanguageModelImpl implements LanguageModel {
             .stopSequences(prepared.getStopSequences() != null
                 ? prepared.getStopSequences()
                 : request.getStopSequences())
+            .seed(prepared.getSeed() != null ? prepared.getSeed() : request.getSeed())
+            .maxRetries(prepared.getMaxRetries() != null
+                ? prepared.getMaxRetries()
+                : request.getMaxRetries())
             .providerOptions(prepared.getProviderOptions() != null
                 ? prepared.getProviderOptions()
                 : request.getProviderOptions())
@@ -889,7 +897,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     private ChatResponse callProvider(GenerateTextRequest request,
         List<org.springframework.ai.chat.messages.Message> messages) {
-        return withStepTimeout(Mono.fromCallable(() -> {
+        var call = withStepTimeout(Mono.fromCallable(() -> {
             checkCancellation(request);
             var prompt = new Prompt(messages, buildChatOptions(request));
             if (shouldUseReasoningAwareStreamCall(request)) {
@@ -897,7 +905,24 @@ public class LanguageModelImpl implements LanguageModel {
                 return aggregateStreamResponses(responses);
             }
             return chatModel.call(prompt);
-        }), request).block();
+        }), request);
+        var maxRetries = maxRetries(request);
+        if (maxRetries > 0) {
+            call = call.retryWhen(Retry.max(maxRetries).filter(this::isRetryableProviderFailure));
+        }
+        return call.block();
+    }
+
+    private int maxRetries(GenerateTextRequest request) {
+        return request.getMaxRetries() != null ? request.getMaxRetries() : DEFAULT_MAX_RETRIES;
+    }
+
+    private boolean isRetryableProviderFailure(Throwable error) {
+        return !(error instanceof IllegalArgumentException
+            || error instanceof AiGenerationCancelledException
+            || error instanceof AiGenerationTimeoutException
+            || error instanceof StructuredOutputValidationException
+            || error instanceof TimeoutException);
     }
 
     private boolean shouldUseReasoningAwareStreamCall(GenerateTextRequest request) {

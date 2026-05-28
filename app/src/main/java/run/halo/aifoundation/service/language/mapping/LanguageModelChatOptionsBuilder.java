@@ -50,6 +50,10 @@ public final class LanguageModelChatOptionsBuilder {
     }
 
     public ChatOptions build(GenerateTextRequest request) {
+        if (request.getSeed() != null && !canMapSeed(request)) {
+            throw new IllegalArgumentException("seed is not supported by provider type: "
+                + providerType);
+        }
         if (hasTools(request)
             && (request.getToolChoice() == null
             || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
@@ -94,6 +98,19 @@ public final class LanguageModelChatOptionsBuilder {
             .frequencyPenalty(request.getFrequencyPenalty())
             .stopSequences(request.getStopSequences())
             .build();
+    }
+
+    private boolean canMapSeed(GenerateTextRequest request) {
+        if (hasTools(request)
+            && (request.getToolChoice() == null
+            || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
+            return providerOptions.toolCallingChatOptionsFactory() != null;
+        }
+        if (hasStructuredOutput(request)) {
+            return providerOptions.structuredOutputChatOptionsFactory() != null
+                || providerOptions.chatOptionsFactory() != null;
+        }
+        return providerOptions.chatOptionsFactory() != null;
     }
 
     private List<ToolCallback> toolCallbacks(GenerateTextRequest request) {

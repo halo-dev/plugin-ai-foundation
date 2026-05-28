@@ -49,6 +49,8 @@ const systemPrompt = shallowRef('')
 const temperature = shallowRef(0.7)
 const topP = shallowRef(1)
 const maxTokens = shallowRef(1024)
+const seed = shallowRef<number | undefined>()
+const maxRetries = shallowRef<number | undefined>(2)
 const reasoningMode = shallowRef<ReasoningMode>('DEFAULT')
 const reasoningEffort = shallowRef<ReasoningEffort>('MEDIUM')
 const testToolEnabled = shallowRef(false)
@@ -195,6 +197,8 @@ async function sendMessage() {
     temperature: numberOrUndefined(temperature.value),
     topP: numberOrUndefined(topP.value),
     maxOutputTokens: numberOrUndefined(maxTokens.value),
+    seed: numberOrUndefined(seed.value),
+    maxRetries: numberOrUndefined(maxRetries.value),
     reasoning: buildReasoningOptions({
       mode: reasoningMode.value,
       effort: reasoningEffort.value,
@@ -834,6 +838,26 @@ onBeforeUnmount(() => {
             label="Max Tokens"
             min="1"
             step="1"
+          />
+
+          <FormKit
+            v-model="seed"
+            type="number"
+            number
+            name="seed"
+            label="Seed"
+            step="1"
+          />
+
+          <FormKit
+            v-model="maxRetries"
+            type="number"
+            number
+            name="maxRetries"
+            label="Max Retries"
+            min="0"
+            step="1"
+            help="仅作用于可重试的非流式 provider 调用，0 表示不重试。"
           />
 
           <FormKit

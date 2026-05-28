@@ -65,6 +65,14 @@ public class PreparedStep {
      */
     private List<String> stopSequences;
     /**
+     * Deterministic sampling seed for the current step.
+     */
+    private Integer seed;
+    /**
+     * Retry attempts for retryable non-streaming provider calls in the current step.
+     */
+    private Integer maxRetries;
+    /**
      * Stop condition override to use after this step completes.
      */
     private transient StopCondition stopWhen;

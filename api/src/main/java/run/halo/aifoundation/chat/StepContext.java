@@ -38,6 +38,14 @@ public class StepContext {
      */
     transient StopCondition stopWhen;
     /**
+     * Current deterministic sampling seed, if one was configured.
+     */
+    Integer seed;
+    /**
+     * Current retry attempts for retryable non-streaming provider calls.
+     */
+    Integer maxRetries;
+    /**
      * Request provider options visible to this step.
      */
     Map<String, Map<String, Object>> providerOptions;

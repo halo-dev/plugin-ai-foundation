@@ -33,6 +33,8 @@ export interface ChatParameters {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
+  seed?: number
+  maxRetries?: number
   reasoning?: ReasoningOptions
   providerOptions?: Record<string, Record<string, unknown>>
   output?: OutputSpec
@@ -68,6 +70,8 @@ export interface GenerateTextRequest {
   temperature?: number
   topP?: number
   maxOutputTokens?: number
+  seed?: number
+  maxRetries?: number
   reasoning?: ReasoningOptions
   providerOptions?: Record<string, Record<string, unknown>>
   output?: OutputSpec
@@ -254,6 +258,8 @@ export function buildTestChatRequest(
     temperature: parameters.temperature,
     topP: parameters.topP,
     maxOutputTokens: parameters.maxOutputTokens,
+    seed: parameters.seed,
+    maxRetries: parameters.maxRetries,
     reasoning: parameters.reasoning,
     providerOptions: parameters.providerOptions,
     output: parameters.output,

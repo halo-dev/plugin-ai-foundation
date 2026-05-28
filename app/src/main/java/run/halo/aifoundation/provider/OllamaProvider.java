@@ -186,6 +186,7 @@ public class OllamaProvider extends AbstractAiProviderType {
             .topK(request.getTopK())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .seed(request.getSeed())
             .stop(request.getStopSequences());
     }
 

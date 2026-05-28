@@ -109,6 +109,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
                     .topP(request.getTopP())
                     .presencePenalty(request.getPresencePenalty())
                     .frequencyPenalty(request.getFrequencyPenalty())
+                    .seed(request.getSeed())
                     .stop(request.getStopSequences())
                     .internalToolExecutionEnabled(false)
                     .toolCallbacks(toolCallbacks)
@@ -131,6 +132,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
             .topP(request.getTopP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .seed(request.getSeed())
             .stop(request.getStopSequences())
             .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
         applyDeepSeekExtraBody(builder, request);
@@ -144,6 +146,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
             .topP(request.getTopP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .seed(request.getSeed())
             .stop(request.getStopSequences())
             .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
         applyDeepSeekExtraBody(builder, request);

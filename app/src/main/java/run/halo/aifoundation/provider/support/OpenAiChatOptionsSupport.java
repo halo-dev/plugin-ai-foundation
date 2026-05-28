@@ -55,6 +55,7 @@ public final class OpenAiChatOptionsSupport {
             .topP(request.getTopP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .seed(request.getSeed())
             .stop(request.getStopSequences())
             .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
     }
