@@ -4,6 +4,7 @@ import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { groupModelOptionsByProvider } from '@/utils/model-options'
 
 import { VLoading } from '@halo-dev/components'
+import type { FormKitMessage, FormKitNode } from '@formkit/core'
 import { onClickOutside } from '@vueuse/core'
 import { useFuse } from '@vueuse/integrations/useFuse'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -24,6 +25,8 @@ const props = withDefaults(
     name?: string
     label?: string
     help?: string
+    validation?: string | unknown[]
+    validationMessages?: Record<string, string>
     modelType?: string
     providerName?: string
     providerType?: string
@@ -40,6 +43,8 @@ const props = withDefaults(
     name: undefined,
     label: undefined,
     help: undefined,
+    validation: undefined,
+    validationMessages: undefined,
     modelType: undefined,
     providerName: undefined,
     providerType: undefined,
@@ -62,6 +67,7 @@ const keyword = ref('')
 const selectedValue = ref('')
 const rootRef = ref<HTMLElement>()
 const searchInputRef = ref<HTMLInputElement>()
+const hiddenFormkitRef = ref<{ node: FormKitNode } | null>(null)
 const isOpen = ref(false)
 const activeModelName = ref<string>()
 const selectedModelSnapshot = ref<ModelOption>()
@@ -119,6 +125,16 @@ const hasModels = computed(() => groups.value.some((group) => group.models.lengt
 const selectedDisplayName = computed(() => {
   const model = selectedModel.value || selectedModelSnapshot.value
   return model?.displayName || model?.modelId || selectedValue.value
+})
+
+const fieldErrors = computed<string[]>(() => {
+  const messages = hiddenFormkitRef.value?.node?.context?.messages as
+    | Record<string, FormKitMessage>
+    | undefined
+  if (!messages) return []
+  return Object.values(messages)
+    .filter((msg) => msg.visible && msg.type === 'validation')
+    .map((msg) => String(msg.value))
 })
 
 onClickOutside(rootRef, () => {
@@ -303,7 +319,14 @@ function handleKeyboard(event: KeyboardEvent) {
     class=":uno: py-4 text-sm transition-all formkit-disabled:pointer-events-none formkit-disabled:cursor-not-allowed first:pt-0 last:pb-0 formkit-disabled:opacity-70"
     :data-disabled="effectiveDisabled || undefined"
   >
-    <FormKit type="hidden" :name="name" :value="selectedValue || undefined" />
+    <FormKit
+      ref="hiddenFormkitRef"
+      type="hidden"
+      :name="name"
+      :value="selectedValue || undefined"
+      :validation="props.validation"
+      :validation-messages="props.validationMessages"
+    />
 
     <label v-if="effectiveLabel" class=":uno: mb-1.5 block text-sm text-gray-700 font-medium">
       {{ effectiveLabel }}
@@ -421,7 +444,7 @@ function handleKeyboard(event: KeyboardEvent) {
               role="option"
               :aria-selected="model.name === selectedValue"
               :data-ai-model-selector-active="model.name === activeModelName ? 'true' : undefined"
-              class=":uno: relative mx-1.5 flex cursor-pointer select-none items-center gap-1.5 rounded-lg pl-3 pr-2 py-2 text-[13px] leading-5 transition-colors"
+              class=":uno: relative mx-1.5 flex cursor-pointer select-none items-center gap-1.5 rounded-lg py-2 pl-3 pr-2 text-[13px] leading-5 transition-colors"
               :class="[
                 model.name === selectedValue
                   ? ':uno: bg-blue-50 font-medium text-blue-700'
@@ -437,18 +460,6 @@ function handleKeyboard(event: KeyboardEvent) {
             >
               <span class=":uno: min-w-0 flex-1">
                 <span class=":uno: flex items-center gap-1.5">
-                  <img
-                    v-if="model.provider?.iconUrl"
-                    :src="model.provider.iconUrl"
-                    class=":uno: h-3.5 w-3.5 flex-none rounded-sm object-contain opacity-75"
-                    alt=""
-                  />
-                  <RiBrainLine
-                    v-else
-                    class=":uno: h-3.5 w-3.5 flex-none opacity-55"
-                    aria-hidden="true"
-                  />
-
                   <span class=":uno: min-w-0 truncate leading-5">
                     {{ model.displayName || model.modelId || model.name }}
                   </span>
@@ -503,5 +514,14 @@ function handleKeyboard(event: KeyboardEvent) {
     </div>
 
     <p v-if="effectiveHelp" class=":uno: mt-2 text-xs text-gray-500">{{ effectiveHelp }}</p>
+    <ul v-if="fieldErrors.length" class=":uno: mt-1.5 space-y-0.5">
+      <li
+        v-for="error in fieldErrors"
+        :key="error"
+        class=":uno: text-xs text-red-500 leading-4"
+      >
+        {{ error }}
+      </li>
+    </ul>
   </div>
 </template>
