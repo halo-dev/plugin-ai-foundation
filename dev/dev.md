@@ -251,3 +251,83 @@ public class MyAiService {
 2. **异步 API**：`languageModel()` 和 `embeddingModel()` 返回 `Mono`，需要在响应式上下文中通过 `.flatMap()` 链式调用，或在非响应式上下文中调用 `.block()` 获取实例。`chat()`、`streamChat()`、`embed()` 等方法同样返回 `Mono`/`Flux`
 3. **模型名称**：使用 `listModels()` 获取准确的 `name` 字段，不要硬编码 modelId
 4. **跨插件调用**：由于 Halo 插件 ApplicationContext 隔离，不能通过 `@Autowired` 注入 `AiModelService`，请使用 Halo 的 `ExtensionGetter` 获取启用的 `AiModelService` 扩展实现
+
+## 前端：AiModelSelector 模型选择器组件
+
+`AiModelSelector` 是本插件提供的前端 Vue 组件，注册为全局组件名 `AiModelSelector`。其他插件可以在插件设置页的 FormKit Schema 中直接使用，让用户在 UI 上选择一个已配置的 AI 模型。
+
+**保存的值**：选中后保存的是 `AiModel` 资源的 `metadata.name`，即上文 `modelName` 格式。可直接传给 `AiModelService.languageModel(modelName)` 或 `embeddingModel(modelName)` 使用。
+
+### 在 FormKit Schema 中使用（推荐）
+
+在插件设置页的 `configMaps` schema 中，通过 `$cmp` 方式引用：
+
+```yaml
+formSchema:
+  - $cmp: AiModelSelector
+    props:
+      name: languageModelName
+      label: 语言模型
+      help: 选择用于文章生成的语言模型
+```
+
+带筛选条件（只显示语言模型）：
+
+```yaml
+formSchema:
+  - $cmp: AiModelSelector
+    props:
+      name: languageModelName
+      label: 语言模型
+      modelType: LANGUAGE
+      clearable: true
+      placeholder: 请选择语言模型
+
+  - $cmp: AiModelSelector
+    props:
+      name: embeddingModelName
+      label: 嵌入模型
+      modelType: EMBEDDING
+```
+
+### 全部可用 Props
+
+| Prop | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `name` | `string` | — | **必填**。对应 FormKit 表单字段名，决定保存到 ConfigMap 的 key |
+| `label` | `string` | — | 字段标签文字 |
+| `help` | `string` | — | 字段说明文字（显示在选择器下方） |
+| `modelValue` | `string` | — | 当前选中的模型名（`v-model` 绑定用） |
+| `modelType` | `string` | — | 筛选模型类型，可选值：`LANGUAGE` / `EMBEDDING` |
+| `providerName` | `string` | — | 只显示指定提供商名称（`AiProvider` 的 `metadata.name`）下的模型 |
+| `providerType` | `string` | — | 只显示指定提供商类型（如 `openai`、`deepseek`）下的模型 |
+| `enabled` | `boolean` | — | 若为 `true`，只显示已启用的模型；不传则显示全部 |
+| `available` | `boolean` | `true` | 若为 `true`，只显示可用（已就绪）的模型 |
+| `requiredFeatures` | `string \| string[]` | — | 只显示具备指定 feature 的模型，如 `"FUNCTION_CALL"` 或 `["VISION", "FUNCTION_CALL"]` |
+| `placeholder` | `string` | `请选择模型` | 未选中时的占位文字 |
+| `searchPlaceholder` | `string` | `搜索...` | 搜索框占位文字 |
+| `clearable` | `boolean` | `true` | 是否显示清除按钮 |
+| `disabled` | `boolean` | `false` | 是否禁用 |
+
+### 在 Vue 组件中使用（v-model）
+
+如果不是通过 FormKit Schema，而是直接在 Vue 模板中使用：
+
+```vue
+<template>
+  <AiModelSelector
+    v-model="selectedModel"
+    label="语言模型"
+    model-type="LANGUAGE"
+    help="用于文章摘要生成"
+  />
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const selectedModel = ref<string>()
+</script>
+```
+
+> 直接在 Vue 模板中使用时，无需传 `name` prop，通过 `v-model` 双向绑定即可。

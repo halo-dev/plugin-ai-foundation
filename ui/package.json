@@ -37,6 +37,7 @@
     "vue-router": "5.0.6"
   },
   "devDependencies": {
+    "@formkit/themes": "^2.0.0",
     "@halo-dev/ui-plugin-bundler-kit": "^2.24.0",
     "@iconify-json/ri": "^1.2.10",
     "@rsbuild/core": "^2.0.6",
