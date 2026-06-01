@@ -76,6 +76,7 @@ function onSubmit(data: ModelFormState) {
     <ModelForm
       ref="form"
       :provider-type="providerType || ''"
+      :model-name="model.metadata.name"
       :form-state="{
         modelId: model.spec.modelId,
         displayName: model.spec.displayName,

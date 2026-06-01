@@ -31,6 +31,9 @@ const { copy, isSupported } = useClipboard()
 
 const editingModalVisible = shallowRef(false)
 const canTest = computed(() => isEnabledTestableModel(props.model))
+const modelDescription = computed(() => {
+  return `供应商模型 ID: ${props.model.spec.modelId} · 内部模型 ID: ${props.model.metadata.name}`
+})
 
 function openWorkbench() {
   void router.push({
@@ -44,7 +47,7 @@ function openWorkbench() {
 async function handleCopyModelId() {
   const modelId = props.model.metadata.name
   if (!modelId) {
-    Toast.error('模型 ID 为空')
+    Toast.error('内部模型 ID 为空')
     return
   }
 
@@ -55,9 +58,9 @@ async function handleCopyModelId() {
 
   try {
     await copy(modelId)
-    Toast.success('模型 ID 已复制')
+    Toast.success('内部模型 ID 已复制')
   } catch (error) {
-    Toast.error('模型 ID 复制失败: ' + (error as Error).message)
+    Toast.error('内部模型 ID 复制失败: ' + (error as Error).message)
   }
 }
 
@@ -79,7 +82,7 @@ function handleDelete() {
 <template>
   <VEntity>
     <template #start>
-      <VEntityField :title="model.spec.displayName" :description="model.spec.modelId" />
+      <VEntityField :title="model.spec.displayName" :description="modelDescription" />
     </template>
     <template #end>
       <div class=":uno: flex flex-wrap items-center justify-end gap-1.5">
@@ -91,7 +94,7 @@ function handleDelete() {
     <template #dropdownItems>
       <VDropdownItem @click="editingModalVisible = true">编辑</VDropdownItem>
       <VDropdownItem v-if="canTest" @click="openWorkbench">测试</VDropdownItem>
-      <VDropdownItem @click="handleCopyModelId">复制模型 ID</VDropdownItem>
+      <VDropdownItem @click="handleCopyModelId">复制内部模型 ID</VDropdownItem>
       <VDropdownDivider />
       <VDropdownItem type="danger" @click="handleDelete">删除</VDropdownItem>
     </template>

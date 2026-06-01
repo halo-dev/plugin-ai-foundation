@@ -279,7 +279,7 @@ onMounted(() => {
           id="model-discovery-search-input"
           sync
           v-model="keyword"
-          placeholder="搜索模型名称或 ID..."
+          placeholder="搜索模型名称或供应商模型 ID..."
         />
       </div>
       <div class=":uno: min-h-0 flex-1 overflow-y-auto">
@@ -325,7 +325,9 @@ onMounted(() => {
                   <VEntityField
                     :title="model.displayName || model.modelId"
                     :description="
-                      model.displayName && model.displayName !== model.modelId ? model.modelId : ''
+                      model.displayName && model.displayName !== model.modelId
+                        ? `供应商模型 ID: ${model.modelId}`
+                        : ''
                     "
                   />
                 </template>
