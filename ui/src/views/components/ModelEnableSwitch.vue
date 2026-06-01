@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { aiCoreApiClient } from '@/api'
-import type { AiModel, JsonPatchInner } from '@/api/generated'
+import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { Toast, VSwitch } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
@@ -20,11 +20,11 @@ const mutation = useMutation({
       name: props.model.metadata.name,
       jsonPatchInner: [
         {
-          op: 'replace',
+          op: 'add',
           path: '/spec/enabled',
           value: nextEnabled,
         },
-      ] as JsonPatchInner[],
+      ],
     })
   },
   onSuccess: (_data, nextEnabled) => {
