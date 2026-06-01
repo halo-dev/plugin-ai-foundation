@@ -2,8 +2,9 @@
 import type { ChatChunk } from '@/api/generated'
 import { ModelOptionModelTypeEnum } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
+import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import { renderMarkdown } from '@/utils/markdown'
-import { groupModelOptionsByProvider, modelOptionLabel } from '@/utils/model-options'
+import { modelOptionLabel } from '@/utils/model-options'
 import {
   buildTestChatRequest,
   flushSseJsonBuffer,
@@ -11,7 +12,7 @@ import {
   parseSseJsonLines,
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
-import { IconRefreshLine, VButton, VEmpty, VLoading, VTag } from '@halo-dev/components'
+import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
@@ -50,17 +51,12 @@ const chatModels = computed(() => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Language
   })
 })
-const chatModelGroups = computed(() => groupModelOptionsByProvider(chatModels.value))
 const providerOptionsHelp = computed(() => {
   return providerOptionsError.value || '请输入 JSON 对象，例如 {"seed": 42}'
 })
 
 const selectedModel = computed(() => {
   return chatModels.value.find((model) => model.name === selectedModelName.value)
-})
-
-const selectedModelProviderTypeDisplayName = computed(() => {
-  return selectedModel.value?.provider?.providerTypeDisplayName
 })
 
 watch(
@@ -270,25 +266,19 @@ onBeforeUnmount(() => {
         <header
           class=":uno: flex flex-col gap-3 border-b border-gray-200 bg-white px-3 py-3 sm:flex-row sm:items-center"
         >
-          <select
-            id="model-test-workbench-model"
+          <AiModelSelector
             v-model="selectedModelName"
             name="model"
-            aria-label="测试模型"
-            class=":uno: h-9 min-w-0 flex-1 border border-gray-200 rounded-md bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            :model-type="languageModelType"
+            :available="availableOnly"
             :disabled="isStreaming"
-          >
-            <optgroup v-for="group in chatModelGroups" :key="group.key" :label="group.label">
-              <option v-for="model in group.models" :key="model.name" :value="model.name">
-                {{ modelOptionLabel(model) }}
-              </option>
-            </optgroup>
-          </select>
+            placeholder="选择测试模型"
+            search-placeholder="搜索模型..."
+            full-width
+            class=":uno: min-w-0 flex-1 !py-0"
+          />
 
           <div class=":uno: flex flex-none items-center gap-2">
-            <VTag v-if="selectedModelProviderTypeDisplayName">{{
-              selectedModelProviderTypeDisplayName
-            }}</VTag>
             <button
               type="button"
               class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-gray-200 rounded-md bg-white hover:bg-gray-50"
