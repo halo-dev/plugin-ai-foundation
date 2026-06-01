@@ -725,7 +725,7 @@ onBeforeUnmount(() => {
               aria-label="输入消息"
               rows="2"
               placeholder="输入消息..."
-              class=":uno: min-h-18 flex-1 resize-none border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+              class=":uno: min-h-18 flex-1 resize-none rounded-md text-sm outline-none !border !border-gray-200 !border-solid !px-3 !py-2.5 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
               :disabled="isStreaming"
               @keydown.meta.enter.prevent="sendMessage"
               @keydown.ctrl.enter.prevent="sendMessage"
@@ -763,7 +763,7 @@ onBeforeUnmount(() => {
               v-model="embeddingInputs"
               rows="3"
               placeholder="每行一段需要向量化的文本"
-              class=":uno: min-h-24 flex-1 resize-none border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+              class=":uno: min-h-24 flex-1 resize-none rounded-md text-sm outline-none !border !border-gray-200 !border-solid !px-3 !py-2.5 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
               :disabled="isEmbeddingTesting"
             />
             <div class=":uno: flex flex-none sm:items-end">

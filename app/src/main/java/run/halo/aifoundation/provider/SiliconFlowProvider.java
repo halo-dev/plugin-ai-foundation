@@ -1,16 +1,22 @@
 package run.halo.aifoundation.provider;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.OpenAiCompatibleEmbeddingModel;
 import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
@@ -95,6 +101,22 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
+        return Mono.zip(
+            discoverModelsBySubType(provider, apiKey, "chat", ModelType.LANGUAGE,
+                AdapterType.OPENAI_CHAT, Set.of(ModelFeature.STREAMING)),
+            discoverModelsBySubType(provider, apiKey, "embedding", ModelType.EMBEDDING,
+                AdapterType.OPENAI_EMBEDDING, Set.of()),
+            (chatModels, embeddingModels) -> {
+                var models = new LinkedHashMap<String, DiscoveredModel>();
+                chatModels.forEach(model -> models.putIfAbsent(model.modelId(), model));
+                embeddingModels.forEach(model -> models.put(model.modelId(), model));
+                return List.copyOf(models.values());
+            }
+        );
+    }
+
+    @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
         return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
     }
@@ -122,5 +144,23 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
             .webClientBuilder(webClientBuilder(provider))
             .restClientBuilder(restClientBuilder(provider))
             .build();
+    }
+
+    private Mono<List<DiscoveredModel>> discoverModelsBySubType(AiProvider provider, String apiKey,
+        String subType, ModelType modelType, AdapterType adapterType, Set<ModelFeature> features) {
+        return getDiscoveryJson(provider, apiKey,
+            uriBuilder -> uriBuilder.path("/v1/models")
+                .queryParam("sub_type", subType)
+                .build(),
+            this::customizeDiscoveryRequest
+        ).map(json -> {
+            var data = listValue(json, "data");
+            if (data == null) {
+                return List.<DiscoveredModel>of();
+            }
+            return discoveredModelsFromNodes(data, "id",
+                node -> remoteDiscoveredModel(stringValue(node, "id"), modelType, features,
+                    adapterType));
+        });
     }
 }

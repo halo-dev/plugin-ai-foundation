@@ -1,14 +1,20 @@
 package run.halo.aifoundation.provider;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.OpenAiThinkingOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
@@ -97,6 +103,22 @@ public class KimiProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
+        return getDiscoveryJson(provider, apiKey,
+            uriBuilder -> uriBuilder.path("/v1/models").build(),
+            this::customizeDiscoveryRequest
+        ).map(json -> {
+            var data = listValue(json, "data");
+            if (data == null) {
+                return List.<DiscoveredModel>of();
+            }
+            return discoveredModelsFromNodes(data, "id",
+                node -> remoteDiscoveredModel(stringValue(node, "id"), ModelType.LANGUAGE,
+                    languageFeatures(node), AdapterType.OPENAI_CHAT));
+        });
+    }
+
+    @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoningControlOptions = ReasoningControlOptions.thinkingType();
         return new LanguageModelProviderOptions(false, false,
@@ -108,5 +130,17 @@ public class KimiProvider extends AbstractAiProviderType {
             request -> OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
                 reasoningControlOptions, OpenAiThinkingOptions::applyThinkingType),
             reasoningControlOptions);
+    }
+
+    private Set<ModelFeature> languageFeatures(java.util.Map<?, ?> node) {
+        var features = new LinkedHashSet<ModelFeature>();
+        features.add(ModelFeature.STREAMING);
+        if (booleanValue(node, "supports_image_in")) {
+            features.add(ModelFeature.VISION);
+        }
+        if (booleanValue(node, "supports_reasoning")) {
+            features.add(ModelFeature.REASONING);
+        }
+        return Set.copyOf(features);
     }
 }

@@ -17,6 +17,7 @@ import {
   defaultModelTypeForProviderType,
   filterModelFeaturesForProviderType,
   findProviderTypeForModel,
+  groupDiscoveredModels,
   modelFeatureOptionsForProviderType,
   modelImportFailureMessage,
   modelTypeOptionsForProviderType,
@@ -149,6 +150,41 @@ describe('discovered model profiles', () => {
   })
 })
 
+describe('discovered model groups', () => {
+  it('groups discovered models by model type without confirmation sections', () => {
+    const groups = groupDiscoveredModels([
+      discoveredModel('maybe-chat'),
+      discoveredModel(
+        'remote-embedding',
+        AiModelSpecModelTypeEnum.Embedding,
+        [],
+        DiscoveredModelItemAdapterTypeEnum.OpenaiEmbedding,
+        {
+          source: DiscoveredModelItemSourceEnum.Remote,
+          confidence: DiscoveredModelItemConfidenceEnum.High,
+        },
+      ),
+      discoveredModel(
+        'remote-chat',
+        AiModelSpecModelTypeEnum.Language,
+        [AiModelSpecFeaturesEnum.Streaming],
+        DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+        {
+          source: DiscoveredModelItemSourceEnum.Remote,
+          confidence: DiscoveredModelItemConfidenceEnum.High,
+        },
+      ),
+    ])
+
+    expect(groups.map((group) => group.key)).toEqual([
+      AiModelSpecModelTypeEnum.Language,
+      AiModelSpecModelTypeEnum.Embedding,
+    ])
+    expect(groups[0].models.map((model) => model.modelId)).toEqual(['maybe-chat', 'remote-chat'])
+    expect(groups[1].models.map((model) => model.modelId)).toEqual(['remote-embedding'])
+  })
+})
+
 describe('summarizeModelImportResults', () => {
   it('keeps failed result messages aligned with the original model', () => {
     const error = new Error('already exists')
@@ -221,6 +257,10 @@ function discoveredModel(
   modelType: AiModel['spec']['modelType'] = AiModelSpecModelTypeEnum.Language,
   features = [] as AiModelSpecFeaturesEnum[],
   adapterType?: DiscoveredModelItemAdapterTypeEnum,
+  evidence: {
+    source?: DiscoveredModelItemSourceEnum
+    confidence?: DiscoveredModelItemConfidenceEnum
+  } = {},
 ) {
   return {
     modelId,
@@ -229,7 +269,7 @@ function discoveredModel(
     modelType,
     features,
     adapterType,
-    source: DiscoveredModelItemSourceEnum.Rule,
-    confidence: DiscoveredModelItemConfidenceEnum.Low,
+    source: evidence.source || DiscoveredModelItemSourceEnum.Rule,
+    confidence: evidence.confidence || DiscoveredModelItemConfidenceEnum.Low,
   }
 }

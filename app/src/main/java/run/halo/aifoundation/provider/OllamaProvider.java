@@ -76,7 +76,7 @@ public class OllamaProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OLLAMA_CHAT);
+        return List.of(AdapterType.OLLAMA_CHAT, AdapterType.OLLAMA_EMBEDDING);
     }
 
     @Override
