@@ -3,7 +3,11 @@ import { aiConsoleApiClient } from '@/api'
 import { AiProviderStatusPhaseEnum } from '@/api/generated'
 import { useProviderQueryState } from '@/composables/use-provider-state'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
-import { QK_PROVIDERS } from '@/composables/use-providers-fetch'
+import {
+  QK_PROVIDER,
+  QK_PROVIDERS,
+  reloadProviderQueries,
+} from '@/composables/use-providers-fetch'
 import {
   Dialog,
   Toast,
@@ -28,7 +32,7 @@ const queryClient = useQueryClient()
 const { selectedProvider } = useProviderQueryState()
 
 const { data: provider, isLoading } = useQuery({
-  queryKey: ['plugin:ai-foundation:provider', selectedProvider],
+  queryKey: [QK_PROVIDER, selectedProvider],
   queryFn: async () => {
     if (!selectedProvider.value) {
       return null
@@ -124,7 +128,7 @@ const testConnectivityMutation = useMutation({
     })
   },
   onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['plugin:ai-foundation:provider', selectedProvider] })
+    reloadProviderQueries(queryClient, selectedProvider)
   },
   onError: (error) => {
     Toast.error('连通性检查失败: ' + (error as Error).message)
