@@ -10,7 +10,7 @@ export interface ModelOptionsFetchParams {
   providerName?: Ref<string | undefined>
   providerType?: Ref<string | undefined>
   enabled?: Ref<boolean | undefined>
-  available?: Ref<boolean | undefined>
+  available?: Ref<boolean | null | undefined>
   requiredFeatures?: Ref<string[] | undefined>
   keyword?: Ref<string | undefined>
 }
@@ -33,7 +33,7 @@ export function useModelOptionsFetch(params: ModelOptionsFetchParams = {}) {
         providerName: params.providerName?.value,
         providerType: params.providerType?.value,
         enabled: params.enabled?.value,
-        available: params.available?.value,
+        available: params.available?.value ?? undefined,
         requiredFeatures: params.requiredFeatures?.value?.join(','),
         keyword: params.keyword?.value,
       })

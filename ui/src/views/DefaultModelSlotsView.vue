@@ -11,7 +11,8 @@ import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import { modelTypeLabel } from '@/types'
 import { Toast, VButton, VCard, VLoading, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { computed, reactive, shallowRef, watch } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { computed, reactive, watch } from 'vue'
 
 type SlotKey = keyof DefaultModelSlots
 type SlotModelType = NonNullable<ModelOption['modelType']>
@@ -44,9 +45,13 @@ const slotDefinitions: Array<{
 ]
 
 const queryClient = useQueryClient()
-const availableOnly = shallowRef(true)
+const availableOnly = useLocalStorage(
+  'plugin:ai-foundation:default-model-slots:available-only',
+  true,
+)
+const availableFilter = computed(() => (availableOnly.value ? true : null))
 const { data: modelOptions, isLoading: modelOptionsLoading } = useModelOptionsFetch({
-  available: availableOnly,
+  available: availableFilter,
 })
 const { data: slots, isLoading: slotsLoading } = useDefaultModelSlotsFetch()
 
@@ -130,7 +135,7 @@ const updateMutation = useMutation({
             <AiModelSelector
               v-model="formState[slot.key]"
               :model-type="slot.modelType"
-              :available="availableOnly"
+              :available="availableFilter"
               placeholder="不配置"
               search-placeholder="搜索模型..."
               full-width
