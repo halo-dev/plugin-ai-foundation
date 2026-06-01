@@ -31,11 +31,11 @@ import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
 import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
+import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
-import run.halo.app.plugin.ReactiveSettingFetcher;
 
 @ExtendWith(MockitoExtension.class)
 class AiModelServiceImplTest {
@@ -50,7 +50,7 @@ class AiModelServiceImplTest {
     SecretResolver secretResolver;
 
     @Mock
-    ReactiveSettingFetcher settingFetcher;
+    DefaultModelSlotStore defaultModelSlotStore;
 
     AiModelServiceImpl service;
 
@@ -58,7 +58,8 @@ class AiModelServiceImplTest {
     void setUp() {
         service = new AiModelServiceImpl(
             client,
-            new DefaultAiModelResolver(client, providerClientCache, secretResolver, settingFetcher),
+            new DefaultAiModelResolver(client, providerClientCache, secretResolver,
+                defaultModelSlotStore),
             new DefaultLanguageModelFactory(providerClientCache),
             new DefaultEmbeddingModelFactory(providerClientCache)
         );
@@ -194,8 +195,7 @@ class AiModelServiceImplTest {
 
     @Test
     void defaultLanguageModel_missingSlot_emitsDefaultModelNotConfiguredException() {
-        when(settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class))
-            .thenReturn(Mono.empty());
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
 
         StepVerifier.create(service.defaultLanguageModel())
             .expectError(DefaultModelNotConfiguredException.class)
@@ -210,8 +210,7 @@ class AiModelServiceImplTest {
         var chatModel = mock(ChatModel.class);
         var providerType = languageProviderType();
 
-        when(settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class))
-            .thenReturn(Mono.just(slots));
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
         when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
