@@ -668,3 +668,82 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 ```
 
 如果公开字段与已知 provider 原生键冲突，请优先使用公开字段。例如推理能力使用 `reasoning`，确定性采样使用 `seed`，不要同时在 `providerOptions` 中传入含义相同的原生键。
+
+## 前端：AiModelSelector 模型选择器组件
+
+`AiModelSelector` 是本插件提供的前端 Vue 组件，注册为全局组件名 `AiModelSelector`。其他插件可以在插件设置页的 FormKit Schema 中直接使用，让用户在 UI 上选择一个已配置的 AI 模型。
+
+**保存的值**：选中后保存的是 `AiModel` 资源的 `metadata.name`，即上文 `modelName` 格式。可直接传给 `AiModelService.languageModel(modelName)` 或 `embeddingModel(modelName)` 使用。
+
+### 在 FormKit Schema 中使用（推荐）
+
+在插件设置页的 `configMaps` schema 中，通过 `$cmp` 方式引用：
+
+```yaml
+formSchema:
+  - $cmp: AiModelSelector
+    props:
+      name: languageModelName
+      label: 语言模型
+      help: 选择用于文章生成的语言模型
+```
+
+带筛选条件（只显示语言模型）：
+
+```yaml
+formSchema:
+  - $cmp: AiModelSelector
+    props:
+      name: languageModelName
+      label: 语言模型
+      modelType: LANGUAGE
+      clearable: true
+      placeholder: 请选择语言模型
+
+  - $cmp: AiModelSelector
+    props:
+      name: embeddingModelName
+      label: 嵌入模型
+      modelType: EMBEDDING
+```
+
+### 全部可用 Props
+
+| Prop | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `name` | `string` | - | 对应 FormKit 表单字段名，决定保存到 ConfigMap 的 key |
+| `label` | `string` | - | 字段标签文字 |
+| `help` | `string` | - | 字段说明文字 |
+| `modelValue` | `string` | - | 当前选中的模型名，供 `v-model` 绑定 |
+| `modelType` | `string` | - | 筛选模型类型，可选值如 `LANGUAGE`、`EMBEDDING` |
+| `providerName` | `string` | - | 只显示指定 `AiProvider.metadata.name` 下的模型 |
+| `providerType` | `string` | - | 只显示指定供应方类型下的模型 |
+| `enabled` | `boolean` | - | 若为 `true`，只显示已启用的模型 |
+| `available` | `boolean` | `true` | 若为 `true`，只显示可用模型 |
+| `requiredFeatures` | `string \| string[]` | - | 只显示具备指定 feature 的模型 |
+| `placeholder` | `string` | `请选择模型` | 未选中时的占位文字 |
+| `searchPlaceholder` | `string` | `搜索...` | 搜索框占位文字 |
+| `clearable` | `boolean` | `true` | 是否显示清除按钮 |
+| `disabled` | `boolean` | `false` | 是否禁用 |
+| `fullWidth` | `boolean` | `false` | 是否让选择器占满容器宽度 |
+
+### 在 Vue 组件中使用
+
+```vue
+<template>
+  <AiModelSelector
+    v-model="selectedModel"
+    label="语言模型"
+    model-type="LANGUAGE"
+    help="用于文章摘要生成"
+  />
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const selectedModel = ref<string>()
+</script>
+```
+
+直接在 Vue 模板中使用时，无需传 `name` prop，通过 `v-model` 双向绑定即可。

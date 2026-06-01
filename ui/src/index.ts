@@ -1,11 +1,17 @@
+import { VLoading } from '@halo-dev/components'
 import { definePlugin } from '@halo-dev/ui-shared'
 import 'uno.css'
-import { markRaw } from 'vue'
+import { defineAsyncComponent, markRaw } from 'vue'
 import RiBrainLine from '~icons/ri/brain-line'
 import { AI_FOUNDATION_ROUTE_NAMES } from './routes'
 
 export default definePlugin({
-  components: {},
+  components: {
+    AiModelSelector: defineAsyncComponent({
+      loader: () => import('./formkit/AiModelSelector.vue'),
+      loadingComponent: VLoading,
+    }),
+  },
   routes: [
     {
       parentName: 'Root',

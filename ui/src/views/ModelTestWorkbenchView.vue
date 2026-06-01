@@ -2,8 +2,9 @@
 import { aiConsoleApiClient } from '@/api'
 import { ModelOptionModelTypeEnum, type TestEmbeddingResponse } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
+import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import { renderMarkdown } from '@/utils/markdown'
-import { groupModelOptionsByProvider, modelOptionLabel } from '@/utils/model-options'
+import { modelOptionLabel } from '@/utils/model-options'
 import {
   buildOutputSpec,
   buildReasoningOptions,
@@ -21,7 +22,7 @@ import {
   type ReasoningMode,
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
-import { IconRefreshLine, VButton, VEmpty, VLoading, VTag } from '@halo-dev/components'
+import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
@@ -93,16 +94,16 @@ const chatModels = computed(() => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Language
   })
 })
-const chatModelGroups = computed(() => groupModelOptionsByProvider(chatModels.value))
 const embeddingModels = computed(() => {
   return (modelOptions.value || []).filter((model) => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Embedding
   })
 })
-const embeddingModelGroups = computed(() => groupModelOptionsByProvider(embeddingModels.value))
 const activeModels = computed(() => (testMode.value === 'embedding' ? embeddingModels.value : chatModels.value))
-const activeModelGroups = computed(() =>
-  testMode.value === 'embedding' ? embeddingModelGroups.value : chatModelGroups.value,
+const activeModelType = computed(() =>
+  testMode.value === 'embedding'
+    ? ModelOptionModelTypeEnum.Embedding
+    : ModelOptionModelTypeEnum.Language,
 )
 const providerOptionsHelp = computed(() => {
   return providerOptionsError.value || '请输入按服务商分组的 JSON 对象，例如 {"openai": {"seed": 42}}'
@@ -116,10 +117,6 @@ const outputChoicesHelp = computed(() => {
 
 const selectedModel = computed(() => {
   return activeModels.value.find((model) => model.name === selectedModelName.value)
-})
-
-const selectedModelProviderTypeDisplayName = computed(() => {
-  return selectedModel.value?.provider?.providerTypeDisplayName
 })
 
 watch(
@@ -475,10 +472,10 @@ onBeforeUnmount(() => {
         <header
           class=":uno: flex flex-col gap-3 border-b border-gray-200 bg-white px-3 py-3 sm:flex-row sm:items-center"
         >
-          <div class=":uno: flex flex-none rounded-md border border-gray-200 bg-gray-50 p-0.5">
+          <div class=":uno: flex flex-none border border-gray-200 rounded-md bg-gray-50 p-0.5">
             <button
               type="button"
-              class=":uno: h-8 px-3 text-sm rounded-[5px]"
+              class=":uno: h-8 rounded-[5px] px-3 text-sm"
               :class="testMode === 'chat' ? ':uno: bg-white text-gray-950 shadow-sm' : ':uno: text-gray-500'"
               :disabled="isStreaming || isEmbeddingTesting || !chatModels.length"
               @click="testMode = 'chat'"
@@ -487,7 +484,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              class=":uno: h-8 px-3 text-sm rounded-[5px]"
+              class=":uno: h-8 rounded-[5px] px-3 text-sm"
               :class="testMode === 'embedding' ? ':uno: bg-white text-gray-950 shadow-sm' : ':uno: text-gray-500'"
               :disabled="isStreaming || isEmbeddingTesting || !embeddingModels.length"
               @click="testMode = 'embedding'"
@@ -495,25 +492,19 @@ onBeforeUnmount(() => {
               嵌入
             </button>
           </div>
-          <select
-            id="model-test-workbench-model"
+          <AiModelSelector
             v-model="selectedModelName"
             name="model"
-            aria-label="测试模型"
-            class=":uno: h-9 min-w-0 flex-1 border border-gray-200 rounded-md bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            :model-type="activeModelType"
+            :available="availableOnly"
             :disabled="isStreaming || isEmbeddingTesting"
-          >
-            <optgroup v-for="group in activeModelGroups" :key="group.key" :label="group.label">
-              <option v-for="model in group.models" :key="model.name" :value="model.name">
-                {{ modelOptionLabel(model) }}
-              </option>
-            </optgroup>
-          </select>
+            placeholder="选择测试模型"
+            search-placeholder="搜索模型..."
+            full-width
+            class=":uno: min-w-0 flex-1 !py-0"
+          />
 
           <div class=":uno: flex flex-none items-center gap-2">
-            <VTag v-if="selectedModelProviderTypeDisplayName">{{
-              selectedModelProviderTypeDisplayName
-            }}</VTag>
             <button
               type="button"
               class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-gray-200 rounded-md bg-white hover:bg-gray-50"
@@ -580,7 +571,7 @@ onBeforeUnmount(() => {
                   class=":uno: mb-3 border-b border-gray-100 pb-2 text-xs text-gray-500"
                   :open="message.state === 'streaming'"
                 >
-                  <summary class=":uno: cursor-pointer select-none font-medium text-gray-600">
+                  <summary class=":uno: cursor-pointer select-none text-gray-600 font-medium">
                     推理
                   </summary>
                   <div class=":uno: ai-markdown mt-2 break-words text-gray-500" v-html="renderMarkdown(message.reasoningContent)" />
@@ -588,7 +579,7 @@ onBeforeUnmount(() => {
 
                 <div
                   v-if="message.role === 'assistant' && message.toolEvents?.length"
-                  class=":uno: mb-3 space-y-1 border-b border-gray-100 pb-2"
+                  class=":uno: mb-3 border-b border-gray-100 pb-2 space-y-1"
                 >
                   <div
                     v-for="event in message.toolEvents"
@@ -615,10 +606,10 @@ onBeforeUnmount(() => {
 
                 <div
                   v-if="message.role === 'assistant' && message.warnings?.length"
-                  class=":uno: mb-3 rounded-md border border-yellow-200 bg-yellow-50 px-2 py-1.5"
+                  class=":uno: mb-3 border border-yellow-200 rounded-md bg-yellow-50 px-2 py-1.5"
                 >
-                  <div class=":uno: text-xs font-medium text-yellow-800">Warnings</div>
-                  <ul class=":uno: mt-1 space-y-1 text-xs text-yellow-800">
+                  <div class=":uno: text-xs text-yellow-800 font-medium">Warnings</div>
+                  <ul class=":uno: mt-1 text-xs text-yellow-800 space-y-1">
                     <li
                       v-for="warning in message.warnings"
                       :key="`${warning.code}-${warning.message}`"
@@ -688,13 +679,13 @@ onBeforeUnmount(() => {
                 <div
                   v-for="item in embeddingResult.embeddings"
                   :key="item.index"
-                  class=":uno: rounded-md border border-gray-100 px-3 py-2"
+                  class=":uno: border border-gray-100 rounded-md px-3 py-2"
                 >
                   <div class=":uno: flex items-center justify-between text-xs text-gray-500">
                     <span>#{{ (item.index ?? 0) + 1 }}</span>
                     <span>{{ item.dimensions }} 维</span>
                   </div>
-                  <div class=":uno: mt-1 break-all font-mono text-xs text-gray-700">
+                  <div class=":uno: mt-1 break-all text-xs text-gray-700 font-mono">
                     [{{ (item.preview || []).map((value) => Number(value).toFixed(4)).join(', ') }}]
                   </div>
                 </div>
@@ -702,10 +693,10 @@ onBeforeUnmount(() => {
 
               <div
                 v-if="embeddingResult.warnings?.length"
-                class=":uno: mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2"
+                class=":uno: mt-4 border border-yellow-200 rounded-md bg-yellow-50 px-3 py-2"
               >
-                <div class=":uno: text-xs font-medium text-yellow-800">Warnings</div>
-                <ul class=":uno: mt-1 space-y-1 text-xs text-yellow-800">
+                <div class=":uno: text-xs text-yellow-800 font-medium">Warnings</div>
+                <ul class=":uno: mt-1 text-xs text-yellow-800 space-y-1">
                   <li v-for="warning in embeddingResult.warnings" :key="`${warning.code}-${warning.message}`">
                     <span class=":uno: font-mono">{{ warning.code }}</span>
                     <span v-if="warning.message">: {{ warning.message }}</span>

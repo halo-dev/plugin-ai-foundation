@@ -7,12 +7,8 @@ import {
   useDefaultModelSlotsFetch,
 } from '@/composables/use-default-model-slots-fetch'
 import { QK_MODEL_OPTIONS, useModelOptionsFetch } from '@/composables/use-model-options-fetch'
+import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import { modelTypeLabel } from '@/types'
-import {
-  groupModelOptionsByProvider,
-  modelOptionLabel,
-  type ModelOptionGroup,
-} from '@/utils/model-options'
 import { Toast, VButton, VCard, VLoading, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, reactive, shallowRef, watch } from 'vue'
@@ -75,24 +71,6 @@ const assignedSlotCount = computed(() => {
 })
 const modelOptionCount = computed(() => modelOptions.value?.length || 0)
 
-function modelOptionsForType(modelType: SlotModelType) {
-  return (modelOptions.value || []).filter((model) => model.modelType === modelType)
-}
-
-const modelOptionGroupsByType = computed(() => {
-  return slotDefinitions.reduce(
-    (groups, slot) => {
-      groups[slot.modelType] = groupModelOptionsByProvider(modelOptionsForType(slot.modelType))
-      return groups
-    },
-    {} as Record<SlotModelType, ModelOptionGroup[]>,
-  )
-})
-
-function modelOptionGroupsForType(modelType: SlotModelType) {
-  return modelOptionGroupsByType.value[modelType] || []
-}
-
 function normalizeSlots(): DefaultModelSlots {
   return {
     languageModelName: formState.languageModelName || undefined,
@@ -149,21 +127,15 @@ const updateMutation = useMutation({
             <div class=":uno: mt-1 text-xs text-gray-500">{{ modelTypeLabel(slot.modelType) }}</div>
           </div>
           <div class=":uno: min-w-0">
-            <select
+            <AiModelSelector
               v-model="formState[slot.key]"
-              class=":uno: h-9 w-full border border-gray-200 rounded-md bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-            >
-              <option value="">不配置</option>
-              <optgroup
-                v-for="group in modelOptionGroupsForType(slot.modelType)"
-                :key="group.key"
-                :label="group.label"
-              >
-                <option v-for="model in group.models" :key="model.name" :value="model.name">
-                  {{ modelOptionLabel(model) }}
-                </option>
-              </optgroup>
-            </select>
+              :model-type="slot.modelType"
+              :available="availableOnly"
+              placeholder="不配置"
+              search-placeholder="搜索模型..."
+              full-width
+              class=":uno: !py-0"
+            />
           </div>
         </div>
       </div>
