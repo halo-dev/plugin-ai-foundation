@@ -51,6 +51,9 @@ importers:
         specifier: 5.0.6
         version: 5.0.6(@vue/compiler-sfc@3.5.34)(vue@3.5.34(typescript@5.8.3))
     devDependencies:
+      '@formkit/themes':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@halo-dev/ui-plugin-bundler-kit':
         specifier: ^2.24.0
         version: 2.24.0(@rsbuild/core@2.0.6(core-js@3.47.0))(@rsbuild/plugin-vue@1.2.8(@rsbuild/core@2.0.6(core-js@3.47.0))(@rspack/core@2.0.3(@swc/helpers@0.5.21))(@vue/compiler-sfc@3.5.34)(vue@3.5.34(typescript@5.8.3)))(@vitejs/plugin-vue@6.0.6(vite@8.0.11(@types/node@24.12.4)(jiti@2.7.0)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.47.1)(yaml@2.8.4))(vue@3.5.34(typescript@5.8.3)))(axios@1.16.1)(vite@8.0.11(@types/node@24.12.4)(jiti@2.7.0)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.47.1)(yaml@2.8.4))
@@ -221,8 +224,17 @@ packages:
   '@formkit/core@1.7.2':
     resolution: {integrity: sha512-XDRVqkDtOziU3z44hdvgWEqGpiv6nTNeCmP8cnESKkr24a4keQuEwmfDVvibYV0ywyTMg6ylp2lyklCYeRHykQ==}
 
+  '@formkit/core@2.0.0':
+    resolution: {integrity: sha512-y56SDriprtH44wJEPsEcsGXMZkBHzOT7gKJwX1uSmeM1aXnzMn86SEm5RIwNrDW7MVAgCjPPry/YAZxGgt2peA==}
+
+  '@formkit/themes@2.0.0':
+    resolution: {integrity: sha512-Rtad6OPtOFYF8C8FdR/BrUCkIoDY55ixRMxSQ0r3On/R2ERf3ub7YmyTWUUcoIG/cgITOEFloLz+yKRlyTkFQg==}
+
   '@formkit/utils@1.7.2':
     resolution: {integrity: sha512-bBF6alUBOqFfJHjVB95Vck0hp36vlw4QfFJxGfTO6BX68AEaFzzzabtpwfy0DbcHtwHh4Yn7l/rOWGxXEve+QQ==}
+
+  '@formkit/utils@2.0.0':
+    resolution: {integrity: sha512-9ql3QKsJvdhHY/lFVaXlML0kXTYhv/v/pKytrT3Oby5zIOuUOV/11+25rU+YkpnZePZ8AIhc0INW1iUGr4nF8w==}
 
   '@halo-dev/api-client@2.24.0':
     resolution: {integrity: sha512-c2CQ4peNvfcorq9U0ekidNt4UA0tr7BsPzv3aPl6aHYnnGUdfmoVIIfp4ty0azsdTG6pTnUVdiDNKq185/VTcw==}
@@ -3318,7 +3330,17 @@ snapshots:
     dependencies:
       '@formkit/utils': 1.7.2
 
+  '@formkit/core@2.0.0':
+    dependencies:
+      '@formkit/utils': 2.0.0
+
+  '@formkit/themes@2.0.0':
+    dependencies:
+      '@formkit/core': 2.0.0
+
   '@formkit/utils@1.7.2': {}
+
+  '@formkit/utils@2.0.0': {}
 
   '@halo-dev/api-client@2.24.0(axios@1.16.1)':
     dependencies:
