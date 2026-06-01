@@ -84,7 +84,7 @@ function openProviderConfig() {
             <div class=":uno: grid grid-cols-1 w-full gap-2 sm:grid-cols-2 lg:w-auto">
               <select
                 v-model="modelTypeFilter"
-                class=":uno: h-9 min-w-36 border border-gray-200 rounded-md bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+                class=":uno: h-9 min-w-36 rounded-md bg-white text-sm text-gray-700 outline-none !border !border-gray-200 !border-solid !px-3 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
               >
                 <option value="">全部类型</option>
                 <option v-for="item in MODEL_TYPE_OPTIONS" :key="item.value" :value="item.value">
@@ -93,7 +93,7 @@ function openProviderConfig() {
               </select>
               <select
                 v-model="featureFilter"
-                class=":uno: h-9 min-w-36 border border-gray-200 rounded-md bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+                class=":uno: h-9 min-w-36 rounded-md bg-white text-sm text-gray-700 outline-none !border !border-gray-200 !border-solid !px-3 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
               >
                 <option value="">全部特性</option>
                 <option v-for="item in MODEL_FEATURE_OPTIONS" :key="item.value" :value="item.value">

@@ -9,6 +9,9 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import reactor.netty.transport.ProxyProvider.Proxy;
@@ -17,6 +20,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.Metadata;
@@ -163,6 +167,50 @@ class AbstractAiProviderTypeTest {
         assertThat(profile.confidence()).isEqualTo(DiscoveryConfidence.LOW);
     }
 
+    @Test
+    void remoteDiscoveredModel_buildsHighConfidenceProfile() {
+        var profile = new TestProviderType().remoteDiscoveredModel("remote-embedding",
+            ModelType.EMBEDDING, Set.of(), AdapterType.OPENAI_EMBEDDING);
+
+        assertThat(profile.modelId()).isEqualTo("remote-embedding");
+        assertThat(profile.modelType()).isEqualTo(ModelType.EMBEDDING);
+        assertThat(profile.features()).isEmpty();
+        assertThat(profile.adapterType()).isEqualTo(AdapterType.OPENAI_EMBEDDING);
+        assertThat(profile.source()).isEqualTo(DiscoverySource.REMOTE);
+        assertThat(profile.confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+    }
+
+    @Test
+    void discoveredModelsFromNodes_skipsMalformedItems() {
+        var type = new TestProviderType();
+        var models = type.discoveredModelsFromNodes(List.of(
+            Map.of("id", "gpt-test"),
+            Map.of("name", "missing-id"),
+            "not-object"
+        ), "id", node -> type.inferModelProfile(type.stringValue(node, "id")));
+
+        assertThat(models).singleElement()
+            .extracting(DiscoveredModel::modelId)
+            .isEqualTo("gpt-test");
+    }
+
+    @Test
+    void discoverModels_returnsEmptyListWhenDataArrayIsMissing() throws Exception {
+        var server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        var serverThread = Thread.ofVirtual().start(() -> handleSingleHttpRequest(server, "{}"));
+
+        try {
+            var provider = providerWithBaseUrl("http://127.0.0.1:" + server.getLocalPort());
+
+            StepVerifier.create(new TestProviderType().discoverModels(provider, "key"))
+                .expectNext(List.of())
+                .verifyComplete();
+        } finally {
+            server.close();
+            serverThread.join();
+        }
+    }
+
     private AiProvider providerWithBaseUrl(String baseUrl) {
         var provider = new AiProvider();
         var metadata = new Metadata();
@@ -210,6 +258,23 @@ class AbstractAiProviderTypeTest {
         String line;
         while ((line = reader.readLine()) != null && !line.isEmpty()) {
             // Drain request headers.
+        }
+    }
+
+    private void handleSingleHttpRequest(ServerSocket serverSocket, String body) {
+        try (var socket = serverSocket.accept();
+            var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(),
+                StandardCharsets.US_ASCII));
+            var output = socket.getOutputStream()) {
+            readHttpRequest(reader);
+            var response = "HTTP/1.1 200 OK\r\n"
+                + "Content-Type: application/json\r\n"
+                + "Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n"
+                + "\r\n"
+                + body;
+            output.write(response.getBytes(StandardCharsets.UTF_8));
+            output.flush();
+        } catch (Exception ignored) {
         }
     }
 }

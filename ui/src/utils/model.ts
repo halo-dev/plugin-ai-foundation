@@ -70,6 +70,12 @@ export interface ModelImportFailure {
   reason: unknown
 }
 
+export interface DiscoveredModelGroup {
+  key: string
+  label: string
+  models: DiscoveredModel[]
+}
+
 export function discoveredModelProfileForProviderType(
   providerType: ProviderTypeInfo | undefined,
   model: DiscoveredModel,
@@ -100,6 +106,33 @@ export function syncDiscoveredModelProfiles(
     )
     return profiles
   }, {})
+}
+
+export function groupDiscoveredModels(models: DiscoveredModel[]): DiscoveredModelGroup[] {
+  const groups: DiscoveredModelGroup[] = []
+
+  for (const item of MODEL_TYPE_OPTIONS) {
+    const typedModels = models.filter((model) => model.modelType === item.value)
+    if (typedModels.length > 0) {
+      groups.push({
+        key: item.value,
+        label: item.label,
+        models: typedModels,
+      })
+    }
+  }
+
+  const knownTypes = new Set<string>(MODEL_TYPE_OPTIONS.map((item) => item.value))
+  const otherModels = models.filter((model) => !knownTypes.has(model.modelType))
+  if (otherModels.length > 0) {
+    groups.push({
+      key: 'other',
+      label: '其他',
+      models: otherModels,
+    })
+  }
+
+  return groups
 }
 
 export function summarizeModelImportResults(

@@ -1,6 +1,8 @@
 package run.halo.aifoundation.provider;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -9,10 +11,14 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.OpenAiCompatibleEmbeddingModel;
 import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
@@ -108,6 +114,20 @@ public class AiHubMixProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
+        return getDiscoveryJson(provider, apiKey,
+            uriBuilder -> uriBuilder.path("/api/v1/models").build(),
+            this::customizeDiscoveryRequest
+        ).map(json -> {
+            var data = listValue(json, "data");
+            if (data == null) {
+                return List.<DiscoveredModel>of();
+            }
+            return discoveredModelsFromNodes(data, "model_id", this::toDiscoveredModel);
+        });
+    }
+
+    @Override
     protected void customizeDiscoveryRequest(WebClient.RequestHeadersSpec<?> requestSpec) {
         requestSpec.header("APP-Code", APP_CODE);
     }
@@ -129,5 +149,62 @@ public class AiHubMixProvider extends AbstractAiProviderType {
             .webClientBuilder(webClientBuilder(provider))
             .restClientBuilder(restClientBuilder(provider))
             .build();
+    }
+
+    private DiscoveredModel toDiscoveredModel(java.util.Map<?, ?> node) {
+        var modelId = stringValue(node, "model_id");
+        if (modelId.isBlank()) {
+            modelId = stringValue(node, "id");
+        }
+        if (modelId.isBlank()) {
+            return null;
+        }
+
+        if (containsToken(node.get("types"), "embedding")
+            || containsToken(node.get("type"), "embedding")) {
+            return remoteDiscoveredModel(modelId, ModelType.EMBEDDING, Set.of(),
+                AdapterType.OPENAI_EMBEDDING);
+        }
+
+        if (containsLanguageType(node)) {
+            return remoteDiscoveredModel(modelId, ModelType.LANGUAGE, languageFeatures(node),
+                AdapterType.OPENAI_CHAT);
+        }
+
+        return null;
+    }
+
+    private boolean containsLanguageType(java.util.Map<?, ?> node) {
+        var types = node.get("types");
+        var type = node.get("type");
+        return containsToken(types, "chat")
+            || containsToken(types, "llm")
+            || containsToken(types, "language")
+            || containsToken(type, "chat")
+            || containsToken(type, "llm")
+            || containsToken(type, "language");
+    }
+
+    private Set<ModelFeature> languageFeatures(java.util.Map<?, ?> node) {
+        var features = new LinkedHashSet<ModelFeature>();
+        features.add(ModelFeature.STREAMING);
+        if (containsToken(node.get("input_modalities"), "image")
+            || containsToken(node.get("features"), "vision")
+            || containsToken(node.get("features"), "image")) {
+            features.add(ModelFeature.VISION);
+        }
+        if (containsToken(node.get("features"), "tool")
+            || containsToken(node.get("features"), "function")) {
+            features.add(ModelFeature.TOOL_CALL);
+        }
+        if (containsToken(node.get("features"), "json")
+            || containsToken(node.get("features"), "structured")) {
+            features.add(ModelFeature.STRUCTURED_OUTPUT);
+        }
+        if (containsToken(node.get("features"), "reasoning")
+            || containsToken(node.get("features"), "thinking")) {
+            features.add(ModelFeature.REASONING);
+        }
+        return Set.copyOf(features);
     }
 }
