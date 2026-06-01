@@ -310,7 +310,6 @@ async function streamChatResponse(requestBody: GenerateTextRequest, modelName: s
 async function handleRegenerate(messageIndex: number) {
   if (isStreaming.value) return
 
-  // Find the user message before this assistant message
   let userMessageIndex = -1
   for (let i = messageIndex - 1; i >= 0; i--) {
     if (messages.value[i]?.role === 'user') {
@@ -323,10 +322,8 @@ async function handleRegenerate(messageIndex: number) {
   const model = selectedModel.value
   if (!model?.name) return
 
-  // Remove the current assistant message and all subsequent messages
   messages.value = messages.value.slice(0, messageIndex)
 
-  // Rebuild request with current messages
   const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
   if (providerOptions.error) {
     providerOptionsError.value = providerOptions.error
@@ -619,9 +616,7 @@ onBeforeUnmount(() => {
       v-else
       class=":uno: grid grid-cols-1 h-full min-h-0 overflow-hidden border border-slate-200/80 rounded-lg bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)] lg:grid-cols-[minmax(0,1fr)_23rem]"
     >
-      <!-- Main Content -->
       <section class=":uno: min-h-0 min-w-0 flex flex-col bg-[#f8fafc]">
-        <!-- Header -->
         <header class=":uno: border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur">
           <div class=":uno: flex flex-col gap-3 xl:flex-row xl:items-center">
             <div class=":uno: flex min-w-0 flex-1 items-center gap-3">
@@ -654,7 +649,6 @@ onBeforeUnmount(() => {
             </div>
 
             <div class=":uno: flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center xl:w-[42rem]">
-              <!-- Mode Toggle -->
               <div
                 class=":uno: h-8 inline-flex flex-none items-center rounded-lg border border-slate-200 bg-slate-100/80 !p-0.5"
               >
@@ -688,7 +682,6 @@ onBeforeUnmount(() => {
                 </button>
               </div>
 
-              <!-- Model Selector -->
               <AiModelSelector
                 v-model="selectedModelName"
                 name="model"
@@ -701,7 +694,6 @@ onBeforeUnmount(() => {
                 class=":uno: min-w-0 flex-1 !py-0"
               />
 
-              <!-- Actions -->
               <div class=":uno: flex flex-none items-center gap-1">
                 <button
                   type="button"
@@ -727,17 +719,14 @@ onBeforeUnmount(() => {
           </div>
         </header>
 
-        <!-- Chat Area -->
         <template v-if="testMode === 'chat'">
           <div
             ref="conversationRef"
             class=":uno: min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(20,184,166,0.10),transparent_30%),linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] px-4 py-5"
             @scroll.passive="handleConversationScroll"
           >
-            <!-- Empty State with Example Prompts -->
             <ExamplePrompts v-if="!messages.length" @select="handleExampleSelect" />
 
-            <!-- Messages -->
             <div v-else class=":uno: mx-auto max-w-4xl space-y-5">
               <ChatMessageItem
                 v-for="(message, index) in messages"
@@ -749,7 +738,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- Chat Input -->
           <ChatInputArea
             ref="chatInputRef"
             v-model="input"
@@ -760,7 +748,6 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <!-- Embedding Area -->
         <template v-else>
           <EmbeddingTestPanel
             :inputs="embeddingInputs"
@@ -772,7 +759,6 @@ onBeforeUnmount(() => {
             @run="runEmbeddingTest"
           />
 
-          <!-- Embedding Input Footer -->
           <div class=":uno: border-t border-slate-200 bg-white/95 px-4 py-3">
             <div class=":uno: mx-auto max-w-4xl flex flex-col gap-2 sm:flex-row">
               <textarea
@@ -798,7 +784,6 @@ onBeforeUnmount(() => {
         </template>
       </section>
 
-      <!-- Parameter Sidebar -->
       <ParameterSidebar
         :mode="testMode"
         :system-prompt="systemPrompt"

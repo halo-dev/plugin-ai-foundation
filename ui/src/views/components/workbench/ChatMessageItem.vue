@@ -41,7 +41,6 @@ function handleRegenerate() {
       ':uno: flex-row-reverse': message.role === 'user',
     }"
   >
-    <!-- Avatar -->
     <div
       class=":uno: h-8 w-8 flex flex-none items-center justify-center rounded-lg border shadow-sm"
       :class="{
@@ -53,7 +52,6 @@ function handleRegenerate() {
       <RiCpuLine v-else class=":uno: h-3.5 w-3.5" />
     </div>
 
-    <!-- Message Content -->
     <div
       class=":uno: min-w-0 flex flex-col"
       :class="{
@@ -61,7 +59,6 @@ function handleRegenerate() {
         ':uno: max-w-[88%] flex-1': message.role === 'assistant',
       }"
     >
-      <!-- Model info for assistant messages -->
       <div v-if="message.role === 'assistant'" class=":uno: mb-1 flex items-center gap-2">
         <span class=":uno: text-xs text-slate-600 font-medium">
           {{ message.modelDisplayName || 'Assistant' }}
@@ -76,7 +73,6 @@ function handleRegenerate() {
         <VTag v-else-if="message.state === 'error'" size="sm" theme="danger">错误</VTag>
       </div>
 
-      <!-- Message Bubble -->
       <div
         class=":uno: relative overflow-hidden text-sm leading-relaxed shadow-sm"
         :class="{
@@ -88,7 +84,6 @@ function handleRegenerate() {
             message.role === 'assistant' && message.state === 'error',
         }"
       >
-        <!-- Reasoning content -->
         <details
           v-if="message.role === 'assistant' && message.reasoningContent"
           class=":uno: group/reasoning mb-2.5 border-b border-slate-100 pb-2"
@@ -123,7 +118,6 @@ function handleRegenerate() {
           />
         </details>
 
-        <!-- Tool events -->
         <div
           v-if="message.role === 'assistant' && message.toolEvents?.length"
           class=":uno: mb-2.5 border-b border-slate-100 pb-2 space-y-1.5"
@@ -165,7 +159,6 @@ function handleRegenerate() {
           </div>
         </div>
 
-        <!-- Warnings -->
         <div
           v-if="message.role === 'assistant' && message.warnings?.length"
           class=":uno: mb-2.5 border border-amber-200 rounded-md bg-amber-50 px-3 py-2"
@@ -192,7 +185,6 @@ function handleRegenerate() {
           </ul>
         </div>
 
-        <!-- Main content -->
         <div v-if="message.role === 'user'" class=":uno: whitespace-pre-wrap">
           {{ message.content }}
         </div>
@@ -205,14 +197,12 @@ function handleRegenerate() {
           "
         />
 
-        <!-- Streaming cursor -->
         <span
           v-if="message.role === 'assistant' && message.state === 'streaming'"
           class=":uno: ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-teal-500 align-middle"
         />
       </div>
 
-      <!-- Message Actions -->
       <div
         v-if="message.role === 'assistant' && message.state !== 'streaming'"
         class=":uno: mt-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
@@ -295,12 +285,6 @@ function handleRegenerate() {
   color: #374151;
 }
 
-.ai-markdown :deep(pre code) {
-  background: transparent;
-  padding: 0;
-  color: #e5e7eb;
-}
-
 .ai-markdown :deep(blockquote) {
   margin: 0.5rem 0;
   border-left: 2px solid #d1d5db;
@@ -368,7 +352,6 @@ function handleRegenerate() {
   font-size: 0.875rem;
 }
 
-/* User message dark mode overrides */
 .border-slate-800.bg-slate-950 .ai-markdown :deep(a) {
   color: #99f6e4;
 }

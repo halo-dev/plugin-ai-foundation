@@ -8,7 +8,6 @@ import RiSettings3Line from '~icons/ri/settings-3-line'
 
 const props = defineProps<{
   mode: 'chat' | 'embedding'
-  // Chat parameters
   systemPrompt?: string
   temperature?: number
   topP?: number
@@ -26,7 +25,6 @@ const props = defineProps<{
   chatHeadersError?: string
   providerOptionsError?: string
   outputError?: string
-  // Embedding parameters
   embeddingDimensions?: number | undefined
   embeddingMaxBatchSize?: number | undefined
   embeddingMaxParallelCalls?: number | undefined
@@ -126,7 +124,6 @@ function updateNumberField(key: NumberFieldKey, value: string) {
   <div
     class=":uno: h-full flex flex-col overflow-hidden border-t border-slate-200 bg-white lg:border-l lg:border-t-0"
   >
-    <!-- Header -->
     <div class=":uno: border-b border-slate-200 bg-slate-50/70 px-4 py-3">
       <div class=":uno: flex items-center gap-2">
         <span
@@ -139,12 +136,9 @@ function updateNumberField(key: NumberFieldKey, value: string) {
       <div class=":uno: mt-1 text-xs text-slate-500">调整模型行为、输出格式和请求扩展</div>
     </div>
 
-    <!-- Parameters -->
     <div class=":uno: flex-1 overflow-y-auto px-4 py-3">
-      <!-- Chat Parameters -->
       <template v-if="mode === 'chat'">
-        <!-- System Prompt -->
-        <details class=":uno: group parameter-group" open>
+        <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -162,8 +156,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <!-- Sampling Parameters -->
-        <details class=":uno: group parameter-group" open>
+        <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -187,7 +180,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                 min="0"
                 max="2"
                 step="0.1"
-                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600"
+                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
                 @input="updateNumberField('temperature', ($event.target as HTMLInputElement).value)"
               />
               <div class=":uno: flex justify-between text-[10px] text-slate-400">
@@ -212,7 +205,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                 min="0"
                 max="1"
                 step="0.05"
-                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600"
+                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
                 @input="updateNumberField('topP', ($event.target as HTMLInputElement).value)"
               />
             </div>
@@ -266,8 +259,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <!-- Reasoning -->
-        <details class=":uno: group parameter-group">
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -317,8 +309,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <!-- Output Mode -->
-        <details class=":uno: group parameter-group">
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -392,8 +383,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <!-- Tools -->
-        <details class=":uno: group parameter-group">
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -414,8 +404,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <!-- Provider Options -->
-        <details class=":uno: group parameter-group">
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -441,7 +430,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <details class=":uno: group parameter-group">
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -468,9 +457,8 @@ function updateNumberField(key: NumberFieldKey, value: string) {
         </details>
       </template>
 
-      <!-- Embedding Parameters -->
       <template v-else>
-        <details class=":uno: group parameter-group" open>
+        <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -551,7 +539,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <details class=":uno: group parameter-group">
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -582,7 +570,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <details class=":uno: group parameter-group">
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
@@ -611,36 +599,3 @@ function updateNumberField(key: NumberFieldKey, value: string) {
     </div>
   </div>
 </template>
-
-<style scoped>
-.parameter-group {
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.parameter-group:last-child {
-  border-bottom: none;
-}
-
-/* Range slider custom styling */
-input[type='range']::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #0f766e;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.24);
-}
-
-input[type='range']::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #0f766e;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.24);
-}
-</style>

@@ -24,7 +24,6 @@ defineProps<{
     class=":uno: min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] px-4 py-5"
   >
     <div class=":uno: mx-auto max-w-4xl space-y-3">
-      <!-- Error -->
       <div
         v-if="error"
         class=":uno: rounded-lg border border-rose-200 bg-rose-50 !px-4 !py-3 text-sm text-rose-700 shadow-sm"
@@ -45,7 +44,6 @@ defineProps<{
         </div>
       </div>
 
-      <!-- Empty state -->
       <div
         v-if="!result && !error"
         class=":uno: rounded-lg border border-dashed border-slate-200 bg-white !px-6 !py-12 text-center shadow-sm"
@@ -69,9 +67,7 @@ defineProps<{
         <div class=":uno: mt-1 text-xs text-slate-500">输入多行文本后点击运行测试</div>
       </div>
 
-      <!-- Result -->
       <div v-if="result" class=":uno: rounded-lg border border-slate-200 bg-white !p-4 shadow-sm">
-        <!-- Header -->
         <div class=":uno: flex flex-wrap items-center gap-2">
           <span class=":uno: text-sm text-slate-950 font-semibold">结果</span>
           <VTag size="sm">{{ result.embeddingsCount }} 个向量</VTag>
@@ -83,7 +79,6 @@ defineProps<{
           </VTag>
         </div>
 
-        <!-- Similarity -->
         <div
           v-if="result.firstPairSimilarity !== undefined"
           class=":uno: mt-3 rounded-lg border border-slate-100 bg-slate-50 !px-4 !py-3 text-sm"
@@ -103,7 +98,6 @@ defineProps<{
               {{ result.firstPairSimilarity.toFixed(4) }}
             </span>
           </div>
-          <!-- Progress bar -->
           <div class=":uno: mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
             <div
               class=":uno: h-full rounded-full transition-all"
@@ -119,7 +113,6 @@ defineProps<{
           </div>
         </div>
 
-        <!-- Embeddings list -->
         <div class=":uno: mt-3 space-y-2">
           <div
             v-for="item in result.embeddings"
@@ -143,7 +136,6 @@ defineProps<{
           </div>
         </div>
 
-        <!-- Warnings -->
         <div
           v-if="result.warnings?.length"
           class=":uno: mt-3 rounded-lg border border-amber-200 bg-amber-50 !px-3 !py-2"
@@ -170,7 +162,6 @@ defineProps<{
           </ul>
         </div>
 
-        <!-- Diagnostics -->
         <details class=":uno: mt-3 text-xs text-slate-600">
           <summary class=":uno: cursor-pointer select-none font-medium">诊断信息</summary>
           <pre
