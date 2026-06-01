@@ -8,6 +8,9 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.OpenAiChatOptionsSupport;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Component
 public class MiniMaxProvider extends AbstractAiProviderType {
@@ -90,5 +93,19 @@ public class MiniMaxProvider extends AbstractAiProviderType {
             .openAiApi(openAiApi)
             .defaultOptions(OpenAiChatOptions.builder().model(modelId).build())
             .build();
+    }
+
+    @Override
+    public LanguageModelProviderOptions languageModelProviderOptions() {
+        var reasoningControlOptions = ReasoningControlOptions.unsupported();
+        return new LanguageModelProviderOptions(false, false,
+            request -> OpenAiChatOptionsSupport.buildBasic(request, getProviderType(),
+                reasoningControlOptions, null),
+            (request, toolCallbacks, toolNames) -> OpenAiChatOptionsSupport.buildToolCalling(
+                request, toolCallbacks, toolNames, getProviderType(), reasoningControlOptions,
+                null),
+            request -> OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
+                reasoningControlOptions, null),
+            reasoningControlOptions);
     }
 }

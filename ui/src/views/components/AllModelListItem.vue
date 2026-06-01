@@ -7,7 +7,7 @@ import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import { findProviderTypeForModel } from '@/utils/model'
-import { isEnabledChatModel } from '@/utils/model-test-workbench'
+import { isEnabledTestableModel } from '@/utils/model-test-workbench'
 import {
   Dialog,
   Toast,
@@ -64,7 +64,7 @@ const providerType = computed(() => {
   return findProviderTypeForModel(props.model, providers.value, providerTypes.value)
 })
 
-const canTest = computed(() => isEnabledChatModel(props.model))
+const canTest = computed(() => isEnabledTestableModel(props.model))
 </script>
 <template>
   <VEntity>
