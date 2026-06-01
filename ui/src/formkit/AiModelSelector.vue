@@ -31,7 +31,7 @@ const props = withDefaults(
     providerName?: string
     providerType?: string
     enabled?: boolean
-    available?: boolean
+    available?: boolean | null
     requiredFeatures?: string | string[]
     modelValue?: string
     placeholder?: string
@@ -88,7 +88,7 @@ const modelType = computed(() => props.modelType)
 const providerName = computed(() => props.providerName)
 const providerType = computed(() => props.providerType)
 const enabled = computed(() => props.enabled)
-const available = computed(() => props.available)
+const available = computed(() => (props.available === null ? undefined : props.available))
 const requiredFeatures = computed(() => normalizeRequiredFeatures(props.requiredFeatures))
 
 const { data: modelOptions, isLoading } = useModelOptionsFetch({
