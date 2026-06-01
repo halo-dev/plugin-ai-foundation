@@ -15,9 +15,9 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.aifoundation.service.AiModelResolver;
+import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.ReactiveExtensionClient;
-import run.halo.app.plugin.ReactiveSettingFetcher;
 
 @Component
 @RequiredArgsConstructor
@@ -26,7 +26,7 @@ public class DefaultAiModelResolver implements AiModelResolver {
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
     private final SecretResolver secretResolver;
-    private final ReactiveSettingFetcher settingFetcher;
+    private final DefaultModelSlotStore defaultModelSlotStore;
 
     @Override
     public Mono<ModelResolution> resolve(String modelName, ModelType expectedType) {
@@ -88,10 +88,9 @@ public class DefaultAiModelResolver implements AiModelResolver {
 
     private Mono<String> defaultSlotName(String slotName,
         Function<DefaultModelSlots, String> extractor) {
-        return settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class)
-            .switchIfEmpty(Mono.error(new DefaultModelNotConfiguredException(slotName)))
-            .map(extractor)
-            .flatMap(modelName -> {
+        return defaultModelSlotStore.get()
+            .flatMap(slots -> {
+                var modelName = extractor.apply(slots);
                 if (modelName == null || modelName.isBlank()) {
                     return Mono.error(new DefaultModelNotConfiguredException(slotName));
                 }

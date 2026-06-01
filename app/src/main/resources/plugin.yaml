@@ -11,7 +11,6 @@ spec:
     name: Halo
     website: https://github.com/halo-dev
   logo: logo.png
-  settingName: ai-foundation-settings
   configMapName: ai-foundation-configmap
   homepage: https://github.com/halo-dev/plugin-ai-foundation#readme
   repo: https://github.com/halo-dev/plugin-ai-foundation

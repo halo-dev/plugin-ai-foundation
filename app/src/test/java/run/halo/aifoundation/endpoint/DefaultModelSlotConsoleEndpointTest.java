@@ -15,24 +15,24 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.ConfigMap;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.PluginContext;
-import run.halo.app.plugin.ReactiveSettingFetcher;
 
 class DefaultModelSlotConsoleEndpointTest {
 
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
-    private final ReactiveSettingFetcher settingFetcher = mock(ReactiveSettingFetcher.class);
     private final PluginContext pluginContext = mock(PluginContext.class);
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
         when(pluginContext.getConfigMapName()).thenReturn("ai-foundation-configmap");
-        var endpoint = new DefaultModelSlotConsoleEndpoint(client, settingFetcher, pluginContext);
+        var defaultModelSlotStore = new DefaultModelSlotStore(client, pluginContext);
+        var endpoint = new DefaultModelSlotConsoleEndpoint(client, defaultModelSlotStore);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();
@@ -40,8 +40,7 @@ class DefaultModelSlotConsoleEndpointTest {
 
     @Test
     void getDefaultModelSlots_returnsEmptySingletonWhenMissing() {
-        when(settingFetcher.fetch(DefaultModelSlots.GROUP, DefaultModelSlots.class))
-            .thenReturn(Mono.empty());
+        when(client.fetch(ConfigMap.class, "ai-foundation-configmap")).thenReturn(Mono.empty());
 
         webTestClient.get().uri("/default-model-slots")
             .exchange()
@@ -49,6 +48,23 @@ class DefaultModelSlotConsoleEndpointTest {
             .expectBody(DefaultModelSlots.class)
             .consumeWith(response -> assertThat(response.getResponseBody().getLanguageModelName())
                 .isNull());
+    }
+
+    @Test
+    void getDefaultModelSlots_readsConfigMapPayload() {
+        var configMap = new ConfigMap();
+        configMap.putDataItem(DefaultModelSlots.GROUP,
+            "{\"languageModelName\":\"gpt-4\",\"embeddingModelName\":\"embedding\"}");
+        when(client.fetch(ConfigMap.class, "ai-foundation-configmap")).thenReturn(Mono.just(configMap));
+
+        webTestClient.get().uri("/default-model-slots")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(DefaultModelSlots.class)
+            .consumeWith(response -> {
+                assertThat(response.getResponseBody().getLanguageModelName()).isEqualTo("gpt-4");
+                assertThat(response.getResponseBody().getEmbeddingModelName()).isEqualTo("embedding");
+            });
     }
 
     @Test
