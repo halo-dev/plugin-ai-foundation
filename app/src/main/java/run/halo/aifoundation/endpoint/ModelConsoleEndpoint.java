@@ -6,14 +6,19 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -22,16 +27,21 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
-import run.halo.aifoundation.ChatChunk;
-import run.halo.aifoundation.ChatRequest;
-import run.halo.aifoundation.ChunkType;
-import run.halo.aifoundation.Message;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
+import run.halo.aifoundation.embedding.EmbeddingResponseMetadata;
+import run.halo.aifoundation.embedding.EmbeddingUsage;
+import run.halo.aifoundation.embedding.EmbeddingUtils;
+import run.halo.aifoundation.embedding.EmbeddingWarning;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
-import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
@@ -47,6 +57,9 @@ import run.halo.app.extension.router.selector.SelectorUtil;
 public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private static final int MAX_NAME_GENERATION_ATTEMPTS = 10;
+    private static final String HALO_AI_STREAM_PROTOCOL_HEADER = "X-Halo-AI-Stream-Protocol";
+    private static final String HALO_AI_TEXT_STREAM_PROTOCOL = "text-v1";
+    private static final String CONSOLE_TEST_TOOL_NAME = "halo_test_info";
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
@@ -111,7 +124,35 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             )
             .POST("models/{name}/test-chat/stream", this::testChatStream,
                 builder -> builder.operationId("TestModelChatStream")
-                    .description("Test chat completion with streaming response.")
+                    .description("Test text generation with Halo text stream response.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .parameter(parameterBuilder()
+                        .name("enableTestTool")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject the console-only halo_test_info tool for "
+                            + "tool calling tests.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .requestBody(requestBodyBuilder()
+                        .required(false)
+                        .implementation(GenerateTextRequest.class))
+                    .response(responseBuilder()
+                        .description("Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. "
+                            + "Each data event contains a TextStreamPart JSON object. The stream can "
+                            + "include message lifecycle, step lifecycle, text, tool call, tool result, "
+                            + "tool error, finish, sanitized raw diagnostic, and error parts, then ends "
+                            + "with data: [DONE].")
+                        .implementation(TextStreamPart.class))
+            )
+            .POST("models/{name}/test-embedding", this::testEmbedding,
+                builder -> builder.operationId("TestModelEmbedding")
+                    .description("Test embedding generation with embedding settings and diagnostics.")
                     .tag(tag)
                     .parameter(parameterBuilder()
                         .name("name")
@@ -120,10 +161,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(String.class)
                         .required(true))
                     .requestBody(requestBodyBuilder()
-                        .required(false)
-                        .implementation(TestChatRequest.class))
-                    .response(responseBuilder()
-                        .implementation(ChatChunk.class))
+                        .required(true)
+                        .implementation(TestEmbeddingRequest.class))
+                    .response(responseBuilder().implementation(TestEmbeddingResponse.class))
             )
             .build();
     }
@@ -191,44 +231,153 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var modelName = request.pathVariable("name");
         log.info("testChatStream: modelName={}", modelName);
 
-        return request.bodyToMono(TestChatRequest.class)
-            .defaultIfEmpty(new TestChatRequest())
+        return request.bodyToMono(GenerateTextRequest.class)
+            .defaultIfEmpty(new GenerateTextRequest())
             .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
-                var chatRequest = ChatRequest.builder()
-                    .messages(body.getMessages())
-                    .temperature(body.getTemperature())
-                    .maxTokens(body.getMaxTokens())
-                    .topP(body.getTopP())
-                    .providerOptions(body.getProviderOptions())
-                    .build();
-                Flux<ChatChunk> flux = aiModelService.languageModel(modelName)
-                    .flatMapMany(languageModel -> languageModel.streamChat(chatRequest))
+                var chatRequest = withConsoleTestTool(body, consoleTestToolEnabled(request));
+                Flux<ServerSentEvent<Object>> flux = aiModelService.languageModel(modelName)
+                    .flatMapMany(languageModel -> languageModel.streamText(chatRequest).fullStream())
                     .onErrorResume(e -> {
                         log.error("Stream chat failed for model: {}", modelName, e);
-                        return Flux.just(ChatChunk.builder()
-                            .type(ChunkType.ERROR)
-                            .content("Chat test failed: " + e.getMessage())
-                            .build());
-                    });
+                        return Flux.just(TextStreamPart.error("Chat test failed: " + e.getMessage()));
+                    })
+                    .map(part -> ServerSentEvent.builder((Object) part).build())
+                    .concatWith(Mono.just(ServerSentEvent.builder((Object) "[DONE]").build()));
                 return ServerResponse.ok()
                     .contentType(MediaType.TEXT_EVENT_STREAM)
-                    .body(flux, ChatChunk.class);
+                    .header(HALO_AI_STREAM_PROTOCOL_HEADER, HALO_AI_TEXT_STREAM_PROTOCOL)
+                    .body(flux, ServerSentEvent.class);
             })));
     }
 
-    private Mono<Void> validateTestChatRequest(TestChatRequest request) {
-        if (request.getMessages() == null || request.getMessages().isEmpty()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "messages must not be empty"));
+    private Mono<ServerResponse> testEmbedding(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testEmbedding: modelName={}", modelName);
+        return request.bodyToMono(TestEmbeddingRequest.class)
+            .flatMap(body -> validateTestEmbeddingRequest(body)
+                .then(aiModelService.embeddingModel(modelName))
+                .flatMap(model -> model.embed(EmbeddingRequest.builder()
+                        .inputs(body.getInputs())
+                        .dimensions(body.getDimensions())
+                        .maxBatchSize(body.getMaxBatchSize())
+                        .maxParallelCalls(body.getMaxParallelCalls())
+                        .maxRetries(body.getMaxRetries())
+                        .providerOptions(body.getProviderOptions())
+                        .metadata(Map.of("source", "console-test"))
+                        .build())
+                    .map(TestEmbeddingResponse::from)))
+            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+    }
+
+    private boolean consoleTestToolEnabled(ServerRequest request) {
+        return request.queryParam("enableTestTool")
+            .map(Boolean::parseBoolean)
+            .orElse(false);
+    }
+
+    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request, boolean enabled) {
+        if (!enabled) {
+            return request;
         }
-        for (var message : request.getMessages()) {
-            if (message == null || message.getRole() == null || message.getRole().isBlank()
-                || message.getContent() == null || message.getContent().isBlank()) {
-                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "messages must include non-empty role and content"));
+        var tools = new ArrayList<ToolDefinition>();
+        if (request.getTools() != null) {
+            tools.addAll(request.getTools());
+        }
+        var hasTestTool = tools.stream()
+            .anyMatch(tool -> CONSOLE_TEST_TOOL_NAME.equals(tool.getName()));
+        if (!hasTestTool) {
+            tools.add(consoleTestTool());
+        }
+        request.setTools(List.copyOf(tools));
+        request.setStopWhen(StopCondition.stepCountIs(2));
+        return request;
+    }
+
+    private ToolDefinition consoleTestTool() {
+        return ToolDefinition.builder()
+            .name(CONSOLE_TEST_TOOL_NAME)
+            .description("Halo 控制台模型测试工具。用于验证工具调用链路；当用户要求测试工具、"
+                + "回显输入、获取 Halo 测试信息时调用。")
+            .inputSchema(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "query", Map.of(
+                        "type", "string",
+                        "description", "用户想让测试工具回显或处理的文本"
+                    )
+                )
+            ))
+            .executor(context -> Mono.just(Map.of(
+                "tool", CONSOLE_TEST_TOOL_NAME,
+                "message", "Halo console test tool executed successfully.",
+                "query", context.getInput() != null
+                    ? context.getInput().getOrDefault("query", "")
+                    : "",
+                "nextAction", "Answer the user using this tool result."
+            )))
+            .build();
+    }
+
+    private Mono<Void> validateTestChatRequest(GenerateTextRequest request) {
+        var hasPrompt = request.getPrompt() != null && !request.getPrompt().isBlank();
+        var hasMessages = request.getMessages() != null && !request.getMessages().isEmpty();
+        if (hasPrompt == hasMessages) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "exactly one of prompt or messages must be provided"));
+        }
+        if (request.getPrompt() != null && request.getPrompt().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "prompt must not be blank"));
+        }
+        if (request.getSystem() != null && request.getSystem().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "system must not be blank"));
+        }
+        if (hasMessages) {
+            for (var message : request.getMessages()) {
+                if (message == null || message.getRole() == null
+                    || message.getContent() == null || message.getContent().isEmpty()) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "messages must include role and content"));
+                }
+                for (var part : message.getContent()) {
+                    if (part == null || !isSupportedTestChatPart(message.getRole(), part)) {
+                        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "messages must include non-empty supported content parts"));
+                    }
+                }
             }
         }
         return Mono.empty();
+    }
+
+    private Mono<Void> validateTestEmbeddingRequest(TestEmbeddingRequest request) {
+        if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At least one input is required"));
+        }
+        if (request.getInputs().size() > 20) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At most 20 inputs can be tested at once"));
+        }
+        for (var input : request.getInputs()) {
+            if (input == null || input.isBlank()) {
+                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Embedding inputs must not be blank"));
+            }
+        }
+        return Mono.empty();
+    }
+
+    private boolean isSupportedTestChatPart(run.halo.aifoundation.message.ModelMessageRole role,
+        run.halo.aifoundation.message.ModelMessagePart part) {
+        if (PartType.isText(part.getType())) {
+            return part.getText() != null && !part.getText().isBlank();
+        }
+        return role == run.halo.aifoundation.message.ModelMessageRole.ASSISTANT
+            && PartType.isReasoning(part.getType())
+            && part.getText() != null
+            && !part.getText().isBlank();
     }
 
     private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId,
@@ -350,11 +499,87 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     @Data
-    static class TestChatRequest {
-        private List<Message> messages;
-        private Double temperature;
-        private Integer maxTokens;
-        private Double topP;
-        private Map<String, Object> providerOptions;
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestEmbeddingRequest {
+        private List<String> inputs;
+        private Integer dimensions;
+        private Integer maxBatchSize;
+        private Integer maxParallelCalls;
+        private Integer maxRetries;
+        private Map<String, Map<String, Object>> providerOptions;
     }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestEmbeddingResponse {
+        private int embeddingsCount;
+        private List<EmbeddingPreview> embeddings;
+        private Double firstPairSimilarity;
+        private EmbeddingUsage usage;
+        private EmbeddingResponseMetadata response;
+        private List<EmbeddingWarning> warnings;
+        private Map<String, Object> providerMetadata;
+
+        static TestEmbeddingResponse from(run.halo.aifoundation.embedding.EmbeddingResponse response) {
+            var vectors = response.getEmbeddings() != null
+                ? response.getEmbeddings()
+                : List.<float[]>of();
+            return TestEmbeddingResponse.builder()
+                .embeddingsCount(vectors.size())
+                .embeddings(previews(vectors))
+                .firstPairSimilarity(similarity(vectors))
+                .usage(response.getUsage())
+                .response(response.getResponse())
+                .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
+                .providerMetadata(response.getProviderMetadata())
+                .build();
+        }
+
+        private static List<EmbeddingPreview> previews(List<float[]> vectors) {
+            var result = new ArrayList<EmbeddingPreview>();
+            for (int i = 0; i < vectors.size(); i++) {
+                var vector = vectors.get(i);
+                result.add(EmbeddingPreview.builder()
+                    .index(i)
+                    .dimensions(vector != null ? vector.length : 0)
+                    .preview(preview(vector))
+                    .build());
+            }
+            return List.copyOf(result);
+        }
+
+        private static List<Float> preview(float[] vector) {
+            if (vector == null) {
+                return List.of();
+            }
+            var size = Math.min(vector.length, 8);
+            var values = new ArrayList<Float>();
+            for (int i = 0; i < size; i++) {
+                values.add(vector[i]);
+            }
+            return List.copyOf(values);
+        }
+
+        private static Double similarity(List<float[]> vectors) {
+            if (vectors.size() < 2) {
+                return null;
+            }
+            return EmbeddingUtils.cosineSimilarity(vectors.get(0), vectors.get(1));
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EmbeddingPreview {
+        private int index;
+        private int dimensions;
+        private List<Float> preview;
+    }
+
 }

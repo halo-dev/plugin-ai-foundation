@@ -10,6 +10,8 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 
@@ -80,6 +82,14 @@ public interface AiProviderType {
     // ── Behavior ──────────────────────────────────────────────
 
     ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId);
+
+    default LanguageModelProviderOptions languageModelProviderOptions() {
+        return LanguageModelProviderOptions.defaults();
+    }
+
+    default EmbeddingModelProviderOptions embeddingModelProviderOptions() {
+        return EmbeddingModelProviderOptions.defaults(getProviderType());
+    }
 
     @Nullable
     default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {

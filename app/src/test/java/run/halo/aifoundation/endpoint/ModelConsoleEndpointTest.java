@@ -19,11 +19,12 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
-import run.halo.aifoundation.ChatChunk;
-import run.halo.aifoundation.ChatRequest;
-import run.halo.aifoundation.ChunkType;
-import run.halo.aifoundation.LanguageModel;
-import run.halo.aifoundation.Message;
+import run.halo.aifoundation.chat.FinishReason;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.chat.StreamTextResult;
+import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -445,24 +446,27 @@ class ModelConsoleEndpointTest {
     // ---- test chat stream ----
 
     @Test
-    void testChatStream_mapsMessagesAndOptionsToChatRequest() {
+    void testChatStream_mapsMessagesAndOptionsToGenerateTextRequest() {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
-        when(languageModel.streamChat(any(ChatRequest.class)))
-            .thenReturn(Flux.just(
-                ChatChunk.builder().type(ChunkType.TEXT).content("Hi").build(),
-                ChatChunk.builder().type(ChunkType.FINISH).last(true).finishReason("stop").build()
-            ));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.start("msg_1"),
+                TextStreamPart.textStart("txt_1"),
+                TextStreamPart.textDelta("txt_1", "Hi"),
+                TextStreamPart.textEnd("txt_1"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
 
         var body = Map.of(
+            "system", "You are concise.",
             "messages", List.of(
-                Map.of("role", "system", "content", "You are concise."),
-                Map.of("role", "user", "content", "Hello")
+                Map.of("role", "USER", "content", List.of(Map.of("type", "text", "text", "Hello")))
             ),
             "temperature", 0.2,
-            "maxTokens", 128,
+            "maxOutputTokens", 128,
             "topP", 0.9,
-            "providerOptions", Map.of("seed", 42)
+            "providerOptions", Map.of("openai", Map.of("seed", 42))
         );
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
@@ -471,24 +475,113 @@ class ModelConsoleEndpointTest {
             .exchange()
             .expectStatus().isOk()
             .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
-            .expectBodyList(ChatChunk.class)
-            .consumeWith(response -> assertThat(response.getResponseBody())
-                .extracting(ChatChunk::getType)
-                .containsExactly(ChunkType.TEXT, ChunkType.FINISH));
+            .expectHeader().valueEquals("X-Halo-AI-Stream-Protocol", "text-v1")
+            .expectHeader().doesNotExist("x-vercel-ai-ui-message-stream")
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"start\"");
+                assertThat(bodyText).contains("\"type\":\"text-delta\"");
+                assertThat(bodyText).contains("\"delta\":\"Hi\"");
+                assertThat(bodyText).contains("data:[DONE]");
+            });
 
-        var captor = ArgumentCaptor.forClass(ChatRequest.class);
-        verify(languageModel).streamChat(captor.capture());
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
         var request = captor.getValue();
-        assertThat(request.getMessages())
-            .extracting(Message::getRole)
-            .containsExactly("system", "user");
-        assertThat(request.getMessages())
-            .extracting(Message::getContent)
-            .containsExactly("You are concise.", "Hello");
+        assertThat(request.getSystem()).isEqualTo("You are concise.");
+        assertThat(request.getMessages()).hasSize(1);
+        assertThat(request.getMessages().getFirst().getRole().name()).isEqualTo("USER");
+        assertThat(request.getMessages().getFirst().getContent().getFirst().getText())
+            .isEqualTo("Hello");
         assertThat(request.getTemperature()).isEqualTo(0.2);
-        assertThat(request.getMaxTokens()).isEqualTo(128);
+        assertThat(request.getMaxOutputTokens()).isEqualTo(128);
         assertThat(request.getTopP()).isEqualTo(0.9);
-        assertThat(request.getProviderOptions()).containsEntry("seed", 42);
+        assertThat(request.getProviderOptions()).containsKey("openai");
+        assertThat(request.getProviderOptions().get("openai")).containsEntry("seed", 42);
+        assertThat(request.getTools()).isNull();
+    }
+
+    @Test
+    void testChatStream_withConsoleTestTool_injectsToolAndMaxSteps() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                    .toolCallId("call_1")
+                    .toolName("halo_test_info")
+                    .input(Map.of("query", "hello"))
+                    .build()),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream?enableTestTool=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "请调用测试工具"))
+            ))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"tool-call\"");
+                assertThat(bodyText).contains("halo_test_info");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getStopWhen()).isNotNull();
+        assertThat(request.getTools())
+            .singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getName()).isEqualTo("halo_test_info");
+                assertThat(tool.getExecutor()).isNotNull();
+            });
+    }
+
+    @Test
+    void testChatStream_serializesReasoningPartsAndAcceptsReasoningHistory() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.reasoningStart("rsn_1"),
+                TextStreamPart.reasoningDelta("rsn_1", "Think", Map.of("deepseek", Map.of())),
+                TextStreamPart.reasoningEnd("rsn_1"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(
+                Map.of("role", "ASSISTANT", "content", List.of(
+                    Map.of("type", "reasoning", "text", "Previous reasoning"),
+                    Map.of("type", "text", "text", "Previous answer")
+                )),
+                Map.of("role", "USER", "content", List.of(
+                    Map.of("type", "text", "text", "Continue")
+                ))
+            )))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().valueEquals("X-Halo-AI-Stream-Protocol", "text-v1")
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"reasoning-start\"");
+                assertThat(bodyText).contains("\"type\":\"reasoning-delta\"");
+                assertThat(bodyText).contains("\"delta\":\"Think\"");
+                assertThat(bodyText).contains("data:[DONE]");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        assertThat(captor.getValue().getMessages().getFirst().getContent().getFirst().getType())
+            .isEqualTo("reasoning");
     }
 
     @Test
@@ -506,24 +599,69 @@ class ModelConsoleEndpointTest {
     void testChatStream_streamErrorEmitsErrorChunk() {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
-        when(languageModel.streamChat(any(ChatRequest.class)))
-            .thenReturn(Flux.error(new IllegalStateException("upstream failed")));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream failed"))));
 
         webTestClient.post().uri("/models/gpt-4/test-chat/stream")
             .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("messages", List.of(Map.of("role", "user", "content", "Hello"))))
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "Hello"))
+            ))))
             .exchange()
             .expectStatus().isOk()
-            .expectBodyList(ChatChunk.class)
+            .expectHeader().valueEquals("X-Halo-AI-Stream-Protocol", "text-v1")
+            .expectBody(String.class)
             .consumeWith(response -> {
-                assertThat(response.getResponseBody()).hasSize(1);
-                var chunk = response.getResponseBody().getFirst();
-                assertThat(chunk.getType()).isEqualTo(ChunkType.ERROR);
-                assertThat(chunk.getContent()).contains("upstream failed");
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"error\"");
+                assertThat(bodyText).contains("upstream failed");
+                assertThat(bodyText).contains("data:[DONE]");
+            });
+    }
+
+    @Test
+    void testChatStream_streamErrorAfterReasoningEmitsDone() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.concat(
+                Flux.just(TextStreamPart.reasoningDelta("rsn_1", "Think", Map.of())),
+                Flux.error(new IllegalStateException("upstream failed"))
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "Hello"))
+            ))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"reasoning-delta\"");
+                assertThat(bodyText).contains("\"type\":\"error\"");
+                assertThat(bodyText).contains("upstream failed");
+                assertThat(bodyText).contains("data:[DONE]");
             });
     }
 
     // ---- helpers ----
+
+    private StreamTextResult streamResult(Flux<TextStreamPart> fullStream) {
+        var shared = fullStream.cache();
+        return new StreamTextResult(
+            shared,
+            shared.filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
+                .map(TextStreamPart::getDelta),
+            Flux.empty(),
+            Flux.empty(),
+            Mono.empty(),
+            Mono.empty()
+        );
+    }
 
     private AiProvider provider(String name, String providerType) {
         var p = new AiProvider();

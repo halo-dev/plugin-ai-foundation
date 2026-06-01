@@ -24,9 +24,13 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { AiModel } from '../models';
 // @ts-ignore
-import type { ChatChunk } from '../models';
+import type { GenerateTextRequest } from '../models';
 // @ts-ignore
-import type { TestChatRequest } from '../models';
+import type { TestEmbeddingRequest } from '../models';
+// @ts-ignore
+import type { TestEmbeddingResponse } from '../models';
+// @ts-ignore
+import type { TextStreamPart } from '../models';
 /**
  * ConsoleApiAifoundationHaloRunV1alpha1ModelApi - axios parameter creator
  * @export
@@ -165,13 +169,14 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             };
         },
         /**
-         * Test chat completion with streaming response.
+         * Test text generation with Halo text stream response.
          * @param {string} name Model name (AiModel.metadata.name)
-         * @param {TestChatRequest} [testChatRequest] 
+         * @param {boolean} [enableTestTool] Whether to inject the console-only halo_test_info tool for tool calling tests.
+         * @param {GenerateTextRequest} [generateTextRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelChatStream: async (name: string, testChatRequest?: TestChatRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        testModelChatStream: async (name: string, enableTestTool?: boolean, generateTextRequest?: GenerateTextRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
             assertParamExists('testModelChatStream', 'name', name)
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream`
@@ -195,6 +200,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             // http bearer authentication required
             await setBearerAuthToObject(localVarHeaderParameter, configuration)
 
+            if (enableTestTool !== undefined) {
+                localVarQueryParameter['enableTestTool'] = enableTestTool;
+            }
+
 
     
             localVarHeaderParameter['Content-Type'] = 'application/json';
@@ -202,7 +211,54 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(testChatRequest, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(generateTextRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Test embedding generation with embedding settings and diagnostics.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestEmbeddingRequest} testEmbeddingRequest
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelEmbedding: async (name: string, testEmbeddingRequest: TestEmbeddingRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('testModelEmbedding', 'name', name)
+            // verify required parameter 'testEmbeddingRequest' is not null or undefined
+            assertParamExists('testModelEmbedding', 'testEmbeddingRequest', testEmbeddingRequest)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-embedding`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(testEmbeddingRequest, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -304,16 +360,30 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Test chat completion with streaming response.
+         * Test text generation with Halo text stream response.
          * @param {string} name Model name (AiModel.metadata.name)
-         * @param {TestChatRequest} [testChatRequest] 
+         * @param {boolean} [enableTestTool] Whether to inject the console-only halo_test_info tool for tool calling tests.
+         * @param {GenerateTextRequest} [generateTextRequest] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async testModelChatStream(name: string, testChatRequest?: TestChatRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ChatChunk>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChatStream(name, testChatRequest, options);
+        async testModelChatStream(name: string, enableTestTool?: boolean, generateTextRequest?: GenerateTextRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TextStreamPart>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChatStream(name, enableTestTool, generateTextRequest, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelChatStream']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Test embedding generation with embedding settings and diagnostics.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestEmbeddingRequest} testEmbeddingRequest
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async testModelEmbedding(name: string, testEmbeddingRequest: TestEmbeddingRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TestEmbeddingResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelEmbedding(name, testEmbeddingRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelEmbedding']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -367,13 +437,22 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(axios, basePath));
         },
         /**
-         * Test chat completion with streaming response.
+         * Test text generation with Halo text stream response.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<ChatChunk> {
-            return localVarFp.testModelChatStream(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(axios, basePath));
+        testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<TextStreamPart> {
+            return localVarFp.testModelChatStream(requestParameters.name, requestParameters.enableTestTool, requestParameters.generateTextRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Test embedding generation with embedding settings and diagnostics.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbeddingRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelEmbedding(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbeddingRequest, options?: RawAxiosRequestConfig): AxiosPromise<TestEmbeddingResponse> {
+            return localVarFp.testModelEmbedding(requestParameters.name, requestParameters.testEmbeddingRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * Update an AI model.
@@ -394,7 +473,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
  */
 export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModelRequest {
     /**
-     * 
+     *
      * @type {AiModel}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiCreateModel
      */
@@ -450,11 +529,39 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStrea
     readonly name: string
 
     /**
-     * 
-     * @type {TestChatRequest}
+     * Whether to inject the console-only halo_test_info tool for tool calling tests.
+     * @type {boolean}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
      */
-    readonly testChatRequest?: TestChatRequest
+    readonly enableTestTool?: boolean
+
+    /**
+     *
+     * @type {GenerateTextRequest}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
+     */
+    readonly generateTextRequest?: GenerateTextRequest
+}
+
+/**
+ * Request parameters for testModelEmbedding operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbeddingRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbeddingRequest {
+    /**
+     * Model name (AiModel.metadata.name)
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbedding
+     */
+    readonly name: string
+
+    /**
+     *
+     * @type {TestEmbeddingRequest}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbedding
+     */
+    readonly testEmbeddingRequest: TestEmbeddingRequest
 }
 
 /**
@@ -519,14 +626,25 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
     }
 
     /**
-     * Test chat completion with streaming response.
+     * Test text generation with Halo text stream response.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
     public testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChatStream(requestParameters.name, requestParameters.testChatRequest, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChatStream(requestParameters.name, requestParameters.enableTestTool, requestParameters.generateTextRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Test embedding generation with embedding settings and diagnostics.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbeddingRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
+     */
+    public testModelEmbedding(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelEmbeddingRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelEmbedding(requestParameters.name, requestParameters.testEmbeddingRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -540,4 +658,3 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
         return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).updateModel(requestParameters.name, requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
     }
 }
-

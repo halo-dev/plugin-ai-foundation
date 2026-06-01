@@ -5,7 +5,7 @@
     "version" : "2.23.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:51286",
+    "url" : "http://localhost:31439",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -683,8 +683,52 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream" : {
       "post" : {
-        "description" : "Test chat completion with streaming response.",
+        "description" : "Test text generation with Halo text stream response.",
         "operationId" : "TestModelChatStream",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Whether to inject the console-only halo_test_info tool for tool calling tests.",
+          "in" : "query",
+          "name" : "enableTestTool",
+          "schema" : {
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/GenerateTextRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TextStreamPart"
+                }
+              }
+            },
+            "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object. The stream can include message lifecycle, step lifecycle, text, tool call, tool result, tool error, finish, sanitized raw diagnostic, and error parts, then ends with data: [DONE]."
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-embedding" : {
+      "post" : {
+        "description" : "Test embedding generation with embedding settings and diagnostics.",
+        "operationId" : "TestModelEmbedding",
         "parameters" : [ {
           "description" : "Model name (AiModel.metadata.name)",
           "in" : "path",
@@ -698,17 +742,18 @@
           "content" : {
             "*/*" : {
               "schema" : {
-                "$ref" : "#/components/schemas/TestChatRequest"
+                "$ref" : "#/components/schemas/TestEmbeddingRequest"
               }
             }
-          }
+          },
+          "required" : true
         },
         "responses" : {
           "default" : {
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ChatChunk"
+                  "$ref" : "#/components/schemas/TestEmbeddingResponse"
                 }
               }
             },
@@ -1193,27 +1238,6 @@
           }
         }
       },
-      "ChatChunk" : {
-        "type" : "object",
-        "properties" : {
-          "content" : {
-            "type" : "string"
-          },
-          "finishReason" : {
-            "type" : "string"
-          },
-          "last" : {
-            "type" : "boolean"
-          },
-          "type" : {
-            "type" : "string",
-            "enum" : [ "TEXT", "REASONING", "TOOL_CALL", "ERROR", "FINISH" ]
-          },
-          "usage" : {
-            "$ref" : "#/components/schemas/Usage"
-          }
-        }
-      },
       "CopyOperation" : {
         "required" : [ "op", "from", "path" ],
         "type" : "object",
@@ -1290,6 +1314,241 @@
           }
         }
       },
+      "EmbeddingPreview" : {
+        "type" : "object",
+        "properties" : {
+          "dimensions" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "preview" : {
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "float"
+            }
+          }
+        }
+      },
+      "EmbeddingResponseMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "body" : {
+            "type" : "object"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "EmbeddingUsage" : {
+        "type" : "object",
+        "properties" : {
+          "raw" : {
+            "type" : "object"
+          },
+          "tokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "EmbeddingWarning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          }
+        }
+      },
+      "GenerateTextRequest" : {
+        "type" : "object",
+        "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessage"
+            }
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "output" : {
+            "$ref" : "#/components/schemas/OutputSpec"
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "prompt" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "toolChoice" : {
+            "$ref" : "#/components/schemas/ToolChoice"
+          },
+          "tools" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ToolDefinition"
+            }
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "GenerationRequestMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          }
+        }
+      },
+      "GenerationResponseMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "body" : {
+            "type" : "object"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessage"
+            }
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "GenerationWarning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          }
+        }
+      },
       "JsonPatch" : {
         "minItems" : 1,
         "uniqueItems" : true,
@@ -1311,14 +1570,27 @@
           } ]
         }
       },
-      "Message" : {
+      "LanguageModelUsage" : {
         "type" : "object",
         "properties" : {
-          "content" : {
-            "type" : "string"
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
           },
-          "role" : {
-            "type" : "string"
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "raw" : {
+            "type" : "object"
+          },
+          "reasoningTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalTokens" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -1377,6 +1649,59 @@
           }
         },
         "description" : "Metadata of Extension."
+      },
+      "ModelMessage" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessagePart"
+            }
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "SYSTEM", "USER", "ASSISTANT", "TOOL" ]
+          }
+        }
+      },
+      "ModelMessagePart" : {
+        "type" : "object",
+        "properties" : {
+          "errorText" : {
+            "type" : "string"
+          },
+          "input" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "result" : {
+            "type" : "object"
+          },
+          "signature" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "toolCallId" : {
+            "type" : "string"
+          },
+          "toolName" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
       },
       "ModelOption" : {
         "type" : "object",
@@ -1485,6 +1810,51 @@
           }
         }
       },
+      "OutputSpec" : {
+        "type" : "object",
+        "properties" : {
+          "choices" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "elementSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "schema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "strict" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "TEXT", "OBJECT", "ARRAY", "CHOICE", "JSON" ]
+          }
+        }
+      },
       "ProviderModelDiscoveryResponse" : {
         "type" : "object",
         "properties" : {
@@ -1587,32 +1957,82 @@
           }
         }
       },
-      "TestChatRequest" : {
+      "TestEmbeddingRequest" : {
         "type" : "object",
         "properties" : {
-          "maxTokens" : {
+          "dimensions" : {
             "type" : "integer",
             "format" : "int32"
           },
-          "messages" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/Message"
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
             }
           },
+          "inputs" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "maxBatchSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxParallelCalls" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          }
+        }
+      },
+      "TestEmbeddingResponse" : {
+        "type" : "object",
+        "properties" : {
+          "embeddings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EmbeddingPreview"
+            }
+          },
+          "embeddingsCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "firstPairSimilarity" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "providerMetadata" : {
             "type" : "object",
             "additionalProperties" : {
               "type" : "object"
             }
           },
-          "temperature" : {
-            "type" : "number",
-            "format" : "double"
+          "response" : {
+            "$ref" : "#/components/schemas/EmbeddingResponseMetadata"
           },
-          "topP" : {
-            "type" : "number",
-            "format" : "double"
+          "usage" : {
+            "$ref" : "#/components/schemas/EmbeddingUsage"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EmbeddingWarning"
+            }
           }
         }
       },
@@ -1635,18 +2055,146 @@
           }
         }
       },
-      "Usage" : {
+      "TextStreamPart" : {
         "type" : "object",
         "properties" : {
-          "completionTokens" : {
+          "data" : {
+            "type" : "object"
+          },
+          "delta" : {
+            "type" : "string"
+          },
+          "errorText" : {
+            "type" : "string"
+          },
+          "finishReason" : {
+            "type" : "string",
+            "enum" : [ "STOP", "LENGTH", "CONTENT_FILTER", "TOOL_CALLS", "ERROR", "OTHER", "UNKNOWN" ]
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "input" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "mediaType" : {
+            "type" : "string"
+          },
+          "messageId" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "rawFinishReason" : {
+            "type" : "string"
+          },
+          "request" : {
+            "$ref" : "#/components/schemas/GenerationRequestMetadata"
+          },
+          "response" : {
+            "$ref" : "#/components/schemas/GenerationResponseMetadata"
+          },
+          "result" : {
+            "type" : "object"
+          },
+          "signature" : {
+            "type" : "string"
+          },
+          "stepIndex" : {
             "type" : "integer",
             "format" : "int32"
           },
-          "promptTokens" : {
-            "type" : "integer",
-            "format" : "int32"
+          "title" : {
+            "type" : "string"
+          },
+          "toolCallId" : {
+            "type" : "string"
+          },
+          "toolName" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/LanguageModelUsage"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GenerationWarning"
+            }
           }
         }
+      },
+      "ToolChoice" : {
+        "type" : "object",
+        "properties" : {
+          "toolName" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "AUTO", "NONE", "REQUIRED", "TOOL" ]
+          }
+        }
+      },
+      "ToolDefinition" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "executor" : {
+            "$ref" : "#/components/schemas/ToolExecutor"
+          },
+          "inputExamples" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "inputSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "outputSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "strict" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ToolExecutor" : {
+        "type" : "object"
       }
     },
     "securitySchemes" : {
