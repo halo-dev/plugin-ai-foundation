@@ -12,6 +12,7 @@ import { computed } from 'vue'
 const props = defineProps<{
   formState?: ModelFormState
   providerType: string
+  modelName?: string
 }>()
 
 const emit = defineEmits<{
@@ -56,9 +57,20 @@ defineExpose({
 <template>
   <FormKit id="model-form" type="form" @submit="onSubmit">
     <FormKit
+      v-if="isEditing"
+      type="text"
+      name="modelName"
+      label="内部模型 ID"
+      help="Halo 内用于识别此模型的 ID，调用 AI Foundation SDK 时传递此值。"
+      disabled
+      :value="modelName"
+    />
+
+    <FormKit
       type="text"
       name="modelId"
-      label="模型 ID"
+      label="供应商模型 ID"
+      help="调用第三方供应商时传递的模型 ID，例如 OpenAI 的 gpt-4o。"
       validation="required"
       placeholder="例如: gpt-4o"
       :disabled="isEditing"
