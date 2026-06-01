@@ -18,6 +18,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { computed, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import ModelEditingModal from './ModelEditingModal.vue'
+import ModelEnableSwitch from './ModelEnableSwitch.vue'
 
 const props = defineProps<{
   model: AiModel
@@ -62,6 +63,7 @@ function handleDelete() {
       <div class=":uno: flex flex-wrap items-center justify-end gap-1.5">
         <ModelBadgeGroup :model="model" />
         <VStatusDot v-if="model.metadata.deletionTimestamp" animate state="warning" text="删除中" />
+        <ModelEnableSwitch :model="model" />
       </div>
     </template>
     <template #dropdownItems>
