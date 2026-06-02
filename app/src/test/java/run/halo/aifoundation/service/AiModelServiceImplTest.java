@@ -2,19 +2,15 @@ package run.halo.aifoundation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
 import org.springframework.ai.chat.model.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Sort;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.exception.DefaultModelNotConfiguredException;
@@ -33,7 +29,6 @@ import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
 import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
-import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -57,80 +52,11 @@ class AiModelServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AiModelServiceImpl(
-            client,
             new DefaultAiModelResolver(client, providerClientCache, secretResolver,
                 defaultModelSlotStore),
             new DefaultLanguageModelFactory(providerClientCache),
             new DefaultEmbeddingModelFactory(providerClientCache)
         );
-    }
-
-    // ---- listModels ----
-
-    @Test
-    void listModels_returnsAllModels() {
-        when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(Flux.just(
-                aiModel("openai-prod-gpt-4-abc", "provider-a", "gpt-4", "GPT-4", true),
-                aiModel("ollama-local-claude-3-xyz", "provider-b", "claude-3", "Claude 3", true)
-            ));
-
-        StepVerifier.create(service.listModels())
-            .assertNext(models -> {
-                assertThat(models).hasSize(2);
-                assertThat(models.get(0).getName()).isEqualTo("openai-prod-gpt-4-abc");
-                assertThat(models.get(0).getModelId()).isEqualTo("gpt-4");
-                assertThat(models.get(0).getProviderName()).isEqualTo("provider-a");
-                assertThat(models.get(1).getName()).isEqualTo("ollama-local-claude-3-xyz");
-                assertThat(models.get(1).getModelId()).isEqualTo("claude-3");
-            })
-            .verifyComplete();
-    }
-
-    @Test
-    void listModels_emptyResult_returnsEmptyList() {
-        when(client.listAll(eq(AiModel.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(Flux.empty());
-
-        StepVerifier.create(service.listModels())
-            .assertNext(models -> assertThat(models).isEmpty())
-            .verifyComplete();
-    }
-
-    // ---- listProviders ----
-
-    @Test
-    void listProviders_returnsAllProviders() {
-        var provider1 = aiProvider("openai-prod", "openai", true);
-        provider1.setStatus(statusWithPhase(AiProvider.AiProviderStatus.Phase.OK));
-        var provider2 = aiProvider("ollama-local", "ollama", false);
-
-        when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(Flux.just(provider1, provider2));
-
-        StepVerifier.create(service.listProviders())
-            .assertNext(providers -> {
-                assertThat(providers).hasSize(2);
-                assertThat(providers.get(0).getName()).isEqualTo("openai-prod");
-                assertThat(providers.get(0).getProviderType()).isEqualTo("openai");
-                assertThat(providers.get(0).isEnabled()).isTrue();
-                assertThat(providers.get(0).getPhase()).isEqualTo("OK");
-                assertThat(providers.get(1).isEnabled()).isFalse();
-                assertThat(providers.get(1).getPhase()).isEqualTo("UNKNOWN");
-            })
-            .verifyComplete();
-    }
-
-    @Test
-    void listProviders_nullStatus_showsUnknownPhase() {
-        var provider = aiProvider("my-provider", "openai", true);
-        provider.setStatus(null);
-        when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
-            .thenReturn(Flux.just(provider));
-
-        StepVerifier.create(service.listProviders())
-            .assertNext(providers -> assertThat(providers.get(0).getPhase()).isEqualTo("UNKNOWN"))
-            .verifyComplete();
     }
 
     // ---- languageModel — fetch by metadata.name ----
@@ -194,16 +120,16 @@ class AiModelServiceImplTest {
     }
 
     @Test
-    void defaultLanguageModel_missingSlot_emitsDefaultModelNotConfiguredException() {
+    void languageModel_withoutNameAndMissingSlot_emitsDefaultModelNotConfiguredException() {
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
 
-        StepVerifier.create(service.defaultLanguageModel())
+        StepVerifier.create(service.languageModel())
             .expectError(DefaultModelNotConfiguredException.class)
             .verify();
     }
 
     @Test
-    void defaultLanguageModel_resolvesConfiguredModel() {
+    void languageModel_withoutName_resolvesConfiguredModel() {
         var slots = defaultSlots("openai-prod-gpt-4-abc", null);
         var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
         var provider = aiProvider("openai-prod", "openai", true);
@@ -218,9 +144,61 @@ class AiModelServiceImplTest {
         when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
             .thenReturn(chatModel);
 
-        StepVerifier.create(service.defaultLanguageModel())
+        StepVerifier.create(service.languageModel())
             .assertNext(languageModel -> assertThat(languageModel).isNotNull())
             .verifyComplete();
+    }
+
+    @Test
+    void languageModel_blankName_resolvesConfiguredModel() {
+        var slots = defaultSlots("openai-prod-gpt-4-abc", null);
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
+        var provider = aiProvider("openai-prod", "openai", true);
+        var chatModel = mock(ChatModel.class);
+        var providerType = languageProviderType();
+
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
+            .thenReturn(chatModel);
+
+        StepVerifier.create(service.languageModel("  "))
+            .assertNext(languageModel -> assertThat(languageModel).isNotNull())
+            .verifyComplete();
+    }
+
+    @Test
+    void embeddingModel_withoutName_resolvesConfiguredModel() {
+        var slots = defaultSlots(null, "openai-prod-embedding");
+        var model = aiModel("openai-prod-embedding", "openai-prod",
+            "text-embedding-3-small", "Embedding", true, ModelType.EMBEDDING);
+        var provider = aiProvider("openai-prod", "openai", true);
+        var springEmbeddingModel = mock(org.springframework.ai.embedding.EmbeddingModel.class);
+        var providerType = mock(AiProviderType.class);
+
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
+        when(client.fetch(AiModel.class, "openai-prod-embedding")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
+        when(providerClientCache.getOrCreateEmbeddingModel(provider, "sk-test",
+            "text-embedding-3-small")).thenReturn(springEmbeddingModel);
+
+        StepVerifier.create(service.embeddingModel())
+            .assertNext(embeddingModel -> assertThat(embeddingModel).isNotNull())
+            .verifyComplete();
+    }
+
+    @Test
+    void embeddingModel_blankNameAndMissingSlot_emitsDefaultModelNotConfiguredException() {
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
+
+        StepVerifier.create(service.embeddingModel(""))
+            .expectError(DefaultModelNotConfiguredException.class)
+            .verify();
     }
 
     // ---- helpers ----
@@ -257,12 +235,6 @@ class AiModelServiceImplTest {
         spec.setEnabled(enabled);
         provider.setSpec(spec);
         return provider;
-    }
-
-    private AiProvider.AiProviderStatus statusWithPhase(AiProvider.AiProviderStatus.Phase phase) {
-        var status = new AiProvider.AiProviderStatus();
-        status.setPhase(phase);
-        return status;
     }
 
     private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName) {

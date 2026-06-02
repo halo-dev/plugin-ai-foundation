@@ -57,12 +57,10 @@ public class MyAiService {
 
 | 方法 | 说明 |
 | --- | --- |
-| `languageModel(String modelName)` | 获取指定语言模型 |
-| `embeddingModel(String modelName)` | 获取指定嵌入模型 |
-| `defaultLanguageModel()` | 获取默认语言模型 |
-| `defaultEmbeddingModel()` | 获取默认嵌入模型 |
-| `listModels()` | 列出可用模型 |
-| `listProviders()` | 列出可用供应方 |
+| `languageModel()` | 获取默认语言模型 |
+| `languageModel(String modelName)` | 获取指定语言模型；`modelName` 为 `null` 或空白时获取默认语言模型 |
+| `embeddingModel()` | 获取默认嵌入模型 |
+| `embeddingModel(String modelName)` | 获取指定嵌入模型；`modelName` 为 `null` 或空白时获取默认嵌入模型 |
 
 推荐在业务服务中保持响应式调用，不要在 WebFlux 请求线程里直接 `block()`。如果调用点本身是阻塞式任务或后台批处理，可以在调用方自己的调度边界内阻塞。
 
@@ -83,10 +81,13 @@ public Mono<String> summarize(String modelName, String content) {
 
 ```java
 return aiModelService()
-    .flatMap(AiModelService::defaultLanguageModel)
+    .flatMap(AiModelService::languageModel)
     .flatMap(model -> model.generateText("生成一句站点欢迎语"))
     .map(GenerateTextResult::getText);
 ```
+
+如果业务配置里的模型名可能为空，也可以直接传入 `languageModel(modelName)`；当 `modelName`
+为 `null` 或空白字符串时，会自动使用默认语言模型。
 
 ## 常用类型
 
@@ -94,7 +95,7 @@ return aiModelService()
 
 | 类型 | 用途 |
 | --- | --- |
-| `AiModelService` | 获取语言模型、嵌入模型和模型列表 |
+| `AiModelService` | 获取语言模型和嵌入模型 |
 | `LanguageModel` | 文本生成和流式文本生成 |
 | `GenerateTextRequest` | 文本生成请求 |
 | `GenerateTextResult` | 文本生成结果 |
@@ -540,7 +541,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 
 ```java
 return aiModelService()
-    .flatMap(service -> service.defaultEmbeddingModel())
+    .flatMap(AiModelService::embeddingModel)
     .flatMap(model -> model.embedQuery("Halo 插件开发"));
 ```
 
