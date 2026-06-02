@@ -15,8 +15,8 @@ spec:
   homepage: https://github.com/halo-dev/plugin-ai-foundation#readme
   repo: https://github.com/halo-dev/plugin-ai-foundation
   issues: https://github.com/halo-dev/plugin-ai-foundation/issues
-  displayName: "AI 基础设施"
-  description: "为 Halo 提供统一的 AI 模型配置能力，并暴露 Java SDK 供其他插件调用 AI 能力"
+  displayName: "AI Foundation"
+  description: "Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提供文本生成、嵌入向量、工具调用等智能化能力"
   license:
     - name: "GPL-3.0"
       url: "https://github.com/halo-dev/plugin-ai-foundation/blob/main/LICENSE"

@@ -9,7 +9,7 @@ import RiBrainLine from '~icons/ri/brain-line'
 
 const tabs: Tab[] = [
   {
-    label: '配置',
+    label: '模型配置',
     value: AI_FOUNDATION_ROUTE_NAMES.PROVIDERS,
   },
   {
@@ -45,7 +45,7 @@ const activeRouteName = computed({
 </script>
 
 <template>
-  <VPageHeader title="AI 模型配置">
+  <VPageHeader title="AI Foundation">
     <template #icon>
       <RiBrainLine />
     </template>

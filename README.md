@@ -1,6 +1,6 @@
-# AI 基础设施（ai-foundation）
+# Halo AI Foundation
 
-为 Halo 提供统一的 AI 模型配置与管理能力，并暴露 Java SDK 供其他插件调用 AI 能力。
+Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提供文本生成、嵌入向量、工具调用等智能化能力。
 
 ## 功能特性
 
@@ -37,7 +37,7 @@
 cd ui && pnpm install && pnpm dev
 ```
 
-开发服务器启动后，访问 `http://127.0.0.1:8090/console/`（默认账号 admin / admin）即可在控制台中看到「AI 基础设施」菜单。
+开发服务器启动后，访问 `http://127.0.0.1:8090/console/`（默认账号 admin / admin）即可在控制台中看到「AI 模型配置」菜单。
 
 修改后端代码后，需要重启开发容器：
 

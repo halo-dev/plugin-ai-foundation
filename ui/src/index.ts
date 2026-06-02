@@ -24,10 +24,10 @@ export default definePlugin({
           name: AI_FOUNDATION_ROUTE_NAMES.PROVIDERS,
         },
         meta: {
-          title: 'AI 模型配置',
+          title: 'AI Foundation',
           permissions: ['*'],
           menu: {
-            name: 'AI 模型配置',
+            name: 'AI Foundation',
             group: 'system',
             icon: markRaw(RiBrainLine),
             priority: 100,
