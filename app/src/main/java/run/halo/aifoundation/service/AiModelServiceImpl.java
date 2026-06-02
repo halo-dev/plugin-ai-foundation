@@ -20,6 +20,11 @@ public class AiModelServiceImpl implements AiModelService {
     private final EmbeddingModelFactory embeddingModelFactory;
 
     @Override
+    public Mono<LanguageModel> languageModel() {
+        return languageModel(null);
+    }
+
+    @Override
     public Mono<LanguageModel> languageModel(String modelName) {
         var resolvedModelName = StringUtils.hasText(modelName)
             ? Mono.just(modelName)
@@ -27,6 +32,11 @@ public class AiModelServiceImpl implements AiModelService {
         return resolvedModelName
             .flatMap(name -> modelResolver.resolve(name, ModelType.LANGUAGE))
             .map(languageModelFactory::create);
+    }
+
+    @Override
+    public Mono<EmbeddingModel> embeddingModel() {
+        return embeddingModel(null);
     }
 
     @Override

@@ -120,16 +120,16 @@ class AiModelServiceImplTest {
     }
 
     @Test
-    void languageModel_nullNameAndMissingSlot_emitsDefaultModelNotConfiguredException() {
+    void languageModel_withoutNameAndMissingSlot_emitsDefaultModelNotConfiguredException() {
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
 
-        StepVerifier.create(service.languageModel(null))
+        StepVerifier.create(service.languageModel())
             .expectError(DefaultModelNotConfiguredException.class)
             .verify();
     }
 
     @Test
-    void languageModel_nullName_resolvesConfiguredModel() {
+    void languageModel_withoutName_resolvesConfiguredModel() {
         var slots = defaultSlots("openai-prod-gpt-4-abc", null);
         var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
         var provider = aiProvider("openai-prod", "openai", true);
@@ -144,7 +144,7 @@ class AiModelServiceImplTest {
         when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
             .thenReturn(chatModel);
 
-        StepVerifier.create(service.languageModel(null))
+        StepVerifier.create(service.languageModel())
             .assertNext(languageModel -> assertThat(languageModel).isNotNull())
             .verifyComplete();
     }
@@ -171,7 +171,7 @@ class AiModelServiceImplTest {
     }
 
     @Test
-    void embeddingModel_nullName_resolvesConfiguredModel() {
+    void embeddingModel_withoutName_resolvesConfiguredModel() {
         var slots = defaultSlots(null, "openai-prod-embedding");
         var model = aiModel("openai-prod-embedding", "openai-prod",
             "text-embedding-3-small", "Embedding", true, ModelType.EMBEDDING);
@@ -187,7 +187,7 @@ class AiModelServiceImplTest {
         when(providerClientCache.getOrCreateEmbeddingModel(provider, "sk-test",
             "text-embedding-3-small")).thenReturn(springEmbeddingModel);
 
-        StepVerifier.create(service.embeddingModel(null))
+        StepVerifier.create(service.embeddingModel())
             .assertNext(embeddingModel -> assertThat(embeddingModel).isNotNull())
             .verifyComplete();
     }
