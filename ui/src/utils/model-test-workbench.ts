@@ -1,5 +1,5 @@
-import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import type { AiModel, OutputSpec } from '@/api/generated'
+import { AiModelSpecModelTypeEnum } from '@/api/generated'
 
 export type ChatRole = 'user' | 'assistant'
 
@@ -8,6 +8,7 @@ export interface WorkbenchMessage {
   role: ChatRole
   content: string
   reasoningContent?: string
+  reasoningState?: 'streaming' | 'done'
   toolEvents?: WorkbenchToolEvent[]
   modelName?: string
   modelDisplayName?: string
@@ -28,6 +29,63 @@ export interface WorkbenchToolEvent {
   summary: string
 }
 
+export interface ExamplePrompt {
+  id: string
+  icon: string
+  title: string
+  content: string
+}
+
+export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
+  {
+    id: 'creative-writing',
+    icon: 'ri-quill-pen-line',
+    title: '创意写作',
+    content: '请帮我写一个关于未来城市的短故事，大约300字。',
+  },
+  {
+    id: 'code-review',
+    icon: 'ri-code-box-line',
+    title: '代码审查',
+    content:
+      '请审查以下代码并给出改进建议：\n\n```python\ndef fib(n):\n    if n <= 1:\n        return n\n    return fib(n-1) + fib(n-2)\n```',
+  },
+  {
+    id: 'explain-concept',
+    icon: 'ri-lightbulb-line',
+    title: '概念解释',
+    content: '请用简单易懂的语言解释什么是"神经网络"，并举一个生活中的类比。',
+  },
+  {
+    id: 'json-output',
+    icon: 'ri-table-line',
+    title: '结构化输出',
+    content:
+      '请分析以下产品评论，并返回一个包含 sentiment（positive/negative/neutral）和 keywords 数组的 JSON 对象。\n\n评论：这个手机的电池续航真的很棒，但摄像头效果一般。',
+  },
+  {
+    id: 'translation',
+    icon: 'ri-translate-2',
+    title: '翻译',
+    content: '请将以下中文翻译成英文，保持原文的语气和风格：\n\n"春风又绿江南岸，明月何时照我还。"',
+  },
+  {
+    id: 'tool-test',
+    icon: 'ri-tools-line',
+    title: '工具调用',
+    content: '请调用 halo_test_info 工具并告诉我返回的内容。',
+  },
+]
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export interface ChatParameters {
   systemPrompt?: string
   temperature?: number
@@ -37,6 +95,7 @@ export interface ChatParameters {
   maxRetries?: number
   reasoning?: ReasoningOptions
   providerOptions?: Record<string, Record<string, unknown>>
+  headers?: Record<string, string>
   output?: OutputSpec
 }
 
@@ -74,6 +133,7 @@ export interface GenerateTextRequest {
   maxRetries?: number
   reasoning?: ReasoningOptions
   providerOptions?: Record<string, Record<string, unknown>>
+  headers?: Record<string, string>
   output?: OutputSpec
 }
 
@@ -158,7 +218,10 @@ export function parseProviderOptionsJson(input: string): {
   }
 }
 
-export function parseJsonSchema(input: string, label = 'JSON Schema'): {
+export function parseJsonSchema(
+  input: string,
+  label = 'JSON Schema',
+): {
   value?: Record<string, unknown>
   error?: string
 } {
@@ -262,6 +325,7 @@ export function buildTestChatRequest(
     maxRetries: parameters.maxRetries,
     reasoning: parameters.reasoning,
     providerOptions: parameters.providerOptions,
+    headers: parameters.headers,
     output: parameters.output,
   }
 }
