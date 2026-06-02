@@ -26,6 +26,7 @@ import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiMessage3Line from '~icons/ri/message-3-line'
+import RiSendPlaneLine from '~icons/ri/send-plane-line'
 import RiSparkling2Line from '~icons/ri/sparkling-2-line'
 import RiStackLine from '~icons/ri/stack-line'
 import ChatInputArea from './components/workbench/ChatInputArea.vue'
@@ -499,6 +500,15 @@ function handleExampleSelect(content: string) {
   chatInputRef.value?.focus()
 }
 
+function handleEmbeddingKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault()
+    if (embeddingInputs.value.trim() && selectedModel.value && !isEmbeddingTesting.value) {
+      runEmbeddingTest()
+    }
+  }
+}
+
 function handleConversationScroll() {
   const el = conversationRef.value
   if (!el) return
@@ -760,23 +770,31 @@ onBeforeUnmount(() => {
           />
 
           <div class=":uno: border-t border-slate-200 bg-white/95 px-4 py-3">
-            <div class=":uno: mx-auto max-w-4xl flex flex-col gap-2 sm:flex-row">
-              <textarea
-                v-model="embeddingInputs"
-                rows="3"
-                placeholder="每行一段需要向量化的文本"
-                class=":uno: min-h-20 flex-1 resize-none !border !border-solid !border-slate-200 !rounded-lg !bg-slate-50 !px-4 !py-3 !text-sm leading-relaxed outline-none transition-colors focus:!border-teal-400 focus:!bg-white focus:!ring-3 focus:!ring-teal-500/10"
-                :disabled="isEmbeddingTesting"
-              />
-              <div class=":uno: flex flex-none sm:items-end">
+            <div class=":uno: mx-auto max-w-4xl">
+              <div
+                class=":uno: relative flex-1 rounded-lg border border-slate-200 bg-slate-50 shadow-inner transition-colors focus-within:border-teal-400 focus-within:bg-white focus-within:ring-3 focus-within:ring-teal-500/10"
+              >
+                <textarea
+                  v-model="embeddingInputs"
+                  rows="3"
+                  placeholder="每行一段需要向量化的文本... (Cmd/Ctrl + Enter 发送)"
+                  class=":uno: min-h-20 w-[calc(100%-4.5rem)] resize-none !border-none !bg-transparent !px-4 !py-3 text-sm text-slate-900 leading-relaxed outline-none placeholder:text-slate-400"
+                  :disabled="!selectedModel || isEmbeddingTesting"
+                  @keydown="handleEmbeddingKeydown"
+                />
+                <div
+                  class=":uno: pointer-events-none absolute bottom-3 right-14 text-[11px] text-slate-400 font-mono"
+                >
+                  {{ embeddingInputs.length }}
+                </div>
                 <VButton
                   type="primary"
-                  class=":uno: w-full sm:w-auto"
+                  class=":uno: absolute bottom-2 right-2 h-8 w-8 !rounded-md !p-0 shadow-sm"
                   :loading="isEmbeddingTesting"
                   :disabled="!embeddingInputs.trim() || !selectedModel"
                   @click="runEmbeddingTest"
                 >
-                  运行测试
+                  <RiSendPlaneLine class=":uno: h-4 w-4" />
                 </VButton>
               </div>
             </div>

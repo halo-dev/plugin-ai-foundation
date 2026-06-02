@@ -67,7 +67,7 @@ defineExpose({ focus })
           :value="modelValue"
           rows="1"
           :placeholder="placeholder || '输入消息... (Cmd/Ctrl + Enter 发送)'"
-          class=":uno: w-full resize-none !border-none !bg-transparent !px-4 !py-3 !pr-22 text-sm text-slate-900 leading-relaxed outline-none placeholder:text-slate-400"
+          class=":uno: w-[calc(100%-4.5rem)] resize-none !border-none !bg-transparent !px-4 !py-3 text-sm text-slate-900 leading-relaxed outline-none placeholder:text-slate-400"
           :disabled="disabled || isStreaming"
           @input="onInput"
           @keydown="handleKeydown"

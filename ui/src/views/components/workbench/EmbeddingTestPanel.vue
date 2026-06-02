@@ -64,7 +64,7 @@ defineProps<{
           </svg>
         </div>
         <div class=":uno: text-sm text-slate-900 font-semibold">暂无嵌入测试结果</div>
-        <div class=":uno: mt-1 text-xs text-slate-500">输入多行文本后点击运行测试</div>
+        <div class=":uno: mt-1 text-xs text-slate-500">输入多行文本后点击发送</div>
       </div>
 
       <div v-if="result" class=":uno: rounded-lg border border-slate-200 bg-white !p-4 shadow-sm">
