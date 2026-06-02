@@ -599,7 +599,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class=":uno: h-[calc(100vh-8.25rem)] min-h-[34rem] bg-[#eef3f7] p-2">
+  <div class=":uno: h-[calc(100vh-9.25rem)] min-h-[34rem] bg-[#eef3f7] p-2">
     <VLoading v-if="isLoading" />
 
     <VEmpty
@@ -650,7 +650,7 @@ onBeforeUnmount(() => {
 
             <div class=":uno: flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center xl:w-[42rem]">
               <div
-                class=":uno: h-8 inline-flex flex-none items-center rounded-lg border border-slate-200 bg-slate-100/80 !p-0.5"
+                class=":uno: h-9 inline-flex flex-none items-center rounded-lg border border-slate-200 bg-slate-100/80 !p-0.5"
               >
                 <button
                   type="button"
@@ -697,7 +697,7 @@ onBeforeUnmount(() => {
               <div class=":uno: flex flex-none items-center gap-1">
                 <button
                   type="button"
-                  class=":uno: group h-8 w-8 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                  class=":uno: group h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                   v-tooltip="`刷新模型`"
                   @click="refetch()"
                 >
@@ -708,7 +708,7 @@ onBeforeUnmount(() => {
                 </button>
                 <button
                   type="button"
-                  class=":uno: group h-8 w-8 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  class=":uno: group h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
                   v-tooltip="`清空会话`"
                   @click="clearMessages"
                 >
