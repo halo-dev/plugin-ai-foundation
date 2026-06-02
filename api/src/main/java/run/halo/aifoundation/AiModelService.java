@@ -15,20 +15,10 @@ import run.halo.aifoundation.embedding.EmbeddingModel;
 public interface AiModelService extends ExtensionPoint {
 
     /**
-     * Resolves the configured default language model.
-     */
-    Mono<LanguageModel> languageModel();
-
-    /**
      * Resolves an enabled language model by {@code AiModel.metadata.name}. When {@code modelName}
      * is {@code null} or blank, resolves the configured default language model.
      */
     Mono<LanguageModel> languageModel(String modelName);
-
-    /**
-     * Resolves the configured default embedding model.
-     */
-    Mono<EmbeddingModel> embeddingModel();
 
     /**
      * Resolves an enabled embedding model by {@code AiModel.metadata.name}. When {@code modelName}

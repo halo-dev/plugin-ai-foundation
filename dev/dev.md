@@ -57,9 +57,7 @@ public class MyAiService {
 
 | 方法 | 说明 |
 | --- | --- |
-| `languageModel()` | 获取默认语言模型 |
 | `languageModel(String modelName)` | 获取指定语言模型；`modelName` 为 `null` 或空白时获取默认语言模型 |
-| `embeddingModel()` | 获取默认嵌入模型 |
 | `embeddingModel(String modelName)` | 获取指定嵌入模型；`modelName` 为 `null` 或空白时获取默认嵌入模型 |
 
 推荐在业务服务中保持响应式调用，不要在 WebFlux 请求线程里直接 `block()`。如果调用点本身是阻塞式任务或后台批处理，可以在调用方自己的调度边界内阻塞。
@@ -81,7 +79,7 @@ public Mono<String> summarize(String modelName, String content) {
 
 ```java
 return aiModelService()
-    .flatMap(AiModelService::languageModel)
+    .flatMap(service -> service.languageModel(null))
     .flatMap(model -> model.generateText("生成一句站点欢迎语"))
     .map(GenerateTextResult::getText);
 ```
@@ -541,7 +539,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 
 ```java
 return aiModelService()
-    .flatMap(AiModelService::embeddingModel)
+    .flatMap(service -> service.embeddingModel(null))
     .flatMap(model -> model.embedQuery("Halo 插件开发"));
 ```
 
