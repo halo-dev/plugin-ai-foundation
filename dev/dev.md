@@ -4,30 +4,32 @@
 
 ## 快速开始
 
-调用方插件需要依赖公开 API，并在运行时声明依赖本插件：
+调用方插件需要依赖公开 API，并在运行时声明依赖本插件。
 
-```gradle
-repositories {
-    mavenLocal()
-}
+> **注意**：`api` 模块暂未发布到 Maven 仓库，请先从 [Release](https://github.com/halo-dev/plugin-ai-foundation/releases) 页面下载 `api-1.0.0-SNAPSHOT.jar`，放置于调用方插件项目根目录（或其他固定路径），然后通过本地文件方式引入：
 
+```groovy
 dependencies {
-    compileOnly platform('run.halo.tools.platform:plugin:2.23.0')
-    compileOnly 'run.halo.app:api'
-    compileOnly 'run.halo.aifoundation:api:1.0.0-SNAPSHOT'
+    compileOnly files("${rootDir}/api-1.0.0-SNAPSHOT.jar")
+    testImplementation files("${rootDir}/api-1.0.0-SNAPSHOT.jar")
 }
 ```
+
+后续发布到 Maven 仓库之后需要改为：
+
+```groovy
+dependencies {
+    compileOnly 'run.halo.aifoundation:api:1.0.0'
+    testImplementation 'run.halo.aifoundation:api:1.0.0'
+}
+```
+
+plugin.yaml 中需要添加插件依赖声明：
 
 ```yaml
 spec:
   pluginDependencies:
-    ai-foundation: ">=1.0.0-SNAPSHOT"
-```
-
-开发本插件时，可先执行：
-
-```bash
-./gradlew :api:publishToMavenLocal
+    ai-foundation: "*"
 ```
 
 ## 获取服务
