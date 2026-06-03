@@ -2,6 +2,7 @@
 import type { AiProvider } from '@/api/generated'
 import { useModelsFetch } from '@/composables/use-models-fetch'
 import {
+  IconAddCircle,
   VButton,
   VCard,
   VDropdown,
@@ -11,7 +12,6 @@ import {
   VLoading,
 } from '@halo-dev/components'
 import { computed, shallowRef } from 'vue'
-import RiAddLine from '~icons/ri/add-line'
 import ModelCreationModal from './ModelCreationModal.vue'
 import ProviderModelListItem from './ProviderModelListItem.vue'
 import ProviderModelsDiscoveryModal from './ProviderModelsDiscoveryModal.vue'
@@ -43,7 +43,7 @@ const creationModalVisible = shallowRef(false)
         <VDropdown>
           <VButton type="secondary" size="sm">
             <template #icon>
-              <RiAddLine />
+              <IconAddCircle />
             </template>
             添加模型
           </VButton>

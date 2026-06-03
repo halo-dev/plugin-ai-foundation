@@ -3,11 +3,7 @@ import { aiConsoleApiClient } from '@/api'
 import { AiProviderStatusPhaseEnum } from '@/api/generated'
 import { useProviderQueryState } from '@/composables/use-provider-state'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
-import {
-  QK_PROVIDER,
-  QK_PROVIDERS,
-  reloadProviderQueries,
-} from '@/composables/use-providers-fetch'
+import { QK_PROVIDER, QK_PROVIDERS, reloadProviderQueries } from '@/composables/use-providers-fetch'
 import {
   Dialog,
   Toast,
@@ -20,9 +16,9 @@ import {
 } from '@halo-dev/components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, shallowRef } from 'vue'
-import RiDeleteBinLine from '~icons/ri/delete-bin-line'
-import RiEditLine from '~icons/ri/edit-line'
-import RiTestTubeLine from '~icons/ri/test-tube-line'
+import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
+import MingcuteEdit3Line from '~icons/mingcute/edit-3-line'
+import MingcuteRadar2Line from '~icons/mingcute/radar-2-line'
 import ProviderEditingModal from './components/ProviderEditingModal.vue'
 import ProviderEnableSwitch from './components/ProviderEnableSwitch.vue'
 import ProviderModelList from './components/ProviderModelList.vue'
@@ -163,19 +159,19 @@ const testConnectivityMutation = useMutation({
               @click="testConnectivityMutation.mutate()"
             >
               <template #icon>
-                <RiTestTubeLine />
+                <MingcuteRadar2Line />
               </template>
               检查连通性
             </VButton>
             <VButton size="sm" @click="editingModalVisible = true">
               <template #icon>
-                <RiEditLine />
+                <MingcuteEdit3Line />
               </template>
               编辑
             </VButton>
             <VButton type="danger" size="sm" @click="handleDelete" ghost>
               <template #icon>
-                <RiDeleteBinLine />
+                <MingcuteDelete2Line />
               </template>
               删除
             </VButton>

@@ -3,16 +3,16 @@ import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { groupModelOptionsByProvider } from '@/utils/model-options'
 
-import { VLoading } from '@halo-dev/components'
 import type { FormKitMessage, FormKitNode } from '@formkit/core'
+import { VLoading } from '@halo-dev/components'
 import { onClickOutside } from '@vueuse/core'
 import { useFuse } from '@vueuse/integrations/useFuse'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
-import RiArrowDownSLine from '~icons/ri/arrow-down-s-line'
+import MingcuteCheckLine from '~icons/mingcute/check-line'
+import MingcuteCloseLine from '~icons/mingcute/close-line'
+import MingcuteDownLine from '~icons/mingcute/down-line'
+import MingcuteSearchLine from '~icons/mingcute/search-line'
 import RiBrainLine from '~icons/ri/brain-line'
-import RiCheckLine from '~icons/ri/check-line'
-import RiCloseLine from '~icons/ri/close-line'
-import RiSearchLine from '~icons/ri/search-line'
 import {
   isModelOptionSelectable,
   modelFeatureLabel,
@@ -427,10 +427,10 @@ onBeforeUnmount(() => {
           class=":uno: ml-1 h-5 w-5 flex flex-none items-center justify-center rounded text-gray-500 -mr-1 hover:bg-gray-100 hover:text-gray-700"
           @click.stop="clearSelection"
         >
-          <RiCloseLine class=":uno: h-3.5 w-3.5" />
+          <MingcuteCloseLine class=":uno: h-3.5 w-3.5" />
         </span>
 
-        <RiArrowDownSLine
+        <MingcuteDownLine
           class=":uno: ml-1 h-4 w-4 flex-none text-gray-500 transition-transform duration-200"
           :class="{ ':uno: rotate-180': isOpen }"
           aria-hidden="true"
@@ -448,7 +448,10 @@ onBeforeUnmount(() => {
             <div
               class=":uno: h-8 flex items-center gap-1.5 border border-gray-200 rounded bg-gray-50 px-2"
             >
-              <RiSearchLine class=":uno: h-4 w-4 flex-none text-gray-500" aria-hidden="true" />
+              <MingcuteSearchLine
+                class=":uno: h-4 w-4 flex-none text-gray-500"
+                aria-hidden="true"
+              />
               <input
                 ref="searchInputRef"
                 v-model="keyword"
@@ -466,26 +469,19 @@ onBeforeUnmount(() => {
                 aria-label="清空"
                 @click="keyword = ''"
               >
-                <RiCloseLine class=":uno: h-3.5 w-3.5" />
+                <MingcuteCloseLine class=":uno: h-3.5 w-3.5" />
               </button>
             </div>
           </div>
 
           <VLoading v-if="isLoading" />
 
-          <div
-            v-else-if="!hasModels"
-            class=":uno: px-3 py-5 text-center text-[13px] text-gray-500"
-          >
+          <div v-else-if="!hasModels" class=":uno: px-3 py-5 text-center text-[13px] text-gray-500">
             暂无匹配模型
           </div>
 
           <div v-else class=":uno: max-h-60 overflow-y-auto pb-1" role="listbox">
-            <div
-              v-for="group in groups"
-              :key="group.key"
-              class=":uno: mt-1.5 first:mt-0"
-            >
+            <div v-for="group in groups" :key="group.key" class=":uno: mt-1.5 first:mt-0">
               <div
                 class=":uno: sticky top-0 z-10 flex select-none items-center gap-2 bg-gray-50 px-3 py-1.5"
               >
@@ -510,9 +506,7 @@ onBeforeUnmount(() => {
                 :key="model.name"
                 role="option"
                 :aria-selected="model.name === selectedValue"
-                :data-ai-model-selector-active="
-                  model.name === activeModelName ? 'true' : undefined
-                "
+                :data-ai-model-selector-active="model.name === activeModelName ? 'true' : undefined"
                 class=":uno: relative mx-1.5 flex cursor-pointer select-none items-center gap-1.5 rounded-lg py-2 pl-3 pr-2 text-[13px] leading-5 transition-colors"
                 :class="[
                   model.name === selectedValue
@@ -571,7 +565,7 @@ onBeforeUnmount(() => {
                   </span>
                 </span>
 
-                <RiCheckLine
+                <MingcuteCheckLine
                   v-if="model.name === selectedValue"
                   class=":uno: h-3.5 w-3.5 flex-none text-blue-600"
                   aria-hidden="true"
@@ -585,11 +579,7 @@ onBeforeUnmount(() => {
 
     <p v-if="effectiveHelp" class=":uno: mt-2 text-xs text-gray-500">{{ effectiveHelp }}</p>
     <ul v-if="fieldErrors.length" class=":uno: mt-1.5 space-y-0.5">
-      <li
-        v-for="error in fieldErrors"
-        :key="error"
-        class=":uno: text-xs text-red-500 leading-4"
-      >
+      <li v-for="error in fieldErrors" :key="error" class=":uno: text-xs text-red-500 leading-4">
         {{ error }}
       </li>
     </ul>

@@ -24,7 +24,7 @@ import {
 import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import RiDeleteBinLine from '~icons/ri/delete-bin-line'
+import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
 import RiMessage3Line from '~icons/ri/message-3-line'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 import RiSparkling2Line from '~icons/ri/sparkling-2-line'
@@ -629,9 +629,9 @@ onBeforeUnmount(() => {
       <section class=":uno: min-h-0 min-w-0 flex flex-col bg-[#f8fafc]">
         <header class=":uno: border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur">
           <div class=":uno: flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div class=":uno: flex min-w-0 flex-1 items-center gap-3">
+            <div class=":uno: min-w-0 flex flex-1 items-center gap-3">
               <div
-                class=":uno: h-9 w-9 flex flex-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm"
+                class=":uno: h-9 w-9 flex flex-none items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-700 shadow-sm"
               >
                 <img
                   v-if="selectedProviderIconUrl"
@@ -642,12 +642,12 @@ onBeforeUnmount(() => {
                 <RiSparkling2Line v-else class=":uno: h-4.5 w-4.5" />
               </div>
               <div class=":uno: min-w-0">
-                <div class=":uno: flex min-w-0 items-center gap-2">
+                <div class=":uno: min-w-0 flex items-center gap-2">
                   <div class=":uno: truncate text-sm text-slate-950 font-semibold">
                     {{ selectedModelLabel }}
                   </div>
                   <span
-                    class=":uno: hidden rounded border border-emerald-200 bg-emerald-50 !px-1.5 !py-0.5 text-[10px] text-emerald-700 font-medium sm:inline-flex"
+                    class=":uno: hidden border border-emerald-200 rounded bg-emerald-50 text-[10px] text-emerald-700 font-medium sm:inline-flex !px-1.5 !py-0.5"
                   >
                     {{ testMode === 'chat' ? 'Language' : 'Embedding' }}
                   </span>
@@ -658,13 +658,13 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div class=":uno: flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center xl:w-[42rem]">
+            <div class=":uno: min-w-0 flex flex-col gap-2 xl:w-[42rem] sm:flex-row sm:items-center">
               <div
-                class=":uno: h-9 inline-flex flex-none items-center rounded-lg border border-slate-200 bg-slate-100/80 !p-0.5"
+                class=":uno: h-9 inline-flex flex-none items-center border border-slate-200 rounded-lg bg-slate-100/80 !p-0.5"
               >
                 <button
                   type="button"
-                  class=":uno: inline-flex h-7 items-center gap-1.5 rounded-md !px-3 text-xs font-medium transition-all"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
                   :class="
                     testMode === 'chat'
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
@@ -678,7 +678,7 @@ onBeforeUnmount(() => {
                 </button>
                 <button
                   type="button"
-                  class=":uno: inline-flex h-7 items-center gap-1.5 rounded-md !px-3 text-xs font-medium transition-all"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
                   :class="
                     testMode === 'embedding'
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
@@ -707,7 +707,7 @@ onBeforeUnmount(() => {
               <div class=":uno: flex flex-none items-center gap-1">
                 <button
                   type="button"
-                  class=":uno: group h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                  class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                   v-tooltip="`刷新模型`"
                   @click="refetch()"
                 >
@@ -718,11 +718,11 @@ onBeforeUnmount(() => {
                 </button>
                 <button
                   type="button"
-                  class=":uno: group h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
                   v-tooltip="`清空会话`"
                   @click="clearMessages"
                 >
-                  <RiDeleteBinLine class=":uno: h-3.5 w-3.5" />
+                  <MingcuteDelete2Line class=":uno: h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
@@ -772,13 +772,13 @@ onBeforeUnmount(() => {
           <div class=":uno: border-t border-slate-200 bg-white/95 px-4 py-3">
             <div class=":uno: mx-auto max-w-4xl">
               <div
-                class=":uno: relative flex-1 rounded-lg border border-slate-200 bg-slate-50 shadow-inner transition-colors focus-within:border-teal-400 focus-within:bg-white focus-within:ring-3 focus-within:ring-teal-500/10"
+                class=":uno: relative flex-1 border border-slate-200 rounded-lg bg-slate-50 shadow-inner transition-colors focus-within:border-teal-400 focus-within:bg-white focus-within:ring-3 focus-within:ring-teal-500/10"
               >
                 <textarea
                   v-model="embeddingInputs"
                   rows="3"
                   placeholder="每行一段需要向量化的文本... (Cmd/Ctrl + Enter 发送)"
-                  class=":uno: min-h-20 w-[calc(100%-4.5rem)] resize-none !border-none !bg-transparent !px-4 !py-3 text-sm text-slate-900 leading-relaxed outline-none placeholder:text-slate-400"
+                  class=":uno: min-h-20 w-[calc(100%-4.5rem)] resize-none text-sm text-slate-900 leading-relaxed outline-none !border-none !bg-transparent !px-4 !py-3 placeholder:text-slate-400"
                   :disabled="!selectedModel || isEmbeddingTesting"
                   @keydown="handleEmbeddingKeydown"
                 />
@@ -789,7 +789,7 @@ onBeforeUnmount(() => {
                 </div>
                 <VButton
                   type="primary"
-                  class=":uno: absolute bottom-2 right-2 h-8 w-8 !rounded-md !p-0 shadow-sm"
+                  class=":uno: absolute bottom-2 right-2 h-8 w-8 shadow-sm !rounded-md !p-0"
                   :loading="isEmbeddingTesting"
                   :disabled="!embeddingInputs.trim() || !selectedModel"
                   @click="runEmbeddingTest"

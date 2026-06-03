@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { useProviderQueryState } from '@/composables/use-provider-state'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
-import { VEmpty, VLoading } from '@halo-dev/components'
+import { IconAddCircle, VEmpty, VLoading } from '@halo-dev/components'
 import { computed, shallowRef, watch } from 'vue'
-import RiAddLine from '~icons/ri/add-line'
 import ProviderCreationModal from './ProviderCreationModal.vue'
 import ProviderListItem from './ProviderListItem.vue'
 
@@ -44,7 +43,7 @@ watch(
           v-tooltip="`接入供应商`"
           @click="creationModalVisible = true"
         >
-          <RiAddLine class=":uno: h-4 w-4" />
+          <IconAddCircle class=":uno: h-4 w-4" />
         </button>
       </div>
     </div>
