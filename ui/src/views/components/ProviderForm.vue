@@ -115,7 +115,7 @@ defineExpose({
       :value="formState?.apiKeySecretName"
       :requiredKeys="[
         {
-          key: 'token',
+          key: 'api-key',
         },
       ]"
       help="新建一个密钥，并将平台的 API key 填入该密钥的 Value 字段"

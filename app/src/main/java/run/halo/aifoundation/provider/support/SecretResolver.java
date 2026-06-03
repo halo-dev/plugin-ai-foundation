@@ -16,7 +16,7 @@ public class SecretResolver {
 
     /**
      * Resolves an API key from a Halo Secret by name.
-     * Looks for the key "value" first, then "token", then the first available key.
+     * Looks for the key "api-key".
      */
     public Mono<String> resolveApiKey(String secretName) {
         if (secretName == null || secretName.isBlank()) {
@@ -35,15 +35,13 @@ public class SecretResolver {
                     return Mono.error(new IllegalArgumentException(
                         "API key secret '" + secretName + "' has no data"));
                 }
-                var value = stringData.get("value");
-                if (value != null) {
-                    return Mono.just(value);
+                var apiKey = stringData.get("api-key");
+                if (apiKey != null) {
+                    return Mono.just(apiKey);
                 }
-                var token = stringData.get("token");
-                if (token != null) {
-                    return Mono.just(token);
-                }
-                return Mono.just(stringData.values().iterator().next());
+                log.warn("API key secret '{}' has no 'api-key' entry", secretName);
+                return Mono.error(new IllegalArgumentException(
+                    "API key secret '" + secretName + "' must contain key 'api-key'"));
             });
     }
 }
