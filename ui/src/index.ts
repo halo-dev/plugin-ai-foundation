@@ -2,7 +2,7 @@ import { VLoading } from '@halo-dev/components'
 import { definePlugin } from '@halo-dev/ui-shared'
 import 'uno.css'
 import { defineAsyncComponent, markRaw } from 'vue'
-import RiBrainLine from '~icons/ri/brain-line'
+import MingcuteAiLine from '~icons/mingcute/ai-line'
 import { AI_FOUNDATION_ROUTE_NAMES } from './routes'
 
 export default definePlugin({
@@ -29,7 +29,7 @@ export default definePlugin({
           menu: {
             name: 'AI Foundation',
             group: 'system',
-            icon: markRaw(RiBrainLine),
+            icon: markRaw(MingcuteAiLine),
             priority: 100,
           },
           hideFooter: true,

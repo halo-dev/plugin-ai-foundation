@@ -5,7 +5,7 @@ import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import { VPageHeader } from '@halo-dev/components'
 import { computed } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
-import RiBrainLine from '~icons/ri/brain-line'
+import MingcuteAiLine from '~icons/mingcute/ai-line'
 
 const tabs: Tab[] = [
   {
@@ -47,7 +47,7 @@ const activeRouteName = computed({
 <template>
   <VPageHeader title="AI Foundation">
     <template #icon>
-      <RiBrainLine />
+      <MingcuteAiLine />
     </template>
   </VPageHeader>
 
