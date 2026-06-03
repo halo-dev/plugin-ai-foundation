@@ -51,8 +51,8 @@ class SecretResolverTest {
     }
 
     @Test
-    void resolveApiKey_withValueKey_returnsValue() {
-        var secret = secretWithData(Map.of("value", "sk-test-key"));
+    void resolveApiKey_withApiKey_returnsApiKey() {
+        var secret = secretWithData(Map.of("api-key", "sk-test-key"));
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
 
         StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
@@ -61,9 +61,9 @@ class SecretResolverTest {
     }
 
     @Test
-    void resolveApiKey_withTokenKey_preferredOverOtherKeys() {
+    void resolveApiKey_withApiKey_preferredOverOtherKeys() {
         var data = new LinkedHashMap<String, String>();
-        data.put("token", "bearer-token");
+        data.put("api-key", "bearer-token");
         data.put("other", "ignored");
         var secret = secretWithData(data);
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
@@ -74,26 +74,13 @@ class SecretResolverTest {
     }
 
     @Test
-    void resolveApiKey_withValueKey_preferredOverToken() {
-        var secret = secretWithData(Map.of("value", "sk-value", "token", "tok-should-not-use"));
+    void resolveApiKey_withoutApiKey_throwsError() {
+        var secret = secretWithData(Map.of("value", "sk-value"));
         when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
 
         StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
-            .expectNext("sk-value")
-            .verifyComplete();
-    }
-
-    @Test
-    void resolveApiKey_withUnknownKey_returnsFirstEntry() {
-        var data = new LinkedHashMap<String, String>();
-        data.put("apikey", "first-entry-value");
-        data.put("other", "second");
-        var secret = secretWithData(data);
-        when(client.fetch(Secret.class, "my-secret")).thenReturn(Mono.just(secret));
-
-        StepVerifier.create(secretResolver.resolveApiKey("my-secret"))
-            .expectNext("first-entry-value")
-            .verifyComplete();
+            .expectErrorMessage("API key secret 'my-secret' must contain key 'api-key'")
+            .verify();
     }
 
     @Test
