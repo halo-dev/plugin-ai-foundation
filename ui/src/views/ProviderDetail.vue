@@ -16,7 +16,6 @@ import {
   VEmpty,
   VLoading,
   VStatusDot,
-  VTag,
   type StatusDotState,
 } from '@halo-dev/components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -25,6 +24,7 @@ import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 import RiEditLine from '~icons/ri/edit-line'
 import RiTestTubeLine from '~icons/ri/test-tube-line'
 import ProviderEditingModal from './components/ProviderEditingModal.vue'
+import ProviderEnableSwitch from './components/ProviderEnableSwitch.vue'
 import ProviderModelList from './components/ProviderModelList.vue'
 
 const queryClient = useQueryClient()
@@ -149,8 +149,6 @@ const testConnectivityMutation = useMutation({
               <h2 class=":uno: min-w-0 truncate text-base text-gray-950 font-semibold">
                 {{ provider.spec.displayName }}
               </h2>
-              <VTag v-if="provider.spec.enabled" theme="primary">已启用</VTag>
-              <VTag v-else>已禁用</VTag>
             </div>
             <div class=":uno: truncate text-xs text-gray-500">
               {{ providerType?.displayName || provider.spec.providerType }} /
@@ -158,6 +156,7 @@ const testConnectivityMutation = useMutation({
             </div>
           </div>
           <div class=":uno: flex flex-wrap items-center gap-2 xl:justify-end">
+            <ProviderEnableSwitch :provider="provider" />
             <VButton
               size="sm"
               :loading="testConnectivityMutation.isPending.value"
