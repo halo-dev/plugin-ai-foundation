@@ -39,6 +39,7 @@
   "devDependencies": {
     "@formkit/themes": "^2.0.0",
     "@halo-dev/ui-plugin-bundler-kit": "^2.24.0",
+    "@iconify-json/mingcute": "^1.2.7",
     "@iconify-json/ri": "^1.2.10",
     "@rsbuild/core": "^2.0.6",
     "@rsbuild/plugin-sass": "^1.5.2",
