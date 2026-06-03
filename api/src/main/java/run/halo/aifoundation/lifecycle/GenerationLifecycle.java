@@ -45,6 +45,10 @@ public interface GenerationLifecycle {
         return Mono.empty();
     }
 
+    default Mono<Void> onToolApprovalRequest(GenerationToolApprovalRequestEvent event) {
+        return Mono.empty();
+    }
+
     default Mono<Void> onStepFinish(GenerationStepFinishEvent event) {
         return Mono.empty();
     }

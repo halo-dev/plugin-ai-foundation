@@ -10,7 +10,7 @@ import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.core.ParameterizedTypeReference;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.tool.ToolChoice;
-import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.provider.support.ProviderToolMetadata;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 
 public final class LanguageModelChatOptionsBuilder {
@@ -114,23 +114,16 @@ public final class LanguageModelChatOptionsBuilder {
     }
 
     private List<ToolCallback> toolCallbacks(GenerateTextRequest request) {
-        return request.getTools().stream()
+        return ProviderToolMetadata.from(request).stream()
             .map(tool -> FunctionToolCallback
-                .builder(tool.getName(), (Function<Map<String, Object>, Object>) input -> Map.of())
-                .description(tool.getDescription())
-                .inputSchema(writeJson(defaultInputSchema(tool)))
+                .builder(tool.name(), (Function<Map<String, Object>, Object>) input -> Map.of())
+                .description(tool.description())
+                .inputSchema(writeJson(tool.inputSchema()))
                 .inputType(new ParameterizedTypeReference<Map<String, Object>>() {
                 })
                 .build())
             .map(ToolCallback.class::cast)
             .toList();
-    }
-
-    private Map<String, Object> defaultInputSchema(ToolDefinition tool) {
-        if (tool.getInputSchema() != null && !tool.getInputSchema().isEmpty()) {
-            return tool.getInputSchema();
-        }
-        return Map.of("type", "object", "properties", Map.of());
     }
 
     private Set<String> toolNames(GenerateTextRequest request) {

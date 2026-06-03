@@ -1,10 +1,10 @@
-import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import type { AiModel, OutputSpec } from '@/api/generated'
+import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
-  buildTestChatRequest,
   buildOutputSpec,
   buildReasoningOptions,
+  buildTestChatRequest,
   filterEnabledChatModels,
   flushSseJsonBuffer,
   isRenderableReasoningDelta,
@@ -81,11 +81,14 @@ describe('buildTestChatRequest', () => {
 
   it('does not send displayed reasoning back as chat history', () => {
     expect(
-      buildTestChatRequest([
-        { id: '1', role: 'user', content: 'Hello' },
-        { id: '2', role: 'assistant', content: 'Hi', reasoningContent: 'Think', state: 'done' },
-        { id: '3', role: 'user', content: 'Continue' },
-      ], {}),
+      buildTestChatRequest(
+        [
+          { id: '1', role: 'user', content: 'Hello' },
+          { id: '2', role: 'assistant', content: 'Hi', reasoningContent: 'Think', state: 'done' },
+          { id: '3', role: 'user', content: 'Continue' },
+        ],
+        {},
+      ),
     ).toMatchObject({
       messages: [
         { role: 'USER', content: [{ type: 'text', text: 'Hello' }] },
@@ -93,6 +96,344 @@ describe('buildTestChatRequest', () => {
         { role: 'USER', content: [{ type: 'text', text: 'Continue' }] },
       ],
     })
+  })
+
+  it('uses returned response messages before approval continuation messages', () => {
+    expect(
+      buildTestChatRequest(
+        [
+          { id: '1', role: 'user', content: 'Remove file' },
+          {
+            id: '2',
+            role: 'assistant',
+            content: '',
+            state: 'done',
+            responseMessages: [
+              {
+                role: 'ASSISTANT',
+                content: [
+                  {
+                    type: 'tool-call',
+                    toolCallId: 'call_1',
+                    toolName: 'run',
+                    input: { command: 'rm file' },
+                  },
+                  {
+                    type: 'tool-approval-request',
+                    approvalId: 'approval_call_1',
+                    toolCallId: 'call_1',
+                    toolName: 'run',
+                    stepIndex: 1,
+                    input: { command: 'rm file' },
+                  },
+                ],
+              },
+            ],
+            followingMessages: [
+              {
+                role: 'TOOL',
+                content: [
+                  {
+                    type: 'tool-approval-response',
+                    approvalId: 'approval_call_1',
+                    toolCallId: 'call_1',
+                    toolName: 'run',
+                    approved: false,
+                    reason: 'Denied from console test page',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: '3',
+            role: 'assistant',
+            content: '工具执行被拒绝',
+            state: 'done',
+            responseMessages: [
+              {
+                role: 'TOOL',
+                content: [
+                  {
+                    type: 'tool-error',
+                    toolCallId: 'call_1',
+                    toolName: 'run',
+                    errorText: 'Tool execution denied: Denied from console test page',
+                  },
+                ],
+              },
+              { role: 'ASSISTANT', content: [{ type: 'text', text: '工具执行被拒绝' }] },
+            ],
+          },
+        ],
+        {},
+      ).messages,
+    ).toEqual([
+      { role: 'USER', content: [{ type: 'text', text: 'Remove file' }] },
+      {
+        role: 'ASSISTANT',
+        content: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'run',
+            input: { command: 'rm file' },
+          },
+          {
+            type: 'tool-approval-request',
+            approvalId: 'approval_call_1',
+            toolCallId: 'call_1',
+            toolName: 'run',
+            stepIndex: 1,
+            input: { command: 'rm file' },
+          },
+        ],
+      },
+      {
+        role: 'TOOL',
+        content: [
+          {
+            type: 'tool-approval-response',
+            approvalId: 'approval_call_1',
+            toolCallId: 'call_1',
+            toolName: 'run',
+            approved: false,
+            reason: 'Denied from console test page',
+          },
+        ],
+      },
+      {
+        role: 'TOOL',
+        content: [
+          {
+            type: 'tool-error',
+            toolCallId: 'call_1',
+            toolName: 'run',
+            errorText: 'Tool execution denied: Denied from console test page',
+          },
+        ],
+      },
+      { role: 'ASSISTANT', content: [{ type: 'text', text: '工具执行被拒绝' }] },
+    ])
+  })
+
+  it('uses returned external tool-call messages before external results', () => {
+    expect(
+      buildTestChatRequest(
+        [
+          { id: '1', role: 'user', content: 'Get external info' },
+          {
+            id: '2',
+            role: 'assistant',
+            content: '',
+            state: 'done',
+            responseMessages: [
+              {
+                role: 'ASSISTANT',
+                content: [
+                  {
+                    type: 'tool-call',
+                    toolCallId: 'call_1',
+                    toolName: 'halo_external_test_info',
+                    input: { query: 'Halo' },
+                  },
+                ],
+              },
+            ],
+            followingMessages: [
+              {
+                role: 'TOOL',
+                content: [
+                  {
+                    type: 'tool-result',
+                    toolCallId: 'call_1',
+                    toolName: 'halo_external_test_info',
+                    result: { ok: true },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        {},
+      ).messages,
+    ).toEqual([
+      { role: 'USER', content: [{ type: 'text', text: 'Get external info' }] },
+      {
+        role: 'ASSISTANT',
+        content: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'halo_external_test_info',
+            input: { query: 'Halo' },
+          },
+        ],
+      },
+      {
+        role: 'TOOL',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call_1',
+            toolName: 'halo_external_test_info',
+            result: { ok: true },
+          },
+        ],
+      },
+    ])
+  })
+
+  it('uses returned external tool-call messages before external errors', () => {
+    expect(
+      buildTestChatRequest(
+        [
+          { id: '1', role: 'user', content: 'Get external info' },
+          {
+            id: '2',
+            role: 'assistant',
+            content: '',
+            state: 'done',
+            responseMessages: [
+              {
+                role: 'ASSISTANT',
+                content: [
+                  {
+                    type: 'tool-call',
+                    toolCallId: 'call_1',
+                    toolName: 'halo_external_test_info',
+                    input: { query: 'Halo' },
+                  },
+                ],
+              },
+            ],
+            followingMessages: [
+              {
+                role: 'TOOL',
+                content: [
+                  {
+                    type: 'tool-error',
+                    toolCallId: 'call_1',
+                    toolName: 'halo_external_test_info',
+                    errorText: 'External timeout',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: '3',
+            role: 'assistant',
+            content: '外部工具超时',
+            state: 'done',
+            responseMessages: [
+              { role: 'ASSISTANT', content: [{ type: 'text', text: '外部工具超时' }] },
+            ],
+          },
+        ],
+        {},
+      ).messages,
+    ).toEqual([
+      { role: 'USER', content: [{ type: 'text', text: 'Get external info' }] },
+      {
+        role: 'ASSISTANT',
+        content: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'halo_external_test_info',
+            input: { query: 'Halo' },
+          },
+        ],
+      },
+      {
+        role: 'TOOL',
+        content: [
+          {
+            type: 'tool-error',
+            toolCallId: 'call_1',
+            toolName: 'halo_external_test_info',
+            errorText: 'External timeout',
+          },
+        ],
+      },
+      { role: 'ASSISTANT', content: [{ type: 'text', text: '外部工具超时' }] },
+    ])
+  })
+
+  it('uses repaired response messages once for continued requests', () => {
+    expect(
+      buildTestChatRequest(
+        [
+          { id: '1', role: 'user', content: 'Repair tool input' },
+          {
+            id: '2',
+            role: 'assistant',
+            content: '',
+            state: 'done',
+            responseMessages: [
+              {
+                role: 'ASSISTANT',
+                content: [
+                  {
+                    type: 'tool-call',
+                    toolCallId: 'call_1',
+                    toolName: 'halo_repair_test_info',
+                    input: { query: 'repair me', repairSource: 'console-test' },
+                  },
+                ],
+              },
+              {
+                role: 'TOOL',
+                content: [
+                  {
+                    type: 'tool-result',
+                    toolCallId: 'call_1',
+                    toolName: 'halo_repair_test_info',
+                    result: { ok: true },
+                  },
+                ],
+              },
+            ],
+            historyParts: [
+              {
+                type: 'tool-call',
+                toolCallId: 'call_1',
+                toolName: 'halo_repair_test_info',
+                input: { message: 'repair me' },
+              },
+            ],
+          },
+          { id: '3', role: 'user', content: 'Continue' },
+        ],
+        {},
+      ).messages,
+    ).toEqual([
+      { role: 'USER', content: [{ type: 'text', text: 'Repair tool input' }] },
+      {
+        role: 'ASSISTANT',
+        content: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'halo_repair_test_info',
+            input: { query: 'repair me', repairSource: 'console-test' },
+          },
+        ],
+      },
+      {
+        role: 'TOOL',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call_1',
+            toolName: 'halo_repair_test_info',
+            result: { ok: true },
+          },
+        ],
+      },
+      { role: 'USER', content: [{ type: 'text', text: 'Continue' }] },
+    ])
   })
 })
 
@@ -230,10 +571,28 @@ describe('toToolEvent', () => {
       type: 'tool-call',
       toolCallId: 'call_1',
       toolName: 'halo_test_info',
+      externalStatus: 'pending',
       summary: '{"query":"hello"}',
     })
 
     expect(toToolEvent({ type: 'text-delta', delta: 'hello' })).toBeUndefined()
+
+    expect(
+      toToolEvent({
+        type: 'tool-approval-request',
+        approvalId: 'approval_call_1',
+        toolCallId: 'call_1',
+        toolName: 'run',
+        stepIndex: 1,
+        input: { command: 'rm file' },
+      }),
+    ).toMatchObject({
+      type: 'tool-approval-request',
+      approvalId: 'approval_call_1',
+      stepIndex: 1,
+      approvalStatus: 'pending',
+      summary: '{"command":"rm file"}',
+    })
   })
 })
 

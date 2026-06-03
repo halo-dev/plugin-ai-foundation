@@ -15,6 +15,7 @@ import {
   parseSseJsonLines,
   toToolEvent,
   type GenerateTextRequest,
+  type ModelMessage,
   type OutputMode,
   type ReasoningEffort,
   type ReasoningMode,
@@ -61,6 +62,9 @@ const maxRetries = shallowRef<number | undefined>(2)
 const reasoningMode = shallowRef<ReasoningMode>('DEFAULT')
 const reasoningEffort = shallowRef<ReasoningEffort>('MEDIUM')
 const testToolEnabled = shallowRef(false)
+const testToolApprovalEnabled = shallowRef(false)
+const externalTestToolEnabled = shallowRef(false)
+const toolCallRepairEnabled = shallowRef(false)
 const outputMode = shallowRef<OutputMode>('TEXT')
 const outputSchemaText = shallowRef(`{
   "type": "object",
@@ -91,9 +95,7 @@ const embeddingMaxBatchSize = shallowRef<number | undefined>(1)
 const embeddingMaxParallelCalls = shallowRef<number | undefined>(2)
 const embeddingMaxRetries = shallowRef<number | undefined>(1)
 const embeddingProviderOptionsText = shallowRef('{}')
-const embeddingHeadersText = shallowRef('{}')
 const embeddingProviderOptionsError = shallowRef('')
-const embeddingHeadersError = shallowRef('')
 const embeddingResult = shallowRef<TestEmbeddingResponse | undefined>()
 const embeddingError = shallowRef('')
 const isEmbeddingTesting = shallowRef(false)
@@ -217,19 +219,7 @@ async function sendMessage(content?: string) {
   shouldAutoScroll.value = true
 
   const requestBody = buildTestChatRequest(messages.value, {
-    systemPrompt: systemPrompt.value,
-    temperature: numberOrUndefined(temperature.value),
-    topP: numberOrUndefined(topP.value),
-    maxOutputTokens: numberOrUndefined(maxTokens.value),
-    seed: numberOrUndefined(seed.value),
-    maxRetries: numberOrUndefined(maxRetries.value),
-    reasoning: buildReasoningOptions({
-      mode: reasoningMode.value,
-      effort: reasoningEffort.value,
-    }),
-    providerOptions: providerOptions.value,
-    headers: headers.value,
-    output: outputSpec.value,
+    ...buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
   })
 
   await streamChatResponse(requestBody, model.name)
@@ -257,6 +247,15 @@ async function streamChatResponse(requestBody: GenerateTextRequest, modelName: s
     const params = new URLSearchParams()
     if (testToolEnabled.value) {
       params.set('enableTestTool', 'true')
+    }
+    if (testToolApprovalEnabled.value) {
+      params.set('enableTestToolApproval', 'true')
+    }
+    if (externalTestToolEnabled.value) {
+      params.set('enableExternalTestTool', 'true')
+    }
+    if (toolCallRepairEnabled.value) {
+      params.set('enableToolCallRepair', 'true')
     }
     const query = params.toString()
     const response = await fetch(
@@ -349,19 +348,7 @@ async function handleRegenerate(messageIndex: number) {
   outputError.value = ''
 
   const requestBody = buildTestChatRequest(messages.value, {
-    systemPrompt: systemPrompt.value,
-    temperature: numberOrUndefined(temperature.value),
-    topP: numberOrUndefined(topP.value),
-    maxOutputTokens: numberOrUndefined(maxTokens.value),
-    seed: numberOrUndefined(seed.value),
-    maxRetries: numberOrUndefined(maxRetries.value),
-    reasoning: buildReasoningOptions({
-      mode: reasoningMode.value,
-      effort: reasoningEffort.value,
-    }),
-    providerOptions: providerOptions.value,
-    headers: headers.value,
-    output: outputSpec.value,
+    ...buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
   })
 
   await streamChatResponse(requestBody, model.name)
@@ -394,8 +381,13 @@ function handleChunks(messageId: string, chunks: TextStreamPart[]) {
       appendAssistantContent(messageId, chunk.delta)
       continue
     }
-    if (chunk.type === 'finish-step' && chunk.warnings?.length) {
-      appendAssistantWarnings(messageId, chunk.warnings)
+    if (chunk.type === 'finish-step') {
+      if (chunk.response?.messages?.length) {
+        setAssistantResponseMessages(messageId, chunk.response.messages)
+      }
+      if (chunk.warnings?.length) {
+        appendAssistantWarnings(messageId, chunk.warnings)
+      }
       continue
     }
     if (isTerminalTextStreamPart(chunk)) {
@@ -407,7 +399,266 @@ function handleChunks(messageId: string, chunks: TextStreamPart[]) {
 function appendToolEvent(messageId: string, event: NonNullable<ReturnType<typeof toToolEvent>>) {
   const message = messages.value.find((item) => item.id === messageId)
   if (message) {
+    if (
+      event.toolCallId &&
+      (event.type === 'tool-result' ||
+        event.type === 'tool-error' ||
+        event.type === 'tool-approval-request')
+    ) {
+      message.toolEvents = (message.toolEvents || []).map((item) => {
+        if (item.type !== 'tool-call' || item.toolCallId !== event.toolCallId) {
+          return item
+        }
+        return {
+          ...item,
+          externalStatus:
+            event.type === 'tool-result'
+              ? 'completed'
+              : event.type === 'tool-error'
+                ? 'failed'
+                : undefined,
+        }
+      })
+    }
     message.toolEvents = [...(message.toolEvents || []), event]
+  }
+}
+
+function setAssistantResponseMessages(messageId: string, responseMessages: ModelMessage[]) {
+  const message = messages.value.find((item) => item.id === messageId)
+  if (message) {
+    message.responseMessages = responseMessages
+    message.leadingMessages = undefined
+    message.historyParts = undefined
+  }
+}
+
+async function handleToolApproval(options: {
+  messageId: string
+  eventId: string
+  approved: boolean
+}) {
+  if (isStreaming.value) {
+    return
+  }
+  const model = selectedModel.value
+  if (!model?.name) {
+    return
+  }
+  const message = messages.value.find((item) => item.id === options.messageId)
+  const event = message?.toolEvents?.find((item) => item.id === options.eventId)
+  if (!message || !event || event.type !== 'tool-approval-request' || !event.approvalId) {
+    return
+  }
+
+  event.approvalStatus = options.approved ? 'approved' : 'denied'
+  message.toolEvents = [...(message.toolEvents || [])]
+  const approvalResponseMessage = {
+    role: 'TOOL' as const,
+    content: [
+      {
+        type: 'tool-approval-response' as const,
+        approvalId: event.approvalId,
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        approved: options.approved,
+        reason: options.approved
+          ? 'Approved from console test page'
+          : 'Denied from console test page',
+      },
+    ],
+  }
+  message.followingMessages = [
+    ...(message.followingMessages || []).filter(
+      (item) =>
+        !item.content.some(
+          (part) => part.type === 'tool-approval-response' && part.approvalId === event.approvalId,
+        ),
+    ),
+    approvalResponseMessage,
+  ]
+
+  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
+  if (providerOptions.error) {
+    providerOptionsError.value = providerOptions.error
+    return
+  }
+  providerOptionsError.value = ''
+  const headers = parseStringMapJson(chatHeadersText.value)
+  if (headers.error) {
+    chatHeadersError.value = headers.error
+    return
+  }
+  chatHeadersError.value = ''
+  const outputSpec = buildOutputSpec({
+    mode: outputMode.value,
+    schemaText: outputSchemaText.value,
+    choicesText: outputChoicesText.value,
+  })
+  if (outputSpec.error) {
+    outputError.value = outputSpec.error
+    return
+  }
+  outputError.value = ''
+
+  const requestBody = buildTestChatRequest(
+    messages.value,
+    buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
+  )
+
+  await streamChatResponse(requestBody, model.name)
+}
+
+async function handleExternalToolResult(options: {
+  messageId: string
+  eventId: string
+  resultText: string
+}) {
+  const parsed = parseExternalToolResult(options.resultText)
+  if (parsed.error) {
+    appendAssistantWarnings(options.messageId, [
+      { code: 'external-tool-result-invalid', message: parsed.error },
+    ])
+    return
+  }
+  await continueExternalTool(options.messageId, options.eventId, {
+    type: 'tool-result',
+    result: parsed.value,
+  })
+}
+
+async function handleExternalToolError(options: {
+  messageId: string
+  eventId: string
+  errorText: string
+}) {
+  const errorText = options.errorText.trim()
+  if (!errorText) {
+    appendAssistantWarnings(options.messageId, [
+      { code: 'external-tool-error-empty', message: '外部工具错误不能为空' },
+    ])
+    return
+  }
+  await continueExternalTool(options.messageId, options.eventId, {
+    type: 'tool-error',
+    errorText,
+  })
+}
+
+async function continueExternalTool(
+  messageId: string,
+  eventId: string,
+  payload:
+    | { type: 'tool-result'; result: unknown }
+    | { type: 'tool-error'; errorText: string },
+) {
+  if (isStreaming.value) {
+    return
+  }
+  const model = selectedModel.value
+  if (!model?.name) {
+    return
+  }
+  const message = messages.value.find((item) => item.id === messageId)
+  const event = message?.toolEvents?.find((item) => item.id === eventId)
+  if (!message || !event || event.type !== 'tool-call' || !event.toolCallId || !event.toolName) {
+    return
+  }
+
+  event.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
+  message.toolEvents = [...(message.toolEvents || [])]
+  const externalToolMessage = {
+    role: 'TOOL' as const,
+    content: [
+      payload.type === 'tool-result'
+        ? {
+            type: 'tool-result' as const,
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            result: payload.result,
+          }
+        : {
+            type: 'tool-error' as const,
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            errorText: payload.errorText,
+          },
+    ],
+  }
+  message.followingMessages = [
+    ...(message.followingMessages || []).filter(
+      (item) =>
+        !item.content.some(
+          (part) =>
+            (part.type === 'tool-result' || part.type === 'tool-error') &&
+            part.toolCallId === event.toolCallId,
+        ),
+    ),
+    externalToolMessage,
+  ]
+
+  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
+  if (providerOptions.error) {
+    providerOptionsError.value = providerOptions.error
+    return
+  }
+  providerOptionsError.value = ''
+  const headers = parseStringMapJson(chatHeadersText.value)
+  if (headers.error) {
+    chatHeadersError.value = headers.error
+    return
+  }
+  chatHeadersError.value = ''
+  const outputSpec = buildOutputSpec({
+    mode: outputMode.value,
+    schemaText: outputSchemaText.value,
+    choicesText: outputChoicesText.value,
+  })
+  if (outputSpec.error) {
+    outputError.value = outputSpec.error
+    return
+  }
+  outputError.value = ''
+
+  const requestBody = buildTestChatRequest(
+    messages.value,
+    buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
+  )
+
+  await streamChatResponse(requestBody, model.name)
+}
+
+function parseExternalToolResult(input: string): { value?: unknown; error?: string } {
+  const content = input.trim()
+  if (!content) {
+    return { error: '外部工具结果不能为空' }
+  }
+  try {
+    return { value: JSON.parse(content) }
+  } catch {
+    return { error: '外部工具结果必须是有效 JSON' }
+  }
+}
+
+function buildChatParameters(
+  providerOptions: Record<string, Record<string, unknown>> | undefined,
+  headers: Record<string, string> | undefined,
+  output: ReturnType<typeof buildOutputSpec>['value'],
+) {
+  return {
+    systemPrompt: systemPrompt.value,
+    temperature: numberOrUndefined(temperature.value),
+    topP: numberOrUndefined(topP.value),
+    maxOutputTokens: numberOrUndefined(maxTokens.value),
+    seed: numberOrUndefined(seed.value),
+    maxRetries: numberOrUndefined(maxRetries.value),
+    reasoning: buildReasoningOptions({
+      mode: reasoningMode.value,
+      effort: reasoningEffort.value,
+    }),
+    providerOptions,
+    headers,
+    output,
   }
 }
 
@@ -495,6 +746,18 @@ function clearMessages() {
   shouldAutoScroll.value = true
 }
 
+watch(testToolApprovalEnabled, (enabled) => {
+  if (enabled && !testToolEnabled.value) {
+    testToolEnabled.value = true
+  }
+})
+
+watch(testToolEnabled, (enabled) => {
+  if (!enabled) {
+    testToolApprovalEnabled.value = false
+  }
+})
+
 function handleExampleSelect(content: string) {
   input.value = content
   chatInputRef.value?.focus()
@@ -571,12 +834,6 @@ async function runEmbeddingTest() {
     return
   }
   embeddingProviderOptionsError.value = ''
-  const headers = parseStringMapJson(embeddingHeadersText.value)
-  if (headers.error) {
-    embeddingHeadersError.value = headers.error
-    return
-  }
-  embeddingHeadersError.value = ''
   embeddingError.value = ''
   embeddingResult.value = undefined
   isEmbeddingTesting.value = true
@@ -592,7 +849,6 @@ async function runEmbeddingTest() {
         providerOptions: providerOptions.value as
           | { [key: string]: { [key: string]: object } }
           | undefined,
-        headers: headers.value,
       },
     })
     embeddingResult.value = data
@@ -629,9 +885,9 @@ onBeforeUnmount(() => {
       <section class=":uno: min-h-0 min-w-0 flex flex-col bg-[#f8fafc]">
         <header class=":uno: border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur">
           <div class=":uno: flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div class=":uno: flex min-w-0 flex-1 items-center gap-3">
+            <div class=":uno: min-w-0 flex flex-1 items-center gap-3">
               <div
-                class=":uno: h-9 w-9 flex flex-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm"
+                class=":uno: h-9 w-9 flex flex-none items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-700 shadow-sm"
               >
                 <img
                   v-if="selectedProviderIconUrl"
@@ -642,12 +898,12 @@ onBeforeUnmount(() => {
                 <RiSparkling2Line v-else class=":uno: h-4.5 w-4.5" />
               </div>
               <div class=":uno: min-w-0">
-                <div class=":uno: flex min-w-0 items-center gap-2">
+                <div class=":uno: min-w-0 flex items-center gap-2">
                   <div class=":uno: truncate text-sm text-slate-950 font-semibold">
                     {{ selectedModelLabel }}
                   </div>
                   <span
-                    class=":uno: hidden rounded border border-emerald-200 bg-emerald-50 !px-1.5 !py-0.5 text-[10px] text-emerald-700 font-medium sm:inline-flex"
+                    class=":uno: hidden border border-emerald-200 rounded bg-emerald-50 text-[10px] text-emerald-700 font-medium sm:inline-flex !px-1.5 !py-0.5"
                   >
                     {{ testMode === 'chat' ? 'Language' : 'Embedding' }}
                   </span>
@@ -658,13 +914,13 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div class=":uno: flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center xl:w-[42rem]">
+            <div class=":uno: min-w-0 flex flex-col gap-2 xl:w-[42rem] sm:flex-row sm:items-center">
               <div
-                class=":uno: h-9 inline-flex flex-none items-center rounded-lg border border-slate-200 bg-slate-100/80 !p-0.5"
+                class=":uno: h-9 inline-flex flex-none items-center border border-slate-200 rounded-lg bg-slate-100/80 !p-0.5"
               >
                 <button
                   type="button"
-                  class=":uno: inline-flex h-7 items-center gap-1.5 rounded-md !px-3 text-xs font-medium transition-all"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
                   :class="
                     testMode === 'chat'
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
@@ -678,7 +934,7 @@ onBeforeUnmount(() => {
                 </button>
                 <button
                   type="button"
-                  class=":uno: inline-flex h-7 items-center gap-1.5 rounded-md !px-3 text-xs font-medium transition-all"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
                   :class="
                     testMode === 'embedding'
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
@@ -707,7 +963,7 @@ onBeforeUnmount(() => {
               <div class=":uno: flex flex-none items-center gap-1">
                 <button
                   type="button"
-                  class=":uno: group h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                  class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                   v-tooltip="`刷新模型`"
                   @click="refetch()"
                 >
@@ -718,7 +974,7 @@ onBeforeUnmount(() => {
                 </button>
                 <button
                   type="button"
-                  class=":uno: group h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
                   v-tooltip="`清空会话`"
                   @click="clearMessages"
                 >
@@ -744,6 +1000,9 @@ onBeforeUnmount(() => {
                 :message="message"
                 :index="index"
                 @regenerate="handleRegenerate"
+                @tool-approval="handleToolApproval"
+                @external-tool-result="handleExternalToolResult"
+                @external-tool-error="handleExternalToolError"
               />
             </div>
           </div>
@@ -772,13 +1031,13 @@ onBeforeUnmount(() => {
           <div class=":uno: border-t border-slate-200 bg-white/95 px-4 py-3">
             <div class=":uno: mx-auto max-w-4xl">
               <div
-                class=":uno: relative flex-1 rounded-lg border border-slate-200 bg-slate-50 shadow-inner transition-colors focus-within:border-teal-400 focus-within:bg-white focus-within:ring-3 focus-within:ring-teal-500/10"
+                class=":uno: relative flex-1 border border-slate-200 rounded-lg bg-slate-50 shadow-inner transition-colors focus-within:border-teal-400 focus-within:bg-white focus-within:ring-3 focus-within:ring-teal-500/10"
               >
                 <textarea
                   v-model="embeddingInputs"
                   rows="3"
                   placeholder="每行一段需要向量化的文本... (Cmd/Ctrl + Enter 发送)"
-                  class=":uno: min-h-20 w-[calc(100%-4.5rem)] resize-none !border-none !bg-transparent !px-4 !py-3 text-sm text-slate-900 leading-relaxed outline-none placeholder:text-slate-400"
+                  class=":uno: min-h-20 w-[calc(100%-4.5rem)] resize-none text-sm text-slate-900 leading-relaxed outline-none !border-none !bg-transparent !px-4 !py-3 placeholder:text-slate-400"
                   :disabled="!selectedModel || isEmbeddingTesting"
                   @keydown="handleEmbeddingKeydown"
                 />
@@ -789,7 +1048,7 @@ onBeforeUnmount(() => {
                 </div>
                 <VButton
                   type="primary"
-                  class=":uno: absolute bottom-2 right-2 h-8 w-8 !rounded-md !p-0 shadow-sm"
+                  class=":uno: absolute bottom-2 right-2 h-8 w-8 shadow-sm !rounded-md !p-0"
                   :loading="isEmbeddingTesting"
                   :disabled="!embeddingInputs.trim() || !selectedModel"
                   @click="runEmbeddingTest"
@@ -813,6 +1072,9 @@ onBeforeUnmount(() => {
         :reasoning-mode="reasoningMode"
         :reasoning-effort="reasoningEffort"
         :test-tool-enabled="testToolEnabled"
+        :test-tool-approval-enabled="testToolApprovalEnabled"
+        :external-test-tool-enabled="externalTestToolEnabled"
+        :tool-call-repair-enabled="toolCallRepairEnabled"
         :output-mode="outputMode"
         :output-schema-text="outputSchemaText"
         :output-choices-text="outputChoicesText"
@@ -826,9 +1088,7 @@ onBeforeUnmount(() => {
         :embedding-max-parallel-calls="embeddingMaxParallelCalls"
         :embedding-max-retries="embeddingMaxRetries"
         :embedding-provider-options-text="embeddingProviderOptionsText"
-        :embedding-headers-text="embeddingHeadersText"
         :embedding-provider-options-error="embeddingProviderOptionsError"
-        :embedding-headers-error="embeddingHeadersError"
         @update:system-prompt="systemPrompt = $event"
         @update:temperature="temperature = $event"
         @update:top-p="topP = $event"
@@ -838,6 +1098,9 @@ onBeforeUnmount(() => {
         @update:reasoning-mode="reasoningMode = $event"
         @update:reasoning-effort="reasoningEffort = $event"
         @update:test-tool-enabled="testToolEnabled = $event"
+        @update:test-tool-approval-enabled="testToolApprovalEnabled = $event"
+        @update:external-test-tool-enabled="externalTestToolEnabled = $event"
+        @update:tool-call-repair-enabled="toolCallRepairEnabled = $event"
         @update:output-mode="outputMode = $event"
         @update:output-schema-text="outputSchemaText = $event"
         @update:output-choices-text="outputChoicesText = $event"
@@ -848,7 +1111,6 @@ onBeforeUnmount(() => {
         @update:embedding-max-parallel-calls="embeddingMaxParallelCalls = $event"
         @update:embedding-max-retries="embeddingMaxRetries = $event"
         @update:embedding-provider-options-text="embeddingProviderOptionsText = $event"
-        @update:embedding-headers-text="embeddingHeadersText = $event"
       />
     </div>
   </div>

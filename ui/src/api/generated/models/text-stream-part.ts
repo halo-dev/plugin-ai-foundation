@@ -34,6 +34,12 @@ import type { LanguageModelUsage } from './language-model-usage';
 export interface TextStreamPart {
     /**
      *
+     * @type {string}
+     * @memberof TextStreamPart
+     */
+    'approvalId'?: string;
+    /**
+     *
      * @type {object}
      * @memberof TextStreamPart
      */
@@ -183,5 +189,3 @@ export const TextStreamPartFinishReasonEnum = {
 } as const;
 
 export type TextStreamPartFinishReasonEnum = typeof TextStreamPartFinishReasonEnum[keyof typeof TextStreamPartFinishReasonEnum];
-
-

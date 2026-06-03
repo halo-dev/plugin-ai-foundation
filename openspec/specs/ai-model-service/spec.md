@@ -534,7 +534,7 @@ The system SHALL allow callers to define request-scoped tools for language model
 
 ### Requirement: Multi-step tool execution
 
-The system SHALL execute server-side tools and continue generation across multiple provider calls when requested.
+The system SHALL execute server-side tools and support externally executed tools across multiple provider calls when requested.
 
 #### Scenario: Single-step default
 - **WHEN** a request omits `stopWhen`
@@ -550,9 +550,10 @@ The system SHALL execute server-side tools and continue generation across multip
 
 #### Scenario: Tool call without executor
 - **WHEN** a provider returns a tool call whose name matches a request tool without an executor
-- **THEN** the system SHALL record the tool call
-- **AND** the system SHALL add a warning indicating that the tool was not executed
-- **AND** the system SHALL NOT start another provider step for that tool call
+- **THEN** the system SHALL record the tool call as pending external execution
+- **AND** `GenerateTextResult.responseMessages` SHALL include the assistant tool-call message needed by the caller to persist and execute the tool externally
+- **AND** the system SHALL NOT create a tool result or tool error for that call during the same request
+- **AND** the system SHALL NOT start another provider step for that tool call until a later request includes a matching tool result or tool error message
 
 #### Scenario: Unknown tool call
 - **WHEN** a provider returns a tool call whose name is not present in the request tools
@@ -568,6 +569,45 @@ The system SHALL execute server-side tools and continue generation across multip
 - **WHEN** a request includes tools but the resolved provider/model does not support tool calling
 - **THEN** non-streaming generation SHALL fail before invoking the provider
 - **AND** streaming generation SHALL emit an `error` part before completing gracefully
+
+### Requirement: External Tool Results Resume Generation
+The language model service SHALL accept caller-supplied tool result or tool error messages for prior no-executor tool calls and use them to continue generation.
+
+#### Scenario: External tool result continues generation
+- **WHEN** a later `GenerateTextRequest.messages` history contains an assistant tool-call part from a prior response
+- **AND** the history contains a later tool message with a matching `tool-result` part
+- **THEN** the system SHALL pass both messages to the provider before generation
+- **AND** it SHALL allow the provider to produce a continuation answer based on the external result
+- **AND** it SHALL NOT require a server-side executor for that tool
+
+#### Scenario: External tool error continues generation
+- **WHEN** a later `GenerateTextRequest.messages` history contains an assistant tool-call part from a prior response
+- **AND** the history contains a later tool message with a matching `tool-error` part
+- **THEN** the system SHALL pass both messages to the provider before generation
+- **AND** it SHALL allow the provider to respond to the externally reported failure
+- **AND** it SHALL NOT execute or deny the tool server-side
+
+#### Scenario: External tool result references unknown call
+- **WHEN** a request contains a tool result or tool error message that does not match an earlier assistant tool-call part in the supplied history
+- **THEN** the request SHALL fail validation before invoking the provider
+
+#### Scenario: External result is caller-supplied history
+- **WHEN** a caller resumes generation with externally produced tool results or errors
+- **THEN** `GenerateTextResult.responseMessages` SHALL NOT duplicate the caller-supplied external tool message
+- **AND** it SHALL contain only messages produced by the new generation call
+
+### Requirement: External Tool State Is Provider-Neutral
+External tool execution state SHALL be represented with existing provider-neutral message and content part types.
+
+#### Scenario: Pending external tool uses assistant tool call
+- **WHEN** a generation returns a no-executor tool call
+- **THEN** callers SHALL be able to read the tool name, tool call id, parsed input, and provider metadata from the returned assistant tool-call part
+
+#### Scenario: External completion uses tool message
+- **WHEN** a caller completes an external tool
+- **THEN** the caller SHALL represent success as a tool message containing `tool-result`
+- **AND** the caller SHALL represent failure as a tool message containing `tool-error`
+- **AND** both forms SHALL use the same tool call id as the original assistant tool-call part
 
 ### Requirement: Streaming tool calls in LanguageModel
 The `LanguageModel.streamText` API SHALL support request-scoped server-side tools without degrading to buffered non-streaming output.
@@ -602,10 +642,16 @@ The system SHALL allow text-generation callers to configure lifecycle callbacks,
 - **THEN** the language model service MUST apply those controls during `generateText` and `streamText`
 - **AND** public request types MUST remain independent from Spring AI and provider SDK classes
 
+#### Scenario: Tool executor receives cancellation control
+- **WHEN** a Java caller builds `GenerateTextRequest` with a cancellation token
+- **AND** a server-side tool executor is invoked
+- **THEN** the tool execution context MUST expose that cancellation token
+- **AND** the language model service MUST continue enforcing existing cancellation checks before and after tool execution
+
 #### Scenario: Lifecycle controls do not enter provider prompt
-- **WHEN** lifecycle metadata or context is attached to a generation request
-- **THEN** the system MUST expose that data to lifecycle events
-- **AND** it MUST NOT convert lifecycle metadata or context into model prompt messages unless a future explicit feature requests it
+- **WHEN** lifecycle metadata, context, timeout, or cancellation controls are attached to a generation request
+- **THEN** the system MUST expose the relevant data to lifecycle events or tool execution context
+- **AND** it MUST NOT convert lifecycle metadata, context, timeout, or cancellation controls into model prompt messages unless a future explicit feature requests it
 
 ### Requirement: Embedding requests expose lifecycle controls
 The system SHALL allow advanced embedding calls to configure lifecycle callbacks, timeout, cancellation, metadata, and context through provider-neutral request fields.
@@ -793,3 +839,80 @@ Text generation results SHALL separate normalized SDK metadata from provider-spe
 - **WHEN** text generation records SDK invocation diagnostics such as provider type
 - **THEN** those diagnostics SHALL be exposed through request or response metadata
 - **AND** they SHALL NOT be mixed into provider-specific metadata
+
+### Requirement: Text Generation Results Expose Response Messages
+Text generation results SHALL expose provider-neutral response messages that callers can append to later `GenerateTextRequest.messages` history.
+
+#### Scenario: Text-only generation returns assistant message
+- **WHEN** `LanguageModel.generateText(request)` completes with generated text and no tool calls
+- **THEN** `GenerateTextResult` SHALL include a response message with role `ASSISTANT`
+- **AND** the response message SHALL contain the generated answer text as a `text` content part
+
+#### Scenario: Tool call generation returns appendable history
+- **WHEN** `LanguageModel.generateText(request)` completes a tool-enabled multi-step generation
+- **THEN** `GenerateTextResult` SHALL include response messages ordered as assistant tool-call history, tool result or tool error history, and later assistant answer history
+- **AND** callers SHALL be able to append those response messages to the original request messages before a later model call
+
+#### Scenario: Prompt request returns only generated response messages
+- **WHEN** a caller sends `GenerateTextRequest.prompt`
+- **THEN** `GenerateTextResult.responseMessages` SHALL contain only messages produced by the generation call
+- **AND** it SHALL NOT synthesize a user message for the original prompt
+
+### Requirement: Generation Steps Expose Step Response Messages
+Each generation step SHALL expose the provider-neutral response messages produced during that step.
+
+#### Scenario: Step contains assistant output
+- **WHEN** a generation step produces text, reasoning, tool calls, or approval requests
+- **THEN** the corresponding `GenerationStep` SHALL include an assistant response message containing those content parts
+
+#### Scenario: Step contains server-side tool history
+- **WHEN** a generation step executes, denies, or fails a server-side tool call
+- **THEN** the corresponding `GenerationStep` SHALL include a tool response message containing the tool result or tool error parts
+
+#### Scenario: Top-level messages preserve step order
+- **WHEN** `GenerateTextResult` contains multiple generation steps
+- **THEN** the top-level response messages SHALL preserve the same order as the step response messages concatenated by step index
+
+### Requirement: Tool Call Repair
+The language model service SHALL support caller-provided repair of invalid model-produced tool-call input before server-side tool execution.
+
+#### Scenario: Repair callback receives invalid known tool call
+- **WHEN** a provider returns a tool call whose name matches a request tool with a server-side executor
+- **AND** the tool call input fails the tool input schema validation
+- **AND** the request includes a tool-call repair callback
+- **THEN** the system SHALL invoke the repair callback before creating a final tool error
+- **AND** the callback SHALL receive the original tool call, the tool definition, validation error details, step index, messages sent to the provider, request context, and provider metadata
+
+#### Scenario: Repaired input executes tool
+- **WHEN** the repair callback returns a repaired tool call for the same tool name
+- **AND** the repaired input satisfies the original tool input schema
+- **THEN** the system SHALL execute the server-side tool using the repaired input
+- **AND** the step SHALL record a stable warning that the tool call was repaired
+- **AND** `GenerateTextResult.responseMessages` SHALL contain the repaired assistant tool-call message before the tool result message
+
+#### Scenario: Repair not configured preserves validation error
+- **WHEN** a provider returns a known executable tool call whose input fails validation
+- **AND** the request does not include a tool-call repair callback
+- **THEN** the system SHALL record a safe tool error for the validation failure
+- **AND** it SHALL NOT execute the tool
+
+#### Scenario: Repair failure preserves validation error
+- **WHEN** the repair callback fails, returns no repaired call, returns a different tool name, or returns input that still fails validation
+- **THEN** the system SHALL record a safe tool error for the original validation failure
+- **AND** it SHALL NOT execute the tool
+- **AND** it SHALL report a stable warning that repair failed when a callback was attempted
+
+#### Scenario: Unknown tool is not repaired
+- **WHEN** a provider returns a tool call whose name is not present in the request tools
+- **THEN** the system SHALL record an unknown-tool error
+- **AND** it SHALL NOT invoke the tool-call repair callback
+
+#### Scenario: Non-input failures are not repaired
+- **WHEN** a server-side tool executor fails, an output schema validation fails, a tool approval is denied, a tool times out, or generation is cancelled
+- **THEN** the system SHALL use the existing error or cancellation behavior
+- **AND** it SHALL NOT invoke the tool-call repair callback
+
+#### Scenario: Repair context is provider-neutral
+- **WHEN** the repair callback receives messages and provider metadata
+- **THEN** those values SHALL use AI Foundation public DTOs and provider-neutral maps
+- **AND** the public API SHALL NOT expose Spring AI message, prompt, or response types

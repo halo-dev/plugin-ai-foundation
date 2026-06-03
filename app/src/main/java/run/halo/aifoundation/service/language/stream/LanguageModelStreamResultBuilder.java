@@ -13,10 +13,13 @@ import run.halo.aifoundation.chat.GenerationResponseMetadata;
 import run.halo.aifoundation.chat.GenerationStep;
 import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.chat.LanguageModelUsage;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.service.language.structured.StructuredOutput;
@@ -55,6 +58,15 @@ public final class LanguageModelStreamResultBuilder {
                 .input(part.getInput())
                 .providerMetadata(part.getProviderMetadata())
                 .build());
+            case PartType.TOOL_APPROVAL_REQUEST -> step(currentStepIndex).toolApprovalRequests.add(
+                ToolApprovalRequest.builder()
+                    .approvalId(part.getApprovalId())
+                    .toolCallId(part.getToolCallId())
+                    .toolName(part.getToolName())
+                    .input(part.getInput())
+                    .stepIndex(part.getStepIndex())
+                    .providerMetadata(part.getProviderMetadata())
+                    .build());
             case PartType.TOOL_RESULT -> step(currentStepIndex).toolResults.add(ToolResult.builder()
                 .toolCallId(part.getToolCallId())
                 .toolName(part.getToolName())
@@ -163,6 +175,9 @@ public final class LanguageModelStreamResultBuilder {
         var toolCalls = generationSteps.stream()
             .flatMap(step -> nullSafe(step.getToolCalls()).stream())
             .toList();
+        var toolApprovalRequests = generationSteps.stream()
+            .flatMap(step -> nullSafe(step.getToolApprovalRequests()).stream())
+            .toList();
         var toolResults = generationSteps.stream()
             .flatMap(step -> nullSafe(step.getToolResults()).stream())
             .toList();
@@ -194,7 +209,9 @@ public final class LanguageModelStreamResultBuilder {
             .request(finalStep != null ? finalStep.getRequest() : request)
             .response(finalStep != null ? finalStep.getResponse() : response)
             .steps(generationSteps)
+            .responseMessages(responseMessages(generationSteps))
             .toolCalls(toolCalls)
+            .toolApprovalRequests(toolApprovalRequests)
             .toolResults(toolResults)
             .toolErrors(toolErrors)
             .providerMetadata(finalStep != null ? finalStep.getProviderMetadata() : providerMetadata)
@@ -212,6 +229,12 @@ public final class LanguageModelStreamResultBuilder {
             .orElse(stepIndex));
     }
 
+    private List<ModelMessage> responseMessages(List<GenerationStep> steps) {
+        return nullSafe(steps).stream()
+            .flatMap(step -> nullSafe(step.getResponseMessages()).stream())
+            .toList();
+    }
+
     private static <T> List<T> nullSafe(List<T> list) {
         return list != null ? list : List.of();
     }
@@ -224,6 +247,7 @@ public final class LanguageModelStreamResultBuilder {
         private final StringBuilder text = new StringBuilder();
         private final ArrayList<ReasoningPart> reasoning = new ArrayList<>();
         private final ArrayList<ToolCall> toolCalls = new ArrayList<>();
+        private final ArrayList<ToolApprovalRequest> toolApprovalRequests = new ArrayList<>();
         private final ArrayList<ToolResult> toolResults = new ArrayList<>();
         private final ArrayList<ToolError> toolErrors = new ArrayList<>();
         private final ArrayList<GenerationContentPart> content = new ArrayList<>();
@@ -243,6 +267,9 @@ public final class LanguageModelStreamResultBuilder {
             }
             content.addAll(this.content);
             toolCalls.stream().map(GenerationContentPart::toolCall).forEach(content::add);
+            toolApprovalRequests.stream()
+                .map(GenerationContentPart::toolApprovalRequest)
+                .forEach(content::add);
             toolResults.stream().map(GenerationContentPart::toolResult).forEach(content::add);
             toolErrors.stream().map(GenerationContentPart::toolError).forEach(content::add);
             var reasoningText = reasoning.stream()
@@ -261,12 +288,81 @@ public final class LanguageModelStreamResultBuilder {
                 .rawFinishReason(rawFinishReason)
                 .usage(usage)
                 .toolCalls(toolCalls)
+                .toolApprovalRequests(toolApprovalRequests)
                 .toolResults(toolResults)
                 .toolErrors(toolErrors)
+                .responseMessages(responseMessages(response, text.toString(), reasoning,
+                    toolCalls, toolApprovalRequests, toolResults, toolErrors))
                 .warnings(warnings)
                 .request(request)
-                .response(response)
+                .response(appendToolMessages(response, toolResults, toolErrors))
                 .providerMetadata(providerMetadata)
+                .build();
+        }
+
+        private List<ModelMessage> responseMessages(GenerationResponseMetadata response,
+            String text, List<ReasoningPart> reasoning, List<ToolCall> toolCalls,
+            List<ToolApprovalRequest> approvals, List<ToolResult> results,
+            List<ToolError> errors) {
+            var messages = new ArrayList<ModelMessage>();
+            var toolMessage = toolMessage(results, errors);
+            var responseMessages = response != null && response.getMessages() != null
+                ? List.copyOf(response.getMessages())
+                : List.<ModelMessage>of();
+            if (toolMessage != null && (nullSafe(toolCalls).isEmpty()
+                && nullSafe(approvals).isEmpty())) {
+                messages.add(toolMessage);
+                messages.addAll(responseMessages);
+                return messages;
+            }
+            if (!responseMessages.isEmpty()) {
+                messages.addAll(responseMessages);
+            }
+            if (toolMessage != null && responseMessages.stream()
+                .noneMatch(message -> message.getRole() == run.halo.aifoundation.message.ModelMessageRole.TOOL)) {
+                messages.add(toolMessage);
+            }
+            return messages;
+        }
+
+        private ModelMessage toolMessage(List<ToolResult> results, List<ToolError> errors) {
+            if ((results == null || results.isEmpty()) && (errors == null || errors.isEmpty())) {
+                return null;
+            }
+            var parts = new ArrayList<ModelMessagePart>();
+            nullSafe(results).stream().map(ModelMessagePart::toolResult).forEach(parts::add);
+            nullSafe(errors).stream().map(ModelMessagePart::toolError).forEach(parts::add);
+            return ModelMessage.tool(parts);
+        }
+
+        private GenerationResponseMetadata appendToolMessages(GenerationResponseMetadata response,
+            List<ToolResult> results, List<ToolError> errors) {
+            if ((results == null || results.isEmpty()) && (errors == null || errors.isEmpty())) {
+                return response;
+            }
+            var parts = new ArrayList<run.halo.aifoundation.message.ModelMessagePart>();
+            nullSafe(results).stream()
+                .map(run.halo.aifoundation.message.ModelMessagePart::toolResult)
+                .forEach(parts::add);
+            nullSafe(errors).stream()
+                .map(run.halo.aifoundation.message.ModelMessagePart::toolError)
+                .forEach(parts::add);
+            var messages = new ArrayList<run.halo.aifoundation.message.ModelMessage>();
+            if (response != null && response.getMessages() != null) {
+                messages.addAll(response.getMessages());
+            }
+            messages.add(run.halo.aifoundation.message.ModelMessage.tool(parts));
+            if (response == null) {
+                return GenerationResponseMetadata.builder().messages(messages).build();
+            }
+            return GenerationResponseMetadata.builder()
+                .id(response.getId())
+                .model(response.getModel())
+                .timestamp(response.getTimestamp())
+                .messages(messages)
+                .headers(response.getHeaders())
+                .body(response.getBody())
+                .metadata(response.getMetadata())
                 .build();
         }
     }

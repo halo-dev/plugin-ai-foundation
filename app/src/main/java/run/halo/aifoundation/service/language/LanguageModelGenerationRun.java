@@ -19,9 +19,11 @@ import run.halo.aifoundation.lifecycle.GenerationStepFinishEvent;
 import run.halo.aifoundation.lifecycle.GenerationStepStartEvent;
 import run.halo.aifoundation.lifecycle.GenerationToolCallFinishEvent;
 import run.halo.aifoundation.lifecycle.GenerationToolCallStartEvent;
+import run.halo.aifoundation.lifecycle.GenerationToolApprovalRequestEvent;
 import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
@@ -113,6 +115,17 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
                 .providerMetadata(providerMetadata)
                 .metadata(metadata(request))
                 .context(context(request))
+                .build()));
+    }
+
+    @Override
+    public void toolApprovalRequest(int stepIndex, ToolApprovalRequest request) {
+        invoke("onToolApprovalRequest", lifecycle -> lifecycle.onToolApprovalRequest(
+            GenerationToolApprovalRequestEvent.builder()
+                .stepIndex(stepIndex)
+                .approvalRequest(request)
+                .metadata(metadata(this.request))
+                .context(context(this.request))
                 .build()));
     }
 

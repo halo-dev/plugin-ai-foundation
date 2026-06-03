@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
+import run.halo.aifoundation.tool.ToolApprovalResponse;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
@@ -24,6 +26,8 @@ import run.halo.aifoundation.tool.ToolResult;
  *   <li>{@link PartType#TOOL_RESULT}: {@link #toolCallId}, {@link #toolName}, {@link #result}</li>
  *   <li>{@link PartType#TOOL_ERROR}: {@link #toolCallId}, {@link #toolName},
  *   {@link #errorText}</li>
+ *   <li>{@link PartType#TOOL_APPROVAL_REQUEST}: {@link #approvalId}, {@link #toolCallId},
+ *   {@link #toolName}, {@link #input}, {@link #stepIndex}</li>
  * </ul>
  *
  * <p>For normal callers, prefer the factory methods such as {@link #text(String)} and
@@ -48,6 +52,10 @@ public class ModelMessagePart {
      */
     private String signature;
     /**
+     * Approval id for tool approval request/response parts.
+     */
+    private String approvalId;
+    /**
      * Provider or Halo generated tool call identifier. Tool result/error parts should echo the
      * same id so the model can correlate the response with the original tool call.
      */
@@ -56,6 +64,10 @@ public class ModelMessagePart {
      * Tool name as defined by {@link ToolDefinition#getName()}.
      */
     private String toolName;
+    /**
+     * Zero-based model invocation step that produced a tool approval request.
+     */
+    private Integer stepIndex;
     /**
      * Parsed tool arguments for {@link PartType#TOOL_CALL}.
      */
@@ -69,6 +81,14 @@ public class ModelMessagePart {
      * Human-readable tool execution error for {@link PartType#TOOL_ERROR}.
      */
     private String errorText;
+    /**
+     * Whether a tool approval response approved execution.
+     */
+    private Boolean approved;
+    /**
+     * Optional approval or denial reason.
+     */
+    private String reason;
     /**
      * Provider-specific options scoped to this part. Most callers should prefer request-level
      * provider options unless a provider explicitly documents part-level behavior.
@@ -123,6 +143,36 @@ public class ModelMessagePart {
     }
 
     /**
+     * Creates a persisted assistant approval request part from a pending tool approval.
+     */
+    public static ModelMessagePart toolApprovalRequest(ToolApprovalRequest request) {
+        return ModelMessagePart.builder()
+            .type(PartType.TOOL_APPROVAL_REQUEST)
+            .approvalId(request.getApprovalId())
+            .toolCallId(request.getToolCallId())
+            .toolName(request.getToolName())
+            .input(request.getInput())
+            .stepIndex(request.getStepIndex())
+            .providerOptions(request.getProviderMetadata())
+            .build();
+    }
+
+    /**
+     * Creates a tool message part that answers a prior approval request.
+     */
+    public static ModelMessagePart toolApprovalResponse(ToolApprovalResponse response) {
+        return ModelMessagePart.builder()
+            .type(PartType.TOOL_APPROVAL_RESPONSE)
+            .approvalId(response.getApprovalId())
+            .toolCallId(response.getToolCallId())
+            .toolName(response.getToolName())
+            .approved(response.getApproved())
+            .reason(response.getReason())
+            .providerOptions(response.getProviderMetadata())
+            .build();
+    }
+
+    /**
      * Creates a tool result part for a {@link ModelMessageRole#TOOL} message.
      *
      * <pre>{@code
@@ -157,35 +207,49 @@ public class ModelMessagePart {
             throw new IllegalArgumentException("message part type must not be blank");
         }
         switch (type) {
-            case PartType.TEXT -> rejectFields("text", signature, toolCallId, toolName, input,
-                result, errorText, providerOptions);
+            case PartType.TEXT -> rejectFields("text", signature, approvalId, toolCallId,
+                toolName, stepIndex, input, result, errorText, approved, reason, providerOptions);
             case PartType.REASONING -> {
                 if ((text == null || text.isBlank())
                     && (providerOptions == null || providerOptions.isEmpty())) {
                     throw new IllegalArgumentException(
                         "reasoning message part must include text or provider options");
                 }
-                rejectFields("reasoning", toolCallId, toolName, input, result,
-                    errorText);
+                rejectFields("reasoning", approvalId, toolCallId, toolName, stepIndex, input,
+                    result, errorText, approved, reason);
             }
             case PartType.TOOL_CALL -> {
                 requireText(toolCallId, "tool-call message part toolCallId");
                 requireText(toolName, "tool-call message part toolName");
-                rejectFields("tool-call", text, signature, result, errorText,
-                    providerOptions);
+                rejectFields("tool-call", text, signature, approvalId, stepIndex, result, errorText,
+                    approved, reason, providerOptions);
             }
             case PartType.TOOL_RESULT -> {
                 requireText(toolCallId, "tool-result message part toolCallId");
                 requireText(toolName, "tool-result message part toolName");
-                rejectFields("tool-result", text, signature, input, errorText,
-                    providerOptions);
+                rejectFields("tool-result", text, signature, approvalId, stepIndex, input, errorText,
+                    approved, reason, providerOptions);
             }
             case PartType.TOOL_ERROR -> {
                 requireText(toolCallId, "tool-error message part toolCallId");
                 requireText(toolName, "tool-error message part toolName");
                 requireText(errorText, "tool-error message part errorText");
-                rejectFields("tool-error", text, signature, input, result,
-                    providerOptions);
+                rejectFields("tool-error", text, signature, approvalId, stepIndex, input, result,
+                    approved, reason, providerOptions);
+            }
+            case PartType.TOOL_APPROVAL_REQUEST -> {
+                requireText(approvalId, "tool-approval-request message part approvalId");
+                requireText(toolCallId, "tool-approval-request message part toolCallId");
+                requireText(toolName, "tool-approval-request message part toolName");
+                requireNonNegative(stepIndex, "tool-approval-request message part stepIndex");
+                rejectFields("tool-approval-request", text, signature, result, errorText,
+                    approved, reason);
+            }
+            case PartType.TOOL_APPROVAL_RESPONSE -> {
+                requireText(approvalId, "tool-approval-response message part approvalId");
+                requirePresent(approved, "tool-approval-response message part approved");
+                rejectFields("tool-approval-response", text, signature, stepIndex, input, result,
+                    errorText);
             }
             default -> throw new IllegalArgumentException("unsupported message part type: " + type);
         }
@@ -195,6 +259,18 @@ public class ModelMessagePart {
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");
+        }
+    }
+
+    private static void requirePresent(Object value, String name) {
+        if (value == null) {
+            throw new IllegalArgumentException(name + " must be present");
+        }
+    }
+
+    private static void requireNonNegative(Integer value, String name) {
+        if (value != null && value < 0) {
+            throw new IllegalArgumentException(name + " must be non-negative");
         }
     }
 

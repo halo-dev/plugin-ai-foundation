@@ -55,4 +55,4 @@
 - [x] 7.4 Add backend tests for warnings on unsupported or downgraded settings.
 - [x] 7.5 Add backend tests for enriched structured output validation errors.
 - [x] 7.6 Update `dev/dev.md` to document the hardened provider-neutral alignment and known Halo protocol differences.
-- [x] 7.7 Run `./gradlew :app:test`, `./gradlew generateApiClient`, `pnpm --dir ui type-check`, targeted UI unit tests, and `openspec validate harden-ai-sdk-core-alignment --strict`.
+- [x] 7.7 Run `./gradlew :app:test`, `./gradlew generateApiClient`, `pnpm --dir ui type-check`, targeted UI unit tests, and `openspec validate harden-provider-neutral-core-alignment --strict`.

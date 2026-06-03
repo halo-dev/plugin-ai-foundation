@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.GenerationStep;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 
@@ -38,6 +39,10 @@ public class GenerationContentPart {
      */
     private String signature;
     /**
+     * Approval id for tool approval request parts.
+     */
+    private String approvalId;
+    /**
      * Tool call id for tool call/result/error parts.
      */
     private String toolCallId;
@@ -45,6 +50,10 @@ public class GenerationContentPart {
      * Tool name for tool call/result/error parts.
      */
     private String toolName;
+    /**
+     * Zero-based model invocation step that produced a tool approval request.
+     */
+    private Integer stepIndex;
     /**
      * Parsed tool arguments for {@link PartType#TOOL_CALL}.
      */
@@ -127,6 +136,21 @@ public class GenerationContentPart {
     }
 
     /**
+     * Creates a content part for a pending tool approval request.
+     */
+    public static GenerationContentPart toolApprovalRequest(ToolApprovalRequest request) {
+        return GenerationContentPart.builder()
+            .type(PartType.TOOL_APPROVAL_REQUEST)
+            .approvalId(request.getApprovalId())
+            .toolCallId(request.getToolCallId())
+            .toolName(request.getToolName())
+            .input(request.getInput())
+            .stepIndex(request.getStepIndex())
+            .metadata(request.getProviderMetadata())
+            .build();
+    }
+
+    /**
      * Creates a content part for a successful server-side tool execution.
      */
     public static GenerationContentPart toolResult(ToolResult toolResult) {
@@ -187,33 +211,44 @@ public class GenerationContentPart {
             throw new IllegalArgumentException("generation content part type must not be blank");
         }
         switch (type) {
-            case PartType.TEXT -> rejectFields("text", signature, toolCallId, toolName, input,
-                result, errorText, id, url, title, mediaType, data);
+            case PartType.TEXT -> rejectFields("text", signature, approvalId, toolCallId,
+                toolName, stepIndex, input, result, errorText, id, url, title, mediaType, data);
             case PartType.REASONING -> rejectFields("reasoning",
-                toolCallId, toolName, input, result, errorText, id, url, title, mediaType, data);
+                approvalId, toolCallId, toolName, stepIndex, input, result, errorText, id, url, title,
+                mediaType, data);
             case PartType.TOOL_CALL -> {
                 requireText(toolCallId, "tool-call content part toolCallId");
                 requireText(toolName, "tool-call content part toolName");
-                rejectFields("tool-call", text, signature, result, errorText, id,
+                rejectFields("tool-call", text, signature, approvalId, stepIndex, result, errorText, id,
                     url, title, mediaType, data);
             }
             case PartType.TOOL_RESULT -> {
                 requireText(toolCallId, "tool-result content part toolCallId");
                 requireText(toolName, "tool-result content part toolName");
-                rejectFields("tool-result", text, signature, input, errorText, id,
+                rejectFields("tool-result", text, signature, approvalId, stepIndex, input, errorText, id,
                     url, title, mediaType, data);
             }
             case PartType.TOOL_ERROR -> {
                 requireText(toolCallId, "tool-error content part toolCallId");
                 requireText(toolName, "tool-error content part toolName");
                 requireText(errorText, "tool-error content part errorText");
-                rejectFields("tool-error", text, signature, input, result, id,
+                rejectFields("tool-error", text, signature, approvalId, stepIndex, input, result, id,
+                    url, title, mediaType, data);
+            }
+            case PartType.TOOL_APPROVAL_REQUEST -> {
+                requireText(approvalId, "tool-approval-request content part approvalId");
+                requireText(toolCallId, "tool-approval-request content part toolCallId");
+                requireText(toolName, "tool-approval-request content part toolName");
+                requireNonNegative(stepIndex, "tool-approval-request content part stepIndex");
+                rejectFields("tool-approval-request", text, signature, result, errorText, id,
                     url, title, mediaType, data);
             }
             case PartType.SOURCE -> rejectFields("source", text,
-                signature, toolCallId, toolName, input, result, errorText, mediaType, data);
+                signature, approvalId, toolCallId, toolName, stepIndex, input, result, errorText,
+                mediaType, data);
             case PartType.FILE -> rejectFields("file",
-                text, signature, toolCallId, toolName, input, result, errorText);
+                text, signature, approvalId, toolCallId, toolName, stepIndex, input, result,
+                errorText);
             default -> throw new IllegalArgumentException("unsupported generation content part type: "
                 + type);
         }
@@ -223,6 +258,12 @@ public class GenerationContentPart {
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");
+        }
+    }
+
+    private static void requireNonNegative(Integer value, String name) {
+        if (value != null && value < 0) {
+            throw new IllegalArgumentException(name + " must be non-negative");
         }
     }
 

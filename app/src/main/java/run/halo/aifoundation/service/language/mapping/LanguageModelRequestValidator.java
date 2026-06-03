@@ -1,6 +1,8 @@
 package run.halo.aifoundation.service.language.mapping;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
@@ -39,6 +41,7 @@ public final class LanguageModelRequestValidator {
             for (var message : request.getMessages()) {
                 validateMessage(message);
             }
+            validateToolResponseHistory(request.getMessages());
         }
         if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
             throw new IllegalArgumentException("maxRetries must not be negative");
@@ -122,13 +125,64 @@ public final class LanguageModelRequestValidator {
             }
             return;
         }
+        if (role == ModelMessageRole.ASSISTANT && PartType.isToolCall(part.getType())) {
+            if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
+                throw new IllegalArgumentException("tool-call content part must include toolCallId and toolName");
+            }
+            return;
+        }
         if (role == ModelMessageRole.TOOL && PartType.isToolResponse(part.getType())) {
             if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
                 throw new IllegalArgumentException("tool content part must include toolCallId and toolName");
             }
             return;
         }
+        if (role == ModelMessageRole.ASSISTANT
+            && PartType.isToolApprovalRequest(part.getType())) {
+            if (!hasText(part.getApprovalId()) || !hasText(part.getToolCallId())
+                || !hasText(part.getToolName())) {
+                throw new IllegalArgumentException(
+                    "tool approval request part must include approvalId, toolCallId and toolName");
+            }
+            return;
+        }
+        if (role == ModelMessageRole.TOOL
+            && PartType.isToolApprovalResponse(part.getType())) {
+            if (!hasText(part.getApprovalId()) || part.getApproved() == null) {
+                throw new IllegalArgumentException(
+                    "tool approval response part must include approvalId and approved");
+            }
+            return;
+        }
         throw new IllegalArgumentException("unsupported content part type: " + part.getType());
+    }
+
+    private void validateToolResponseHistory(List<ModelMessage> messages) {
+        var toolCallsById = new LinkedHashMap<String, String>();
+        for (var message : messages) {
+            for (var part : message.getContent()) {
+                if (message.getRole() == ModelMessageRole.ASSISTANT
+                    && PartType.isToolCall(part.getType())) {
+                    toolCallsById.putIfAbsent(part.getToolCallId(), part.getToolName());
+                    continue;
+                }
+                if (message.getRole() == ModelMessageRole.TOOL
+                    && PartType.isToolResponse(part.getType())) {
+                    var expectedToolName = toolCallsById.get(part.getToolCallId());
+                    if (expectedToolName == null) {
+                        throw new IllegalArgumentException(
+                            "tool response references unknown tool call: "
+                                + part.getToolCallId());
+                    }
+                    if (!expectedToolName.equals(part.getToolName())) {
+                        throw new IllegalArgumentException(
+                            "tool response toolName mismatch for tool call "
+                                + part.getToolCallId() + ": expected " + expectedToolName
+                                + " but got " + part.getToolName());
+                    }
+                }
+            }
+        }
     }
 
     private void validateOutput(OutputSpec output) {

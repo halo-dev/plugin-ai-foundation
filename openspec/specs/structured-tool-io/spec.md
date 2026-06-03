@@ -36,12 +36,19 @@ The system SHALL allow tool definitions to validate executor results before send
 - **AND** it SHALL stop the multi-step tool loop for that failed tool call
 
 ### Requirement: Tool schema metadata
-The system SHALL keep tool schema behavior provider-neutral while allowing providers to use supported schema features.
+The system SHALL keep tool schema behavior provider-neutral while ensuring public tool schema metadata is either applied by provider adapters that support it or ignored safely by providers that do not.
 
 #### Scenario: Tool input examples
 - **WHEN** a tool definition includes input examples
-- **THEN** provider adapters MAY pass those examples to providers that support them
-- **AND** providers that do not support examples SHALL ignore them without failing the request
+- **AND** the selected provider adapter supports provider-native tool input examples
+- **THEN** the provider request SHALL include the examples in the provider-supported form
+- **AND** local tool input validation SHALL still run before executor invocation
+
+#### Scenario: Unsupported tool input examples
+- **WHEN** a tool definition includes input examples
+- **AND** the selected provider adapter does not support provider-native tool input examples
+- **THEN** the request SHALL still be allowed
+- **AND** the unsupported examples SHALL NOT alter local validation or executor input
 
 #### Scenario: Public tool schema DTOs
 - **WHEN** a caller compiles against the `api` module
@@ -59,6 +66,12 @@ The system SHALL pass a provider-neutral execution context to server-side tools.
 - **WHEN** the system invokes a tool executor during a multi-step generation
 - **THEN** the executor context SHALL include the messages that led to the tool call
 - **AND** those messages SHALL include prior assistant tool calls and tool results already appended for the current generation loop
+
+#### Scenario: Tool context contains cancellation
+- **WHEN** a request includes a cancellation token
+- **AND** the system invokes a server-side tool executor
+- **THEN** the executor context SHALL expose the same provider-neutral cancellation token
+- **AND** the executor SHALL be able to check cancellation without depending on Spring AI or provider-native classes
 
 #### Scenario: Tool context is provider-neutral
 - **WHEN** a consumer compiles against the `api` module
@@ -95,11 +108,21 @@ Tool definition APIs SHALL provide typed constants or enums for tool and schema 
 - **THEN** the author does not need to know undocumented string literals for supported tool or schema types
 
 ### Requirement: Tool Behavior Is Verified End To End
-Tool schema helpers SHALL be covered by tests that prove the typed SDK construction reaches tool execution and result handling.
+Tool schema helpers and provider-facing metadata SHALL be covered by tests that prove typed SDK construction reaches provider request construction, tool execution, and result handling.
 
 #### Scenario: Tool call round trip
 - **WHEN** a request uses a typed tool schema and the model emits a tool call
 - **THEN** the implementation validates arguments, invokes the tool, returns the tool result, and preserves the existing tool stream/result contract
+
+#### Scenario: Strict flag reaches supported provider adapter
+- **WHEN** a request defines a tool with `strict = true`
+- **AND** the selected provider adapter supports provider-native strict tool schemas
+- **THEN** provider request construction SHALL carry the strict flag to the native tool definition
+- **AND** local input validation SHALL still run before executor invocation
+
+#### Scenario: Unsupported provider metadata is not fake-applied
+- **WHEN** a request defines tool metadata that the selected provider adapter does not support
+- **THEN** tests SHALL prove the unsupported metadata is ignored safely rather than represented as applied behavior
 
 ### Requirement: Tool calling documentation covers multi-step workflows
 Consumer documentation SHALL describe tool definitions, tool choice, server-side executors, multi-step control, and tool result aggregation.
@@ -120,3 +143,27 @@ Consumer documentation SHALL describe tool definitions, tool choice, server-side
 - **WHEN** a plugin author needs observability or auditing
 - **THEN** the guide SHALL explain caller-visible lifecycle callbacks, tool results, tool errors, and warnings without exposing internal orchestration classes
 
+### Requirement: Tool Approval Runs After Input Validation
+The system SHALL decide tool execution approval only after the model-produced input has been parsed and validated.
+
+#### Scenario: Invalid input does not request approval
+- **WHEN** a model returns a tool call whose input does not match the tool input schema
+- **THEN** the system SHALL record or emit a `tool-error`
+- **AND** it SHALL NOT evaluate approval policy for that invalid tool call
+
+#### Scenario: Approval predicate receives validated input
+- **WHEN** a tool approval predicate is evaluated
+- **THEN** it SHALL receive the validated parsed input through provider-neutral execution context
+- **AND** it SHALL NOT receive Spring AI or provider-native message types
+
+### Requirement: Tool Definition Approval API Is Provider-Neutral
+Tool approval configuration SHALL be declared through public SDK types that do not depend on Spring AI or provider-native classes.
+
+#### Scenario: Caller declares approval policy
+- **WHEN** a plugin author defines a tool
+- **THEN** the author can configure no approval, always approval, or dynamic approval without using raw string literals
+
+#### Scenario: Provider adapter receives tools
+- **WHEN** a request with approval-aware tools is converted for a provider
+- **THEN** approval policy SHALL remain enforced by the Halo app layer
+- **AND** provider adapters SHALL continue receiving provider-supported tool declarations without approval-only runtime callbacks

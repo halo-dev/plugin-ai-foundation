@@ -88,7 +88,7 @@ public final class StreamProtocolNormalizer {
                     }
                     parts.add(part);
                 }
-                case PartType.TOOL_CALL -> {
+                case PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST -> {
                     closeText(parts);
                     closeReasoning(parts);
                     closeToolInput();

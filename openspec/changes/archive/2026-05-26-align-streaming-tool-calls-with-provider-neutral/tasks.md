@@ -32,4 +32,4 @@
 - [x] 5.1 Update `dev/dev.md` to describe streaming tool-call behavior and expected event ordering.
 - [x] 5.2 Run `./gradlew :app:test`.
 - [x] 5.3 Run UI validation for changed workbench files, such as `pnpm --dir ui type-check` and targeted unit tests.
-- [x] 5.4 Run `openspec validate align-streaming-tool-calls-with-ai-sdk --strict`.
+- [x] 5.4 Run `openspec validate align-streaming-tool-calls-with-provider-neutral --strict`.

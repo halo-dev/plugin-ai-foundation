@@ -13,6 +13,7 @@ import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 
@@ -71,6 +72,10 @@ public class TextStreamPart {
      * Optional provider signature for reasoning stream events.
      */
     private String signature;
+    /**
+     * Approval id for tool approval request events.
+     */
+    private String approvalId;
     /**
      * Tool call id for tool call/result/error events.
      */
@@ -243,6 +248,21 @@ public class TextStreamPart {
     }
 
     /**
+     * Creates a stream event for a pending tool approval request.
+     */
+    public static TextStreamPart toolApprovalRequest(ToolApprovalRequest request) {
+        return TextStreamPart.builder()
+            .type(PartType.TOOL_APPROVAL_REQUEST)
+            .approvalId(request.getApprovalId())
+            .toolCallId(request.getToolCallId())
+            .toolName(request.getToolName())
+            .input(request.getInput())
+            .stepIndex(request.getStepIndex())
+            .providerMetadata(request.getProviderMetadata())
+            .build();
+    }
+
+    /**
      * Creates a stream event for a successful server-side tool execution.
      */
     public static TextStreamPart toolResult(ToolResult toolResult) {
@@ -370,6 +390,11 @@ public class TextStreamPart {
             case PartType.TOOL_CALL, PartType.TOOL_RESULT, PartType.TOOL_ERROR -> {
                 requireText(toolCallId, type + " stream part toolCallId");
                 requireText(toolName, type + " stream part toolName");
+            }
+            case PartType.TOOL_APPROVAL_REQUEST -> {
+                requireText(approvalId, "tool-approval-request stream part approvalId");
+                requireText(toolCallId, "tool-approval-request stream part toolCallId");
+                requireText(toolName, "tool-approval-request stream part toolName");
             }
             case PartType.SOURCE, PartType.FILE -> requireText(id, type + " stream part id");
             case PartType.FINISH_STEP -> requirePresent(stepIndex,

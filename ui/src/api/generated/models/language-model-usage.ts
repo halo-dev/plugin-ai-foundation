@@ -51,4 +51,3 @@ export interface LanguageModelUsage {
      */
     'totalTokens'?: number;
 }
-

@@ -13,6 +13,9 @@
  */
 
 
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ToolApprovalPolicy } from './tool-approval-policy';
 
 /**
  *
@@ -20,6 +23,12 @@
  * @interface ToolDefinition
  */
 export interface ToolDefinition {
+    /**
+     *
+     * @type {ToolApprovalPolicy}
+     * @memberof ToolDefinition
+     */
+    'approvalPolicy'?: ToolApprovalPolicy;
     /**
      *
      * @type {string}
@@ -63,4 +72,3 @@ export interface ToolDefinition {
      */
     'strict'?: boolean;
 }
-

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.part.TextStreamPart;
@@ -162,6 +163,10 @@ public class StreamTextResult {
 
     public Mono<List<GenerationStep>> steps() {
         return result.flatMap(value -> Mono.justOrEmpty(value.getSteps()));
+    }
+
+    public Mono<List<ModelMessage>> responseMessages() {
+        return result.flatMap(value -> Mono.justOrEmpty(value.getResponseMessages()));
     }
 
     public Mono<List<ToolCall>> toolCalls() {

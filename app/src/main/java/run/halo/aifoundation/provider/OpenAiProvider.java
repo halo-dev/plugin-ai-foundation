@@ -98,7 +98,7 @@ public class OpenAiProvider extends AbstractAiProviderType {
                 reasoningControlOptions, null),
             (request, toolCallbacks, toolNames) -> OpenAiChatOptionsSupport.buildToolCalling(
                 request, toolCallbacks, toolNames, getProviderType(), reasoningControlOptions,
-                null),
+                null, true),
             request -> OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
                 reasoningControlOptions, null),
             reasoningControlOptions);

@@ -32,6 +32,7 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -541,6 +542,212 @@ class ModelConsoleEndpointTest {
                 assertThat(tool.getName()).isEqualTo("halo_test_info");
                 assertThat(tool.getExecutor()).isNotNull();
             });
+    }
+
+    @Test
+    void testChatStream_withExternalConsoleTestTool_injectsNoExecutorTool() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                    .toolCallId("call_1")
+                    .toolName("halo_external_test_info")
+                    .input(Map.of("query", "hello"))
+                    .build()),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream?enableExternalTestTool=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "请调用外部测试工具"))
+            ))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"tool-call\"");
+                assertThat(bodyText).contains("halo_external_test_info");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getStopWhen()).isNotNull();
+        assertThat(request.getTools())
+            .singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getName()).isEqualTo("halo_external_test_info");
+                assertThat(tool.getExecutor()).isNull();
+            });
+    }
+
+    @Test
+    void testChatStream_withToolCallRepair_injectsRepairableToolAndCallback() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                    .toolCallId("call_1")
+                    .toolName("halo_repair_test_info")
+                    .input(Map.of("query", "hello", "repairSource", "console-test"))
+                    .build()),
+                TextStreamPart.toolResult(run.halo.aifoundation.tool.ToolResult.builder()
+                    .toolCallId("call_1")
+                    .toolName("halo_repair_test_info")
+                    .result(Map.of("ok", true))
+                    .build()),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/stream?enableToolCallRepair=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "请测试工具修复"))
+            ))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"tool-call\"");
+                assertThat(bodyText).contains("halo_repair_test_info");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getStopWhen()).isNotNull();
+        assertThat(request.getTools())
+            .singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getName()).isEqualTo("halo_repair_test_info");
+                assertThat(tool.getExecutor()).isNotNull();
+                assertThat(tool.getInputSchema()).containsEntry("required", List.of("query"));
+            });
+        assertThat(request.getToolCallRepair()).isNotNull();
+        var repair = request.getToolCallRepair().repair(
+            run.halo.aifoundation.tool.ToolCallRepairContext.builder()
+                .toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                    .toolCallId("call_1")
+                    .toolName("halo_repair_test_info")
+                    .input(Map.of("message", "hello"))
+                    .build())
+                .build()
+        ).block();
+        assertThat(repair.getToolCall().getInput()).containsEntry("query", "hello");
+    }
+
+    @Test
+    void testChatStream_withConsoleTestToolApproval_injectsApprovalTool() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.toolApprovalRequest(ToolApprovalRequest.builder()
+                    .approvalId("approval_1")
+                    .toolCallId("call_1")
+                    .toolName("halo_test_info")
+                    .input(Map.of("query", "hello"))
+                    .stepIndex(0)
+                    .build()),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post()
+            .uri("/models/gpt-4/test-chat/stream?enableTestToolApproval=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(Map.of(
+                "role", "USER",
+                "content", List.of(Map.of("type", "text", "text", "请调用测试工具"))
+            ))))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var bodyText = response.getResponseBody();
+                assertThat(bodyText).contains("\"type\":\"tool-approval-request\"");
+                assertThat(bodyText).contains("\"approvalId\":\"approval_1\"");
+                assertThat(bodyText).contains("halo_test_info");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getStopWhen()).isNotNull();
+        assertThat(request.getTools())
+            .singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getName()).isEqualTo("halo_test_info");
+                assertThat(tool.getApprovalPolicy()).isNotNull();
+                assertThat(tool.getApprovalPolicy().getMode().name()).isEqualTo("ALWAYS");
+            });
+    }
+
+    @Test
+    void testChatStream_acceptsToolApprovalHistory() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.textDelta("txt_1", "Approved"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post()
+            .uri("/models/gpt-4/test-chat/stream?enableTestToolApproval=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("messages", List.of(
+                Map.of("role", "USER", "content", List.of(
+                    Map.of("type", "text", "text", "请调用测试工具")
+                )),
+                Map.of("role", "ASSISTANT", "content", List.of(
+                    Map.of(
+                        "type", "tool-call",
+                        "toolCallId", "call_1",
+                        "toolName", "halo_test_info",
+                        "input", Map.of("query", "hello")
+                    ),
+                    Map.of(
+                        "type", "tool-approval-request",
+                        "approvalId", "approval_1",
+                        "toolCallId", "call_1",
+                        "toolName", "halo_test_info",
+                        "input", Map.of("query", "hello")
+                    )
+                )),
+                Map.of("role", "TOOL", "content", List.of(
+                    Map.of(
+                        "type", "tool-approval-response",
+                        "approvalId", "approval_1",
+                        "toolCallId", "call_1",
+                        "toolName", "halo_test_info",
+                        "approved", true,
+                        "reason", "console approved"
+                    )
+                ))
+            )))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response ->
+                assertThat(response.getResponseBody()).contains("\"delta\":\"Approved\""));
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getMessages()).hasSize(3);
+        assertThat(request.getMessages().get(1).getContent())
+            .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
+            .containsExactly("tool-call", "tool-approval-request");
+        assertThat(request.getMessages().get(2).getRole().name()).isEqualTo("TOOL");
+        assertThat(request.getMessages().get(2).getContent().getFirst().getType())
+            .isEqualTo("tool-approval-response");
     }
 
     @Test

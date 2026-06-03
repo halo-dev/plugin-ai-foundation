@@ -21,6 +21,9 @@ import type { ModelMessage } from './model-message';
 import type { OutputSpec } from './output-spec';
 // May contain unused imports in some cases
 // @ts-ignore
+import type { ReasoningOptions } from './reasoning-options';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { ToolChoice } from './tool-choice';
 // May contain unused imports in some cases
 // @ts-ignore
@@ -46,10 +49,22 @@ export interface GenerateTextRequest {
     'frequencyPenalty'?: number;
     /**
      *
+     * @type {{ [key: string]: string; }}
+     * @memberof GenerateTextRequest
+     */
+    'headers'?: { [key: string]: string; };
+    /**
+     *
      * @type {number}
      * @memberof GenerateTextRequest
      */
     'maxOutputTokens'?: number;
+    /**
+     *
+     * @type {number}
+     * @memberof GenerateTextRequest
+     */
+    'maxRetries'?: number;
     /**
      *
      * @type {Array<ModelMessage>}
@@ -86,6 +101,18 @@ export interface GenerateTextRequest {
      * @memberof GenerateTextRequest
      */
     'providerOptions'?: { [key: string]: { [key: string]: object; }; };
+    /**
+     *
+     * @type {ReasoningOptions}
+     * @memberof GenerateTextRequest
+     */
+    'reasoning'?: ReasoningOptions;
+    /**
+     *
+     * @type {number}
+     * @memberof GenerateTextRequest
+     */
+    'seed'?: number;
     /**
      *
      * @type {Array<string>}
@@ -129,4 +156,3 @@ export interface GenerateTextRequest {
      */
     'topP'?: number;
 }
-

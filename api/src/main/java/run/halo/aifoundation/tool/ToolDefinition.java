@@ -63,6 +63,10 @@ public class ToolDefinition {
      */
     private Boolean strict;
     /**
+     * Approval policy evaluated after input schema validation and before executor invocation.
+     */
+    private ToolApprovalPolicy approvalPolicy;
+    /**
      * Server-side tool implementation. Return values should be JSON serializable.
      */
     private transient ToolExecutor executor;
@@ -109,6 +113,26 @@ public class ToolDefinition {
         public ToolDefinitionBuilder outputSchema(JsonSchema.Builder<?> schema) {
             this.outputSchema = schema != null ? schema.toMap() : null;
             return this;
+        }
+
+        public ToolDefinitionBuilder requiresApproval(boolean requiresApproval) {
+            this.approvalPolicy = requiresApproval
+                ? ToolApprovalPolicy.always()
+                : ToolApprovalPolicy.never();
+            return this;
+        }
+
+        public ToolDefinitionBuilder needsApproval(boolean requiresApproval) {
+            return requiresApproval(requiresApproval);
+        }
+
+        public ToolDefinitionBuilder approvalPredicate(ToolApprovalPredicate predicate) {
+            this.approvalPolicy = ToolApprovalPolicy.dynamic(predicate);
+            return this;
+        }
+
+        public ToolDefinitionBuilder needsApproval(ToolApprovalPredicate predicate) {
+            return approvalPredicate(predicate);
         }
     }
 }

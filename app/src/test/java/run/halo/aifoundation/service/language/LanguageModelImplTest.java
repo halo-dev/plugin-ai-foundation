@@ -13,7 +13,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -50,8 +49,14 @@ import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
+import run.halo.aifoundation.tool.ToolApprovalResponse;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
-import run.halo.aifoundation.tool.ToolExecutionContext;
+import run.halo.aifoundation.tool.ToolExecutor;
+import run.halo.aifoundation.tool.ToolError;
+import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
@@ -99,12 +104,22 @@ class LanguageModelImplTest {
                     .singleElement()
                     .satisfies(message -> assertThat(message.getRole())
                         .isEqualTo(run.halo.aifoundation.message.ModelMessageRole.ASSISTANT));
+                assertThat(result.getResponseMessages())
+                    .singleElement()
+                    .satisfies(message -> {
+                        assertThat(message.getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
+                        assertThat(message.getContent().getFirst().getType())
+                            .isEqualTo(PartType.TEXT);
+                        assertThat(message.getContent().getFirst().getText()).isEqualTo("Done");
+                    });
                 assertThat(result.getSteps())
                     .singleElement()
                     .satisfies(step -> {
                         assertThat(step.getStepIndex()).isZero();
                         assertThat(step.getText()).isEqualTo("Done");
                         assertThat(step.getUsage().getTotalTokens()).isEqualTo(8);
+                        assertThat(step.getResponseMessages())
+                            .containsExactlyElementsOf(result.getResponseMessages());
                     });
             })
             .verifyComplete();
@@ -282,6 +297,37 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_omitsReasoningFromResponseMessagesWhenProviderUnsupported() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            reasoningToolCallResponse("call_1", "weather", "{\"location\":\"SF\"}",
+                "Think first.", 3, 5)
+        );
+        var model = new LanguageModelImpl(chatModel, "mimo");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getReasoningText()).isEqualTo("Think first.");
+                assertThat(result.getContent()).extracting("type")
+                    .containsExactly(PartType.REASONING, PartType.TOOL_CALL);
+                assertThat(result.getResponseMessages())
+                    .singleElement()
+                    .satisfies(message -> assertThat(message.getContent())
+                        .extracting(ModelMessagePart::getType)
+                        .containsExactly(PartType.TOOL_CALL));
+            })
+            .verifyComplete();
+    }
+
+    @Test
     void generateText_extractsTaggedReasoningFromNonStreamingText() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
@@ -413,108 +459,229 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void generateText_executesToolAndContinuesWhenMaxStepsAllows() {
+    void generateText_missingOrFailedRepairPreservesValidationToolError() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
-            chatResponse("It is 22C.", "stop", 4, 5)
+            toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3),
+            toolCallResponse("call_2", "weather", "{\"city\":\"NYC\"}", 2, 3)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
-        var toolContext = new AtomicReference<ToolExecutionContext>();
 
-        var request = GenerateTextRequest.builder()
-            .prompt("Weather in SF?")
+        var requestWithoutRepair = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(repairableWeatherTool(context -> Mono.just(Map.of()))))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        StepVerifier.create(model.generateText(requestWithoutRepair))
+            .assertNext(result -> {
+                assertThat(result.getToolErrors())
+                    .singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText()).contains("location"));
+                assertThat(result.getWarnings()).extracting("code")
+                    .doesNotContain("tool-call-repair-failed");
+            })
+            .verifyComplete();
+
+        var requestWithFailedRepair = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(repairableWeatherTool(context -> Mono.just(Map.of()))))
+            .toolCallRepair(context -> Mono.just(ToolCallRepairResult.unrepaired()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        StepVerifier.create(model.generateText(requestWithFailedRepair))
+            .assertNext(result -> {
+                assertThat(result.getToolErrors())
+                    .singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText()).contains("location"));
+                assertThat(result.getWarnings()).extracting("code")
+                    .contains("tool-call-repair-failed");
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_doesNotRepairUnknownToolOrOutputSchemaFailure() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "unknown", "{}", 2, 3),
+            toolCallResponse("call_2", "weather", "{\"location\":\"SF\"}", 2, 3)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var repairCalls = new AtomicInteger();
+
+        var unknownRequest = GenerateTextRequest.builder()
+            .prompt("Use tool")
+            .tools(List.of(repairableWeatherTool(context -> Mono.just(Map.of()))))
+            .toolCallRepair(context -> {
+                repairCalls.incrementAndGet();
+                return Mono.just(ToolCallRepairResult.unrepaired());
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        StepVerifier.create(model.generateText(unknownRequest))
+            .assertNext(result -> assertThat(result.getToolErrors())
+                .singleElement()
+                .satisfies(error -> assertThat(error.getErrorText()).contains("Unknown tool")))
+            .verifyComplete();
+
+        var outputFailureRequest = GenerateTextRequest.builder()
+            .prompt("Use tool")
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
-                .description("Get weather")
-                .inputSchema(Map.of("type", "object"))
+                .inputSchema(weatherInputSchema())
+                .outputSchema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("temperature", Map.of("type", "integer")),
+                    "required", List.of("temperature")
+                ))
+                .executor(context -> Mono.just(Map.of("temperature", "hot")))
+                .build()))
+            .toolCallRepair(context -> {
+                repairCalls.incrementAndGet();
+                return Mono.just(ToolCallRepairResult.unrepaired());
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        StepVerifier.create(model.generateText(outputFailureRequest))
+            .assertNext(result -> assertThat(result.getToolErrors())
+                .singleElement()
+                .satisfies(error -> assertThat(error.getErrorText()).contains("temperature")))
+            .verifyComplete();
+
+        assertThat(repairCalls).hasValue(0);
+    }
+
+    @Test
+    void generateText_turnsDeniedApprovalIntoToolErrorWithoutExecuting() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("I will not remove it.",
+            "stop", 4, 5));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var executions = new AtomicInteger();
+
+        var request = GenerateTextRequest.builder()
+            .messages(approvalMessages(false, "Too destructive"))
+            .tools(List.of(ToolDefinition.builder()
+                .name("run")
+                .needsApproval(true)
                 .executor(context -> {
-                    toolContext.set(context);
-                    return reactor.core.publisher.Mono.just(Map.of(
-                        "location", context.getInput().get("location"),
-                        "temperature", 22
-                    ));
+                    executions.incrementAndGet();
+                    return Mono.just(Map.of("ok", true));
                 })
+                .build()))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getToolResults()).isEmpty();
+                assertThat(result.getToolErrors())
+                    .singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText())
+                        .isEqualTo("Tool execution denied: Too destructive"));
+                assertThat(result.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.TOOL, ModelMessageRole.ASSISTANT);
+                assertThat(result.getResponseMessages().get(0).getContent().getFirst())
+                    .satisfies(part -> {
+                        assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
+                        assertThat(part.getErrorText())
+                            .isEqualTo("Tool execution denied: Too destructive");
+                    });
+            })
+            .verifyComplete();
+
+        assertThat(executions).hasValue(0);
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_doesNotRequestApprovalWhenToolInputIsInvalid() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "weather", "{\"location\":12}", 2, 3)
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(Map.of("type", "object", "properties",
+                    Map.of("location", Map.of("type", "string")), "required",
+                    List.of("location")))
+                .needsApproval(true)
+                .executor(context -> Mono.just(Map.of()))
                 .build()))
             .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> {
-                assertThat(result.getText()).isEqualTo("It is 22C.");
-                assertThat(result.getSteps()).hasSize(2);
-                assertThat(result.getContent())
-                    .extracting("type")
-                    .contains("tool-call", "tool-result", "text");
-                assertThat(result.getSteps().get(0).getToolCalls())
-                    .singleElement()
-                    .satisfies(call -> {
-                        assertThat(call.getToolCallId()).isEqualTo("call_1");
-                        assertThat(call.getToolName()).isEqualTo("weather");
-                        assertThat(call.getInput()).containsEntry("location", "SF");
-                    });
-                assertThat(result.getSteps().get(0).getToolResults())
-                    .singleElement()
-                    .satisfies(toolResult -> assertThat(toolResult.getResult().toString())
-                        .contains("temperature=22"));
-                assertThat(result.getToolCalls()).hasSize(1);
-                assertThat(result.getToolResults()).hasSize(1);
-                assertThat(result.getToolErrors()).isEmpty();
+                assertThat(result.getToolApprovalRequests()).isEmpty();
+                assertThat(result.getToolErrors()).isNotEmpty();
             })
             .verifyComplete();
-
-        assertThat(toolContext.get().getToolCallId()).isEqualTo("call_1");
-        assertThat(toolContext.get().getToolName()).isEqualTo("weather");
-        assertThat(toolContext.get().getStepIndex()).isZero();
-        assertThat(toolContext.get().getMessages()).isNotEmpty();
-
-        var captor = ArgumentCaptor.forClass(Prompt.class);
-        verify(chatModel, times(2)).call(captor.capture());
-        assertThat(captor.getAllValues().get(1).getInstructions())
-            .extracting(message -> message.getMessageType().getValue())
-            .contains("tool");
     }
 
     @Test
-    void generateText_toolContextIncludesPriorToolHistoryForLaterSteps() {
+    void generateText_rejectsUnknownApprovalResponseBeforeProviderCall() {
         var chatModel = mock(ChatModel.class);
-        when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
-            toolCallResponse("call_2", "weather", "{\"location\":\"NYC\"}", 4, 5),
-            chatResponse("Done", "stop", 6, 7)
-        );
         var model = new LanguageModelImpl(chatModel, "openai");
-        var contexts = new ArrayList<ToolExecutionContext>();
-
         var request = GenerateTextRequest.builder()
-            .prompt("Compare weather")
-            .tools(List.of(ToolDefinition.builder()
-                .name("weather")
-                .executor(context -> {
-                    contexts.add(context);
-                    return reactor.core.publisher.Mono.just(Map.of("ok", true));
-                })
-                .build()))
-            .stopWhen(StopCondition.stepCountIs(3))
+            .messages(List.of(
+                ModelMessage.user("Run"),
+                ModelMessage.tool(List.of(ModelMessagePart.toolApprovalResponse(
+                    ToolApprovalResponse.builder()
+                        .approvalId("missing")
+                        .approved(true)
+                        .build())))
+            ))
+            .tools(List.of(ToolDefinition.builder().name("run").build()))
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .assertNext(result -> {
-                assertThat(result.getToolCalls()).hasSize(2);
-                assertThat(result.getToolResults()).hasSize(2);
-                assertThat(result.getText()).isEqualTo("Done");
-            })
+            .expectErrorMessage("tool approval response references unknown approval: missing")
+            .verify();
+
+        verify(chatModel, times(0)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_doesNotReplayConsumedApprovalResponse() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Already done", "stop", 4, 5));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var executions = new AtomicInteger();
+        var messages = new ArrayList<>(approvalMessages(true, "done"));
+        messages.add(ModelMessage.tool(List.of(ModelMessagePart.toolResult(
+            run.halo.aifoundation.tool.ToolResult.builder()
+                .toolCallId("call_1")
+                .toolName("run")
+                .result(Map.of("ok", true))
+                .build()))));
+
+        var request = GenerateTextRequest.builder()
+            .messages(messages)
+            .tools(List.of(ToolDefinition.builder()
+                .name("run")
+                .executor(context -> {
+                    executions.incrementAndGet();
+                    return Mono.just(Map.of("ok", true));
+                })
+                .build()))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getResponseMessages())
+                .singleElement()
+                .satisfies(message -> {
+                    assertThat(message.getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
+                    assertThat(message.getContent().getFirst().getText()).isEqualTo("Already done");
+                }))
             .verifyComplete();
 
-        assertThat(contexts).hasSize(2);
-        assertThat(contexts.get(1).getStepIndex()).isEqualTo(1);
-        assertThat(contexts.get(1).getMessages())
-            .extracting(ModelMessage::getRole)
-            .contains(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL);
-        assertThat(contexts.get(1).getMessages().stream()
-            .flatMap(message -> message.getContent().stream())
-            .map(ModelMessagePart::getType))
-            .contains(PartType.TOOL_CALL, PartType.TOOL_RESULT);
+        assertThat(executions).hasValue(0);
+        verify(chatModel).call(any(Prompt.class));
     }
 
     @Test
@@ -636,6 +803,17 @@ class LanguageModelImplTest {
                 assertThat(result.getSteps()).hasSize(2);
                 assertThat(result.getText()).isEqualTo("It is 22C.");
                 assertThat(result.getToolResults()).hasSize(1);
+                assertThat(result.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL,
+                        ModelMessageRole.ASSISTANT);
+                assertThat(result.getResponseMessages().get(0).getContent())
+                    .extracting(ModelMessagePart::getType)
+                    .containsExactly(PartType.TOOL_CALL);
+                assertThat(result.getResponseMessages().get(1).getContent().getFirst().getType())
+                    .isEqualTo(PartType.TOOL_RESULT);
+                assertThat(result.getResponseMessages().get(2).getContent().getFirst().getText())
+                    .isEqualTo("It is 22C.");
             })
             .verifyComplete();
 
@@ -717,15 +895,23 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void generateText_warnsAndStopsWhenToolHasNoExecutor() {
+    void generateText_continuesFromExternalToolError() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{}", 2, 3)
+            chatResponse("I could not get the weather.", "stop", 4, 5)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
-            .prompt("Use tool")
+            .messages(List.of(
+                ModelMessage.user("Weather in SF?"),
+                externalToolCallMessage("call_1", "weather", Map.of("location", "SF")),
+                ModelMessage.tool(List.of(ModelMessagePart.toolError(ToolError.builder()
+                    .toolCallId("call_1")
+                    .toolName("weather")
+                    .errorText("weather service unavailable")
+                    .build())))
+            ))
             .tools(List.of(ToolDefinition.builder()
                 .name("weather")
                 .build()))
@@ -734,15 +920,62 @@ class LanguageModelImplTest {
 
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> {
-                assertThat(result.getSteps()).hasSize(1);
-                assertThat(result.getSteps().get(0).getToolResults()).isEmpty();
-                assertThat(result.getWarnings())
-                    .extracting("code")
-                    .contains("tool-not-executed");
+                assertThat(result.getText()).isEqualTo("I could not get the weather.");
+                assertThat(result.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.ASSISTANT);
             })
             .verifyComplete();
 
         verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_rejectsExternalToolResultWithoutPriorToolCall() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+
+        var request = GenerateTextRequest.builder()
+            .messages(List.of(
+                ModelMessage.user("Weather in SF?"),
+                ModelMessage.tool(List.of(ModelMessagePart.toolResult(ToolResult.builder()
+                    .toolCallId("call_1")
+                    .toolName("weather")
+                    .result(Map.of("temperature", 22))
+                    .build())))
+            ))
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .build()))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage("tool response references unknown tool call: call_1")
+            .verify();
+    }
+
+    @Test
+    void generateText_rejectsExternalToolErrorWithMismatchedToolName() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+
+        var request = GenerateTextRequest.builder()
+            .messages(List.of(
+                ModelMessage.user("Weather in SF?"),
+                externalToolCallMessage("call_1", "weather", Map.of("location", "SF")),
+                ModelMessage.tool(List.of(ModelMessagePart.toolError(ToolError.builder()
+                    .toolCallId("call_1")
+                    .toolName("search")
+                    .errorText("failed")
+                    .build())))
+            ))
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .build()))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorMessage(
+                "tool response toolName mismatch for tool call call_1: expected weather but got search")
+            .verify();
     }
 
     @Test
@@ -764,9 +997,19 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .assertNext(result -> assertThat(result.getSteps().get(0).getToolErrors())
-                .singleElement()
-                .satisfies(error -> assertThat(error.getErrorText()).isEqualTo("tool failed")))
+            .assertNext(result -> {
+                assertThat(result.getSteps().get(0).getToolErrors())
+                    .singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText()).isEqualTo("tool failed"));
+                assertThat(result.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL);
+                assertThat(result.getResponseMessages().get(1).getContent().getFirst())
+                    .satisfies(part -> {
+                        assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
+                        assertThat(part.getErrorText()).isEqualTo("tool failed");
+                    });
+            })
             .verifyComplete();
     }
 
@@ -1222,6 +1465,218 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void streamText_emitsApprovalRequestAndDoesNotExecuteTool() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "run", "{\"command\":\"rm file\"}", 2, 3))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var executions = new AtomicInteger();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Remove file")
+            .tools(List.of(ToolDefinition.builder()
+                .name("run")
+                .needsApproval(true)
+                .executor(context -> {
+                    executions.incrementAndGet();
+                    return Mono.just(Map.of("ok", true));
+                })
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream())
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(PartType.TOOL_APPROVAL_REQUEST);
+                assertThat(part.getApprovalId()).isEqualTo("approval_call_1");
+            })
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getToolApprovalRequests()).hasSize(1);
+                assertThat(finalResult.getToolResults()).isEmpty();
+                assertThat(finalResult.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.ASSISTANT);
+                assertThat(finalResult.getResponseMessages().stream()
+                    .flatMap(message -> message.getContent().stream())
+                    .map(ModelMessagePart::getType))
+                    .containsExactly(PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST);
+            })
+            .verifyComplete();
+        StepVerifier.create(result.textStream()).verifyComplete();
+        assertThat(executions).hasValue(0);
+    }
+
+    @Test
+    void streamText_stopsMixedExecutableAndApprovalToolCallsWithoutUnresolvedCalls() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(multiToolCallResponse(List.of(
+                new AssistantMessage.ToolCall("call_1", "function", "weather",
+                    "{\"location\":\"SF\"}"),
+                new AssistantMessage.ToolCall("call_2", "function", "run",
+                    "{\"command\":\"rm file\"}")
+            ), 2, 3))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var executions = new AtomicInteger();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Use tools")
+            .tools(List.of(
+                ToolDefinition.builder()
+                    .name("weather")
+                    .executor(context -> {
+                        executions.incrementAndGet();
+                        return Mono.just(Map.of("temperature", 22));
+                    })
+                    .build(),
+                ToolDefinition.builder()
+                    .name("run")
+                    .needsApproval(true)
+                    .executor(context -> {
+                        executions.incrementAndGet();
+                        return Mono.just(Map.of("ok", true));
+                    })
+                    .build()
+            ))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream().collectList())
+            .assertNext(parts -> assertThat(parts).extracting(TextStreamPart::getType)
+                .containsExactly(
+                    PartType.START,
+                    PartType.START_STEP,
+                    PartType.TOOL_CALL,
+                    PartType.TOOL_APPROVAL_REQUEST,
+                    PartType.FINISH_STEP,
+                    PartType.FINISH
+                ))
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getToolCalls())
+                    .singleElement()
+                    .satisfies(call -> {
+                        assertThat(call.getToolCallId()).isEqualTo("call_2");
+                        assertThat(call.getToolName()).isEqualTo("run");
+                    });
+                assertThat(finalResult.getToolApprovalRequests()).hasSize(1);
+                assertThat(finalResult.getToolResults()).isEmpty();
+                assertThat(finalResult.getResponseMessages().stream()
+                    .flatMap(message -> message.getContent().stream())
+                    .map(ModelMessagePart::getType))
+                    .containsExactly(PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST);
+            })
+            .verifyComplete();
+
+        assertThat(executions).hasValue(0);
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_executesApprovedToolBeforeStreamingContinuation() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(chatResponse("Done", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .messages(approvalMessages(true, "confirmed"))
+            .tools(List.of(ToolDefinition.builder()
+                .name("run")
+                .executor(context -> Mono.just(Map.of("ok", true)))
+                .build()))
+            .build();
+
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream())
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TOOL_RESULT.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.TOOL, ModelMessageRole.ASSISTANT);
+                assertThat(finalResult.getResponseMessages().get(0).getContent().getFirst().getType())
+                    .isEqualTo(PartType.TOOL_RESULT);
+                assertThat(finalResult.getResponseMessages().get(1).getContent().getFirst().getText())
+                    .isEqualTo("Done");
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void streamText_turnsDeniedApprovalIntoToolErrorBeforeContinuation() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(chatResponse("Denied", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .messages(approvalMessages(false, "No"))
+            .tools(List.of(ToolDefinition.builder()
+                .name("run")
+                .executor(context -> Mono.just(Map.of("ok", true)))
+                .build()))
+            .build();
+
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream())
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
+                assertThat(part.getErrorText()).isEqualTo("Tool execution denied: No");
+            })
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.TOOL, ModelMessageRole.ASSISTANT);
+                assertThat(finalResult.getResponseMessages().get(0).getContent().getFirst())
+                    .satisfies(part -> {
+                        assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
+                        assertThat(part.getErrorText()).isEqualTo("Tool execution denied: No");
+                    });
+                assertThat(finalResult.getResponseMessages().get(1).getContent().getFirst().getText())
+                    .isEqualTo("Denied");
+            })
+            .verifyComplete();
+    }
+
+    @Test
     void streamText_emitsErrorPartWhenProviderDoesNotSupportTools() {
         var model = new LanguageModelImpl(mock(ChatModel.class), "simple") {
             @Override
@@ -1261,7 +1716,9 @@ class LanguageModelImplTest {
             .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
-        StepVerifier.create(model.streamText(request).fullStream())
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream())
             .expectNextMatches(part -> PartType.START.equals(part.getType()))
             .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
             .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
@@ -1271,6 +1728,19 @@ class LanguageModelImplTest {
             })
             .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
             .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL);
+                assertThat(finalResult.getResponseMessages().get(1).getContent().getFirst())
+                    .satisfies(part -> {
+                        assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
+                        assertThat(part.getErrorText()).isEqualTo("tool failed");
+                    });
+            })
             .verifyComplete();
     }
 
@@ -1654,7 +2124,132 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void streamText_warnsAndStopsWhenToolHasNoExecutor() {
+    void streamText_repairsInvalidToolInputBeforeEmittingResultAndContinuing() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3)),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var repairs = new AtomicInteger();
+        var executions = new AtomicInteger();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(repairableWeatherTool(context -> {
+                executions.incrementAndGet();
+                return Mono.just(Map.of("temperature", 22));
+            })))
+            .toolCallRepair(context -> {
+                repairs.incrementAndGet();
+                return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                    .input(Map.of("location", context.getToolCall().getInput().get("city")))
+                    .build()));
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        var stream = model.streamText(request);
+
+        StepVerifier.create(stream.fullStream().collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsSubsequence(
+                        PartType.TOOL_CALL,
+                        PartType.TOOL_RESULT,
+                        PartType.FINISH_STEP,
+                        PartType.START_STEP,
+                        PartType.TEXT_DELTA
+                    );
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .toList())
+                    .singleElement()
+                    .satisfies(part -> assertThat(part.getInput())
+                        .containsEntry("location", "SF")
+                        .doesNotContainKey("city"));
+                assertThat(parts.stream()
+                    .filter(part -> PartType.FINISH_STEP.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getWarnings())
+                    .extracting("code")
+                    .contains("tool-call-repaired");
+            })
+            .verifyComplete();
+
+        StepVerifier.create(stream.textStream().collectList())
+            .assertNext(text -> assertThat(String.join("", text)).isEqualTo("It is 22C."))
+            .verifyComplete();
+
+        StepVerifier.create(stream.result())
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("It is 22C.");
+                assertThat(result.getToolCalls())
+                    .singleElement()
+                    .satisfies(call -> assertThat(call.getInput())
+                        .containsEntry("location", "SF"));
+                assertThat(result.getResponseMessages().stream()
+                    .flatMap(message -> message.getContent().stream())
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .toList())
+                    .singleElement()
+                    .satisfies(part -> assertThat(part.getInput())
+                        .containsEntry("location", "SF"));
+            })
+            .verifyComplete();
+
+        assertThat(repairs).hasValue(1);
+        assertThat(executions).hasValue(1);
+        verify(chatModel, times(2)).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_failedRepairEmitsOriginalToolCallAndToolError() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(repairableWeatherTool(context -> Mono.just(Map.of()))))
+            .toolCallRepair(context -> Mono.just(ToolCallRepairResult.unrepaired()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.streamText(request).fullStream().collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsSubsequence(PartType.TOOL_CALL, PartType.TOOL_ERROR);
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getInput())
+                    .containsEntry("city", "SF");
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_ERROR.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getErrorText())
+                    .contains("location");
+                assertThat(parts.stream()
+                    .filter(part -> PartType.FINISH_STEP.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getWarnings())
+                    .extracting("code")
+                    .contains("tool-call-repair-failed");
+            })
+            .verifyComplete();
+
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_returnsPendingExternalToolCallWhenToolHasNoExecutor() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
             Flux.just(toolCallResponse("call_1", "weather", "{}", 2, 3))
@@ -1669,14 +2264,201 @@ class LanguageModelImplTest {
             .stopWhen(StopCondition.stepCountIs(2))
             .build();
 
-        StepVerifier.create(model.streamText(request).fullStream())
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream().collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsExactly(
+                        PartType.START,
+                        PartType.START_STEP,
+                        PartType.TOOL_CALL,
+                        PartType.FINISH_STEP,
+                        PartType.FINISH
+                    );
+                assertThat(parts)
+                    .noneMatch(part -> PartType.TOOL_RESULT.equals(part.getType()))
+                    .noneMatch(part -> PartType.TOOL_ERROR.equals(part.getType()));
+                var finishStep = parts.stream()
+                    .filter(part -> PartType.FINISH_STEP.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow();
+                assertThat(finishStep.getWarnings()).extracting("code")
+                    .contains("external-tool-pending");
+            })
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getToolCalls())
+                    .singleElement()
+                    .satisfies(call -> assertThat(call.getToolCallId()).isEqualTo("call_1"));
+                assertThat(finalResult.getToolResults()).isEmpty();
+                assertThat(finalResult.getToolErrors()).isEmpty();
+                assertThat(finalResult.getResponseMessages())
+                    .singleElement()
+                    .satisfies(message -> assertThat(message.getContent()).singleElement()
+                        .satisfies(part -> assertThat(part.getType())
+                            .isEqualTo(PartType.TOOL_CALL)));
+            })
+            .verifyComplete();
+
+        StepVerifier.create(result.textStream()).verifyComplete();
+
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_stopsMixedExecutableAndExternalToolCallsWithoutContinuation() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(multiToolCallResponse(List.of(
+                new AssistantMessage.ToolCall("call_1", "function", "weather",
+                    "{\"location\":\"SF\"}"),
+                new AssistantMessage.ToolCall("call_2", "function", "search",
+                    "{\"query\":\"Halo\"}")
+            ), 2, 3))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var executions = new AtomicInteger();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Use tools")
+            .tools(List.of(
+                ToolDefinition.builder()
+                    .name("weather")
+                    .executor(context -> {
+                        executions.incrementAndGet();
+                        return Mono.just(Map.of("temperature", 22));
+                    })
+                    .build(),
+                ToolDefinition.builder()
+                    .name("search")
+                    .build()
+            ))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream().collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsExactly(
+                        PartType.START,
+                        PartType.START_STEP,
+                        PartType.TOOL_CALL,
+                        PartType.FINISH_STEP,
+                        PartType.FINISH
+                    );
+                assertThat(parts)
+                    .noneMatch(part -> PartType.TOOL_RESULT.equals(part.getType()))
+                    .noneMatch(part -> PartType.TOOL_ERROR.equals(part.getType()));
+                assertThat(parts.stream()
+                    .filter(part -> PartType.FINISH_STEP.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getWarnings())
+                    .extracting("code")
+                    .contains("external-tool-pending");
+            })
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getToolCalls())
+                    .singleElement()
+                    .satisfies(call -> {
+                        assertThat(call.getToolCallId()).isEqualTo("call_2");
+                        assertThat(call.getToolName()).isEqualTo("search");
+                    });
+                assertThat(finalResult.getToolResults()).isEmpty();
+                assertThat(finalResult.getToolErrors()).isEmpty();
+                assertThat(finalResult.getResponseMessages())
+                    .singleElement()
+                    .satisfies(message -> assertThat(message.getContent())
+                        .singleElement()
+                        .satisfies(part -> assertThat(part.getToolCallId()).isEqualTo("call_2")));
+            })
+            .verifyComplete();
+
+        assertThat(executions).hasValue(0);
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_continuesFromExternalToolResult() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .messages(List.of(
+                ModelMessage.user("Weather in SF?"),
+                externalToolCallMessage("call_1", "weather", Map.of("location", "SF")),
+                ModelMessage.tool(List.of(ModelMessagePart.toolResult(ToolResult.builder()
+                    .toolCallId("call_1")
+                    .toolName("weather")
+                    .result(Map.of("temperature", 22))
+                    .build())))
+            ))
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.textStream())
+            .expectNext("It is 22C.")
+            .verifyComplete();
+        StepVerifier.create(result.result())
+            .assertNext(finalResult -> {
+                assertThat(finalResult.getText()).isEqualTo("It is 22C.");
+                assertThat(finalResult.getResponseMessages())
+                    .extracting(ModelMessage::getRole)
+                    .containsExactly(ModelMessageRole.ASSISTANT);
+            })
+            .verifyComplete();
+
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_continuesFromExternalToolError() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(chatResponse("I could not get the weather.", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .messages(List.of(
+                ModelMessage.user("Weather in SF?"),
+                externalToolCallMessage("call_1", "weather", Map.of("location", "SF")),
+                ModelMessage.tool(List.of(ModelMessagePart.toolError(ToolError.builder()
+                    .toolCallId("call_1")
+                    .toolName("weather")
+                    .errorText("weather service unavailable")
+                    .build())))
+            ))
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        var result = model.streamText(request);
+
+        StepVerifier.create(result.fullStream())
             .expectNextMatches(part -> PartType.START.equals(part.getType()))
             .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
-            .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(PartType.FINISH_STEP);
-                assertThat(part.getWarnings()).extracting("code").contains("tool-not-executed");
-            })
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
             .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
@@ -1834,7 +2616,15 @@ class LanguageModelImplTest {
             .expectNext("Done")
             .verifyComplete();
         StepVerifier.create(stream.result())
-            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("Done");
+                assertThat(result.getResponseMessages())
+                    .singleElement()
+                    .satisfies(message -> {
+                        assertThat(message.getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
+                        assertThat(message.getContent().getFirst().getText()).isEqualTo("Done");
+                    });
+            })
             .verifyComplete();
 
         assertThat(starts).hasValue(1);
@@ -1914,6 +2704,25 @@ class LanguageModelImplTest {
     private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
         Integer completionTokens) {
         return chatResponse(text, finishReason, promptTokens, completionTokens, Map.of());
+    }
+
+    private ToolDefinition repairableWeatherTool(ToolExecutor executor) {
+        return ToolDefinition.builder()
+            .name("weather")
+            .description("Get weather")
+            .inputSchema(weatherInputSchema())
+            .executor(executor)
+            .build();
+    }
+
+    private Map<String, Object> weatherInputSchema() {
+        return Map.of(
+            "type", "object",
+            "properties", Map.of(
+                "location", Map.of("type", "string")
+            ),
+            "required", List.of("location")
+        );
     }
 
     private ChatResponse reasoningResponse(String reasoning, String text, String finishReason,
@@ -1999,6 +2808,65 @@ class LanguageModelImplTest {
         return new ChatResponse(
             List.of(new Generation(output, generationMetadata)),
             metadataBuilder.build()
+        );
+    }
+
+    private ChatResponse multiToolCallResponse(List<AssistantMessage.ToolCall> toolCalls,
+        Integer promptTokens, Integer completionTokens) {
+        var generationMetadata = ChatGenerationMetadata.builder()
+            .finishReason("tool_calls")
+            .build();
+        var output = AssistantMessage.builder()
+            .content("")
+            .toolCalls(toolCalls)
+            .build();
+        var metadataBuilder = ChatResponseMetadata.builder()
+            .id("resp_tool")
+            .model("test-model");
+        if (promptTokens != null || completionTokens != null) {
+            metadataBuilder.usage(new DefaultUsage(promptTokens, completionTokens));
+        }
+        return new ChatResponse(
+            List.of(new Generation(output, generationMetadata)),
+            metadataBuilder.build()
+        );
+    }
+
+    private ModelMessage externalToolCallMessage(String id, String name, Map<String, Object> input) {
+        return ModelMessage.assistant(List.of(ModelMessagePart.toolCall(ToolCall.builder()
+            .toolCallId(id)
+            .toolName(name)
+            .input(input)
+            .build())));
+    }
+
+    private List<ModelMessage> approvalMessages(boolean approved, String reason) {
+        var approvalRequest = ToolApprovalRequest.builder()
+            .approvalId("approval_call_1")
+            .toolCallId("call_1")
+            .toolName("run")
+            .input(Map.of("command", "rm file"))
+            .stepIndex(0)
+            .providerMetadata(Map.of())
+            .build();
+        var approvalResponse = ToolApprovalResponse.builder()
+            .approvalId("approval_call_1")
+            .toolCallId("call_1")
+            .toolName("run")
+            .approved(approved)
+            .reason(reason)
+            .build();
+        return List.of(
+            ModelMessage.user("Remove file"),
+            ModelMessage.assistant(List.of(
+                ModelMessagePart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                    .toolCallId("call_1")
+                    .toolName("run")
+                    .input(Map.of("command", "rm file"))
+                    .build()),
+                ModelMessagePart.toolApprovalRequest(approvalRequest)
+            )),
+            ModelMessage.tool(List.of(ModelMessagePart.toolApprovalResponse(approvalResponse)))
         );
     }
 
