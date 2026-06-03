@@ -23,7 +23,10 @@ export type DiscoveredModel = DiscoveredModelItem & {
   adapterType?: DiscoveredModelItemAdapterTypeEnum
 }
 
-type ProviderModelDiscoveryResult = Omit<ProviderModelDiscoveryResponse, 'models' | 'providerName'> & {
+type ProviderModelDiscoveryResult = Omit<
+  ProviderModelDiscoveryResponse,
+  'models' | 'providerName'
+> & {
   models: DiscoveredModel[]
   providerName: string
 }

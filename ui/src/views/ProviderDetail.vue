@@ -141,7 +141,7 @@ const testConnectivityMutation = useMutation({
         <div class=":uno: w-full flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center">
           <div class=":uno: min-w-0 flex-1">
             <div class=":uno: min-w-0 flex flex-wrap items-center gap-2">
-              <img :src="providerType?.iconUrl" class=":uno: h-5 w-5 flex-none" />
+              <img :src="providerType?.iconUrl" class=":uno: size-5 flex-none" />
               <h2 class=":uno: min-w-0 truncate text-base text-gray-950 font-semibold">
                 {{ provider.spec.displayName }}
               </h2>

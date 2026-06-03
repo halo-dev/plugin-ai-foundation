@@ -43,7 +43,7 @@ watch(
           v-tooltip="`接入供应商`"
           @click="creationModalVisible = true"
         >
-          <IconAddCircle class=":uno: h-4 w-4" />
+          <IconAddCircle class=":uno: size-4" />
         </button>
       </div>
     </div>

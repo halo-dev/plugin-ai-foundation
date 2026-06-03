@@ -25,10 +25,10 @@ const iconMap: Record<string, typeof RiQuillPenLine> = {
   <div class=":uno: h-full flex flex-col items-center justify-center px-4 py-8">
     <div class=":uno: mx-auto max-w-2xl w-full text-center">
       <div
-        class=":uno: mx-auto mb-4 h-12 w-12 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-teal-600 shadow-sm"
+        class=":uno: mx-auto mb-4 size-12 flex items-center justify-center border border-slate-200 rounded-lg bg-white text-teal-600 shadow-sm"
       >
         <svg
-          class=":uno: h-5 w-5"
+          class=":uno: size-5"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -52,13 +52,13 @@ const iconMap: Record<string, typeof RiQuillPenLine> = {
         v-for="prompt in EXAMPLE_PROMPTS"
         :key="prompt.id"
         type="button"
-        class=":uno: group min-h-25 flex items-start gap-3 rounded-lg border border-slate-200 bg-white !p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"
+        class=":uno: group min-h-25 flex items-start gap-3 border border-slate-200 rounded-lg bg-white text-left shadow-sm transition-all hover:border-teal-300 !p-3 hover:shadow-md hover:-translate-y-0.5"
         @click="emit('select', prompt.content)"
       >
         <span
           class=":uno: mt-0.5 h-8 w-8 flex flex-none items-center justify-center rounded-md bg-slate-100 text-slate-500 transition-colors group-hover:bg-teal-50 group-hover:text-teal-600"
         >
-          <component :is="iconMap[prompt.icon]" class=":uno: h-4 w-4" />
+          <component :is="iconMap[prompt.icon]" class=":uno: size-4" />
         </span>
         <div class=":uno: min-w-0 flex-1">
           <div

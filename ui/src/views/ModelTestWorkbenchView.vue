@@ -548,9 +548,7 @@ async function handleExternalToolError(options: {
 async function continueExternalTool(
   messageId: string,
   eventId: string,
-  payload:
-    | { type: 'tool-result'; result: unknown }
-    | { type: 'tool-error'; errorText: string },
+  payload: { type: 'tool-result'; result: unknown } | { type: 'tool-error'; errorText: string },
 ) {
   if (isStreaming.value) {
     return
@@ -887,13 +885,13 @@ onBeforeUnmount(() => {
           <div class=":uno: flex flex-col gap-3 xl:flex-row xl:items-center">
             <div class=":uno: min-w-0 flex flex-1 items-center gap-3">
               <div
-                class=":uno: h-9 w-9 flex flex-none items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-700 shadow-sm"
+                class=":uno: size-9 flex flex-none items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-700 shadow-sm"
               >
                 <img
                   v-if="selectedProviderIconUrl"
                   :src="selectedProviderIconUrl"
                   :alt="selectedProviderLabel"
-                  class=":uno: h-5 w-5 object-contain"
+                  class=":uno: size-5 object-contain"
                 />
                 <RiSparkling2Line v-else class=":uno: h-4.5 w-4.5" />
               </div>
@@ -929,7 +927,7 @@ onBeforeUnmount(() => {
                   :disabled="isStreaming || isEmbeddingTesting || !chatModels.length"
                   @click="testMode = 'chat'"
                 >
-                  <RiMessage3Line class=":uno: h-3.5 w-3.5" />
+                  <RiMessage3Line class=":uno: size-3.5" />
                   对话
                 </button>
                 <button
@@ -943,7 +941,7 @@ onBeforeUnmount(() => {
                   :disabled="isStreaming || isEmbeddingTesting || !embeddingModels.length"
                   @click="testMode = 'embedding'"
                 >
-                  <RiStackLine class=":uno: h-3.5 w-3.5" />
+                  <RiStackLine class=":uno: size-3.5" />
                   嵌入
                 </button>
               </div>
@@ -963,22 +961,22 @@ onBeforeUnmount(() => {
               <div class=":uno: flex flex-none items-center gap-1">
                 <button
                   type="button"
-                  class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                  class=":uno: group size-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                   v-tooltip="`刷新模型`"
                   @click="refetch()"
                 >
                   <IconRefreshLine
-                    class=":uno: h-3.5 w-3.5"
+                    class=":uno: size-3.5"
                     :class="{ ':uno: animate-spin': isFetching }"
                   />
                 </button>
                 <button
                   type="button"
-                  class=":uno: group h-9 w-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  class=":uno: group size-9 inline-flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
                   v-tooltip="`清空会话`"
                   @click="clearMessages"
                 >
-                  <MingcuteDelete2Line class=":uno: h-3.5 w-3.5" />
+                  <MingcuteDelete2Line class=":uno: size-3.5" />
                 </button>
               </div>
             </div>
@@ -1053,7 +1051,7 @@ onBeforeUnmount(() => {
                   :disabled="!embeddingInputs.trim() || !selectedModel"
                   @click="runEmbeddingTest"
                 >
-                  <RiSendPlaneLine class=":uno: h-4 w-4" />
+                  <RiSendPlaneLine class=":uno: size-4" />
                 </VButton>
               </div>
             </div>

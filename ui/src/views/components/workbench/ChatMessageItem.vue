@@ -18,16 +18,22 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'regenerate', messageIndex: number): void
   (e: 'toolApproval', options: { messageId: string; eventId: string; approved: boolean }): void
-  (e: 'externalToolResult', options: {
-    messageId: string
-    eventId: string
-    resultText: string
-  }): void
-  (e: 'externalToolError', options: {
-    messageId: string
-    eventId: string
-    errorText: string
-  }): void
+  (
+    e: 'externalToolResult',
+    options: {
+      messageId: string
+      eventId: string
+      resultText: string
+    },
+  ): void
+  (
+    e: 'externalToolError',
+    options: {
+      messageId: string
+      eventId: string
+      errorText: string
+    },
+  ): void
 }>()
 
 const copied = ref(false)
@@ -107,8 +113,8 @@ function handleExternalToolError(eventId: string) {
         ':uno: border-teal-100 bg-white text-teal-600': message.role === 'assistant',
       }"
     >
-      <RiUserLine v-if="message.role === 'user'" class=":uno: h-3.5 w-3.5" />
-      <RiCpuLine v-else class=":uno: h-3.5 w-3.5" />
+      <RiUserLine v-if="message.role === 'user'" class=":uno: size-3.5" />
+      <RiCpuLine v-else class=":uno: size-3.5" />
     </div>
 
     <div
@@ -225,9 +231,7 @@ function handleExternalToolError(eventId: string) {
               {{ event.summary }}
             </div>
             <div
-              v-if="
-                event.type === 'tool-approval-request' && event.approvalStatus === 'pending'
-              "
+              v-if="event.type === 'tool-approval-request' && event.approvalStatus === 'pending'"
               class=":uno: mt-2 flex items-center gap-1.5"
             >
               <button
@@ -252,7 +256,7 @@ function handleExternalToolError(eventId: string) {
               <textarea
                 :value="externalResultInput(event.id)"
                 rows="2"
-                class=":uno: w-full resize-y border border-slate-200 rounded-md bg-white text-[11px] text-slate-700 font-mono outline-none !px-2 !py-1.5 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/10"
+                class=":uno: w-full resize-y border border-slate-200 rounded-md bg-white text-[11px] text-slate-700 font-mono outline-none focus:border-teal-400 !px-2 !py-1.5 focus:ring-2 focus:ring-teal-500/10"
                 @input="
                   handleExternalResultInput(event.id, ($event.target as HTMLTextAreaElement).value)
                 "
@@ -290,7 +294,7 @@ function handleExternalToolError(eventId: string) {
         >
           <div class=":uno: flex items-center gap-1.5 text-xs text-amber-800 font-medium">
             <svg
-              class=":uno: h-3.5 w-3.5"
+              class=":uno: size-3.5"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

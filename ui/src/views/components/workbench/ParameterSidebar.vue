@@ -132,7 +132,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
         <span
           class=":uno: h-7 w-7 flex items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm ring-1 ring-slate-200"
         >
-          <RiSettings3Line class=":uno: h-4 w-4" />
+          <RiSettings3Line class=":uno: size-4" />
         </span>
         <span class=":uno: text-sm text-slate-950 font-semibold">参数设置</span>
       </div>
@@ -145,7 +145,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             系统提示词
           </summary>
           <div class=":uno: pb-3 pl-5">
@@ -163,8 +163,8 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
-            <RiFlaskLine class=":uno: h-3.5 w-3.5" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
+            <RiFlaskLine class=":uno: size-3.5" />
             采样参数
           </summary>
           <div class=":uno: pb-3 pl-5 space-y-3">
@@ -266,7 +266,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             推理控制
           </summary>
           <div class=":uno: pb-3 pl-5 space-y-3">
@@ -316,7 +316,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             结构化输出
           </summary>
           <div class=":uno: pb-3 pl-5 space-y-3">
@@ -390,7 +390,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             工具测试
           </summary>
           <div class=":uno: pb-3 pl-5">
@@ -429,7 +429,8 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               <span class=":uno: text-xs text-slate-700">启用工具调用修复</span>
             </div>
             <div class=":uno: mt-1 text-[10px] text-slate-400">
-              后台会注入 halo_test_info；外部工具会注入 halo_external_test_info；修复测试会注入 halo_repair_test_info。
+              后台会注入 halo_test_info；外部工具会注入 halo_external_test_info；修复测试会注入
+              halo_repair_test_info。
             </div>
           </div>
         </details>
@@ -438,7 +439,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             Provider Options
           </summary>
           <div class=":uno: pb-3 pl-5">
@@ -464,7 +465,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             Headers
           </summary>
           <div class=":uno: pb-3 pl-5">
@@ -492,7 +493,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             嵌入参数
           </summary>
           <div class=":uno: pb-3 pl-5 space-y-3">
@@ -573,7 +574,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             Provider Options
           </summary>
           <div class=":uno: pb-3 pl-5">

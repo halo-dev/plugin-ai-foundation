@@ -26,11 +26,11 @@ defineProps<{
     <div class=":uno: mx-auto max-w-4xl space-y-3">
       <div
         v-if="error"
-        class=":uno: rounded-lg border border-rose-200 bg-rose-50 !px-4 !py-3 text-sm text-rose-700 shadow-sm"
+        class=":uno: border border-rose-200 rounded-lg bg-rose-50 text-sm text-rose-700 shadow-sm !px-4 !py-3"
       >
         <div class=":uno: flex items-center gap-2 font-medium">
           <svg
-            class=":uno: h-4 w-4"
+            class=":uno: size-4"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -46,13 +46,13 @@ defineProps<{
 
       <div
         v-if="!result && !error"
-        class=":uno: rounded-lg border border-dashed border-slate-200 bg-white !px-6 !py-12 text-center shadow-sm"
+        class=":uno: border border-slate-200 rounded-lg border-dashed bg-white text-center shadow-sm !px-6 !py-12"
       >
         <div
-          class=":uno: mx-auto mb-3 h-12 w-12 flex items-center justify-center rounded-lg border border-slate-200 bg-amber-50"
+          class=":uno: mx-auto mb-3 size-12 flex items-center justify-center border border-slate-200 rounded-lg bg-amber-50"
         >
           <svg
-            class=":uno: h-5 w-5 text-amber-600"
+            class=":uno: size-5 text-amber-600"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -67,7 +67,7 @@ defineProps<{
         <div class=":uno: mt-1 text-xs text-slate-500">输入多行文本后点击发送</div>
       </div>
 
-      <div v-if="result" class=":uno: rounded-lg border border-slate-200 bg-white !p-4 shadow-sm">
+      <div v-if="result" class=":uno: border border-slate-200 rounded-lg bg-white shadow-sm !p-4">
         <div class=":uno: flex flex-wrap items-center gap-2">
           <span class=":uno: text-sm text-slate-950 font-semibold">结果</span>
           <VTag size="sm">{{ result.embeddingsCount }} 个向量</VTag>
@@ -81,7 +81,7 @@ defineProps<{
 
         <div
           v-if="result.firstPairSimilarity !== undefined"
-          class=":uno: mt-3 rounded-lg border border-slate-100 bg-slate-50 !px-4 !py-3 text-sm"
+          class=":uno: mt-3 border border-slate-100 rounded-lg bg-slate-50 text-sm !px-4 !py-3"
         >
           <div class=":uno: flex items-center justify-between">
             <span class=":uno: text-slate-600">前两个输入的 cosine similarity</span>
@@ -117,19 +117,19 @@ defineProps<{
           <div
             v-for="item in result.embeddings"
             :key="item.index"
-            class=":uno: rounded-lg border border-slate-100 bg-slate-50/70 !px-3 !py-2.5 transition-colors hover:bg-slate-50"
+            class=":uno: border border-slate-100 rounded-lg bg-slate-50/70 transition-colors hover:bg-slate-50 !px-3 !py-2.5"
           >
             <div class=":uno: flex items-center justify-between">
-              <span class=":uno: text-xs text-slate-500 font-mono font-medium"
+              <span class=":uno: text-xs text-slate-500 font-medium font-mono"
                 >#{{ (item.index ?? 0) + 1 }}</span
               >
               <span
-                class=":uno: rounded-md border border-slate-200 bg-white !px-1.5 !py-0.5 text-xs text-slate-600 font-mono"
+                class=":uno: border border-slate-200 rounded-md bg-white text-xs text-slate-600 font-mono !px-1.5 !py-0.5"
                 >{{ item.dimensions }} 维</span
               >
             </div>
             <div
-              class=":uno: mt-1.5 break-all rounded-md border border-slate-800 bg-slate-950 !px-3 !py-2 text-xs text-slate-300 font-mono"
+              class=":uno: mt-1.5 break-all border border-slate-800 rounded-md bg-slate-950 text-xs text-slate-300 font-mono !px-3 !py-2"
             >
               [{{ (item.preview || []).map((value) => Number(value).toFixed(4)).join(', ') }}]
             </div>
@@ -138,11 +138,11 @@ defineProps<{
 
         <div
           v-if="result.warnings?.length"
-          class=":uno: mt-3 rounded-lg border border-amber-200 bg-amber-50 !px-3 !py-2"
+          class=":uno: mt-3 border border-amber-200 rounded-lg bg-amber-50 !px-3 !py-2"
         >
           <div class=":uno: flex items-center gap-1.5 text-xs text-amber-800 font-medium">
             <svg
-              class=":uno: h-3.5 w-3.5"
+              class=":uno: size-3.5"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -165,7 +165,7 @@ defineProps<{
         <details class=":uno: mt-3 text-xs text-slate-600">
           <summary class=":uno: cursor-pointer select-none font-medium">诊断信息</summary>
           <pre
-            class=":uno: mt-2 overflow-auto rounded-md bg-slate-950 !p-3 text-slate-100 text-xs"
+            class=":uno: mt-2 overflow-auto rounded-md bg-slate-950 text-xs text-slate-100 !p-3"
             >{{
               JSON.stringify(
                 {

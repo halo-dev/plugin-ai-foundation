@@ -405,12 +405,12 @@ onBeforeUnmount(() => {
         <img
           v-if="selectedValue && (selectedModel || selectedModelSnapshot)?.provider?.iconUrl"
           :src="(selectedModel || selectedModelSnapshot)!.provider!.iconUrl!"
-          class=":uno: mr-1.5 h-4 w-4 flex-none rounded-sm object-contain"
+          class=":uno: mr-1.5 size-4 flex-none rounded-sm object-contain"
           alt=""
         />
         <RiBrainLine
           v-else-if="selectedValue"
-          class=":uno: mr-1.5 h-4 w-4 flex-none text-gray-400"
+          class=":uno: mr-1.5 size-4 flex-none text-gray-400"
           aria-hidden="true"
         />
         <span
@@ -424,14 +424,14 @@ onBeforeUnmount(() => {
           v-if="effectiveClearable && selectedValue && !effectiveDisabled"
           role="button"
           aria-label="清除"
-          class=":uno: ml-1 h-5 w-5 flex flex-none items-center justify-center rounded text-gray-500 -mr-1 hover:bg-gray-100 hover:text-gray-700"
+          class=":uno: ml-1 size-5 flex flex-none items-center justify-center rounded text-gray-500 -mr-1 hover:bg-gray-100 hover:text-gray-700"
           @click.stop="clearSelection"
         >
-          <MingcuteCloseLine class=":uno: h-3.5 w-3.5" />
+          <MingcuteCloseLine class=":uno: size-3.5" />
         </span>
 
         <MingcuteDownLine
-          class=":uno: ml-1 h-4 w-4 flex-none text-gray-500 transition-transform duration-200"
+          class=":uno: ml-1 size-4 flex-none text-gray-500 transition-transform duration-200"
           :class="{ ':uno: rotate-180': isOpen }"
           aria-hidden="true"
         />
@@ -448,10 +448,7 @@ onBeforeUnmount(() => {
             <div
               class=":uno: h-8 flex items-center gap-1.5 border border-gray-200 rounded bg-gray-50 px-2"
             >
-              <MingcuteSearchLine
-                class=":uno: h-4 w-4 flex-none text-gray-500"
-                aria-hidden="true"
-              />
+              <MingcuteSearchLine class=":uno: size-4 flex-none text-gray-500" aria-hidden="true" />
               <input
                 ref="searchInputRef"
                 v-model="keyword"
@@ -465,11 +462,11 @@ onBeforeUnmount(() => {
               <button
                 v-if="keyword"
                 type="button"
-                class=":uno: h-5 w-5 flex flex-none items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                class=":uno: size-5 flex flex-none items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                 aria-label="清空"
                 @click="keyword = ''"
               >
-                <MingcuteCloseLine class=":uno: h-3.5 w-3.5" />
+                <MingcuteCloseLine class=":uno: size-3.5" />
               </button>
             </div>
           </div>
@@ -488,12 +485,12 @@ onBeforeUnmount(() => {
                 <img
                   v-if="group.models[0]?.provider?.iconUrl"
                   :src="group.models[0].provider?.iconUrl"
-                  class=":uno: h-4 w-4 flex-none rounded-sm object-contain"
+                  class=":uno: size-4 flex-none rounded-sm object-contain"
                   alt=""
                 />
                 <RiBrainLine
                   v-else
-                  class=":uno: h-4 w-4 flex-none text-gray-400"
+                  class=":uno: size-4 flex-none text-gray-400"
                   aria-hidden="true"
                 />
                 <span class=":uno: text-[11px] text-gray-500 font-semibold tracking-wide uppercase">
@@ -567,7 +564,7 @@ onBeforeUnmount(() => {
 
                 <MingcuteCheckLine
                   v-if="model.name === selectedValue"
-                  class=":uno: h-3.5 w-3.5 flex-none text-blue-600"
+                  class=":uno: size-3.5 flex-none text-blue-600"
                   aria-hidden="true"
                 />
               </div>

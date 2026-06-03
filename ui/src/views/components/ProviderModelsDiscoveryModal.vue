@@ -367,7 +367,7 @@ onMounted(() => {
                       >
                         <RiCheckLine
                           v-if="isFeatureEnabled(model, item.value)"
-                          class=":uno: h-3.5 w-3.5"
+                          class=":uno: size-3.5"
                         />
                         {{ item.label }}
                       </button>

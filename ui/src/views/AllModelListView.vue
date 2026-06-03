@@ -105,13 +105,13 @@ function openProviderConfig() {
               <div class=":uno: flex flex-row gap-2">
                 <button
                   type="button"
-                  class=":uno: group h-9 w-9 inline-flex cursor-pointer items-center justify-center border border-gray-200 rounded-md bg-white hover:bg-gray-50"
+                  class=":uno: group size-9 inline-flex cursor-pointer items-center justify-center border border-gray-200 rounded-md bg-white hover:bg-gray-50"
                   @click="refetch()"
                   v-tooltip="`刷新`"
                 >
                   <IconRefreshLine
                     :class="{ ':uno: animate-spin text-gray-900': isFetching }"
-                    class=":uno: h-4 w-4 text-gray-600 group-hover:text-gray-900"
+                    class=":uno: size-4 text-gray-600 group-hover:text-gray-900"
                   />
                 </button>
               </div>

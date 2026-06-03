@@ -20,7 +20,9 @@ export const MODEL_FEATURE_OPTIONS = [
   { label: '推理', value: AiModelSpecFeaturesEnum.Reasoning },
 ] as const
 
-const MODEL_TYPE_LABELS = Object.fromEntries(MODEL_TYPE_OPTIONS.map((item) => [item.value, item.label]))
+const MODEL_TYPE_LABELS = Object.fromEntries(
+  MODEL_TYPE_OPTIONS.map((item) => [item.value, item.label]),
+)
 const MODEL_FEATURE_LABELS = Object.fromEntries(
   MODEL_FEATURE_OPTIONS.map((item) => [item.value, item.label]),
 )
