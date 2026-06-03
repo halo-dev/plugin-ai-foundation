@@ -27,4 +27,4 @@
 - [x] 4.3 Run `./gradlew :app:test`
 - [x] 4.4 Run `pnpm --dir ui type-check`
 - [x] 4.5 Run `pnpm --dir ui test:unit`
-- [x] 4.6 Run `openspec validate align-text-generation-core-with-ai-sdk --strict`
+- [x] 4.6 Run `openspec validate align-text-generation-core-with-provider-neutral --strict`

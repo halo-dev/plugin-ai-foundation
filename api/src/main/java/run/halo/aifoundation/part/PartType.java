@@ -27,6 +27,16 @@ public final class PartType {
      */
     public static final String TOOL_ERROR = "tool-error";
     /**
+     * Pending tool approval request. Relevant fields: {@code approvalId}, {@code toolCallId},
+     * {@code toolName}, {@code input}.
+     */
+    public static final String TOOL_APPROVAL_REQUEST = "tool-approval-request";
+    /**
+     * Caller response to a pending tool approval request. Relevant fields: {@code approvalId},
+     * {@code approved}, {@code reason}.
+     */
+    public static final String TOOL_APPROVAL_RESPONSE = "tool-approval-response";
+    /**
      * Reasoning content part. Relevant fields: {@code text}, {@code providerMetadata}.
      */
     public static final String REASONING = "reasoning";
@@ -121,6 +131,14 @@ public final class PartType {
 
     public static boolean isToolError(String type) {
         return TOOL_ERROR.equals(type);
+    }
+
+    public static boolean isToolApprovalRequest(String type) {
+        return TOOL_APPROVAL_REQUEST.equals(type);
+    }
+
+    public static boolean isToolApprovalResponse(String type) {
+        return TOOL_APPROVAL_RESPONSE.equals(type);
     }
 
     public static boolean isReasoning(String type) {

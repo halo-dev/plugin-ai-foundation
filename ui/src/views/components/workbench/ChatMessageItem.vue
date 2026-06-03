@@ -17,9 +17,22 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'regenerate', messageIndex: number): void
+  (e: 'toolApproval', options: { messageId: string; eventId: string; approved: boolean }): void
+  (e: 'externalToolResult', options: {
+    messageId: string
+    eventId: string
+    resultText: string
+  }): void
+  (e: 'externalToolError', options: {
+    messageId: string
+    eventId: string
+    errorText: string
+  }): void
 }>()
 
 const copied = ref(false)
+const externalResultInputs = ref<Record<string, string>>({})
+const externalErrorInputs = ref<Record<string, string>>({})
 
 async function handleCopy() {
   const ok = await copyToClipboard(props.message.content)
@@ -32,6 +45,52 @@ async function handleCopy() {
 function handleRegenerate() {
   emit('regenerate', props.index)
 }
+
+function handleToolApproval(eventId: string, approved: boolean) {
+  emit('toolApproval', {
+    messageId: props.message.id,
+    eventId,
+    approved,
+  })
+}
+
+function externalResultInput(eventId: string) {
+  if (!(eventId in externalResultInputs.value)) {
+    externalResultInputs.value[eventId] = '{"ok":true}'
+  }
+  return externalResultInputs.value[eventId]
+}
+
+function handleExternalResultInput(eventId: string, value: string) {
+  externalResultInputs.value[eventId] = value
+}
+
+function externalErrorInput(eventId: string) {
+  if (!(eventId in externalErrorInputs.value)) {
+    externalErrorInputs.value[eventId] = 'External tool failed'
+  }
+  return externalErrorInputs.value[eventId]
+}
+
+function handleExternalErrorInput(eventId: string, value: string) {
+  externalErrorInputs.value[eventId] = value
+}
+
+function handleExternalToolResult(eventId: string) {
+  emit('externalToolResult', {
+    messageId: props.message.id,
+    eventId,
+    resultText: externalResultInput(eventId),
+  })
+}
+
+function handleExternalToolError(eventId: string) {
+  emit('externalToolError', {
+    messageId: props.message.id,
+    eventId,
+    errorText: externalErrorInput(eventId),
+  })
+}
 </script>
 
 <template>
@@ -42,7 +101,7 @@ function handleRegenerate() {
     }"
   >
     <div
-      class=":uno: h-8 w-8 flex flex-none items-center justify-center rounded-lg border shadow-sm"
+      class=":uno: h-8 w-8 flex flex-none items-center justify-center border rounded-lg shadow-sm"
       :class="{
         ':uno: border-slate-300 bg-slate-900 text-white': message.role === 'user',
         ':uno: border-teal-100 bg-white text-teal-600': message.role === 'assistant',
@@ -90,7 +149,7 @@ function handleRegenerate() {
           :open="message.reasoningState === 'streaming'"
         >
           <summary
-            class=":uno: flex cursor-pointer list-none select-none items-center gap-1.5 text-xs text-slate-500 font-medium [&::-webkit-details-marker]:hidden"
+            class=":uno: flex cursor-pointer select-none list-none items-center gap-1.5 text-xs text-slate-500 font-medium [&::-webkit-details-marker]:hidden"
           >
             <span
               class=":uno: h-3 w-3 transition-transform duration-200 group-open/reasoning:rotate-90"
@@ -131,6 +190,8 @@ function handleRegenerate() {
               ':uno: border-emerald-200 bg-emerald-50 text-emerald-700':
                 event.type === 'tool-result',
               ':uno: border-rose-200 bg-rose-50 text-rose-700': event.type === 'tool-error',
+              ':uno: border-amber-200 bg-amber-50 text-amber-800':
+                event.type === 'tool-approval-request',
             }"
           >
             <div class=":uno: flex items-center gap-1.5 font-medium">
@@ -140,6 +201,7 @@ function handleRegenerate() {
                   ':uno: bg-slate-400': event.type === 'tool-call',
                   ':uno: bg-emerald-500': event.type === 'tool-result',
                   ':uno: bg-rose-500': event.type === 'tool-error',
+                  ':uno: bg-amber-500': event.type === 'tool-approval-request',
                 }"
               />
               {{
@@ -147,7 +209,13 @@ function handleRegenerate() {
                   ? '工具调用'
                   : event.type === 'tool-result'
                     ? '工具结果'
-                    : '工具错误'
+                    : event.type === 'tool-error'
+                      ? '工具错误'
+                      : event.approvalStatus === 'approved'
+                        ? '已批准'
+                        : event.approvalStatus === 'denied'
+                          ? '已拒绝'
+                          : '等待审批'
               }}
               <span v-if="event.toolName" class=":uno: font-mono opacity-70">
                 {{ event.toolName }}
@@ -155,6 +223,63 @@ function handleRegenerate() {
             </div>
             <div v-if="event.summary" class=":uno: mt-1 break-all opacity-80">
               {{ event.summary }}
+            </div>
+            <div
+              v-if="
+                event.type === 'tool-approval-request' && event.approvalStatus === 'pending'
+              "
+              class=":uno: mt-2 flex items-center gap-1.5"
+            >
+              <button
+                type="button"
+                class=":uno: rounded-md bg-emerald-600 text-[11px] text-white font-medium shadow-sm hover:bg-emerald-700 !px-2 !py-1"
+                @click="handleToolApproval(event.id, true)"
+              >
+                批准执行
+              </button>
+              <button
+                type="button"
+                class=":uno: border border-rose-200 rounded-md bg-white text-[11px] text-rose-600 font-medium shadow-sm hover:bg-rose-50 !px-2 !py-1"
+                @click="handleToolApproval(event.id, false)"
+              >
+                拒绝
+              </button>
+            </div>
+            <div
+              v-if="event.type === 'tool-call' && event.externalStatus === 'pending'"
+              class=":uno: mt-2 space-y-2"
+            >
+              <textarea
+                :value="externalResultInput(event.id)"
+                rows="2"
+                class=":uno: w-full resize-y border border-slate-200 rounded-md bg-white text-[11px] text-slate-700 font-mono outline-none !px-2 !py-1.5 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/10"
+                @input="
+                  handleExternalResultInput(event.id, ($event.target as HTMLTextAreaElement).value)
+                "
+              />
+              <div class=":uno: flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  class=":uno: rounded-md bg-emerald-600 text-[11px] text-white font-medium shadow-sm hover:bg-emerald-700 !px-2 !py-1"
+                  @click="handleExternalToolResult(event.id)"
+                >
+                  提交结果并继续
+                </button>
+                <input
+                  :value="externalErrorInput(event.id)"
+                  class=":uno: h-7 w-44 flex-none text-[11px] text-rose-700 outline-none sm:w-56 !border !border-rose-200 !rounded-md !border-solid !bg-white !px-2 !py-1 focus:!border-rose-300 focus:!ring-2 focus:!ring-rose-500/10"
+                  @input="
+                    handleExternalErrorInput(event.id, ($event.target as HTMLInputElement).value)
+                  "
+                />
+                <button
+                  type="button"
+                  class=":uno: border border-rose-200 rounded-md bg-white text-[11px] text-rose-600 font-medium shadow-sm hover:bg-rose-50 !px-2 !py-1"
+                  @click="handleExternalToolError(event.id)"
+                >
+                  提交错误
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -209,7 +334,7 @@ function handleRegenerate() {
       >
         <button
           type="button"
-          class=":uno: inline-flex items-center gap-1 rounded-md !px-2 !py-1 text-xs text-slate-500 hover:bg-white hover:text-slate-800"
+          class=":uno: inline-flex items-center gap-1 rounded-md text-xs text-slate-500 hover:bg-white !px-2 !py-1 hover:text-slate-800"
           @click="handleCopy"
         >
           <RiCheckLine v-if="copied" class=":uno: h-3 w-3 text-green-600" />
@@ -219,7 +344,7 @@ function handleRegenerate() {
         <button
           v-if="index > 0"
           type="button"
-          class=":uno: inline-flex items-center gap-1 rounded-md !px-2 !py-1 text-xs text-slate-500 hover:bg-white hover:text-slate-800"
+          class=":uno: inline-flex items-center gap-1 rounded-md text-xs text-slate-500 hover:bg-white !px-2 !py-1 hover:text-slate-800"
           @click="handleRegenerate"
         >
           <RiRestartLine class=":uno: h-3 w-3" />

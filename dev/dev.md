@@ -103,6 +103,8 @@ return aiModelService()
 | `ModelMessage` / `ModelMessagePart` | 多轮消息和消息内容 part |
 | `OutputSpec` / `JsonSchema` | 结构化输出和工具入参 schema |
 | `ToolDefinition` / `ToolChoice` | 工具定义和工具选择策略 |
+| `ToolCallRepairCallback` / `ToolCallRepairContext` / `ToolCallRepairResult` | 工具调用入参修复 |
+| `ToolApprovalRequest` / `ToolApprovalResponse` | 工具执行审批请求和审批响应 |
 | `StopCondition` / `PreparedStep` | 多步骤调用控制 |
 | `ReasoningOptions` | 推理能力控制 |
 | `GenerationTimeouts` / `CancellationSource` | 超时和取消 |
@@ -155,6 +157,7 @@ return model.generateText(request)
 | `request` / `response` | 本次调用的标准化请求和响应元数据 |
 | `providerMetadata` | provider 原生元数据，不包含标准化的模型 ID、响应 ID 等字段 |
 | `steps` | 多步骤调用明细 |
+| `responseMessages` | 本次调用产生的可持久化消息，下一轮可追加到历史 `messages` |
 
 ### 输入方式
 
@@ -185,7 +188,7 @@ GenerateTextRequest conversation = GenerateTextRequest.builder()
 
 ### 结果处理
 
-普通业务通常读取 `getText()`。如果要保存完整上下文，可以保存 `getResponse().getMessages()` 或每一步的 `getSteps()`。
+普通业务通常读取 `getText()`。如果要保存多轮上下文，应把本轮请求消息和 `getResponseMessages()` 一起持久化；下一轮请求时把这些消息作为 `GenerateTextRequest.messages` 传回。
 
 ```java
 return model.generateText(request)
@@ -193,6 +196,7 @@ return model.generateText(request)
         if (!result.getWarnings().isEmpty()) {
             log.warn("Generation warnings: {}", result.getWarnings());
         }
+        conversationMessages.addAll(result.getResponseMessages());
         return result.getText();
     });
 ```
@@ -224,7 +228,7 @@ return model.generateText(request)
 
 业务代码需要响应 ID 或模型 ID 时优先读取 `result.getResponse().getId()` 和 `result.getResponse().getModel()`。`providerMetadata` 只适合调试或 provider 特有能力，不应作为标准字段来源。
 
-如果请求包含工具调用，`steps` 会记录每一步模型输出、工具调用、工具结果和 usage。最终 `text` 是最后汇总后的文本。
+如果请求包含工具调用，`steps` 会记录每一步模型输出、工具调用、工具结果和 usage。最终 `text` 是最后汇总后的文本。工具循环中的 assistant tool call、tool result 和 tool error 也会出现在 `responseMessages` 中；调用方不要只保存最终文本，否则下一轮模型无法知道工具已经被调用或失败。
 
 ## 流式文本
 
@@ -251,6 +255,10 @@ return result.textStream()
 | `partialOutputStream()` | 结构化对象的中间状态 |
 | `elementStream()` | 结构化数组的元素流 |
 | `result()` | 流结束后的完整 `GenerateTextResult` |
+
+流式调用结束后同样从 `result().map(GenerateTextResult::getResponseMessages)` 获取可持久化消息。`textStream()` 只包含回答文本 delta，不会把工具调用、工具结果、工具错误、审批请求或 response messages 序列化成文本。没有 executor 的外部工具会在 `fullStream()` 中产生 `tool-call` 后结束当前流，不会产生合成的 `tool-result` 或 `tool-error`；调用方追加外部结果或错误后再发起下一次请求。
+
+如果配置了工具调用修复，流式 `fullStream()` 会在修复成功后只发送修复后的 `tool-call`，随后发送匹配的 `tool-result`；不会先发送原始错误调用再发送修复调用。修复失败时会发送原始 `tool-call` 和安全的 `tool-error`。`textStream()` 仍然只包含回答文本，不会包含修复诊断、工具事件或 warning 文本。
 
 如果要把完整事件透传给前端，可以直接订阅 `fullStream()`：
 
@@ -381,11 +389,13 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .prompt("杭州今天适合出门吗？")
     .tools(List.of(weatherTool))
     .toolChoice(ToolChoice.auto())
-    .stopWhen(StopCondition.maxSteps(3))
+    .stopWhen(StopCondition.stepCountIs(3))
     .build();
 ```
 
 `ToolChoice.required()` 表示模型必须选择某个工具；`ToolChoice.tool("get_weather")` 表示固定调用指定工具；`ToolChoice.none()` 表示本次请求禁用工具。
+
+工具 schema 元数据仍然是 provider-neutral 的 Java `Map`。`ToolDefinition.strict(true)` 会在文档明确支持 native function `strict` 的 provider 请求中启用严格工具 schema；当前会下发到 OpenAI、OpenAI 兼容自定义 provider，以及 DeepSeek。DeepSeek 官方文档要求 strict mode 使用 beta base URL，并且 `tools` 中所有 function 都设置 `strict: true`，因此使用 DeepSeek strict 时需要在 provider 配置中选择对应 base URL。不支持 native strict 或文档未明确支持的 provider 不会因为该字段拒绝请求，本地输入校验仍会在 executor 调用前执行。`inputExamples` 只会在 provider adapter 明确支持原生示例时转发；当前不支持示例的 provider 会安全忽略它，不会改变本地 validation 或 executor 收到的参数。
 
 多步骤调用可通过 `stopWhen` 和 `prepareStep` 控制：
 
@@ -393,7 +403,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 GenerateTextRequest request = GenerateTextRequest.builder()
     .prompt("先查天气，再给出建议")
     .tools(List.of(weatherTool))
-    .stopWhen(StopCondition.maxSteps(3))
+    .stopWhen(StopCondition.stepCountIs(3))
     .prepareStep(context -> context.getStepIndex() == 0
         ? PreparedStep.builder().toolChoice(ToolChoice.required()).build()
         : PreparedStep.builder().toolChoice(ToolChoice.none()).build())
@@ -414,8 +424,71 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 | `stepIndex` | 触发工具调用的模型步骤 |
 | `messages` | 当前步骤发送给模型的消息 |
 | `providerMetadata` | provider 返回的元数据 |
+| `cancellationToken` | 请求级协作式取消信号 |
 
 工具 executor 返回 `Mono<Object>`，返回值需要能被 JSON 序列化。抛出异常或返回失败 `Mono` 会被记录为工具错误，并以 tool error part 形式回传给模型和调用方。
+
+长时间运行的工具应主动检查 `context.getCancellationToken()`。取消 token 是协作式信号，SDK 仍会保留工具执行前后的取消检查以及 `GenerationTimeouts.toolTimeout` 的超时保护。
+
+### 外部工具执行
+
+`ToolDefinition.executor` 是可选的。提供 executor 时，AI Foundation 会在服务端校验输入、执行工具、把 tool result 或 tool error 追加到模型上下文，并在 `stopWhen` 允许时继续生成。不提供 executor 时，该工具表示由调用方、浏览器、队列任务或其他插件在 AI Foundation 外部执行。
+
+外部工具的第一次调用只返回 assistant `tool-call`，不会创建合成的 tool result 或 tool error。结果中会包含 `external-tool-pending` warning，`responseMessages` 中保留可持久化的 assistant tool-call：
+
+```java
+ToolDefinition browserLookup = ToolDefinition.builder()
+    .name("browser_lookup")
+    .description("由前端浏览器查询公开页面")
+    .inputSchema(JsonSchema.object()
+        .property("query", JsonSchema.string())
+        .required("query")
+        .build())
+    .build();
+
+GenerateTextResult first = model.generateText(GenerateTextRequest.builder()
+    .messages(messages)
+    .tools(List.of(browserLookup))
+    .stopWhen(StopCondition.stepCountIs(2))
+    .build()).block();
+
+messages.addAll(first.getResponseMessages());
+```
+
+调用方在外部完成工具后，追加 `TOOL` 消息并再次请求模型：
+
+```java
+ToolCall pending = first.getToolCalls().getFirst();
+
+messages.add(ModelMessage.tool(List.of(ModelMessagePart.toolResult(
+    ToolResult.builder()
+        .toolCallId(pending.getToolCallId())
+        .toolName(pending.getToolName())
+        .result(Map.of("title", "Halo", "url", "https://www.halo.run"))
+        .build()
+))));
+
+GenerateTextResult second = model.generateText(GenerateTextRequest.builder()
+    .messages(messages)
+    .tools(List.of(browserLookup))
+    .build()).block();
+
+messages.addAll(second.getResponseMessages());
+```
+
+外部执行失败时也追加工具错误，让模型基于失败原因继续回答：
+
+```java
+messages.add(ModelMessage.tool(List.of(ModelMessagePart.toolError(
+    ToolError.builder()
+        .toolCallId(pending.getToolCallId())
+        .toolName(pending.getToolName())
+        .errorText("Browser lookup timed out")
+        .build()
+))));
+```
+
+`tool-result` 和 `tool-error` 必须匹配前面历史中的 assistant `tool-call`，`toolCallId` 和 `toolName` 都要一致；否则请求会在调用 provider 前失败。外部工具结果是普通消息历史，调用方应只追加一次并持久化第二次调用返回的 `responseMessages`。
 
 ### 多工具和强制工具
 
@@ -424,7 +497,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .prompt("查询天气并推荐出行方式")
     .tools(List.of(weatherTool, trafficTool))
     .toolChoice(ToolChoice.required())
-    .stopWhen(StopCondition.maxSteps(4))
+    .stopWhen(StopCondition.stepCountIs(4))
     .build();
 ```
 
@@ -445,6 +518,113 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 ```
 
 工具调用是否可用取决于模型和 provider。调用方应为 `IllegalArgumentException` 做好处理，因为某些 provider 不支持工具、强制工具或指定工具模式。
+
+### 工具执行审批
+
+对会修改数据、调用外部系统、产生费用或执行危险操作的工具，可以要求调用方先审批。审批不会让一次生成请求挂起：第一次调用会返回 `tool-approval-request`，调用方把审批结果追加到消息历史后，再发起第二次调用。
+
+```java
+ToolDefinition runCommand = ToolDefinition.builder()
+    .name("run_command")
+    .description("执行一条运维命令")
+    .inputSchema(JsonSchema.object()
+        .property("command", JsonSchema.string())
+        .required("command")
+        .build())
+    .needsApproval(true)
+    .executor(context -> runCommand((String) context.getInput().get("command")))
+    .build();
+```
+
+也可以根据已校验的输入动态决定是否需要审批：
+
+```java
+ToolDefinition payment = ToolDefinition.builder()
+    .name("pay")
+    .description("发起付款")
+    .inputSchema(JsonSchema.object()
+        .property("amount", JsonSchema.number())
+        .property("recipient", JsonSchema.string())
+        .required("amount", "recipient")
+        .build())
+    .needsApproval(context ->
+        ((Number) context.getInput().get("amount")).doubleValue() > 1000)
+    .executor(context -> processPayment(context.getInput()))
+    .build();
+```
+
+处理审批请求：
+
+```java
+GenerateTextResult first = model.generateText(GenerateTextRequest.builder()
+    .messages(messages)
+    .tools(List.of(runCommand))
+    .stopWhen(StopCondition.stepCountIs(3))
+    .build()).block();
+
+messages.addAll(first.getResponseMessages());
+
+for (ToolApprovalRequest approval : first.getToolApprovalRequests()) {
+    ToolApprovalResponse response = ToolApprovalResponse.builder()
+        .approvalId(approval.getApprovalId())
+        .toolCallId(approval.getToolCallId())
+        .toolName(approval.getToolName())
+        .approved(true)
+        .reason("管理员已确认")
+        .build();
+    messages.add(ModelMessage.tool(List.of(
+        ModelMessagePart.toolApprovalResponse(response)
+    )));
+}
+
+GenerateTextResult second = model.generateText(GenerateTextRequest.builder()
+    .messages(messages)
+    .tools(List.of(runCommand))
+    .build()).block();
+
+messages.addAll(second.getResponseMessages());
+```
+
+如果 `approved = true`，SDK 会在第二次 provider 调用前执行原始工具调用，并把 tool result 放进模型上下文；如果 `approved = false`，SDK 不会执行工具，而是把安全的拒绝信息作为 tool error 放进模型上下文，让模型继续响应。`tool-approval-response` 必须能匹配前面消息中的 `tool-approval-request`，否则请求会在调用 provider 前失败。
+
+`tool-approval-request` 会在 `ToolApprovalRequest`、结果 content part、流式 part 和 `responseMessages` 的 `ModelMessagePart` 中保留触发审批的 `stepIndex`。调用方持久化 `responseMessages` 后，第二次调用会使用历史里的原始 step index 构造 `ToolExecutionContext`。
+
+调用方需要同时持久化自己追加的 `tool-approval-response` 和第二次调用返回的 `responseMessages`。第二次调用返回的消息中包含已消费审批产生的 tool result 或 tool error，以及模型基于该结果继续生成的 assistant 消息。如果只重复提交同一个已批准但尚未记录结果的消息历史，工具可能被再次执行。若历史中审批响应后已经有相同 `toolCallId` 的 tool result 或 tool error，SDK 会视为已消费，不会重复执行。
+
+### 工具调用修复
+
+模型有时会选对工具但输出不符合工具 `inputSchema` 的参数。可以在请求上配置 `toolCallRepair`，只针对“已知工具 + 有 server-side executor + 输入 schema 校验失败”的场景尝试修复参数。未知工具、外部工具、审批拒绝、executor 失败、输出 schema 失败、超时和取消不会触发修复。
+
+```java
+ToolDefinition weather = ToolDefinition.builder()
+    .name("weather")
+    .description("查询天气")
+    .inputSchema(JsonSchema.object()
+        .property("location", JsonSchema.string())
+        .required("location")
+        .build())
+    .executor(context -> getWeather(context.getInput()))
+    .build();
+
+GenerateTextResult result = model.generateText(GenerateTextRequest.builder()
+    .messages(messages)
+    .tools(List.of(weather))
+    .toolCallRepair(context -> {
+        Object city = context.getToolCall().getInput().get("city");
+        if (city == null) {
+            return Mono.just(ToolCallRepairResult.unrepaired());
+        }
+        return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+            .input(Map.of("location", String.valueOf(city)))
+            .build()));
+    })
+    .stopWhen(StopCondition.stepCountIs(3))
+    .build()).block();
+```
+
+`ToolCallRepairContext` 是 provider-neutral 的，不包含 Spring AI 类型。它会包含原始 `toolCall`、匹配到的 `ToolDefinition`、校验错误文本、校验路径、step index、本步骤发送给模型的 `ModelMessage`、请求 `context` 和 provider metadata。callback 返回的 repaired `ToolCall` 会用原始 `toolCallId` 和 `toolName` 执行，并重新用原工具 schema 校验；重新校验失败会保留原始 validation tool error。
+
+修复成功后，本步骤的 `toolCalls`、`content`、`responseMessages` 和下一轮 provider history 都会使用修复后的 tool call。调用方应继续持久化 `result.getResponseMessages()`，不要把页面上展示过的原始坏参数重新拼回历史。修复成功会产生 `tool-call-repaired` warning，修复失败会产生 `tool-call-repair-failed` warning 并返回原始 validation tool error。
 
 ## 设置
 
@@ -481,14 +661,14 @@ GenerateTextRequest carefulRequest = GenerateTextRequest.builder()
 取消示例：
 
 ```java
-CancellationSource source = CancellationSource.create();
+CancellationSource source = new CancellationSource();
 
 Mono<GenerateTextResult> task = model.generateText(GenerateTextRequest.builder()
     .prompt("生成一篇长文")
     .cancellationToken(source.token())
     .build());
 
-source.cancel("user stopped");
+source.cancel();
 ```
 
 ### 超时
@@ -609,6 +789,8 @@ return embeddingModel.embed(EmbeddingRequest.builder()
 | 结构化输出 | 可用 | 本地会解析和校验，模型不合规时会失败 |
 | 工具调用 | Provider 相关 | provider/model 不支持时会报错 |
 | 多步骤工具循环 | 可用 | 使用 `stopWhen` 限制最大步骤 |
+| 工具执行审批 | 可用 | 保存审批响应和返回的 `responseMessages`，避免重复执行 |
+| 工具调用修复 | 可用 | 只修复已知 server-side 工具的输入 schema 失败 |
 | 推理控制 | Provider 相关 | 使用 `ReasoningOptions`，不支持时会报错 |
 | `seed` | Provider 相关 | OpenAI-compatible 和 Ollama 路径已映射；确定性取决于模型 |
 | `maxRetries` | 可用 | 非流式 provider 调用生效 |
@@ -616,7 +798,7 @@ return embeddingModel.embed(EmbeddingRequest.builder()
 | source/file part | Provider 相关 | 只有 provider 返回时才会出现 |
 | 嵌入 | 可用 | 维度、批量、并发能力取决于 provider |
 
-当前 SDK 聚焦语言模型和嵌入。图像、视频、语音、转写、重排序、工具审批等暂不属于当前公开能力范围。
+当前 SDK 聚焦语言模型和嵌入。图像、视频、语音、转写、重排序等暂不属于当前公开能力范围。
 
 ## 错误和告警
 

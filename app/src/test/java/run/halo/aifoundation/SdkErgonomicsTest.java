@@ -6,8 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import run.halo.aifoundation.chat.GenerateTextResult;
+import run.halo.aifoundation.chat.GenerationStep;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
+import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.options.ProviderOptions;
 import run.halo.aifoundation.part.GenerationContentPart;
@@ -17,6 +20,14 @@ import run.halo.aifoundation.schema.JsonSchema;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.tool.ToolApprovalPolicy;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
+import run.halo.aifoundation.tool.ToolApprovalResponse;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallRepairContext;
+import run.halo.aifoundation.tool.ToolCallRepairResult;
+import run.halo.aifoundation.tool.ToolExecutionContext;
+import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
 
 class SdkErgonomicsTest {
@@ -56,6 +67,45 @@ class SdkErgonomicsTest {
 
         assertThat(tool.getInputSchema()).containsEntry("type", "object");
         assertThat(tool.getOutputSchema()).containsEntry("type", "object");
+    }
+
+    @Test
+    void toolDefinition_acceptsApprovalPolicies() {
+        var always = ToolDefinition.builder()
+            .name("dangerous")
+            .needsApproval(true)
+            .build();
+        var dynamic = ToolDefinition.builder()
+            .name("payment")
+            .needsApproval(context -> ((Number) context.getInput().get("amount")).intValue() > 1000)
+            .build();
+
+        assertThat(always.getApprovalPolicy().getMode())
+            .isEqualTo(ToolApprovalPolicy.Mode.ALWAYS);
+        assertThat(dynamic.getApprovalPolicy().requiresApproval(ToolExecutionContext.builder()
+            .input(Map.of("amount", 1200))
+            .build())).isTrue();
+    }
+
+    @Test
+    void generationResultsExposeProviderNeutralResponseMessages() {
+        var responseMessage = ModelMessage.assistant("hello");
+        var step = GenerationStep.builder()
+            .responseMessages(List.of(responseMessage))
+            .build();
+        var result = GenerateTextResult.builder()
+            .responseMessages(List.of(responseMessage))
+            .steps(List.of(step))
+            .build();
+
+        assertThat(result.getResponseMessages())
+            .singleElement()
+            .satisfies(message -> {
+                assertThat(message.getRole().name()).isEqualTo("ASSISTANT");
+                assertThat(message.getContent().getFirst().getText()).isEqualTo("hello");
+            });
+        assertThat(result.getSteps().getFirst().getResponseMessages())
+            .containsExactly(responseMessage);
     }
 
     @Test
@@ -132,6 +182,58 @@ class SdkErgonomicsTest {
             .build())
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("text message part has invalid fields");
+    }
+
+    @Test
+    void approvalPartsHaveTypedFactories() {
+        var request = ToolApprovalRequest.from(ToolCall.builder()
+            .toolCallId("call_1")
+            .toolName("run")
+            .input(Map.of("command", "rm file"))
+            .build(), "approval_call_1", 0, Map.of());
+        var response = ToolApprovalResponse.builder()
+            .approvalId("approval_call_1")
+            .toolCallId("call_1")
+            .toolName("run")
+            .approved(false)
+            .reason("Destructive command")
+            .build();
+
+        assertThat(ModelMessagePart.toolApprovalRequest(request).getType())
+            .isEqualTo(PartType.TOOL_APPROVAL_REQUEST);
+        assertThat(ModelMessagePart.toolApprovalResponse(response).getApproved())
+            .isFalse();
+        assertThat(GenerationContentPart.toolApprovalRequest(request).getApprovalId())
+            .isEqualTo("approval_call_1");
+        assertThat(TextStreamPart.toolApprovalRequest(request).getType())
+            .isEqualTo(PartType.TOOL_APPROVAL_REQUEST);
+    }
+
+    @Test
+    void generateTextRequest_acceptsTransientToolCallRepairCallback() throws Exception {
+        var mapper = JsonMapper.builder().build();
+        var request = GenerateTextRequest.builder()
+            .prompt("repair tool")
+            .toolCallRepair(context -> Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                .toolCallId(context.getToolCall().getToolCallId())
+                .toolName(context.getToolCall().getToolName())
+                .input(Map.of("location", "SF"))
+                .build())))
+            .build();
+
+        var repaired = request.getToolCallRepair().repair(ToolCallRepairContext.builder()
+            .toolCall(ToolCall.builder()
+                .toolCallId("call_1")
+                .toolName("weather")
+                .input(Map.of("city", "SF"))
+                .build())
+            .build()).block();
+
+        assertThat(repaired.getToolCall().getInput()).containsEntry("location", "SF");
+        var json = mapper.writeValueAsString(request);
+        assertThat(json).doesNotContain("toolCallRepair");
+        var restored = mapper.readValue(json, GenerateTextRequest.class);
+        assertThat(restored.getToolCallRepair()).isNull();
     }
 
     @Test

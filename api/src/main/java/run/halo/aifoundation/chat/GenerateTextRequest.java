@@ -13,6 +13,7 @@ import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.options.ProviderOptions;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolChoice;
+import run.halo.aifoundation.tool.ToolCallRepairCallback;
 import run.halo.aifoundation.tool.ToolDefinition;
 
 /**
@@ -142,6 +143,11 @@ public class GenerateTextRequest {
      */
     private transient GenerationLifecycle lifecycle;
     /**
+     * Optional callback that can repair invalid input for known server-side tool calls before tool
+     * execution.
+     */
+    private transient ToolCallRepairCallback toolCallRepair;
+    /**
      * Request-scoped cancellation signal.
      */
     private transient CancellationToken cancellationToken;
@@ -163,6 +169,11 @@ public class GenerateTextRequest {
     @Transient
     public GenerationLifecycle getLifecycle() {
         return lifecycle;
+    }
+
+    @Transient
+    public ToolCallRepairCallback getToolCallRepair() {
+        return toolCallRepair;
     }
 
     @Transient

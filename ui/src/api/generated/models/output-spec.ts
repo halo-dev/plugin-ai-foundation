@@ -79,5 +79,3 @@ export const OutputSpecTypeEnum = {
 } as const;
 
 export type OutputSpecTypeEnum = typeof OutputSpecTypeEnum[keyof typeof OutputSpecTypeEnum];
-
-

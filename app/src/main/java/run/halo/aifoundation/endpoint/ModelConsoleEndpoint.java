@@ -36,6 +36,8 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
@@ -60,6 +62,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private static final String HALO_AI_STREAM_PROTOCOL_HEADER = "X-Halo-AI-Stream-Protocol";
     private static final String HALO_AI_TEXT_STREAM_PROTOCOL = "text-v1";
     private static final String CONSOLE_TEST_TOOL_NAME = "halo_test_info";
+    private static final String CONSOLE_EXTERNAL_TEST_TOOL_NAME = "halo_external_test_info";
+    private static final String CONSOLE_REPAIR_TEST_TOOL_NAME = "halo_repair_test_info";
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
@@ -139,6 +143,20 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                             + "tool calling tests.")
                         .implementation(Boolean.class)
                         .required(false))
+                    .parameter(parameterBuilder()
+                        .name("enableTestToolApproval")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether the console-only halo_test_info tool should require "
+                            + "caller approval before execution.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .parameter(parameterBuilder()
+                        .name("enableToolCallRepair")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject a console-only repairable tool and "
+                            + "deterministic tool-call repair callback.")
+                        .implementation(Boolean.class)
+                        .required(false))
                     .requestBody(requestBodyBuilder()
                         .required(false)
                         .implementation(GenerateTextRequest.class))
@@ -146,8 +164,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .description("Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. "
                             + "Each data event contains a TextStreamPart JSON object. The stream can "
                             + "include message lifecycle, step lifecycle, text, tool call, tool result, "
-                            + "tool error, finish, sanitized raw diagnostic, and error parts, then ends "
-                            + "with data: [DONE].")
+                            + "tool approval request, tool error, finish, sanitized raw diagnostic, "
+                            + "and error parts, then ends with data: [DONE].")
                         .implementation(TextStreamPart.class))
             )
             .POST("models/{name}/test-embedding", this::testEmbedding,
@@ -234,7 +252,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return request.bodyToMono(GenerateTextRequest.class)
             .defaultIfEmpty(new GenerateTextRequest())
             .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
-                var chatRequest = withConsoleTestTool(body, consoleTestToolEnabled(request));
+                var chatRequest = withConsoleTestTool(body, consoleTestToolEnabled(request),
+                    consoleTestToolApprovalEnabled(request), consoleExternalTestToolEnabled(request),
+                    consoleToolCallRepairEnabled(request));
                 Flux<ServerSentEvent<Object>> flux = aiModelService.languageModel(modelName)
                     .flatMapMany(languageModel -> languageModel.streamText(chatRequest).fullStream())
                     .onErrorResume(e -> {
@@ -275,29 +295,71 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .orElse(false);
     }
 
-    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request, boolean enabled) {
-        if (!enabled) {
+    private boolean consoleTestToolApprovalEnabled(ServerRequest request) {
+        return request.queryParam("enableTestToolApproval")
+            .map(Boolean::parseBoolean)
+            .orElse(false);
+    }
+
+    private boolean consoleExternalTestToolEnabled(ServerRequest request) {
+        return request.queryParam("enableExternalTestTool")
+            .map(Boolean::parseBoolean)
+            .orElse(false);
+    }
+
+    private boolean consoleToolCallRepairEnabled(ServerRequest request) {
+        return request.queryParam("enableToolCallRepair")
+            .map(Boolean::parseBoolean)
+            .orElse(false);
+    }
+
+    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request, boolean enabled,
+        boolean approvalEnabled, boolean externalEnabled, boolean repairEnabled) {
+        if (!enabled && !approvalEnabled && !externalEnabled && !repairEnabled) {
             return request;
         }
         var tools = new ArrayList<ToolDefinition>();
         if (request.getTools() != null) {
             tools.addAll(request.getTools());
         }
-        var hasTestTool = tools.stream()
-            .anyMatch(tool -> CONSOLE_TEST_TOOL_NAME.equals(tool.getName()));
-        if (!hasTestTool) {
-            tools.add(consoleTestTool());
+        tools.removeIf(tool -> CONSOLE_TEST_TOOL_NAME.equals(tool.getName())
+            || CONSOLE_EXTERNAL_TEST_TOOL_NAME.equals(tool.getName())
+            || CONSOLE_REPAIR_TEST_TOOL_NAME.equals(tool.getName()));
+        if (enabled || approvalEnabled) {
+            tools.add(consoleTestTool(approvalEnabled));
+        }
+        if (externalEnabled) {
+            tools.add(consoleExternalTestTool());
+        }
+        if (repairEnabled) {
+            tools.add(consoleRepairTestTool());
+            request.setToolCallRepair(context -> {
+                if (!CONSOLE_REPAIR_TEST_TOOL_NAME.equals(context.getToolCall().getToolName())) {
+                    return Mono.just(ToolCallRepairResult.unrepaired());
+                }
+                var repairedQuery = repairedConsoleQuery(context.getToolCall().getInput());
+                if (repairedQuery == null || repairedQuery.isBlank()) {
+                    return Mono.just(ToolCallRepairResult.unrepaired());
+                }
+                return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                    .input(Map.of(
+                        "query", repairedQuery,
+                        "repairSource", "console-test"
+                    ))
+                    .build()));
+            });
         }
         request.setTools(List.copyOf(tools));
         request.setStopWhen(StopCondition.stepCountIs(2));
         return request;
     }
 
-    private ToolDefinition consoleTestTool() {
+    private ToolDefinition consoleTestTool(boolean approvalEnabled) {
         return ToolDefinition.builder()
             .name(CONSOLE_TEST_TOOL_NAME)
             .description("Halo 控制台模型测试工具。用于验证工具调用链路；当用户要求测试工具、"
                 + "回显输入、获取 Halo 测试信息时调用。")
+            .needsApproval(approvalEnabled)
             .inputSchema(Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -315,6 +377,73 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                     : "",
                 "nextAction", "Answer the user using this tool result."
             )))
+            .build();
+    }
+
+    private ToolDefinition consoleRepairTestTool() {
+        return ToolDefinition.builder()
+            .name(CONSOLE_REPAIR_TEST_TOOL_NAME)
+            .description("Halo 控制台工具调用修复测试工具。用于验证模型输出错误参数后，"
+                + "后台 repair callback 将参数修复为 query 并继续执行工具。")
+            .inputSchema(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "query", Map.of(
+                        "type", "string",
+                        "description", "需要测试工具处理的文本"
+                    ),
+                    "repairSource", Map.of(
+                        "type", "string",
+                        "description", "修复来源"
+                    )
+                ),
+                "required", List.of("query")
+            ))
+            .executor(context -> Mono.just(Map.of(
+                "tool", CONSOLE_REPAIR_TEST_TOOL_NAME,
+                "message", "Halo console repair test tool executed successfully.",
+                "query", context.getInput() != null
+                    ? context.getInput().getOrDefault("query", "")
+                    : "",
+                "repairSource", context.getInput() != null
+                    ? context.getInput().getOrDefault("repairSource", "")
+                    : "",
+                "nextAction", "Answer the user using this repaired tool result."
+            )))
+            .build();
+    }
+
+    private String repairedConsoleQuery(Map<String, Object> input) {
+        if (input == null || input.isEmpty()) {
+            return null;
+        }
+        for (var key : List.of("query", "text", "message", "prompt", "q")) {
+            var value = input.get(key);
+            if (value != null && !String.valueOf(value).isBlank()) {
+                return String.valueOf(value);
+            }
+        }
+        return input.values().stream()
+            .filter(value -> value != null && !String.valueOf(value).isBlank())
+            .map(String::valueOf)
+            .findFirst()
+            .orElse(null);
+    }
+
+    private ToolDefinition consoleExternalTestTool() {
+        return ToolDefinition.builder()
+            .name(CONSOLE_EXTERNAL_TEST_TOOL_NAME)
+            .description("Halo 控制台外部工具测试工具。用于验证工具调用返回后由调用方在外部执行，"
+                + "再把结果或错误追加到消息历史中继续生成。")
+            .inputSchema(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "query", Map.of(
+                        "type", "string",
+                        "description", "希望外部系统查询或处理的文本"
+                    )
+                )
+            ))
             .build();
     }
 
@@ -374,10 +503,44 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         if (PartType.isText(part.getType())) {
             return part.getText() != null && !part.getText().isBlank();
         }
-        return role == run.halo.aifoundation.message.ModelMessageRole.ASSISTANT
-            && PartType.isReasoning(part.getType())
-            && part.getText() != null
-            && !part.getText().isBlank();
+        if (role == run.halo.aifoundation.message.ModelMessageRole.ASSISTANT) {
+            return isSupportedAssistantTestChatPart(part);
+        }
+        if (role == run.halo.aifoundation.message.ModelMessageRole.TOOL) {
+            return isSupportedToolTestChatPart(part);
+        }
+        return false;
+    }
+
+    private boolean isSupportedAssistantTestChatPart(
+        run.halo.aifoundation.message.ModelMessagePart part) {
+        return (PartType.isReasoning(part.getType())
+                && (part.getText() != null && !part.getText().isBlank()))
+            || (PartType.TOOL_CALL.equals(part.getType())
+                && hasText(part.getToolCallId())
+                && hasText(part.getToolName()))
+            || (PartType.TOOL_APPROVAL_REQUEST.equals(part.getType())
+                && hasText(part.getApprovalId())
+                && hasText(part.getToolCallId())
+                && hasText(part.getToolName()));
+    }
+
+    private boolean isSupportedToolTestChatPart(
+        run.halo.aifoundation.message.ModelMessagePart part) {
+        return (PartType.TOOL_RESULT.equals(part.getType())
+                && hasText(part.getToolCallId())
+                && hasText(part.getToolName()))
+            || (PartType.TOOL_ERROR.equals(part.getType())
+                && hasText(part.getToolCallId())
+                && hasText(part.getToolName())
+                && hasText(part.getErrorText()))
+            || (PartType.TOOL_APPROVAL_RESPONSE.equals(part.getType())
+                && hasText(part.getApprovalId())
+                && part.getApproved() != null);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId,

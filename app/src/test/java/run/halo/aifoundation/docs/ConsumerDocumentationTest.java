@@ -44,6 +44,12 @@ class ConsumerDocumentationTest {
         "JsonSchema",
         "ToolDefinition",
         "ToolExecutionContext",
+        "ToolCallRepairCallback",
+        "ToolCallRepairContext",
+        "ToolCallRepairResult",
+        "ToolApprovalPolicy",
+        "ToolApprovalRequest",
+        "ToolApprovalResponse",
         "ToolChoice",
         "ProviderOptions",
         "EmbeddingModel",
@@ -62,6 +68,26 @@ class ConsumerDocumentationTest {
         assertThat(guide).doesNotContain("ProviderClientCache");
         assertThat(guide).doesNotContain("SecretResolver");
         assertThat(guide).contains(REQUIRED_HEADINGS.toArray(String[]::new));
+        assertThat(guide).contains(
+            "getResponseMessages()",
+            "conversationMessages.addAll(result.getResponseMessages())",
+            "messages.addAll(first.getResponseMessages())",
+            "messages.addAll(second.getResponseMessages())",
+            "external-tool-pending",
+            "tool-call-repaired",
+            "tool-call-repair-failed",
+            "ToolCallRepairContext",
+            "ModelMessagePart.toolResult",
+            "ModelMessagePart.toolError",
+            "tool-approval-response",
+            "ToolDefinition.strict(true)",
+            "inputExamples",
+            "context.getCancellationToken()",
+            "原始 step index",
+            "textStream()` 只包含回答文本 delta",
+            "只发送修复后的 `tool-call`",
+            "不会产生合成的 `tool-result` 或 `tool-error`"
+        );
     }
 
     @Test

@@ -84,6 +84,57 @@ class DeepSeekProviderTest {
     }
 
     @Test
+    void toolOptions_applyNativeStrictToolSchemaWhenRequested() {
+        var request = GenerateTextRequest.builder()
+            .prompt("Use a strict tool")
+            .tools(List.of(ToolDefinition.builder()
+                .name("halo_test_info")
+                .description("Read Halo test information")
+                .inputSchema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("name", Map.of("type", "string")),
+                    "required", List.of("name"),
+                    "additionalProperties", false
+                ))
+                .strict(true)
+                .build()))
+            .build();
+
+        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+            .toolCallingChatOptionsFactory()
+            .build(request, List.of(), java.util.Set.of());
+
+        assertThat(options.getTools()).singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getFunction().getName()).isEqualTo("halo_test_info");
+                assertThat(tool.getFunction().getDescription())
+                    .isEqualTo("Read Halo test information");
+                assertThat(tool.getFunction().getParameters())
+                    .containsEntry("additionalProperties", false);
+                assertThat(tool.getFunction().getStrict()).isTrue();
+            });
+    }
+
+    @Test
+    void toolOptions_ignoreInputExamplesWhenProviderHasNoNativeExampleSupport() {
+        var request = GenerateTextRequest.builder()
+            .prompt("Use a tool with examples")
+            .tools(List.of(ToolDefinition.builder()
+                .name("halo_test_info")
+                .description("Read Halo test information")
+                .inputSchema(Map.of("type", "object"))
+                .inputExamples(List.of(Map.of("name", "example")))
+                .build()))
+            .build();
+
+        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+            .toolCallingChatOptionsFactory()
+            .build(request, List.of(), java.util.Set.of());
+
+        assertThat(options.getTools()).isNullOrEmpty();
+    }
+
+    @Test
     void options_applyExplicitDeepSeekThinkingProviderOption() {
         var request = GenerateTextRequest.builder()
             .prompt("Generate JSON")

@@ -25,6 +25,18 @@ export interface ModelMessagePart {
      * @type {string}
      * @memberof ModelMessagePart
      */
+    'approvalId'?: string;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ModelMessagePart
+     */
+    'approved'?: boolean;
+    /**
+     *
+     * @type {string}
+     * @memberof ModelMessagePart
+     */
     'errorText'?: string;
     /**
      *
@@ -40,6 +52,12 @@ export interface ModelMessagePart {
     'providerOptions'?: { [key: string]: object; };
     /**
      *
+     * @type {string}
+     * @memberof ModelMessagePart
+     */
+    'reason'?: string;
+    /**
+     *
      * @type {object}
      * @memberof ModelMessagePart
      */
@@ -50,6 +68,12 @@ export interface ModelMessagePart {
      * @memberof ModelMessagePart
      */
     'signature'?: string;
+    /**
+     *
+     * @type {number}
+     * @memberof ModelMessagePart
+     */
+    'stepIndex'?: number;
     /**
      *
      * @type {string}
@@ -75,4 +99,3 @@ export interface ModelMessagePart {
      */
     'type'?: string;
 }
-

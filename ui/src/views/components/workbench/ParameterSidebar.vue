@@ -17,6 +17,9 @@ const props = defineProps<{
   reasoningMode?: ReasoningMode
   reasoningEffort?: ReasoningEffort
   testToolEnabled?: boolean
+  testToolApprovalEnabled?: boolean
+  externalTestToolEnabled?: boolean
+  toolCallRepairEnabled?: boolean
   outputMode?: OutputMode
   outputSchemaText?: string
   outputChoicesText?: string
@@ -30,9 +33,7 @@ const props = defineProps<{
   embeddingMaxParallelCalls?: number | undefined
   embeddingMaxRetries?: number | undefined
   embeddingProviderOptionsText?: string
-  embeddingHeadersText?: string
   embeddingProviderOptionsError?: string
-  embeddingHeadersError?: string
 }>()
 
 const emit = defineEmits<{
@@ -45,6 +46,9 @@ const emit = defineEmits<{
   (e: 'update:reasoningMode', value: ReasoningMode): void
   (e: 'update:reasoningEffort', value: ReasoningEffort): void
   (e: 'update:testToolEnabled', value: boolean): void
+  (e: 'update:testToolApprovalEnabled', value: boolean): void
+  (e: 'update:externalTestToolEnabled', value: boolean): void
+  (e: 'update:toolCallRepairEnabled', value: boolean): void
   (e: 'update:outputMode', value: OutputMode): void
   (e: 'update:outputSchemaText', value: string): void
   (e: 'update:outputChoicesText', value: string): void
@@ -55,7 +59,6 @@ const emit = defineEmits<{
   (e: 'update:embeddingMaxParallelCalls', value: number | undefined): void
   (e: 'update:embeddingMaxRetries', value: number | undefined): void
   (e: 'update:embeddingProviderOptionsText', value: string): void
-  (e: 'update:embeddingHeadersText', value: string): void
 }>()
 
 const outputSchemaHelp = computed(() => {
@@ -150,7 +153,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               :value="systemPrompt"
               rows="4"
               placeholder="可选：设置 AI 的角色和行为规则..."
-              class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-3 !py-2 !text-xs text-slate-700 leading-relaxed outline-none transition-colors placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+              class=":uno: w-full text-slate-700 leading-relaxed outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
               @input="emit('update:systemPrompt', ($event.target as HTMLTextAreaElement).value)"
             />
           </div>
@@ -169,7 +172,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               <div class=":uno: flex items-center justify-between">
                 <label class=":uno: text-xs text-slate-600 font-medium">Temperature</label>
                 <span
-                  class=":uno: rounded-md border border-slate-200 bg-white !px-1.5 !py-0.5 text-xs text-slate-700 font-mono"
+                  class=":uno: border border-slate-200 rounded-md bg-white text-xs text-slate-700 font-mono !px-1.5 !py-0.5"
                 >
                   {{ temperature }}
                 </span>
@@ -180,7 +183,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                 min="0"
                 max="2"
                 step="0.1"
-                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
+                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
                 @input="updateNumberField('temperature', ($event.target as HTMLInputElement).value)"
               />
               <div class=":uno: flex justify-between text-[10px] text-slate-400">
@@ -194,7 +197,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               <div class=":uno: flex items-center justify-between">
                 <label class=":uno: text-xs text-slate-600 font-medium">Top P</label>
                 <span
-                  class=":uno: rounded-md border border-slate-200 bg-white !px-1.5 !py-0.5 text-xs text-slate-700 font-mono"
+                  class=":uno: border border-slate-200 rounded-md bg-white text-xs text-slate-700 font-mono !px-1.5 !py-0.5"
                 >
                   {{ topP }}
                 </span>
@@ -205,7 +208,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                 min="0"
                 max="1"
                 step="0.05"
-                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
+                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
                 @input="updateNumberField('topP', ($event.target as HTMLInputElement).value)"
               />
             </div>
@@ -218,7 +221,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="maxTokens"
                   min="1"
                   step="1"
-                  class=":uno: w-20 !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-right text-slate-700 font-mono outline-none placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-20 text-right text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="updateNumberField('maxTokens', ($event.target as HTMLInputElement).value)"
                 />
               </div>
@@ -232,7 +235,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="seed"
                   step="1"
                   placeholder="随机"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 font-mono outline-none placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="updateNumberField('seed', ($event.target as HTMLInputElement).value)"
                 />
               </div>
@@ -243,7 +246,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="maxRetries"
                   min="0"
                   step="1"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 font-mono outline-none placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="
                     updateNumberField('maxRetries', ($event.target as HTMLInputElement).value)
                   "
@@ -252,7 +255,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
             </div>
             <div
               v-if="maxRetries !== undefined"
-              class=":uno: rounded-md bg-slate-50 !px-2 !py-1.5 text-[10px] text-slate-500"
+              class=":uno: rounded-md bg-slate-50 text-[10px] text-slate-500 !px-2 !py-1.5"
             >
               仅作用于可重试的非流式 provider 调用，0 表示不重试
             </div>
@@ -271,7 +274,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               <label class=":uno: text-xs text-slate-600 font-medium">模式</label>
               <select
                 :value="reasoningMode"
-                class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 outline-none focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
                 @change="
                   emit(
                     'update:reasoningMode',
@@ -293,7 +296,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               <label class=":uno: text-xs text-slate-600 font-medium">Effort</label>
               <select
                 :value="reasoningEffort"
-                class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 outline-none focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
                 @change="
                   emit(
                     'update:reasoningEffort',
@@ -321,7 +324,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               <label class=":uno: text-xs text-slate-600 font-medium">输出格式</label>
               <select
                 :value="outputMode"
-                class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 outline-none focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
                 @change="
                   emit(
                     'update:outputMode',
@@ -346,7 +349,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="outputSchemaText"
                   rows="6"
                   :class="{ ':uno: !border-rose-300': outputError }"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-3 !py-2 !text-xs text-slate-700 leading-relaxed font-mono outline-none transition-colors placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="
                     emit('update:outputSchemaText', ($event.target as HTMLTextAreaElement).value)
                   "
@@ -367,7 +370,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="outputChoicesText"
                   rows="4"
                   :class="{ ':uno: !border-rose-300': outputError }"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-3 !py-2 !text-xs text-slate-700 leading-relaxed outline-none transition-colors placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 leading-relaxed outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="
                     emit('update:outputChoicesText', ($event.target as HTMLTextAreaElement).value)
                   "
@@ -398,8 +401,35 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               />
               <span class=":uno: text-xs text-slate-700">启用测试工具</span>
             </div>
+            <div class=":uno: mt-2 flex items-center gap-2">
+              <VSwitch
+                :model-value="testToolApprovalEnabled"
+                :disabled="!testToolEnabled"
+                @update:model-value="emit('update:testToolApprovalEnabled', $event)"
+              />
+              <span
+                class=":uno: text-xs"
+                :class="testToolEnabled ? ':uno: text-slate-700' : ':uno: text-slate-400'"
+              >
+                工具执行需要审批
+              </span>
+            </div>
+            <div class=":uno: mt-2 flex items-center gap-2">
+              <VSwitch
+                :model-value="externalTestToolEnabled"
+                @update:model-value="emit('update:externalTestToolEnabled', $event)"
+              />
+              <span class=":uno: text-xs text-slate-700">启用外部测试工具</span>
+            </div>
+            <div class=":uno: mt-2 flex items-center gap-2">
+              <VSwitch
+                :model-value="toolCallRepairEnabled"
+                @update:model-value="emit('update:toolCallRepairEnabled', $event)"
+              />
+              <span class=":uno: text-xs text-slate-700">启用工具调用修复</span>
+            </div>
             <div class=":uno: mt-1 text-[10px] text-slate-400">
-              后台会注入 halo_test_info。可输入：请调用 halo_test_info 测试工具并告诉我返回内容。
+              后台会注入 halo_test_info；外部工具会注入 halo_external_test_info；修复测试会注入 halo_repair_test_info。
             </div>
           </div>
         </details>
@@ -416,7 +446,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               :value="providerOptionsText"
               rows="6"
               :class="{ ':uno: !border-rose-300': providerOptionsError }"
-              class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-3 !py-2 !text-xs text-slate-700 leading-relaxed font-mono outline-none transition-colors placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
               @input="
                 emit('update:providerOptionsText', ($event.target as HTMLTextAreaElement).value)
               "
@@ -442,7 +472,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               :value="chatHeadersText"
               rows="4"
               :class="{ ':uno: !border-rose-300': chatHeadersError }"
-              class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-3 !py-2 !text-xs text-slate-700 leading-relaxed font-mono outline-none transition-colors placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
               @input="emit('update:chatHeadersText', ($event.target as HTMLTextAreaElement).value)"
             />
             <div
@@ -475,7 +505,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   min="1"
                   step="1"
                   placeholder="默认"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 font-mono outline-none placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="
                     updateNumberField(
                       'embeddingDimensions',
@@ -491,7 +521,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="embeddingMaxBatchSize"
                   min="1"
                   step="1"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 font-mono outline-none placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="
                     updateNumberField(
                       'embeddingMaxBatchSize',
@@ -510,7 +540,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="embeddingMaxParallelCalls"
                   min="1"
                   step="1"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 font-mono outline-none placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="
                     updateNumberField(
                       'embeddingMaxParallelCalls',
@@ -526,7 +556,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   :value="embeddingMaxRetries"
                   min="0"
                   step="1"
-                  class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-2 !py-1.5 !text-xs text-slate-700 font-mono outline-none placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                  class=":uno: w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
                   @input="
                     updateNumberField(
                       'embeddingMaxRetries',
@@ -551,7 +581,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               :value="embeddingProviderOptionsText"
               rows="6"
               :class="{ ':uno: !border-rose-300': embeddingProviderOptionsError }"
-              class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-3 !py-2 !text-xs text-slate-700 leading-relaxed font-mono outline-none transition-colors placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
               @input="
                 emit(
                   'update:embeddingProviderOptionsText',
@@ -566,32 +596,6 @@ function updateNumberField(key: NumberFieldKey, value: string) {
               "
             >
               {{ embeddingProviderOptionsError || '例如 openai.dimensions = 512' }}
-            </div>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: h-4 w-4 transition-transform group-open:rotate-90" />
-            Headers
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <textarea
-              :value="embeddingHeadersText"
-              rows="4"
-              :class="{ ':uno: !border-rose-300': embeddingHeadersError }"
-              class=":uno: w-full !border !border-solid !border-slate-200 !rounded-md !bg-white !px-3 !py-2 !text-xs text-slate-700 leading-relaxed font-mono outline-none transition-colors placeholder:!text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-              @input="
-                emit('update:embeddingHeadersText', ($event.target as HTMLTextAreaElement).value)
-              "
-            />
-            <div
-              class=":uno: mt-1 text-[10px]"
-              :class="embeddingHeadersError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-            >
-              {{ embeddingHeadersError || '请求级 headers，当前 provider 不支持时会返回 warning' }}
             </div>
           </div>
         </details>

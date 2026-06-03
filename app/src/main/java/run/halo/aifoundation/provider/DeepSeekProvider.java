@@ -114,6 +114,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
                     .internalToolExecutionEnabled(false)
                     .toolCallbacks(toolCallbacks)
                     .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
+                OpenAiToolCallingOptions.applyNativeTools(builder, request);
                 applyDeepSeekExtraBody(builder, request);
                 applyJsonObjectResponseFormat(builder, request);
                 OpenAiToolCallingOptions.applyToolChoice(builder, request.getToolChoice(),

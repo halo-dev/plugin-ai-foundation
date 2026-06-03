@@ -7,6 +7,10 @@ export interface WorkbenchMessage {
   id: string
   role: ChatRole
   content: string
+  leadingMessages?: ModelMessage[]
+  followingMessages?: ModelMessage[]
+  historyParts?: ModelMessagePart[]
+  responseMessages?: ModelMessage[]
   reasoningContent?: string
   reasoningState?: 'streaming' | 'done'
   toolEvents?: WorkbenchToolEvent[]
@@ -23,9 +27,16 @@ export interface WorkbenchWarning {
 
 export interface WorkbenchToolEvent {
   id: string
-  type: 'tool-call' | 'tool-result' | 'tool-error'
+  type: 'tool-call' | 'tool-result' | 'tool-error' | 'tool-approval-request'
+  approvalId?: string
   toolCallId?: string
   toolName?: string
+  stepIndex?: number
+  input?: Record<string, unknown>
+  result?: unknown
+  errorText?: string
+  approvalStatus?: 'pending' | 'approved' | 'denied'
+  externalStatus?: 'pending' | 'completed' | 'failed'
   summary: string
 }
 
@@ -75,6 +86,13 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: '工具调用',
     content: '请调用 halo_test_info 工具并告诉我返回的内容。',
   },
+  {
+    id: 'tool-repair-test',
+    icon: 'ri-tools-line',
+    title: '工具修复',
+    content:
+      '请调用 halo_repair_test_info 工具。请把参数写成 {"message":"repair me"}，然后告诉我工具返回的内容。',
+  },
 ]
 
 export async function copyToClipboard(text: string): Promise<boolean> {
@@ -114,12 +132,28 @@ export interface SseParseResult<T> {
 }
 
 export interface ModelMessagePart {
-  type: 'text' | 'reasoning'
-  text: string
+  type:
+    | 'text'
+    | 'reasoning'
+    | 'tool-call'
+    | 'tool-result'
+    | 'tool-error'
+    | 'tool-approval-request'
+    | 'tool-approval-response'
+  text?: string
+  approvalId?: string
+  toolCallId?: string
+  toolName?: string
+  stepIndex?: number
+  input?: Record<string, unknown>
+  result?: unknown
+  errorText?: string
+  approved?: boolean
+  reason?: string
 }
 
 export interface ModelMessage {
-  role: 'USER' | 'ASSISTANT'
+  role: 'USER' | 'ASSISTANT' | 'TOOL'
   content: ModelMessagePart[]
 }
 
@@ -152,6 +186,7 @@ export interface TextStreamPart {
     | 'tool-call'
     | 'tool-result'
     | 'tool-error'
+    | 'tool-approval-request'
     | 'source'
     | 'file'
     | 'finish-step'
@@ -165,6 +200,7 @@ export interface TextStreamPart {
   stepIndex?: number
   delta?: string
   providerMetadata?: Record<string, unknown>
+  approvalId?: string
   toolCallId?: string
   toolName?: string
   input?: Record<string, unknown>
@@ -175,6 +211,9 @@ export interface TextStreamPart {
   mediaType?: string
   data?: unknown
   warnings?: WorkbenchWarning[]
+  response?: {
+    messages?: ModelMessage[]
+  }
 }
 
 export function isEnabledChatModel(model: AiModel) {
@@ -297,22 +336,51 @@ export function buildReasoningOptions(options: {
 export function buildTestChatRequest(
   messages: WorkbenchMessage[],
   parameters: ChatParameters,
+  options?: {
+    extraMessages?: ModelMessage[]
+  },
 ): GenerateTextRequest {
   const requestMessages: ModelMessage[] = []
 
   const systemPrompt = parameters.systemPrompt?.trim()
 
   for (const message of messages) {
+    if (message.responseMessages?.length) {
+      requestMessages.push(...message.responseMessages)
+      if (message.followingMessages?.length) {
+        requestMessages.push(...message.followingMessages)
+      }
+      continue
+    }
+    if (message.leadingMessages?.length) {
+      requestMessages.push(...message.leadingMessages)
+    }
     const content = message.content.trim()
-    if (!content || (message.role === 'assistant' && message.state === 'error')) {
+    const historyParts = message.role === 'assistant' ? message.historyParts || [] : []
+    if (
+      (!content && !historyParts.length) ||
+      (message.role === 'assistant' && message.state === 'error')
+    ) {
+      if (message.followingMessages?.length) {
+        requestMessages.push(...message.followingMessages)
+      }
       continue
     }
     const parts: ModelMessagePart[] = []
-    parts.push({ type: 'text', text: content })
+    parts.push(...historyParts)
+    if (content) {
+      parts.push({ type: 'text', text: content })
+    }
     requestMessages.push({
       role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
       content: parts,
     })
+    if (message.followingMessages?.length) {
+      requestMessages.push(...message.followingMessages)
+    }
+  }
+  if (options?.extraMessages?.length) {
+    requestMessages.push(...options.extraMessages)
   }
 
   return {
@@ -386,16 +454,28 @@ export function toToolEvent(part: TextStreamPart): WorkbenchToolEvent | undefine
   }
 
   return {
-    id: `${part.type}-${part.toolCallId || crypto.randomUUID()}`,
+    id: `${part.type}-${part.approvalId || part.toolCallId || crypto.randomUUID()}`,
     type: part.type,
+    approvalId: part.approvalId,
     toolCallId: part.toolCallId,
     toolName: part.toolName,
+    stepIndex: part.stepIndex,
+    input: part.input,
+    result: part.result,
+    errorText: part.errorText,
+    approvalStatus: part.type === 'tool-approval-request' ? 'pending' : undefined,
+    externalStatus: part.type === 'tool-call' ? 'pending' : undefined,
     summary: toolEventSummary(part),
   }
 }
 
 function isToolStreamPartType(type: TextStreamPart['type']): type is WorkbenchToolEvent['type'] {
-  return type === 'tool-call' || type === 'tool-result' || type === 'tool-error'
+  return (
+    type === 'tool-call' ||
+    type === 'tool-result' ||
+    type === 'tool-error' ||
+    type === 'tool-approval-request'
+  )
 }
 
 function toolEventSummary(part: TextStreamPart) {
@@ -406,6 +486,8 @@ function toolEventSummary(part: TextStreamPart) {
       return stringifyCompact(part.result)
     case 'tool-error':
       return part.errorText || '工具执行失败'
+    case 'tool-approval-request':
+      return stringifyCompact(part.input)
     default:
       return ''
   }

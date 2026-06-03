@@ -12,6 +12,7 @@ import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.ReasoningPart;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolResult;
 import tools.jackson.core.JacksonException;
@@ -46,13 +47,26 @@ public final class LanguageModelMessageMapper {
 
     public List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
         List<ToolCall> toolCalls) {
+        return responseMessages(text, reasoning, toolCalls, List.of());
+    }
+
+    public List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
+        List<ToolCall> toolCalls, List<ToolApprovalRequest> approvals) {
         var parts = new ArrayList<ModelMessagePart>();
         nullSafe(reasoning).stream().map(ModelMessagePart::reasoning).forEach(parts::add);
         if (hasText(text)) {
             parts.add(ModelMessagePart.text(text));
         }
         nullSafe(toolCalls).stream().map(ModelMessagePart::toolCall).forEach(parts::add);
+        nullSafe(approvals).stream()
+            .map(ModelMessagePart::toolApprovalRequest)
+            .forEach(parts::add);
         return parts.isEmpty() ? List.of() : List.of(ModelMessage.assistant(parts));
+    }
+
+    public boolean hasProviderToolResponse(ModelMessage message) {
+        return message != null && message.getContent() != null
+            && message.getContent().stream().anyMatch(part -> PartType.isToolResponse(part.getType()));
     }
 
     private String textContent(ModelMessage message) {

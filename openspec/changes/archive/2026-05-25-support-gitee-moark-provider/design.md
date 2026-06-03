@@ -2,7 +2,7 @@
 
 AI Foundation already models each provider as one `AiProviderType` Spring component that owns identity, metadata, supported adapter types, and runtime client construction. OpenAI-compatible chat-only providers such as Kimi, MiniMax, and Xiaomi MiMo reuse `OpenAiChatModel` with provider-specific defaults and do not require frontend changes because the console reads provider metadata from the provider-types API.
 
-Gitee 模力方舟 documents text generation through `POST https://ai.gitee.com/v1/chat/completions`, `Authorization: Bearer <token>`, and OpenAI SDK compatibility. The OpenAI SDK examples configure `base_url = "https://ai.gitee.com/v1"`, but this plugin's provider convention stores the service root as `baseUrl` and supplies `/v1/...` paths through the provider implementation. For this codebase, the default provider base URL should therefore be `https://ai.gitee.com`.
+Gitee 模力方舟 documents text generation through `POST https://ai.gitee.com/v1/chat/completions`, `Authorization: Bearer <token>`, and OpenAI-compatible API behavior. The OpenAI-compatible client examples configure `base_url = "https://ai.gitee.com/v1"`, but this plugin's provider convention stores the service root as `baseUrl` and supplies `/v1/...` paths through the provider implementation. For this codebase, the default provider base URL should therefore be `https://ai.gitee.com`.
 
 ## Goals / Non-Goals
 
@@ -45,7 +45,7 @@ Set `getDefaultBaseUrl()` to `https://ai.gitee.com` and configure chat completio
 
 Rationale: Existing OpenAI-compatible providers in this codebase store the service root and pass versioned endpoint paths separately. The default discovery implementation also calls `{baseUrl}/v1/models`, so including `/v1` in the default base URL would risk double-versioned URLs.
 
-Alternative considered: set the default to the official OpenAI SDK base URL `https://ai.gitee.com/v1` and use `/chat/completions`. That would diverge from the current provider pattern and require either overriding discovery or adding URL normalization for this provider.
+Alternative considered: set the default to the official OpenAI-compatible client base URL `https://ai.gitee.com/v1` and use `/chat/completions`. That would diverge from the current provider pattern and require either overriding discovery or adding URL normalization for this provider.
 
 ### Decision 4: Mark only OpenAI chat as supported
 

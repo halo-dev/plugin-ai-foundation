@@ -6,9 +6,11 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 
@@ -69,6 +71,10 @@ public class GenerationStep {
      */
     private List<ToolCall> toolCalls;
     /**
+     * Tool execution approval requests produced during this step.
+     */
+    private List<ToolApprovalRequest> toolApprovalRequests;
+    /**
      * Successful tool results produced during this step.
      */
     private List<ToolResult> toolResults;
@@ -76,6 +82,10 @@ public class GenerationStep {
      * Tool execution errors produced during this step.
      */
     private List<ToolError> toolErrors;
+    /**
+     * Provider-neutral response messages produced during this step.
+     */
+    private List<ModelMessage> responseMessages;
     /**
      * Non-fatal warnings for this step, such as skipped tool execution.
      */

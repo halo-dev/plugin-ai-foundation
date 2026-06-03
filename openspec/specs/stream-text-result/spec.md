@@ -83,3 +83,38 @@ Lifecycle callbacks attached to a streaming request SHALL observe the same share
 #### Scenario: Multiple stream views
 - **WHEN** a caller consumes `fullStream()`, `textStream()`, and `result()` from one stream result
 - **THEN** lifecycle callbacks MUST NOT be invoked more than once for the same generation, step, or tool execution
+
+### Requirement: Stream Text Result Exposes Approval Requests
+`StreamTextResult` SHALL expose pending tool approval requests through full stream and final result projections.
+
+#### Scenario: Full stream contains approval request
+- **WHEN** a stream emits a tool call that requires approval
+- **THEN** `fullStream()` SHALL emit a `tool-approval-request` part containing the approval id and normalized tool call data
+
+#### Scenario: Final result contains approval request
+- **WHEN** a streamed generation completes with pending approval requests
+- **THEN** `result()` SHALL expose those approval requests in the final accumulated generation result
+- **AND** it SHALL not report tool results for tools that were not executed
+
+#### Scenario: Convenience projections avoid duplicate execution
+- **WHEN** multiple `StreamTextResult` projections are consumed for a stream with approval requests
+- **THEN** each approval request SHALL be produced at most once by the shared generation execution
+- **AND** no tool executor SHALL run until a later request provides approval
+
+### Requirement: Stream Final Results Expose Response Messages
+Streaming text final projections SHALL expose the same provider-neutral response messages as non-streaming text generation.
+
+#### Scenario: Stream result includes appendable messages
+- **WHEN** `LanguageModel.streamText(request)` completes successfully
+- **THEN** `StreamTextResult.result()` SHALL return a `GenerateTextResult` whose response messages contain the assistant and tool history produced by the streamed generation
+- **AND** those messages SHALL be appendable to later `GenerateTextRequest.messages`
+
+#### Scenario: Full stream and final result share one response history
+- **WHEN** a caller consumes `fullStream()` and later consumes `result()` from the same `StreamTextResult`
+- **THEN** response messages SHALL reflect the single shared generation execution
+- **AND** consuming multiple projections SHALL NOT duplicate tool execution or duplicate response messages
+
+#### Scenario: Stream text projection remains text-only
+- **WHEN** a caller consumes `StreamTextResult.textStream()`
+- **THEN** response messages SHALL remain available only through final result projections
+- **AND** response messages SHALL NOT be emitted as answer text deltas

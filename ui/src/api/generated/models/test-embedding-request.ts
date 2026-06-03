@@ -28,12 +28,6 @@ export interface TestEmbeddingRequest {
     'dimensions'?: number;
     /**
      * 
-     * @type {{ [key: string]: string; }}
-     * @memberof TestEmbeddingRequest
-     */
-    'headers'?: { [key: string]: string; };
-    /**
-     * 
      * @type {Array<string>}
      * @memberof TestEmbeddingRequest
      */

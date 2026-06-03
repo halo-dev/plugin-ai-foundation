@@ -6,10 +6,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 
@@ -84,9 +86,18 @@ public class GenerateTextResult {
      */
     private List<GenerationStep> steps;
     /**
+     * Provider-neutral messages produced by this generation call. Callers can append these after
+     * their stored request messages before a later generation call.
+     */
+    private List<ModelMessage> responseMessages;
+    /**
      * Aggregated tool calls across all steps.
      */
     private List<ToolCall> toolCalls;
+    /**
+     * Aggregated pending tool approval requests across all steps.
+     */
+    private List<ToolApprovalRequest> toolApprovalRequests;
     /**
      * Aggregated successful tool results across all steps.
      */

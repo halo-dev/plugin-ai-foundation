@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.message.ModelMessage;
 
 /**
@@ -43,4 +44,8 @@ public class ToolExecutionContext {
      * Provider metadata from the tool call and surrounding step.
      */
     private Map<String, Object> providerMetadata;
+    /**
+     * Request-scoped cooperative cancellation signal, when the caller supplied one.
+     */
+    private CancellationToken cancellationToken;
 }

@@ -45,11 +45,13 @@ models/move-operation.ts
 models/output-spec.ts
 models/provider-model-discovery-response.ts
 models/provider-type-info.ts
+models/reasoning-options.ts
 models/remove-operation.ts
 models/replace-operation.ts
 models/test-embedding-request.ts
 models/test-embedding-response.ts
 models/test-operation.ts
 models/text-stream-part.ts
+models/tool-approval-policy.ts
 models/tool-choice.ts
 models/tool-definition.ts

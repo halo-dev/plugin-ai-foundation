@@ -1,5 +1,6 @@
 package run.halo.aifoundation.provider.support;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -35,10 +36,31 @@ public final class OpenAiToolCallingOptions {
             .internalToolExecutionEnabled(false)
             .toolCallbacks(toolCallbacks)
             .httpHeaders(headers(request));
+        applyNativeTools(builder, request);
         reasoningControlOptions.apply(builder, request);
         applyToolChoice(builder, request.getToolChoice(), toolNames);
         OpenAiStructuredOutputOptions.apply(builder, request);
         return builder.build();
+    }
+
+    public static void applyNativeTools(OpenAiChatOptions.Builder builder,
+        GenerateTextRequest request) {
+        var tools = ProviderToolMetadata.from(request);
+        if (tools.stream().noneMatch(ProviderToolMetadata::hasNativeStrictMetadata)) {
+            return;
+        }
+        builder.tools(toOpenAiFunctionTools(tools));
+    }
+
+    static List<OpenAiApi.FunctionTool> toOpenAiFunctionTools(List<ProviderToolMetadata> tools) {
+        return tools.stream()
+            .map(tool -> new OpenAiApi.FunctionTool(new OpenAiApi.FunctionTool.Function(
+                tool.description(),
+                tool.name(),
+                tool.inputSchema(),
+                tool.strict()
+            )))
+            .toList();
     }
 
     public static void applyToolChoice(OpenAiChatOptions.Builder builder, ToolChoice toolChoice,
