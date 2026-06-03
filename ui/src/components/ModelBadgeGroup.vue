@@ -22,7 +22,6 @@ const features = computed(() => props.model.spec.features || [])
     class=":uno: flex flex-wrap items-center gap-1.5"
     :class="{ ':uno: justify-end': align === 'end' }"
   >
-    <VTag v-if="!model.spec.enabled">已禁用</VTag>
     <VTag>{{ modelTypeLabel(model.spec.modelType) }}</VTag>
     <VTag v-for="feature in features" :key="feature">
       {{ modelFeatureLabel(feature) }}
