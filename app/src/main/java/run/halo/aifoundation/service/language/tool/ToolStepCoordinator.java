@@ -18,24 +18,23 @@ public final class ToolStepCoordinator {
         this.toolExecutor = toolExecutor;
     }
 
-    public Mono<ToolStepResolution> resolve(List<ToolCall> toolCalls, GenerateTextRequest request,
-        int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, LanguageModelToolExecutor.ToolLifecycle lifecycle,
-        Function<ToolCall, String> approvalIdFactory, boolean toolExecutionAllowed) {
-        if (!toolExecutionAllowed) {
-            var execution = toolExecutor.stepLimitReached(toolCalls);
-            return Mono.just(new ToolStepResolution(toolCalls, List.of(), execution,
+    public Mono<ToolStepResolution> resolve(ToolStepRequest request) {
+        if (!request.toolExecutionAllowed()) {
+            var execution = toolExecutor.stepLimitReached(request.toolCalls());
+            return Mono.just(new ToolStepResolution(request.toolCalls(), List.of(), execution,
                 execution.warnings(), false));
         }
 
-        return toolExecutor.evaluateApproval(toolCalls, request, stepIndex, executionMessages,
-                stepProviderMetadata, lifecycle, approvalIdFactory)
+        return toolExecutor.evaluateApproval(request.toolCalls(), request.generationRequest(),
+                request.stepIndex(), request.executionMessages(), request.stepProviderMetadata(),
+                request.lifecycle(), request.approvalIdFactory())
             .flatMap(approval -> {
                 var execution = approval.approvalRequests().isEmpty()
                     && approval.errors().isEmpty()
                     && !approval.hasPendingExternalCalls()
-                    ? toolExecutor.execute(approval.executableCalls(), request, stepIndex,
-                    executionMessages, stepProviderMetadata, lifecycle)
+                    ? toolExecutor.execute(approval.executableCalls(), request.generationRequest(),
+                    request.stepIndex(), request.executionMessages(), request.stepProviderMetadata(),
+                    request.lifecycle())
                     : Mono.just(new ToolExecutionBatch(List.of(), approval.errors(),
                         approval.warnings()));
                 return execution.map(batch -> resolution(approval, batch));
@@ -55,6 +54,18 @@ public final class ToolStepCoordinator {
             && !execution.results().isEmpty();
         return new ToolStepResolution(approval.toolCalls(), approval.approvalRequests(),
             execution, List.copyOf(warnings), canContinue);
+    }
+
+    public record ToolStepRequest(
+        List<ToolCall> toolCalls,
+        GenerateTextRequest generationRequest,
+        int stepIndex,
+        List<ModelMessage> executionMessages,
+        Map<String, Object> stepProviderMetadata,
+        LanguageModelToolExecutor.ToolLifecycle lifecycle,
+        Function<ToolCall, String> approvalIdFactory,
+        boolean toolExecutionAllowed
+    ) {
     }
 
     public record ToolStepResolution(

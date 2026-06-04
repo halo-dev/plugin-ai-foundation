@@ -150,75 +150,99 @@ public final class LanguageModelStructuredOutputHandler {
                 path);
         }
         if ("object".equals(type) || schema.containsKey("properties")) {
-            if (!(value instanceof Map<?, ?> map)) {
-                throw validationError(
-                    "Structured output validation failed: " + path + " must be an object", path);
-            }
-            var required = schema.get("required");
-            if (required instanceof Collection<?> requiredFields) {
-                for (var field : requiredFields) {
-                    if (!map.containsKey(field)) {
-                        throw validationError(
-                            "Structured output validation failed: missing required field "
-                                + path + "." + field, path + "." + field);
-                    }
-                }
-            }
-            var properties = schema.get("properties");
-            if (properties instanceof Map<?, ?> propertyMap) {
-                for (var entry : propertyMap.entrySet()) {
-                    var key = entry.getKey();
-                    if (key == null || !map.containsKey(key)) {
-                        continue;
-                    }
-                    if (entry.getValue() instanceof Map<?, ?> propertySchema) {
-                        validateJsonValue(map.get(key),
-                            (Map<String, Object>) responseMapper.sanitizeValue(propertySchema),
-                            path + "." + key);
-                    }
-                }
-            }
+            validateObjectValue(value, schema, path);
         }
         if ("array".equals(type) || schema.containsKey("items")) {
-            if (!(value instanceof List<?> list)) {
-                throw validationError(
-                    "Structured output validation failed: " + path + " must be an array", path);
-            }
-            var items = schema.get("items");
-            if (items instanceof Map<?, ?> itemSchema) {
-                for (var i = 0; i < list.size(); i++) {
-                    validateJsonValue(list.get(i),
-                        (Map<String, Object>) responseMapper.sanitizeValue(itemSchema),
-                        path + "[" + i + "]");
+            validateArrayValue(value, schema, path);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateObjectValue(Object value, Map<String, Object> schema, String path) {
+        if (!(value instanceof Map<?, ?> map)) {
+            throw validationError(
+                "Structured output validation failed: " + path + " must be an object", path);
+        }
+        var required = schema.get("required");
+        if (required instanceof Collection<?> requiredFields) {
+            validateRequiredFields(map, requiredFields, path);
+        }
+        var properties = schema.get("properties");
+        if (properties instanceof Map<?, ?> propertyMap) {
+            for (var entry : propertyMap.entrySet()) {
+                var key = entry.getKey();
+                if (key == null || !map.containsKey(key)) {
+                    continue;
+                }
+                if (entry.getValue() instanceof Map<?, ?> propertySchema) {
+                    validateJsonValue(map.get(key),
+                        (Map<String, Object>) responseMapper.sanitizeValue(propertySchema),
+                        path + "." + key);
                 }
             }
         }
     }
 
+    private void validateRequiredFields(Map<?, ?> map, Collection<?> requiredFields, String path) {
+        for (var field : requiredFields) {
+            if (!map.containsKey(field)) {
+                throw validationError(
+                    "Structured output validation failed: missing required field "
+                        + path + "." + field, path + "." + field);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateArrayValue(Object value, Map<String, Object> schema, String path) {
+        if (!(value instanceof List<?> list)) {
+            throw validationError(
+                "Structured output validation failed: " + path + " must be an array", path);
+        }
+        var items = schema.get("items");
+        if (items instanceof Map<?, ?> itemSchema) {
+            for (var i = 0; i < list.size(); i++) {
+                validateJsonValue(list.get(i),
+                    (Map<String, Object>) responseMapper.sanitizeValue(itemSchema),
+                    path + "[" + i + "]");
+            }
+        }
+    }
+
     private String outputText(OutputSpec output, String text) {
+        var trimmed = stripMarkdownFence(text);
+        var objectText = structuredSlice(trimmed, '{', '}',
+            output.getType() == OutputType.OBJECT
+                || output.getType() == OutputType.JSON && trimmed.startsWith("{"));
+        if (objectText != null) {
+            return objectText;
+        }
+        var arrayText = structuredSlice(trimmed, '[', ']',
+            output.getType() == OutputType.ARRAY
+                || output.getType() == OutputType.JSON && trimmed.startsWith("["));
+        return arrayText != null ? arrayText : trimmed;
+    }
+
+    private String stripMarkdownFence(String text) {
         var trimmed = text != null ? text.trim() : "";
         if (trimmed.startsWith("```")) {
-            trimmed = trimmed.replaceFirst("^```[a-zA-Z0-9_-]*\\s*", "")
+            return trimmed.replaceFirst("^```[a-zA-Z0-9_-]*\\s*", "")
                 .replaceFirst("\\s*```$", "")
                 .trim();
         }
-        if (output.getType() == OutputType.OBJECT
-            || output.getType() == OutputType.JSON && trimmed.startsWith("{")) {
-            var start = trimmed.indexOf('{');
-            var end = trimmed.lastIndexOf('}');
-            if (start >= 0 && end >= start) {
-                return trimmed.substring(start, end + 1);
-            }
-        }
-        if (output.getType() == OutputType.ARRAY
-            || output.getType() == OutputType.JSON && trimmed.startsWith("[")) {
-            var start = trimmed.indexOf('[');
-            var end = trimmed.lastIndexOf(']');
-            if (start >= 0 && end >= start) {
-                return trimmed.substring(start, end + 1);
-            }
-        }
         return trimmed;
+    }
+
+    private String structuredSlice(String text, char startChar, char endChar, boolean enabled) {
+        if (!enabled) {
+            return null;
+        }
+        var start = text.indexOf(startChar);
+        var end = text.lastIndexOf(endChar);
+        if (start >= 0 && end >= start) {
+            return text.substring(start, end + 1);
+        }
+        return null;
     }
 
     private String normalizeChoice(String outputText) {

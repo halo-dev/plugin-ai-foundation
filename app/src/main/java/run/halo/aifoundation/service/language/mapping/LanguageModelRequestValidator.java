@@ -105,56 +105,84 @@ public final class LanguageModelRequestValidator {
         if (part == null) {
             throw new IllegalArgumentException("message content must not contain null parts");
         }
-        if (PartType.isText(part.getType()) && !hasText(part.getText())) {
-            throw new IllegalArgumentException("text content part must not be blank");
-        }
         if (PartType.isText(part.getType())) {
+            validateTextPart(part);
             return;
         }
         if (PartType.isReasoning(part.getType())) {
-            if (role != ModelMessageRole.ASSISTANT) {
-                throw new IllegalArgumentException("reasoning content part is only supported for assistant messages");
-            }
-            if (!reasoningHistorySupported) {
-                throw new IllegalArgumentException("reasoning content is not supported by provider type: "
-                    + providerType);
-            }
-            if (!hasText(part.getText()) && (part.getProviderOptions() == null
-                || part.getProviderOptions().isEmpty())) {
-                throw new IllegalArgumentException("reasoning content part must include text or provider metadata");
-            }
+            validateReasoningPart(role, part);
             return;
         }
         if (role == ModelMessageRole.ASSISTANT && PartType.isToolCall(part.getType())) {
-            if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
-                throw new IllegalArgumentException("tool-call content part must include toolCallId and toolName");
-            }
+            validateToolCallPart(part);
             return;
         }
         if (role == ModelMessageRole.TOOL && PartType.isToolResponse(part.getType())) {
-            if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
-                throw new IllegalArgumentException("tool content part must include toolCallId and toolName");
-            }
+            validateToolResponsePart(part);
             return;
         }
         if (role == ModelMessageRole.ASSISTANT
             && PartType.isToolApprovalRequest(part.getType())) {
-            if (!hasText(part.getApprovalId()) || !hasText(part.getToolCallId())
-                || !hasText(part.getToolName())) {
-                throw new IllegalArgumentException(
-                    "tool approval request part must include approvalId, toolCallId and toolName");
-            }
+            validateToolApprovalRequestPart(part);
             return;
         }
         if (role == ModelMessageRole.TOOL
             && PartType.isToolApprovalResponse(part.getType())) {
-            if (!hasText(part.getApprovalId()) || part.getApproved() == null) {
-                throw new IllegalArgumentException(
-                    "tool approval response part must include approvalId and approved");
-            }
+            validateToolApprovalResponsePart(part);
             return;
         }
         throw new IllegalArgumentException("unsupported content part type: " + part.getType());
+    }
+
+    private void validateTextPart(ModelMessagePart part) {
+        if (!hasText(part.getText())) {
+            throw new IllegalArgumentException("text content part must not be blank");
+        }
+    }
+
+    private void validateReasoningPart(ModelMessageRole role, ModelMessagePart part) {
+        if (role != ModelMessageRole.ASSISTANT) {
+            throw new IllegalArgumentException(
+                "reasoning content part is only supported for assistant messages");
+        }
+        if (!reasoningHistorySupported) {
+            throw new IllegalArgumentException("reasoning content is not supported by provider type: "
+                + providerType);
+        }
+        if (!hasText(part.getText()) && (part.getProviderOptions() == null
+            || part.getProviderOptions().isEmpty())) {
+            throw new IllegalArgumentException(
+                "reasoning content part must include text or provider metadata");
+        }
+    }
+
+    private void validateToolCallPart(ModelMessagePart part) {
+        if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
+            throw new IllegalArgumentException(
+                "tool-call content part must include toolCallId and toolName");
+        }
+    }
+
+    private void validateToolResponsePart(ModelMessagePart part) {
+        if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
+            throw new IllegalArgumentException(
+                "tool content part must include toolCallId and toolName");
+        }
+    }
+
+    private void validateToolApprovalRequestPart(ModelMessagePart part) {
+        if (!hasText(part.getApprovalId()) || !hasText(part.getToolCallId())
+            || !hasText(part.getToolName())) {
+            throw new IllegalArgumentException(
+                "tool approval request part must include approvalId, toolCallId and toolName");
+        }
+    }
+
+    private void validateToolApprovalResponsePart(ModelMessagePart part) {
+        if (!hasText(part.getApprovalId()) || part.getApproved() == null) {
+            throw new IllegalArgumentException(
+                "tool approval response part must include approvalId and approved");
+        }
     }
 
     private void validateToolResponseHistory(List<ModelMessage> messages) {

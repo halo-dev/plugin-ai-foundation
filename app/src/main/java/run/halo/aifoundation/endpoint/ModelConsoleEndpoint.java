@@ -40,11 +40,6 @@ import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.extension.AiModel;
-import run.halo.aifoundation.extension.AiProvider;
-import run.halo.aifoundation.provider.AiProviderType;
-import run.halo.aifoundation.provider.support.DiscoveryConfidence;
-import run.halo.aifoundation.provider.support.DiscoverySource;
-import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
@@ -67,7 +62,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
-    private final ProviderClientCache providerClientCache;
+    private final ModelConsoleModelValidator modelValidator;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -252,9 +247,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return request.bodyToMono(GenerateTextRequest.class)
             .defaultIfEmpty(new GenerateTextRequest())
             .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
-                var chatRequest = withConsoleTestTool(body, consoleTestToolEnabled(request),
-                    consoleTestToolApprovalEnabled(request), consoleExternalTestToolEnabled(request),
-                    consoleToolCallRepairEnabled(request));
+                var chatRequest = withConsoleTestTool(body, ConsoleTestToolOptions.from(request));
                 Flux<ServerSentEvent<Object>> flux = aiModelService.languageModel(modelName)
                     .flatMapMany(languageModel -> languageModel.streamText(chatRequest).fullStream())
                     .onErrorResume(e -> {
@@ -289,33 +282,33 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .flatMap(response -> ServerResponse.ok().bodyValue(response));
     }
 
-    private boolean consoleTestToolEnabled(ServerRequest request) {
+    private static boolean consoleTestToolEnabled(ServerRequest request) {
         return request.queryParam("enableTestTool")
             .map(Boolean::parseBoolean)
             .orElse(false);
     }
 
-    private boolean consoleTestToolApprovalEnabled(ServerRequest request) {
+    private static boolean consoleTestToolApprovalEnabled(ServerRequest request) {
         return request.queryParam("enableTestToolApproval")
             .map(Boolean::parseBoolean)
             .orElse(false);
     }
 
-    private boolean consoleExternalTestToolEnabled(ServerRequest request) {
+    private static boolean consoleExternalTestToolEnabled(ServerRequest request) {
         return request.queryParam("enableExternalTestTool")
             .map(Boolean::parseBoolean)
             .orElse(false);
     }
 
-    private boolean consoleToolCallRepairEnabled(ServerRequest request) {
+    private static boolean consoleToolCallRepairEnabled(ServerRequest request) {
         return request.queryParam("enableToolCallRepair")
             .map(Boolean::parseBoolean)
             .orElse(false);
     }
 
-    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request, boolean enabled,
-        boolean approvalEnabled, boolean externalEnabled, boolean repairEnabled) {
-        if (!enabled && !approvalEnabled && !externalEnabled && !repairEnabled) {
+    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request,
+        ConsoleTestToolOptions options) {
+        if (!options.hasAnyEnabled()) {
             return request;
         }
         var tools = new ArrayList<ToolDefinition>();
@@ -325,13 +318,13 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         tools.removeIf(tool -> CONSOLE_TEST_TOOL_NAME.equals(tool.getName())
             || CONSOLE_EXTERNAL_TEST_TOOL_NAME.equals(tool.getName())
             || CONSOLE_REPAIR_TEST_TOOL_NAME.equals(tool.getName()));
-        if (enabled || approvalEnabled) {
-            tools.add(consoleTestTool(approvalEnabled));
+        if (options.basicEnabled() || options.approvalEnabled()) {
+            tools.add(consoleTestTool(options.approvalEnabled()));
         }
-        if (externalEnabled) {
+        if (options.externalEnabled()) {
             tools.add(consoleExternalTestTool());
         }
-        if (repairEnabled) {
+        if (options.repairEnabled()) {
             tools.add(consoleRepairTestTool());
             request.setToolCallRepair(context -> {
                 if (!CONSOLE_REPAIR_TEST_TOOL_NAME.equals(context.getToolCall().getToolName())) {
@@ -543,6 +536,26 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return value != null && !value.isBlank();
     }
 
+    private record ConsoleTestToolOptions(
+        boolean basicEnabled,
+        boolean approvalEnabled,
+        boolean externalEnabled,
+        boolean repairEnabled
+    ) {
+        static ConsoleTestToolOptions from(ServerRequest request) {
+            return new ConsoleTestToolOptions(
+                consoleTestToolEnabled(request),
+                consoleTestToolApprovalEnabled(request),
+                consoleExternalTestToolEnabled(request),
+                consoleToolCallRepairEnabled(request)
+            );
+        }
+
+        boolean hasAnyEnabled() {
+            return basicEnabled || approvalEnabled || externalEnabled || repairEnabled;
+        }
+    }
+
     private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId,
         int attempt) {
         if (attempt >= MAX_NAME_GENERATION_ATTEMPTS) {
@@ -557,88 +570,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<Void> validateModel(AiModel model) {
-        if (model.getSpec() == null) {
-            return Mono.error(
-                new ResponseStatusException(HttpStatus.BAD_REQUEST, "Model spec is required"));
-        }
-        var providerName = model.getSpec().getProviderName();
-        var modelId = model.getSpec().getModelId();
-        var modelType = model.getSpec().getModelType();
-
-        if (providerName == null || providerName.isBlank()) {
-            return Mono.error(
-                new ResponseStatusException(HttpStatus.BAD_REQUEST, "providerName is required"));
-        }
-        if (modelId == null || modelId.isBlank()) {
-            return Mono.error(
-                new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelId is required"));
-        }
-        if (modelType == null) {
-            return Mono.error(
-                new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelType is required"));
-        }
-        normalizeProfileDefaults(model.getSpec());
-
-        return client.fetch(AiProvider.class, providerName)
-            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Provider not found: " + providerName)))
-            .flatMap(provider -> {
-                var providerType = provider.getSpec().getProviderType();
-                var type = providerClientCache.getProviderTypeMap().get(providerType);
-                if (type == null) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Unsupported provider type: " + providerType));
-                }
-                if (!type.getSupportedModelTypes().contains(modelType)) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Model type '" + modelType.getValue()
-                            + "' is not supported by provider type '" + providerType
-                            + "'. Supported model types: " + type.getSupportedModelTypes()));
-                }
-                var unsupportedFeatures = model.getSpec().getFeatures().stream()
-                    .filter(feature -> !type.getSupportedFeatures().contains(feature))
-                    .toList();
-                if (!unsupportedFeatures.isEmpty()) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Model features " + unsupportedFeatures
-                            + " are not supported by provider type '" + providerType
-                            + "'. Supported features: " + type.getSupportedFeatures()));
-                }
-                applyDefaultAdapterType(model, type);
-                var adapterType = model.getSpec().getAdapterType();
-                if (adapterType == null) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "adapterType is required and no supported default could be recommended"));
-                }
-                var supportedTypes = type.getSupportedAdapterTypes();
-                if (!supportedTypes.contains(adapterType)) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Adapter type '" + adapterType.getValue() + "' is not supported by provider type '"
-                            + providerType + "'. Supported types: " + supportedTypes));
-                }
-                return Mono.empty();
-            });
-    }
-
-    private void normalizeProfileDefaults(AiModel.AiModelSpec spec) {
-        if (spec.getFeatures() == null) {
-            spec.setFeatures(List.of());
-        }
-        if (spec.getDiscoverySource() == null) {
-            spec.setDiscoverySource(DiscoverySource.MANUAL);
-        }
-        if (spec.getDiscoveryConfidence() == null) {
-            spec.setDiscoveryConfidence(DiscoveryConfidence.HIGH);
-        }
-    }
-
-    private void applyDefaultAdapterType(AiModel model, AiProviderType providerType) {
-        var spec = model.getSpec();
-        var adapterType = spec.getAdapterType();
-        if (adapterType != null) {
-            return;
-        }
-        providerType.recommendAdapterType(spec.getModelType()).ifPresent(spec::setAdapterType);
+        return modelValidator.validate(model);
     }
 
     private Mono<Void> checkModelUniqueness(AiModel model, String excludeName) {

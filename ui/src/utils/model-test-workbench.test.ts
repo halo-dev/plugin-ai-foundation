@@ -2,6 +2,7 @@ import type { AiModel, OutputSpec } from '@/api/generated'
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
+  applyWorkbenchStreamPart,
   buildOutputSpec,
   buildReasoningOptions,
   buildTestChatRequest,
@@ -12,6 +13,7 @@ import {
   isTerminalTextStreamPart,
   parseProviderOptionsJson,
   parseSseJsonLines,
+  testChatStreamUrl,
   toToolEvent,
   type TextStreamPart,
   type WorkbenchMessage,
@@ -554,6 +556,84 @@ describe('parseSseJsonLines', () => {
     ])
     expect(result.chunks.filter(isTerminalTextStreamPart).map((chunk) => chunk.type)).toEqual([
       'finish',
+    ])
+  })
+})
+
+describe('testChatStreamUrl', () => {
+  it('adds enabled console test flags as query parameters', () => {
+    expect(
+      testChatStreamUrl('model/name', {
+        testToolEnabled: true,
+        externalTestToolEnabled: true,
+        toolCallRepairEnabled: false,
+      }),
+    ).toBe(
+      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/stream?enableTestTool=true&enableExternalTestTool=true',
+    )
+  })
+})
+
+describe('applyWorkbenchStreamPart', () => {
+  it('accumulates text, reasoning, response messages, warnings, and finish state', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+      leadingMessages: [{ role: 'USER', content: [{ type: 'text', text: 'hello' }] }],
+      historyParts: [{ type: 'text', text: 'old' }],
+    }
+
+    applyWorkbenchStreamPart(message, { type: 'reasoning-start' })
+    applyWorkbenchStreamPart(message, { type: 'reasoning-delta', delta: 'think' })
+    applyWorkbenchStreamPart(message, { type: 'reasoning-end' })
+    applyWorkbenchStreamPart(message, { type: 'text-delta', delta: 'answer' })
+    applyWorkbenchStreamPart(message, {
+      type: 'finish-step',
+      warnings: [{ code: 'w', message: 'warn' }],
+      response: {
+        messages: [{ role: 'ASSISTANT', content: [{ type: 'text', text: 'answer' }] }],
+      },
+    })
+    applyWorkbenchStreamPart(message, { type: 'finish' })
+
+    expect(message).toMatchObject({
+      content: 'answer',
+      reasoningContent: 'think',
+      reasoningState: 'done',
+      state: 'done',
+      warnings: [{ code: 'w', message: 'warn' }],
+      responseMessages: [{ role: 'ASSISTANT', content: [{ type: 'text', text: 'answer' }] }],
+      leadingMessages: undefined,
+      historyParts: undefined,
+    })
+  })
+
+  it('updates pending tool-call status when a result arrives', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+    }
+
+    applyWorkbenchStreamPart(message, {
+      type: 'tool-call',
+      toolCallId: 'call_1',
+      toolName: 'search',
+      input: { q: 'Halo' },
+    })
+    applyWorkbenchStreamPart(message, {
+      type: 'tool-result',
+      toolCallId: 'call_1',
+      toolName: 'search',
+      result: { ok: true },
+    })
+
+    expect(message.toolEvents).toMatchObject([
+      { type: 'tool-call', toolCallId: 'call_1', externalStatus: 'completed' },
+      { type: 'tool-result', toolCallId: 'call_1' },
     ])
   })
 })

@@ -171,6 +171,13 @@ export interface GenerateTextRequest {
   output?: OutputSpec
 }
 
+export interface ChatStreamOptions {
+  testToolEnabled?: boolean
+  testToolApprovalEnabled?: boolean
+  externalTestToolEnabled?: boolean
+  toolCallRepairEnabled?: boolean
+}
+
 export interface TextStreamPart {
   type?:
     | 'start'
@@ -340,51 +347,9 @@ export function buildTestChatRequest(
     extraMessages?: ModelMessage[]
   },
 ): GenerateTextRequest {
-  const requestMessages: ModelMessage[] = []
-
-  const systemPrompt = parameters.systemPrompt?.trim()
-
-  for (const message of messages) {
-    if (message.responseMessages?.length) {
-      requestMessages.push(...message.responseMessages)
-      if (message.followingMessages?.length) {
-        requestMessages.push(...message.followingMessages)
-      }
-      continue
-    }
-    if (message.leadingMessages?.length) {
-      requestMessages.push(...message.leadingMessages)
-    }
-    const content = message.content.trim()
-    const historyParts = message.role === 'assistant' ? message.historyParts || [] : []
-    if (
-      (!content && !historyParts.length) ||
-      (message.role === 'assistant' && message.state === 'error')
-    ) {
-      if (message.followingMessages?.length) {
-        requestMessages.push(...message.followingMessages)
-      }
-      continue
-    }
-    const parts: ModelMessagePart[] = []
-    parts.push(...historyParts)
-    if (content) {
-      parts.push({ type: 'text', text: content })
-    }
-    requestMessages.push({
-      role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
-      content: parts,
-    })
-    if (message.followingMessages?.length) {
-      requestMessages.push(...message.followingMessages)
-    }
-  }
-  if (options?.extraMessages?.length) {
-    requestMessages.push(...options.extraMessages)
-  }
-
+  const requestMessages = buildRequestMessages(messages, options?.extraMessages)
   return {
-    system: systemPrompt || undefined,
+    system: normalizedSystemPrompt(parameters),
     messages: requestMessages,
     temperature: parameters.temperature,
     topP: parameters.topP,
@@ -398,23 +363,73 @@ export function buildTestChatRequest(
   }
 }
 
+function buildRequestMessages(
+  messages: WorkbenchMessage[],
+  extraMessages?: ModelMessage[],
+): ModelMessage[] {
+  const requestMessages: ModelMessage[] = []
+  for (const message of messages) {
+    appendWorkbenchMessage(requestMessages, message)
+  }
+  if (extraMessages?.length) {
+    requestMessages.push(...extraMessages)
+  }
+  return requestMessages
+}
+
+function appendWorkbenchMessage(requestMessages: ModelMessage[], message: WorkbenchMessage) {
+  if (message.responseMessages?.length) {
+    requestMessages.push(...message.responseMessages)
+    appendFollowingMessages(requestMessages, message)
+    return
+  }
+  appendLeadingMessages(requestMessages, message)
+  const modelMessage = toModelMessage(message)
+  if (modelMessage) {
+    requestMessages.push(modelMessage)
+  }
+  appendFollowingMessages(requestMessages, message)
+}
+
+function toModelMessage(message: WorkbenchMessage): ModelMessage | undefined {
+  const content = message.content.trim()
+  const historyParts = message.role === 'assistant' ? message.historyParts || [] : []
+  if ((!content && !historyParts.length) || (message.role === 'assistant' && message.state === 'error')) {
+    return undefined
+  }
+  const parts = [...historyParts]
+  if (content) {
+    parts.push({ type: 'text', text: content })
+  }
+  return {
+    role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
+    content: parts,
+  }
+}
+
+function appendLeadingMessages(requestMessages: ModelMessage[], message: WorkbenchMessage) {
+  if (message.leadingMessages?.length) {
+    requestMessages.push(...message.leadingMessages)
+  }
+}
+
+function appendFollowingMessages(requestMessages: ModelMessage[], message: WorkbenchMessage) {
+  if (message.followingMessages?.length) {
+    requestMessages.push(...message.followingMessages)
+  }
+}
+
+function normalizedSystemPrompt(parameters: ChatParameters) {
+  return parameters.systemPrompt?.trim() || undefined
+}
+
 export function parseSseJsonLines<T>(buffer: string, text: string): SseParseResult<T> {
   const lines = (buffer + text).split('\n')
   const nextBuffer = lines.pop() || ''
   const chunks: T[] = []
 
   for (const line of lines) {
-    if (!line.startsWith('data:')) {
-      continue
-    }
-    const data = line.slice(5).trim()
-    if (!data) {
-      continue
-    }
-    if (data === '[DONE]') {
-      continue
-    }
-    chunks.push(JSON.parse(data) as T)
+    appendSseJsonChunk(chunks, line)
   }
 
   return {
@@ -424,12 +439,79 @@ export function parseSseJsonLines<T>(buffer: string, text: string): SseParseResu
 }
 
 export function flushSseJsonBuffer<T>(buffer: string) {
-  const line = buffer.trim()
+  const chunks: T[] = []
+  appendSseJsonChunk(chunks, buffer.trim())
+  return chunks
+}
+
+function appendSseJsonChunk<T>(chunks: T[], line: string) {
   if (!line.startsWith('data:')) {
-    return []
+    return
   }
   const data = line.slice(5).trim()
-  return data && data !== '[DONE]' ? [JSON.parse(data) as T] : []
+  if (data && data !== '[DONE]') {
+    chunks.push(JSON.parse(data) as T)
+  }
+}
+
+export async function readTestChatStream(options: {
+  modelName: string
+  requestBody: GenerateTextRequest
+  streamOptions: ChatStreamOptions
+  signal: AbortSignal
+  onChunks: (chunks: TextStreamPart[]) => void
+}) {
+  const response = await fetch(testChatStreamUrl(options.modelName, options.streamOptions), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options.requestBody),
+    signal: options.signal,
+  })
+  if (!response.ok) {
+    throw new Error((await response.text()) || `HTTP ${response.status}`)
+  }
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('无法读取响应流')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    const parsed = parseSseJsonLines<TextStreamPart>(
+      buffer,
+      decoder.decode(value, { stream: true }),
+    )
+    buffer = parsed.buffer
+    options.onChunks(parsed.chunks)
+  }
+  options.onChunks(flushSseJsonBuffer<TextStreamPart>(buffer))
+}
+
+export function testChatStreamUrl(modelName: string, options: ChatStreamOptions) {
+  const params = chatStreamQueryParams(options)
+  const query = params.toString()
+  return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-chat/stream${query ? `?${query}` : ''}`
+}
+
+function chatStreamQueryParams(options: ChatStreamOptions) {
+  const params = new URLSearchParams()
+  if (options.testToolEnabled) {
+    params.set('enableTestTool', 'true')
+  }
+  if (options.testToolApprovalEnabled) {
+    params.set('enableTestToolApproval', 'true')
+  }
+  if (options.externalTestToolEnabled) {
+    params.set('enableExternalTestTool', 'true')
+  }
+  if (options.toolCallRepairEnabled) {
+    params.set('enableToolCallRepair', 'true')
+  }
+  return params
 }
 
 export function isRenderableTextDelta(
@@ -469,6 +551,49 @@ export function toToolEvent(part: TextStreamPart): WorkbenchToolEvent | undefine
   }
 }
 
+export function applyWorkbenchStreamPart(message: WorkbenchMessage, part: TextStreamPart) {
+  const toolEvent = toToolEvent(part)
+  if (toolEvent) {
+    appendWorkbenchToolEvent(message, toolEvent)
+    return
+  }
+  if (part.type === 'error') {
+    appendWorkbenchError(message, part.errorText || '请求失败')
+    return
+  }
+  if (part.type === 'reasoning-start') {
+    message.reasoningState = 'streaming'
+    return
+  }
+  if (isRenderableReasoningDelta(part)) {
+    message.reasoningContent = `${message.reasoningContent || ''}${part.delta}`
+    message.reasoningState = 'streaming'
+    return
+  }
+  if (part.type === 'reasoning-end') {
+    message.reasoningState = 'done'
+    return
+  }
+  if (isRenderableTextDelta(part)) {
+    message.content += part.delta
+    return
+  }
+  if (part.type === 'finish-step') {
+    if (part.response?.messages?.length) {
+      message.responseMessages = part.response.messages
+      message.leadingMessages = undefined
+      message.historyParts = undefined
+    }
+    if (part.warnings?.length) {
+      message.warnings = [...(message.warnings || []), ...part.warnings]
+    }
+    return
+  }
+  if (isTerminalTextStreamPart(part)) {
+    finishWorkbenchMessage(message, 'done')
+  }
+}
+
 function isToolStreamPartType(type: TextStreamPart['type']): type is WorkbenchToolEvent['type'] {
   return (
     type === 'tool-call' ||
@@ -476,6 +601,48 @@ function isToolStreamPartType(type: TextStreamPart['type']): type is WorkbenchTo
     type === 'tool-error' ||
     type === 'tool-approval-request'
   )
+}
+
+function appendWorkbenchToolEvent(message: WorkbenchMessage, event: WorkbenchToolEvent) {
+  if (
+    event.toolCallId &&
+    (event.type === 'tool-result' ||
+      event.type === 'tool-error' ||
+      event.type === 'tool-approval-request')
+  ) {
+    message.toolEvents = (message.toolEvents || []).map((item) => {
+      if (item.type !== 'tool-call' || item.toolCallId !== event.toolCallId) {
+        return item
+      }
+      return {
+        ...item,
+        externalStatus:
+          event.type === 'tool-result'
+            ? 'completed'
+            : event.type === 'tool-error'
+              ? 'failed'
+              : undefined,
+      }
+    })
+  }
+  message.toolEvents = [...(message.toolEvents || []), event]
+}
+
+function appendWorkbenchError(message: WorkbenchMessage, content: string) {
+  message.content += content
+  message.state = 'error'
+  if (message.reasoningState === 'streaming') {
+    message.reasoningState = 'done'
+  }
+}
+
+function finishWorkbenchMessage(message: WorkbenchMessage, state: WorkbenchMessage['state']) {
+  if (message.state === 'streaming') {
+    message.state = state
+    if (message.reasoningState === 'streaming') {
+      message.reasoningState = 'done'
+    }
+  }
 }
 
 function toolEventSummary(part: TextStreamPart) {

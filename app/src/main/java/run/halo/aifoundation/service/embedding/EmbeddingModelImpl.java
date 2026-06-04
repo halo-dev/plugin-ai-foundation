@@ -72,32 +72,18 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         return Mono.defer(() -> {
                 validateRequest(request);
                 checkCancellation(request);
-                if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
-                    var empty = EmbeddingResponse.builder()
-                        .embeddings(List.of())
-                        .warnings(List.of())
-                        .providerMetadata(Map.of("providerType", providerType))
-                        .build();
-                    return invokeStart(lifecycle, request)
-                        .then(invokeFinish(lifecycle, request, empty))
-                        .thenReturn(empty);
+                if (isEmptyRequest(request)) {
+                    return emptyResponse(lifecycle, request);
                 }
 
-                var warnings = new ArrayList<EmbeddingWarning>();
-                warnings.addAll(requestWarnings(request));
-                var springOptions = providerOptions.buildOptions(request, warnings);
-                var batches = batchPlanner.indexedBatches(request);
-                var concurrency = batchPlanner.concurrency(request);
-                var batchFlux = Flux.fromIterable(batches);
-                Flux<EmbeddingBatchResult> results = supportsParallelCalls && concurrency > 1
-                    ? batchFlux.flatMap(batch -> batchCall(request, batch, springOptions), concurrency)
-                    : batchFlux.concatMap(batch -> batchCall(request, batch, springOptions));
-
+                var invocation = prepareInvocation(request);
                 return invokeStart(lifecycle, request)
-                    .thenMany(results)
+                    .thenMany(executeBatches(invocation))
                     .collectList()
-                    .map(batchResults -> responseAggregator.aggregate(batchResults, warnings))
-                    .flatMap(response -> invokeFinish(lifecycle, request, response).thenReturn(response));
+                    .map(batchResults -> responseAggregator.aggregate(batchResults,
+                        invocation.warnings()))
+                    .flatMap(response -> invokeFinish(lifecycle, request, response)
+                        .thenReturn(response));
             })
             .transform(mono -> withEmbeddingTimeout(mono, request))
             .onErrorResume(error -> invokeError(lifecycle, request, error).then(Mono.error(error)));
@@ -117,6 +103,39 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     @Override
     public boolean supportsParallelCalls() {
         return supportsParallelCalls;
+    }
+
+    private boolean isEmptyRequest(EmbeddingRequest request) {
+        return request == null || request.getInputs() == null || request.getInputs().isEmpty();
+    }
+
+    private Mono<EmbeddingResponse> emptyResponse(EmbeddingLifecycle lifecycle,
+        EmbeddingRequest request) {
+        var empty = EmbeddingResponse.builder()
+            .embeddings(List.of())
+            .warnings(List.of())
+            .providerMetadata(Map.of("providerType", providerType))
+            .build();
+        return invokeStart(lifecycle, request)
+            .then(invokeFinish(lifecycle, request, empty))
+            .thenReturn(empty);
+    }
+
+    private EmbeddingInvocation prepareInvocation(EmbeddingRequest request) {
+        var warnings = new ArrayList<EmbeddingWarning>();
+        warnings.addAll(requestWarnings(request));
+        return new EmbeddingInvocation(request, providerOptions.buildOptions(request, warnings),
+            warnings, batchPlanner.indexedBatches(request), batchPlanner.concurrency(request));
+    }
+
+    private Flux<EmbeddingBatchResult> executeBatches(EmbeddingInvocation invocation) {
+        var batchFlux = Flux.fromIterable(invocation.batches());
+        if (supportsParallelCalls && invocation.concurrency() > 1) {
+            return batchFlux.flatMap(batch -> batchCall(invocation.request(), batch,
+                invocation.options()), invocation.concurrency());
+        }
+        return batchFlux.concatMap(batch -> batchCall(invocation.request(), batch,
+            invocation.options()));
     }
 
     private Mono<EmbeddingBatchResult> batchCall(EmbeddingRequest request,
@@ -274,6 +293,15 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         return request != null && request.getContext() != null
             ? Map.copyOf(request.getContext())
             : Map.of();
+    }
+
+    private record EmbeddingInvocation(
+        EmbeddingRequest request,
+        EmbeddingOptions options,
+        List<EmbeddingWarning> warnings,
+        List<EmbeddingBatchPlanner.IndexedBatch> batches,
+        int concurrency
+    ) {
     }
 
 }

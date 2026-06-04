@@ -17,8 +17,13 @@ import {
   isModelOptionSelectable,
   modelFeatureLabel,
   modelOptionUnavailableReasonLabel,
+  modelOptionDisplayName,
   modelTypeLabel,
+  nextActiveModelName,
   normalizeRequiredFeatures,
+  selectedModelDisplayName,
+  shouldShowModelDetails,
+  shouldShowModelId,
 } from './ai-model-selector'
 const props = withDefaults(
   defineProps<{
@@ -128,8 +133,11 @@ const selectableModels = computed(() => {
 
 const hasModels = computed(() => groups.value.some((group) => group.models.length > 0))
 const selectedDisplayName = computed(() => {
-  const model = selectedModel.value || selectedModelSnapshot.value
-  return model?.displayName || model?.modelId || selectedValue.value
+  return selectedModelDisplayName(
+    selectedModel.value,
+    selectedModelSnapshot.value,
+    selectedValue.value,
+  )
 })
 
 const fieldErrors = computed<string[]>(() => {
@@ -189,17 +197,7 @@ watch([selectableModels, isOpen], () => {
   if (!isOpen.value) {
     return
   }
-
-  if (
-    activeModelName.value &&
-    selectableModels.value.some((model) => model.name === activeModelName.value)
-  ) {
-    return
-  }
-
-  activeModelName.value =
-    selectableModels.value.find((model) => model.name === selectedValue.value)?.name ||
-    selectableModels.value[0]?.name
+  refreshActiveModel()
 })
 
 watch(
@@ -257,12 +255,18 @@ function clearSelection() {
 
 async function openDropdown() {
   isOpen.value = true
-  activeModelName.value =
-    selectableModels.value.find((model) => model.name === selectedValue.value)?.name ||
-    selectableModels.value[0]?.name
+  refreshActiveModel()
   await nextTick()
   updateDropdownPosition()
   searchInputRef.value?.focus()
+}
+
+function refreshActiveModel() {
+  activeModelName.value = nextActiveModelName(
+    selectableModels.value,
+    selectedValue.value,
+    activeModelName.value,
+  )
 }
 
 async function moveActive(delta: number) {
@@ -521,23 +525,17 @@ onBeforeUnmount(() => {
                 <span class=":uno: min-w-0 flex-1">
                   <span class=":uno: flex items-center gap-1.5">
                     <span class=":uno: min-w-0 truncate leading-5">
-                      {{ model.displayName || model.modelId || model.name }}
+                      {{ modelOptionDisplayName(model) }}
                     </span>
                     <span
-                      v-if="
-                        model.modelId &&
-                        model.modelId !== model.displayName &&
-                        model.modelId !== model.name
-                      "
+                      v-if="shouldShowModelId(model)"
                       class=":uno: flex-none text-[11px] leading-4 opacity-50"
                     >
                       {{ model.modelId }}
                     </span>
                   </span>
                   <span
-                    v-if="
-                      model.modelType || model.features?.length || !isModelOptionSelectable(model)
-                    "
+                    v-if="shouldShowModelDetails(model)"
                     class=":uno: mt-1 flex flex-wrap items-center gap-1"
                   >
                     <span

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import run.halo.aifoundation.chat.FinishReason;
 import run.halo.aifoundation.chat.GenerateTextResult;
@@ -41,84 +42,118 @@ public final class LanguageModelStreamResultBuilder {
             return;
         }
         switch (part.getType()) {
-            case PartType.START_STEP -> {
-                currentStepIndex = part.getStepIndex() != null ? part.getStepIndex() : 0;
-                step(currentStepIndex);
-            }
+            case PartType.START_STEP -> acceptStartStep(part);
             case PartType.TEXT_DELTA -> step(currentStepIndex).text.append(part.getDelta());
-            case PartType.REASONING_DELTA -> step(currentStepIndex).reasoning.add(
-                ReasoningPart.builder()
-                    .text(part.getDelta())
-                    .signature(part.getSignature())
-                    .providerMetadata(part.getProviderMetadata())
-                    .build());
-            case PartType.TOOL_CALL -> step(currentStepIndex).toolCalls.add(ToolCall.builder()
-                .toolCallId(part.getToolCallId())
-                .toolName(part.getToolName())
-                .input(part.getInput())
-                .providerMetadata(part.getProviderMetadata())
-                .build());
-            case PartType.TOOL_APPROVAL_REQUEST -> step(currentStepIndex).toolApprovalRequests.add(
-                ToolApprovalRequest.builder()
-                    .approvalId(part.getApprovalId())
-                    .toolCallId(part.getToolCallId())
-                    .toolName(part.getToolName())
-                    .input(part.getInput())
-                    .stepIndex(part.getStepIndex())
-                    .providerMetadata(part.getProviderMetadata())
-                    .build());
-            case PartType.TOOL_RESULT -> step(currentStepIndex).toolResults.add(ToolResult.builder()
-                .toolCallId(part.getToolCallId())
-                .toolName(part.getToolName())
-                .result(part.getResult())
-                .providerMetadata(part.getProviderMetadata())
-                .build());
-            case PartType.TOOL_ERROR -> step(currentStepIndex).toolErrors.add(ToolError.builder()
-                .toolCallId(part.getToolCallId())
-                .toolName(part.getToolName())
-                .errorText(part.getErrorText())
-                .providerMetadata(part.getProviderMetadata())
-                .build());
-            case PartType.SOURCE -> step(currentStepIndex).content.add(GenerationContentPart.source(
-                part.getId(), part.getUrl(), part.getTitle(), part.getProviderMetadata()));
-            case PartType.FILE -> step(currentStepIndex).content.add(GenerationContentPart.file(
-                part.getId(), part.getUrl(), part.getTitle(), part.getMediaType(),
-                part.getData(), part.getProviderMetadata()));
-            case PartType.FINISH_STEP -> {
-                var step = step(part.getStepIndex() != null ? part.getStepIndex() : currentStepIndex);
-                step.finishReason = part.getFinishReason();
-                step.rawFinishReason = part.getRawFinishReason();
-                step.usage = part.getUsage();
-                step.warnings.addAll(nullSafe(part.getWarnings()));
-                step.request = part.getRequest();
-                step.response = part.getResponse();
-                step.providerMetadata = part.getProviderMetadata();
-            }
-            case PartType.FINISH -> {
-                finishReason = part.getFinishReason();
-                rawFinishReason = part.getRawFinishReason();
-                usage = part.getUsage();
-            }
-            case PartType.ERROR -> {
-                errorText = part.getErrorText();
-                if (part.getStepIndex() != null) {
-                    currentStepIndex = part.getStepIndex();
-                }
-                if (part.getUsage() != null) {
-                    usage = part.getUsage();
-                }
-                if (part.getResponse() != null) {
-                    response = part.getResponse();
-                }
-                if (part.getProviderMetadata() != null) {
-                    providerMetadata = part.getProviderMetadata();
-                    var exceptionType = part.getProviderMetadata().get("exceptionType");
-                    if (exceptionType != null) {
-                        errorType = exceptionType.toString();
-                    }
-                }
-            }
+            case PartType.REASONING_DELTA -> acceptReasoningDelta(part);
+            case PartType.TOOL_CALL -> acceptToolCall(part);
+            case PartType.TOOL_APPROVAL_REQUEST -> acceptToolApprovalRequest(part);
+            case PartType.TOOL_RESULT -> acceptToolResult(part);
+            case PartType.TOOL_ERROR -> acceptToolError(part);
+            case PartType.SOURCE -> acceptSource(part);
+            case PartType.FILE -> acceptFile(part);
+            case PartType.FINISH_STEP -> acceptFinishStep(part);
+            case PartType.FINISH -> acceptFinish(part);
+            case PartType.ERROR -> acceptError(part);
             default -> {
+            }
+        }
+    }
+
+    private void acceptStartStep(TextStreamPart part) {
+        currentStepIndex = part.getStepIndex() != null ? part.getStepIndex() : 0;
+        step(currentStepIndex);
+    }
+
+    private void acceptReasoningDelta(TextStreamPart part) {
+        step(currentStepIndex).reasoning.add(ReasoningPart.builder()
+            .text(part.getDelta())
+            .signature(part.getSignature())
+            .providerMetadata(part.getProviderMetadata())
+            .build());
+    }
+
+    private void acceptToolCall(TextStreamPart part) {
+        step(currentStepIndex).toolCalls.add(ToolCall.builder()
+            .toolCallId(part.getToolCallId())
+            .toolName(part.getToolName())
+            .input(part.getInput())
+            .providerMetadata(part.getProviderMetadata())
+            .build());
+    }
+
+    private void acceptToolApprovalRequest(TextStreamPart part) {
+        step(currentStepIndex).toolApprovalRequests.add(ToolApprovalRequest.builder()
+            .approvalId(part.getApprovalId())
+            .toolCallId(part.getToolCallId())
+            .toolName(part.getToolName())
+            .input(part.getInput())
+            .stepIndex(part.getStepIndex())
+            .providerMetadata(part.getProviderMetadata())
+            .build());
+    }
+
+    private void acceptToolResult(TextStreamPart part) {
+        step(currentStepIndex).toolResults.add(ToolResult.builder()
+            .toolCallId(part.getToolCallId())
+            .toolName(part.getToolName())
+            .result(part.getResult())
+            .providerMetadata(part.getProviderMetadata())
+            .build());
+    }
+
+    private void acceptToolError(TextStreamPart part) {
+        step(currentStepIndex).toolErrors.add(ToolError.builder()
+            .toolCallId(part.getToolCallId())
+            .toolName(part.getToolName())
+            .errorText(part.getErrorText())
+            .providerMetadata(part.getProviderMetadata())
+            .build());
+    }
+
+    private void acceptSource(TextStreamPart part) {
+        step(currentStepIndex).content.add(GenerationContentPart.source(
+            part.getId(), part.getUrl(), part.getTitle(), part.getProviderMetadata()));
+    }
+
+    private void acceptFile(TextStreamPart part) {
+        step(currentStepIndex).content.add(GenerationContentPart.file(
+            part.getId(), part.getUrl(), part.getTitle(), part.getMediaType(),
+            part.getData(), part.getProviderMetadata()));
+    }
+
+    private void acceptFinishStep(TextStreamPart part) {
+        var step = step(part.getStepIndex() != null ? part.getStepIndex() : currentStepIndex);
+        step.finishReason = part.getFinishReason();
+        step.rawFinishReason = part.getRawFinishReason();
+        step.usage = part.getUsage();
+        step.warnings.addAll(nullSafe(part.getWarnings()));
+        step.request = part.getRequest();
+        step.response = part.getResponse();
+        step.providerMetadata = part.getProviderMetadata();
+    }
+
+    private void acceptFinish(TextStreamPart part) {
+        finishReason = part.getFinishReason();
+        rawFinishReason = part.getRawFinishReason();
+        usage = part.getUsage();
+    }
+
+    private void acceptError(TextStreamPart part) {
+        errorText = part.getErrorText();
+        if (part.getStepIndex() != null) {
+            currentStepIndex = part.getStepIndex();
+        }
+        if (part.getUsage() != null) {
+            usage = part.getUsage();
+        }
+        if (part.getResponse() != null) {
+            response = part.getResponse();
+        }
+        if (part.getProviderMetadata() != null) {
+            providerMetadata = part.getProviderMetadata();
+            var exceptionType = part.getProviderMetadata().get("exceptionType");
+            if (exceptionType != null) {
+                errorType = exceptionType.toString();
             }
         }
     }
@@ -162,50 +197,26 @@ public final class LanguageModelStreamResultBuilder {
     }
 
     public GenerateTextResult build(StructuredOutput structuredOutput) {
-        var generationSteps = steps.entrySet().stream()
-            .map(entry -> entry.getValue().build(entry.getKey(), structuredOutput,
-                isFinalStep(entry.getKey())))
-            .toList();
-        var content = generationSteps.stream()
-            .flatMap(step -> nullSafe(step.getContent()).stream())
-            .toList();
-        var warnings = generationSteps.stream()
-            .flatMap(step -> nullSafe(step.getWarnings()).stream())
-            .toList();
-        var toolCalls = generationSteps.stream()
-            .flatMap(step -> nullSafe(step.getToolCalls()).stream())
-            .toList();
-        var toolApprovalRequests = generationSteps.stream()
-            .flatMap(step -> nullSafe(step.getToolApprovalRequests()).stream())
-            .toList();
-        var toolResults = generationSteps.stream()
-            .flatMap(step -> nullSafe(step.getToolResults()).stream())
-            .toList();
-        var toolErrors = generationSteps.stream()
-            .flatMap(step -> nullSafe(step.getToolErrors()).stream())
-            .toList();
-        var finalStep = generationSteps.isEmpty() ? null : generationSteps.get(generationSteps.size() - 1);
-        var text = generationSteps.stream()
-            .map(GenerationStep::getText)
-            .filter(LanguageModelStreamResultBuilder::hasText)
-            .collect(Collectors.joining());
-        var reasoning = finalStep != null ? nullSafe(finalStep.getReasoning()) : List.<ReasoningPart>of();
-        var reasoningText = reasoning.stream()
-            .map(ReasoningPart::getText)
-            .filter(LanguageModelStreamResultBuilder::hasText)
-            .collect(Collectors.joining());
+        var generationSteps = generationSteps(structuredOutput);
+        var finalStep = finalStep(generationSteps);
+        var reasoning = finalStepReasoning(finalStep);
+        var reasoningText = reasoningText(reasoning);
+        var toolCalls = flatten(generationSteps, GenerationStep::getToolCalls);
+        var toolApprovalRequests = flatten(generationSteps, GenerationStep::getToolApprovalRequests);
+        var toolResults = flatten(generationSteps, GenerationStep::getToolResults);
+        var toolErrors = flatten(generationSteps, GenerationStep::getToolErrors);
         return GenerateTextResult.builder()
-            .text(text)
+            .text(text(generationSteps))
             .output(structuredOutput != null ? structuredOutput.output() : null)
             .outputText(structuredOutput != null ? structuredOutput.outputText() : null)
             .reasoningText(hasText(reasoningText) ? reasoningText : null)
-            .content(content)
+            .content(flatten(generationSteps, GenerationStep::getContent))
             .reasoning(reasoning)
             .finishReason(finishReason)
             .rawFinishReason(rawFinishReason)
             .usage(finalStep != null ? finalStep.getUsage() : null)
             .totalUsage(usage)
-            .warnings(warnings)
+            .warnings(flatten(generationSteps, GenerationStep::getWarnings))
             .request(finalStep != null ? finalStep.getRequest() : request)
             .response(finalStep != null ? finalStep.getResponse() : response)
             .steps(generationSteps)
@@ -216,6 +227,42 @@ public final class LanguageModelStreamResultBuilder {
             .toolErrors(toolErrors)
             .providerMetadata(finalStep != null ? finalStep.getProviderMetadata() : providerMetadata)
             .build();
+    }
+
+    private List<GenerationStep> generationSteps(StructuredOutput structuredOutput) {
+        return steps.entrySet().stream()
+            .map(entry -> entry.getValue().build(entry.getKey(), structuredOutput,
+                isFinalStep(entry.getKey())))
+            .toList();
+    }
+
+    private GenerationStep finalStep(List<GenerationStep> generationSteps) {
+        return generationSteps.isEmpty() ? null : generationSteps.get(generationSteps.size() - 1);
+    }
+
+    private String text(List<GenerationStep> generationSteps) {
+        return generationSteps.stream()
+            .map(GenerationStep::getText)
+            .filter(LanguageModelStreamResultBuilder::hasText)
+            .collect(Collectors.joining());
+    }
+
+    private List<ReasoningPart> finalStepReasoning(GenerationStep finalStep) {
+        return finalStep != null ? nullSafe(finalStep.getReasoning()) : List.of();
+    }
+
+    private String reasoningText(List<ReasoningPart> reasoning) {
+        return reasoning.stream()
+            .map(ReasoningPart::getText)
+            .filter(LanguageModelStreamResultBuilder::hasText)
+            .collect(Collectors.joining());
+    }
+
+    private static <T> List<T> flatten(List<GenerationStep> generationSteps,
+        Function<GenerationStep, List<T>> values) {
+        return generationSteps.stream()
+            .flatMap(step -> nullSafe(values.apply(step)).stream())
+            .toList();
     }
 
     private StepBuild step(Integer stepIndex) {
