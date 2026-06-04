@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.message.ModelMessage;
@@ -17,24 +18,31 @@ public final class ToolStepCoordinator {
         this.toolExecutor = toolExecutor;
     }
 
-    public ToolStepResolution resolve(List<ToolCall> toolCalls, GenerateTextRequest request,
+    public Mono<ToolStepResolution> resolve(List<ToolCall> toolCalls, GenerateTextRequest request,
         int stepIndex, List<ModelMessage> executionMessages,
         Map<String, Object> stepProviderMetadata, LanguageModelToolExecutor.ToolLifecycle lifecycle,
         Function<ToolCall, String> approvalIdFactory, boolean toolExecutionAllowed) {
         if (!toolExecutionAllowed) {
             var execution = toolExecutor.stepLimitReached(toolCalls);
-            return new ToolStepResolution(toolCalls, List.of(), execution, execution.warnings(),
-                false);
+            return Mono.just(new ToolStepResolution(toolCalls, List.of(), execution,
+                execution.warnings(), false));
         }
 
-        var approval = toolExecutor.evaluateApproval(toolCalls, request, stepIndex,
-            executionMessages, stepProviderMetadata, lifecycle, approvalIdFactory);
-        var execution = approval.approvalRequests().isEmpty()
-            && approval.errors().isEmpty()
-            && !approval.hasPendingExternalCalls()
-            ? toolExecutor.execute(approval.executableCalls(), request, stepIndex,
-            executionMessages, stepProviderMetadata, lifecycle)
-            : new ToolExecutionBatch(List.of(), approval.errors(), approval.warnings());
+        return toolExecutor.evaluateApproval(toolCalls, request, stepIndex, executionMessages,
+                stepProviderMetadata, lifecycle, approvalIdFactory)
+            .flatMap(approval -> {
+                var execution = approval.approvalRequests().isEmpty()
+                    && approval.errors().isEmpty()
+                    && !approval.hasPendingExternalCalls()
+                    ? toolExecutor.execute(approval.executableCalls(), request, stepIndex,
+                    executionMessages, stepProviderMetadata, lifecycle)
+                    : Mono.just(new ToolExecutionBatch(List.of(), approval.errors(),
+                        approval.warnings()));
+                return execution.map(batch -> resolution(approval, batch));
+            });
+    }
+
+    private ToolStepResolution resolution(ToolApprovalBatch approval, ToolExecutionBatch execution) {
         var warnings = new ArrayList<GenerationWarning>();
         warnings.addAll(approval.warnings());
         warnings.addAll(execution.warnings().stream()
