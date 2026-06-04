@@ -27,6 +27,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.control.CancellationSource;
@@ -2205,6 +2206,84 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void streamText_composesAsyncToolExecutorOnNonBlockingThread() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3)),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(context -> Mono.defer(() -> Mono.just(Map.of("temperature", 22))))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.streamText(request).fullStream()
+                .subscribeOn(Schedulers.parallel())
+                .collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsSubsequence(PartType.TOOL_CALL, PartType.TOOL_RESULT,
+                        PartType.FINISH_STEP, PartType.START_STEP, PartType.TEXT_DELTA);
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_RESULT.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getResult())
+                    .isEqualTo(Map.of("temperature", 22));
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void streamText_composesAsyncToolRepairOnNonBlockingThread() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3)),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(repairableWeatherTool(context -> Mono.just(Map.of("temperature", 22)))))
+            .toolCallRepair(context -> Mono.defer(() -> Mono.just(ToolCallRepairResult.repaired(
+                ToolCall.builder()
+                    .input(Map.of("location", context.getToolCall().getInput().get("city")))
+                    .build()))))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.streamText(request).fullStream()
+                .subscribeOn(Schedulers.parallel())
+                .collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsSubsequence(PartType.TOOL_CALL, PartType.TOOL_RESULT);
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getInput())
+                    .containsEntry("location", "SF")
+                    .doesNotContainKey("city");
+                assertThat(parts.stream()
+                    .filter(part -> PartType.FINISH_STEP.equals(part.getType()))
+                    .findFirst()
+                    .orElseThrow()
+                    .getWarnings())
+                    .extracting("code")
+                    .contains("tool-call-repaired");
+            })
+            .verifyComplete();
+    }
+
+    @Test
     void streamText_failedRepairEmitsOriginalToolCallAndToolError() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
@@ -2629,6 +2708,52 @@ class LanguageModelImplTest {
 
         assertThat(starts).hasValue(1);
         verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_composesAsyncLifecycleCallbacksOnNonBlockingThread() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3)),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var events = new ArrayList<String>();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(context -> Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .lifecycle(new GenerationLifecycle() {
+                @Override
+                public Mono<Void> onToolCallStart(GenerationToolCallStartEvent event) {
+                    return Mono.defer(() -> {
+                        events.add("tool-start:" + event.getToolName());
+                        return Mono.empty();
+                    });
+                }
+
+                @Override
+                public Mono<Void> onToolCallFinish(GenerationToolCallFinishEvent event) {
+                    return Mono.defer(() -> {
+                        events.add("tool-finish:" + event.getToolName());
+                        return Mono.empty();
+                    });
+                }
+            })
+            .build();
+
+        StepVerifier.create(model.streamText(request).fullStream()
+                .subscribeOn(Schedulers.parallel())
+                .collectList())
+            .assertNext(parts -> assertThat(parts).extracting(TextStreamPart::getType)
+                .containsSubsequence(PartType.TOOL_CALL, PartType.TOOL_RESULT))
+            .verifyComplete();
+
+        assertThat(events).containsExactly("tool-start:weather", "tool-finish:weather");
     }
 
     @Test

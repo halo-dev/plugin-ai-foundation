@@ -52,7 +52,7 @@ The system SHALL emit lifecycle callbacks around server-side tool executor calls
 - **THEN** the system MUST invoke the tool-call-finish callback with the corresponding safe tool error and duration metadata
 
 ### Requirement: Lifecycle callbacks are safe observers
-Lifecycle callbacks SHALL NOT trigger additional provider calls or duplicate server-side tool execution.
+Lifecycle callbacks SHALL NOT trigger additional provider calls, duplicate server-side tool execution, or block Reactor non-blocking threads.
 
 #### Scenario: Multiple stream projections with callbacks
 - **WHEN** a caller consumes multiple projections from one `StreamTextResult`
@@ -62,6 +62,16 @@ Lifecycle callbacks SHALL NOT trigger additional provider calls or duplicate ser
 - **WHEN** a lifecycle callback fails
 - **THEN** the generation MUST continue when possible
 - **AND** the failure MUST be surfaced as a provider-neutral warning with a safe message
+
+#### Scenario: Callback uses Halo reactive APIs
+- **WHEN** a streaming generation lifecycle callback returns a `Mono` backed by Halo reactive APIs such as `ReactiveExtensionClient.list`
+- **THEN** the callback `Mono` SHALL be composed as part of the generation chain without calling `block()`, `blockFirst()`, or `blockLast()` on Reactor non-blocking threads
+- **AND** lifecycle event ordering MUST remain consistent with the existing callback order requirements
+
+#### Scenario: Tool lifecycle callback uses Halo reactive APIs
+- **WHEN** a tool-call-start or tool-call-finish callback returns a `Mono` backed by Halo reactive APIs
+- **THEN** the callback `Mono` SHALL complete before the next lifecycle-dependent tool action or stream part is emitted
+- **AND** the generation SHALL NOT fail with Reactor's non-blocking-thread blocking error
 
 ### Requirement: Generation calls support timeout controls
 The system SHALL allow callers to set provider-neutral timeout controls for total generation, individual provider steps, and server-side tool execution.
@@ -130,4 +140,3 @@ Approval-related lifecycle callbacks SHALL NOT change whether a tool is approved
 - **WHEN** an approval-related lifecycle callback throws an exception
 - **THEN** generation SHALL continue when possible
 - **AND** the failure SHALL be surfaced as a provider-neutral warning with a safe message
-

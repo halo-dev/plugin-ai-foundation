@@ -49,12 +49,12 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
         return List.copyOf(lifecycleWarnings);
     }
 
-    void start() {
+    Mono<Void> start() {
         if (started) {
-            return;
+            return Mono.empty();
         }
         started = true;
-        invoke("onStart", lifecycle -> lifecycle.onStart(GenerationStartEvent.builder()
+        return invoke("onStart", lifecycle -> lifecycle.onStart(GenerationStartEvent.builder()
             .request(request)
             .requestMetadata(GenerationRequestMetadata.builder()
                 .metadata(Map.of("providerType", providerType))
@@ -68,9 +68,9 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
             .build()));
     }
 
-    void stepStart(int stepIndex, GenerateTextRequest stepRequest, List<ModelMessage> messages,
+    Mono<Void> stepStart(int stepIndex, GenerateTextRequest stepRequest, List<ModelMessage> messages,
         List<GenerationStep> previousSteps, StopCondition stopWhen) {
-        invoke("onStepStart", lifecycle -> lifecycle.onStepStart(GenerationStepStartEvent.builder()
+        return invoke("onStepStart", lifecycle -> lifecycle.onStepStart(GenerationStepStartEvent.builder()
             .stepIndex(stepIndex)
             .request(stepRequest)
             .messages(List.copyOf(nullSafe(messages)))
@@ -86,9 +86,9 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
     }
 
     @Override
-    public void toolCallStart(int stepIndex, ToolCall toolCall,
+    public Mono<Void> toolCallStart(int stepIndex, ToolCall toolCall,
         Map<String, Object> providerMetadata) {
-        invoke("onToolCallStart", lifecycle -> lifecycle.onToolCallStart(
+        return invoke("onToolCallStart", lifecycle -> lifecycle.onToolCallStart(
             GenerationToolCallStartEvent.builder()
                 .stepIndex(stepIndex)
                 .toolCallId(toolCall.getToolCallId())
@@ -101,10 +101,10 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
     }
 
     @Override
-    public void toolCallFinish(int stepIndex, ToolResult result, ToolError error,
+    public Mono<Void> toolCallFinish(int stepIndex, ToolResult result, ToolError error,
         Instant startedAt, Map<String, Object> providerMetadata) {
         var duration = startedAt != null ? Duration.between(startedAt, Instant.now()) : null;
-        invoke("onToolCallFinish", lifecycle -> lifecycle.onToolCallFinish(
+        return invoke("onToolCallFinish", lifecycle -> lifecycle.onToolCallFinish(
             GenerationToolCallFinishEvent.builder()
                 .stepIndex(stepIndex)
                 .toolCallId(result != null ? result.getToolCallId() : error.getToolCallId())
@@ -119,8 +119,8 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
     }
 
     @Override
-    public void toolApprovalRequest(int stepIndex, ToolApprovalRequest request) {
-        invoke("onToolApprovalRequest", lifecycle -> lifecycle.onToolApprovalRequest(
+    public Mono<Void> toolApprovalRequest(int stepIndex, ToolApprovalRequest request) {
+        return invoke("onToolApprovalRequest", lifecycle -> lifecycle.onToolApprovalRequest(
             GenerationToolApprovalRequestEvent.builder()
                 .stepIndex(stepIndex)
                 .approvalRequest(request)
@@ -129,8 +129,8 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
                 .build()));
     }
 
-    void stepFinish(int stepIndex, GenerationStep step, List<GenerationStep> steps) {
-        invoke("onStepFinish", lifecycle -> lifecycle.onStepFinish(
+    Mono<Void> stepFinish(int stepIndex, GenerationStep step, List<GenerationStep> steps) {
+        return invoke("onStepFinish", lifecycle -> lifecycle.onStepFinish(
             GenerationStepFinishEvent.builder()
                 .stepIndex(stepIndex)
                 .step(step)
@@ -140,24 +140,24 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
                 .build()));
     }
 
-    void finish(GenerateTextResult result) {
+    Mono<Void> finish(GenerateTextResult result) {
         if (finished) {
-            return;
+            return Mono.empty();
         }
         finished = true;
-        invoke("onFinish", lifecycle -> lifecycle.onFinish(GenerationFinishEvent.builder()
+        return invoke("onFinish", lifecycle -> lifecycle.onFinish(GenerationFinishEvent.builder()
             .result(result)
             .metadata(metadata(request))
             .context(context(request))
             .build()));
     }
 
-    void error(Throwable error, Integer stepIndex, List<GenerationStep> steps) {
+    Mono<Void> error(Throwable error, Integer stepIndex, List<GenerationStep> steps) {
         if (errorNotified || finished) {
-            return;
+            return Mono.empty();
         }
         errorNotified = true;
-        invoke("onError", lifecycle -> lifecycle.onError(GenerationErrorEvent.builder()
+        return invoke("onError", lifecycle -> lifecycle.onError(GenerationErrorEvent.builder()
             .error(error)
             .stepIndex(stepIndex)
             .steps(List.copyOf(nullSafe(steps)))
@@ -166,24 +166,32 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
             .build()));
     }
 
-    private void invoke(String callbackName,
+    private Mono<Void> invoke(String callbackName,
         Function<GenerationLifecycle, Mono<Void>> callback) {
         var lifecycle = request != null ? request.getLifecycle() : null;
         if (lifecycle == null) {
-            return;
+            return Mono.empty();
         }
         try {
             var mono = callback.apply(lifecycle);
-            if (mono != null) {
-                mono.block();
-            }
+            return mono != null
+                ? mono.onErrorResume(e -> {
+                    addLifecycleWarning(callbackName, e);
+                    return Mono.empty();
+                })
+                : Mono.empty();
         } catch (RuntimeException e) {
-            lifecycleWarnings.add(GenerationWarning.builder()
-                .code("lifecycle-callback-failed")
-                .message(callbackName + " callback failed: " + safeErrorMessage(e))
-                .providerMetadata(Map.of("providerType", providerType))
-                .build());
+            addLifecycleWarning(callbackName, e);
+            return Mono.empty();
         }
+    }
+
+    private void addLifecycleWarning(String callbackName, Throwable e) {
+        lifecycleWarnings.add(GenerationWarning.builder()
+            .code("lifecycle-callback-failed")
+            .message(callbackName + " callback failed: " + safeErrorMessage(e))
+            .providerMetadata(Map.of("providerType", providerType))
+            .build());
     }
 
     private Map<String, Object> metadata(GenerateTextRequest request) {
