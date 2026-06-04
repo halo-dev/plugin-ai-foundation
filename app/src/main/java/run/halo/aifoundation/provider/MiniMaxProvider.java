@@ -46,7 +46,7 @@ public class MiniMaxProvider extends AbstractAiProviderType {
 
     @Override
     public String getDocumentationUrl() {
-        return "https://platform.minimaxi.com/docs/api-reference/api-overview.md";
+        return "https://platform.minimaxi.com/docs/api-reference/api-overview";
     }
 
     @Override
