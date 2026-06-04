@@ -20,9 +20,9 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 @Component
 public class OpenAiProvider extends AbstractAiProviderType {
 
-    private static final String DEFAULT_BASE_URL = "https://api.openai.com";
-    private static final String COMPLETIONS_PATH = "/v1/chat/completions";
-    private static final String EMBEDDINGS_PATH = "/v1/embeddings";
+    private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1";
+    private static final String COMPLETIONS_PATH = "/chat/completions";
+    private static final String EMBEDDINGS_PATH = "/embeddings";
 
     @Override
     public String getProviderType() {

@@ -20,9 +20,9 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 @Component
 public class ErnieProvider extends AbstractAiProviderType {
 
-    private static final String DEFAULT_BASE_URL = "https://qianfan.baidubce.com";
-    private static final String CHAT_PATH = "/v2/chat/completions";
-    private static final String EMBEDDING_PATH = "/v2/embeddings";
+    private static final String DEFAULT_BASE_URL = "https://qianfan.baidubce.com/v2";
+    private static final String CHAT_PATH = "/chat/completions";
+    private static final String EMBEDDING_PATH = "/embeddings";
 
     @Override
     public String getProviderType() {

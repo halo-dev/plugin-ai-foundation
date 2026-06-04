@@ -24,7 +24,7 @@ class XiaomiMiMoProviderTest {
             .isEqualTo("https://platform.xiaomimimo.com/#/docs/welcome");
         assertThat(providerType.isBuiltIn()).isTrue();
         assertThat(providerType.requiresBaseUrl()).isFalse();
-        assertThat(providerType.getDefaultBaseUrl()).isEqualTo("https://api.xiaomimimo.com");
+        assertThat(providerType.getDefaultBaseUrl()).isEqualTo("https://api.xiaomimimo.com/v1");
     }
 
     @Test

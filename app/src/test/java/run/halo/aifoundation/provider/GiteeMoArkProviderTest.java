@@ -33,7 +33,7 @@ class GiteeMoArkProviderTest {
             .isEqualTo("https://ai.gitee.com/docs/products/apis/texts/text-generation");
         assertThat(providerType.isBuiltIn()).isTrue();
         assertThat(providerType.requiresBaseUrl()).isFalse();
-        assertThat(providerType.getDefaultBaseUrl()).isEqualTo("https://ai.gitee.com");
+        assertThat(providerType.getDefaultBaseUrl()).isEqualTo("https://ai.gitee.com/v1");
     }
 
     @Test
@@ -71,7 +71,7 @@ class GiteeMoArkProviderTest {
         var serverThread = Thread.ofVirtual().start(() -> handleModelsRequest(server, request));
 
         try {
-            var baseUrl = "http://127.0.0.1:" + server.getLocalPort();
+            var baseUrl = "http://127.0.0.1:" + server.getLocalPort() + "/v1";
             StepVerifier.create(providerType.discoverModels(provider(baseUrl), "sk-test"))
                 .assertNext(models -> {
                     assertThat(models).hasSize(1);

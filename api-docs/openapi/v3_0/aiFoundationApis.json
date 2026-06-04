@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.23.3"
+    "version" : "2.24.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:47286",
+    "url" : "http://localhost:58411",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1208,7 +1208,7 @@
           },
           "baseUrl" : {
             "type" : "string",
-            "description" : "Base URL. Required for ollama and openailike; built-in providers use defaults"
+            "description" : "Provider-documented API base URL. Leave blank to use the provider default."
           },
           "displayName" : {
             "type" : "string",
@@ -1220,7 +1220,7 @@
           },
           "providerType" : {
             "type" : "string",
-            "description" : "Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike"
+            "description" : "Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike, dashscope"
           },
           "proxyHost" : {
             "type" : "string",
@@ -1918,6 +1918,9 @@
         "properties" : {
           "builtIn" : {
             "type" : "boolean"
+          },
+          "completionsPath" : {
+            "type" : "string"
           },
           "defaultBaseUrl" : {
             "type" : "string"

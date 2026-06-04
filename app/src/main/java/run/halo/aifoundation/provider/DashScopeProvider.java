@@ -20,8 +20,8 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 public class DashScopeProvider extends AbstractAiProviderType {
 
     private static final String DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
-    private static final String COMPLETIONS_PATH = "/v1/chat/completions";
-    private static final String EMBEDDINGS_PATH = "/v1/embeddings";
+    private static final String COMPLETIONS_PATH = "/chat/completions";
+    private static final String EMBEDDINGS_PATH = "/embeddings";
 
     @Override
     public String getProviderType() {
@@ -60,7 +60,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
 
     @Override
     public boolean requiresBaseUrl() {
-        return true;
+        return false;
     }
 
     @Override

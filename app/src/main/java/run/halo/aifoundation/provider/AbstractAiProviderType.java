@@ -36,6 +36,12 @@ import run.halo.aifoundation.provider.support.ModelType;
 public abstract class AbstractAiProviderType implements AiProviderType {
 
     private static final int DISCOVERY_MAX_IN_MEMORY_SIZE = 8 * 1024 * 1024;
+    private static final String COMPLETIONS_PATH = "/chat/completions";
+
+    @Override
+    public String getCompletionsPath() {
+        return COMPLETIONS_PATH;
+    }
 
     protected String resolveBaseUrl(AiProvider provider) {
         var spec = provider.getSpec();
@@ -114,7 +120,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         log.info("Discovering models for provider {}: type={}, baseUrl={}",
             providerName, getProviderType(), baseUrl);
 
-        return getDiscoveryJson(provider, apiKey, uriBuilder -> uriBuilder.path("/v1/models")
+        return getDiscoveryJson(provider, apiKey, uriBuilder -> uriBuilder.path("/models")
                 .build(), this::customizeDiscoveryRequest)
             .map(json -> {
                 var dataList = listValue(json, "data");

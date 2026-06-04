@@ -23,6 +23,8 @@ public class ProviderTypeInfo {
     private boolean requiresBaseUrl;
     @Nullable
     private String defaultBaseUrl;
+    @Nullable
+    private String completionsPath;
     private List<ModelType> supportedModelTypes;
     private List<ModelFeature> supportedFeatures;
     private List<AdapterType> supportedAdapterTypes;

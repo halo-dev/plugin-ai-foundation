@@ -21,13 +21,13 @@ public class AiProvider extends AbstractExtension {
 
     @Data
     public static class AiProviderSpec {
-        @Schema(requiredMode = REQUIRED, description = "Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike")
+        @Schema(requiredMode = REQUIRED, description = "Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike, dashscope")
         private String providerType;
         @Schema(requiredMode = REQUIRED, description = "Display name of the provider")
         private String displayName;
         @Schema(requiredMode = REQUIRED, description = "Whether the provider is enabled")
         private boolean enabled = true;
-        @Schema(description = "Base URL. Required for ollama and openailike; built-in providers use defaults")
+        @Schema(description = "Provider-documented API base URL. Leave blank to use the provider default.")
         private String baseUrl;
         @Schema(description = "Name of the Halo Secret containing the API key")
         private String apiKeySecretName;

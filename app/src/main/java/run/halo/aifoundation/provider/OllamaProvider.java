@@ -28,6 +28,7 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 public class OllamaProvider extends AbstractAiProviderType {
 
     private static final String DEFAULT_BASE_URL = "http://localhost:11434";
+    private static final String COMPLETIONS_PATH = "/api/chat";
 
     @Override
     public String getProviderType() {
@@ -72,6 +73,11 @@ public class OllamaProvider extends AbstractAiProviderType {
     @Override
     public String getDefaultBaseUrl() {
         return DEFAULT_BASE_URL;
+    }
+
+    @Override
+    public String getCompletionsPath() {
+        return COMPLETIONS_PATH;
     }
 
     @Override

@@ -2,12 +2,14 @@ package run.halo.aifoundation.provider;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -28,9 +30,10 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 @Component
 public class AiHubMixProvider extends AbstractAiProviderType {
 
-    private static final String DEFAULT_BASE_URL = "https://aihubmix.com";
-    private static final String COMPLETIONS_PATH = "/v1/chat/completions";
-    private static final String EMBEDDINGS_PATH = "/v1/embeddings";
+    private static final String DEFAULT_BASE_URL = "https://aihubmix.com/v1";
+    private static final String COMPLETIONS_PATH = "/chat/completions";
+    private static final String EMBEDDINGS_PATH = "/embeddings";
+    private static final String MODEL_CATALOG_PATH = "/api/v1/models";
     private static final String APP_CODE = "NEUE3459";
 
     @Override
@@ -115,16 +118,24 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
-        return getDiscoveryJson(provider, apiKey,
-            uriBuilder -> uriBuilder.path("/api/v1/models").build(),
-            this::customizeDiscoveryRequest
-        ).map(json -> {
-            var data = listValue(json, "data");
-            if (data == null) {
-                return List.<DiscoveredModel>of();
-            }
-            return discoveredModelsFromNodes(data, "model_id", this::toDiscoveredModel);
-        });
+        var wc = discoveryWebClientBuilder(provider)
+            .baseUrl(modelCatalogBaseUrl(provider))
+            .build();
+        var requestSpec = wc.get().uri(MODEL_CATALOG_PATH);
+        if (apiKey != null && !apiKey.isBlank()) {
+            requestSpec = requestSpec.header("Authorization", "Bearer " + apiKey);
+        }
+        customizeDiscoveryRequest(requestSpec);
+        return requestSpec.retrieve()
+            .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {
+            })
+            .map(json -> {
+                var data = listValue(json, "data");
+                if (data == null) {
+                    return List.<DiscoveredModel>of();
+                }
+                return discoveredModelsFromNodes(data, "model_id", this::toDiscoveredModel);
+            });
     }
 
     @Override
@@ -151,7 +162,23 @@ public class AiHubMixProvider extends AbstractAiProviderType {
             .build();
     }
 
-    private DiscoveredModel toDiscoveredModel(java.util.Map<?, ?> node) {
+    private String modelCatalogBaseUrl(AiProvider provider) {
+        var baseUrl = trimTrailingSlash(resolveBaseUrl(provider));
+        if (baseUrl.endsWith("/v1")) {
+            return baseUrl.substring(0, baseUrl.length() - "/v1".length());
+        }
+        return baseUrl;
+    }
+
+    private String trimTrailingSlash(String baseUrl) {
+        var result = baseUrl;
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
+    }
+
+    private DiscoveredModel toDiscoveredModel(Map<?, ?> node) {
         var modelId = stringValue(node, "model_id");
         if (modelId.isBlank()) {
             modelId = stringValue(node, "id");
@@ -174,7 +201,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         return null;
     }
 
-    private boolean containsLanguageType(java.util.Map<?, ?> node) {
+    private boolean containsLanguageType(Map<?, ?> node) {
         var types = node.get("types");
         var type = node.get("type");
         return containsToken(types, "chat")
@@ -185,7 +212,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
             || containsToken(type, "language");
     }
 
-    private Set<ModelFeature> languageFeatures(java.util.Map<?, ?> node) {
+    private Set<ModelFeature> languageFeatures(Map<?, ?> node) {
         var features = new LinkedHashSet<ModelFeature>();
         features.add(ModelFeature.STREAMING);
         if (containsToken(node.get("input_modalities"), "image")

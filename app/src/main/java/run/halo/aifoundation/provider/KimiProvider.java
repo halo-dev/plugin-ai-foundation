@@ -22,9 +22,9 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 @Component
 public class KimiProvider extends AbstractAiProviderType {
 
-    private static final String DEFAULT_BASE_URL = "https://api.moonshot.cn";
-    private static final String COMPLETIONS_PATH = "/v1/chat/completions";
-    private static final String EMBEDDINGS_PATH = "/v1/embeddings";
+    private static final String DEFAULT_BASE_URL = "https://api.moonshot.cn/v1";
+    private static final String COMPLETIONS_PATH = "/chat/completions";
+    private static final String EMBEDDINGS_PATH = "/embeddings";
 
     @Override
     public String getProviderType() {
@@ -105,7 +105,7 @@ public class KimiProvider extends AbstractAiProviderType {
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         return getDiscoveryJson(provider, apiKey,
-            uriBuilder -> uriBuilder.path("/v1/models").build(),
+            uriBuilder -> uriBuilder.path("/models").build(),
             this::customizeDiscoveryRequest
         ).map(json -> {
             var data = listValue(json, "data");
