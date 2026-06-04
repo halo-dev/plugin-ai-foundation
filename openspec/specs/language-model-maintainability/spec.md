@@ -1,8 +1,6 @@
 ## Purpose
 Ensure language model tool workflows remain maintainable by centralizing shared orchestration, response history assembly, and behavior-focused regression coverage.
-
 ## Requirements
-
 ### Requirement: Language Model Tool Flow Is Centrally Orchestrated
 The language model implementation SHALL centralize Reactor-native tool-step orchestration so streaming and non-streaming tool loops use the same resolution rules for executable tools, external tools, approval requests, tool repair, warnings, provider continuation, timeout, cancellation, and non-blocking execution.
 
@@ -46,3 +44,58 @@ Language model tests SHALL be split into focused classes by behavior area while 
 - **WHEN** the refactor is complete
 - **THEN** focused language model tests SHALL pass
 - **AND** `./gradlew compileJava` and OpenSpec strict validation SHALL pass
+
+### Requirement: Language Generation Internals Have Visible Responsibilities
+The language model implementation SHALL model generation, streaming, structured output, and tool workflow responsibilities with focused internal types and collaborators instead of broad helper methods and hidden positional state.
+
+#### Scenario: Generation step state is grouped by type
+- **WHEN** maintainers inspect language generation internals
+- **THEN** stable per-step values such as request, step index, provider messages, execution messages, provider metadata, lifecycle hooks, and resolved step controls SHALL be grouped into explicit internal context/value types
+- **AND** helper methods SHALL receive those types instead of repeatedly accepting the same step values as independent positional parameters
+
+#### Scenario: Stream mapping and aggregation are focused
+- **WHEN** provider stream responses are mapped, normalized, accumulated, and converted into final `StreamTextResult` state
+- **THEN** stream parsing, event normalization, response aggregation, and final result assembly SHALL be separated into focused helpers
+- **AND** stream part ordering, response messages, usage, warnings, reasoning, and provider metadata SHALL remain behaviorally unchanged
+
+#### Scenario: Structured output parsing is focused
+- **WHEN** structured output text is extracted, validated, repaired, or converted into final output
+- **THEN** parsing, validation, fallback extraction, and error construction SHALL be separated into focused helpers where they currently share oversized methods
+- **AND** existing structured output success and failure behavior SHALL remain unchanged
+
+#### Scenario: Tool orchestration state is visible
+- **WHEN** tool calls are validated, repaired, approved, executed, or recorded for continuation
+- **THEN** repair handling, approval policy evaluation, server-side executor invocation, lifecycle wrapping, and batch accumulation SHALL be represented by focused internal collaborators or context/result objects
+- **AND** helper methods SHALL NOT pass multiple mutable collections and repeated step invariants through long positional parameter lists
+
+#### Scenario: Language behavior remains unchanged
+- **WHEN** the language maintainability refactor is complete
+- **THEN** existing streaming and non-streaming behavior for prompts, messages, reasoning, structured output, server-side tools, external tools, approval requests, approval responses, denied approvals, repair success, repair failure, warnings, timeout, cancellation, and lifecycle events SHALL remain unchanged
+- **AND** focused language model tests SHALL continue to pass
+
+### Requirement: Language Runtime Composition Is Spring-Managed
+The language model runtime SHALL be assembled through explicit Spring-managed composition boundaries instead of hiding behavior collaborator creation inside `LanguageModelImpl`.
+
+#### Scenario: Language model factory owns runtime composition
+- **WHEN** a resolved provider chat model is wrapped as a `LanguageModel`
+- **THEN** the language model factory SHALL assemble or request a composition object containing request validation, message mapping, chat options mapping, response mapping, reasoning extraction, structured output handling, tool execution, tool-step coordination, approval resolution, and history assembly collaborators
+- **AND** `LanguageModelImpl` SHALL receive those collaborators through constructor parameters or a named composition object
+- **AND** `LanguageModelImpl` SHALL remain focused on orchestration of generation and streaming flows
+
+#### Scenario: Provider-specific language options remain visible
+- **WHEN** provider-specific language behavior such as reasoning support, tool-calling options, structured-output options, or request headers is configured
+- **THEN** the selected `LanguageModelProviderOptions` and related strategy choices SHALL be visible at the factory/composition boundary
+- **AND** provider-specific behavior SHALL NOT be inferred from scattered constructor calls inside `LanguageModelImpl`
+
+#### Scenario: Language composition supports decoration
+- **WHEN** maintainers add metrics, lifecycle guarding, logging, timeout policy, or other cross-cutting behavior to language execution
+- **THEN** the design SHALL allow that behavior through explicit collaborators, decorators, or justified Spring advice
+- **AND** the behavior SHALL NOT require editing unrelated mapping, validation, tool, or structured-output algorithms
+
+### Requirement: Language Runtime Tests Cover Composition
+Language runtime refactors SHALL include tests that protect the factory and collaborator graph.
+
+#### Scenario: Factory composition is tested
+- **WHEN** language runtime collaborators move out of `LanguageModelImpl`
+- **THEN** tests SHALL verify that the factory passes provider type, provider options, and Spring AI chat model dependencies into the runtime composition correctly
+- **AND** existing generation, streaming, reasoning, structured-output, tool, approval, repair, timeout, cancellation, and lifecycle tests SHALL continue to pass

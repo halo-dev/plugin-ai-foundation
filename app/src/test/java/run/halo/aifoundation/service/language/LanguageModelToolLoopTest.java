@@ -37,7 +37,7 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
             toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
             chatResponse("It is 22C.", "stop", 4, 5)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var toolContext = new AtomicReference<ToolExecutionContext>();
 
         var request = GenerateTextRequest.builder()
@@ -83,7 +83,7 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
             toolCallResponse("call_2", "weather", "{\"location\":\"NYC\"}", 4, 5),
             chatResponse("Done", "stop", 6, 7)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var contexts = new ArrayList<ToolExecutionContext>();
 
         var request = GenerateTextRequest.builder()
@@ -123,7 +123,7 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
         when(chatModel.call(any(Prompt.class))).thenReturn(
             toolCallResponse("call_1", "weather", "{}", 2, 3)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var executions = new AtomicInteger();
 
         var request = GenerateTextRequest.builder()
@@ -160,7 +160,7 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
             toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
             chatResponse("Done", "stop", 4, 5)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var source = new CancellationSource();
         var observedToken = new AtomicReference<CancellationToken>();
 

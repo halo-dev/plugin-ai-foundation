@@ -35,7 +35,7 @@ class LanguageModelToolRepairTest extends LanguageModelTestSupport {
             toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3),
             chatResponse("It is 22C.", "stop", 4, 5)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var repairContext = new AtomicReference<ToolCallRepairContext>();
 
         var request = GenerateTextRequest.builder()
@@ -83,7 +83,7 @@ class LanguageModelToolRepairTest extends LanguageModelTestSupport {
             toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3),
             chatResponse("It is 22C.", "stop", 4, 5)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var repairs = new AtomicInteger();
         var requestContext = new LinkedHashMap<String, Object>();
         requestContext.put("tenant", null);

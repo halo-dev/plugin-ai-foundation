@@ -11,9 +11,12 @@ import run.halo.aifoundation.service.model.ModelResolution;
 public class DefaultEmbeddingModelFactory implements EmbeddingModelFactory {
 
     private final ProviderClientCache providerClientCache;
+    private final EmbeddingModelRuntimeFactory runtimeFactory;
 
-    public DefaultEmbeddingModelFactory(ProviderClientCache providerClientCache) {
+    public DefaultEmbeddingModelFactory(ProviderClientCache providerClientCache,
+        EmbeddingModelRuntimeFactory runtimeFactory) {
         this.providerClientCache = providerClientCache;
+        this.runtimeFactory = runtimeFactory;
     }
 
     @Override
@@ -26,7 +29,7 @@ public class DefaultEmbeddingModelFactory implements EmbeddingModelFactory {
                     + "' does not support embeddings");
         }
         var providerType = resolution.providerType();
-        return new EmbeddingModelImpl(
+        return runtimeFactory.create(
             springEmbeddingModel,
             resolution.providerTypeName(),
             providerType.maxEmbeddingsPerCall(),

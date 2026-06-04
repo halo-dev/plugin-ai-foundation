@@ -20,6 +20,41 @@ export function isModelOptionSelectable(model: ModelOption) {
   return model.available !== false
 }
 
+export function modelOptionDisplayName(model: ModelOption) {
+  return model.displayName || model.modelId || model.name
+}
+
+export function selectedModelDisplayName(
+  selectedModel: ModelOption | undefined,
+  snapshot: ModelOption | undefined,
+  selectedValue: string,
+) {
+  const model = selectedModel || snapshot
+  return model ? modelOptionDisplayName(model) : selectedValue
+}
+
+export function nextActiveModelName(
+  models: ModelOption[],
+  selectedValue: string,
+  currentActiveName?: string,
+) {
+  if (currentActiveName && models.some((model) => model.name === currentActiveName)) {
+    return currentActiveName
+  }
+
+  return models.find((model) => model.name === selectedValue)?.name || models[0]?.name
+}
+
+export function shouldShowModelId(model: ModelOption) {
+  return Boolean(
+    model.modelId && model.modelId !== model.displayName && model.modelId !== model.name,
+  )
+}
+
+export function shouldShowModelDetails(model: ModelOption) {
+  return Boolean(model.modelType || model.features?.length || !isModelOptionSelectable(model))
+}
+
 export function modelFeatureLabel(feature: string): string {
   switch (feature) {
     case ModelOptionFeaturesEnum.Streaming:

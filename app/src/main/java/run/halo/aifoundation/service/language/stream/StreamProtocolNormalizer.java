@@ -30,64 +30,14 @@ public final class StreamProtocolNormalizer {
             }
             var parts = new ArrayList<TextStreamPart>();
             switch (part.getType()) {
-                case PartType.TEXT_START -> {
-                    closeReasoning(parts);
-                    closeToolInput();
-                    textId = part.getId();
-                    parts.add(part);
-                }
-                case PartType.TEXT_DELTA -> {
-                    closeReasoning(parts);
-                    closeToolInput();
-                    if (textId == null) {
-                        textId = part.getId();
-                        parts.add(TextStreamPart.textStart(textId));
-                    }
-                    parts.add(part);
-                }
-                case PartType.TEXT_END -> {
-                    if (textId != null) {
-                        parts.add(part);
-                        textId = null;
-                    }
-                }
-                case PartType.REASONING_START -> {
-                    closeText(parts);
-                    closeToolInput();
-                    reasoningId = part.getId();
-                    parts.add(part);
-                }
-                case PartType.REASONING_DELTA -> {
-                    closeText(parts);
-                    closeToolInput();
-                    if (reasoningId == null) {
-                        reasoningId = part.getId();
-                        parts.add(TextStreamPart.reasoningStart(reasoningId));
-                    }
-                    parts.add(part);
-                }
-                case PartType.REASONING_END -> {
-                    if (reasoningId != null) {
-                        parts.add(part);
-                        reasoningId = null;
-                    }
-                }
-                case PartType.TOOL_INPUT_START -> {
-                    closeText(parts);
-                    closeReasoning(parts);
-                    toolInputId = part.getId();
-                    parts.add(part);
-                }
-                case PartType.TOOL_INPUT_DELTA -> {
-                    closeText(parts);
-                    closeReasoning(parts);
-                    if (toolInputId == null) {
-                        toolInputId = part.getId();
-                        parts.add(TextStreamPart.toolInputStart(toolInputId, part.getToolCallId(),
-                            part.getToolName()));
-                    }
-                    parts.add(part);
-                }
+                case PartType.TEXT_START -> acceptTextStart(part, parts);
+                case PartType.TEXT_DELTA -> acceptTextDelta(part, parts);
+                case PartType.TEXT_END -> acceptTextEnd(part, parts);
+                case PartType.REASONING_START -> acceptReasoningStart(part, parts);
+                case PartType.REASONING_DELTA -> acceptReasoningDelta(part, parts);
+                case PartType.REASONING_END -> acceptReasoningEnd(part, parts);
+                case PartType.TOOL_INPUT_START -> acceptToolInputStart(part, parts);
+                case PartType.TOOL_INPUT_DELTA -> acceptToolInputDelta(part, parts);
                 case PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST -> {
                     closeText(parts);
                     closeReasoning(parts);
@@ -103,6 +53,72 @@ public final class StreamProtocolNormalizer {
                 default -> parts.add(part);
             }
             return parts;
+        }
+
+        private void acceptTextStart(TextStreamPart part, List<TextStreamPart> parts) {
+            closeReasoning(parts);
+            closeToolInput();
+            textId = part.getId();
+            parts.add(part);
+        }
+
+        private void acceptTextDelta(TextStreamPart part, List<TextStreamPart> parts) {
+            closeReasoning(parts);
+            closeToolInput();
+            if (textId == null) {
+                textId = part.getId();
+                parts.add(TextStreamPart.textStart(textId));
+            }
+            parts.add(part);
+        }
+
+        private void acceptTextEnd(TextStreamPart part, List<TextStreamPart> parts) {
+            if (textId != null) {
+                parts.add(part);
+                textId = null;
+            }
+        }
+
+        private void acceptReasoningStart(TextStreamPart part, List<TextStreamPart> parts) {
+            closeText(parts);
+            closeToolInput();
+            reasoningId = part.getId();
+            parts.add(part);
+        }
+
+        private void acceptReasoningDelta(TextStreamPart part, List<TextStreamPart> parts) {
+            closeText(parts);
+            closeToolInput();
+            if (reasoningId == null) {
+                reasoningId = part.getId();
+                parts.add(TextStreamPart.reasoningStart(reasoningId));
+            }
+            parts.add(part);
+        }
+
+        private void acceptReasoningEnd(TextStreamPart part, List<TextStreamPart> parts) {
+            if (reasoningId != null) {
+                parts.add(part);
+                reasoningId = null;
+            }
+        }
+
+        private void acceptToolInputStart(TextStreamPart part, List<TextStreamPart> parts) {
+            closeText(parts);
+            closeReasoning(parts);
+            toolInputId = part.getId();
+            parts.add(part);
+        }
+
+        private void acceptToolInputDelta(TextStreamPart part, List<TextStreamPart> parts) {
+            closeText(parts);
+            closeReasoning(parts);
+            if (toolInputId == null) {
+                toolInputId = part.getId();
+                parts.add(TextStreamPart.toolInputStart(toolInputId, part.getToolCallId(),
+                    part.getToolName()));
+            }
+            parts.add(part);
         }
 
         List<TextStreamPart> closeOpenBlocks() {

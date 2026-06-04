@@ -68,7 +68,8 @@ class ModelConsoleEndpointTest {
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
         when(providerClientCache.getProviderType("openai")).thenReturn(mockType);
 
-        var endpoint = new ModelConsoleEndpoint(client, aiModelService, providerClientCache);
+        var modelValidator = new ModelConsoleModelValidator(client, providerClientCache);
+        var endpoint = new ModelConsoleEndpoint(client, aiModelService, modelValidator);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();

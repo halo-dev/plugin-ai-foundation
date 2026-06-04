@@ -43,70 +43,63 @@ public final class LanguageModelToolExecutor {
         if (toolCalls.isEmpty()) {
             return Mono.just(new ToolExecutionBatch(List.of(), List.of(), List.of()));
         }
-        var toolsByName = toolsByName(request);
-        return executeNext(toolCalls, 0, request, stepIndex, executionMessages, stepProviderMetadata,
-            lifecycle, toolsByName, new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+        var context = ToolStepContext.execution(request, stepIndex, executionMessages,
+            stepProviderMetadata, lifecycle, toolsByName(request));
+        return executeNext(toolCalls, 0, context, new ExecutionAccumulator());
     }
 
     private Mono<ToolExecutionBatch> executeNext(List<ToolCall> toolCalls, int index,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle,
-        Map<String, ToolDefinition> toolsByName, ArrayList<ToolResult> results,
-        ArrayList<ToolError> errors, ArrayList<GenerationWarning> warnings) {
-        if (index >= toolCalls.size() || !errors.isEmpty()) {
-            return Mono.just(toolExecutionBatch(results, errors, warnings));
+        ToolStepContext context, ExecutionAccumulator accumulator) {
+        if (index >= toolCalls.size() || accumulator.hasErrors()) {
+            return Mono.just(accumulator.toBatch());
         }
         var toolCall = toolCalls.get(index);
         var resolvedCall = toolCall;
         try {
-            var tool = toolsByName.get(toolCall.getToolName());
+            var tool = context.tool(toolCall);
             if (tool == null) {
-                errors.add(unknownToolError(toolCall));
-                return Mono.just(toolExecutionBatch(results, errors, warnings));
+                accumulator.addError(unknownToolError(toolCall));
+                return Mono.just(accumulator.toBatch());
             }
             if (tool.getExecutor() == null) {
-                warnings.add(externalToolPendingWarning(tool));
-                return Mono.just(toolExecutionBatch(results, errors, warnings));
+                accumulator.addWarning(externalToolPendingWarning(tool));
+                return Mono.just(accumulator.toBatch());
             }
-            cancellationChecker.check(request);
-            return repairIfNeeded(toolCall, tool, request, stepIndex, executionMessages,
-                    stepProviderMetadata)
+            cancellationChecker.check(context.request());
+            return repairIfNeeded(toolCall, tool, context)
                 .flatMap(repair -> {
                     var currentCall = repair.toolCall();
-                    warnings.addAll(repair.warnings());
+                    accumulator.addWarnings(repair.warnings());
                     if (repair.error() != null) {
-                        errors.add(repair.error());
-                        return Mono.just(toolExecutionBatch(results, errors, warnings));
+                        accumulator.addError(repair.error());
+                        return Mono.just(accumulator.toBatch());
                     }
-                    return executeOne(currentCall, tool, request, stepIndex, executionMessages,
-                            stepProviderMetadata, lifecycle)
+                    return executeOne(currentCall, tool, context)
                         .flatMap(outcome -> {
                             if (outcome.error() != null) {
-                                errors.add(outcome.error());
-                                return Mono.just(toolExecutionBatch(results, errors, warnings));
+                                accumulator.addError(outcome.error());
+                                return Mono.just(accumulator.toBatch());
                             }
-                            results.add(outcome.result());
-                            return executeNext(toolCalls, index + 1, request, stepIndex,
-                                executionMessages, stepProviderMetadata, lifecycle, toolsByName,
-                                results, errors, warnings);
+                            accumulator.addResult(outcome.result());
+                            return executeNext(toolCalls, index + 1, context, accumulator);
                         });
                 });
         } catch (RuntimeException e) {
-            errors.add(toolError(resolvedCall, e));
-            return Mono.just(toolExecutionBatch(results, errors, warnings));
+            accumulator.addError(toolError(resolvedCall, e));
+            return Mono.just(accumulator.toBatch());
         }
     }
 
     private Mono<ToolExecutionOutcome> executeOne(ToolCall resolvedCall, ToolDefinition tool,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle) {
-        var context = executionContext(resolvedCall, request, stepIndex, executionMessages,
-            stepProviderMetadata);
+        ToolStepContext stepContext) {
+        var context = executionContext(resolvedCall, stepContext);
         var started = Instant.now();
-        return lifecycle.toolCallStart(stepIndex, resolvedCall, context.getProviderMetadata())
-            .then(Mono.defer(() -> toolTimeout.apply(tool.getExecutor().execute(context), request)))
+        return stepContext.lifecycle()
+            .toolCallStart(stepContext.stepIndex(), resolvedCall, context.getProviderMetadata())
+            .then(Mono.defer(() -> toolTimeout.apply(tool.getExecutor().execute(context),
+                stepContext.request())))
             .doOnNext(value -> {
-                cancellationChecker.check(request);
+                cancellationChecker.check(stepContext.request());
                 validateOutput(resolvedCall, tool, value);
             })
             .map(value -> ToolResult.builder()
@@ -114,12 +107,13 @@ public final class LanguageModelToolExecutor {
                 .toolName(resolvedCall.getToolName())
                 .result(value)
                 .build())
-            .flatMap(result -> lifecycle.toolCallFinish(stepIndex, result, null, started,
+            .flatMap(result -> stepContext.lifecycle()
+                .toolCallFinish(stepContext.stepIndex(), result, null, started,
                     context.getProviderMetadata())
                 .thenReturn(new ToolExecutionOutcome(result, null)))
             .onErrorResume(RuntimeException.class, e -> {
                 var error = toolError(resolvedCall, e);
-                return lifecycle.toolCallFinish(stepIndex, null, error, started,
+                return stepContext.lifecycle().toolCallFinish(stepContext.stepIndex(), null, error, started,
                         context.getProviderMetadata())
                     .thenReturn(new ToolExecutionOutcome(null, error));
             });
@@ -133,90 +127,65 @@ public final class LanguageModelToolExecutor {
             return Mono.just(new ToolApprovalBatch(List.of(), List.of(), List.of(), List.of(), List.of(),
                 false));
         }
-        return evaluateApprovalNext(toolCalls, 0, request, stepIndex, executionMessages,
-            stepProviderMetadata, lifecycle, approvalIdFactory, toolsByName(request),
-            new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
-            new ArrayList<>(), false);
+        var context = ToolStepContext.approval(request, stepIndex, executionMessages,
+            stepProviderMetadata, lifecycle, toolsByName(request), approvalIdFactory);
+        return evaluateApprovalNext(toolCalls, 0, context, new ApprovalAccumulator());
     }
 
     private Mono<ToolApprovalBatch> evaluateApprovalNext(List<ToolCall> toolCalls, int index,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle,
-        Function<ToolCall, String> approvalIdFactory, Map<String, ToolDefinition> toolsByName,
-        ArrayList<ToolCall> executable, ArrayList<ToolCall> resolvedCalls,
-        ArrayList<ToolApprovalRequest> approvals, ArrayList<ToolError> errors,
-        ArrayList<GenerationWarning> warnings, boolean hasPendingExternalCalls) {
-        if (index >= toolCalls.size() || !approvals.isEmpty() || !errors.isEmpty()
-            || hasPendingExternalCalls) {
-            return Mono.just(finalizeApproval(resolvedCalls, executable, approvals, errors, warnings,
-                hasPendingExternalCalls));
+        ToolStepContext context, ApprovalAccumulator accumulator) {
+        if (index >= toolCalls.size() || accumulator.isTerminal()) {
+            return Mono.just(finalizeApproval(accumulator));
         }
         var toolCall = toolCalls.get(index);
         var resolvedCall = toolCall;
         try {
-            var tool = toolsByName.get(toolCall.getToolName());
+            var tool = context.tool(toolCall);
             if (tool == null) {
-                resolvedCalls.add(toolCall);
-                errors.add(unknownToolError(toolCall));
-                return Mono.just(finalizeApproval(resolvedCalls, executable, approvals, errors,
-                    warnings, false));
+                accumulator.addResolvedCall(toolCall);
+                accumulator.addError(unknownToolError(toolCall));
+                return Mono.just(finalizeApproval(accumulator));
             }
             if (tool.getExecutor() == null) {
-                executable.clear();
-                resolvedCalls.clear();
-                resolvedCalls.add(toolCall);
-                warnings.add(externalToolPendingWarning(tool));
-                return Mono.just(finalizeApproval(resolvedCalls, executable, approvals, errors,
-                    warnings, true));
+                accumulator.pendingExternal(toolCall, externalToolPendingWarning(tool));
+                return Mono.just(finalizeApproval(accumulator));
             }
-            cancellationChecker.check(request);
-            return repairIfNeeded(toolCall, tool, request, stepIndex, executionMessages,
-                    stepProviderMetadata)
-                .flatMap(repair -> handleApprovalRepair(toolCalls, index, request, stepIndex,
-                    executionMessages, stepProviderMetadata, lifecycle, approvalIdFactory,
-                    toolsByName, executable, resolvedCalls, approvals, errors, warnings, tool,
-                    repair));
+            cancellationChecker.check(context.request());
+            return repairIfNeeded(toolCall, tool, context)
+                .flatMap(repair -> handleApprovalRepair(toolCalls, index, context, accumulator,
+                    tool, repair));
         } catch (RuntimeException e) {
-            resolvedCalls.add(resolvedCall);
-            errors.add(toolError(resolvedCall, e));
-            return Mono.just(finalizeApproval(resolvedCalls, executable, approvals, errors, warnings,
-                false));
+            accumulator.addResolvedCall(resolvedCall);
+            accumulator.addError(toolError(resolvedCall, e));
+            return Mono.just(finalizeApproval(accumulator));
         }
     }
 
     private Mono<ToolApprovalBatch> handleApprovalRepair(List<ToolCall> toolCalls, int index,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle,
-        Function<ToolCall, String> approvalIdFactory, Map<String, ToolDefinition> toolsByName,
-        ArrayList<ToolCall> executable, ArrayList<ToolCall> resolvedCalls,
-        ArrayList<ToolApprovalRequest> approvals, ArrayList<ToolError> errors,
-        ArrayList<GenerationWarning> warnings, ToolDefinition tool, RepairAttempt repair) {
+        ToolStepContext context, ApprovalAccumulator accumulator, ToolDefinition tool,
+        RepairAttempt repair) {
         var resolvedCall = repair.toolCall();
-        warnings.addAll(repair.warnings());
+        accumulator.addWarnings(repair.warnings());
         if (repair.error() != null) {
-            resolvedCalls.add(resolvedCall);
-            errors.add(repair.error());
-            return Mono.just(finalizeApproval(resolvedCalls, executable, approvals, errors, warnings,
-                false));
+            accumulator.addResolvedCall(resolvedCall);
+            accumulator.addError(repair.error());
+            return Mono.just(finalizeApproval(accumulator));
         }
-        resolvedCalls.add(resolvedCall);
-        var context = executionContext(resolvedCall, request, stepIndex, executionMessages,
-            stepProviderMetadata);
+        accumulator.addResolvedCall(resolvedCall);
+        var executionContext = executionContext(resolvedCall, context);
         var policy = tool.getApprovalPolicy();
-        if (policy != null && policy.requiresApproval(context)) {
+        if (policy != null && policy.requiresApproval(executionContext)) {
             var approval = ToolApprovalRequest.from(resolvedCall,
-                approvalIdFactory.apply(resolvedCall), stepIndex, context.getProviderMetadata());
-            return lifecycle.toolApprovalRequest(stepIndex, approval)
+                context.approvalId(resolvedCall), context.stepIndex(),
+                executionContext.getProviderMetadata());
+            return context.lifecycle().toolApprovalRequest(context.stepIndex(), approval)
                 .then(Mono.fromSupplier(() -> {
-                    approvals.add(approval);
-                    return finalizeApproval(resolvedCalls, executable, approvals, errors, warnings,
-                        false);
+                    accumulator.addApproval(approval);
+                    return finalizeApproval(accumulator);
                 }));
         }
-        executable.add(resolvedCall);
-        return evaluateApprovalNext(toolCalls, index + 1, request, stepIndex, executionMessages,
-            stepProviderMetadata, lifecycle, approvalIdFactory, toolsByName, executable,
-            resolvedCalls, approvals, errors, warnings, false);
+        accumulator.addExecutable(resolvedCall);
+        return evaluateApprovalNext(toolCalls, index + 1, context, accumulator);
     }
 
     public ToolExecutionBatch stepLimitReached(List<ToolCall> toolCalls) {
@@ -229,26 +198,16 @@ public final class LanguageModelToolExecutor {
             .build()));
     }
 
-    private ToolExecutionBatch toolExecutionBatch(ArrayList<ToolResult> results,
-        ArrayList<ToolError> errors, ArrayList<GenerationWarning> warnings) {
-        return new ToolExecutionBatch(List.copyOf(results), List.copyOf(errors),
-            List.copyOf(warnings));
-    }
-
-    private ToolApprovalBatch finalizeApproval(ArrayList<ToolCall> resolvedCalls,
-        ArrayList<ToolCall> executable, ArrayList<ToolApprovalRequest> approvals,
-        ArrayList<ToolError> errors, ArrayList<GenerationWarning> warnings,
-        boolean hasPendingExternalCalls) {
-        if (!approvals.isEmpty()) {
-            var approvalCallIds = approvals.stream()
+    private ToolApprovalBatch finalizeApproval(ApprovalAccumulator accumulator) {
+        if (!accumulator.approvals.isEmpty()) {
+            var approvalCallIds = accumulator.approvals.stream()
                 .map(ToolApprovalRequest::getToolCallId)
                 .collect(Collectors.toCollection(HashSet::new));
-            resolvedCalls.removeIf(toolCall -> !approvalCallIds.contains(toolCall.getToolCallId()));
-            executable.clear();
+            accumulator.resolvedCalls.removeIf(toolCall ->
+                !approvalCallIds.contains(toolCall.getToolCallId()));
+            accumulator.executable.clear();
         }
-        return new ToolApprovalBatch(List.copyOf(resolvedCalls), List.copyOf(executable),
-            List.copyOf(approvals), List.copyOf(errors), List.copyOf(warnings),
-            hasPendingExternalCalls);
+        return accumulator.toBatch();
     }
 
     private Map<String, ToolDefinition> toolsByName(GenerateTextRequest request) {
@@ -270,6 +229,11 @@ public final class LanguageModelToolExecutor {
                 toolCall.getProviderMetadata()))
             .cancellationToken(request.getCancellationToken())
             .build();
+    }
+
+    private ToolExecutionContext executionContext(ToolCall toolCall, ToolStepContext context) {
+        return executionContext(toolCall, context.request(), context.stepIndex(),
+            context.executionMessages(), context.stepProviderMetadata());
     }
 
     private ToolError unknownToolError(ToolCall toolCall) {
@@ -303,13 +267,12 @@ public final class LanguageModelToolExecutor {
     }
 
     private Mono<RepairAttempt> repairIfNeeded(ToolCall toolCall, ToolDefinition tool,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata) {
+        ToolStepContext context) {
         try {
             validateInput(toolCall, tool);
             return Mono.just(new RepairAttempt(toolCall, null, List.of()));
         } catch (RuntimeException validationFailure) {
-            var repairCallback = request.getToolCallRepair();
+            var repairCallback = context.request().getToolCallRepair();
             if (repairCallback == null) {
                 return Mono.just(new RepairAttempt(toolCall, toolError(toolCall, validationFailure),
                     List.of()));
@@ -319,10 +282,10 @@ public final class LanguageModelToolExecutor {
                     .tool(tool)
                     .validationError(safeErrorMessage(validationFailure))
                     .validationPath(validationPath(toolCall))
-                    .stepIndex(stepIndex)
-                    .messages(List.copyOf(executionMessages))
-                    .requestContext(copyContext(request.getContext()))
-                    .providerMetadata(mergeProviderMetadata(stepProviderMetadata,
+                    .stepIndex(context.stepIndex())
+                    .messages(List.copyOf(context.executionMessages()))
+                    .requestContext(copyContext(context.request().getContext()))
+                    .providerMetadata(mergeProviderMetadata(context.stepProviderMetadata(),
                         toolCall.getProviderMetadata()))
                     .build())
                 .map(result -> repairedAttempt(toolCall, tool, validationFailure, result))
@@ -421,6 +384,117 @@ public final class LanguageModelToolExecutor {
             merged.putAll(right);
         }
         return merged;
+    }
+
+    private record ToolStepContext(
+        GenerateTextRequest request,
+        int stepIndex,
+        List<ModelMessage> executionMessages,
+        Map<String, Object> stepProviderMetadata,
+        ToolLifecycle lifecycle,
+        Map<String, ToolDefinition> toolsByName,
+        Function<ToolCall, String> approvalIdFactory
+    ) {
+        static ToolStepContext execution(GenerateTextRequest request, int stepIndex,
+            List<ModelMessage> executionMessages, Map<String, Object> stepProviderMetadata,
+            ToolLifecycle lifecycle, Map<String, ToolDefinition> toolsByName) {
+            return new ToolStepContext(request, stepIndex, executionMessages,
+                stepProviderMetadata, lifecycle, toolsByName, null);
+        }
+
+        static ToolStepContext approval(GenerateTextRequest request, int stepIndex,
+            List<ModelMessage> executionMessages, Map<String, Object> stepProviderMetadata,
+            ToolLifecycle lifecycle, Map<String, ToolDefinition> toolsByName,
+            Function<ToolCall, String> approvalIdFactory) {
+            return new ToolStepContext(request, stepIndex, executionMessages,
+                stepProviderMetadata, lifecycle, toolsByName, approvalIdFactory);
+        }
+
+        ToolDefinition tool(ToolCall toolCall) {
+            return toolsByName.get(toolCall.getToolName());
+        }
+
+        String approvalId(ToolCall toolCall) {
+            return approvalIdFactory.apply(toolCall);
+        }
+    }
+
+    private static final class ExecutionAccumulator {
+        private final ArrayList<ToolResult> results = new ArrayList<>();
+        private final ArrayList<ToolError> errors = new ArrayList<>();
+        private final ArrayList<GenerationWarning> warnings = new ArrayList<>();
+
+        boolean hasErrors() {
+            return !errors.isEmpty();
+        }
+
+        void addResult(ToolResult result) {
+            results.add(result);
+        }
+
+        void addError(ToolError error) {
+            errors.add(error);
+        }
+
+        void addWarning(GenerationWarning warning) {
+            warnings.add(warning);
+        }
+
+        void addWarnings(List<GenerationWarning> warnings) {
+            this.warnings.addAll(warnings);
+        }
+
+        ToolExecutionBatch toBatch() {
+            return new ToolExecutionBatch(List.copyOf(results), List.copyOf(errors),
+                List.copyOf(warnings));
+        }
+    }
+
+    private static final class ApprovalAccumulator {
+        private final ArrayList<ToolCall> executable = new ArrayList<>();
+        private final ArrayList<ToolCall> resolvedCalls = new ArrayList<>();
+        private final ArrayList<ToolApprovalRequest> approvals = new ArrayList<>();
+        private final ArrayList<ToolError> errors = new ArrayList<>();
+        private final ArrayList<GenerationWarning> warnings = new ArrayList<>();
+        private boolean hasPendingExternalCalls;
+
+        boolean isTerminal() {
+            return !approvals.isEmpty() || !errors.isEmpty() || hasPendingExternalCalls;
+        }
+
+        void addExecutable(ToolCall toolCall) {
+            executable.add(toolCall);
+        }
+
+        void addResolvedCall(ToolCall toolCall) {
+            resolvedCalls.add(toolCall);
+        }
+
+        void addApproval(ToolApprovalRequest approval) {
+            approvals.add(approval);
+        }
+
+        void addError(ToolError error) {
+            errors.add(error);
+        }
+
+        void addWarnings(List<GenerationWarning> warnings) {
+            this.warnings.addAll(warnings);
+        }
+
+        void pendingExternal(ToolCall toolCall, GenerationWarning warning) {
+            executable.clear();
+            resolvedCalls.clear();
+            resolvedCalls.add(toolCall);
+            warnings.add(warning);
+            hasPendingExternalCalls = true;
+        }
+
+        ToolApprovalBatch toBatch() {
+            return new ToolApprovalBatch(List.copyOf(resolvedCalls), List.copyOf(executable),
+                List.copyOf(approvals), List.copyOf(errors), List.copyOf(warnings),
+                hasPendingExternalCalls);
+        }
     }
 
     @FunctionalInterface

@@ -4,18 +4,13 @@ import { ModelOptionModelTypeEnum, type TestEmbeddingResponse } from '@/api/gene
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import {
+  applyWorkbenchStreamPart,
   buildOutputSpec,
   buildReasoningOptions,
   buildTestChatRequest,
-  flushSseJsonBuffer,
-  isRenderableReasoningDelta,
-  isRenderableTextDelta,
-  isTerminalTextStreamPart,
   parseProviderOptionsJson,
-  parseSseJsonLines,
-  toToolEvent,
+  readTestChatStream,
   type GenerateTextRequest,
-  type ModelMessage,
   type OutputMode,
   type ReasoningEffort,
   type ReasoningMode,
@@ -229,14 +224,7 @@ async function streamChatResponse(requestBody: GenerateTextRequest, modelName: s
   const model = activeModels.value.find((m) => m.name === modelName)
   if (!model) return
 
-  const assistantMessage: WorkbenchMessage = {
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: '',
-    modelName: model.name,
-    modelDisplayName: model.displayName || model.modelId || model.name,
-    state: 'streaming',
-  }
+  const assistantMessage = createAssistantMessage(model)
   messages.value.push(assistantMessage)
 
   const controller = new AbortController()
@@ -244,55 +232,18 @@ async function streamChatResponse(requestBody: GenerateTextRequest, modelName: s
   isStreaming.value = true
 
   try {
-    const params = new URLSearchParams()
-    if (testToolEnabled.value) {
-      params.set('enableTestTool', 'true')
-    }
-    if (testToolApprovalEnabled.value) {
-      params.set('enableTestToolApproval', 'true')
-    }
-    if (externalTestToolEnabled.value) {
-      params.set('enableExternalTestTool', 'true')
-    }
-    if (toolCallRepairEnabled.value) {
-      params.set('enableToolCallRepair', 'true')
-    }
-    const query = params.toString()
-    const response = await fetch(
-      `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-chat/stream${query ? `?${query}` : ''}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
+    await readTestChatStream({
+      modelName,
+      requestBody,
+      signal: controller.signal,
+      streamOptions: {
+        testToolEnabled: testToolEnabled.value,
+        testToolApprovalEnabled: testToolApprovalEnabled.value,
+        externalTestToolEnabled: externalTestToolEnabled.value,
+        toolCallRepairEnabled: toolCallRepairEnabled.value,
       },
-    )
-
-    if (!response.ok) {
-      throw new Error((await response.text()) || `HTTP ${response.status}`)
-    }
-
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('无法读取响应流')
-    }
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const parsed = parseSseJsonLines<TextStreamPart>(
-        buffer,
-        decoder.decode(value, { stream: true }),
-      )
-      buffer = parsed.buffer
-      handleChunks(assistantMessage.id, parsed.chunks)
-    }
-
-    handleChunks(assistantMessage.id, flushSseJsonBuffer<TextStreamPart>(buffer))
+      onChunks: (chunks) => handleChunks(assistantMessage.id, chunks),
+    })
     finishAssistantMessage(assistantMessage.id, 'done')
   } catch (e) {
     if ((e as Error).name === 'AbortError') {
@@ -304,6 +255,21 @@ async function streamChatResponse(requestBody: GenerateTextRequest, modelName: s
       isStreaming.value = false
       abortController = null
     }
+  }
+}
+
+function createAssistantMessage(model: {
+  name?: string
+  displayName?: string
+  modelId?: string
+}): WorkbenchMessage {
+  return {
+    id: crypto.randomUUID(),
+    role: 'assistant',
+    content: '',
+    modelName: model.name,
+    modelDisplayName: model.displayName || model.modelId || model.name,
+    state: 'streaming',
   }
 }
 
@@ -355,81 +321,12 @@ async function handleRegenerate(messageIndex: number) {
 }
 
 function handleChunks(messageId: string, chunks: TextStreamPart[]) {
+  const message = messages.value.find((item) => item.id === messageId)
+  if (!message) {
+    return
+  }
   for (const chunk of chunks) {
-    const toolEvent = toToolEvent(chunk)
-    if (toolEvent) {
-      appendToolEvent(messageId, toolEvent)
-      continue
-    }
-    if (chunk.type === 'error') {
-      appendAssistantError(messageId, chunk.errorText || '请求失败')
-      continue
-    }
-    if (chunk.type === 'reasoning-start') {
-      setAssistantReasoningState(messageId, 'streaming')
-      continue
-    }
-    if (isRenderableReasoningDelta(chunk)) {
-      appendAssistantReasoning(messageId, chunk.delta)
-      continue
-    }
-    if (chunk.type === 'reasoning-end') {
-      setAssistantReasoningState(messageId, 'done')
-      continue
-    }
-    if (isRenderableTextDelta(chunk)) {
-      appendAssistantContent(messageId, chunk.delta)
-      continue
-    }
-    if (chunk.type === 'finish-step') {
-      if (chunk.response?.messages?.length) {
-        setAssistantResponseMessages(messageId, chunk.response.messages)
-      }
-      if (chunk.warnings?.length) {
-        appendAssistantWarnings(messageId, chunk.warnings)
-      }
-      continue
-    }
-    if (isTerminalTextStreamPart(chunk)) {
-      finishAssistantMessage(messageId, 'done')
-    }
-  }
-}
-
-function appendToolEvent(messageId: string, event: NonNullable<ReturnType<typeof toToolEvent>>) {
-  const message = messages.value.find((item) => item.id === messageId)
-  if (message) {
-    if (
-      event.toolCallId &&
-      (event.type === 'tool-result' ||
-        event.type === 'tool-error' ||
-        event.type === 'tool-approval-request')
-    ) {
-      message.toolEvents = (message.toolEvents || []).map((item) => {
-        if (item.type !== 'tool-call' || item.toolCallId !== event.toolCallId) {
-          return item
-        }
-        return {
-          ...item,
-          externalStatus:
-            event.type === 'tool-result'
-              ? 'completed'
-              : event.type === 'tool-error'
-                ? 'failed'
-                : undefined,
-        }
-      })
-    }
-    message.toolEvents = [...(message.toolEvents || []), event]
-  }
-}
-
-function setAssistantResponseMessages(messageId: string, responseMessages: ModelMessage[]) {
-  const message = messages.value.find((item) => item.id === messageId)
-  if (message) {
-    message.responseMessages = responseMessages
-    message.leadingMessages = undefined
-    message.historyParts = undefined
+    applyWorkbenchStreamPart(message, chunk)
   }
 }
 
@@ -657,31 +554,6 @@ function buildChatParameters(
     providerOptions,
     headers,
     output,
-  }
-}
-
-function appendAssistantContent(messageId: string, content: string) {
-  const message = messages.value.find((item) => item.id === messageId)
-  if (message) {
-    message.content += content
-  }
-}
-
-function appendAssistantReasoning(messageId: string, content: string) {
-  const message = messages.value.find((item) => item.id === messageId)
-  if (message) {
-    message.reasoningContent = `${message.reasoningContent || ''}${content}`
-    message.reasoningState = 'streaming'
-  }
-}
-
-function setAssistantReasoningState(
-  messageId: string,
-  state: NonNullable<WorkbenchMessage['reasoningState']>,
-) {
-  const message = messages.value.find((item) => item.id === messageId)
-  if (message) {
-    message.reasoningState = state
   }
 }
 

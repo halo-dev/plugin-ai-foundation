@@ -72,7 +72,7 @@ public final class LanguageModelResponseMapper {
         var input = usage.getPromptTokens();
         var output = usage.getCompletionTokens();
         var total = usage.getTotalTokens();
-        if (input == null && output == null && total == null && usage.getNativeUsage() == null) {
+        if (!hasUsageData(input, output, total, usage.getNativeUsage())) {
             return null;
         }
         return LanguageModelUsage.builder()
@@ -131,15 +131,12 @@ public final class LanguageModelResponseMapper {
     }
 
     public List<GenerationWarning> mapWarnings(ChatResponse response) {
-        var metadata = response.getMetadata();
-        if (metadata == null || !metadata.containsKey("warnings")) {
+        var warnings = warningValues(response);
+        if (warnings == null) {
             return List.of();
         }
-        var warnings = metadata.get("warnings");
         if (warnings instanceof Collection<?> collection) {
-            return collection.stream()
-                .map(this::mapWarning)
-                .toList();
+            return mapWarningCollection(collection);
         }
         return List.of(mapWarning(warnings));
     }
@@ -228,17 +225,26 @@ public final class LanguageModelResponseMapper {
         if (response == null) {
             return values;
         }
-        if (response.getMetadata() != null) {
-            response.getMetadata().entrySet()
-                .forEach(entry -> values.put(entry.getKey(), sanitizeValue(entry.getValue())));
+        appendResponseMetadata(values, response);
+        appendOutputMetadata(values, response);
+        return values;
+    }
+
+    private void appendResponseMetadata(Map<String, Object> values, ChatResponse response) {
+        if (response.getMetadata() == null) {
+            return;
         }
+        response.getMetadata().entrySet()
+            .forEach(entry -> values.put(entry.getKey(), sanitizeValue(entry.getValue())));
+    }
+
+    private void appendOutputMetadata(Map<String, Object> values, ChatResponse response) {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
         if (output != null && output.getMetadata() != null) {
             output.getMetadata()
                 .forEach((key, value) -> values.put(key, sanitizeValue(value)));
         }
-        return values;
     }
 
     private void addSourceParts(List<GenerationContentPart> parts, Object value) {
@@ -307,6 +313,24 @@ public final class LanguageModelResponseMapper {
         } catch (ReflectiveOperationException ignored) {
             return null;
         }
+    }
+
+    private boolean hasUsageData(Integer input, Integer output, Integer total, Object nativeUsage) {
+        return input != null || output != null || total != null || nativeUsage != null;
+    }
+
+    private Object warningValues(ChatResponse response) {
+        var metadata = response.getMetadata();
+        if (metadata == null || !metadata.containsKey("warnings")) {
+            return null;
+        }
+        return metadata.get("warnings");
+    }
+
+    private List<GenerationWarning> mapWarningCollection(Collection<?> collection) {
+        return collection.stream()
+            .map(this::mapWarning)
+            .toList();
     }
 
     private boolean isRawDiagnosticKey(String key) {
