@@ -4,11 +4,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
 
+@Component
 final class ModelOptionAssembler {
 
     List<ModelOption> toOptions(List<AiModel> models, Map<String, AiProvider> providers,

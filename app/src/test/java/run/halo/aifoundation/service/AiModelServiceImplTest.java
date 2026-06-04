@@ -25,7 +25,10 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
+import run.halo.aifoundation.service.embedding.EmbeddingModelRuntimeFactory;
 import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
+import run.halo.aifoundation.service.language.LanguageModelRuntimeFactory;
+import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
 import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
@@ -54,8 +57,9 @@ class AiModelServiceImplTest {
         service = new AiModelServiceImpl(
             new DefaultAiModelResolver(client, providerClientCache, secretResolver,
                 defaultModelSlotStore),
-            new DefaultLanguageModelFactory(providerClientCache),
-            new DefaultEmbeddingModelFactory(providerClientCache)
+            new DefaultLanguageModelFactory(providerClientCache,
+                new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport())),
+            new DefaultEmbeddingModelFactory(providerClientCache, new EmbeddingModelRuntimeFactory())
         );
     }
 

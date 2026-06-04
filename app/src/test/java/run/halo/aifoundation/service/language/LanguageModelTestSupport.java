@@ -6,6 +6,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.DefaultUsage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import run.halo.aifoundation.message.ModelMessage;
@@ -21,6 +22,16 @@ import run.halo.aifoundation.tool.ToolExecutor;
 import run.halo.aifoundation.tool.ToolResult;
 
 abstract class LanguageModelTestSupport {
+
+    LanguageModelImpl languageModel(ChatModel chatModel, String providerType) {
+        return languageModel(chatModel, providerType, LanguageModelProviderOptions.defaults());
+    }
+
+    LanguageModelImpl languageModel(ChatModel chatModel, String providerType,
+        LanguageModelProviderOptions providerOptions) {
+        return new LanguageModelImpl(chatModel, LanguageModelRuntimeComposition.create(providerType,
+            providerOptions, new LanguageModelRuntimeSupport()));
+    }
 
     ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
         Integer completionTokens) {

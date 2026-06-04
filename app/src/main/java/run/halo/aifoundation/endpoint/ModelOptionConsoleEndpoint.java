@@ -26,7 +26,7 @@ public class ModelOptionConsoleEndpoint implements CustomEndpoint {
 
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
-    private final ModelOptionAssembler modelOptionAssembler = new ModelOptionAssembler();
+    private final ModelOptionAssembler modelOptionAssembler;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {

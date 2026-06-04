@@ -35,7 +35,8 @@ class ModelOptionConsoleEndpointTest {
         when(providerClientCache.getProviderTypeMap())
             .thenReturn(Map.of("openai", openAiType, "ollama", ollamaType));
 
-        var endpoint = new ModelOptionConsoleEndpoint(client, providerClientCache);
+        var endpoint = new ModelOptionConsoleEndpoint(client, providerClientCache,
+            new ModelOptionAssembler());
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();

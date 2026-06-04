@@ -35,7 +35,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
         when(chatModel.call(any(Prompt.class))).thenReturn(
             toolCallResponse("call_1", "run", "{\"command\":\"rm file\"}", 2, 3)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var executions = new AtomicInteger();
 
         var request = GenerateTextRequest.builder()
@@ -76,7 +76,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
     void generateTextExecutesApprovedToolBeforeProviderContinuation() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Removed.", "stop", 4, 5));
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var executions = new AtomicInteger();
 
         var request = GenerateTextRequest.builder()
@@ -115,7 +115,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
                 new AssistantMessage.ToolCall("call_2", "function", "unknown", "{}")
             ), 2, 3)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
             .prompt("Use tools")
@@ -150,7 +150,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
             toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3),
             toolCallResponse("call_2", "run", "{\"command\":\"rm file\"}", 4, 5)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
             .prompt("Use tools")
@@ -189,7 +189,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
             Flux.just(toolCallResponse("call_1", "weather", "{\"location\":\"SF\"}", 2, 3)),
             Flux.just(toolCallResponse("call_2", "run", "{\"command\":\"rm file\"}", 4, 5))
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
             .prompt("Use tools")
@@ -232,7 +232,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
     void generateTextUsesPersistedApprovalStepIndexWhenResumingApprovedTool() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Removed.", "stop", 4, 5));
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var observedStepIndex = new AtomicReference<Integer>();
 
         var request = GenerateTextRequest.builder()
@@ -260,7 +260,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
         when(chatModel.call(any(Prompt.class))).thenReturn(
             toolCallResponse("call_1", "run", "{\"command\":\"rm file\"}", 2, 3)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var source = new CancellationSource();
         var observedToken = new AtomicReference<CancellationToken>();
 

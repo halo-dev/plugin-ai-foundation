@@ -67,8 +67,6 @@ import run.halo.aifoundation.service.language.tool.LanguageModelToolExecutor;
 import run.halo.aifoundation.service.language.tool.ToolApprovalResolver;
 import run.halo.aifoundation.service.language.tool.ToolExecutionBatch;
 import run.halo.aifoundation.service.language.tool.ToolStepCoordinator;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
 public class LanguageModelImpl implements LanguageModel {
@@ -83,7 +81,6 @@ public class LanguageModelImpl implements LanguageModel {
         "tool-input-examples-ignored";
     private static final String WARNING_REASONING_RETURNED_WHILE_DISABLED =
         "reasoning-returned-while-disabled";
-    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final ChatModel chatModel;
     private final String providerType;
@@ -99,35 +96,34 @@ public class LanguageModelImpl implements LanguageModel {
     private final ToolApprovalResolver approvalResolver;
     private final LanguageModelStructuredOutputHandler structuredOutputHandler;
     private final ReasoningContentExtractor reasoningExtractor;
+    private final LanguageModelRuntimeSupport runtimeSupport;
 
-    public LanguageModelImpl(ChatModel chatModel, String providerType) {
+    LanguageModelImpl(ChatModel chatModel, String providerType) {
         this(chatModel, providerType, LanguageModelProviderOptions.defaults());
     }
 
-    public LanguageModelImpl(ChatModel chatModel, String providerType,
+    LanguageModelImpl(ChatModel chatModel, String providerType,
         LanguageModelProviderOptions providerOptions) {
+        this(chatModel, LanguageModelRuntimeComposition.create(providerType, providerOptions,
+            new LanguageModelRuntimeSupport()));
+    }
+
+    LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition) {
         this.chatModel = chatModel;
-        this.providerType = providerType;
-        this.providerOptions = providerOptions != null
-            ? providerOptions
-            : LanguageModelProviderOptions.defaults();
-        this.requestValidator = new LanguageModelRequestValidator(providerType,
-            this.providerOptions.reasoningHistorySupported());
-        this.messageMapper = new LanguageModelMessageMapper(providerType);
-        this.messageHistoryAssembler = new GenerationMessageHistoryAssembler(providerType,
-            this.providerOptions.reasoningHistorySupported(), messageMapper);
-        this.chatOptionsBuilder = new LanguageModelChatOptionsBuilder(providerType,
-            this.providerOptions, this::writeJson);
-        this.responseMapper = new LanguageModelResponseMapper(providerType, messageMapper);
-        this.reasoningExtractor =
-            new ReasoningContentExtractor(providerType, this.responseMapper::sanitizeValue);
-        this.toolCallMapper = new LanguageModelToolCallMapper();
-        this.structuredOutputHandler =
-            new LanguageModelStructuredOutputHandler(responseMapper, this::writeJson);
-        this.toolExecutor = new LanguageModelToolExecutor(structuredOutputHandler::validateJsonValue,
-            this::checkCancellation, this::withToolTimeout);
-        this.toolStepCoordinator = new ToolStepCoordinator(toolExecutor);
-        this.approvalResolver = new ToolApprovalResolver();
+        this.providerType = composition.providerType();
+        this.providerOptions = composition.providerOptions();
+        this.requestValidator = composition.requestValidator();
+        this.messageMapper = composition.messageMapper();
+        this.messageHistoryAssembler = composition.messageHistoryAssembler();
+        this.chatOptionsBuilder = composition.chatOptionsBuilder();
+        this.responseMapper = composition.responseMapper();
+        this.reasoningExtractor = composition.reasoningExtractor();
+        this.toolCallMapper = composition.toolCallMapper();
+        this.structuredOutputHandler = composition.structuredOutputHandler();
+        this.toolExecutor = composition.toolExecutor();
+        this.toolStepCoordinator = composition.toolStepCoordinator();
+        this.approvalResolver = composition.approvalResolver();
+        this.runtimeSupport = composition.runtimeSupport();
     }
 
     @Override
@@ -1408,16 +1404,6 @@ public class LanguageModelImpl implements LanguageModel {
                 error -> new AiGenerationTimeoutException("step", timeout, error));
     }
 
-    private <T> Mono<T> withToolTimeout(Mono<T> mono, GenerateTextRequest request) {
-        var timeout = toolTimeout(request);
-        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
-            return mono;
-        }
-        return mono.timeout(timeout)
-            .onErrorMap(TimeoutException.class,
-                error -> new AiGenerationTimeoutException("tool", timeout, error));
-    }
-
     private Duration totalTimeout(GenerateTextRequest request) {
         return request != null && request.getTimeouts() != null
             ? request.getTimeouts().getTotalTimeout()
@@ -1430,17 +1416,8 @@ public class LanguageModelImpl implements LanguageModel {
             : null;
     }
 
-    private Duration toolTimeout(GenerateTextRequest request) {
-        return request != null && request.getTimeouts() != null
-            ? request.getTimeouts().getToolTimeout()
-            : null;
-    }
-
     private void checkCancellation(GenerateTextRequest request) {
-        if (request != null && request.getCancellationToken() != null
-            && request.getCancellationToken().isCancellationRequested()) {
-            throw new AiGenerationCancelledException("Generation was cancelled");
-        }
+        runtimeSupport.checkCancellation(request);
     }
 
     private TextStreamPart terminalErrorPart(Throwable error) {
@@ -1484,14 +1461,6 @@ public class LanguageModelImpl implements LanguageModel {
             && request.getOutput() != null
             && request.getOutput().getType() != null
             && request.getOutput().getType() != OutputType.TEXT;
-    }
-
-    private String writeJson(Object value) {
-        try {
-            return JSON_MAPPER.writeValueAsString(value != null ? value : Map.of());
-        } catch (JacksonException e) {
-            throw new IllegalArgumentException("failed to serialize JSON value", e);
-        }
     }
 
     private <T> List<T> nullSafe(List<T> list) {

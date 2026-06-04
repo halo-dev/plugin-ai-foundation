@@ -35,7 +35,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     private final EmbeddingBatchPlanner batchPlanner;
     private final EmbeddingResponseAggregator responseAggregator;
 
-    public EmbeddingModelImpl(
+    EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
         String providerType,
         int maxEmbeddingsPerCall,
@@ -44,21 +44,26 @@ public class EmbeddingModelImpl implements EmbeddingModel {
             EmbeddingModelProviderOptions.defaults(providerType));
     }
 
-    public EmbeddingModelImpl(
+    EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
         String providerType,
         int maxEmbeddingsPerCall,
         boolean supportsParallelCalls,
         EmbeddingModelProviderOptions providerOptions) {
+        this(springEmbeddingModel, EmbeddingModelRuntimeComposition.create(providerType,
+            maxEmbeddingsPerCall, supportsParallelCalls, providerOptions));
+    }
+
+    EmbeddingModelImpl(
+        org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
+        EmbeddingModelRuntimeComposition composition) {
         this.springEmbeddingModel = springEmbeddingModel;
-        this.providerType = providerType;
-        this.maxEmbeddingsPerCall = maxEmbeddingsPerCall;
-        this.supportsParallelCalls = supportsParallelCalls;
-        this.providerOptions = providerOptions != null
-            ? providerOptions
-            : EmbeddingModelProviderOptions.defaults(providerType);
-        this.batchPlanner = new EmbeddingBatchPlanner(maxEmbeddingsPerCall, supportsParallelCalls);
-        this.responseAggregator = new EmbeddingResponseAggregator(providerType);
+        this.providerType = composition.providerType();
+        this.maxEmbeddingsPerCall = composition.maxEmbeddingsPerCall();
+        this.supportsParallelCalls = composition.supportsParallelCalls();
+        this.providerOptions = composition.providerOptions();
+        this.batchPlanner = composition.batchPlanner();
+        this.responseAggregator = composition.responseAggregator();
     }
 
     @Override

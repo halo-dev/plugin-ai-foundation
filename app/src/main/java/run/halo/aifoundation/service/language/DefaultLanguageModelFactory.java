@@ -11,9 +11,12 @@ import run.halo.aifoundation.service.model.ModelResolution;
 public class DefaultLanguageModelFactory implements LanguageModelFactory {
 
     private final ProviderClientCache providerClientCache;
+    private final LanguageModelRuntimeFactory runtimeFactory;
 
-    public DefaultLanguageModelFactory(ProviderClientCache providerClientCache) {
+    public DefaultLanguageModelFactory(ProviderClientCache providerClientCache,
+        LanguageModelRuntimeFactory runtimeFactory) {
         this.providerClientCache = providerClientCache;
+        this.runtimeFactory = runtimeFactory;
     }
 
     @Override
@@ -23,6 +26,6 @@ public class DefaultLanguageModelFactory implements LanguageModelFactory {
         var providerOptions = resolution.providerType() != null
             ? resolution.providerType().languageModelProviderOptions()
             : LanguageModelProviderOptions.defaults();
-        return new LanguageModelImpl(chatModel, resolution.providerTypeName(), providerOptions);
+        return runtimeFactory.create(chatModel, resolution.providerTypeName(), providerOptions);
     }
 }

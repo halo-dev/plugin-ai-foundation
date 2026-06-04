@@ -31,7 +31,7 @@ class LanguageModelExternalToolTest extends LanguageModelTestSupport {
         when(chatModel.call(any(Prompt.class))).thenReturn(
             toolCallResponse("call_1", "weather", "{}", 2, 3)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
             .prompt("Use tool")
@@ -64,7 +64,7 @@ class LanguageModelExternalToolTest extends LanguageModelTestSupport {
         when(chatModel.call(any(Prompt.class))).thenReturn(
             chatResponse("It is 22C.", "stop", 4, 5)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
             .messages(externalToolResultMessages())
@@ -93,7 +93,7 @@ class LanguageModelExternalToolTest extends LanguageModelTestSupport {
                     "{\"query\":\"Halo\"}")
             ), 2, 3)
         );
-        var model = new LanguageModelImpl(chatModel, "openai");
+        var model = languageModel(chatModel, "openai");
         var executions = new AtomicInteger();
 
         var request = GenerateTextRequest.builder()
