@@ -12,6 +12,11 @@ import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
+import run.halo.aifoundation.ui.UIMessageChunk;
+import run.halo.aifoundation.ui.UIMessageStream;
+import run.halo.aifoundation.ui.UIMessageStreamMapper;
+import run.halo.aifoundation.ui.UIMessageStreamResponse;
+import java.util.function.Function;
 
 /**
  * Result returned by {@link LanguageModel#streamText(GenerateTextRequest)}.
@@ -183,5 +188,27 @@ public class StreamTextResult {
 
     public Mono<Map<String, Object>> providerMetadata() {
         return result.flatMap(value -> Mono.justOrEmpty(value.getProviderMetadata()));
+    }
+
+    /**
+     * Converts the full model stream into a frontend-facing Halo UI message stream.
+     */
+    public UIMessageStream toUIMessageStream() {
+        return UIMessageStreamMapper.toUIMessageStream(fullStream);
+    }
+
+    /**
+     * Creates an HTTP-friendly response descriptor for the UI message stream.
+     */
+    public UIMessageStreamResponse toUIMessageStreamResponse() {
+        return UIMessageStreamMapper.toResponse(fullStream);
+    }
+
+    /**
+     * Creates an HTTP-friendly response descriptor with serializer-backed SSE body frames.
+     */
+    public UIMessageStreamResponse toUIMessageStreamResponse(
+        Function<UIMessageChunk, String> serializer) {
+        return UIMessageStreamMapper.toResponse(fullStream, serializer);
     }
 }

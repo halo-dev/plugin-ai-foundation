@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# minimax-provider Specification
+
+## Purpose
+Define the built-in MiniMax provider integration, including provider metadata, default endpoint behavior, and model support.
+
+## Requirements
 
 ### Requirement: MiniMax provider exposes complete metadata
 The system SHALL expose MiniMax provider metadata through the provider-types REST API.

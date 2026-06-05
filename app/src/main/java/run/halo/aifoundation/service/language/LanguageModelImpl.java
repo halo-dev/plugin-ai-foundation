@@ -34,6 +34,7 @@ import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.message.ModelMessage;
@@ -168,6 +169,11 @@ public class LanguageModelImpl implements LanguageModel {
             output,
             result
         );
+    }
+
+    @Override
+    public LanguageModelCapabilities capabilities() {
+        return new LanguageModelCapabilities(providerOptions.reasoningHistorySupported());
     }
 
     private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request,

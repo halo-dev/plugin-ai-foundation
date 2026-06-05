@@ -182,3 +182,410 @@ Consumer documentation SHALL describe tool runtime features only when those feat
 - **WHEN** a plugin author reads the lifecycle controls guide
 - **THEN** the guide SHALL explain that `ToolExecutionContext` exposes request cancellation
 - **AND** it SHALL recommend cooperative cancellation checks for long-running server-side tools
+
+### Requirement: Documentation Covers UI Message Reuse
+Consumer documentation SHALL explain how plugin authors validate persisted UI messages and convert them back into model messages.
+
+#### Scenario: UI message reuse workflow is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide shows validating persisted `UIMessage` values
+- **AND** converting them into `ModelMessage`
+- **AND** passing the converted messages to `GenerateTextRequest`
+
+#### Scenario: Conversion warnings are documented
+- **WHEN** a plugin author reads the UI message conversion documentation
+- **THEN** the guide explains that data, source, file, approval, and unsupported reasoning state may be skipped by default
+- **AND** the guide shows how to inspect conversion warnings
+
+#### Scenario: Data part extension is documented
+- **WHEN** a plugin author reads the UI message conversion documentation
+- **THEN** the guide shows registering data validators or converters by data name
+
+#### Scenario: Reasoning conversion boundary is documented
+- **WHEN** a plugin author reads the UI message conversion documentation
+- **THEN** the guide explains that `ReasoningPart.text()` is UI-visible reasoning text
+- **AND** it explains that provider-specific opaque reasoning state belongs in `providerMetadata`
+- **AND** it states that provider-specific preservation requires an explicit converter or future provider-aware helper
+
+### Requirement: Documentation Covers AI Foundation API Classloading Contract
+Consumer documentation SHALL explain how plugin authors depend on the AI Foundation API without bundling duplicate API classes.
+
+#### Scenario: Compile-only dependency is documented
+- **WHEN** a plugin author reads the dependency setup section
+- **THEN** the guide uses `compileOnly 'run.halo.aifoundation:api:...'`
+- **AND** the guide does not instruct plugin authors to use `implementation 'run.halo.aifoundation:api:...'`
+
+#### Scenario: Runtime plugin dependency is documented
+- **WHEN** a plugin author reads the dependency setup section
+- **THEN** the guide shows `pluginDependencies.ai-foundation`
+- **AND** it explains that AI Foundation provides the API classes at runtime
+
+#### Scenario: Duplicate API classes are warned against
+- **WHEN** a plugin author reads the dependency setup section
+- **THEN** the guide warns that bundling the API jar into a consumer plugin can cause classloader type mismatches
+
+### Requirement: Documentation Covers UI Message Chat Handler
+Consumer documentation SHALL explain how plugin authors use the framework-neutral UI message chat handler.
+
+#### Scenario: Chat handler workflow is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide shows resolving a `LanguageModel`
+- **AND** passing persisted `UIMessage` values to the chat handler
+- **AND** returning the handler response descriptor
+- **AND** saving updated messages from finish
+
+#### Scenario: Request customizer boundary is documented
+- **WHEN** a plugin author reads the chat handler documentation
+- **THEN** the guide explains that request customizers can set generation options
+- **AND** it explains that customizers must not set `prompt` or `messages`
+
+#### Scenario: Conversion warnings are documented for handler users
+- **WHEN** a plugin author reads the chat handler documentation
+- **THEN** the guide shows reading conversion warnings from the chat result
+
+#### Scenario: Finish reactivity is documented
+- **WHEN** a plugin author reads the chat handler documentation
+- **THEN** the guide explains that finish is completed when the UI stream is consumed
+
+### Requirement: Documentation Tracks Deferred UI Message Chat Work
+Consumer documentation SHALL record chat-handler-adjacent work that remains intentionally deferred.
+
+#### Scenario: Dynamic metadata callback is deferred
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide states that `UIMessageChatOptions` metadata shortcut hooks remain future work
+
+#### Scenario: HTTP transport contract is deferred
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide states that request body parsing and frontend transport schema will be designed with the future npm helper
+
+#### Scenario: Transport cancellation mapping is deferred
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide states that HTTP disconnect, frontend stop, abort chunks, and cancellation-source mapping are future work
+
+### Requirement: Documentation Covers Chat Transport Request Contract
+Consumer documentation SHALL explain how plugin authors use the framework-neutral chat transport request contract.
+
+#### Scenario: Request body shape is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide shows the default chat request fields `id`, `messages`, `trigger`, and `messageId`
+- **AND** it explains that the shape is the Halo UI message chat transport request
+
+#### Scenario: Manual WebFlux glue is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide shows parsing a request body into the chat request model
+- **AND** it shows returning `UIMessageStreamResponse` headers and body through WebFlux without a SDK-provided adapter
+
+#### Scenario: Custom endpoint fields are documented
+- **WHEN** a plugin author needs extra endpoint fields
+- **THEN** the guide explains that callers can wrap the chat request model in their own endpoint DTO
+- **AND** it does not present a fixed extra body or request metadata protocol
+
+### Requirement: Documentation Covers Chat Transport Trigger Semantics
+Consumer documentation SHALL distinguish normal submission, regeneration, retry, stop, and resume behavior.
+
+#### Scenario: Submit behavior is documented
+- **WHEN** a plugin author reads the chat transport documentation
+- **THEN** the guide explains that submit uses the provided UI messages as conversation history
+
+#### Scenario: Regenerate behavior is documented
+- **WHEN** a plugin author reads the chat transport documentation
+- **THEN** the guide explains that regenerate requires an assistant message id
+- **AND** it explains that the target assistant message and later messages are excluded before model invocation
+
+#### Scenario: Regenerate and provider retry are distinguished
+- **WHEN** a plugin author reads the chat transport documentation
+- **THEN** the guide explains that regenerate is a user-level new model invocation
+- **AND** provider retry remains controlled by generation request settings such as `maxRetries`
+
+#### Scenario: Stop and abort are documented as cancellation
+- **WHEN** a plugin author reads the chat transport documentation
+- **THEN** the guide explains that stop is not a request trigger
+- **AND** it explains that HTTP or reactive cancellation can be mapped to generation cancellation support by the caller
+
+#### Scenario: Resume remains deferred
+- **WHEN** a plugin author reads the chat transport documentation
+- **THEN** the guide states that resume stream requires a future reconnect contract, active stream registry, and replay or continuation strategy
+
+### Requirement: Documentation Covers Message Metadata Lifecycle
+Consumer documentation SHALL explain how plugin authors use message metadata lifecycle updates.
+
+#### Scenario: Metadata chunk APIs are documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide shows start metadata, message metadata chunk, and finish metadata usage
+
+#### Scenario: Metadata aggregation is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide explains that metadata updates merge into `UIMessage.metadata`
+- **AND** it explains that metadata changes can emit message snapshots
+
+#### Scenario: Metadata merge behavior is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide explains default Map shallow merge and non-Map replacement
+- **AND** it shows how to configure a custom metadata merger for typed metadata
+
+### Requirement: Documentation Distinguishes Metadata From Data Parts
+Consumer documentation SHALL distinguish message metadata from UI message parts and transient data.
+
+#### Scenario: Metadata and DataPart boundary is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide explains that message metadata is message-level state
+- **AND** it explains that `DataPart` is message content or application data stored in parts
+
+#### Scenario: Metadata does not enter parts
+- **WHEN** a plugin author reads the metadata documentation
+- **THEN** the guide states that metadata chunks do not enter `UIMessage.parts`
+
+#### Scenario: Transient data boundary is documented
+- **WHEN** a plugin author reads the metadata documentation
+- **THEN** the guide distinguishes message metadata from transient data chunks
+
+### Requirement: Documentation Tracks Metadata Lifecycle Non-goals
+Consumer documentation SHALL record metadata lifecycle work that remains intentionally out of scope.
+
+#### Scenario: Chat handler shortcut is deferred
+- **WHEN** a plugin author reads the metadata documentation
+- **THEN** the guide states that this version does not add `UIMessageChatOptions` metadata shortcut hooks
+
+#### Scenario: Automatic model metadata mapping is deferred
+- **WHEN** a plugin author reads the metadata documentation
+- **THEN** the guide states that model request metadata, response metadata, usage, model id, and finish reason are not automatically promoted to message metadata
+
+#### Scenario: Terminal metadata field is not documented
+- **WHEN** a plugin author reads the metadata documentation
+- **THEN** the guide directs callers to `finish.responseMessage().metadata()`
+- **AND** it does not document a separate terminal metadata field
+
+### Requirement: Documentation Covers UI Message Cancellation Contract
+Consumer documentation SHALL explain how plugin authors wire UI message chat cancellation.
+
+#### Scenario: Cancellation helper usage is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide shows creating a UI message cancellation helper
+- **AND** passing its token to `UIMessageChatOptions`
+
+#### Scenario: Subscriber cancellation binding is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide shows wrapping the response body with a subscriber-cancel binding helper
+- **AND** it explains that the helper cancels only on subscriber cancellation
+
+#### Scenario: WebFlux remains manual glue
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide shows WebFlux-style manual request and response wiring
+- **AND** it states that the SDK does not provide a WebFlux adapter
+
+### Requirement: Documentation Covers Cancellation Finish Semantics
+Consumer documentation SHALL explain what callers receive when cancellation aborts a UI message stream.
+
+#### Scenario: Abort is distinguished from error
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide explains that expected cancellation maps to an `abort` chunk rather than an `error` chunk
+
+#### Scenario: Partial message persistence decision is documented
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide explains that `onFinish` still receives a partial response message
+- **AND** it explains that callers decide whether to persist the aborted partial message
+
+#### Scenario: Error text boundary is documented
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide explains that expected cancellation does not produce safe error text
+
+### Requirement: Documentation Tracks Deferred Cancellation Work
+Consumer documentation SHALL record cancellation-adjacent work that remains intentionally out of scope.
+
+#### Scenario: Stop endpoint is deferred
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide states that stop endpoints require future active stream registry work
+
+#### Scenario: Resume and reconnect remain deferred
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide states that resume, reconnect, replay, and stream id behavior remain future work
+
+#### Scenario: Cancellation reason is deferred
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide states that this version does not expose structured cancellation reasons
+
+#### Scenario: Frontend helper is deferred
+- **WHEN** a plugin author reads the cancellation documentation
+- **THEN** the guide states that npm helper behavior remains future work
+
+### Requirement: UI Message Guide Is Caller-Oriented
+Consumer documentation SHALL present UI Message backend usage as a caller-facing integration guide.
+
+#### Scenario: Minimal backend flow comes first
+- **WHEN** a plugin author opens the UI Message guide
+- **THEN** the guide starts with the minimal backend flow for resolving a model, handling a chat request, returning a stream response, and saving messages
+
+#### Scenario: Advanced topics follow the main flow
+- **WHEN** a plugin author reads the UI Message guide
+- **THEN** metadata, data parts, tool behavior, validation, conversion, regeneration, cancellation, and error handling are presented after the minimal flow
+
+#### Scenario: Deferred work is grouped separately
+- **WHEN** a plugin author reads the UI Message guide
+- **THEN** future npm helper, WebFlux adapter, stop endpoint, resume/reconnect, active stream registry, and provider-aware reasoning preservation are grouped as deferred work
+
+### Requirement: UI Message Guide Uses Consistent Chinese Terminology
+Consumer documentation SHALL use clear Chinese terminology for caller-facing explanations.
+
+#### Scenario: Mixed Chinese-English phrasing is reduced
+- **WHEN** the UI Message guide explains concepts
+- **THEN** it avoids unnecessary mixed phrases such as "UI-only" or "glue code"
+- **AND** it uses consistent Chinese terms for interface display, manual adapter code, transport layer, persisted messages, cancellation, and regeneration
+
+#### Scenario: English API names remain unchanged
+- **WHEN** the guide references Java types or methods
+- **THEN** it preserves the exact Java API names in code formatting
+
+### Requirement: UI Message Guide Is Concise And Scannable
+Consumer documentation SHALL reduce long prose and make integration steps easier to scan.
+
+#### Scenario: Long explanations are replaced with focused structure
+- **WHEN** the guide explains a workflow
+- **THEN** it prefers short sections, tables, and focused code examples over long paragraphs
+
+#### Scenario: JavaDoc and guide responsibilities are separated
+- **WHEN** a detail belongs to a single type or method contract
+- **THEN** JavaDoc may carry that local detail
+- **AND** the guide focuses on end-to-end caller workflows
+
+#### Scenario: Documentation matches actual API behavior
+- **WHEN** the guide shows UI Message examples
+- **THEN** the examples use actual public Java APIs and match the current backend contract
+
+### Requirement: Main SDK Guide Is Caller-First
+The main consumer SDK guide SHALL be organized around the order in which a plugin author adopts and uses the SDK.
+
+#### Scenario: Setup comes before feature details
+- **WHEN** a plugin author opens `dev/dev.md`
+- **THEN** the guide first explains dependency setup, runtime plugin dependency, `AiModelService` resolution, and model selection
+- **AND** it avoids starting with advanced or implementation-oriented details
+
+#### Scenario: Common workflows define the document order
+- **WHEN** a plugin author scans `dev/dev.md`
+- **THEN** the guide presents common workflows before advanced options
+- **AND** those workflows include text generation, streaming, tools, structured output, reasoning and metadata, cancellation and timeouts, embeddings, provider options, errors, and testing
+
+### Requirement: Main SDK Guide Is Concise And Scannable
+The main consumer SDK guide SHALL reduce long prose and make common workflows easy to scan.
+
+#### Scenario: Dense prose is replaced by focused structure
+- **WHEN** the guide explains an SDK workflow
+- **THEN** it prefers short sections, small tables, and focused code examples over long explanatory paragraphs
+
+#### Scenario: Mixed terminology is reduced
+- **WHEN** the guide explains caller-facing concepts
+- **THEN** it uses consistent Chinese terminology where possible
+- **AND** it preserves exact Java API names in code formatting
+
+#### Scenario: Caller examples use public APIs
+- **WHEN** the guide includes Java examples
+- **THEN** the examples use public SDK API types and methods
+- **AND** they avoid requiring knowledge of internal provider adapters or console endpoint implementation
+
+### Requirement: Main SDK Guide Links To Dedicated UI Message Guide
+The main consumer SDK guide SHALL introduce UI Message usage without duplicating the dedicated UI Message guide.
+
+#### Scenario: UI Message stream has a short entry point
+- **WHEN** a plugin author reads the streaming section in `dev/dev.md`
+- **THEN** the guide explains when to use `UIMessageStream` and `UIMessage`
+- **AND** it links to `dev/ui-message-stream.md` for the complete backend UI Message workflow
+
+#### Scenario: Detailed UI Message content stays in dedicated guide
+- **WHEN** UI Message details involve chunk aggregation, metadata lifecycle, UI Message validation, conversion, regeneration, or cancellation
+- **THEN** the main guide summarizes the topic briefly
+- **AND** the detailed instructions remain in `dev/ui-message-stream.md`
+
+### Requirement: Main SDK Guide Records Deferred Frontend Work
+The main consumer SDK guide SHALL keep frontend helper and runtime deferrals visible without presenting them as current backend features.
+
+#### Scenario: Deferred UI Message work is clearly marked
+- **WHEN** the guide mentions frontend helpers, WebFlux adapters, stop endpoints, resume, reconnect, or stream registries
+- **THEN** it marks them as deferred work
+- **AND** it does not describe them as currently available public APIs
+
+### Requirement: Documentation Covers Final UI Message Backend Contract
+Consumer documentation SHALL explain the completed Java backend UI Message contract from the caller perspective.
+
+#### Scenario: Main guide links to detailed backend contract
+- **WHEN** a plugin author reads `dev/dev.md`
+- **THEN** the guide provides a concise UI Message entry point
+- **AND** links to `dev/ui-message-stream.md` for the detailed backend workflow
+
+#### Scenario: UI Message guide explains persisted tool state
+- **WHEN** a plugin author reads the UI Message guide
+- **THEN** the guide explains that tool calls, tool results, tool errors, approval requests, and approval responses are persisted in assistant `UIMessage.parts()`
+- **AND** it explains that `UIMessageRole` does not include a tool role
+
+#### Scenario: UI Message guide explains continuation flows
+- **WHEN** a plugin author reads the UI Message guide
+- **THEN** the guide shows how to append `tool-result`, `tool-error`, and `tool-approval-response` parts before continuing generation
+
+#### Scenario: UI Message guide explains denied approvals
+- **WHEN** a plugin author reads the UI Message guide
+- **THEN** the guide states that denied approvals are represented by `tool-approval-response approved=false`
+- **AND** denied approvals do not require a synthetic `tool-error`
+
+### Requirement: Documentation Covers UI Message Transport Codec
+Consumer documentation SHALL explain how callers use the framework-neutral Map-based UI Message transport codec.
+
+#### Scenario: Codec boundary is documented
+- **WHEN** a plugin author reads the UI Message transport section
+- **THEN** the guide states that callers own JSON parsing and serialization
+- **AND** the SDK codec converts map/list structures to typed UI Message values
+
+#### Scenario: Codec examples are provided
+- **WHEN** a plugin author reads the UI Message transport section
+- **THEN** the guide includes examples for decoding a chat request
+- **AND** encoding UI message values back to transport maps when useful
+
+#### Scenario: Metadata mapper is documented
+- **WHEN** a plugin author uses typed UI message metadata
+- **THEN** the guide explains how to use a metadata mapper instead of relying on automatic JSON binding
+
+#### Scenario: Codec errors map to bad requests
+- **WHEN** a plugin author writes an HTTP endpoint
+- **THEN** the guide explains that `InvalidUIMessageException` from transport decoding should normally be returned as a bad request
+
+### Requirement: Documentation Covers UI Message Reasoning Continuation
+Consumer documentation SHALL explain how UI Message reasoning parts are preserved and how provider support is determined.
+
+#### Scenario: Automatic reasoning continuation is documented
+- **WHEN** a plugin author reads the UI Message conversion section
+- **THEN** the guide states that `UIMessageChatHandlers` automatically decides whether reasoning parts can be preserved
+- **AND** visible reasoning text and provider metadata are kept when the selected model supports reasoning history
+
+#### Scenario: Model capability ownership is documented
+- **WHEN** a plugin author reads the reasoning continuation section
+- **THEN** the guide states that `LanguageModel` capabilities determine whether reasoning history is supported
+- **AND** callers do not need to query provider resources for UI Message reasoning continuation
+
+#### Scenario: Tool boundary reasoning is documented
+- **WHEN** a plugin author reads the UI Message conversion section
+- **THEN** the guide explains that conversion preserves reasoning and tool boundary order for tool continuation
+
+### Requirement: Documentation Covers Correct WebFlux SSE Usage
+Consumer documentation SHALL show how to return UI Message streams from WebFlux without double-encoding SSE frames.
+
+#### Scenario: Structured stream WebFlux example
+- **WHEN** a plugin author uses `UIMessageStreamResponse.stream()`
+- **THEN** the guide shows building WebFlux `ServerSentEvent` values from serialized chunks
+
+#### Scenario: Pre-encoded SSE body example
+- **WHEN** a plugin author uses `UIMessageStreamResponse.body()`
+- **THEN** the guide shows returning the pre-encoded string body directly
+
+#### Scenario: Double data prefix warning
+- **WHEN** a plugin author reads the WebFlux examples
+- **THEN** the guide warns not to wrap `response.body()` in `ServerSentEvent`
+- **AND** it explains that doing so produces double `data:` SSE frames
+
+### Requirement: Documentation Tracks Deferred UI Message Runtime Work
+Consumer documentation SHALL keep deferred UI Message runtime and frontend helper work visible without presenting it as current backend functionality.
+
+#### Scenario: Runtime roadmap is documented
+- **WHEN** a plugin author reads the UI Message guide
+- **THEN** active stream registries, stop endpoints, resume, reconnect, replay, and stream id behavior are listed as future work
+
+#### Scenario: Frontend helper roadmap is documented
+- **WHEN** a plugin author reads the UI Message guide
+- **THEN** the future npm helper package is listed as future work
+- **AND** current Java backend examples do not imply that an npm helper already exists

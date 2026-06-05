@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# gitee-moark-provider Specification
+
+## Purpose
+Define the built-in Gitee MoArk provider integration.
+
+## Requirements
 
 ### Requirement: Gitee 模力方舟 is registered as a built-in AI provider type
 The system SHALL expose Gitee 模力方舟 as a built-in AI provider type via the provider type discovery mechanism.

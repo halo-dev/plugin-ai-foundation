@@ -26,4 +26,16 @@ public interface LanguageModel {
      * derived streams such as text deltas and final aggregate result.
      */
     StreamTextResult streamText(GenerateTextRequest request);
+
+    /**
+     * Returns read-only capability metadata for this resolved model.
+     *
+     * <p>The default is conservative so custom implementations can opt in to provider-specific
+     * behavior only when they know it is supported.
+     *
+     * @return model capabilities
+     */
+    default LanguageModelCapabilities capabilities() {
+        return LanguageModelCapabilities.defaults();
+    }
 }

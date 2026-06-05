@@ -4,17 +4,25 @@ import { ModelOptionModelTypeEnum, type TestEmbeddingResponse } from '@/api/gene
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import {
+  applyWorkbenchUIMessageChunk,
   applyWorkbenchStreamPart,
   buildOutputSpec,
   buildReasoningOptions,
   buildTestChatRequest,
+  buildTestUiMessageChatRequest,
+  createAssistantUIMessage,
+  createUserUIMessage,
   parseProviderOptionsJson,
   readTestChatStream,
+  readTestUiMessageChatStream,
+  type ChatStreamProtocol,
   type GenerateTextRequest,
   type OutputMode,
   type ReasoningEffort,
   type ReasoningMode,
   type TextStreamPart,
+  type UIMessageChunk,
+  type UIMessagePart,
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
@@ -45,6 +53,7 @@ const {
 
 const selectedModelName = useRouteQuery<string | undefined>('model')
 const testMode = shallowRef<'chat' | 'embedding'>('chat')
+const chatProtocol = shallowRef<ChatStreamProtocol>('text')
 
 const messages = ref<WorkbenchMessage[]>([])
 const input = shallowRef('')
@@ -209,14 +218,22 @@ async function sendMessage(content?: string) {
     role: 'user',
     content: text,
   }
+  if (chatProtocol.value === 'ui-message') {
+    userMessage.uiMessage = createUserUIMessage(userMessage.id, text)
+  }
   messages.value.push(userMessage)
   input.value = ''
   shouldAutoScroll.value = true
 
-  const requestBody = buildTestChatRequest(messages.value, {
-    ...buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
-  })
+  const parameters = buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
 
+  if (chatProtocol.value === 'ui-message') {
+    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters)
+    await streamUiMessageChatResponse(requestBody, model.name)
+    return
+  }
+
+  const requestBody = buildTestChatRequest(messages.value, parameters)
   await streamChatResponse(requestBody, model.name)
 }
 
@@ -236,13 +253,55 @@ async function streamChatResponse(requestBody: GenerateTextRequest, modelName: s
       modelName,
       requestBody,
       signal: controller.signal,
-      streamOptions: {
-        testToolEnabled: testToolEnabled.value,
-        testToolApprovalEnabled: testToolApprovalEnabled.value,
-        externalTestToolEnabled: externalTestToolEnabled.value,
-        toolCallRepairEnabled: toolCallRepairEnabled.value,
-      },
+      streamOptions: chatStreamOptions(),
       onChunks: (chunks) => handleChunks(assistantMessage.id, chunks),
+    })
+    finishAssistantMessage(assistantMessage.id, 'done')
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') {
+      return
+    }
+    appendAssistantError(assistantMessage.id, `请求失败: ${(e as Error).message}`)
+  } finally {
+    if (abortController === controller) {
+      isStreaming.value = false
+      abortController = null
+    }
+  }
+}
+
+async function streamUiMessageChatResponse(
+  requestBody: ReturnType<typeof buildTestUiMessageChatRequest>,
+  modelName: string,
+  targetMessage?: WorkbenchMessage,
+) {
+  const model = activeModels.value.find((m) => m.name === modelName)
+  if (!model) return
+
+  const assistantMessage = targetMessage || createAssistantMessage(model)
+  assistantMessage.uiMessage = createAssistantUIMessage(assistantMessage.uiMessage?.id || assistantMessage.id)
+  assistantMessage.content = ''
+  assistantMessage.reasoningContent = undefined
+  assistantMessage.reasoningState = undefined
+  assistantMessage.toolEvents = undefined
+  assistantMessage.transientData = undefined
+  assistantMessage.warnings = undefined
+  assistantMessage.state = 'streaming'
+  if (!targetMessage) {
+    messages.value.push(assistantMessage)
+  }
+
+  const controller = new AbortController()
+  abortController = controller
+  isStreaming.value = true
+
+  try {
+    await readTestUiMessageChatStream({
+      modelName,
+      requestBody,
+      signal: controller.signal,
+      streamOptions: chatStreamOptions(),
+      onChunks: (chunks) => handleUIMessageChunks(assistantMessage.id, chunks),
     })
     finishAssistantMessage(assistantMessage.id, 'done')
   } catch (e) {
@@ -288,8 +347,6 @@ async function handleRegenerate(messageIndex: number) {
   const model = selectedModel.value
   if (!model?.name) return
 
-  messages.value = messages.value.slice(0, messageIndex)
-
   const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
   if (providerOptions.error) {
     providerOptionsError.value = providerOptions.error
@@ -313,9 +370,25 @@ async function handleRegenerate(messageIndex: number) {
   }
   outputError.value = ''
 
-  const requestBody = buildTestChatRequest(messages.value, {
-    ...buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
-  })
+  const parameters = buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
+
+  if (chatProtocol.value === 'ui-message') {
+    const targetMessage = messages.value[messageIndex]
+    const messageId = targetMessage?.uiMessage?.id
+    if (!targetMessage || targetMessage.role !== 'assistant' || !messageId) {
+      return
+    }
+    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters, {
+      trigger: 'regenerate-message',
+      messageId,
+    })
+    await streamUiMessageChatResponse(requestBody, model.name, targetMessage)
+    return
+  }
+
+  messages.value = messages.value.slice(0, messageIndex)
+
+  const requestBody = buildTestChatRequest(messages.value, parameters)
 
   await streamChatResponse(requestBody, model.name)
 }
@@ -327,6 +400,25 @@ function handleChunks(messageId: string, chunks: TextStreamPart[]) {
   }
   for (const chunk of chunks) {
     applyWorkbenchStreamPart(message, chunk)
+  }
+}
+
+function handleUIMessageChunks(messageId: string, chunks: UIMessageChunk[]) {
+  const message = messages.value.find((item) => item.id === messageId)
+  if (!message) {
+    return
+  }
+  for (const chunk of chunks) {
+    applyWorkbenchUIMessageChunk(message, chunk)
+  }
+}
+
+function chatStreamOptions() {
+  return {
+    testToolEnabled: testToolEnabled.value,
+    testToolApprovalEnabled: testToolApprovalEnabled.value,
+    externalTestToolEnabled: externalTestToolEnabled.value,
+    toolCallRepairEnabled: toolCallRepairEnabled.value,
   }
 }
 
@@ -345,6 +437,27 @@ async function handleToolApproval(options: {
   const message = messages.value.find((item) => item.id === options.messageId)
   const event = message?.toolEvents?.find((item) => item.id === options.eventId)
   if (!message || !event || event.type !== 'tool-approval-request' || !event.approvalId) {
+    return
+  }
+  if (chatProtocol.value === 'ui-message') {
+    event.approvalStatus = options.approved ? 'approved' : 'denied'
+    message.toolEvents = [...(message.toolEvents || [])]
+    appendUIMessageToolPart(message, 'tool-approval-response', event.approvalId, {
+      type: 'tool-approval-response',
+      approvalId: event.approvalId,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      approved: options.approved,
+      reason: options.approved
+        ? 'Approved from console test page'
+        : 'Denied from console test page',
+    })
+    const parameters = buildValidatedChatParameters()
+    if (!parameters) {
+      return
+    }
+    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters)
+    await streamUiMessageChatResponse(requestBody, model.name)
     return
   }
 
@@ -459,6 +572,25 @@ async function continueExternalTool(
   if (!message || !event || event.type !== 'tool-call' || !event.toolCallId || !event.toolName) {
     return
   }
+  if (chatProtocol.value === 'ui-message') {
+    event.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
+    message.toolEvents = [...(message.toolEvents || [])]
+    appendUIMessageToolPart(message, payload.type, event.toolCallId, {
+      type: payload.type,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      ...(payload.type === 'tool-result'
+        ? { result: payload.result }
+        : { errorText: payload.errorText }),
+    })
+    const parameters = buildValidatedChatParameters()
+    if (!parameters) {
+      return
+    }
+    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters)
+    await streamUiMessageChatResponse(requestBody, model.name)
+    return
+  }
 
   event.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
   message.toolEvents = [...(message.toolEvents || [])]
@@ -521,6 +653,59 @@ async function continueExternalTool(
   )
 
   await streamChatResponse(requestBody, model.name)
+}
+
+function appendUIMessageToolPart(
+  message: WorkbenchMessage,
+  type: UIMessagePart['type'],
+  key: string,
+  part: UIMessagePart,
+) {
+  message.uiMessage ||= createAssistantUIMessage(message.id)
+  message.uiMessage.parts = [
+    ...message.uiMessage.parts.filter((item) => {
+      if (type === 'tool-approval-response') {
+        return item.type !== type || item.approvalId !== key
+      }
+      if (type === 'tool-result' || type === 'tool-error') {
+        return (
+          item.toolCallId !== key ||
+          (item.type !== 'tool-result' && item.type !== 'tool-error')
+        )
+      }
+      return (
+        item.type !== type ||
+        item.toolCallId !== key
+      )
+    }),
+    part,
+  ]
+}
+
+function buildValidatedChatParameters(): ReturnType<typeof buildChatParameters> | undefined {
+  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
+  if (providerOptions.error) {
+    providerOptionsError.value = providerOptions.error
+    return undefined
+  }
+  providerOptionsError.value = ''
+  const headers = parseStringMapJson(chatHeadersText.value)
+  if (headers.error) {
+    chatHeadersError.value = headers.error
+    return undefined
+  }
+  chatHeadersError.value = ''
+  const outputSpec = buildOutputSpec({
+    mode: outputMode.value,
+    schemaText: outputSchemaText.value,
+    choicesText: outputChoicesText.value,
+  })
+  if (outputSpec.error) {
+    outputError.value = outputSpec.error
+    return undefined
+  }
+  outputError.value = ''
+  return buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
 }
 
 function parseExternalToolResult(input: string): { value?: unknown; error?: string } {
@@ -815,6 +1000,38 @@ onBeforeUnmount(() => {
                 >
                   <RiStackLine class=":uno: size-3.5" />
                   嵌入
+                </button>
+              </div>
+
+              <div
+                v-if="testMode === 'chat'"
+                class=":uno: h-9 inline-flex flex-none items-center border border-slate-200 rounded-lg bg-white !p-0.5"
+              >
+                <button
+                  type="button"
+                  class=":uno: h-7 inline-flex items-center rounded-md text-xs font-medium transition-all !px-3"
+                  :class="
+                    chatProtocol === 'text'
+                      ? ':uno: bg-slate-900 text-white shadow-sm'
+                      : ':uno: text-slate-500 hover:text-slate-800'
+                  "
+                  :disabled="isStreaming"
+                  @click="chatProtocol = 'text'"
+                >
+                  Text
+                </button>
+                <button
+                  type="button"
+                  class=":uno: h-7 inline-flex items-center rounded-md text-xs font-medium transition-all !px-3"
+                  :class="
+                    chatProtocol === 'ui-message'
+                      ? ':uno: bg-slate-900 text-white shadow-sm'
+                      : ':uno: text-slate-500 hover:text-slate-800'
+                  "
+                  :disabled="isStreaming"
+                  @click="chatProtocol = 'ui-message'"
+                >
+                  UI Message
                 </button>
               </div>
 

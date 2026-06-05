@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# xiaomi-mimo-provider Specification
+
+## Purpose
+Define the built-in Xiaomi MiMo provider integration.
+
+## Requirements
 
 ### Requirement: Xiaomi MiMo is registered as a built-in AI provider type
 The system SHALL expose Xiaomi MiMo as a built-in AI provider type via the provider type discovery mechanism.
