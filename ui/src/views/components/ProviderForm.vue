@@ -24,6 +24,7 @@ const providerTypeOptions = computed(() => {
 
 const providerType = shallowRef(props.formState?.providerType)
 const displayName = shallowRef(props.formState?.displayName)
+const baseUrl = shallowRef(props.formState?.baseUrl)
 
 const selectedProviderType = computed(() => {
   return providerTypes.value?.find((t) => t.providerType === providerType.value)
@@ -48,8 +49,28 @@ const baseUrlPlaceholder = computed(() => {
 
 const isEditing = computed(() => !!props.formState)
 
+const resolvedBaseUrl = computed(() => {
+  return (baseUrl.value || selectedProviderType.value?.defaultBaseUrl || '').trim()
+})
+
+const completionsUrlPreview = computed(() => {
+  const completionsPath = selectedProviderType.value?.completionsPath
+  if (!resolvedBaseUrl.value || !completionsPath) {
+    return ''
+  }
+  return joinUrl(resolvedBaseUrl.value, completionsPath)
+})
+
+const baseUrlHelp = computed(() => {
+  return `留空使用默认地址，自定义时可以填平台文档里的基础地址，当前接口预览：${completionsUrlPreview.value}`
+})
+
 function onSubmit(data: ProviderFormState) {
   emit('submit', data)
+}
+
+function joinUrl(base: string, path: string) {
+  return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
 }
 
 defineExpose({
@@ -99,13 +120,15 @@ defineExpose({
     />
 
     <FormKit
-      v-if="requiresBaseUrl"
+      v-if="selectedProviderType"
       type="text"
       name="baseUrl"
       label="Base URL"
-      validation="required"
+      v-model="baseUrl"
+      :validation="requiresBaseUrl ? 'required' : undefined"
       :placeholder="baseUrlPlaceholder"
       :value="formState?.baseUrl"
+      :help="baseUrlHelp"
     />
 
     <FormKit

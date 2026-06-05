@@ -26,9 +26,9 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 @Component
 public class SiliconFlowProvider extends AbstractAiProviderType {
 
-    private static final String DEFAULT_BASE_URL = "https://api.siliconflow.cn";
-    private static final String COMPLETIONS_PATH = "/v1/chat/completions";
-    private static final String EMBEDDINGS_PATH = "/v1/embeddings";
+    private static final String DEFAULT_BASE_URL = "https://api.siliconflow.cn/v1";
+    private static final String COMPLETIONS_PATH = "/chat/completions";
+    private static final String EMBEDDINGS_PATH = "/embeddings";
 
     @Override
     public String getProviderType() {
@@ -149,7 +149,7 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
     private Mono<List<DiscoveredModel>> discoverModelsBySubType(AiProvider provider, String apiKey,
         String subType, ModelType modelType, AdapterType adapterType, Set<ModelFeature> features) {
         return getDiscoveryJson(provider, apiKey,
-            uriBuilder -> uriBuilder.path("/v1/models")
+            uriBuilder -> uriBuilder.path("/models")
                 .queryParam("sub_type", subType)
                 .build(),
             this::customizeDiscoveryRequest

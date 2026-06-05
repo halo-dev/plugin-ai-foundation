@@ -21,8 +21,8 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 @Component
 public class OpenAiLikeProvider extends AbstractAiProviderType {
 
-    private static final String COMPLETIONS_PATH = "/v1/chat/completions";
-    private static final String EMBEDDINGS_PATH = "/v1/embeddings";
+    private static final String COMPLETIONS_PATH = "/chat/completions";
+    private static final String EMBEDDINGS_PATH = "/embeddings";
 
     @Override
     public String getProviderType() {

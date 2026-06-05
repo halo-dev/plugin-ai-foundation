@@ -31,7 +31,7 @@ class KimiProviderTest {
         server.start();
 
         try {
-            var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+            var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
 
             StepVerifier.create(providerType.discoverModels(provider(baseUrl), "sk-test"))
                 .assertNext(models -> {

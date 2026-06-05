@@ -54,6 +54,11 @@ public interface AiProviderType {
     @Nullable
     String getDefaultBaseUrl();
 
+    @Nullable
+    default String getCompletionsPath() {
+        return null;
+    }
+
     List<AdapterType> getSupportedAdapterTypes();
 
     default List<ModelType> getSupportedModelTypes() {

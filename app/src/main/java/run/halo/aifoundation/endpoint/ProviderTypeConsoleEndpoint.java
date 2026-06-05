@@ -54,6 +54,7 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                 .builtIn(type.isBuiltIn())
                 .requiresBaseUrl(type.requiresBaseUrl())
                 .defaultBaseUrl(type.getDefaultBaseUrl())
+                .completionsPath(type.getCompletionsPath())
                 .supportedModelTypes(type.getSupportedModelTypes())
                 .supportedFeatures(type.getSupportedFeatures())
                 .supportedAdapterTypes(type.getSupportedAdapterTypes())

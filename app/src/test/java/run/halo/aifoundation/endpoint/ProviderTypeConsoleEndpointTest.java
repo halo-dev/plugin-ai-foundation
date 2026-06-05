@@ -7,6 +7,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import run.halo.aifoundation.provider.GiteeMoArkProvider;
+import run.halo.aifoundation.provider.OllamaProvider;
 import run.halo.aifoundation.provider.XiaomiMiMoProvider;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 
@@ -37,7 +38,8 @@ class ProviderTypeConsoleEndpointTest {
             .isEqualTo("https://platform.xiaomimimo.com/#/docs/welcome")
             .jsonPath("$[0].builtIn").isEqualTo(true)
             .jsonPath("$[0].requiresBaseUrl").isEqualTo(false)
-            .jsonPath("$[0].defaultBaseUrl").isEqualTo("https://api.xiaomimimo.com")
+            .jsonPath("$[0].defaultBaseUrl").isEqualTo("https://api.xiaomimimo.com/v1")
+            .jsonPath("$[0].completionsPath").isEqualTo("/chat/completions")
             .jsonPath("$[0].supportedAdapterTypes[0]").isEqualTo("openai-chat");
     }
 
@@ -60,7 +62,22 @@ class ProviderTypeConsoleEndpointTest {
             .isEqualTo("https://ai.gitee.com/docs/products/apis/texts/text-generation")
             .jsonPath("$[0].builtIn").isEqualTo(true)
             .jsonPath("$[0].requiresBaseUrl").isEqualTo(false)
-            .jsonPath("$[0].defaultBaseUrl").isEqualTo("https://ai.gitee.com")
+            .jsonPath("$[0].defaultBaseUrl").isEqualTo("https://ai.gitee.com/v1")
+            .jsonPath("$[0].completionsPath").isEqualTo("/chat/completions")
             .jsonPath("$[0].supportedAdapterTypes[0]").isEqualTo("openai-chat");
+    }
+
+    @Test
+    void listProviderTypes_includesOllamaCompletionsPath() {
+        when(providerClientCache.getProviderTypeMap())
+            .thenReturn(Map.of("ollama", new OllamaProvider()));
+
+        webTestClient.get().uri("/provider-types")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$[0].providerType").isEqualTo("ollama")
+            .jsonPath("$[0].defaultBaseUrl").isEqualTo("http://localhost:11434")
+            .jsonPath("$[0].completionsPath").isEqualTo("/api/chat");
     }
 }
