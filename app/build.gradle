@@ -34,8 +34,6 @@ dependencies {
 
     implementation 'org.springframework.ai:spring-ai-client-chat'
     implementation 'org.springframework.ai:spring-ai-openai'
-    implementation 'org.springframework.ai:spring-ai-starter-model-deepseek'
-    implementation 'org.springframework.ai:spring-ai-starter-model-zhipuai'
     implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 
     compileOnly 'run.halo.app:api'
