@@ -53,16 +53,16 @@ WIP
 # 1. 启动 Halo 开发服务器（会自动构建并加载插件）
 ./gradlew haloServer
 
-# 2. 启动前端开发服务器（需另开终端，默认 http://localhost:3000）
+# 2. 启动前端开发服务器
 cd ui && pnpm install && pnpm dev
 ```
 
-开发服务器启动后，访问 `http://127.0.0.1:8090/console/`（默认账号 admin / admin）即可在控制台中看到「AI 模型配置」菜单。
+开发服务器启动后，访问 `http://127.0.0.1:8090/console/`（默认账号 admin / admin）即可在控制台中看到「Ai Foundation」菜单。
 
-修改后端代码后，需要重启开发容器：
+修改后端代码后，重载插件：
 
 ```bash
-docker rm halo-for-plugin-development -f && ./gradlew haloServer
+./gradlew reloadPlugin
 ```
 
 修改后端 API 或字段后，重新生成前端 API 客户端：
