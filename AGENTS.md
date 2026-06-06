@@ -55,7 +55,7 @@ This is a **Halo CMS plugin** that provides shared AI foundation capabilities fo
 
 **Cross-Plugin Service Access**: Due to Halo's plugin ApplicationContext isolation, `AiModelService` cannot be injected via `@Autowired` from other plugins. Instead, consumer plugins use `AiServices.getModelService()` — a static locator in the `api` module. `AiModelServiceImpl` registers itself on `@PostConstruct` and clears on `@PreDestroy`.
 
-**OpenAPI Code Generation**: Backend endpoints auto-generate TypeScript client code in `ui/src/api/generated/` during build. Do not edit generated files manually.
+**OpenAPI Code Generation**: Backend endpoints auto-generate API docs and TypeScript client code during build. Never manually edit generated `api-docs` files or `ui/src/api/generated/`, even to fix formatting issues.
 
 ### Backend Package Layout (`app/src/main/java/run/halo/aifoundation/`)
 
