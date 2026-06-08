@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# console-model-management Specification
+
+## Purpose
+Define console workflows for creating, editing, discovering, and managing AI providers and models.
+
+## Requirements
 
 ### Requirement: Create new provider
 The Console UI SHALL allow admins to create a new `AiProvider` Extension by selecting a provider type and filling in configuration fields.

@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# kimi-provider Specification
+
+## Purpose
+Define the built-in Kimi provider integration, including provider identity, default endpoint metadata, and supported model behavior.
+
+## Requirements
 
 ### Requirement: Kimi provider type identity
 The system SHALL register a built-in provider type with providerType `kimi`, display name `Kimi`, and default base URL `https://api.moonshot.cn/v1`.

@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.24.0"
+    "version" : "2.24.2"
   },
   "servers" : [ {
-    "url" : "http://localhost:58411",
+    "url" : "http://localhost:63150",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -734,6 +734,65 @@
               }
             },
             "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object. The stream can include message lifecycle, step lifecycle, text, tool call, tool result, tool approval request, tool error, finish, sanitized raw diagnostic, and error parts, then ends with data: [DONE]."
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/ui-message/stream" : {
+      "post" : {
+        "description" : "Test text generation with Halo UI Message stream response.",
+        "operationId" : "TestModelUiMessageChatStream",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Whether to inject the console-only halo_test_info tool for tool calling tests.",
+          "in" : "query",
+          "name" : "enableTestTool",
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "Whether the console-only halo_test_info tool should require caller approval before execution.",
+          "in" : "query",
+          "name" : "enableTestToolApproval",
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "Whether to inject a console-only repairable tool and deterministic tool-call repair callback.",
+          "in" : "query",
+          "name" : "enableToolCallRepair",
+          "schema" : {
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestUiMessageChatRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UIMessageChunk"
+                }
+              }
+            },
+            "description" : "Server-Sent Events using the Halo UI Message stream protocol. Each data event contains a UIMessageChunk JSON object and the stream ends with data: [DONE]."
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
@@ -2112,6 +2171,129 @@
           }
         }
       },
+      "TestUiMessage" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "parts" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "role" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TestUiMessageChatRequest" : {
+        "type" : "object",
+        "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "messageId" : {
+            "type" : "string"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TestUiMessage"
+            }
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "output" : {
+            "$ref" : "#/components/schemas/OutputSpec"
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "toolChoice" : {
+            "$ref" : "#/components/schemas/ToolChoice"
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "trigger" : {
+            "type" : "string"
+          }
+        }
+      },
       "TextStreamPart" : {
         "type" : "object",
         "properties" : {
@@ -2273,6 +2455,14 @@
       },
       "ToolExecutor" : {
         "type" : "object"
+      },
+      "UIMessageChunk" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          }
+        }
       }
     },
     "securitySchemes" : {

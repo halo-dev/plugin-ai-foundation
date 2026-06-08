@@ -1,12 +1,15 @@
-import type { AiModel, OutputSpec } from '@/api/generated'
+import type { AiModel, OutputSpec, TestUiMessageChatRequest } from '@/api/generated'
 import { AiModelSpecModelTypeEnum } from '@/api/generated'
 
 export type ChatRole = 'user' | 'assistant'
+export type ChatStreamProtocol = 'text' | 'ui-message'
 
 export interface WorkbenchMessage {
   id: string
   role: ChatRole
   content: string
+  uiMessage?: UIMessage<Record<string, unknown>>
+  transientData?: Record<string, unknown>
   leadingMessages?: ModelMessage[]
   followingMessages?: ModelMessage[]
   historyParts?: ModelMessagePart[]
@@ -37,6 +40,7 @@ export interface WorkbenchToolEvent {
   errorText?: string
   approvalStatus?: 'pending' | 'approved' | 'denied'
   externalStatus?: 'pending' | 'completed' | 'failed'
+  continuationSupported?: boolean
   summary: string
 }
 
@@ -223,6 +227,86 @@ export interface TextStreamPart {
   }
 }
 
+export interface UIMessage<M = Record<string, unknown>> {
+  id: string
+  role: 'USER' | 'ASSISTANT'
+  parts: UIMessagePart[]
+  metadata?: M
+}
+
+export interface UIMessagePart {
+  type: string
+  id?: string
+  text?: string
+  name?: string
+  data?: unknown
+  sourceId?: string
+  fileId?: string
+  url?: string
+  title?: string
+  mediaType?: string
+  approvalId?: string
+  toolCallId?: string
+  toolName?: string
+  stepIndex?: number
+  input?: Record<string, unknown>
+  result?: unknown
+  errorText?: string
+  approved?: boolean
+  reason?: string
+  providerMetadata?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export interface UIMessageChunk {
+  type?:
+    | 'start'
+    | 'text-start'
+    | 'text-delta'
+    | 'text-end'
+    | 'reasoning-start'
+    | 'reasoning-delta'
+    | 'reasoning-end'
+    | 'data'
+    | 'message-metadata'
+    | 'source-url'
+    | 'file'
+    | 'tool-input-start'
+    | 'tool-input-delta'
+    | 'tool-call'
+    | 'tool-result'
+    | 'tool-error'
+    | 'tool-approval-request'
+    | 'finish-step'
+    | 'finish'
+    | 'error'
+    | 'abort'
+    | (string & {})
+  messageId?: string
+  messageMetadata?: unknown
+  id?: string
+  delta?: string
+  name?: string
+  data?: unknown
+  transientData?: boolean
+  sourceId?: string
+  fileId?: string
+  url?: string
+  title?: string
+  mediaType?: string
+  approvalId?: string
+  toolCallId?: string
+  toolName?: string
+  stepIndex?: number
+  input?: Record<string, unknown>
+  result?: unknown
+  errorText?: string
+  providerMetadata?: Record<string, unknown>
+  warnings?: WorkbenchWarning[]
+}
+
+export type UIMessageChatTrigger = 'submit-message' | 'regenerate-message'
+
 export function isEnabledChatModel(model: AiModel) {
   return model.spec.enabled !== false && model.spec.modelType === AiModelSpecModelTypeEnum.Language
 }
@@ -363,6 +447,65 @@ export function buildTestChatRequest(
   }
 }
 
+export function buildTestUiMessageChatRequest(
+  messages: WorkbenchMessage[],
+  parameters: ChatParameters,
+  options?: {
+    trigger?: UIMessageChatTrigger
+    messageId?: string
+  },
+): TestUiMessageChatRequest {
+  return {
+    id: crypto.randomUUID(),
+    messages: messages
+      .map(toUIMessage)
+      .filter((message): message is UIMessage => !!message) as TestUiMessageChatRequest['messages'],
+    trigger: options?.trigger || 'submit-message',
+    messageId: options?.messageId,
+    system: normalizedSystemPrompt(parameters),
+    temperature: parameters.temperature,
+    topP: parameters.topP,
+    maxOutputTokens: parameters.maxOutputTokens,
+    seed: parameters.seed,
+    maxRetries: parameters.maxRetries,
+    reasoning: parameters.reasoning,
+    providerOptions: parameters.providerOptions as TestUiMessageChatRequest['providerOptions'],
+    headers: parameters.headers,
+    output: parameters.output,
+  }
+}
+
+export function createUserUIMessage(id: string, text: string): UIMessage {
+  return {
+    id,
+    role: 'USER',
+    parts: [{ type: 'text', id: `${id}-text`, text }],
+  }
+}
+
+export function createAssistantUIMessage(id: string): UIMessage {
+  return {
+    id,
+    role: 'ASSISTANT',
+    parts: [],
+  }
+}
+
+function toUIMessage(message: WorkbenchMessage): UIMessage | undefined {
+  if (message.uiMessage) {
+    return message.uiMessage
+  }
+  const content = message.content.trim()
+  if (!content || (message.role === 'assistant' && message.state === 'error')) {
+    return undefined
+  }
+  return {
+    id: message.id,
+    role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
+    parts: [{ type: 'text', id: `${message.id}-text`, text: content }],
+  }
+}
+
 function buildRequestMessages(
   messages: WorkbenchMessage[],
   extraMessages?: ModelMessage[],
@@ -445,10 +588,13 @@ export function flushSseJsonBuffer<T>(buffer: string) {
 }
 
 function appendSseJsonChunk<T>(chunks: T[], line: string) {
-  if (!line.startsWith('data:')) {
+  let data = line.trim()
+  if (!data.startsWith('data:')) {
     return
   }
-  const data = line.slice(5).trim()
+  while (data.startsWith('data:')) {
+    data = data.slice(5).trim()
+  }
   if (data && data !== '[DONE]') {
     chunks.push(JSON.parse(data) as T)
   }
@@ -491,10 +637,53 @@ export async function readTestChatStream(options: {
   options.onChunks(flushSseJsonBuffer<TextStreamPart>(buffer))
 }
 
+export async function readTestUiMessageChatStream(options: {
+  modelName: string
+  requestBody: TestUiMessageChatRequest
+  streamOptions: ChatStreamOptions
+  signal: AbortSignal
+  onChunks: (chunks: UIMessageChunk[]) => void
+}) {
+  const response = await fetch(testUiMessageChatStreamUrl(options.modelName, options.streamOptions), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options.requestBody),
+    signal: options.signal,
+  })
+  if (!response.ok) {
+    throw new Error((await response.text()) || `HTTP ${response.status}`)
+  }
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('无法读取响应流')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    const parsed = parseSseJsonLines<UIMessageChunk>(
+      buffer,
+      decoder.decode(value, { stream: true }),
+    )
+    buffer = parsed.buffer
+    options.onChunks(parsed.chunks)
+  }
+  options.onChunks(flushSseJsonBuffer<UIMessageChunk>(buffer))
+}
+
 export function testChatStreamUrl(modelName: string, options: ChatStreamOptions) {
   const params = chatStreamQueryParams(options)
   const query = params.toString()
   return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-chat/stream${query ? `?${query}` : ''}`
+}
+
+export function testUiMessageChatStreamUrl(modelName: string, options: ChatStreamOptions) {
+  const params = chatStreamQueryParams(options)
+  const query = params.toString()
+  return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-chat/ui-message/stream${query ? `?${query}` : ''}`
 }
 
 function chatStreamQueryParams(options: ChatStreamOptions) {
@@ -592,6 +781,307 @@ export function applyWorkbenchStreamPart(message: WorkbenchMessage, part: TextSt
   if (isTerminalTextStreamPart(part)) {
     finishWorkbenchMessage(message, 'done')
   }
+}
+
+export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: UIMessageChunk) {
+  const uiMessage = ensureAssistantUIMessage(message)
+  if (chunk.type === 'start') {
+    if (chunk.messageId) {
+      uiMessage.id = chunk.messageId
+    }
+    mergeUIMessageMetadata(uiMessage, chunk.messageMetadata)
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'message-metadata') {
+    mergeUIMessageMetadata(uiMessage, chunk.messageMetadata)
+    return
+  }
+  if (chunk.type === 'text-start') {
+    upsertUIMessagePart(uiMessage, 'text', chunk.id || 'text', { text: '' })
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'text-delta') {
+    const part = upsertUIMessagePart(uiMessage, 'text', chunk.id || 'text', {})
+    part.text = `${part.text || ''}${chunk.delta || ''}`
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'reasoning-start') {
+    upsertUIMessagePart(uiMessage, 'reasoning', chunk.id || 'reasoning', { text: '' })
+    message.reasoningState = 'streaming'
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'reasoning-delta') {
+    const part = upsertUIMessagePart(uiMessage, 'reasoning', chunk.id || 'reasoning', {
+      providerMetadata: chunk.providerMetadata,
+    })
+    part.text = `${part.text || ''}${chunk.delta || ''}`
+    part.providerMetadata = mergePlainObjects(part.providerMetadata, chunk.providerMetadata)
+    message.reasoningState = 'streaming'
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'reasoning-end') {
+    message.reasoningState = 'done'
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'data') {
+    if (chunk.name) {
+      if (chunk.transientData) {
+        message.transientData = { ...(message.transientData || {}), [chunk.name]: chunk.data }
+      } else {
+        upsertUIMessagePart(uiMessage, 'data', chunk.name, {
+          name: chunk.name,
+          data: chunk.data,
+        })
+      }
+    }
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'source-url' && chunk.sourceId) {
+    upsertUIMessagePart(uiMessage, 'source-url', chunk.sourceId, {
+      sourceId: chunk.sourceId,
+      url: chunk.url,
+      title: chunk.title,
+      providerMetadata: chunk.providerMetadata,
+    })
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'file' && chunk.fileId) {
+    upsertUIMessagePart(uiMessage, 'file', chunk.fileId, {
+      fileId: chunk.fileId,
+      url: chunk.url,
+      title: chunk.title,
+      mediaType: chunk.mediaType,
+      data: chunk.data,
+      providerMetadata: chunk.providerMetadata,
+    })
+    projectUIMessage(message)
+    return
+  }
+  if (isUIMessageToolPartType(chunk.type)) {
+    const key = chunk.type === 'tool-approval-request' ? chunk.approvalId : chunk.toolCallId
+    if (key) {
+      upsertUIMessagePart(uiMessage, chunk.type, key, {
+        approvalId: chunk.approvalId,
+        toolCallId: chunk.toolCallId,
+        toolName: chunk.toolName,
+        input: chunk.input,
+        result: chunk.result,
+        errorText: chunk.errorText,
+        stepIndex: chunk.stepIndex,
+        providerMetadata: chunk.providerMetadata,
+      })
+      projectUIMessage(message)
+    }
+    return
+  }
+  if (chunk.type === 'finish-step') {
+    if (chunk.warnings?.length) {
+      message.warnings = [...(message.warnings || []), ...chunk.warnings]
+    }
+    return
+  }
+  if (chunk.type === 'finish') {
+    mergeUIMessageMetadata(uiMessage, chunk.messageMetadata)
+    projectUIMessage(message)
+    finishWorkbenchMessage(message, 'done')
+    return
+  }
+  if (chunk.type === 'error') {
+    appendWorkbenchError(message, chunk.errorText || '请求失败')
+    return
+  }
+  if (chunk.type === 'abort') {
+    finishWorkbenchMessage(message, 'stopped')
+  }
+}
+
+function ensureAssistantUIMessage(message: WorkbenchMessage): UIMessage<Record<string, unknown>> {
+  if (!message.uiMessage) {
+    message.uiMessage = createAssistantUIMessage(message.id)
+  }
+  return message.uiMessage
+}
+
+function upsertUIMessagePart(
+  message: UIMessage,
+  type: string,
+  id: string,
+  patch: Partial<UIMessagePart>,
+) {
+  const key = uiMessagePartKey(type)
+  const existing = message.parts.find((part) => part.type === type && part[key] === id)
+  if (existing) {
+    Object.assign(existing, patch)
+    return existing
+  }
+  const part: UIMessagePart = { type, [key]: id, ...patch }
+  message.parts.push(part)
+  return part
+}
+
+function uiMessagePartKey(type: string) {
+  if (type === 'data') {
+    return 'name'
+  }
+  if (type === 'source-url') {
+    return 'sourceId'
+  }
+  if (type === 'file') {
+    return 'fileId'
+  }
+  if (type === 'tool-approval-request') {
+    return 'approvalId'
+  }
+  if (type === 'tool-call' || type === 'tool-result' || type === 'tool-error') {
+    return 'toolCallId'
+  }
+  return 'id'
+}
+
+function mergeUIMessageMetadata(message: UIMessage, metadata: unknown) {
+  const merged = mergePlainObjects(message.metadata, metadata)
+  if (merged) {
+    message.metadata = merged
+  }
+}
+
+function mergePlainObjects(
+  current: unknown,
+  update: unknown,
+): Record<string, unknown> | undefined {
+  if (!isPlainRecord(update)) {
+    return isPlainRecord(current) ? current : undefined
+  }
+  return {
+    ...(isPlainRecord(current) ? current : {}),
+    ...update,
+  }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && !Array.isArray(value) && typeof value === 'object'
+}
+
+function projectUIMessage(message: WorkbenchMessage) {
+  const uiMessage = message.uiMessage
+  if (!uiMessage) {
+    return
+  }
+  message.content = uiMessage.parts
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text || '')
+    .join('')
+  message.reasoningContent =
+    uiMessage.parts
+      .filter((part) => part.type === 'reasoning')
+      .map((part) => part.text || '')
+      .join('') || undefined
+  const toolEvents = uiMessagePartsToToolEvents(uiMessage.parts)
+  message.toolEvents = toolEvents.length ? toolEvents : undefined
+}
+
+function uiMessagePartsToToolEvents(parts: UIMessagePart[]): WorkbenchToolEvent[] {
+  const terminalToolParts = parts.filter(
+    (part) => part.type === 'tool-result' || part.type === 'tool-error',
+  )
+  const approvalRequestParts = parts.filter((part) => part.type === 'tool-approval-request')
+  const approvalResponseParts = parts.filter((part) => part.type === 'tool-approval-response')
+  return parts
+    .map((part) =>
+      uiMessagePartToToolEvent(
+        part,
+        terminalToolParts,
+        approvalRequestParts,
+        approvalResponseParts,
+      ),
+    )
+    .filter((event): event is WorkbenchToolEvent => !!event)
+}
+
+function uiMessagePartToToolEvent(
+  part: UIMessagePart,
+  terminalToolParts: UIMessagePart[],
+  approvalRequestParts: UIMessagePart[],
+  approvalResponseParts: UIMessagePart[],
+): WorkbenchToolEvent | undefined {
+  if (!isUIMessageToolPartType(part.type)) {
+    return undefined
+  }
+  return {
+    id: `${part.type}-${part.approvalId || part.toolCallId || crypto.randomUUID()}`,
+    type: part.type,
+    approvalId: part.approvalId,
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    stepIndex: part.stepIndex,
+    input: part.input,
+    result: part.result,
+    errorText: part.errorText,
+    approvalStatus:
+      part.type === 'tool-approval-request'
+        ? toolApprovalStatus(part.approvalId, approvalResponseParts)
+        : undefined,
+    externalStatus:
+      part.type === 'tool-call' && !hasApprovalRequest(part.toolCallId, approvalRequestParts)
+        ? toolCallStatus(part.toolCallId, terminalToolParts)
+        : undefined,
+    summary: toolEventSummary(part as TextStreamPart),
+  }
+}
+
+function hasApprovalRequest(
+  toolCallId: string | undefined,
+  approvalRequestParts: UIMessagePart[],
+) {
+  return !!toolCallId && approvalRequestParts.some((part) => part.toolCallId === toolCallId)
+}
+
+function toolApprovalStatus(
+  approvalId: string | undefined,
+  approvalResponseParts: UIMessagePart[],
+): WorkbenchToolEvent['approvalStatus'] {
+  if (!approvalId) {
+    return undefined
+  }
+  const response = approvalResponseParts.find((part) => part.approvalId === approvalId)
+  if (!response) {
+    return 'pending'
+  }
+  return response.approved === false ? 'denied' : 'approved'
+}
+
+function toolCallStatus(
+  toolCallId: string | undefined,
+  terminalToolParts: UIMessagePart[],
+): WorkbenchToolEvent['externalStatus'] {
+  if (!toolCallId) {
+    return undefined
+  }
+  const terminalPart = terminalToolParts.find((part) => part.toolCallId === toolCallId)
+  if (terminalPart?.type === 'tool-result') {
+    return 'completed'
+  }
+  if (terminalPart?.type === 'tool-error') {
+    return 'failed'
+  }
+  return 'pending'
+}
+
+function isUIMessageToolPartType(type: string | undefined): type is WorkbenchToolEvent['type'] {
+  return (
+    type === 'tool-call' ||
+    type === 'tool-result' ||
+    type === 'tool-error' ||
+    type === 'tool-approval-request'
+  )
 }
 
 function isToolStreamPartType(type: TextStreamPart['type']): type is WorkbenchToolEvent['type'] {

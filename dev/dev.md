@@ -1,12 +1,10 @@
 # Halo AI Foundation SDK 调用指南
 
-本文档面向在 Halo 插件中调用模型能力的开发者。
+本文面向在 Halo 插件中调用 AI Foundation 的开发者。
 
-## 快速开始
+## 1. 接入插件
 
-调用方插件需要依赖公开 API，并在运行时声明依赖本插件。
-
-> **注意**：`api` 模块暂未发布到 Maven 仓库，请先从 [Release](https://github.com/halo-dev/plugin-ai-foundation/releases) 页面下载 `api-1.0.0-SNAPSHOT.jar`，放置于调用方插件项目根目录（或其他固定路径），然后通过本地文件方式引入：
+当前 `api` 模块还没有发布到 Maven 仓库，可以先使用本地 jar：
 
 ```groovy
 dependencies {
@@ -15,16 +13,16 @@ dependencies {
 }
 ```
 
-后续发布到 Maven 仓库之后需要改为：
+后续版本发布到 Maven 仓库后改为：
 
 ```groovy
 dependencies {
-    compileOnly 'run.halo.aifoundation:api:1.0.0'
-    testImplementation 'run.halo.aifoundation:api:1.0.0'
+    compileOnly "run.halo.aifoundation:api:1.0.0"
+    testImplementation "run.halo.aifoundation:api:1.0.0"
 }
 ```
 
-plugin.yaml 中需要添加插件依赖声明：
+`plugin.yaml` 中需要添加插件依赖声明：
 
 ```yaml
 spec:
@@ -32,9 +30,12 @@ spec:
     ai-foundation: "*"
 ```
 
-## 获取服务
+不要使用 `implementation` 打包 API。AI Foundation 插件运行时会提供同一份 API 类型；
+调用方再次打包可能造成 classloader 中出现两份类型。
 
-`AiModelService` 是调用入口。调用方插件应通过 Halo 的 `ExtensionGetter` 获取启用的服务实现：
+## 2. 获取服务
+
+`AiModelService` 是后端调用入口。调用方插件通过 Halo 的 `ExtensionGetter` 获取当前启用的实现：
 
 ```java
 import lombok.RequiredArgsConstructor;
@@ -45,7 +46,7 @@ import run.halo.app.plugin.extensionpoint.ExtensionGetter;
 
 @Service
 @RequiredArgsConstructor
-public class MyAiService {
+public class ArticleAiService {
 
     private final ExtensionGetter extensionGetter;
 
@@ -55,77 +56,29 @@ public class MyAiService {
 }
 ```
 
-常用入口：
+常用方法：
 
 | 方法 | 说明 |
 | --- | --- |
 | `languageModel()` | 获取默认语言模型 |
-| `languageModel(String modelName)` | 获取指定语言模型；`modelName` 为 `null` 或空白时获取默认语言模型 |
+| `languageModel(String modelName)` | 获取指定语言模型；空值使用默认语言模型 |
 | `embeddingModel()` | 获取默认嵌入模型 |
-| `embeddingModel(String modelName)` | 获取指定嵌入模型；`modelName` 为 `null` 或空白时获取默认嵌入模型 |
+| `embeddingModel(String modelName)` | 获取指定嵌入模型；空值使用默认嵌入模型 |
 
-推荐在业务服务中保持响应式调用，不要在 WebFlux 请求线程里直接 `block()`。如果调用点本身是阻塞式任务或后台批处理，可以在调用方自己的调度边界内阻塞。
+`modelName` 是 `AiModel.metadata.name`，不是供应方原始模型 ID。
 
-```java
-public Mono<String> summarize(String modelName, String content) {
-    return aiModelService()
-        .flatMap(service -> service.languageModel(modelName))
-        .flatMap(model -> model.generateText(GenerateTextRequest.builder()
-            .system("你负责生成简短摘要。")
-            .prompt(content)
-            .maxOutputTokens(300)
-            .build()))
-        .map(GenerateTextResult::getText);
-}
-```
+## 3. 生成文本
 
-可以使用默认模型：
+最小调用：
 
 ```java
 return aiModelService()
-    .flatMap(AiModelService::languageModel)
-    .flatMap(model -> model.generateText("生成一句站点欢迎语"))
+    .flatMap(service -> service.languageModel(modelName))
+    .flatMap(model -> model.generateText("请用一句话介绍 Halo CMS"))
     .map(GenerateTextResult::getText);
 ```
 
-如果业务配置里的模型名可能为空，也可以直接传入 `languageModel(modelName)`；当 `modelName`
-为 `null` 或空白字符串时，会自动使用默认语言模型。
-
-## 常用类型
-
-公开 API 按能力分包。通常只需要下面这些类型：
-
-| 类型 | 用途 |
-| --- | --- |
-| `AiModelService` | 获取语言模型和嵌入模型 |
-| `LanguageModel` | 文本生成和流式文本生成 |
-| `GenerateTextRequest` | 文本生成请求 |
-| `GenerateTextResult` | 文本生成结果 |
-| `StreamTextResult` | 流式文本结果 |
-| `ModelMessage` / `ModelMessagePart` | 多轮消息和消息内容 part |
-| `OutputSpec` / `JsonSchema` | 结构化输出和工具入参 schema |
-| `ToolDefinition` / `ToolChoice` | 工具定义和工具选择策略 |
-| `ToolCallRepairCallback` / `ToolCallRepairContext` / `ToolCallRepairResult` | 工具调用入参修复 |
-| `ToolApprovalRequest` / `ToolApprovalResponse` | 工具执行审批请求和审批响应 |
-| `StopCondition` / `PreparedStep` | 多步骤调用控制 |
-| `ReasoningOptions` | 推理能力控制 |
-| `GenerationTimeouts` / `CancellationSource` | 超时和取消 |
-| `EmbeddingModel` / `EmbeddingRequest` / `EmbeddingResponse` | 嵌入调用 |
-| `EmbeddingUtils` | 向量工具函数 |
-| `ProviderOptions` | 高级 provider 原生选项 |
-
-## 生成文本
-
-最简单的调用方式：
-
-```java
-return aiModelService()
-    .flatMap(service -> service.languageModel("deepseek-chat-prod"))
-    .flatMap(model -> model.generateText("请用一句话介绍 Halo CMS"))
-    .map(result -> result.getText());
-```
-
-需要更多控制时使用 `GenerateTextRequest`。`prompt` 和 `messages` 二选一，系统提示词使用顶层 `system`。
+需要系统提示词、采样参数或多轮消息时使用 `GenerateTextRequest`：
 
 ```java
 GenerateTextRequest request = GenerateTextRequest.builder()
@@ -136,245 +89,121 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .temperature(0.7)
     .topP(0.9)
     .maxOutputTokens(1024)
-    .seed(42)
     .maxRetries(2)
-    .reasoning(ReasoningOptions.disabled())
     .build();
 
 return model.generateText(request)
-    .map(result -> result.getText());
+    .map(GenerateTextResult::getText);
 ```
 
-`GenerateTextResult` 中常用字段：
+输入规则：
 
 | 字段 | 说明 |
 | --- | --- |
-| `text` | 汇总后的文本 |
-| `content` | 标准化后的内容 part |
-| `reasoningText` | 模型返回的推理文本，如果存在 |
-| `reasoning` | 推理内容 part 列表，可读取每段推理文本和 provider 附加信息 |
-| `output` | 结构化输出解析结果 |
-| `usage` / `totalUsage` | Token 使用量 |
-| `warnings` | 可恢复问题或供应方能力差异提示 |
-| `request` / `response` | 本次调用的标准化请求和响应元数据 |
-| `providerMetadata` | provider 原生元数据，不包含标准化的模型 ID、响应 ID 等字段 |
-| `steps` | 多步骤调用明细 |
-| `responseMessages` | 本次调用产生的可持久化消息，下一轮可追加到历史 `messages` |
+| `prompt` | 单轮用户输入 |
+| `messages` | 多轮上下文 |
+| `system` | 顶层系统提示词，可与 `prompt` 或 `messages` 搭配 |
 
-### 输入方式
+`prompt` 和 `messages` 不能同时传。
 
-`GenerateTextRequest` 有两种输入方式：
+## 4. 保存多轮上下文
 
-| 输入 | 适用场景 |
-| --- | --- |
-| `prompt` | 单轮用户输入，最简单 |
-| `messages` | 多轮上下文，需要保留用户、助手、工具响应等历史 |
-
-`prompt` 和 `messages` 不能同时传。`system` 是顶层系统提示词，可与两种输入方式搭配。
-
-```java
-GenerateTextRequest singleTurn = GenerateTextRequest.builder()
-    .system("你是站点运营助手。")
-    .prompt("为这篇文章生成 SEO 描述")
-    .build();
-
-GenerateTextRequest conversation = GenerateTextRequest.builder()
-    .system("你是客服助手。")
-    .messages(List.of(
-        ModelMessage.user("Halo 支持插件吗？"),
-        ModelMessage.assistant("支持，Halo 提供插件机制。"),
-        ModelMessage.user("那我如何调用模型能力？")
-    ))
-    .build();
-```
-
-### 结果处理
-
-普通业务通常读取 `getText()`。如果要保存多轮上下文，应把本轮请求消息和 `getResponseMessages()` 一起持久化；下一轮请求时把这些消息作为 `GenerateTextRequest.messages` 传回。
+如果要继续对话，保存本轮请求消息和 `result.getResponseMessages()`：
 
 ```java
 return model.generateText(request)
     .map(result -> {
-        if (!result.getWarnings().isEmpty()) {
-            log.warn("Generation warnings: {}", result.getWarnings());
-        }
-        conversationMessages.addAll(result.getResponseMessages());
+        messages.addAll(result.getResponseMessages());
         return result.getText();
     });
 ```
 
-### 推理结果
-
-如果模型返回推理内容，SDK 会把推理和最终回答分开。调用方正常读取：
+下一轮请求时把保存的 `messages` 传回：
 
 ```java
-return model.generateText(request)
-    .map(result -> {
-        String answer = result.getText();
-        String thinking = result.getReasoningText();
-        return answer;
-    });
+GenerateTextRequest next = GenerateTextRequest.builder()
+    .messages(messages)
+    .build();
 ```
 
-`getText()` 始终表示最终回答；已识别的推理内容不会混在回答文本中。需要更细粒度信息时读取 `getReasoning()`，其中每个 `ReasoningPart` 都有 `getText()`。不要依赖 provider 原生字段名读取推理内容，provider 原生字段只用于底层适配和必要的续写上下文。
+不要只保存最终文本。工具调用、工具结果、工具错误和审批请求也会通过
+`responseMessages` 保存，否则下一轮模型不知道前面发生过什么。
 
-### 结果元数据
+## 5. 流式文本
 
-结果中的元数据分为两层：
-
-| 字段 | 使用方式 |
-| --- | --- |
-| `getRequest()` | 标准化请求元数据，例如本次调用使用的模型信息和 SDK 诊断信息 |
-| `getResponse()` | 标准化响应元数据，例如响应 ID、模型 ID、响应消息、headers/body |
-| `getProviderMetadata()` | provider 原生附加信息，字段形态由 provider 决定 |
-
-业务代码需要响应 ID 或模型 ID 时优先读取 `result.getResponse().getId()` 和 `result.getResponse().getModel()`。`providerMetadata` 只适合调试或 provider 特有能力，不应作为标准字段来源。
-
-如果请求包含工具调用，`steps` 会记录每一步模型输出、工具调用、工具结果和 usage。最终 `text` 是最后汇总后的文本。工具循环中的 assistant tool call、tool result 和 tool error 也会出现在 `responseMessages` 中；调用方不要只保存最终文本，否则下一轮模型无法知道工具已经被调用或失败。
-
-## 流式文本
-
-`streamText` 返回 `StreamTextResult`，可按需消费完整 part 流、纯文本流或结构化片段流：
+`streamText` 返回 `StreamTextResult`：
 
 ```java
-StreamTextResult result = model.streamText(GenerateTextRequest.builder()
+StreamTextResult stream = model.streamText(GenerateTextRequest.builder()
     .prompt("写一段 Halo 插件开发简介")
     .build());
 
-return result.textStream()
-    .doOnNext(delta -> log.info("delta={}", delta))
-    .then(result.result());
+return stream.textStream()
+    .doOnNext(delta -> log.debug("delta={}", delta))
+    .then(stream.result());
 ```
 
-完整 part 流使用 `fullStream()`，其中 `text-start`、`text-delta`、`text-end`、`reasoning-start`、`reasoning-delta`、`reasoning-end` 等块会保持独立闭合。
+常用流：
 
-常见消费方式：
-
-| 方法 | 用途 |
+| 方法 | 适合场景 |
 | --- | --- |
-| `fullStream()` | 接收所有标准化事件，包括文本、推理、工具、source、file、finish、error |
-| `textStream()` | 只接收文本 delta，适合直接推给前端 |
+| `textStream()` | 只需要文本增量 |
+| `fullStream()` | 需要文本、推理、工具、source、file、finish、error 等完整事件 |
 | `partialOutputStream()` | 结构化对象的中间状态 |
 | `elementStream()` | 结构化数组的元素流 |
 | `result()` | 流结束后的完整 `GenerateTextResult` |
 
-流式调用结束后同样从 `result().map(GenerateTextResult::getResponseMessages)` 获取可持久化消息。`textStream()` 只包含回答文本 delta，不会把工具调用、工具结果、工具错误、审批请求或 response messages 序列化成文本。没有 executor 的外部工具会在 `fullStream()` 中产生 `tool-call` 后结束当前流，不会产生合成的 `tool-result` 或 `tool-error`；调用方追加外部结果或错误后再发起下一次请求。
+`fullStream()` 适合后端编排和调试。如果要把聊天状态返回给前端，优先使用
+`UIMessageStream` 和 `UIMessageStreamResponse`。完整后端流程见
+[UI Message Stream](./ui-message-stream.md)。
 
-如果配置了工具调用修复，流式 `fullStream()` 会在修复成功后只发送修复后的 `tool-call`，随后发送匹配的 `tool-result`；不会先发送原始错误调用再发送修复调用。修复失败时会发送原始 `tool-call` 和安全的 `tool-error`。`textStream()` 仍然只包含回答文本，不会包含修复诊断、工具事件或 warning 文本。
+## 6. UI Message Stream
 
-如果要把完整事件透传给前端，可以直接订阅 `fullStream()`：
+`UIMessage` 面向聊天界面和消息持久化：
 
-```java
-StreamTextResult stream = model.streamText(request);
-
-return stream.fullStream()
-    .doOnNext(part -> log.debug("part={}", part.getType()))
-    .then(stream.result());
-```
-
-常见 part 类型：
-
-| 类型 | 含义 |
+| 类型 | 用途 |
 | --- | --- |
-| `start` / `finish` | 整体开始和结束 |
-| `start-step` / `finish-step` | 单个模型步骤开始和结束 |
-| `text-start` / `text-delta` / `text-end` | 文本块 |
-| `reasoning-start` / `reasoning-delta` / `reasoning-end` | 推理块 |
-| `tool-call` / `tool-result` / `tool-error` | 工具调用、结果和错误 |
-| `source` / `file` | 模型返回的引用来源或文件 |
-| `error` / `abort` | 错误或取消 |
+| `UIMessageChatRequest<M>` | 前端或数据库传回的聊天请求 |
+| `UIMessage<M>` | 可保存的 UI 消息 |
+| `UIMessageChunk` | 发送给前端的流式事件 |
+| `UIMessageStreamResponse` | 带协议 header 的 SSE 响应描述 |
 
-流式调用一旦已经向调用方发出事件，就不适合在 SDK 层自动重试；需要重试的场景建议使用非流式 `generateText`。
-
-## 结构化输出
-
-结构化输出通过 `OutputSpec` 声明。调用方优先使用 `JsonSchema` 与 `OutputSpec`，不需要手写提示词解析 JSON。
+后端最小形态：
 
 ```java
-Map<String, Object> schema = JsonSchema.object()
-    .property("title", JsonSchema.string())
-    .property("summary", JsonSchema.string())
-    .property("tags", JsonSchema.array(JsonSchema.string().build()))
-    .required("title", "summary")
-    .build();
+UIMessageChatResult<Map<String, Object>> chat = UIMessageChatHandlers.streamText(
+    model,
+    chatRequest,
+    options -> options
+        .serializer(chunk -> objectMapper.writeValueAsString(chunk))
+        .request(builder -> builder
+            .system("你是站点助手。")
+            .maxRetries(2))
+        .onFinish(finish -> saveMessages(finish.messages()))
+);
 
-GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("总结 Halo CMS，并输出标题、摘要和标签")
-    .output(OutputSpec.object(schema))
-    .build();
-
-return model.generateText(request)
-    .map(result -> (Map<?, ?>) result.getOutput());
+UIMessageStreamResponse response = chat.response();
 ```
 
-可用输出类型：
+`response.headers()` 会自动包含：
 
-| 工厂方法 | 说明 |
-| --- | --- |
-| `OutputSpec.object(schema)` | 输出 JSON 对象 |
-| `OutputSpec.array(elementSchema)` | 输出 JSON 数组 |
-| `OutputSpec.choice(values)` | 输出枚举字符串 |
-| `OutputSpec.json()` | 输出任意 JSON 值 |
-
-如果结构化输出校验失败，会抛出 `StructuredOutputValidationException`，异常中包含输出类型、原始文本、校验路径和步骤信息。
-
-### 使用 Java 类型生成 Schema
-
-如果你的输出结构可以用 record 或简单 POJO 描述，可以直接使用 Java 类型生成 schema：
-
-```java
-record ArticleSummary(String title, String summary, List<String> tags) {
-}
-
-GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("总结这篇文章")
-    .output(OutputSpec.object(ArticleSummary.class))
-    .build();
-
-return model.generateText(request)
-    .map(result -> (ArticleSummary) result.getOutput());
+```http
+X-Halo-AI-UI-Message-Stream: v1
 ```
 
-数组输出：
+主文档只介绍入口。chunk 聚合、metadata 生命周期、重新生成、取消、自定义 data 和保存规则见
+[UI Message Stream](./ui-message-stream.md)。
+
+如果 HTTP 入参是普通 JSON，先解析成 `Map` / `List`，再用 `UIMessageTransportCodec`
+转成 `UIMessageChatRequest`。工具审批、外部工具结果、WebFlux SSE 返回方式也都在
+[UI Message Stream](./ui-message-stream.md) 中说明。
+
+## 7. 工具调用
+
+工具用 `ToolDefinition` 声明。服务端执行工具时提供 `executor`：
 
 ```java
-record TodoItem(String title, String priority) {
-}
-
-GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("从会议纪要里提取待办事项")
-    .output(OutputSpec.array(TodoItem.class))
-    .build();
-```
-
-枚举输出：
-
-```java
-GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("判断这条评论情绪：内容很好")
-    .output(OutputSpec.choice(List.of("positive", "neutral", "negative")))
-    .build();
-```
-
-### 校验失败处理
-
-```java
-return model.generateText(request)
-    .onErrorResume(StructuredOutputValidationException.class, error -> {
-        log.warn("Invalid structured output at {}: {}", error.getValidationPath(),
-            error.getOutputText());
-        return Mono.empty();
-    });
-```
-
-结构化输出依赖模型遵循指令。本插件会尽量使用 provider 支持的结构化参数，并在本地解析和校验最终结果；如果 provider 不支持强约束，仍可能因为模型输出不合规而失败。
-
-## 工具调用
-
-工具通过 `ToolDefinition` 声明。建议使用 `ToolDefinition.builder()` 和 `ToolChoice`，这样 IDE 能提供可用枚举和方法提示。
-
-```java
-ToolDefinition weatherTool = ToolDefinition.builder()
+ToolDefinition weather = ToolDefinition.builder()
     .name("get_weather")
     .description("查询城市天气")
     .inputSchema(JsonSchema.object()
@@ -389,278 +218,107 @@ ToolDefinition weatherTool = ToolDefinition.builder()
 
 GenerateTextRequest request = GenerateTextRequest.builder()
     .prompt("杭州今天适合出门吗？")
-    .tools(List.of(weatherTool))
+    .tools(List.of(weather))
     .toolChoice(ToolChoice.auto())
     .stopWhen(StopCondition.stepCountIs(3))
     .build();
 ```
 
-`ToolChoice.required()` 表示模型必须选择某个工具；`ToolChoice.tool("get_weather")` 表示固定调用指定工具；`ToolChoice.none()` 表示本次请求禁用工具。
+常用设置：
 
-工具 schema 元数据仍然是 provider-neutral 的 Java `Map`。`ToolDefinition.strict(true)` 会在文档明确支持 native function `strict` 的 provider 请求中启用严格工具 schema；当前会下发到 OpenAI、OpenAI 兼容自定义 provider，以及 DeepSeek。DeepSeek 官方文档要求 strict mode 使用 beta base URL，并且 `tools` 中所有 function 都设置 `strict: true`，因此使用 DeepSeek strict 时需要在 provider 配置中选择对应 base URL。不支持 native strict 或文档未明确支持的 provider 不会因为该字段拒绝请求，本地输入校验仍会在 executor 调用前执行。`inputExamples` 只会在 provider adapter 明确支持原生示例时转发；当前不支持示例的 provider 会安全忽略它，不会改变本地 validation 或 executor 收到的参数。
-
-多步骤调用可通过 `stopWhen` 和 `prepareStep` 控制：
-
-```java
-GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("先查天气，再给出建议")
-    .tools(List.of(weatherTool))
-    .stopWhen(StopCondition.stepCountIs(3))
-    .prepareStep(context -> context.getStepIndex() == 0
-        ? PreparedStep.builder().toolChoice(ToolChoice.required()).build()
-        : PreparedStep.builder().toolChoice(ToolChoice.none()).build())
-    .build();
-```
-
-`PreparedStep` 可覆盖当前步骤的消息、工具选择、可用工具、采样设置、`seed`、`maxRetries`、停止序列和 provider options。
-
-### 工具执行上下文
-
-`ToolExecutionContext` 中常用字段：
-
-| 字段 | 说明 |
+| API | 说明 |
 | --- | --- |
-| `toolCallId` | 当前工具调用 ID |
-| `toolName` | 工具名称 |
-| `input` | 模型生成并解析后的 JSON 参数 |
-| `stepIndex` | 触发工具调用的模型步骤 |
-| `messages` | 当前步骤发送给模型的消息 |
-| `providerMetadata` | provider 返回的元数据 |
-| `cancellationToken` | 请求级协作式取消信号 |
+| `ToolChoice.auto()` | 由模型决定是否调用工具 |
+| `ToolChoice.required()` | 要求模型调用工具 |
+| `ToolChoice.tool("name")` | 固定调用指定工具 |
+| `ToolChoice.none()` | 禁用工具调用 |
+| `StopCondition.stepCountIs(n)` | 限制最大模型步骤 |
+| `prepareStep(...)` | 按步骤调整工具、消息或采样参数 |
 
-工具 executor 返回 `Mono<Object>`，返回值需要能被 JSON 序列化。抛出异常或返回失败 `Mono` 会被记录为工具错误，并以 tool error part 形式回传给模型和调用方。
+外部工具不提供 `executor`。第一次请求会返回 assistant `tool-call`，调用方执行后追加
+`ModelMessage.tool(...)`，再发起下一次请求。
 
-长时间运行的工具应主动检查 `context.getCancellationToken()`。取消 token 是协作式信号，SDK 仍会保留工具执行前后的取消检查以及 `GenerationTimeouts.toolTimeout` 的超时保护。
+需要审批的工具使用 `needsApproval(true)` 或 `needsApproval(predicate)`。审批不会挂起同一个请求：
+第一次返回 `tool-approval-request`，调用方追加 `tool-approval-response` 后再次调用模型。
+如果使用 UI Message，审批响应保存在 assistant `UIMessage.parts()` 中，不需要额外创建
+`TOOL` role 的 UI 消息。
 
-### 外部工具执行
+工具入参修复使用 `toolCallRepair(...)`。它只处理“已知工具、服务端执行、入参 schema 校验失败”的场景。
 
-`ToolDefinition.executor` 是可选的。提供 executor 时，AI Foundation 会在服务端校验输入、执行工具、把 tool result 或 tool error 追加到模型上下文，并在 `stopWhen` 允许时继续生成。不提供 executor 时，该工具表示由调用方、浏览器、队列任务或其他插件在 AI Foundation 外部执行。
+## 8. 结构化输出
 
-外部工具的第一次调用只返回 assistant `tool-call`，不会创建合成的 tool result 或 tool error。结果中会包含 `external-tool-pending` warning，`responseMessages` 中保留可持久化的 assistant tool-call：
+优先使用 `OutputSpec`，不要靠手写提示词解析 JSON：
 
 ```java
-ToolDefinition browserLookup = ToolDefinition.builder()
-    .name("browser_lookup")
-    .description("由前端浏览器查询公开页面")
-    .inputSchema(JsonSchema.object()
-        .property("query", JsonSchema.string())
-        .required("query")
-        .build())
+Map<String, Object> schema = JsonSchema.object()
+    .property("title", JsonSchema.string())
+    .property("summary", JsonSchema.string())
+    .required("title", "summary")
     .build();
 
-GenerateTextResult first = model.generateText(GenerateTextRequest.builder()
-    .messages(messages)
-    .tools(List.of(browserLookup))
-    .stopWhen(StopCondition.stepCountIs(2))
-    .build()).block();
-
-messages.addAll(first.getResponseMessages());
-```
-
-调用方在外部完成工具后，追加 `TOOL` 消息并再次请求模型：
-
-```java
-ToolCall pending = first.getToolCalls().getFirst();
-
-messages.add(ModelMessage.tool(List.of(ModelMessagePart.toolResult(
-    ToolResult.builder()
-        .toolCallId(pending.getToolCallId())
-        .toolName(pending.getToolName())
-        .result(Map.of("title", "Halo", "url", "https://www.halo.run"))
-        .build()
-))));
-
-GenerateTextResult second = model.generateText(GenerateTextRequest.builder()
-    .messages(messages)
-    .tools(List.of(browserLookup))
-    .build()).block();
-
-messages.addAll(second.getResponseMessages());
-```
-
-外部执行失败时也追加工具错误，让模型基于失败原因继续回答：
-
-```java
-messages.add(ModelMessage.tool(List.of(ModelMessagePart.toolError(
-    ToolError.builder()
-        .toolCallId(pending.getToolCallId())
-        .toolName(pending.getToolName())
-        .errorText("Browser lookup timed out")
-        .build()
-))));
-```
-
-`tool-result` 和 `tool-error` 必须匹配前面历史中的 assistant `tool-call`，`toolCallId` 和 `toolName` 都要一致；否则请求会在调用 provider 前失败。外部工具结果是普通消息历史，调用方应只追加一次并持久化第二次调用返回的 `responseMessages`。
-
-### 多工具和强制工具
-
-```java
 GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("查询天气并推荐出行方式")
-    .tools(List.of(weatherTool, trafficTool))
-    .toolChoice(ToolChoice.required())
-    .stopWhen(StopCondition.stepCountIs(4))
+    .prompt("总结 Halo CMS")
+    .output(OutputSpec.object(schema))
     .build();
+
+return model.generateText(request)
+    .map(result -> (Map<?, ?>) result.getOutput());
 ```
 
-如果只允许某一步使用部分工具，可以用 `PreparedStep.activeTools`：
+输出类型：
+
+| API | 说明 |
+| --- | --- |
+| `OutputSpec.object(schema)` | JSON 对象 |
+| `OutputSpec.array(elementSchema)` | JSON 数组 |
+| `OutputSpec.choice(values)` | 枚举字符串 |
+| `OutputSpec.json()` | 任意 JSON 值 |
+
+也可以用 Java 类型生成 schema：
 
 ```java
-.prepareStep(context -> {
-    if (context.getStepIndex() == 0) {
-        return PreparedStep.builder()
-            .activeTools(List.of("get_weather"))
-            .toolChoice(ToolChoice.required())
-            .build();
-    }
-    return PreparedStep.builder()
-        .activeTools(List.of("get_traffic"))
-        .build();
-})
-```
-
-工具调用是否可用取决于模型和 provider。调用方应为 `IllegalArgumentException` 做好处理，因为某些 provider 不支持工具、强制工具或指定工具模式。
-
-### 工具执行审批
-
-对会修改数据、调用外部系统、产生费用或执行危险操作的工具，可以要求调用方先审批。审批不会让一次生成请求挂起：第一次调用会返回 `tool-approval-request`，调用方把审批结果追加到消息历史后，再发起第二次调用。
-
-```java
-ToolDefinition runCommand = ToolDefinition.builder()
-    .name("run_command")
-    .description("执行一条运维命令")
-    .inputSchema(JsonSchema.object()
-        .property("command", JsonSchema.string())
-        .required("command")
-        .build())
-    .needsApproval(true)
-    .executor(context -> runCommand((String) context.getInput().get("command")))
-    .build();
-```
-
-也可以根据已校验的输入动态决定是否需要审批：
-
-```java
-ToolDefinition payment = ToolDefinition.builder()
-    .name("pay")
-    .description("发起付款")
-    .inputSchema(JsonSchema.object()
-        .property("amount", JsonSchema.number())
-        .property("recipient", JsonSchema.string())
-        .required("amount", "recipient")
-        .build())
-    .needsApproval(context ->
-        ((Number) context.getInput().get("amount")).doubleValue() > 1000)
-    .executor(context -> processPayment(context.getInput()))
-    .build();
-```
-
-处理审批请求：
-
-```java
-GenerateTextResult first = model.generateText(GenerateTextRequest.builder()
-    .messages(messages)
-    .tools(List.of(runCommand))
-    .stopWhen(StopCondition.stepCountIs(3))
-    .build()).block();
-
-messages.addAll(first.getResponseMessages());
-
-for (ToolApprovalRequest approval : first.getToolApprovalRequests()) {
-    ToolApprovalResponse response = ToolApprovalResponse.builder()
-        .approvalId(approval.getApprovalId())
-        .toolCallId(approval.getToolCallId())
-        .toolName(approval.getToolName())
-        .approved(true)
-        .reason("管理员已确认")
-        .build();
-    messages.add(ModelMessage.tool(List.of(
-        ModelMessagePart.toolApprovalResponse(response)
-    )));
+record ArticleSummary(String title, String summary) {
 }
 
-GenerateTextResult second = model.generateText(GenerateTextRequest.builder()
-    .messages(messages)
-    .tools(List.of(runCommand))
-    .build()).block();
-
-messages.addAll(second.getResponseMessages());
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("总结这篇文章")
+    .output(OutputSpec.object(ArticleSummary.class))
+    .build();
 ```
 
-如果 `approved = true`，SDK 会在第二次 provider 调用前执行原始工具调用，并把 tool result 放进模型上下文；如果 `approved = false`，SDK 不会执行工具，而是把安全的拒绝信息作为 tool error 放进模型上下文，让模型继续响应。`tool-approval-response` 必须能匹配前面消息中的 `tool-approval-request`，否则请求会在调用 provider 前失败。
+结构化输出校验失败会抛出 `StructuredOutputValidationException`。
 
-`tool-approval-request` 会在 `ToolApprovalRequest`、结果 content part、流式 part 和 `responseMessages` 的 `ModelMessagePart` 中保留触发审批的 `stepIndex`。调用方持久化 `responseMessages` 后，第二次调用会使用历史里的原始 step index 构造 `ToolExecutionContext`。
+## 9. 推理和元数据
 
-调用方需要同时持久化自己追加的 `tool-approval-response` 和第二次调用返回的 `responseMessages`。第二次调用返回的消息中包含已消费审批产生的 tool result 或 tool error，以及模型基于该结果继续生成的 assistant 消息。如果只重复提交同一个已批准但尚未记录结果的消息历史，工具可能被再次执行。若历史中审批响应后已经有相同 `toolCallId` 的 tool result 或 tool error，SDK 会视为已消费，不会重复执行。
-
-### 工具调用修复
-
-模型有时会选对工具但输出不符合工具 `inputSchema` 的参数。可以在请求上配置 `toolCallRepair`，只针对“已知工具 + 有 server-side executor + 输入 schema 校验失败”的场景尝试修复参数。未知工具、外部工具、审批拒绝、executor 失败、输出 schema 失败、超时和取消不会触发修复。
+推理控制：
 
 ```java
-ToolDefinition weather = ToolDefinition.builder()
-    .name("weather")
-    .description("查询天气")
-    .inputSchema(JsonSchema.object()
-        .property("location", JsonSchema.string())
-        .required("location")
-        .build())
-    .executor(context -> getWeather(context.getInput()))
-    .build();
-
-GenerateTextResult result = model.generateText(GenerateTextRequest.builder()
-    .messages(messages)
-    .tools(List.of(weather))
-    .toolCallRepair(context -> {
-        Object city = context.getToolCall().getInput().get("city");
-        if (city == null) {
-            return Mono.just(ToolCallRepairResult.unrepaired());
-        }
-        return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
-            .input(Map.of("location", String.valueOf(city)))
-            .build()));
-    })
-    .stopWhen(StopCondition.stepCountIs(3))
-    .build()).block();
-```
-
-`ToolCallRepairContext` 是 provider-neutral 的，不包含 Spring AI 类型。它会包含原始 `toolCall`、匹配到的 `ToolDefinition`、校验错误文本、校验路径、step index、本步骤发送给模型的 `ModelMessage`、请求 `context` 和 provider metadata。callback 返回的 repaired `ToolCall` 会用原始 `toolCallId` 和 `toolName` 执行，并重新用原工具 schema 校验；重新校验失败会保留原始 validation tool error。
-
-修复成功后，本步骤的 `toolCalls`、`content`、`responseMessages` 和下一轮 provider history 都会使用修复后的 tool call。调用方应继续持久化 `result.getResponseMessages()`，不要把页面上展示过的原始坏参数重新拼回历史。修复成功会产生 `tool-call-repaired` warning，修复失败会产生 `tool-call-repair-failed` warning 并返回原始 validation tool error。
-
-## 设置
-
-常用设置优先使用 `GenerateTextRequest` 的一等字段：
-
-| 字段 | 说明 |
-| --- | --- |
-| `maxOutputTokens` | 最大输出 token 数 |
-| `temperature` | 采样温度 |
-| `topP` / `topK` | 采样范围 |
-| `presencePenalty` / `frequencyPenalty` | 重复惩罚 |
-| `stopSequences` | 停止序列 |
-| `seed` | 确定性采样种子，具体效果取决于供应方和模型 |
-| `maxRetries` | 可重试非流式 provider 调用的最大重试次数，`0` 表示不重试 |
-| `reasoning` | 推理能力控制 |
-| `headers` | 请求级 HTTP header |
-| `timeouts` | 总耗时、单步骤和工具执行超时 |
-| `cancellationToken` | 调用方主动取消 |
-
-推理控制示例：
-
-```java
-GenerateTextRequest fastRequest = GenerateTextRequest.builder()
-    .prompt("快速生成一句摘要")
-    .reasoning(ReasoningOptions.disabled())
-    .build();
-
-GenerateTextRequest carefulRequest = GenerateTextRequest.builder()
-    .prompt("分析这段长文的风险")
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("分析这段内容的风险")
     .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
     .build();
 ```
 
-取消示例：
+常用读取：
+
+| 字段 | 说明 |
+| --- | --- |
+| `result.getText()` | 最终回答 |
+| `result.getReasoningText()` | 已识别的推理文本 |
+| `result.getReasoning()` | 推理 part 列表 |
+| `result.getRequest()` | 标准化请求元数据 |
+| `result.getResponse()` | 标准化响应元数据 |
+| `result.getProviderMetadata()` | 供应方原生附加信息 |
+
+如果需要响应 ID 或模型 ID，优先读取 `result.getResponse()`。`providerMetadata` 只适合调试或供应方特有能力。
+
+部分供应方需要在续写时保留推理相关原生信息。后端会保留可识别的推理文本和可回传的
+reasoning metadata；是否允许回传由供应方能力校验决定。
+使用 `UIMessageChatHandlers` 时，这个判断会自动完成，调用方不需要自行查询供应方类型。
+
+## 10. 取消、超时和重试
+
+取消：
 
 ```java
 CancellationSource source = new CancellationSource();
@@ -673,9 +331,7 @@ Mono<GenerateTextResult> task = model.generateText(GenerateTextRequest.builder()
 source.cancel();
 ```
 
-### 超时
-
-`GenerationTimeouts` 可分别控制整体调用、单个 provider 步骤和工具执行：
+超时：
 
 ```java
 GenerateTextRequest request = GenerateTextRequest.builder()
@@ -688,36 +344,18 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .build();
 ```
 
-超时不是可重试 provider 失败。需要更短响应时，优先降低 `maxOutputTokens`、禁用推理或选择更快模型。
+重试：
 
-### 请求 Header
-
-`headers` 用于请求级 HTTP header，例如调用方链路 ID：
-
-```java
-GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("生成摘要")
-    .headers(Map.of("X-Request-Id", requestId))
-    .build();
-```
-
-并非所有 provider adapter 都支持动态 header。不支持时会明确报错，调用方不应依赖静默忽略。
-
-### Seed 和重试
-
-`seed` 是确定性采样提示，不保证所有 provider 和模型都能完全复现结果。它已经作为一等字段暴露，普通调用不需要再放入 `providerOptions`。
-
-`maxRetries` 只作用于可重试的非流式 provider 调用：
-
-| 值 | 行为 |
+| 设置 | 行为 |
 | --- | --- |
-| `null` | 使用默认重试预算 |
-| `0` | 不重试 |
-| `1` | 最多重试 1 次 |
+| `maxRetries(null)` | 使用默认重试预算 |
+| `maxRetries(0)` | 不重试 |
+| `maxRetries(1)` | 最多重试 1 次 |
 
-参数校验错误、取消、超时、结构化输出校验失败不会被重试。
+`maxRetries` 只作用于可重试的非流式供应方调用。参数错误、取消、超时和结构化输出校验失败不会被重试。
+流式响应已经发出事件后，不适合在 SDK 层自动重试。
 
-## 嵌入
+## 11. 嵌入
 
 简单查询向量：
 
@@ -742,104 +380,31 @@ return embeddingModel.embed(request)
     .map(EmbeddingResponse::getEmbeddings);
 ```
 
-`EmbeddingUtils.cosineSimilarity(a, b)` 可用于计算两个向量的余弦相似度。
-
-`EmbeddingResponse` 常用字段：
+常用字段：
 
 | 字段 | 说明 |
 | --- | --- |
-| `embeddings` | 与输入顺序一致的向量列表 |
-| `usage` | Token 使用量，如果 provider 返回 |
-| `warnings` | 可恢复问题或能力差异提示 |
-| `providerMetadata` | provider 元数据 |
-
-语义相似度示例：
-
-```java
-return embeddingModel.embed(EmbeddingRequest.builder()
-        .inputs(List.of("Halo 插件", "Halo 扩展能力"))
-        .build())
-    .map(response -> {
-        float[] a = response.getEmbeddings().get(0);
-        float[] b = response.getEmbeddings().get(1);
-        return EmbeddingUtils.cosineSimilarity(a, b);
-    });
-```
-
-嵌入 settings：
-
-| 字段 | 说明 |
-| --- | --- |
-| `dimensions` | 期望向量维度，是否可用取决于模型 |
-| `maxBatchSize` | 每批请求最多输入数 |
+| `dimensions` | 期望向量维度 |
+| `maxBatchSize` | 单批输入数量 |
 | `maxParallelCalls` | 最大并行批次数 |
-| `maxRetries` | 可重试 provider 失败的重试次数 |
+| `maxRetries` | 可重试调用的重试次数 |
 | `headers` | 请求级 header |
-| `providerOptions` | 高级 provider 原生选项 |
+| `providerOptions` | 供应方原生选项 |
 
-如果 provider 不支持批量或并发，本插件会按 provider 能力拆分或降级执行。
+`EmbeddingUtils.cosineSimilarity(a, b)` 可计算余弦相似度。
 
-## 能力支持说明
+## 12. Provider Options
 
-下表描述调用方可以依赖的公开能力，以及哪些地方会受 provider 或模型影响：
+公开字段能表达的能力，优先使用公开字段：
 
-| 能力 | 当前状态 | 调用方注意事项 |
-| --- | --- | --- |
-| 普通文本生成 | 可用 | 使用 `LanguageModel.generateText` |
-| 流式文本 | 可用 | 使用 `StreamTextResult`，事件块保持独立闭合 |
-| 多轮消息 | 可用 | 使用 `ModelMessage` |
-| 结构化输出 | 可用 | 本地会解析和校验，模型不合规时会失败 |
-| 工具调用 | Provider 相关 | provider/model 不支持时会报错 |
-| 多步骤工具循环 | 可用 | 使用 `stopWhen` 限制最大步骤 |
-| 工具执行审批 | 可用 | 保存审批响应和返回的 `responseMessages`，避免重复执行 |
-| 工具调用修复 | 可用 | 只修复已知 server-side 工具的输入 schema 失败 |
-| 推理控制 | Provider 相关 | 使用 `ReasoningOptions`，不支持时会报错 |
-| `seed` | Provider 相关 | OpenAI-compatible 和 Ollama 路径已映射；确定性取决于模型 |
-| `maxRetries` | 可用 | 非流式 provider 调用生效 |
-| 请求 header | Provider 相关 | 不支持动态 header 的 adapter 会报错 |
-| source/file part | Provider 相关 | 只有 provider 返回时才会出现 |
-| 嵌入 | 可用 | 维度、批量、并发能力取决于 provider |
-
-当前 SDK 聚焦语言模型和嵌入。图像、视频、语音、转写、重排序等暂不属于当前公开能力范围。
-
-## 错误和告警
-
-常见异常：
-
-| 类型 | 说明 |
+| 能力 | 推荐字段 |
 | --- | --- |
-| `IllegalArgumentException` | 请求参数无效 |
-| `AiGenerationTimeoutException` | 文本生成超时 |
-| `AiGenerationCancelledException` | 文本生成被取消 |
-| `StructuredOutputValidationException` | 结构化输出校验失败 |
-| `EmbeddingTimeoutException` | 嵌入调用超时 |
-| `EmbeddingCancelledException` | 嵌入调用被取消 |
+| 推理控制 | `reasoning` |
+| 确定性采样 | `seed` |
+| 请求 header | `headers` |
+| 输出结构 | `output` |
 
-`warnings` 表示请求已完成但存在能力差异、输出提示或可恢复问题。调用方应记录告警，并在面向用户的功能中给出适当提示。
-
-## 测试和排查
-
-后台模型测试页可用于手动验证调用方最关心的路径：
-
-- 文本生成、流式文本、推理控制、工具调用和结构化输出。
-- `temperature`、`topP`、`maxOutputTokens`、`seed`、`maxRetries` 等文本设置。
-- 嵌入维度、批量大小、并发数、重试次数和 provider options。
-
-调用方插件建议至少覆盖以下自动化用例：
-
-- 正常文本生成。
-- 流式文本能收到文本 delta 和最终结果。
-- 结构化输出校验成功和失败。
-- 工具调用成功、工具返回错误、工具异常。
-- `maxRetries(0)` 不重试。
-- 取消和超时。
-- 嵌入批量输入与向量数量匹配。
-
-排查问题时先确认模型资源名是否为 `AiModel.metadata.name`，再检查后台模型是否启用、provider 是否可用、请求字段是否被当前 provider 支持。对于 provider 相关能力，优先查看返回的异常和 `warnings`，不要假设不支持的设置会被静默忽略。
-
-## 高级 Provider Options
-
-`providerOptions` 用于在公开字段无法表达某个供应方原生能力时使用。它必须按供应方命名空间分组：
+只有公开字段无法表达供应方原生能力时，才使用 `providerOptions`：
 
 ```java
 GenerateTextRequest request = GenerateTextRequest.builder()
@@ -852,28 +417,175 @@ GenerateTextRequest request = GenerateTextRequest.builder()
     .build();
 ```
 
-如果公开字段与已知 provider 原生键冲突，请优先使用公开字段。例如推理能力使用 `reasoning`，确定性采样使用 `seed`，不要同时在 `providerOptions` 中传入含义相同的原生键。
+`providerOptions` 必须按供应方命名空间分组。不支持的命名空间或选项会通过异常或 warning 暴露，
+调用方不要假设会被静默忽略。
 
-## 前端：AiModelSelector 模型选择器组件
+## 13. 错误和告警
 
-`AiModelSelector` 是本插件提供的前端 Vue 组件，注册为全局组件名 `AiModelSelector`。其他插件可以在插件设置页的 FormKit Schema 中直接使用，让用户在 UI 上选择一个已配置的 AI 模型。
+常见异常：
 
-**保存的值**：选中后保存的是 `AiModel` 资源的 `metadata.name`，即上文 `modelName` 格式。可直接传给 `AiModelService.languageModel(modelName)` 或 `embeddingModel(modelName)` 使用。
+| 类型 | 说明 |
+| --- | --- |
+| `IllegalArgumentException` | 请求参数无效 |
+| `AiGenerationTimeoutException` | 文本生成超时 |
+| `AiGenerationCancelledException` | 文本生成被取消 |
+| `StructuredOutputValidationException` | 结构化输出校验失败 |
+| `EmbeddingTimeoutException` | 嵌入调用超时 |
+| `EmbeddingCancelledException` | 嵌入调用被取消 |
 
-### 在 FormKit Schema 中使用（推荐）
+`warnings` 表示请求已经完成，但存在能力差异或可恢复问题。建议记录 warning，并在需要时提示用户。
 
-在插件设置页的 `configMaps` schema 中，通过 `$cmp` 方式引用：
+## 14. 核心类型字段速查
 
-```yaml
-formSchema:
-  - $cmp: AiModelSelector
-    props:
-      name: languageModelName
-      label: 语言模型
-      help: 选择用于文章生成的语言模型
-```
+前面的章节按使用流程介绍；如果需要确认某个类型有哪些可用字段，可以查下面的表。
+更细的行为约束以 API 包 JavaDoc 为准。
 
-带筛选条件（只显示语言模型）：
+### `GenerateTextRequest`
+
+| 字段 | 说明 |
+| --- | --- |
+| `system` | 系统提示词 |
+| `prompt` | 单轮用户输入，不能和 `messages` 同时使用 |
+| `messages` | 多轮消息，不能和 `prompt` 同时使用 |
+| `maxOutputTokens` | 最大输出 token 数 |
+| `temperature` | 采样温度 |
+| `topP` / `topK` | 采样范围 |
+| `presencePenalty` / `frequencyPenalty` | 重复惩罚，是否生效取决于供应方 |
+| `stopSequences` | 停止序列 |
+| `seed` | 确定性采样种子，复现程度取决于模型和供应方 |
+| `maxRetries` | 可重试非流式调用的重试次数，`0` 表示不重试 |
+| `providerOptions` | 按供应方命名空间分组的原生选项 |
+| `reasoning` | 推理能力控制 |
+| `headers` | 请求级 HTTP header |
+| `metadata` | 调用方元数据，只暴露给 lifecycle，不进入模型输入 |
+| `context` | 调用方上下文，只暴露给 lifecycle，不进入模型输入 |
+| `output` | 结构化输出声明 |
+| `tools` | 本次请求可用工具 |
+| `toolChoice` | 工具选择策略 |
+| `stopWhen` | 多步骤继续规则 |
+| `prepareStep` | 每一步开始前调整消息、工具和参数 |
+| `lifecycle` | 请求生命周期回调 |
+| `toolCallRepair` | 工具入参修复回调 |
+| `cancellationToken` | 取消信号 |
+| `timeouts` | 总耗时、单步骤和工具超时 |
+
+### `GenerateTextResult`
+
+| 字段 | 说明 |
+| --- | --- |
+| `text` | 最终回答文本 |
+| `output` / `outputText` | 结构化输出解析结果和原始输出文本 |
+| `reasoningText` / `reasoning` | 推理文本和推理 part |
+| `content` | 标准化内容 part |
+| `finishReason` / `rawFinishReason` | 标准化结束原因和供应方原始结束原因 |
+| `usage` / `totalUsage` | 最后一步 usage 和总 usage |
+| `warnings` | 可恢复告警或能力差异 |
+| `request` / `response` | 标准化请求和响应元数据 |
+| `steps` | 多步骤调用明细 |
+| `responseMessages` | 本次调用产生的可持久化消息 |
+| `toolCalls` | 聚合后的工具调用 |
+| `toolApprovalRequests` | 待处理工具审批请求 |
+| `toolResults` / `toolErrors` | 聚合后的工具结果和工具错误 |
+| `providerMetadata` | 清理后的供应方元数据 |
+
+### `StreamTextResult`
+
+| 方法 | 说明 |
+| --- | --- |
+| `fullStream()` | 完整 `TextStreamPart` 事件流 |
+| `textStream()` | 文本 delta 流 |
+| `partialOutputStream()` | 结构化对象的中间状态 |
+| `elementStream()` | 结构化数组的已完成元素 |
+| `output()` | 最终结构化输出 |
+| `result()` | 最终 `GenerateTextResult` |
+| `text()` / `reasoningText()` | 最终文本和推理文本快捷读取 |
+| `content()` / `reasoning()` | 内容 part 和推理 part 快捷读取 |
+| `usage()` / `totalUsage()` | usage 快捷读取 |
+| `warnings()` | warning 快捷读取 |
+| `request()` / `response()` | 请求和响应元数据快捷读取 |
+| `steps()` / `responseMessages()` | 步骤和可持久化消息快捷读取 |
+| `toolCalls()` / `toolResults()` / `toolErrors()` | 工具相关结果快捷读取 |
+| `providerMetadata()` | 供应方元数据快捷读取 |
+| `toUIMessageStream()` | 转成 `UIMessageStream` |
+| `toUIMessageStreamResponse(...)` | 转成 `UIMessageStreamResponse` |
+
+### `TextStreamPart`
+
+| 类型 | 说明 |
+| --- | --- |
+| `start` / `finish` | 整体开始和结束 |
+| `start-step` / `finish-step` | 单个模型步骤开始和结束 |
+| `text-start` / `text-delta` / `text-end` | 文本块 |
+| `reasoning-start` / `reasoning-delta` / `reasoning-end` | 推理块 |
+| `tool-input-start` / `tool-input-delta` | 流式工具入参 |
+| `tool-call` / `tool-result` / `tool-error` | 工具调用、结果和错误 |
+| `tool-approval-request` | 工具审批请求 |
+| `tool-approval-response` | 工具审批响应 |
+| `source` / `file` | 来源和文件 |
+| `raw` | 供应方原始事件 |
+| `error` / `abort` | 错误和取消 |
+
+### `EmbeddingRequest` / `EmbeddingResponse`
+
+| 类型 | 字段 | 说明 |
+| --- | --- | --- |
+| `EmbeddingRequest` | `inputs` | 要向量化的文本列表 |
+| `EmbeddingRequest` | `dimensions` | 期望向量维度 |
+| `EmbeddingRequest` | `maxBatchSize` | 调用方批大小上限 |
+| `EmbeddingRequest` | `maxParallelCalls` | 最大并行批次数 |
+| `EmbeddingRequest` | `maxRetries` | 可重试调用次数 |
+| `EmbeddingRequest` | `providerOptions` | 供应方原生选项 |
+| `EmbeddingRequest` | `headers` | 请求级 HTTP header |
+| `EmbeddingRequest` | `metadata` / `context` | 调用方 lifecycle 数据 |
+| `EmbeddingRequest` | `lifecycle` | 嵌入生命周期回调 |
+| `EmbeddingRequest` | `cancellationToken` | 取消信号 |
+| `EmbeddingRequest` | `timeouts` | 超时设置 |
+| `EmbeddingResponse` | `embeddings` | 与输入顺序一致的向量 |
+| `EmbeddingResponse` | `usage` | token 使用量 |
+| `EmbeddingResponse` | `response` | 响应元数据 |
+| `EmbeddingResponse` | `warnings` | 可恢复告警 |
+| `EmbeddingResponse` | `providerMetadata` | 供应方元数据 |
+
+### `UIMessage` 相关类型
+
+| 类型 | 字段 / 方法 | 说明 |
+| --- | --- | --- |
+| `UIMessageChatRequest<M>` | `id` | 调用方会话或请求 ID |
+| `UIMessageChatRequest<M>` | `messages` | 前端或数据库传回的 `UIMessage` 列表 |
+| `UIMessageChatRequest<M>` | `trigger` | `submit-message` 或 `regenerate-message` |
+| `UIMessageChatRequest<M>` | `messageId` | 重新生成时目标 assistant 消息 ID |
+| `UIMessage<M>` | `id` | 消息 ID |
+| `UIMessage<M>` | `role` | `SYSTEM`、`USER`、`ASSISTANT` |
+| `UIMessage<M>` | `parts` | 可持久化 UI message part |
+| `UIMessage<M>` | `metadata` | 消息级元数据 |
+| `UIMessage<M>` | `text()` | 拼接所有 text part |
+| `UIMessage<M>` | `parts(type)` / `part(type, id)` | 按类型和 ID 查找 part |
+| `UIMessage<M>` | `dataParts()` / `data(name, type)` | 读取自定义 data |
+| `UIMessage<M>` | `withParts(...)` / `withMetadata(...)` | 创建替换 parts 或 metadata 的副本 |
+
+常见 `UIMessagePart`：
+
+| 类型 | 关键字段 | 说明 |
+| --- | --- | --- |
+| `TextPart` | `id`, `text` | 文本 |
+| `ReasoningPart` | `id`, `text`, `providerMetadata` | 推理内容 |
+| `DataPart` | `name`, `data` | 自定义数据 |
+| `SourceUrlPart` | `sourceId`, `url`, `title` | URL 来源 |
+| `FilePart` | `fileId`, `url`, `mediaType`, `data` | 文件 |
+| `ToolCallPart` | `toolCallId`, `toolName`, `input` | 工具调用 |
+| `ToolResultPart` | `toolCallId`, `toolName`, `result` | 工具结果 |
+| `ToolErrorPart` | `toolCallId`, `toolName`, `errorText` | 工具错误 |
+| `ToolApprovalRequestPart` | `approvalId`, `toolCallId`, `toolName`, `input` | 工具审批请求 |
+| `ToolApprovalResponsePart` | `approvalId`, `approved`, `reason` | 工具审批响应 |
+
+完整聚合、校验和转换规则见 [UI Message Stream](./ui-message-stream.md)。
+
+## 15. 可选前端组件：`AiModelSelector`
+
+`AiModelSelector` 是本插件提供的 FormKit 组件，可在调用方插件设置页中让用户选择模型。
+保存值是 `AiModel.metadata.name`，可直接传给 `languageModel(modelName)` 或 `embeddingModel(modelName)`。
+
+FormKit Schema 示例：
 
 ```yaml
 formSchema:
@@ -892,43 +604,26 @@ formSchema:
       modelType: EMBEDDING
 ```
 
-### 全部可用 Props
+常用 props：
 
-| Prop | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `name` | `string` | - | 对应 FormKit 表单字段名，决定保存到 ConfigMap 的 key |
-| `label` | `string` | - | 字段标签文字 |
-| `help` | `string` | - | 字段说明文字 |
-| `modelValue` | `string` | - | 当前选中的模型名，供 `v-model` 绑定 |
-| `modelType` | `string` | - | 筛选模型类型，可选值如 `LANGUAGE`、`EMBEDDING` |
-| `providerName` | `string` | - | 只显示指定 `AiProvider.metadata.name` 下的模型 |
-| `providerType` | `string` | - | 只显示指定供应方类型下的模型 |
-| `enabled` | `boolean` | - | 若为 `true`，只显示已启用的模型 |
-| `available` | `boolean` | `true` | 若为 `true`，只显示可用模型 |
-| `requiredFeatures` | `string \| string[]` | - | 只显示具备指定 feature 的模型 |
-| `placeholder` | `string` | `请选择模型` | 未选中时的占位文字 |
-| `searchPlaceholder` | `string` | `搜索...` | 搜索框占位文字 |
-| `clearable` | `boolean` | `true` | 是否显示清除按钮 |
-| `disabled` | `boolean` | `false` | 是否禁用 |
-| `fullWidth` | `boolean` | `false` | 是否让选择器占满容器宽度 |
+| Prop | 说明 |
+| --- | --- |
+| `modelType` | 筛选 `LANGUAGE` 或 `EMBEDDING` |
+| `providerName` | 筛选指定 `AiProvider.metadata.name` |
+| `providerType` | 筛选指定供应方类型 |
+| `available` | 只显示可用模型，默认 `true` |
+| `requiredFeatures` | 只显示具备指定 feature 的模型 |
+| `clearable` | 是否允许清空 |
+| `fullWidth` | 是否占满容器宽度 |
 
-### 在 Vue 组件中使用
+也可以在模板中直接使用：
 
 ```vue
-<template>
-  <AiModelSelector
-    v-model="selectedModel"
-    label="语言模型"
-    model-type="LANGUAGE"
-    help="用于文章摘要生成"
-  />
-</template>
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const selectedModel = ref<string>()
-</script>
+<AiModelSelector
+  v-model="modelName"
+  name="model"
+  :model-type="activeModelType"
+  :available="availableOnly"
+  :disabled="isStreaming || isEmbeddingTesting"
+/>
 ```
-
-直接在 Vue 模板中使用时，无需传 `name` prop，通过 `v-model` 双向绑定即可。

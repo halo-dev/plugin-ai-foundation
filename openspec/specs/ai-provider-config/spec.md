@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# ai-provider-config Specification
+
+## Purpose
+Define provider configuration semantics for built-in and custom AI provider types.
+
+## Requirements
 
 ### Requirement: Provider configuration per type
 The system SHALL interpret `AiProvider` structured fields according to the `AiProviderType` metadata, not according to hardcoded per-type rules.

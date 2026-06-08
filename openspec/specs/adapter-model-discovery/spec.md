@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# adapter-model-discovery Specification
+
+## Purpose
+Define provider model discovery behavior and metadata inference rules.
+
+## Requirements
 
 ### Requirement: AbstractProviderAdapter default OpenAI-compatible discovery
 `AbstractProviderAdapter` SHALL provide a default `discoverModels()` implementation that calls `GET {baseUrl}/models` with `Authorization: Bearer {apiKey}` header and parses the `data[].id` field from the JSON response.

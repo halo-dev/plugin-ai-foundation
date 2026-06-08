@@ -2,10 +2,13 @@ import type { AiModel, OutputSpec } from '@/api/generated'
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
+  applyWorkbenchUIMessageChunk,
   applyWorkbenchStreamPart,
   buildOutputSpec,
   buildReasoningOptions,
   buildTestChatRequest,
+  buildTestUiMessageChatRequest,
+  createUserUIMessage,
   filterEnabledChatModels,
   flushSseJsonBuffer,
   isRenderableReasoningDelta,
@@ -14,6 +17,7 @@ import {
   parseProviderOptionsJson,
   parseSseJsonLines,
   testChatStreamUrl,
+  testUiMessageChatStreamUrl,
   toToolEvent,
   type TextStreamPart,
   type WorkbenchMessage,
@@ -439,6 +443,171 @@ describe('buildTestChatRequest', () => {
   })
 })
 
+describe('buildTestUiMessageChatRequest', () => {
+  it('preserves UI messages and generation parameters for submit requests', () => {
+    const userMessage: WorkbenchMessage = {
+      id: 'user-1',
+      role: 'user',
+      content: 'Hello',
+      uiMessage: createUserUIMessage('user-1', 'Hello'),
+    }
+    const assistantMessage: WorkbenchMessage = {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'Hi',
+      state: 'done',
+      uiMessage: {
+        id: 'assistant-1',
+        role: 'ASSISTANT',
+        parts: [{ type: 'text', id: 'answer', text: 'Hi' }],
+        metadata: { traceId: 'trace-1' },
+      },
+    }
+
+    expect(
+      buildTestUiMessageChatRequest([userMessage, assistantMessage], {
+        systemPrompt: 'You are concise.',
+        temperature: 0.2,
+        maxOutputTokens: 128,
+        reasoning: buildReasoningOptions({ mode: 'ENABLED' }),
+        providerOptions: { openai: { seed: 42 } },
+        output: { type: 'JSON' } as OutputSpec,
+      }),
+    ).toMatchObject({
+      trigger: 'submit-message',
+      system: 'You are concise.',
+      temperature: 0.2,
+      maxOutputTokens: 128,
+      reasoning: { mode: 'ENABLED' },
+      providerOptions: { openai: { seed: 42 } },
+      output: { type: 'JSON' },
+      messages: [
+        {
+          id: 'user-1',
+          role: 'USER',
+          parts: [{ type: 'text', id: 'user-1-text', text: 'Hello' }],
+        },
+        {
+          id: 'assistant-1',
+          role: 'ASSISTANT',
+          parts: [{ type: 'text', id: 'answer', text: 'Hi' }],
+          metadata: { traceId: 'trace-1' },
+        },
+      ],
+    })
+  })
+
+  it('builds regenerate requests with the target UI message id', () => {
+    expect(
+      buildTestUiMessageChatRequest(
+        [
+          {
+            id: 'user-1',
+            role: 'user',
+            content: 'Hello',
+            uiMessage: createUserUIMessage('user-1', 'Hello'),
+          },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: 'Old',
+            uiMessage: {
+              id: 'assistant-ui-1',
+              role: 'ASSISTANT',
+              parts: [{ type: 'text', id: 'answer', text: 'Old' }],
+            },
+          },
+        ],
+        {},
+        { trigger: 'regenerate-message', messageId: 'assistant-ui-1' },
+      ),
+    ).toMatchObject({
+      trigger: 'regenerate-message',
+      messageId: 'assistant-ui-1',
+      messages: [
+        { id: 'user-1', role: 'USER' },
+        { id: 'assistant-ui-1', role: 'ASSISTANT' },
+      ],
+    })
+  })
+
+  it('preserves UI Message tool continuation parts in request history', () => {
+    expect(
+      buildTestUiMessageChatRequest(
+        [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '',
+            uiMessage: {
+              id: 'assistant-1',
+              role: 'ASSISTANT',
+              parts: [
+                {
+                  type: 'tool-approval-request',
+                  approvalId: 'approval_1',
+                  toolCallId: 'call_1',
+                  toolName: 'pay',
+                },
+                {
+                  type: 'tool-approval-response',
+                  approvalId: 'approval_1',
+                  approved: true,
+                  reason: 'Approved from console test page',
+                },
+                {
+                  type: 'tool-result',
+                  toolCallId: 'call_1',
+                  toolName: 'pay',
+                  result: { ok: true },
+                },
+                {
+                  type: 'tool-error',
+                  toolCallId: 'call_2',
+                  toolName: 'search',
+                  errorText: 'failed',
+                },
+              ],
+            },
+          },
+        ],
+        {},
+      ).messages,
+    ).toEqual([
+      {
+        id: 'assistant-1',
+        role: 'ASSISTANT',
+        parts: [
+          {
+            type: 'tool-approval-request',
+            approvalId: 'approval_1',
+            toolCallId: 'call_1',
+            toolName: 'pay',
+          },
+          {
+            type: 'tool-approval-response',
+            approvalId: 'approval_1',
+            approved: true,
+            reason: 'Approved from console test page',
+          },
+          {
+            type: 'tool-result',
+            toolCallId: 'call_1',
+            toolName: 'pay',
+            result: { ok: true },
+          },
+          {
+            type: 'tool-error',
+            toolCallId: 'call_2',
+            toolName: 'search',
+            errorText: 'failed',
+          },
+        ],
+      },
+    ])
+  })
+})
+
 describe('buildReasoningOptions', () => {
   it('builds typed reasoning payloads', () => {
     expect(buildReasoningOptions({ mode: 'DEFAULT' })).toBeUndefined()
@@ -485,6 +654,15 @@ describe('parseSseJsonLines', () => {
 
     expect(result.chunks).toEqual([{ delta: 'Hel' }])
     expect(flushSseJsonBuffer<{ delta: string }>(result.buffer)).toEqual([{ delta: 'lo' }])
+  })
+
+  it('accepts nested data prefixes from double-encoded SSE lines', () => {
+    const result = parseSseJsonLines<{ type: string; messageId: string }>(
+      '',
+      'data: data: {"type":"start","messageId":"msg_1"}\n\ndata: data: [DONE]\n\n',
+    )
+
+    expect(result.chunks).toEqual([{ type: 'start', messageId: 'msg_1' }])
   })
 
   it('keeps rich stream parts for the caller to classify', () => {
@@ -574,6 +752,20 @@ describe('testChatStreamUrl', () => {
   })
 })
 
+describe('testUiMessageChatStreamUrl', () => {
+  it('uses the UI Message stream path with the shared console flags', () => {
+    expect(
+      testUiMessageChatStreamUrl('model/name', {
+        testToolEnabled: true,
+        externalTestToolEnabled: true,
+        toolCallRepairEnabled: true,
+      }),
+    ).toBe(
+      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/ui-message/stream?enableTestTool=true&enableExternalTestTool=true&enableToolCallRepair=true',
+    )
+  })
+})
+
 describe('applyWorkbenchStreamPart', () => {
   it('accumulates text, reasoning, response messages, warnings, and finish state', () => {
     const message: WorkbenchMessage = {
@@ -635,6 +827,267 @@ describe('applyWorkbenchStreamPart', () => {
       { type: 'tool-call', toolCallId: 'call_1', externalStatus: 'completed' },
       { type: 'tool-result', toolCallId: 'call_1' },
     ])
+  })
+})
+
+describe('applyWorkbenchUIMessageChunk', () => {
+  it('aggregates text, reasoning, metadata, data, tool parts, warnings, and finish state', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+    }
+
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'start',
+      messageId: 'assistant-ui',
+      messageMetadata: { traceId: 'trace-1' },
+    })
+    applyWorkbenchUIMessageChunk(message, { type: 'reasoning-start', id: 'reasoning' })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'reasoning-delta',
+      id: 'reasoning',
+      delta: 'think',
+      providerMetadata: { provider: { id: 'reasoning-id' } },
+    })
+    applyWorkbenchUIMessageChunk(message, { type: 'reasoning-end', id: 'reasoning' })
+    applyWorkbenchUIMessageChunk(message, { type: 'text-start', id: 'answer' })
+    applyWorkbenchUIMessageChunk(message, { type: 'text-delta', id: 'answer', delta: 'Hi' })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'data',
+      name: 'weather',
+      data: { temp: 22 },
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'data',
+      name: 'progress',
+      data: { percent: 50 },
+      transientData: true,
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'tool-call',
+      toolCallId: 'call_1',
+      toolName: 'search',
+      input: { q: 'Halo' },
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'tool-result',
+      toolCallId: 'call_1',
+      toolName: 'search',
+      result: { ok: true },
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'finish-step',
+      warnings: [{ code: 'w', message: 'warn' }],
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'finish',
+      messageMetadata: { finished: true },
+    })
+
+    expect(message).toMatchObject({
+      content: 'Hi',
+      reasoningContent: 'think',
+      reasoningState: 'done',
+      state: 'done',
+      transientData: { progress: { percent: 50 } },
+      warnings: [{ code: 'w', message: 'warn' }],
+      uiMessage: {
+        id: 'assistant-ui',
+        role: 'ASSISTANT',
+        metadata: { traceId: 'trace-1', finished: true },
+        parts: [
+          {
+            type: 'reasoning',
+            id: 'reasoning',
+            text: 'think',
+            providerMetadata: { provider: { id: 'reasoning-id' } },
+          },
+          { type: 'text', id: 'answer', text: 'Hi' },
+          { type: 'data', name: 'weather', data: { temp: 22 } },
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'search',
+            input: { q: 'Halo' },
+          },
+          {
+            type: 'tool-result',
+            toolCallId: 'call_1',
+            toolName: 'search',
+            result: { ok: true },
+          },
+        ],
+      },
+      toolEvents: [
+        {
+          type: 'tool-call',
+          toolCallId: 'call_1',
+          externalStatus: 'completed',
+        },
+        { type: 'tool-result', toolCallId: 'call_1' },
+      ],
+    })
+  })
+
+  it('marks UI Message tool calls as failed when a matching tool error arrives', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+    }
+
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'tool-call',
+      toolCallId: 'call_1',
+      toolName: 'search',
+      input: { q: 'Halo' },
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'tool-error',
+      toolCallId: 'call_1',
+      toolName: 'search',
+      errorText: 'failed',
+    })
+
+    expect(message.toolEvents).toMatchObject([
+      {
+        type: 'tool-call',
+        toolCallId: 'call_1',
+        externalStatus: 'failed',
+      },
+      { type: 'tool-error', toolCallId: 'call_1' },
+    ])
+  })
+
+  it('projects UI Message approval responses onto approval requests', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+      uiMessage: {
+        id: 'assistant',
+        role: 'ASSISTANT',
+        parts: [
+          {
+            type: 'tool-approval-request',
+            approvalId: 'approval_1',
+            toolCallId: 'call_1',
+            toolName: 'pay',
+          },
+          {
+            type: 'tool-approval-response',
+            approvalId: 'approval_1',
+            approved: false,
+            reason: 'Denied',
+          },
+        ],
+      },
+    }
+
+    applyWorkbenchUIMessageChunk(message, { type: 'finish' })
+
+    expect(message.toolEvents).toMatchObject([
+      {
+        type: 'tool-approval-request',
+        approvalId: 'approval_1',
+        approvalStatus: 'denied',
+      },
+    ])
+  })
+
+  it('does not ask for external tool output when a UI Message tool call needs approval', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+      uiMessage: {
+        id: 'assistant',
+        role: 'ASSISTANT',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'halo_test_info',
+            input: { query: '这是一个测试调用' },
+          },
+          {
+            type: 'tool-approval-request',
+            approvalId: 'approval_1',
+            toolCallId: 'call_1',
+            toolName: 'halo_test_info',
+            input: { query: '这是一个测试调用' },
+          },
+        ],
+      },
+    }
+
+    applyWorkbenchUIMessageChunk(message, { type: 'finish' })
+
+    expect(message.toolEvents).toMatchObject([
+      {
+        type: 'tool-call',
+        toolCallId: 'call_1',
+        externalStatus: undefined,
+      },
+      {
+        type: 'tool-approval-request',
+        approvalId: 'approval_1',
+        approvalStatus: 'pending',
+      },
+    ])
+  })
+
+  it('appends repeated text and reasoning deltas with the same part id', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+    }
+
+    applyWorkbenchUIMessageChunk(message, { type: 'text-delta', id: 'answer', delta: 'Hel' })
+    applyWorkbenchUIMessageChunk(message, { type: 'text-delta', id: 'answer', delta: 'lo' })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'reasoning-delta',
+      id: 'reasoning',
+      delta: 'think ',
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'reasoning-delta',
+      id: 'reasoning',
+      delta: 'more',
+    })
+
+    expect(message.content).toBe('Hello')
+    expect(message.reasoningContent).toBe('think more')
+    expect(message.uiMessage?.parts).toMatchObject([
+      { type: 'text', id: 'answer', text: 'Hello' },
+      { type: 'reasoning', id: 'reasoning', text: 'think more' },
+    ])
+  })
+
+  it('marks abort chunks as stopped without appending an error', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: 'partial',
+      state: 'streaming',
+      uiMessage: {
+        id: 'assistant-ui',
+        role: 'ASSISTANT',
+        parts: [{ type: 'text', id: 'answer', text: 'partial' }],
+      },
+    }
+
+    applyWorkbenchUIMessageChunk(message, { type: 'abort' })
+
+    expect(message.state).toBe('stopped')
+    expect(message.content).toBe('partial')
   })
 })
 

@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# provider-type-registry Specification
+
+## Purpose
+Define provider type registry behavior, provider type metadata, and base provider type defaults.
+
+## Requirements
 
 ### Requirement: AbstractAiProviderType base class
 The system SHALL provide an `AbstractAiProviderType` base class that supplies default implementations for common behavior.

@@ -51,7 +51,10 @@ models/replace-operation.ts
 models/test-embedding-request.ts
 models/test-embedding-response.ts
 models/test-operation.ts
+models/test-ui-message-chat-request.ts
+models/test-ui-message.ts
 models/text-stream-part.ts
 models/tool-approval-policy.ts
 models/tool-choice.ts
 models/tool-definition.ts
+models/uimessage-chunk.ts

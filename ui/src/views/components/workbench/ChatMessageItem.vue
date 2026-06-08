@@ -231,7 +231,11 @@ function handleExternalToolError(eventId: string) {
               {{ event.summary }}
             </div>
             <div
-              v-if="event.type === 'tool-approval-request' && event.approvalStatus === 'pending'"
+              v-if="
+                event.type === 'tool-approval-request' &&
+                event.approvalStatus === 'pending' &&
+                event.continuationSupported !== false
+              "
               class=":uno: mt-2 flex items-center gap-1.5"
             >
               <button
@@ -250,7 +254,11 @@ function handleExternalToolError(eventId: string) {
               </button>
             </div>
             <div
-              v-if="event.type === 'tool-call' && event.externalStatus === 'pending'"
+              v-if="
+                event.type === 'tool-call' &&
+                event.externalStatus === 'pending' &&
+                event.continuationSupported !== false
+              "
               class=":uno: mt-2 space-y-2"
             >
               <textarea

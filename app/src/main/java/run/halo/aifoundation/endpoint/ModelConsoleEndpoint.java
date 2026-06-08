@@ -5,6 +5,7 @@ import static org.springdoc.core.fn.builders.parameter.Builder.parameterBuilder;
 import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuilder;
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
+import java.util.LinkedHashMap;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +40,16 @@ import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.ui.InvalidUIMessageException;
+import run.halo.aifoundation.ui.UIMessageCancellation;
+import run.halo.aifoundation.ui.UIMessageCancellations;
+import run.halo.aifoundation.ui.UIMessageChatHandlers;
+import run.halo.aifoundation.ui.UIMessageChatRequest;
+import run.halo.aifoundation.ui.UIMessageChatTrigger;
+import run.halo.aifoundation.ui.UIMessageChunk;
+import run.halo.aifoundation.ui.UIMessageStream;
+import run.halo.aifoundation.ui.UIMessageStreamResponse;
+import run.halo.aifoundation.ui.UIMessageTransportCodec;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
@@ -47,6 +58,8 @@ import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.extension.index.query.Queries;
 import run.halo.app.extension.router.selector.SelectorUtil;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
 @Component
@@ -59,6 +72,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private static final String CONSOLE_TEST_TOOL_NAME = "halo_test_info";
     private static final String CONSOLE_EXTERNAL_TEST_TOOL_NAME = "halo_external_test_info";
     private static final String CONSOLE_REPAIR_TEST_TOOL_NAME = "halo_repair_test_info";
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
@@ -163,6 +177,46 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                             + "and error parts, then ends with data: [DONE].")
                         .implementation(TextStreamPart.class))
             )
+            .POST("models/{name}/test-chat/ui-message/stream", this::testUiMessageChatStream,
+                builder -> builder.operationId("TestModelUiMessageChatStream")
+                    .description("Test text generation with Halo UI Message stream response.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .parameter(parameterBuilder()
+                        .name("enableTestTool")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject the console-only halo_test_info tool for "
+                            + "tool calling tests.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .parameter(parameterBuilder()
+                        .name("enableTestToolApproval")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether the console-only halo_test_info tool should require "
+                            + "caller approval before execution.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .parameter(parameterBuilder()
+                        .name("enableToolCallRepair")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject a console-only repairable tool and "
+                            + "deterministic tool-call repair callback.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(TestUiMessageChatRequest.class))
+                    .response(responseBuilder()
+                        .description("Server-Sent Events using the Halo UI Message stream protocol. "
+                            + "Each data event contains a UIMessageChunk JSON object and the stream "
+                            + "ends with data: [DONE].")
+                        .implementation(UIMessageChunk.class))
+            )
             .POST("models/{name}/test-embedding", this::testEmbedding,
                 builder -> builder.operationId("TestModelEmbedding")
                     .description("Test embedding generation with embedding settings and diagnostics.")
@@ -263,6 +317,58 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             })));
     }
 
+    private Mono<ServerResponse> testUiMessageChatStream(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testUiMessageChatStream: modelName={}", modelName);
+
+        return request.bodyToMono(TestUiMessageChatRequest.class)
+            .flatMap(body -> validateTestUiMessageChatRequest(body).then(Mono.defer(() -> {
+                var cancellation = UIMessageCancellations.create();
+                return aiModelService.languageModel(modelName)
+                    .map(languageModel -> UIMessageChatHandlers.<Map<String, Object>>streamText(
+                        options -> options
+                            .model(languageModel)
+                            .chatRequest(toUiMessageChatRequest(body))
+                            .metadataSupplier(() -> new LinkedHashMap<>())
+                            .serializer(ModelConsoleEndpoint::writeJson)
+                            .request(builder -> applyConsoleGenerationOptions(builder, body,
+                                ConsoleTestToolOptions.from(request)))
+                            .cancellationToken(cancellation.token())
+                            .onError(error -> "Chat test failed: " + safeMessage(error))
+                            .onFinish(finish -> log.debug(
+                                "UI message chat test finished: modelName={}, messages={}, "
+                                    + "aborted={}, errorText={}",
+                                modelName, finish.messages().size(), finish.terminal().aborted(),
+                                finish.terminal().errorText()
+                            ))
+                    ))
+                    .flatMap(chat -> uiMessageStreamResponse(chat.response(), cancellation));
+            })))
+            .onErrorResume(error -> {
+                if (error instanceof ResponseStatusException) {
+                    return Mono.error(error);
+                }
+                log.error("UI message stream chat failed for model: {}", modelName, error);
+                return uiMessageStreamResponse(new UIMessageStreamResponse(new UIMessageStream(
+                    Flux.just(run.halo.aifoundation.ui.UIMessageChunks.error(
+                        "Chat test failed: " + safeMessage(error)))
+                ), ModelConsoleEndpoint::writeJson), UIMessageCancellations.create());
+            });
+    }
+
+    private Mono<ServerResponse> uiMessageStreamResponse(UIMessageStreamResponse response,
+        UIMessageCancellation cancellation) {
+        Flux<ServerSentEvent<Object>> flux = cancellation.cancelWhenSubscriberCancels(
+                response.stream())
+            .map(chunk -> ServerSentEvent.builder((Object) writeJson(chunk)).build())
+            .concatWith(Mono.just(ServerSentEvent.builder((Object) UIMessageStreamResponse.DONE_MARKER)
+                .build()));
+        return ServerResponse.ok()
+            .contentType(MediaType.TEXT_EVENT_STREAM)
+            .headers(headers -> response.headers().forEach(headers::set))
+            .body(flux, ServerSentEvent.class);
+    }
+
     private Mono<ServerResponse> testEmbedding(ServerRequest request) {
         var modelName = request.pathVariable("name");
         log.info("testEmbedding: modelName={}", modelName);
@@ -345,6 +451,51 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         request.setTools(List.copyOf(tools));
         request.setStopWhen(StopCondition.stepCountIs(2));
         return request;
+    }
+
+    private void applyConsoleGenerationOptions(
+        GenerateTextRequest.GenerateTextRequestBuilder builder,
+        TestUiMessageChatRequest request, ConsoleTestToolOptions options) {
+        var generation = GenerateTextRequest.builder()
+            .system(request.getSystem())
+            .temperature(request.getTemperature())
+            .topP(request.getTopP())
+            .topK(request.getTopK())
+            .presencePenalty(request.getPresencePenalty())
+            .frequencyPenalty(request.getFrequencyPenalty())
+            .stopSequences(request.getStopSequences())
+            .maxOutputTokens(request.getMaxOutputTokens())
+            .seed(request.getSeed())
+            .maxRetries(request.getMaxRetries())
+            .providerOptions(request.getProviderOptions())
+            .reasoning(request.getReasoning())
+            .headers(request.getHeaders())
+            .metadata(request.getMetadata())
+            .context(request.getContext())
+            .output(request.getOutput())
+            .toolChoice(request.getToolChoice())
+            .build();
+        generation = withConsoleTestTool(generation, options);
+        builder.system(generation.getSystem())
+            .temperature(generation.getTemperature())
+            .topP(generation.getTopP())
+            .topK(generation.getTopK())
+            .presencePenalty(generation.getPresencePenalty())
+            .frequencyPenalty(generation.getFrequencyPenalty())
+            .stopSequences(generation.getStopSequences())
+            .maxOutputTokens(generation.getMaxOutputTokens())
+            .seed(generation.getSeed())
+            .maxRetries(generation.getMaxRetries())
+            .providerOptions(generation.getProviderOptions())
+            .reasoning(generation.getReasoning())
+            .headers(generation.getHeaders())
+            .metadata(generation.getMetadata())
+            .context(generation.getContext())
+            .output(generation.getOutput())
+            .tools(generation.getTools())
+            .toolChoice(generation.getToolChoice())
+            .stopWhen(generation.getStopWhen())
+            .toolCallRepair(generation.getToolCallRepair());
     }
 
     private ToolDefinition consoleTestTool(boolean approvalEnabled) {
@@ -473,6 +624,31 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return Mono.empty();
     }
 
+    private Mono<Void> validateTestUiMessageChatRequest(TestUiMessageChatRequest request) {
+        if (request == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "request body is required"));
+        }
+        if (request.getId() == null || request.getId().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "id must not be blank"));
+        }
+        if (request.getMessages() == null || request.getMessages().isEmpty()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "messages must not be empty"));
+        }
+        var trigger = parseUiMessageChatTrigger(request.getTrigger());
+        if (trigger == UIMessageChatTrigger.REGENERATE_MESSAGE
+            && (request.getMessageId() == null || request.getMessageId().isBlank())) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "messageId must be set for regenerate-message requests"));
+        }
+        for (var message : request.getMessages()) {
+            validateConsoleUiMessage(message);
+        }
+        return Mono.empty();
+    }
+
     private Mono<Void> validateTestEmbeddingRequest(TestEmbeddingRequest request) {
         if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -534,6 +710,84 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static UIMessageChatRequest<Map<String, Object>> toUiMessageChatRequest(
+        TestUiMessageChatRequest request) {
+        return UIMessageTransportCodec.chatRequestFromMap(toUiMessageChatRequestMap(request));
+    }
+
+    private static void validateConsoleUiMessage(TestUiMessage message) {
+        if (message == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "messages must not contain null values");
+        }
+        if (message.getId() == null || message.getId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "message id must not be blank");
+        }
+        if (message.getRole() == null || message.getRole().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "message role must not be blank");
+        }
+        if (message.getParts() == null || message.getParts().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "message parts must not be empty");
+        }
+        try {
+            UIMessageTransportCodec.messageFromMap(toUiMessageMap(message));
+        } catch (InvalidUIMessageException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    private static UIMessageChatTrigger parseUiMessageChatTrigger(String trigger) {
+        try {
+            return UIMessageChatTrigger.fromValue(trigger != null ? trigger : "submit-message");
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    private static Map<String, Object> toUiMessageChatRequestMap(
+        TestUiMessageChatRequest request) {
+        var map = new LinkedHashMap<String, Object>();
+        map.put("id", request.getId());
+        map.put("messages", request.getMessages().stream()
+            .map(ModelConsoleEndpoint::toUiMessageMap)
+            .toList());
+        map.put("trigger", request.getTrigger() != null ? request.getTrigger() : "submit-message");
+        if (request.getMessageId() != null) {
+            map.put("messageId", request.getMessageId());
+        }
+        return map;
+    }
+
+    private static Map<String, Object> toUiMessageMap(TestUiMessage message) {
+        var map = new LinkedHashMap<String, Object>();
+        map.put("id", message.getId());
+        map.put("role", message.getRole());
+        map.put("parts", message.getParts());
+        if (message.getMetadata() != null) {
+            map.put("metadata", message.getMetadata());
+        }
+        return map;
+    }
+
+    private static String stringValue(Object value) {
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    private static String writeJson(UIMessageChunk chunk) {
+        try {
+            return JSON_MAPPER.writeValueAsString(chunk);
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("failed to serialize UI message chunk", e);
+        }
+    }
+
+    private static String safeMessage(Throwable error) {
+        return error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
     }
 
     private record ConsoleTestToolOptions(
@@ -604,6 +858,43 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Integer maxParallelCalls;
         private Integer maxRetries;
         private Map<String, Map<String, Object>> providerOptions;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestUiMessageChatRequest {
+        private String id;
+        private List<TestUiMessage> messages;
+        private String trigger = "submit-message";
+        private String messageId;
+        private String system;
+        private Integer maxOutputTokens;
+        private Double temperature;
+        private Double topP;
+        private Integer topK;
+        private Double presencePenalty;
+        private Double frequencyPenalty;
+        private List<String> stopSequences;
+        private Integer seed;
+        private Integer maxRetries;
+        private Map<String, Map<String, Object>> providerOptions;
+        private run.halo.aifoundation.chat.ReasoningOptions reasoning;
+        private Map<String, String> headers;
+        private Map<String, Object> metadata;
+        private Map<String, Object> context;
+        private run.halo.aifoundation.schema.OutputSpec output;
+        private run.halo.aifoundation.tool.ToolChoice toolChoice;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestUiMessage {
+        private String id;
+        private String role;
+        private List<Map<String, Object>> parts;
+        private Map<String, Object> metadata;
     }
 
     @Data
