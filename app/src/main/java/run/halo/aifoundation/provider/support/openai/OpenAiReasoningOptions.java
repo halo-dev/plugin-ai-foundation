@@ -1,7 +1,6 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
 import java.util.Locale;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 
 /**
@@ -12,7 +11,7 @@ public final class OpenAiReasoningOptions {
     private OpenAiReasoningOptions() {
     }
 
-    public static void applyEffort(OpenAiChatOptions.Builder builder,
+    public static void applyEffort(OpenAiCompatibleChatOptions.Builder builder,
         GenerateTextRequest request) {
         var reasoning = request.getReasoning();
         if (reasoning == null || reasoning.getEffort() == null) {

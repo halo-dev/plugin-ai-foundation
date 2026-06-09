@@ -1,9 +1,11 @@
 package run.halo.aifoundation.service.language;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.time.Duration;
@@ -39,6 +41,7 @@ import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.message.ModelMessageRole;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.part.ReasoningPart;
@@ -80,6 +83,8 @@ public class LanguageModelImpl implements LanguageModel {
         "structured-output-strict-not-guaranteed";
     private static final String WARNING_TOOL_INPUT_EXAMPLES_IGNORED =
         "tool-input-examples-ignored";
+    private static final String WARNING_TOOL_STRICT_SCHEMA_DOWNGRADED =
+        "tool-strict-schema-downgraded";
     private static final String WARNING_REASONING_RETURNED_WHILE_DISABLED =
         "reasoning-returned-while-disabled";
 
@@ -410,7 +415,8 @@ public class LanguageModelImpl implements LanguageModel {
         StreamStepAccumulator accumulator) {
         var parts = new ArrayList<TextStreamPart>();
         accumulator.accept(response);
-        var reasoning = extractReasoning(response);
+        var extraction = streamExtraction(response);
+        var reasoning = extraction.reasoningText();
         if (hasText(reasoning)) {
             if (accumulator.textStarted) {
                 accumulator.textStarted = false;
@@ -427,7 +433,7 @@ public class LanguageModelImpl implements LanguageModel {
             parts.add(TextStreamPart.reasoningDelta(accumulator.reasoningId, reasoning,
                 reasoningProviderMetadata(reasoning, metadata)));
         }
-        var text = responseMapper.extractText(response);
+        var text = extraction.text();
         if (hasText(text)) {
             if (accumulator.reasoningStarted) {
                 accumulator.reasoningStarted = false;
@@ -949,15 +955,39 @@ public class LanguageModelImpl implements LanguageModel {
         if (hasText(request.getPrompt())) {
             messages.add(new UserMessage(request.getPrompt().trim()));
         } else {
+            var suppressedToolCallIds = completedApprovalToolCallIds(request.getMessages());
             request.getMessages().stream()
-                .filter(this::hasProviderMessage)
+                .map(message -> providerMessage(message, suppressedToolCallIds))
+                .filter(Objects::nonNull)
                 .map(messageMapper::convert)
                 .forEach(messages::add);
         }
         return messages;
     }
 
-    private boolean hasProviderMessage(ModelMessage message) {
+    private ModelMessage providerMessage(ModelMessage message, Set<String> suppressedToolCallIds) {
+        if (!hasProviderMessage(message, suppressedToolCallIds)) {
+            return null;
+        }
+        if (message.getRole() == ModelMessageRole.ASSISTANT) {
+            var parts = message.getContent().stream()
+                .filter(part -> PartType.isText(part.getType())
+                    || PartType.isReasoning(part.getType())
+                    || (PartType.isToolCall(part.getType())
+                    && !suppressedToolCallIds.contains(part.getToolCallId())))
+                .toList();
+            return parts.isEmpty() ? null : ModelMessage.assistant(parts);
+        }
+        if (message.getRole() == ModelMessageRole.TOOL) {
+            var parts = message.getContent().stream()
+                .filter(part -> PartType.isToolResponse(part.getType()))
+                .toList();
+            return parts.isEmpty() ? null : ModelMessage.tool(parts);
+        }
+        return message;
+    }
+
+    private boolean hasProviderMessage(ModelMessage message, Set<String> suppressedToolCallIds) {
         if (message == null || message.getContent() == null) {
             return false;
         }
@@ -966,9 +996,59 @@ public class LanguageModelImpl implements LanguageModel {
             case ASSISTANT -> message.getContent().stream()
                 .anyMatch(part -> PartType.isText(part.getType())
                     || PartType.isReasoning(part.getType())
-                    || PartType.isToolCall(part.getType()));
+                    || (PartType.isToolCall(part.getType())
+                    && !suppressedToolCallIds.contains(part.getToolCallId())));
             default -> true;
         };
+    }
+
+    private Set<String> completedApprovalToolCallIds(List<ModelMessage> messages) {
+        var approvalToolCallIds = new LinkedHashMap<String, String>();
+        var approvalResponseMessageIndexes = new LinkedHashMap<String, Integer>();
+        var resolvedToolCallIds = new HashSet<String>();
+        var safeMessages = nullSafe(messages);
+        for (var index = 0; index < safeMessages.size(); index++) {
+            var message = safeMessages.get(index);
+            if (message == null || message.getContent() == null) {
+                continue;
+            }
+            for (var part : message.getContent()) {
+                if (PartType.isToolApprovalRequest(part.getType())) {
+                    approvalToolCallIds.put(part.getApprovalId(), part.getToolCallId());
+                } else if (PartType.isToolApprovalResponse(part.getType())) {
+                    approvalResponseMessageIndexes.put(part.getApprovalId(), index);
+                } else if (PartType.isToolResponse(part.getType()) && part.getToolCallId() != null) {
+                    resolvedToolCallIds.add(part.getToolCallId());
+                }
+            }
+        }
+        var completed = new HashSet<String>();
+        approvalResponseMessageIndexes.forEach((approvalId, messageIndex) -> {
+            var toolCallId = approvalToolCallIds.get(approvalId);
+            if (toolCallId != null
+                && !resolvedToolCallIds.contains(toolCallId)
+                && hasProviderContinuationAfter(safeMessages, messageIndex)) {
+                completed.add(toolCallId);
+            }
+        });
+        return completed;
+    }
+
+    private boolean hasProviderContinuationAfter(List<ModelMessage> messages, int messageIndex) {
+        for (var index = messageIndex + 1; index < messages.size(); index++) {
+            var message = messages.get(index);
+            if (message == null || message.getRole() == null) {
+                continue;
+            }
+            if (message.getRole() == ModelMessageRole.USER) {
+                return true;
+            }
+            if (message.getRole() == ModelMessageRole.ASSISTANT
+                && hasProviderMessage(message, Set.of())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private PreparedInvocation prepareInvocation(GenerateTextRequest baseRequest,
@@ -1174,8 +1254,7 @@ public class LanguageModelImpl implements LanguageModel {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
         var originalText = output != null && output.getText() != null ? output.getText() : "";
-        var extraction = reasoningExtractor.extract(originalText,
-            output != null ? output.getMetadata() : Map.of());
+        var extraction = reasoningExtractor.extract(originalText, outputMetadata(output));
         var text = extraction.text();
         var reasoning = extraction.reasoning();
         var reasoningText = reasoning.stream()
@@ -1236,6 +1315,30 @@ public class LanguageModelImpl implements LanguageModel {
             .findFirst()
             .map(ReasoningPart::getProviderMetadata)
             .orElse(Map.of());
+    }
+
+    private Map<String, Object> outputMetadata(AssistantMessage output) {
+        if (output == null) {
+            return Map.of();
+        }
+        var metadata = new LinkedHashMap<String, Object>();
+        if (output.getMetadata() != null) {
+            output.getMetadata().forEach((key, value) -> {
+                if (key != null && value != null) {
+                    metadata.put(key, value);
+                }
+            });
+        }
+        var providerReasoning = providerReasoningContent(output);
+        if (hasText(providerReasoning)) {
+            metadata.put("reasoningContent", providerReasoning);
+        }
+        return metadata.isEmpty() ? Map.of() : Map.copyOf(metadata);
+    }
+
+    private String providerReasoningContent(AssistantMessage output) {
+        var extractor = providerOptions.reasoningContentExtractor();
+        return extractor != null ? extractor.extract(output) : null;
     }
 
     private void validateFinalStructuredOutput(GenerateTextRequest request,
@@ -1476,8 +1579,9 @@ public class LanguageModelImpl implements LanguageModel {
     private Flux<TextStreamPart> mapStreamResponse(GenerateTextRequest request,
         LanguageModelGenerationRun run, ChatResponse response, SimpleStreamState state) {
         var parts = new ArrayList<TextStreamPart>();
-        var text = responseMapper.extractText(response);
-        var reasoning = extractReasoning(response);
+        var extraction = streamExtraction(response);
+        var text = extraction.text();
+        var reasoning = extraction.reasoningText();
         if (hasText(reasoning)) {
             if (state.textStarted.get()) {
                 state.textStarted.set(false);
@@ -1566,12 +1670,19 @@ public class LanguageModelImpl implements LanguageModel {
         return Flux.fromIterable(parts);
     }
 
+    private ReasoningContentExtractor.Extraction streamExtraction(ChatResponse response) {
+        var result = response.getResult();
+        var output = result != null ? result.getOutput() : null;
+        return reasoningExtractor.extract(responseMapper.extractText(response), outputMetadata(output));
+    }
+
     private String extractReasoning(ChatResponse response) {
         var result = response.getResult();
         if (result == null || result.getOutput() == null) {
             return "";
         }
-        var reasoning = reasoningExtractor.extract("", result.getOutput().getMetadata()).reasoning();
+        var reasoning = reasoningExtractor.extract("", outputMetadata(result.getOutput()))
+            .reasoning();
         if (reasoning.isEmpty()) {
             return "";
         }
@@ -1603,6 +1714,15 @@ public class LanguageModelImpl implements LanguageModel {
                     && !tool.getInputExamples().isEmpty())) {
             warnings.add(warning(WARNING_TOOL_INPUT_EXAMPLES_IGNORED,
                 "Tool input examples are ignored by the default tool adapter."));
+        }
+        if (request != null && request.getTools() != null
+            && !"deepseek".equals(providerType)
+            && request.getTools().stream()
+                .anyMatch(tool -> tool != null && Boolean.TRUE.equals(tool.getStrict()))) {
+            warnings.add(warning(WARNING_TOOL_STRICT_SCHEMA_DOWNGRADED,
+                "Strict tool input schema was requested, but provider-native strict schema "
+                    + "metadata is not available with Spring AI 2.0.0-RC1. Local tool input "
+                    + "validation still applies."));
         }
         return warnings;
     }
@@ -1712,7 +1832,7 @@ public class LanguageModelImpl implements LanguageModel {
         }
 
         private void appendReasoning(AssistantMessage output) {
-            var extraction = reasoningExtractor.extract("", output.getMetadata());
+            var extraction = reasoningExtractor.extract("", outputMetadata(output));
             if (hasText(extraction.reasoningText())) {
                 reasoning.append(extraction.reasoningText());
             }
@@ -1794,7 +1914,7 @@ public class LanguageModelImpl implements LanguageModel {
                     text.append(output.getText());
                 }
                 if (output.getMetadata() != null) {
-                    var extraction = reasoningExtractor.extract("", output.getMetadata());
+                    var extraction = reasoningExtractor.extract("", outputMetadata(output));
                     if (hasText(extraction.reasoningText())) {
                         reasoning.append(extraction.reasoningText());
                     }

@@ -30,6 +30,11 @@ public record LanguageModelRuntimeComposition(
 ) {
     public static LanguageModelRuntimeComposition create(String providerType,
         LanguageModelProviderOptions providerOptions, LanguageModelRuntimeSupport runtimeSupport) {
+        return create(providerType, null, providerOptions, runtimeSupport);
+    }
+
+    public static LanguageModelRuntimeComposition create(String providerType, String modelId,
+        LanguageModelProviderOptions providerOptions, LanguageModelRuntimeSupport runtimeSupport) {
         var resolvedOptions = providerOptions != null
             ? providerOptions
             : LanguageModelProviderOptions.defaults();
@@ -38,7 +43,7 @@ public record LanguageModelRuntimeComposition(
         var messageMapper = new LanguageModelMessageMapper(providerType);
         var messageHistoryAssembler = new GenerationMessageHistoryAssembler(providerType,
             resolvedOptions.reasoningHistorySupported(), messageMapper);
-        var chatOptionsBuilder = new LanguageModelChatOptionsBuilder(providerType,
+        var chatOptionsBuilder = new LanguageModelChatOptionsBuilder(providerType, modelId,
             resolvedOptions, runtimeSupport::writeJson);
         var responseMapper = new LanguageModelResponseMapper(providerType, messageMapper);
         var reasoningExtractor =

@@ -23,18 +23,20 @@ configurations.runtimeClasspath {
     exclude group: 'org.springdoc'
     exclude group: 'io.swagger.core.v3'
     exclude group: 'com.fasterxml.jackson.core'
-    exclude group: 'io.micrometer'
     exclude group: 'org.slf4j'
+    exclude group: 'io.micrometer'
+    exclude group: 'com.squareup.okhttp3'
+    exclude group: 'com.squareup.okio'
 }
 
 dependencies {
     implementation platform('run.halo.tools.platform:plugin:2.23.0')
-    implementation platform("org.springframework.ai:spring-ai-bom:2.0.0-M2")
+    implementation platform("org.springframework.ai:spring-ai-bom:2.0.0-RC1")
     implementation project(':api')
 
     implementation 'org.springframework.ai:spring-ai-client-chat'
-    implementation 'org.springframework.ai:spring-ai-openai'
-    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+    implementation 'org.springframework.ai:spring-ai-deepseek'
+    implementation 'org.springframework.ai:spring-ai-ollama'
 
     compileOnly 'run.halo.app:api'
 

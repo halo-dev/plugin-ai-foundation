@@ -19,8 +19,19 @@ public class LanguageModelRuntimeFactory {
         return new LanguageModelImpl(chatModel, compose(providerType, providerOptions));
     }
 
+    public LanguageModel create(ChatModel chatModel, String providerType, String modelId,
+        LanguageModelProviderOptions providerOptions) {
+        return new LanguageModelImpl(chatModel, compose(providerType, modelId, providerOptions));
+    }
+
     LanguageModelRuntimeComposition compose(String providerType,
         LanguageModelProviderOptions providerOptions) {
         return LanguageModelRuntimeComposition.create(providerType, providerOptions, runtimeSupport);
+    }
+
+    LanguageModelRuntimeComposition compose(String providerType, String modelId,
+        LanguageModelProviderOptions providerOptions) {
+        return LanguageModelRuntimeComposition.create(providerType, modelId, providerOptions,
+            runtimeSupport);
     }
 }

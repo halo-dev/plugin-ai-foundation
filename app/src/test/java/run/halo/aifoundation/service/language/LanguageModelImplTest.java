@@ -9,10 +9,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -23,8 +25,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -50,6 +52,7 @@ import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.provider.DeepSeekProvider;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolApprovalResponse;
 import run.halo.aifoundation.tool.ToolCall;
@@ -201,18 +204,44 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_rejectsSeedWhenDeepSeekDedicatedProviderCannotMapIt() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "deepseek",
+            new DeepSeekProvider().languageModelProviderOptions());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .seed(42)
+                .build()))
+            .expectErrorMessage("seed is not supported by provider type: deepseek")
+            .verify();
+    }
+
+    @Test
+    void generateText_rejectsHeadersWhenDeepSeekDedicatedProviderCannotMapThem() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "deepseek",
+            new DeepSeekProvider().languageModelProviderOptions());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .headers(Map.of("X-Trace-Id", "trace-1"))
+                .build()))
+            .expectErrorMessage("Request headers are not supported by provider type: deepseek")
+            .verify();
+    }
+
+    @Test
     void generateText_prepareStepCanOverrideSeedAndRetryBudget() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
-        var providerOptions = new LanguageModelProviderOptions(false, false,
-            request -> OpenAiChatOptions.builder()
+        var providerOptions = LanguageModelProviderOptions.builder()
+            .requestHeadersSupported(true)
+            .seedSupported(true)
+            .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
                 .temperature(request.getTemperature())
                 .maxTokens(request.getMaxOutputTokens())
                 .seed(request.getSeed())
-                .build(),
-            null,
-            null,
-            ReasoningControlOptions.unsupported());
+                .build())
+            .build();
         var model = new LanguageModelImpl(chatModel, "openai", providerOptions);
 
         StepVerifier.create(model.generateText(GenerateTextRequest.builder()
@@ -233,7 +262,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        assertThat(((OpenAiChatOptions) captor.getValue().getOptions()).getSeed()).isEqualTo(42);
+        assertThat(((OpenAiCompatibleChatOptions) captor.getValue().getOptions()).getSeed()).isEqualTo(42);
     }
 
     @Test
@@ -293,6 +322,25 @@ class LanguageModelImplTest {
                 assertThat(result.getUsage().getReasoningTokens()).isEqualTo(2);
                 assertThat(result.getTotalUsage().getReasoningTokens()).isEqualTo(2);
                 assertThat(result.getSteps().get(0).getReasoningText()).isEqualTo("Think first.");
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_extractsDeepSeekAssistantMessageReasoningContent() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            deepSeekReasoningResponse("Think through DeepSeek.", "Answer.", "stop")
+        );
+        var model = new LanguageModelImpl(chatModel, "deepseek",
+            new DeepSeekProvider().languageModelProviderOptions());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder().prompt("Hi").build()))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("Answer.");
+                assertThat(result.getReasoningText()).isEqualTo("Think through DeepSeek.");
+                assertThat(result.getContent()).extracting("type")
+                    .containsExactly(PartType.REASONING, PartType.TEXT);
             })
             .verifyComplete();
     }
@@ -398,30 +446,41 @@ class LanguageModelImplTest {
 
     @Test
     void generateText_rejectsReasoningProviderOptionConflict() {
-        var model = new LanguageModelImpl(mock(ChatModel.class), "deepseek",
-            new LanguageModelProviderOptions(true, true, null, null, null,
-                ReasoningControlOptions.deepSeek((builder, request) -> {
-                })));
+        var model = new LanguageModelImpl(mock(ChatModel.class), "thinking-provider",
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
+                }))
+                .build());
         var request = GenerateTextRequest.builder()
             .prompt("Fast")
             .reasoning(ReasoningOptions.disabled())
-            .providerOptions(Map.of("deepseek", Map.of(
+            .providerOptions(Map.of("thinking-provider", Map.of(
                 "thinking", Map.of("type", "enabled")
             )))
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .expectErrorMessage("reasoning setting conflicts with providerOptions.deepseek.thinking; "
-                + "use either typed reasoning or raw provider options, not both")
+            .expectErrorMessage("reasoning setting conflicts with "
+                + "providerOptions.thinking-provider.thinking; use either typed reasoning or raw "
+                + "provider options, not both")
             .verify();
     }
 
     @Test
     void generateText_rejectsDisabledReasoningWithReasoningHistory() {
-        var model = new LanguageModelImpl(mock(ChatModel.class), "deepseek",
-            new LanguageModelProviderOptions(true, true, null, null, null,
-                ReasoningControlOptions.deepSeek((builder, request) -> {
-                })));
+        var model = new LanguageModelImpl(mock(ChatModel.class), "thinking-provider",
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
+                }))
+                .build());
         var request = GenerateTextRequest.builder()
             .messages(List.of(
                 ModelMessage.assistant(List.of(ModelMessagePart.reasoning("thinking"))),
@@ -432,7 +491,7 @@ class LanguageModelImplTest {
 
         StepVerifier.create(model.generateText(request))
             .expectErrorMessage("disabled reasoning cannot be combined with assistant reasoning "
-                + "history for provider type: deepseek")
+                + "history for provider type: thinking-provider")
             .verify();
     }
 
@@ -442,10 +501,15 @@ class LanguageModelImplTest {
         when(chatModel.call(any(Prompt.class))).thenReturn(
             reasoningResponse("Still thinking.", "Answer.", "stop", 3, 5, 2)
         );
-        var model = new LanguageModelImpl(chatModel, "deepseek",
-            new LanguageModelProviderOptions(true, true, null, null, null,
-                ReasoningControlOptions.deepSeek((builder, request) -> {
-                })));
+        var model = new LanguageModelImpl(chatModel, "thinking-provider",
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
+                }))
+                .build());
 
         StepVerifier.create(model.generateText(GenerateTextRequest.builder()
                 .prompt("Fast")
@@ -686,6 +750,48 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_doesNotReplayApprovalResponseCompletedByAssistantContinuation() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Next answer", "stop", 4, 5));
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(chatResponse("Next answer", "stop", 4, 5))
+        );
+        var model = new LanguageModelImpl(chatModel, "deepseek",
+            new DeepSeekProvider().languageModelProviderOptions());
+        var executions = new AtomicInteger();
+        var messages = new ArrayList<>(approvalMessages(true, "done"));
+        messages.add(ModelMessage.assistant("Tool was already executed."));
+        messages.add(ModelMessage.user("Continue with another question"));
+
+        var request = GenerateTextRequest.builder()
+            .messages(messages)
+            .tools(List.of(ToolDefinition.builder()
+                .name("run")
+                .executor(context -> {
+                    executions.incrementAndGet();
+                    return Mono.just(Map.of("ok", true));
+                })
+                .build()))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Next answer"))
+            .verifyComplete();
+
+        assertThat(executions).hasValue(0);
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).stream(captor.capture());
+        assertThat(captor.getValue().getInstructions())
+            .extracting(message -> message.getMessageType().getValue())
+            .containsExactly("user", "assistant", "user");
+        assertThat(captor.getValue().getInstructions().stream()
+            .filter(AssistantMessage.class::isInstance)
+            .map(AssistantMessage.class::cast)
+            .flatMap(message -> message.getToolCalls().stream()))
+            .isEmpty();
+    }
+
+    @Test
     void generateText_preservesReasoningWhenContinuingAfterToolCall() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
@@ -720,8 +826,13 @@ class LanguageModelImplTest {
         assertThat(captor.getAllValues().get(1).getInstructions())
             .filteredOn(message -> "assistant".equals(message.getMessageType().getValue()))
             .singleElement()
-            .satisfies(message -> assertThat(message.getMetadata())
-                .containsEntry("reasoningContent", "Need weather data."));
+            .satisfies(message -> {
+                assertThat(message).isInstanceOf(DeepSeekAssistantMessage.class);
+                var deepSeekMessage = (DeepSeekAssistantMessage) message;
+                assertThat(deepSeekMessage.getReasoningContent()).isEqualTo("Need weather data.");
+                assertThat(deepSeekMessage.getMetadata())
+                    .containsEntry("reasoningContent", "Need weather data.");
+            });
     }
 
     @Test
@@ -747,8 +858,8 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).stream(captor.capture());
-        assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiChatOptions.class);
-        var options = (OpenAiChatOptions) captor.getValue().getOptions();
+        assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiCompatibleChatOptions.class);
+        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
         assertThat(options.getExtraBody()).isNullOrEmpty();
     }
 
@@ -1088,6 +1199,39 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void streamText_ignoresNullAssistantMetadataValues() {
+        var chatModel = mock(ChatModel.class);
+        var properties = new LinkedHashMap<String, Object>();
+        properties.put("id", "resp_1");
+        properties.put("finishReason", null);
+        properties.put("reasoningContent", "thinking");
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            assistantResponse("", properties, null, null, null),
+            chatResponse("Done", "stop", 2, 4)
+        ));
+        var model = new LanguageModelImpl(chatModel, "mimo");
+
+        StepVerifier.create(model.streamText(GenerateTextRequest.builder().prompt("Hi").build())
+                .fullStream())
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.REASONING_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(PartType.REASONING_DELTA);
+                assertThat(part.getDelta()).isEqualTo("thinking");
+            })
+            .expectNextMatches(part -> PartType.REASONING_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Done");
+            })
+            .thenConsumeWhile(part -> !PartType.FINISH.equals(part.getType()))
+            .assertNext(part -> assertThat(part.getFinishReason()).isEqualTo(FinishReason.STOP))
+            .verifyComplete();
+    }
+
+    @Test
     void streamText_resultViewsShareSingleExecution() {
         var calls = new AtomicInteger();
         var chatModel = mock(ChatModel.class);
@@ -1256,6 +1400,26 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_warnsWhenStrictToolSchemaIsDowngraded() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 2, 4));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var request = GenerateTextRequest.builder()
+            .prompt("Use weather")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(weatherInputSchema())
+                .strict(true)
+                .build()))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getWarnings()).extracting("code")
+                .contains("tool-strict-schema-downgraded"))
+            .verifyComplete();
+    }
+
+    @Test
     void generateText_structuredValidationErrorContainsSafeContext() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
@@ -1326,10 +1490,15 @@ class LanguageModelImplTest {
         when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
             reasoningResponse("Thinking", "Answer", "stop", 2, 4, 1)
         ));
-        var model = new LanguageModelImpl(chatModel, "deepseek",
-            new LanguageModelProviderOptions(true, true, null, null, null,
-                ReasoningControlOptions.deepSeek((builder, request) -> {
-                })));
+        var model = new LanguageModelImpl(chatModel, "thinking-provider",
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
+                }))
+                .build());
 
         var parts = model.streamText(GenerateTextRequest.builder()
                 .prompt("Fast")
@@ -1343,6 +1512,29 @@ class LanguageModelImplTest {
             .singleElement()
             .satisfies(part -> assertThat(part.getWarnings()).extracting("code")
                 .contains("reasoning-returned-while-disabled"));
+    }
+
+    @Test
+    void streamText_extractsDeepSeekAssistantMessageReasoningContent() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            deepSeekReasoningResponse("Stream thinking.", "Answer", "stop")
+        ));
+        var model = new LanguageModelImpl(chatModel, "deepseek",
+            new DeepSeekProvider().languageModelProviderOptions());
+
+        var parts = model.streamText(GenerateTextRequest.builder().prompt("Hi").build())
+            .fullStream()
+            .collectList()
+            .block();
+
+        assertThat(parts).isNotNull();
+        assertThat(parts).extracting(TextStreamPart::getType)
+            .contains(PartType.REASONING_DELTA, PartType.TEXT_DELTA);
+        assertThat(parts.stream()
+            .filter(part -> PartType.REASONING_DELTA.equals(part.getType()))
+            .map(TextStreamPart::getDelta)
+            .collect(Collectors.joining())).isEqualTo("Stream thinking.");
     }
 
     @Test
@@ -2592,8 +2784,13 @@ class LanguageModelImplTest {
         assertThat(captor.getAllValues().get(1).getInstructions())
             .filteredOn(message -> "assistant".equals(message.getMessageType().getValue()))
             .singleElement()
-            .satisfies(message -> assertThat(message.getMetadata())
-                .containsEntry("reasoningContent", "Need weather data."));
+            .satisfies(message -> {
+                assertThat(message).isInstanceOf(DeepSeekAssistantMessage.class);
+                var deepSeekMessage = (DeepSeekAssistantMessage) message;
+                assertThat(deepSeekMessage.getReasoningContent()).isEqualTo("Need weather data.");
+                assertThat(deepSeekMessage.getMetadata())
+                    .containsEntry("reasoningContent", "Need weather data.");
+            });
     }
 
     @Test
@@ -2859,12 +3056,12 @@ class LanguageModelImplTest {
             .id("resp_reasoning")
             .model("test-model");
         if (promptTokens != null || completionTokens != null || reasoningTokens != null) {
-            var nativeUsage = new OpenAiApi.Usage(completionTokens, promptTokens,
-                promptTokens != null && completionTokens != null ? promptTokens + completionTokens : null,
-                null,
-                new OpenAiApi.Usage.CompletionTokenDetails(reasoningTokens, null, null, null));
+            var nativeUsage = new NativeUsage(new NativeCompletionTokenDetails(reasoningTokens));
+            var totalTokens = promptTokens != null && completionTokens != null
+                ? promptTokens + completionTokens
+                : null;
             metadataBuilder.usage(new DefaultUsage(promptTokens, completionTokens,
-                nativeUsage.totalTokens(), nativeUsage));
+                totalTokens, nativeUsage));
         }
         var output = AssistantMessage.builder()
             .content(text)
@@ -2873,6 +3070,24 @@ class LanguageModelImplTest {
         return new ChatResponse(
             List.of(new Generation(output, generationMetadata)),
             metadataBuilder.build()
+        );
+    }
+
+    private ChatResponse deepSeekReasoningResponse(String reasoning, String text,
+        String finishReason) {
+        var generationMetadata = ChatGenerationMetadata.builder()
+            .finishReason(finishReason)
+            .build();
+        var output = DeepSeekAssistantMessage.builder()
+            .content(text)
+            .reasoningContent(reasoning)
+            .build();
+        return new ChatResponse(
+            List.of(new Generation(output, generationMetadata)),
+            ChatResponseMetadata.builder()
+                .id("resp_deepseek_reasoning")
+                .model("deepseek-reasoner")
+                .build()
         );
     }
 
@@ -3018,27 +3233,35 @@ class LanguageModelImplTest {
     }
 
     private LanguageModelProviderOptions reasoningToolProviderOptions() {
-        return new LanguageModelProviderOptions(true, true, (request, toolCallbacks, toolNames) -> {
-            var builder = OpenAiChatOptions.builder()
-                .temperature(request.getTemperature())
-                .maxTokens(request.getMaxOutputTokens())
-                .topP(request.getTopP())
-                .presencePenalty(request.getPresencePenalty())
-                .frequencyPenalty(request.getFrequencyPenalty())
-                .stop(request.getStopSequences())
-                .internalToolExecutionEnabled(false)
-                .toolCallbacks(toolCallbacks);
-            var providerOptions = request.getProviderOptions() != null
-                ? request.getProviderOptions().get("deepseek")
-                : null;
-            if (providerOptions != null && !providerOptions.isEmpty()) {
-                builder.extraBody(Map.copyOf(providerOptions));
-            }
-            if (!toolNames.isEmpty()) {
-                builder.toolNames(toolNames);
-            }
-            return builder.build();
-        }, null);
+        return LanguageModelProviderOptions.builder()
+            .reasoningHistorySupported(true)
+            .streamToolCallsForReasoning(true)
+            .requestHeadersSupported(true)
+            .seedSupported(true)
+            .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) -> {
+                var builder = OpenAiCompatibleChatOptions.builder()
+                    .temperature(request.getTemperature())
+                    .maxTokens(request.getMaxOutputTokens())
+                    .topP(request.getTopP())
+                    .presencePenalty(request.getPresencePenalty())
+                    .frequencyPenalty(request.getFrequencyPenalty())
+                    .stop(request.getStopSequences())
+                    .toolCallbacks(toolCallbacks);
+                var providerOptions = request.getProviderOptions() != null
+                    ? request.getProviderOptions().get("deepseek")
+                    : null;
+                if (providerOptions != null && !providerOptions.isEmpty()) {
+                    builder.extraBody(Map.copyOf(providerOptions));
+                }
+                return builder.build();
+            })
+            .build();
+    }
+
+    public record NativeUsage(NativeCompletionTokenDetails completionTokenDetails) {
+    }
+
+    public record NativeCompletionTokenDetails(Integer reasoningTokens) {
     }
 
     private void assertStructuredStreamValidationError(Throwable error) {

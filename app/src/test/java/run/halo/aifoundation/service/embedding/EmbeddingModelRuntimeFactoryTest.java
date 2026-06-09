@@ -13,10 +13,10 @@ import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
-import org.springframework.ai.openai.OpenAiEmbeddingOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 
 class EmbeddingModelRuntimeFactoryTest {
 
@@ -57,7 +57,7 @@ class EmbeddingModelRuntimeFactoryTest {
 
         var captor = ArgumentCaptor.forClass(EmbeddingRequest.class);
         org.mockito.Mockito.verify(springModel).call(captor.capture());
-        assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiEmbeddingOptions.class);
+        assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiCompatibleEmbeddingOptions.class);
         assertThat(captor.getValue().getOptions().getDimensions()).isEqualTo(512);
     }
 }

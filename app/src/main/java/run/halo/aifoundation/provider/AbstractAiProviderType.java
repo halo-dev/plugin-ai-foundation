@@ -10,10 +10,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.ReactorClientHttpRequestFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -24,13 +28,19 @@ import org.springframework.web.util.UriBuilder;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.transport.ProxyProvider.Proxy;
+import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.openai.OpenAiChatOptionsSupport;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingModel;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Slf4j
 public abstract class AbstractAiProviderType implements AiProviderType {
@@ -78,6 +88,106 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             .requestFactory(new ReactorClientHttpRequestFactory(
                 httpClient(provider)
             ));
+    }
+
+    protected ChatModel buildOpenAiCompatibleChatModel(AiProvider provider, String apiKey,
+        String modelId) {
+        return buildOpenAiCompatibleChatModel(provider, apiKey, modelId, Map.of());
+    }
+
+    protected ChatModel buildOpenAiCompatibleChatModel(AiProvider provider, String apiKey,
+        String modelId, Map<String, String> customHeaders) {
+        var options = openAiChatOptions(provider, apiKey, modelId, customHeaders);
+        return new OpenAiCompatibleChatModel(options, webClientBuilder(provider));
+    }
+
+    protected EmbeddingModel buildOpenAiCompatibleEmbeddingModel(AiProvider provider,
+        String apiKey, String modelId) {
+        return buildOpenAiCompatibleEmbeddingModel(provider, apiKey, modelId, Map.of());
+    }
+
+    protected EmbeddingModel buildOpenAiCompatibleEmbeddingModel(AiProvider provider,
+        String apiKey, String modelId, Map<String, String> customHeaders) {
+        return new OpenAiCompatibleEmbeddingModel(openAiEmbeddingOptions(provider, apiKey,
+            modelId, customHeaders), webClientBuilder(provider));
+    }
+
+    protected LanguageModelProviderOptions openAiCompatibleLanguageModelProviderOptions(
+        ReasoningControlOptions reasoningControlOptions,
+        BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
+        return openAiCompatibleLanguageModelProviderOptions(reasoningControlOptions,
+            extraBodyCustomizer, false);
+    }
+
+    protected LanguageModelProviderOptions openAiCompatibleLanguageModelProviderOptions(
+        ReasoningControlOptions reasoningControlOptions,
+        BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer,
+        boolean nativeStrictToolSchemas) {
+        return LanguageModelProviderOptions.builder()
+            .requestHeadersSupported(true)
+            .seedSupported(true)
+            .chatOptionsFactory(request -> OpenAiChatOptionsSupport.buildBasic(request,
+                getProviderType(), reasoningControlOptions, extraBodyCustomizer))
+            .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) ->
+                OpenAiChatOptionsSupport.buildToolCalling(request, toolCallbacks, toolNames,
+                    getProviderType(), reasoningControlOptions, extraBodyCustomizer,
+                    nativeStrictToolSchemas))
+            .structuredOutputChatOptionsFactory(request -> OpenAiChatOptionsSupport.buildStructured(
+                request, getProviderType(), reasoningControlOptions, extraBodyCustomizer))
+            .reasoningControlOptions(reasoningControlOptions)
+            .build();
+    }
+
+    protected OpenAiCompatibleChatOptions openAiChatOptions(AiProvider provider, String apiKey,
+        String modelId, Map<String, String> customHeaders) {
+        var builder = OpenAiCompatibleChatOptions.builder();
+        builder.baseUrl(resolveBaseUrl(provider))
+            .apiKey(apiKey)
+            .model(modelId);
+        applyOpenAiClientOptions(builder, provider, customHeaders);
+        return builder.build();
+    }
+
+    protected OpenAiCompatibleEmbeddingOptions openAiEmbeddingOptions(AiProvider provider, String apiKey,
+        String modelId, Map<String, String> customHeaders) {
+        var builder = OpenAiCompatibleEmbeddingOptions.builder();
+        builder.baseUrl(resolveBaseUrl(provider))
+            .apiKey(apiKey)
+            .model(modelId);
+        applyOpenAiClientOptions(builder, provider, customHeaders);
+        return builder.build();
+    }
+
+    private void applyOpenAiClientOptions(OpenAiCompatibleChatOptions.Builder builder, AiProvider provider,
+        Map<String, String> customHeaders) {
+        var proxy = openAiProxy(provider);
+        if (proxy != null) {
+            builder.proxy(proxy);
+        }
+        if (customHeaders != null && !customHeaders.isEmpty()) {
+            builder.customHeaders(Map.copyOf(customHeaders));
+        }
+    }
+
+    private void applyOpenAiClientOptions(OpenAiCompatibleEmbeddingOptions.Builder builder,
+        AiProvider provider, Map<String, String> customHeaders) {
+        var proxy = openAiProxy(provider);
+        if (proxy != null) {
+            builder.proxy(proxy);
+        }
+        if (customHeaders != null && !customHeaders.isEmpty()) {
+            builder.customHeaders(Map.copyOf(customHeaders));
+        }
+    }
+
+    private java.net.Proxy openAiProxy(AiProvider provider) {
+        var spec = provider != null ? provider.getSpec() : null;
+        if (spec == null || spec.getProxyHost() == null || spec.getProxyHost().isBlank()
+            || spec.getProxyPort() == null) {
+            return null;
+        }
+        return new java.net.Proxy(java.net.Proxy.Type.HTTP,
+            new java.net.InetSocketAddress(spec.getProxyHost().trim(), spec.getProxyPort()));
     }
 
     protected HttpClient httpClient(AiProvider provider) {

@@ -1,10 +1,10 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 
 public final class OpenAiEmbeddingOptionsFactory {
 
@@ -21,17 +21,19 @@ public final class OpenAiEmbeddingOptionsFactory {
 
         var dimensions = intOption(namespaceOptions, "dimensions", request.getDimensions());
         var user = stringOption(namespaceOptions, "user");
-        var encodingFormat = stringOption(namespaceOptions, "encodingFormat");
+        var encodingFormat = encodingFormatOption(stringOption(namespaceOptions, "encodingFormat"));
         warnUnsupportedOptions(namespaceOptions, warnings);
 
-        if (dimensions == null && user == null && encodingFormat == null) {
+        var headers = request.getHeaders() != null ? request.getHeaders() : Map.<String, String>of();
+        if (dimensions == null && user == null && encodingFormat == null && headers.isEmpty()) {
             return null;
         }
-        return OpenAiEmbeddingOptions.builder()
+        var builder = OpenAiCompatibleEmbeddingOptions.builder()
             .dimensions(dimensions)
             .user(user)
-            .encodingFormat(encodingFormat)
-            .build();
+            .encodingFormat(encodingFormat);
+        builder.customHeaders(headers);
+        return builder.build();
     }
 
     private static Integer intOption(Map<String, Object> options, String key, Integer fallback) {
@@ -48,6 +50,18 @@ public final class OpenAiEmbeddingOptionsFactory {
     private static String stringOption(Map<String, Object> options, String key) {
         var value = options.get(key);
         return value != null ? value.toString() : null;
+    }
+
+    private static OpenAiCompatibleEmbeddingOptions.EncodingFormat encodingFormatOption(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "float" -> OpenAiCompatibleEmbeddingOptions.EncodingFormat.FLOAT;
+            case "base64" -> OpenAiCompatibleEmbeddingOptions.EncodingFormat.BASE64;
+            default -> throw new IllegalArgumentException(
+                "Unsupported OpenAI-compatible embedding encodingFormat: " + value);
+        };
     }
 
     private static void warnOtherNamespaces(EmbeddingRequest request, String supportedNamespace,

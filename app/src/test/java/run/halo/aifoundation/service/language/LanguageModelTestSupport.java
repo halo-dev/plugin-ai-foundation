@@ -153,7 +153,9 @@ abstract class LanguageModelTestSupport {
     }
 
     LanguageModelProviderOptions reasoningHistoryProviderOptions() {
-        return new LanguageModelProviderOptions(true, true, null, null, null,
-            ReasoningControlOptions.unsupported());
+        return LanguageModelProviderOptions.builder()
+            .reasoningHistorySupported(true)
+            .streamToolCallsForReasoning(true)
+            .build();
     }
 }

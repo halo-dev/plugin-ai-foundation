@@ -20,7 +20,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
-import org.springframework.ai.openai.OpenAiEmbeddingOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.control.CancellationSource;
@@ -28,7 +28,7 @@ import run.halo.aifoundation.exception.EmbeddingCancelledException;
 import run.halo.aifoundation.embedding.EmbeddingLifecycle;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 
 class EmbeddingModelImplTest {
@@ -84,8 +84,8 @@ class EmbeddingModelImplTest {
 
         var captor = ArgumentCaptor.forClass(EmbeddingRequest.class);
         verify(springModel).call(captor.capture());
-        assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiEmbeddingOptions.class);
-        var options = (OpenAiEmbeddingOptions) captor.getValue().getOptions();
+        assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiCompatibleEmbeddingOptions.class);
+        var options = (OpenAiCompatibleEmbeddingOptions) captor.getValue().getOptions();
         assertThat(options.getDimensions()).isEqualTo(512);
         assertThat(options.getUser()).isEqualTo("tester");
     }
