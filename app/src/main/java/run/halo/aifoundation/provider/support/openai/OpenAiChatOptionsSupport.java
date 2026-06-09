@@ -1,11 +1,11 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 /**
  * Builds OpenAI-compatible chat options while preserving provider-specific extensions.
@@ -15,7 +15,7 @@ public final class OpenAiChatOptionsSupport {
     private OpenAiChatOptionsSupport() {
     }
 
-    public static OpenAiChatOptions buildBasic(GenerateTextRequest request,
+    public static OpenAiCompatibleChatOptions buildBasic(GenerateTextRequest request,
         String providerType, ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
         var builder = baseBuilder(request);
@@ -24,7 +24,7 @@ public final class OpenAiChatOptionsSupport {
         return builder.build();
     }
 
-    public static OpenAiChatOptions buildStructured(GenerateTextRequest request,
+    public static OpenAiCompatibleChatOptions buildStructured(GenerateTextRequest request,
         String providerType, ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
         var builder = baseBuilder(request);
@@ -34,7 +34,7 @@ public final class OpenAiChatOptionsSupport {
         return builder.build();
     }
 
-    public static OpenAiChatOptions buildToolCalling(GenerateTextRequest request,
+    public static OpenAiCompatibleChatOptions buildToolCalling(GenerateTextRequest request,
         java.util.List<ToolCallback> toolCallbacks, Set<String> toolNames, String providerType,
         ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
@@ -42,13 +42,12 @@ public final class OpenAiChatOptionsSupport {
             reasoningControlOptions, extraBodyCustomizer, false);
     }
 
-    public static OpenAiChatOptions buildToolCalling(GenerateTextRequest request,
+    public static OpenAiCompatibleChatOptions buildToolCalling(GenerateTextRequest request,
         java.util.List<ToolCallback> toolCallbacks, Set<String> toolNames, String providerType,
         ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer,
         boolean nativeStrictToolSchemas) {
         var builder = baseBuilder(request)
-            .internalToolExecutionEnabled(false)
             .toolCallbacks(toolCallbacks);
         if (nativeStrictToolSchemas) {
             OpenAiToolCallingOptions.applyNativeTools(builder, request);
@@ -60,15 +59,15 @@ public final class OpenAiChatOptionsSupport {
         return builder.build();
     }
 
-    private static OpenAiChatOptions.Builder baseBuilder(GenerateTextRequest request) {
-        return OpenAiChatOptions.builder()
+    private static OpenAiCompatibleChatOptions.Builder baseBuilder(GenerateTextRequest request) {
+        return OpenAiCompatibleChatOptions.builder()
             .temperature(request.getTemperature())
-            .maxTokens(request.getMaxOutputTokens())
             .topP(request.getTopP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .maxTokens(request.getMaxOutputTokens())
             .seed(request.getSeed())
             .stop(request.getStopSequences())
-            .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
+            .customHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
     }
 }

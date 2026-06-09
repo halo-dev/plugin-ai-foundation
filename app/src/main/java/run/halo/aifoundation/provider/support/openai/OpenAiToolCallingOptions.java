@@ -1,12 +1,10 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.tool.ToolCallback;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.tool.ToolChoice;
 
 /**
@@ -17,15 +15,15 @@ public final class OpenAiToolCallingOptions {
     private OpenAiToolCallingOptions() {
     }
 
-    public static OpenAiChatOptions build(GenerateTextRequest request,
+    public static OpenAiCompatibleChatOptions build(GenerateTextRequest request,
         java.util.List<ToolCallback> toolCallbacks, Set<String> toolNames) {
         return build(request, toolCallbacks, toolNames, ReasoningControlOptions.unsupported());
     }
 
-    public static OpenAiChatOptions build(GenerateTextRequest request,
+    public static OpenAiCompatibleChatOptions build(GenerateTextRequest request,
         java.util.List<ToolCallback> toolCallbacks, Set<String> toolNames,
         ReasoningControlOptions reasoningControlOptions) {
-        var builder = OpenAiChatOptions.builder()
+        var builder = OpenAiCompatibleChatOptions.builder()
             .temperature(request.getTemperature())
             .maxTokens(request.getMaxOutputTokens())
             .topP(request.getTopP())
@@ -33,9 +31,8 @@ public final class OpenAiToolCallingOptions {
             .frequencyPenalty(request.getFrequencyPenalty())
             .seed(request.getSeed())
             .stop(request.getStopSequences())
-            .internalToolExecutionEnabled(false)
             .toolCallbacks(toolCallbacks)
-            .httpHeaders(headers(request));
+            .customHeaders(headers(request));
         applyNativeTools(builder, request);
         reasoningControlOptions.apply(builder, request);
         applyToolChoice(builder, request.getToolChoice(), toolNames);
@@ -43,42 +40,28 @@ public final class OpenAiToolCallingOptions {
         return builder.build();
     }
 
-    public static void applyNativeTools(OpenAiChatOptions.Builder builder,
+    public static void applyNativeTools(OpenAiCompatibleChatOptions.Builder builder,
         GenerateTextRequest request) {
-        var tools = ProviderToolMetadata.from(request);
-        if (tools.stream().noneMatch(ProviderToolMetadata::hasNativeStrictMetadata)) {
-            return;
-        }
-        builder.tools(toOpenAiFunctionTools(tools));
+        // RC1 derives provider tool declarations from ToolCallback definitions.
     }
 
-    static List<OpenAiApi.FunctionTool> toOpenAiFunctionTools(List<ProviderToolMetadata> tools) {
-        return tools.stream()
-            .map(tool -> new OpenAiApi.FunctionTool(new OpenAiApi.FunctionTool.Function(
-                tool.description(),
-                tool.name(),
-                tool.inputSchema(),
-                tool.strict()
-            )))
-            .toList();
-    }
-
-    public static void applyToolChoice(OpenAiChatOptions.Builder builder, ToolChoice toolChoice,
+    public static void applyToolChoice(OpenAiCompatibleChatOptions.Builder builder, ToolChoice toolChoice,
         Set<String> toolNames) {
         if (toolChoice == null || toolChoice.getType() == null
             || toolChoice.getType() == ToolChoice.Type.AUTO) {
-            builder.toolChoice(OpenAiApi.ChatCompletionRequest.ToolChoiceBuilder.AUTO);
+            builder.toolChoice("auto");
             return;
         }
         switch (toolChoice.getType()) {
-            case NONE -> builder.toolChoice(OpenAiApi.ChatCompletionRequest.ToolChoiceBuilder.NONE);
+            case NONE -> builder.toolChoice("none");
             case REQUIRED -> builder.toolChoice("required");
             case TOOL -> {
-                builder.toolChoice(OpenAiApi.ChatCompletionRequest.ToolChoiceBuilder.function(
-                    toolChoice.getToolName()));
-                if (toolNames != null && !toolNames.isEmpty()) {
-                    builder.toolNames(toolNames);
-                }
+                var function = new java.util.LinkedHashMap<String, Object>();
+                function.put("name", toolChoice.getToolName());
+                var choice = new java.util.LinkedHashMap<String, Object>();
+                choice.put("type", "function");
+                choice.put("function", function);
+                builder.toolChoice(choice);
             }
             default -> {
             }

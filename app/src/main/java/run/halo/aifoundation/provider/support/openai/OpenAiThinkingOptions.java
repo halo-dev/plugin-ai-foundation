@@ -1,4 +1,4 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
 import java.util.Map;
 import run.halo.aifoundation.chat.GenerateTextRequest;

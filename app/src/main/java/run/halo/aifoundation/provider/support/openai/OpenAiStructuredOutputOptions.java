@@ -1,22 +1,25 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.ResponseFormat;
-import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.schema.OutputType;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions.ResponseFormat;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.schema.OutputType;
 
 /**
  * Applies Halo structured output hints to OpenAI-compatible chat options.
  */
 public final class OpenAiStructuredOutputOptions {
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
     private OpenAiStructuredOutputOptions() {
     }
 
-    public static void apply(OpenAiChatOptions.Builder builder, GenerateTextRequest request) {
+    public static void apply(OpenAiCompatibleChatOptions.Builder builder, GenerateTextRequest request) {
         var output = request.getOutput();
         if (output == null || output.getType() == null || output.getType() == OutputType.TEXT) {
             return;
@@ -45,22 +48,18 @@ public final class OpenAiStructuredOutputOptions {
         if (schema != null) {
             builder.responseFormat(ResponseFormat.builder()
                 .type(ResponseFormat.Type.JSON_SCHEMA)
-                .jsonSchema(ResponseFormat.JsonSchema.builder()
-                    .name(output.getName() != null ? output.getName() : "structured_output")
-                    .schema(Map.copyOf(schema))
-                    .strict(output.getStrict())
-                    .build())
+                .jsonSchema(writeJson(Map.copyOf(schema)))
                 .build());
         }
     }
 
-    public static OpenAiChatOptions buildBasic(GenerateTextRequest request) {
+    public static OpenAiCompatibleChatOptions buildBasic(GenerateTextRequest request) {
         return buildBasic(request, ReasoningControlOptions.unsupported());
     }
 
-    public static OpenAiChatOptions buildBasic(GenerateTextRequest request,
+    public static OpenAiCompatibleChatOptions buildBasic(GenerateTextRequest request,
         ReasoningControlOptions reasoningControlOptions) {
-        var builder = OpenAiChatOptions.builder()
+        var builder = OpenAiCompatibleChatOptions.builder()
             .temperature(request.getTemperature())
             .maxTokens(request.getMaxOutputTokens())
             .topP(request.getTopP())
@@ -68,9 +67,17 @@ public final class OpenAiStructuredOutputOptions {
             .frequencyPenalty(request.getFrequencyPenalty())
             .seed(request.getSeed())
             .stop(request.getStopSequences())
-            .httpHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
+            .customHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
         reasoningControlOptions.apply(builder, request);
         apply(builder, request);
         return builder.build();
+    }
+
+    private static String writeJson(Object value) {
+        try {
+            return JSON_MAPPER.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to serialize structured output schema", e);
+        }
     }
 }

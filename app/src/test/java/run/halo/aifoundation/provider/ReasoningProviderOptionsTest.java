@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
 
@@ -81,9 +81,9 @@ class ReasoningProviderOptionsTest {
             .hasMessageContaining("disabled reasoning is not supported by provider type: minimax");
     }
 
-    private OpenAiChatOptions openAiOptions(AiProviderType providerType,
+    private OpenAiCompatibleChatOptions openAiOptions(AiProviderType providerType,
         GenerateTextRequest request) {
-        return (OpenAiChatOptions) providerType.languageModelProviderOptions()
+        return (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory()
             .build(request);
     }

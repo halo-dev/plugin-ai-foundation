@@ -8,6 +8,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.part.PartType;
@@ -82,6 +83,14 @@ public final class LanguageModelMessageMapper {
             .map(part -> new AssistantMessage.ToolCall(part.getToolCallId(), "function",
                 part.getToolName(), writeJson(part.getInput())))
             .toList();
+        if ("deepseek".equals(providerType)) {
+            return DeepSeekAssistantMessage.builder()
+                .content(textContent(message))
+                .reasoningContent(reasoningContent(message.getContent()))
+                .properties(assistantProperties(message))
+                .toolCalls(toolCalls)
+                .build();
+        }
         return AssistantMessage.builder()
             .content(textContent(message))
             .properties(assistantProperties(message))

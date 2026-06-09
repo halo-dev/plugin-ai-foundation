@@ -1,9 +1,8 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 
 /**
@@ -14,7 +13,7 @@ public final class OpenAiExtraBodyOptions {
     private OpenAiExtraBodyOptions() {
     }
 
-    public static void apply(OpenAiChatOptions.Builder builder, GenerateTextRequest request,
+    public static void apply(OpenAiCompatibleChatOptions.Builder builder, GenerateTextRequest request,
         String providerType, BiConsumer<Map<String, Object>, GenerateTextRequest> customizer) {
         var extraBody = new LinkedHashMap<String, Object>();
         var options = request.getProviderOptions() != null

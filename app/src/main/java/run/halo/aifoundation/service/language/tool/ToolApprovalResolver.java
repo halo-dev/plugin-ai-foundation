@@ -20,12 +20,14 @@ public final class ToolApprovalResolver {
         var consumedApprovalIds = new java.util.HashSet<String>();
         var resolvedToolCallIds = new java.util.HashSet<String>();
 
-        for (var message : nullSafe(messages)) {
+        var safeMessages = nullSafe(messages);
+        for (var messageIndex = 0; messageIndex < safeMessages.size(); messageIndex++) {
+            var message = safeMessages.get(messageIndex);
             for (var part : nullSafe(message.getContent())) {
                 if (PartType.isToolApprovalRequest(part.getType())) {
                     requests.put(part.getApprovalId(), new PendingApproval(part));
                 } else if (PartType.isToolApprovalResponse(part.getType())) {
-                    responses.add(new ResponseEntry(part));
+                    responses.add(new ResponseEntry(part, messageIndex));
                 } else if (PartType.isToolResponse(part.getType())
                     && part.getToolCallId() != null) {
                     resolvedToolCallIds.add(part.getToolCallId());
@@ -55,7 +57,8 @@ public final class ToolApprovalResolver {
                     + response.approvalId());
             }
             if (consumedApprovalIds.contains(response.approvalId())
-                || resolvedToolCallIds.contains(request.toolCallId())) {
+                || resolvedToolCallIds.contains(request.toolCallId())
+                || hasProviderContinuationAfter(safeMessages, response.messageIndex())) {
                 continue;
             }
             unresolved.add(new ResolvedApproval(request, response));
@@ -77,6 +80,36 @@ public final class ToolApprovalResolver {
 
     private static List<ModelMessagePart> nullSafe(java.util.Collection<ModelMessagePart> parts) {
         return parts != null ? List.copyOf(parts) : List.of();
+    }
+
+    private static boolean hasProviderContinuationAfter(List<ModelMessage> messages,
+        int messageIndex) {
+        for (var index = messageIndex + 1; index < messages.size(); index++) {
+            var message = messages.get(index);
+            if (message == null || message.getRole() == null) {
+                continue;
+            }
+            switch (message.getRole()) {
+                case USER -> {
+                    return true;
+                }
+                case ASSISTANT -> {
+                    if (hasAssistantProviderContent(message)) {
+                        return true;
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasAssistantProviderContent(ModelMessage message) {
+        return nullSafe(message.getContent()).stream()
+            .anyMatch(part -> PartType.isText(part.getType())
+                || PartType.isReasoning(part.getType())
+                || PartType.isToolCall(part.getType()));
     }
 
     public record ApprovalResolution(List<ResolvedApproval> approvals) {
@@ -139,11 +172,12 @@ public final class ToolApprovalResolver {
         String toolName,
         Boolean approved,
         String reason,
-        Map<String, Object> providerMetadata
+        Map<String, Object> providerMetadata,
+        int messageIndex
     ) {
-        ResponseEntry(ModelMessagePart part) {
+        ResponseEntry(ModelMessagePart part, int messageIndex) {
             this(part.getApprovalId(), part.getToolCallId(), part.getToolName(),
-                part.getApproved(), part.getReason(), part.getProviderOptions());
+                part.getApproved(), part.getReason(), part.getProviderOptions(), messageIndex);
         }
 
         ToolApprovalResponse toResponse() {

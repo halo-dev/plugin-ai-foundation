@@ -2,9 +2,6 @@ package run.halo.aifoundation.provider;
 
 import java.util.List;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -78,17 +75,6 @@ public class GiteeMoArkProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        var openAiApi = OpenAiApi.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .completionsPath(COMPLETIONS_PATH)
-            .embeddingsPath(EMBEDDINGS_PATH)
-            .webClientBuilder(webClientBuilder(provider))
-            .restClientBuilder(restClientBuilder(provider))
-            .build();
-        return OpenAiChatModel.builder()
-            .openAiApi(openAiApi)
-            .defaultOptions(OpenAiChatOptions.builder().model(modelId).build())
-            .build();
+        return buildOpenAiCompatibleChatModel(provider, apiKey, modelId);
     }
 }

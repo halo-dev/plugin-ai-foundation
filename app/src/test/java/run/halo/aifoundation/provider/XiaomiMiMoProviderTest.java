@@ -3,9 +3,9 @@ package run.halo.aifoundation.provider;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.openai.OpenAiChatModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
 import run.halo.app.extension.Metadata;
 
 class XiaomiMiMoProviderTest {
@@ -41,10 +41,10 @@ class XiaomiMiMoProviderTest {
     }
 
     @Test
-    void buildChatModel_returnsOpenAiChatModel() {
+    void buildChatModel_returnsOpenAiCompatibleChatModel() {
         var chatModel = providerType.buildChatModel(provider(null), "sk-test", "mimo-v2.5");
 
-        assertThat(chatModel).isInstanceOf(OpenAiChatModel.class);
+        assertThat(chatModel).isInstanceOf(OpenAiCompatibleChatModel.class);
     }
 
     @Test

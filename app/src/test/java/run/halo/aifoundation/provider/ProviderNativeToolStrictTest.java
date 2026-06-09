@@ -9,7 +9,8 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.deepseek.DeepSeekChatOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.tool.ToolDefinition;
 
@@ -17,13 +18,12 @@ class ProviderNativeToolStrictTest {
 
     @ParameterizedTest
     @MethodSource("nativeStrictProviders")
-    void documentedNativeStrictProvidersApplyStrictToolSchema(AiProviderType providerType) {
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+    void rc1OpenAiProvidersCannotApplyLegacyNativeStrictToolSchema(AiProviderType providerType) {
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(strictRequest(), List.of(), Set.of());
 
-        assertThat(options.getTools()).singleElement()
-            .satisfies(tool -> assertThat(tool.getFunction().getStrict()).isTrue());
+        assertThat(options.getToolCallbacks()).isEmpty();
     }
 
     @ParameterizedTest
@@ -33,8 +33,8 @@ class ProviderNativeToolStrictTest {
             .toolCallingChatOptionsFactory()
             .build(strictRequest(), List.of(), Set.of());
 
-        if (options instanceof OpenAiChatOptions openAiOptions) {
-            assertThat(openAiOptions.getTools()).isNullOrEmpty();
+        if (options instanceof OpenAiCompatibleChatOptions openAiOptions) {
+            assertThat(openAiOptions.getToolCallbacks()).isEmpty();
         }
     }
 
@@ -44,14 +44,23 @@ class ProviderNativeToolStrictTest {
             .toolCallingChatOptionsFactory()
             .build(strictRequest(), List.of(), Set.of());
 
-        assertThat(options).isNotInstanceOf(OpenAiChatOptions.class);
+        assertThat(options).isNotInstanceOf(OpenAiCompatibleChatOptions.class);
+    }
+
+    @Test
+    void deepSeekDedicatedProviderAppliesNativeStrictToolSchema() {
+        var options = (DeepSeekChatOptions) new DeepSeekProvider().languageModelProviderOptions()
+            .toolCallingChatOptionsFactory()
+            .build(strictRequest(), List.of(), Set.of());
+
+        assertThat(options.getTools()).singleElement()
+            .satisfies(tool -> assertThat(tool.getFunction().getStrict()).isTrue());
     }
 
     static Stream<AiProviderType> nativeStrictProviders() {
         return Stream.of(
             new OpenAiProvider(),
-            new OpenAiLikeProvider(),
-            new DeepSeekProvider()
+            new OpenAiLikeProvider()
         );
     }
 

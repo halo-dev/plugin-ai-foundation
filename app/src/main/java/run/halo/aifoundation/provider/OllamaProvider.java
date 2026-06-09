@@ -100,7 +100,7 @@ public class OllamaProvider extends AbstractAiProviderType {
         var ollamaApi = buildOllamaApi(provider);
         return OllamaChatModel.builder()
             .ollamaApi(ollamaApi)
-            .defaultOptions(OllamaChatOptions.builder().model(modelId).build())
+            .options(OllamaChatOptions.builder().model(modelId).build())
             .modelManagementOptions(ModelManagementOptions.defaults())
             .build();
     }
@@ -108,12 +108,13 @@ public class OllamaProvider extends AbstractAiProviderType {
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoningControlOptions = ReasoningControlOptions.ollama();
-        return new LanguageModelProviderOptions(false, false,
-            this::buildChatOptions,
-            (request, toolCallbacks, toolNames) -> buildToolCallingChatOptions(request,
-                toolCallbacks, toolNames),
-            this::buildChatOptions,
-            reasoningControlOptions);
+        return LanguageModelProviderOptions.builder()
+            .seedSupported(true)
+            .chatOptionsFactory(this::buildChatOptions)
+            .toolCallingChatOptionsFactory(this::buildToolCallingChatOptions)
+            .structuredOutputChatOptionsFactory(this::buildChatOptions)
+            .reasoningControlOptions(reasoningControlOptions)
+            .build();
     }
 
     @Override
@@ -121,7 +122,7 @@ public class OllamaProvider extends AbstractAiProviderType {
         var ollamaApi = buildOllamaApi(provider);
         return OllamaEmbeddingModel.builder()
             .ollamaApi(ollamaApi)
-            .defaultOptions(OllamaEmbeddingOptions.builder().model(modelId).build())
+            .options(OllamaEmbeddingOptions.builder().model(modelId).build())
             .modelManagementOptions(ModelManagementOptions.defaults())
             .build();
     }
@@ -175,11 +176,7 @@ public class OllamaProvider extends AbstractAiProviderType {
     private OllamaChatOptions buildToolCallingChatOptions(GenerateTextRequest request,
         List<ToolCallback> toolCallbacks, java.util.Set<String> toolNames) {
         var builder = baseChatOptionsBuilder(request)
-            .internalToolExecutionEnabled(false)
             .toolCallbacks(toolCallbacks);
-        if (toolNames != null && !toolNames.isEmpty()) {
-            builder.toolNames(toolNames);
-        }
         applyReasoning(builder, request);
         return builder.build();
     }

@@ -9,12 +9,12 @@ import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.openai.OpenAiChatModel;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
 import run.halo.app.extension.Metadata;
 
 class GiteeMoArkProviderTest {
@@ -51,11 +51,11 @@ class GiteeMoArkProviderTest {
     }
 
     @Test
-    void buildChatModel_returnsOpenAiChatModel() {
+    void buildChatModel_returnsOpenAiCompatibleChatModel() {
         var chatModel = providerType.buildChatModel(provider(null), "sk-test",
             "Qwen2.5-72B-Instruct");
 
-        assertThat(chatModel).isInstanceOf(OpenAiChatModel.class);
+        assertThat(chatModel).isInstanceOf(OpenAiCompatibleChatModel.class);
     }
 
     @Test

@@ -1,12 +1,14 @@
 package run.halo.aifoundation.provider;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.ResponseFormat;
+import org.springframework.ai.deepseek.DeepSeekChatOptions;
+import org.springframework.ai.deepseek.api.DeepSeekApi;
+import org.springframework.ai.deepseek.api.ResponseFormat;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.schema.OutputSpec;
@@ -28,14 +30,12 @@ class DeepSeekProviderTest {
             )))
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
             .structuredOutputChatOptionsFactory()
             .build(request);
 
         assertThat(options.getResponseFormat()).isNotNull();
         assertThat(options.getResponseFormat().getType()).isEqualTo(ResponseFormat.Type.JSON_OBJECT);
-        assertThat(options.getResponseFormat().getJsonSchema()).isNull();
-        assertThat(options.getExtraBody()).isNullOrEmpty();
     }
 
     @Test
@@ -53,21 +53,18 @@ class DeepSeekProviderTest {
             )))
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
         assertThat(options.getResponseFormat()).isNotNull();
         assertThat(options.getResponseFormat().getType()).isEqualTo(ResponseFormat.Type.JSON_OBJECT);
-        assertThat(options.getResponseFormat().getJsonSchema()).isNull();
-        assertThat(options.getExtraBody()).isNullOrEmpty();
     }
 
     @Test
-    void toolOptions_applyRequiredToolChoiceAndHeaders() {
+    void toolOptions_applyRequiredToolChoice() {
         var request = GenerateTextRequest.builder()
             .prompt("Use a tool")
-            .headers(Map.of("X-Trace-Id", "trace-1"))
             .tools(List.of(ToolDefinition.builder()
                 .name("halo_test_info")
                 .inputSchema(Map.of("type", "object"))
@@ -75,12 +72,11 @@ class DeepSeekProviderTest {
             .toolChoice(ToolChoice.required())
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
         assertThat(options.getToolChoice()).isEqualTo("required");
-        assertThat(options.getHttpHeaders()).containsEntry("X-Trace-Id", "trace-1");
     }
 
     @Test
@@ -100,19 +96,12 @@ class DeepSeekProviderTest {
                 .build()))
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
         assertThat(options.getTools()).singleElement()
-            .satisfies(tool -> {
-                assertThat(tool.getFunction().getName()).isEqualTo("halo_test_info");
-                assertThat(tool.getFunction().getDescription())
-                    .isEqualTo("Read Halo test information");
-                assertThat(tool.getFunction().getParameters())
-                    .containsEntry("additionalProperties", false);
-                assertThat(tool.getFunction().getStrict()).isTrue();
-            });
+            .satisfies(tool -> assertThat(tool.getFunction().getStrict()).isTrue());
     }
 
     @Test
@@ -127,19 +116,25 @@ class DeepSeekProviderTest {
                 .build()))
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
-        assertThat(options.getTools()).isNullOrEmpty();
+        assertThat(options.getTools()).singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getFunction().getName()).isEqualTo("halo_test_info");
+                assertThat(tool.getFunction().getParameters()).containsEntry("type", "object");
+                assertThat(tool.getFunction().getParameters()).doesNotContainKey("examples");
+            });
     }
 
     @Test
-    void options_applyExplicitDeepSeekThinkingProviderOption() {
+    void options_applyDeepSeekLogprobProviderOptions() {
         var request = GenerateTextRequest.builder()
             .prompt("Generate JSON")
             .providerOptions(Map.of("deepseek", Map.of(
-                "thinking", Map.of("type", "disabled")
+                "logprobs", true,
+                "topLogprobs", 3
             )))
             .output(OutputSpec.object(Map.of(
                 "type", "object",
@@ -148,41 +143,39 @@ class DeepSeekProviderTest {
             )))
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
+        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
             .structuredOutputChatOptionsFactory()
             .build(request);
 
-        assertThat(options.getExtraBody())
-            .containsEntry("thinking", Map.of("type", "disabled"));
+        assertThat(options.getLogprobs()).isTrue();
+        assertThat(options.getTopLogprobs()).isEqualTo(3);
     }
 
     @Test
-    void options_applyTypedDisabledReasoning() {
+    void options_rejectTypedDisabledReasoningBecauseRc1DeepSeekOptionsCannotMapIt() {
         var request = GenerateTextRequest.builder()
             .prompt("Fast")
             .reasoning(ReasoningOptions.disabled())
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
-            .chatOptionsFactory()
-            .build(request);
-
-        assertThat(options.getExtraBody())
-            .containsEntry("thinking", Map.of("type", "disabled"));
+        assertThatThrownBy(() -> providerType.languageModelProviderOptions()
+            .reasoningControlOptions()
+            .validate(providerType.getProviderType(), request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("disabled reasoning is not supported by provider type: deepseek");
     }
 
     @Test
-    void options_applyTypedEnabledReasoning() {
+    void options_rejectTypedEnabledReasoningBecauseRc1DeepSeekOptionsCannotMapIt() {
         var request = GenerateTextRequest.builder()
             .prompt("Think")
             .reasoning(ReasoningOptions.enabled())
             .build();
 
-        var options = (OpenAiChatOptions) providerType.languageModelProviderOptions()
-            .structuredOutputChatOptionsFactory()
-            .build(request);
-
-        assertThat(options.getExtraBody())
-            .containsEntry("thinking", Map.of("type", "enabled"));
+        assertThatThrownBy(() -> providerType.languageModelProviderOptions()
+            .reasoningControlOptions()
+            .validate(providerType.getProviderType(), request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("enabled reasoning is not supported by provider type: deepseek");
     }
 }

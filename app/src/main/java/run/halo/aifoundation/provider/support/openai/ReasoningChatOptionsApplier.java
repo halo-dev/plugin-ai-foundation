@@ -1,6 +1,5 @@
-package run.halo.aifoundation.provider.support;
+package run.halo.aifoundation.provider.support.openai;
 
-import org.springframework.ai.openai.OpenAiChatOptions;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 
 /**
@@ -9,5 +8,5 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 @FunctionalInterface
 public interface ReasoningChatOptionsApplier {
 
-    void apply(OpenAiChatOptions.Builder builder, GenerateTextRequest request);
+    void apply(OpenAiCompatibleChatOptions.Builder builder, GenerateTextRequest request);
 }

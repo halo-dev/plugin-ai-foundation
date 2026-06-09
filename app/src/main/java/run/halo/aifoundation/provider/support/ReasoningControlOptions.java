@@ -3,7 +3,8 @@ package run.halo.aifoundation.provider.support;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
+import run.halo.aifoundation.provider.support.openai.ReasoningChatOptionsApplier;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.message.ModelMessageRole;
@@ -32,10 +33,6 @@ public record ReasoningControlOptions(
 
     public static ReasoningControlOptions unsupported() {
         return new ReasoningControlOptions(false, false, false, Set.of(), Set.of(), null);
-    }
-
-    public static ReasoningControlOptions deepSeek(ReasoningChatOptionsApplier applier) {
-        return thinkingType(applier);
     }
 
     public static ReasoningControlOptions thinkingType(ReasoningChatOptionsApplier applier) {
@@ -97,7 +94,7 @@ public record ReasoningControlOptions(
         return reasoning != null && reasoning.isExplicit();
     }
 
-    public void apply(OpenAiChatOptions.Builder builder, GenerateTextRequest request) {
+    public void apply(OpenAiCompatibleChatOptions.Builder builder, GenerateTextRequest request) {
         if (chatOptionsApplier != null) {
             chatOptionsApplier.apply(builder, request);
         }

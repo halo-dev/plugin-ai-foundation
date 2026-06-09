@@ -4,9 +4,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
@@ -15,8 +12,7 @@ import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.provider.support.OpenAiChatOptionsSupport;
-import run.halo.aifoundation.provider.support.OpenAiThinkingOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiThinkingOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Component
@@ -88,18 +84,7 @@ public class KimiProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        var openAiApi = OpenAiApi.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .completionsPath(COMPLETIONS_PATH)
-            .embeddingsPath(EMBEDDINGS_PATH)
-            .webClientBuilder(webClientBuilder(provider))
-            .restClientBuilder(restClientBuilder(provider))
-            .build();
-        return OpenAiChatModel.builder()
-            .openAiApi(openAiApi)
-            .defaultOptions(OpenAiChatOptions.builder().model(modelId).build())
-            .build();
+        return buildOpenAiCompatibleChatModel(provider, apiKey, modelId);
     }
 
     @Override
@@ -121,15 +106,8 @@ public class KimiProvider extends AbstractAiProviderType {
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoningControlOptions = ReasoningControlOptions.thinkingType();
-        return new LanguageModelProviderOptions(false, false,
-            request -> OpenAiChatOptionsSupport.buildBasic(request, getProviderType(),
-                reasoningControlOptions, OpenAiThinkingOptions::applyThinkingType),
-            (request, toolCallbacks, toolNames) -> OpenAiChatOptionsSupport.buildToolCalling(
-                request, toolCallbacks, toolNames, getProviderType(), reasoningControlOptions,
-                OpenAiThinkingOptions::applyThinkingType),
-            request -> OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
-                reasoningControlOptions, OpenAiThinkingOptions::applyThinkingType),
-            reasoningControlOptions);
+        return openAiCompatibleLanguageModelProviderOptions(reasoningControlOptions,
+            OpenAiThinkingOptions::applyThinkingType);
     }
 
     private Set<ModelFeature> languageFeatures(java.util.Map<?, ?> node) {
