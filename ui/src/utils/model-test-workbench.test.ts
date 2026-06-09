@@ -16,6 +16,7 @@ import {
   isTerminalTextStreamPart,
   parseProviderOptionsJson,
   parseSseJsonLines,
+  readTestUiMessageChatStream,
   testChatStreamUrl,
   testUiMessageChatStreamUrl,
   toToolEvent,
@@ -766,6 +767,59 @@ describe('testUiMessageChatStreamUrl', () => {
   })
 })
 
+describe('readTestUiMessageChatStream', () => {
+  it('reads Halo UI Message SSE chunks through the shared package transport', async () => {
+    const originalFetch = globalThis.fetch
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ input, init })
+      return new Response(
+        streamFromText(
+          'data: {"type":"start","messageId":"assistant-ui"}\n\n'
+            + 'data: {"type":"text-delta","id":"answer","delta":"Hi"}\n\n'
+            + 'data: [DONE]\n\n',
+        ),
+        {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'X-Halo-AI-UI-Message-Stream': 'v1',
+          },
+        },
+      )
+    }) as typeof fetch
+
+    try {
+      const chunks: unknown[] = []
+      await readTestUiMessageChatStream({
+        modelName: 'model/name',
+        requestBody: {
+          id: 'chat-1',
+          messages: [],
+          trigger: 'submit-message',
+        },
+        streamOptions: { testToolEnabled: true },
+        signal: new AbortController().signal,
+        onChunks: (nextChunks) => chunks.push(...nextChunks),
+      })
+
+      expect(String(calls[0]?.input)).toBe(
+        '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/ui-message/stream?enableTestTool=true',
+      )
+      expect(JSON.parse(String(calls[0]?.init?.body))).toMatchObject({
+        id: 'chat-1',
+        messages: [],
+        trigger: 'submit-message',
+      })
+      expect(chunks).toEqual([
+        { type: 'start', messageId: 'assistant-ui' },
+        { type: 'text-delta', id: 'answer', delta: 'Hi' },
+      ])
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})
+
 describe('applyWorkbenchStreamPart', () => {
   it('accumulates text, reasoning, response messages, warnings, and finish state', () => {
     const message: WorkbenchMessage = {
@@ -1148,4 +1202,13 @@ function model(
       adapterType: 'openai-chat',
     },
   }
+}
+
+function streamFromText(text: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text))
+      controller.close()
+    },
+  })
 }

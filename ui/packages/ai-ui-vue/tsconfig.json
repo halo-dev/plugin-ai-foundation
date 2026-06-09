@@ -1,0 +1,16 @@
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "include": ["src/**/*.ts", "src/**/*.test.ts"],
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "rootDir": "src",
+    "strict": true,
+    "target": "ES2022",
+    "types": ["@rstest/core/importMeta"]
+  }
+}

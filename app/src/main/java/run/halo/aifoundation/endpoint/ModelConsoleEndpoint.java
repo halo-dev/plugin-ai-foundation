@@ -13,6 +13,7 @@ import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -217,6 +218,41 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                             + "ends with data: [DONE].")
                         .implementation(UIMessageChunk.class))
             )
+            .POST("models/{name}/test-completion/stream", this::testCompletionStream,
+                builder -> builder.operationId("TestModelCompletionStream")
+                    .description("Test prompt completion with plain text stream response.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(TestCompletionStreamRequest.class))
+                    .response(responseBuilder()
+                        .description("Plain text stream containing generated text deltas.")
+                        .implementation(String.class))
+            )
+            .POST("models/{name}/test-object/stream", this::testObjectStream,
+                builder -> builder.operationId("TestModelObjectStream")
+                    .description("Test structured object generation with plain JSON text stream response.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(TestObjectStreamRequest.class))
+                    .response(responseBuilder()
+                        .description("Plain text stream containing generated JSON text deltas. "
+                            + "The final generated value is validated as structured output.")
+                        .implementation(String.class))
+            )
             .POST("models/{name}/test-embedding", this::testEmbedding,
                 builder -> builder.operationId("TestModelEmbedding")
                     .description("Test embedding generation with embedding settings and diagnostics.")
@@ -367,6 +403,37 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .contentType(MediaType.TEXT_EVENT_STREAM)
             .headers(headers -> response.headers().forEach(headers::set))
             .body(flux, ServerSentEvent.class);
+    }
+
+    private Mono<ServerResponse> testCompletionStream(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testCompletionStream: modelName={}", modelName);
+
+        return request.bodyToMono(TestCompletionStreamRequest.class)
+            .flatMap(body -> validateTestCompletionRequest(body).then(Mono.defer(() -> {
+                var generation = completionRequest(body).build();
+                return aiModelService.languageModel(modelName)
+                    .map(languageModel -> languageModel.streamText(generation))
+                    .flatMap(result -> ServerResponse.ok()
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body(result.textStream(), String.class));
+            })));
+    }
+
+    private Mono<ServerResponse> testObjectStream(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testObjectStream: modelName={}", modelName);
+
+        return request.bodyToMono(TestObjectStreamRequest.class)
+            .flatMap(body -> validateTestObjectRequest(body).then(Mono.defer(() -> {
+                var generation = objectRequest(body).build();
+                return aiModelService.languageModel(modelName)
+                    .map(languageModel -> languageModel.streamText(generation))
+                    .flatMap(result -> ServerResponse.ok()
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body(result.textStream()
+                            .concatWith(result.result().then(Mono.empty())), String.class));
+            })));
     }
 
     private Mono<ServerResponse> testEmbedding(ServerRequest request) {
@@ -649,6 +716,35 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return Mono.empty();
     }
 
+    private Mono<Void> validateTestCompletionRequest(TestCompletionStreamRequest request) {
+        if (request == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "request body is required"));
+        }
+        if (request.getPrompt() == null || request.getPrompt().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "prompt must not be blank"));
+        }
+        return Mono.empty();
+    }
+
+    private Mono<Void> validateTestObjectRequest(TestObjectStreamRequest request) {
+        if (request == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "request body is required"));
+        }
+        if (request.getInput() == null || request.getInput().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "input must not be blank"));
+        }
+        try {
+            objectOutput(request);
+        } catch (ResponseStatusException e) {
+            return Mono.error(e);
+        }
+        return Mono.empty();
+    }
+
     private Mono<Void> validateTestEmbeddingRequest(TestEmbeddingRequest request) {
         if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -710,6 +806,108 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private GenerateTextRequest.GenerateTextRequestBuilder completionRequest(
+        TestCompletionStreamRequest request) {
+        return GenerateTextRequest.builder()
+            .prompt(request.getPrompt())
+            .system(request.getSystem())
+            .temperature(request.getTemperature())
+            .topP(request.getTopP())
+            .topK(request.getTopK())
+            .presencePenalty(request.getPresencePenalty())
+            .frequencyPenalty(request.getFrequencyPenalty())
+            .stopSequences(request.getStopSequences())
+            .maxOutputTokens(request.getMaxOutputTokens())
+            .seed(request.getSeed())
+            .maxRetries(request.getMaxRetries())
+            .providerOptions(request.getProviderOptions())
+            .reasoning(request.getReasoning())
+            .headers(request.getHeaders())
+            .metadata(request.getMetadata())
+            .context(request.getContext());
+    }
+
+    private GenerateTextRequest.GenerateTextRequestBuilder objectRequest(
+        TestObjectStreamRequest request) {
+        return completionRequest(request)
+            .prompt(request.getInput())
+            .output(objectOutput(request));
+    }
+
+    private run.halo.aifoundation.schema.OutputSpec objectOutput(
+        TestObjectStreamRequest request) {
+        if (request.getOutput() != null && !request.getOutput().isEmpty()) {
+            return outputSpecFromMap(request.getOutput());
+        }
+        if (request.getSchema() == null || request.getSchema().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "schema or output must be provided");
+        }
+        return run.halo.aifoundation.schema.OutputSpec.object(request.getSchema());
+    }
+
+    private run.halo.aifoundation.schema.OutputSpec outputSpecFromMap(Map<String, Object> output) {
+        var type = outputType(output.get("type"));
+        if (type != run.halo.aifoundation.schema.OutputType.OBJECT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "output.type must be object");
+        }
+        return run.halo.aifoundation.schema.OutputSpec.builder()
+            .type(type)
+            .name(stringValue(output.get("name")))
+            .description(stringValue(output.get("description")))
+            .schema(objectMapValue(output.get("schema")))
+            .strict(booleanValue(output.get("strict")))
+            .providerOptions(providerOptionsValue(output.get("providerOptions")))
+            .build();
+    }
+
+    private run.halo.aifoundation.schema.OutputType outputType(Object value) {
+        if (value == null) {
+            return run.halo.aifoundation.schema.OutputType.OBJECT;
+        }
+        var normalized = String.valueOf(value).trim().replace('-', '_').toUpperCase();
+        try {
+            return run.halo.aifoundation.schema.OutputType.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "unsupported output.type: " + value, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> objectMapValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "schema must be an object");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Map<String, Object>> providerOptionsValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Map<String, Object>>) map;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "providerOptions must be an object");
+    }
+
+    private static Boolean booleanValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return Boolean.parseBoolean(String.valueOf(value));
     }
 
     private static UIMessageChatRequest<Map<String, Object>> toUiMessageChatRequest(
@@ -858,6 +1056,38 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Integer maxParallelCalls;
         private Integer maxRetries;
         private Map<String, Map<String, Object>> providerOptions;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestCompletionStreamRequest {
+        private String prompt;
+        private String system;
+        private Integer maxOutputTokens;
+        private Double temperature;
+        private Double topP;
+        private Integer topK;
+        private Double presencePenalty;
+        private Double frequencyPenalty;
+        private List<String> stopSequences;
+        private Integer seed;
+        private Integer maxRetries;
+        private Map<String, Map<String, Object>> providerOptions;
+        private run.halo.aifoundation.chat.ReasoningOptions reasoning;
+        private Map<String, String> headers;
+        private Map<String, Object> metadata;
+        private Map<String, Object> context;
+    }
+
+    @Data
+    @EqualsAndHashCode(callSuper = true)
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestObjectStreamRequest extends TestCompletionStreamRequest {
+        private String input;
+        private Map<String, Object> schema;
+        private Map<String, Object> output;
     }
 
     @Data

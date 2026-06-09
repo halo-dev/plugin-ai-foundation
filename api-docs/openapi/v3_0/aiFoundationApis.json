@@ -5,7 +5,7 @@
     "version" : "2.24.2"
   },
   "servers" : [ {
-    "url" : "http://localhost:63150",
+    "url" : "http://localhost:34567",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -798,6 +798,44 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-completion/stream" : {
+      "post" : {
+        "description" : "Test prompt completion with plain text stream response.",
+        "operationId" : "TestModelCompletionStream",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestCompletionStreamRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Plain text stream containing generated text deltas."
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-embedding" : {
       "post" : {
         "description" : "Test embedding generation with embedding settings and diagnostics.",
@@ -831,6 +869,44 @@
               }
             },
             "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-object/stream" : {
+      "post" : {
+        "description" : "Test structured object generation with plain JSON text stream response.",
+        "operationId" : "TestModelObjectStream",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestObjectStreamRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Plain text stream containing generated JSON text deltas. The final generated value is validated as structured output."
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
@@ -2079,6 +2155,85 @@
           }
         }
       },
+      "TestCompletionStreamRequest" : {
+        "type" : "object",
+        "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "prompt" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "TestEmbeddingRequest" : {
         "type" : "object",
         "properties" : {
@@ -2149,6 +2304,100 @@
             "items" : {
               "$ref" : "#/components/schemas/EmbeddingWarning"
             }
+          }
+        }
+      },
+      "TestObjectStreamRequest" : {
+        "type" : "object",
+        "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "input" : {
+            "type" : "string"
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "output" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "prompt" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "schema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
           }
         }
       },

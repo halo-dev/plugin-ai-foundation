@@ -154,6 +154,150 @@ Map<String, Object> requestMap =
 缺少必填字段会抛出 `InvalidUIMessageException`；HTTP 接口通常应把它转换成
 `400 Bad Request`。业务语义校验仍使用 `UIMessageValidators`。
 
+## Vue 前端接入
+
+Vue 前端可以使用 `@halo-dev/ai-ui-vue` 直接消费 Halo UIMessage SSE 协议：
+
+```ts
+import { DefaultChatTransport, useChat } from '@halo-dev/ai-ui-vue'
+
+const chat = useChat({
+  id: 'conversation-1',
+  transport: new DefaultChatTransport({
+    api: '/apis/example.halo.run/v1alpha1/chat/stream',
+  }),
+})
+
+await chat.sendMessage({ text: '你好' })
+```
+
+`DefaultChatTransport` 会向后端发送 `UIMessageChatRequest`：
+
+```json
+{
+  "id": "conversation-1",
+  "messages": [],
+  "trigger": "submit-message",
+  "messageId": null
+}
+```
+
+响应必须是 Halo UIMessage SSE：
+
+```http
+Content-Type: text/event-stream
+X-Halo-AI-UI-Message-Stream: v1
+```
+
+每个 SSE `data:` 是一个 JSON `UIMessageChunk`，正常结束时发送 `data: [DONE]`。
+如果响应带有 `X-Halo-AI-UI-Message-Stream`，前端会校验它必须为 `v1`。
+
+`useChat` 暴露 `messages`、`status`、`error`、`isLoading`，以及 `sendMessage`、
+`regenerate`、`stop`、`setMessages`、`clearError`、`addToolOutput`、
+`addToolResult`、`addToolError`、`addToolApprovalResponse`。同一个 `id` 的多个 `useChat`
+调用会共享消息状态。`addToolOutput` 和 `addToolApprovalResponse` 会从已有 assistant
+message parts 中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
+
+如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成
+assistant 的 text part，但不会提供工具、reasoning、data、source/file 等 UIMessage
+事件。
+
+## Completion 和 Object 流
+
+`@halo-dev/ai-ui-vue` 还提供两个文本流 composable：
+
+```ts
+import { experimental_useObject, jsonSchema, useCompletion } from '@halo-dev/ai-ui-vue'
+
+const completion = useCompletion({
+  api: '/apis/example.halo.run/v1alpha1/completion/stream',
+  body: { temperature: 0.2 },
+})
+
+await completion.complete('写一个标题')
+
+const object = experimental_useObject<{ title: string; summary: string }>({
+  api: '/apis/example.halo.run/v1alpha1/object/stream',
+  schema: jsonSchema({
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      summary: { type: 'string' },
+    },
+    required: ['title', 'summary'],
+  }),
+})
+
+await object.submit('总结这篇文章')
+```
+
+`useCompletion` 会发送 `{ "prompt": "...", ...body }`，并读取普通文本流。
+
+`experimental_useObject` 会发送 `{ "input": "...", "schema": {...}, "output": {...}, ...body }`。
+其中 `schema` 是 JSON Schema，`output` 默认是：
+
+```json
+{
+  "type": "object",
+  "schema": {
+    "type": "object"
+  }
+}
+```
+
+后端应返回模型生成的 JSON 文本流。前端会在流式读取时尽量解析部分 JSON 快照，并在流结束后
+对最终 JSON 做校验；后端仍应依赖结构化输出能力对最终结果负责，不能只把任意文本拼成 JSON
+返回。
+
+## OpenAPI 与流式前端
+
+OpenAPI 生成客户端适合生成类型、路径、headers 和请求体，但常见 Axios operation 方法会把
+响应抽象成 `Promise`，不适合作为浏览器端 `ReadableStream` / SSE 的消费入口。推荐模式是：
+
+1. 使用 OpenAPI 生成的 param creator 构造 request args。
+2. 使用 `fromOpenAPIRequestArgs(...)` 转成 `@halo-dev/ai-ui-vue` 的 prepared request。
+3. 仍由 `DefaultChatTransport`、`useCompletion` 或 `experimental_useObject` 负责读取流。
+
+```ts
+import {
+  DefaultChatTransport,
+  fromOpenAPIRequestArgs,
+  useChat,
+} from '@halo-dev/ai-ui-vue'
+import { ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator } from './api/generated'
+
+const paramCreator = ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator()
+
+const chat = useChat({
+  id: 'conversation-1',
+  transport: new DefaultChatTransport({
+    api: '',
+    prepareSendMessagesRequest: async ({ body }) => {
+      return fromOpenAPIRequestArgs(args, body)
+    },
+  }),
+})
+```
+
+`useCompletion` 和 `experimental_useObject` 可通过 `prepareRequest` 使用同样的模式：
+
+```ts
+const completion = useCompletion({
+  prepareRequest: async ({ body }) => {
+    const args = await paramCreator.testModelCompletionStream('model-name', body)
+    return fromOpenAPIRequestArgs(args, body)
+  },
+})
+
+const object = experimental_useObject({
+  schema,
+  prepareRequest: async ({ body }) => {
+    const args = await paramCreator.testModelObjectStream('model-name', body)
+    return fromOpenAPIRequestArgs(args, body)
+  },
+})
+```
+
 ## 保存消息
 
 推荐在 `onFinish` 中保存 `finish.messages()`。它已经包含本次 assistant 响应：
@@ -478,7 +622,6 @@ UIMessageChatHandlers.streamText(options -> options
 
 | 能力 | 说明 |
 | --- | --- |
-| 前端 npm helper | 后续单独基于前端使用方式设计 |
 | WebFlux adapter | 当前由调用方手写少量 request/response 代码 |
 | stop endpoint | 需要 active stream registry 后再设计 |
 | resume/reconnect/replay | 需要 stream id、重放或继续策略 |

@@ -1,6 +1,7 @@
 import type { AiModel, OutputSpec, TestUiMessageChatRequest } from '@/api/generated'
 import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import { utils } from '@halo-dev/ui-shared'
+import { DefaultChatTransport, type UIMessageChunk as HaloUIMessageChunk } from '@halo-dev/ai-ui-vue'
 
 export type ChatRole = 'user' | 'assistant'
 export type ChatStreamProtocol = 'text' | 'ui-message'
@@ -648,37 +649,22 @@ export async function readTestUiMessageChatStream(options: {
   signal: AbortSignal
   onChunks: (chunks: UIMessageChunk[]) => void
 }) {
-  const response = await fetch(
-    testUiMessageChatStreamUrl(options.modelName, options.streamOptions),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(options.requestBody),
-      signal: options.signal,
-    },
-  )
-  if (!response.ok) {
-    throw new Error((await response.text()) || `HTTP ${response.status}`)
+  const requestBody = options.requestBody as Record<string, unknown>
+  const transport = new DefaultChatTransport({
+    api: testUiMessageChatStreamUrl(options.modelName, options.streamOptions),
+    fetch,
+  })
+  const stream = await transport.sendMessages({
+    chatId: String(requestBody.id || utils.id.uuid()),
+    messages: (options.requestBody.messages || []) as never[],
+    trigger: (options.requestBody.trigger || 'submit-message') as 'submit-message' | 'regenerate-message',
+    messageId: options.requestBody.messageId,
+    body: requestBody,
+    abortSignal: options.signal,
+  })
+  for await (const chunk of stream) {
+    options.onChunks([chunk as HaloUIMessageChunk as UIMessageChunk])
   }
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new Error('无法读取响应流')
-  }
-
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    const parsed = parseSseJsonLines<UIMessageChunk>(
-      buffer,
-      decoder.decode(value, { stream: true }),
-    )
-    buffer = parsed.buffer
-    options.onChunks(parsed.chunks)
-  }
-  options.onChunks(flushSseJsonBuffer<UIMessageChunk>(buffer))
 }
 
 export function testChatStreamUrl(modelName: string, options: ChatStreamOptions) {
@@ -910,6 +896,25 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
   }
 }
 
+export function applyWorkbenchUIMessageSnapshot(
+  message: WorkbenchMessage,
+  uiMessage: UIMessage<Record<string, unknown>>,
+  state: WorkbenchMessage['state'] = 'streaming',
+) {
+  message.uiMessage = {
+    ...uiMessage,
+    parts: uiMessage.parts.map((part) => ({ ...part })),
+  }
+  message.state = state
+  if (message.reasoningState === 'streaming' && state !== 'streaming') {
+    message.reasoningState = 'done'
+  }
+  if (message.uiMessage.parts.some((part) => part.type === 'reasoning')) {
+    message.reasoningState = state === 'streaming' ? 'streaming' : 'done'
+  }
+  projectUIMessage(message)
+}
+
 function ensureAssistantUIMessage(message: WorkbenchMessage): UIMessage<Record<string, unknown>> {
   if (!message.uiMessage) {
     message.uiMessage = createAssistantUIMessage(message.id)
@@ -1019,6 +1024,9 @@ function uiMessagePartToToolEvent(
   if (!isUIMessageToolPartType(part.type)) {
     return undefined
   }
+  if (part.type === 'tool-approval-response') {
+    return undefined
+  }
   return {
     id: `${part.type}-${part.approvalId || part.toolCallId || utils.id.uuid()}`,
     type: part.type,
@@ -1076,12 +1084,15 @@ function toolCallStatus(
   return 'pending'
 }
 
-function isUIMessageToolPartType(type: string | undefined): type is WorkbenchToolEvent['type'] {
+function isUIMessageToolPartType(
+  type: string | undefined,
+): type is WorkbenchToolEvent['type'] | 'tool-approval-response' {
   return (
     type === 'tool-call' ||
     type === 'tool-result' ||
     type === 'tool-error' ||
-    type === 'tool-approval-request'
+    type === 'tool-approval-request' ||
+    type === 'tool-approval-response'
   )
 }
 

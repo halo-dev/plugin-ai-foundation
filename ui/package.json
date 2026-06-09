@@ -23,6 +23,7 @@
   "dependencies": {
     "@formkit/core": "^1.7.2",
     "@halo-dev/api-client": "^2.24.0",
+    "@halo-dev/ai-ui-vue": "workspace:*",
     "@halo-dev/components": "^2.24.0",
     "@halo-dev/ui-shared": "^2.24.0",
     "@tanstack/vue-query": "^4.44.0",

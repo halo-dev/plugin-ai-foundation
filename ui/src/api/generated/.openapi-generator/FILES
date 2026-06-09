@@ -48,8 +48,10 @@ models/provider-type-info.ts
 models/reasoning-options.ts
 models/remove-operation.ts
 models/replace-operation.ts
+models/test-completion-stream-request.ts
 models/test-embedding-request.ts
 models/test-embedding-response.ts
+models/test-object-stream-request.ts
 models/test-operation.ts
 models/test-ui-message-chat-request.ts
 models/test-ui-message.ts

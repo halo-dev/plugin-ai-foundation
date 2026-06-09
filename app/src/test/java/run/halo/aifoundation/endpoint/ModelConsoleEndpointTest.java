@@ -1261,6 +1261,119 @@ class ModelConsoleEndpointTest {
         verify(aiModelService, never()).languageModel(any());
     }
 
+    @Test
+    void testCompletionStream_mapsPromptAndOptionsToGenerateTextRequest() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.textDelta("txt_1", "Hello"),
+                TextStreamPart.textDelta("txt_1", " world")
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-completion/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "prompt", "Say hello",
+                "temperature", 0.2,
+                "maxOutputTokens", 64
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_PLAIN)
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .isEqualTo("Hello world"));
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getPrompt()).isEqualTo("Say hello");
+        assertThat(request.getMessages()).isNull();
+        assertThat(request.getTemperature()).isEqualTo(0.2);
+        assertThat(request.getMaxOutputTokens()).isEqualTo(64);
+    }
+
+    @Test
+    void testObjectStream_prefersExplicitOutputAndStreamsJsonText() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(structuredStreamResult(Flux.just(
+                TextStreamPart.textDelta("txt_1", "{\"title\":\"Halo\"}")
+            )));
+
+        var schema = Map.of(
+            "type", "object",
+            "required", List.of("title"),
+            "properties", Map.of("title", Map.of("type", "string"))
+        );
+        webTestClient.post().uri("/models/gpt-4/test-object/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "input", "Summarize Halo",
+                "schema", schema,
+                "output", Map.of(
+                    "type", "object",
+                    "schema", schema
+                )
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_PLAIN)
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .isEqualTo("{\"title\":\"Halo\"}"));
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getPrompt()).isEqualTo("Summarize Halo");
+        assertThat(request.getOutput()).isNotNull();
+        assertThat(request.getOutput().getType().name()).isEqualTo("OBJECT");
+        assertThat(request.getOutput().getSchema()).isEqualTo(schema);
+    }
+
+    @Test
+    void testObjectStream_derivesOutputFromSchema() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(structuredStreamResult(Flux.just(
+                TextStreamPart.textDelta("txt_1", "{\"ok\":true}")
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-object/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "input", "Return ok",
+                "schema", Map.of(
+                    "type", "object",
+                    "properties", Map.of("ok", Map.of("type", "boolean"))
+                )
+            ))
+            .exchange()
+            .expectStatus().isOk();
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        assertThat(captor.getValue().getOutput().getType().name()).isEqualTo("OBJECT");
+    }
+
+    @Test
+    void testObjectStream_rejectsUnsupportedOutputTypeWithoutCallingModel() {
+        webTestClient.post().uri("/models/gpt-4/test-object/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "input", "Return ok",
+                "output", Map.of("type", "array")
+            ))
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        verify(aiModelService, never()).languageModel(any());
+    }
+
     // ---- helpers ----
 
     private StreamTextResult streamResult(Flux<TextStreamPart> fullStream) {
@@ -1273,6 +1386,21 @@ class ModelConsoleEndpointTest {
             Flux.empty(),
             Mono.empty(),
             Mono.empty()
+        );
+    }
+
+    private StreamTextResult structuredStreamResult(Flux<TextStreamPart> fullStream) {
+        var shared = fullStream.cache();
+        return new StreamTextResult(
+            shared,
+            shared.filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
+                .map(TextStreamPart::getDelta),
+            Flux.empty(),
+            Flux.empty(),
+            Mono.just(Map.of("ok", true)),
+            Mono.just(run.halo.aifoundation.chat.GenerateTextResult.builder()
+                .output(Map.of("ok", true))
+                .build())
         );
     }
 
