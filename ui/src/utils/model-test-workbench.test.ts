@@ -2,8 +2,8 @@ import type { AiModel, OutputSpec } from '@/api/generated'
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
-  applyWorkbenchUIMessageChunk,
   applyWorkbenchStreamPart,
+  applyWorkbenchUIMessageChunk,
   buildOutputSpec,
   buildReasoningOptions,
   buildTestChatRequest,

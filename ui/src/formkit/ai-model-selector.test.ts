@@ -19,7 +19,11 @@ describe('ai model selector helpers', () => {
   })
 
   it('keeps a valid active option or falls back to the selected/first selectable model', () => {
-    const models = [model({ name: 'first' }), model({ name: 'selected' }), model({ name: 'active' })]
+    const models = [
+      model({ name: 'first' }),
+      model({ name: 'selected' }),
+      model({ name: 'active' }),
+    ]
 
     expect(nextActiveModelName(models, 'selected', 'active')).toBe('active')
     expect(nextActiveModelName(models, 'selected', 'missing')).toBe('selected')
@@ -28,7 +32,9 @@ describe('ai model selector helpers', () => {
 
   it('keeps model id and detail visibility rules outside the Vue template', () => {
     expect(
-      shouldShowModelId(model({ name: 'internal', displayName: 'Display', modelId: 'provider-id' })),
+      shouldShowModelId(
+        model({ name: 'internal', displayName: 'Display', modelId: 'provider-id' }),
+      ),
     ).toBe(true)
     expect(shouldShowModelId(model({ name: 'same', modelId: 'same' }))).toBe(false)
     expect(shouldShowModelDetails(model({ name: 'disabled', available: false }))).toBe(true)

@@ -4,8 +4,8 @@ import { ModelOptionModelTypeEnum, type TestEmbeddingResponse } from '@/api/gene
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import {
-  applyWorkbenchUIMessageChunk,
   applyWorkbenchStreamPart,
+  applyWorkbenchUIMessageChunk,
   buildOutputSpec,
   buildReasoningOptions,
   buildTestChatRequest,
@@ -26,6 +26,7 @@ import {
   type WorkbenchMessage,
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
+import { utils } from '@halo-dev/ui-shared'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
@@ -214,7 +215,7 @@ async function sendMessage(content?: string) {
   outputError.value = ''
 
   const userMessage: WorkbenchMessage = {
-    id: crypto.randomUUID(),
+    id: utils.id.uuid(),
     role: 'user',
     content: text,
   }
@@ -279,7 +280,9 @@ async function streamUiMessageChatResponse(
   if (!model) return
 
   const assistantMessage = targetMessage || createAssistantMessage(model)
-  assistantMessage.uiMessage = createAssistantUIMessage(assistantMessage.uiMessage?.id || assistantMessage.id)
+  assistantMessage.uiMessage = createAssistantUIMessage(
+    assistantMessage.uiMessage?.id || assistantMessage.id,
+  )
   assistantMessage.content = ''
   assistantMessage.reasoningContent = undefined
   assistantMessage.reasoningState = undefined
@@ -323,7 +326,7 @@ function createAssistantMessage(model: {
   modelId?: string
 }): WorkbenchMessage {
   return {
-    id: crypto.randomUUID(),
+    id: utils.id.uuid(),
     role: 'assistant',
     content: '',
     modelName: model.name,
@@ -669,14 +672,10 @@ function appendUIMessageToolPart(
       }
       if (type === 'tool-result' || type === 'tool-error') {
         return (
-          item.toolCallId !== key ||
-          (item.type !== 'tool-result' && item.type !== 'tool-error')
+          item.toolCallId !== key || (item.type !== 'tool-result' && item.type !== 'tool-error')
         )
       }
-      return (
-        item.type !== type ||
-        item.toolCallId !== key
-      )
+      return item.type !== type || item.toolCallId !== key
     }),
     part,
   ]

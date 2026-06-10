@@ -1,5 +1,6 @@
 import type { AiModel, OutputSpec, TestUiMessageChatRequest } from '@/api/generated'
 import { AiModelSpecModelTypeEnum } from '@/api/generated'
+import { utils } from '@halo-dev/ui-shared'
 
 export type ChatRole = 'user' | 'assistant'
 export type ChatStreamProtocol = 'text' | 'ui-message'
@@ -456,7 +457,7 @@ export function buildTestUiMessageChatRequest(
   },
 ): TestUiMessageChatRequest {
   return {
-    id: crypto.randomUUID(),
+    id: utils.id.uuid(),
     messages: messages
       .map(toUIMessage)
       .filter((message): message is UIMessage => !!message) as TestUiMessageChatRequest['messages'],
@@ -537,7 +538,10 @@ function appendWorkbenchMessage(requestMessages: ModelMessage[], message: Workbe
 function toModelMessage(message: WorkbenchMessage): ModelMessage | undefined {
   const content = message.content.trim()
   const historyParts = message.role === 'assistant' ? message.historyParts || [] : []
-  if ((!content && !historyParts.length) || (message.role === 'assistant' && message.state === 'error')) {
+  if (
+    (!content && !historyParts.length) ||
+    (message.role === 'assistant' && message.state === 'error')
+  ) {
     return undefined
   }
   const parts = [...historyParts]
@@ -644,12 +648,15 @@ export async function readTestUiMessageChatStream(options: {
   signal: AbortSignal
   onChunks: (chunks: UIMessageChunk[]) => void
 }) {
-  const response = await fetch(testUiMessageChatStreamUrl(options.modelName, options.streamOptions), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(options.requestBody),
-    signal: options.signal,
-  })
+  const response = await fetch(
+    testUiMessageChatStreamUrl(options.modelName, options.streamOptions),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options.requestBody),
+      signal: options.signal,
+    },
+  )
   if (!response.ok) {
     throw new Error((await response.text()) || `HTTP ${response.status}`)
   }
@@ -725,7 +732,7 @@ export function toToolEvent(part: TextStreamPart): WorkbenchToolEvent | undefine
   }
 
   return {
-    id: `${part.type}-${part.approvalId || part.toolCallId || crypto.randomUUID()}`,
+    id: `${part.type}-${part.approvalId || part.toolCallId || utils.id.uuid()}`,
     type: part.type,
     approvalId: part.approvalId,
     toolCallId: part.toolCallId,
@@ -953,10 +960,7 @@ function mergeUIMessageMetadata(message: UIMessage, metadata: unknown) {
   }
 }
 
-function mergePlainObjects(
-  current: unknown,
-  update: unknown,
-): Record<string, unknown> | undefined {
+function mergePlainObjects(current: unknown, update: unknown): Record<string, unknown> | undefined {
   if (!isPlainRecord(update)) {
     return isPlainRecord(current) ? current : undefined
   }
@@ -1016,7 +1020,7 @@ function uiMessagePartToToolEvent(
     return undefined
   }
   return {
-    id: `${part.type}-${part.approvalId || part.toolCallId || crypto.randomUUID()}`,
+    id: `${part.type}-${part.approvalId || part.toolCallId || utils.id.uuid()}`,
     type: part.type,
     approvalId: part.approvalId,
     toolCallId: part.toolCallId,
@@ -1037,10 +1041,7 @@ function uiMessagePartToToolEvent(
   }
 }
 
-function hasApprovalRequest(
-  toolCallId: string | undefined,
-  approvalRequestParts: UIMessagePart[],
-) {
+function hasApprovalRequest(toolCallId: string | undefined, approvalRequestParts: UIMessagePart[]) {
   return !!toolCallId && approvalRequestParts.some((part) => part.toolCallId === toolCallId)
 }
 

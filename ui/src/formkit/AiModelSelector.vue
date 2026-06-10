@@ -16,8 +16,8 @@ import RiBrainLine from '~icons/ri/brain-line'
 import {
   isModelOptionSelectable,
   modelFeatureLabel,
-  modelOptionUnavailableReasonLabel,
   modelOptionDisplayName,
+  modelOptionUnavailableReasonLabel,
   modelTypeLabel,
   nextActiveModelName,
   normalizeRequiredFeatures,
