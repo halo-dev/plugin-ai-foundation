@@ -141,6 +141,7 @@ defineExpose({
           key: 'api-key',
         },
       ]"
+      :descriptionPreset="`${selectedProviderType?.displayName} API Key`"
       help="新建一个密钥，并将平台的 API key 填入该密钥的 Value 字段"
     />
 
