@@ -41,11 +41,16 @@ const { mutate, isPending } = useMutation({
       },
     })
   },
-  onSuccess: (data) => {
+  onSuccess: async (data) => {
     Toast.success('供应商创建成功')
     modal.value?.close()
     queryClient.invalidateQueries({ queryKey: [QK_PROVIDERS] })
     selectedProvider.value = data.data.metadata.name
+
+    await aiConsoleApiClient.provider.testProviderConnectivity({
+      name: data.data.metadata.name,
+    })
+    queryClient.invalidateQueries({ queryKey: [QK_PROVIDERS] })
   },
 })
 

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
 import type { AiProvider } from '@/api/generated'
-import { QK_PROVIDERS } from '@/composables/use-providers-fetch'
+import { QK_PROVIDER, QK_PROVIDERS } from '@/composables/use-providers-fetch'
 import type { ProviderFormState } from '@/types/form'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
@@ -34,9 +34,15 @@ const { mutate, isPending } = useMutation({
       },
     })
   },
-  onSuccess: () => {
+  onSuccess: async () => {
     Toast.success('供应商编辑成功')
     modal.value?.close()
+    queryClient.invalidateQueries({ queryKey: [QK_PROVIDERS] })
+
+    await aiConsoleApiClient.provider.testProviderConnectivity({
+      name: props.provider.metadata.name,
+    })
+    queryClient.invalidateQueries({ queryKey: [QK_PROVIDER, props.provider.metadata.name] })
     queryClient.invalidateQueries({ queryKey: [QK_PROVIDERS] })
   },
 })
