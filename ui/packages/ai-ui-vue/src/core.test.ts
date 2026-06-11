@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@rstest/core'
 import { Chat, createPlainChatState } from './chat'
-import { applyUIMessageChunk, createUIMessageReducer, messageText } from './message-reducer'
+import { applyUIMessageChunk, createUIMessageReducer, messageText, validateUIMessageChunk } from './message-reducer'
 import { readUIMessageSSEStream } from './stream'
 import type { ChatTransport, SendMessagesOptions, UIMessageChunk } from './types'
 
@@ -41,8 +41,8 @@ describe('UI message reducer', () => {
       { type: 'text-start', id: 'text-1' },
       { type: 'text-delta', id: 'text-1', delta: 'Hello' },
       { type: 'reasoning-delta', id: 'reasoning-1', delta: 'Thinking' },
-      { type: 'data', name: 'status', data: 'done' },
-      { type: 'tool-call', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' } },
+      { type: 'data-status', id: 'status', name: 'status', data: 'done' },
+      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
       { type: 'finish', finishReason: 'stop' },
     ] satisfies UIMessageChunk[]) {
       applyUIMessageChunk(state, chunk)
@@ -50,8 +50,43 @@ describe('UI message reducer', () => {
 
     expect(messageText(state.message)).toBe('Hello')
     expect(state.message.parts).toContainEqual({ type: 'reasoning', id: 'reasoning-1', text: 'Thinking' })
-    expect(state.message.parts).toContainEqual({ type: 'data', name: 'status', data: 'done', transientData: false })
+    expect(state.message.parts).toContainEqual({ type: 'data-status', id: 'status', name: 'status', data: 'done', transientData: false })
     expect(state.terminal.finishReason).toBe('stop')
+  })
+
+  it('validates dynamic data and tool chunk protocol', () => {
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'tool-delete-file',
+        toolCallId: 'call-1',
+        toolName: 'delete-file',
+        state: 'input-available',
+      })
+    ).not.toThrow()
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'data-post-draft',
+        id: 'data-1',
+        name: 'post-draft',
+        data: {},
+      })
+    ).not.toThrow()
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        toolName: 'delete-file',
+        state: 'input-available',
+      })
+    ).toThrow('Tool chunk type must be tool-delete-file')
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        state: 'output-error',
+      })
+    ).toThrow('Tool output-error chunk errorText is required')
   })
 })
 
@@ -72,6 +107,70 @@ describe('Chat', () => {
     expect(transport.options?.messages).toHaveLength(1)
     expect(chat.messages).toHaveLength(2)
     expect(messageText(chat.messages[1])).toBe('Hi')
+  })
+
+  it('creates user text and file parts from sendMessage convenience input', async () => {
+    const transport = new RecordingTransport([])
+    const chat = new Chat({ id: 'chat-1', transport })
+
+    await chat.sendMessage({
+      text: 'Read this',
+      files: [
+        { id: 'file-1', url: 'https://example.com/report.pdf', mediaType: 'application/pdf', title: 'Report' },
+      ],
+    })
+
+    expect(transport.options?.messages[0].parts).toEqual([
+      expect.objectContaining({ type: 'text', text: 'Read this' }),
+      {
+        type: 'file',
+        id: 'file-1',
+        url: 'https://example.com/report.pdf',
+        mediaType: 'application/pdf',
+        title: 'Report',
+        data: undefined,
+        providerMetadata: undefined,
+      },
+    ])
+  })
+
+  it('uses explicit message parts instead of synthesizing text and file parts', async () => {
+    const transport = new RecordingTransport([])
+    const chat = new Chat({ id: 'chat-1', transport })
+
+    await chat.sendMessage({
+      text: 'Ignored',
+      files: [{ id: 'file-1', url: 'https://example.com/report.pdf' }],
+      parts: [{ type: 'text', id: 'explicit-text', text: 'Explicit' }],
+    })
+
+    expect(transport.options?.messages[0].parts).toEqual([
+      { type: 'text', id: 'explicit-text', text: 'Explicit' },
+    ])
+  })
+
+  it('fires data and tool callbacks from streamed chunks', async () => {
+    const dataEvents: unknown[] = []
+    const toolCalls: unknown[] = []
+    const transport = new RecordingTransport([
+      { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' }, transient: true },
+      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
+    ])
+    const chat = new Chat({
+      id: 'chat-1',
+      transport,
+      onData: (part) => dataEvents.push(part),
+      onToolCall: (part) => toolCalls.push(part),
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(dataEvents).toEqual([
+      { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' }, transientData: true },
+    ])
+    expect(toolCalls).toEqual([
+      expect.objectContaining({ type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available' }),
+    ])
   })
 
   it('regenerates by truncating the target assistant message', async () => {
@@ -100,21 +199,22 @@ describe('Chat', () => {
       id: 'chat-1',
       state: createPlainChatState({
         messages: [
-          { id: 'assistant-1', role: 'assistant', parts: [{ type: 'tool-call', toolCallId: 'call-1', toolName: 'search' }] },
+          { id: 'assistant-1', role: 'assistant', parts: [{ type: 'tool-search-web', toolCallId: 'call-1', toolName: 'search-web', state: 'input-available' }] },
         ],
       }),
       transport,
       sendAutomaticallyWhen: () => true,
     })
 
-    await chat.addToolResult({ toolCallId: 'call-1', toolName: 'search', result: { ok: true } })
+    await chat.addToolOutput({ toolCallId: 'call-1', toolName: 'search-web', output: { ok: true } })
 
-    expect(chat.messages[0].parts).toContainEqual({
-      type: 'tool-result',
+    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
+      type: 'tool-search-web',
       toolCallId: 'call-1',
-      toolName: 'search',
-      result: { ok: true },
-    })
+      toolName: 'search-web',
+      state: 'output-available',
+      output: { ok: true },
+    }))
     expect(transport.options?.trigger).toBe('submit-message')
   })
 
@@ -127,12 +227,13 @@ describe('Chat', () => {
             id: 'assistant-1',
             role: 'assistant',
             parts: [
-              { type: 'tool-call', toolCallId: 'call-1', toolName: 'search' },
+              { type: 'tool-search-web', toolCallId: 'call-1', toolName: 'search-web', state: 'input-available' },
               {
-                type: 'tool-approval-request',
-                approvalId: 'approval-1',
+                type: 'tool-delete_file',
                 toolCallId: 'call-2',
                 toolName: 'delete_file',
+                state: 'approval-requested',
+                approval: { id: 'approval-1' },
               },
             ],
           },
@@ -141,22 +242,39 @@ describe('Chat', () => {
     })
 
     await chat.addToolOutput({ toolCallId: 'call-1', output: { ok: true } })
-    await chat.addToolApprovalResponse({ id: 'approval-1', approved: false, reason: 'Denied' })
+    await chat.rejectToolCall({ id: 'approval-1', reason: 'Denied' })
 
-    expect(chat.messages[0].parts).toContainEqual({
-      type: 'tool-result',
+    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
+      type: 'tool-search-web',
       toolCallId: 'call-1',
-      toolName: 'search',
-      result: { ok: true },
-    })
-    expect(chat.messages[0].parts).toContainEqual({
-      type: 'tool-approval-response',
-      approvalId: 'approval-1',
+      toolName: 'search-web',
+      state: 'output-available',
+      output: { ok: true },
+    }))
+    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
+      type: 'tool-delete_file',
       toolCallId: 'call-2',
       toolName: 'delete_file',
-      approved: false,
-      reason: 'Denied',
+      state: 'output-error',
+      errorText: 'Denied',
+      approval: { id: 'approval-1', approved: false, reason: 'Denied' },
+    }))
+  })
+
+  it('reports whether the last assistant tool parts are complete', async () => {
+    const chat = new Chat({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          parts: [{ type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available' }],
+        },
+      ],
     })
+
+    expect(chat.isLastAssistantMessageToolComplete()).toBe(false)
+    await chat.addToolOutput({ toolCallId: 'call-1', output: { ok: true } })
+    expect(chat.isLastAssistantMessageToolComplete()).toBe(true)
   })
 
   it('aborts active response and keeps partial message', async () => {
@@ -172,6 +290,59 @@ describe('Chat', () => {
     expect(chat.status).toBe('ready')
     expect(chat.messages).toHaveLength(2)
   })
+
+  it('marks pre-stream failures as errors', async () => {
+    const expected = new Error('request failed')
+    const transport: ChatTransport = {
+      sendMessages: async () => {
+        throw expected
+      },
+    }
+    const errors: Error[] = []
+    const chat = new Chat({ id: 'chat-1', transport, onError: (error) => errors.push(error) })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(chat.status).toBe('error')
+    expect(chat.error).toBe(expected)
+    expect(errors).toEqual([expected])
+  })
+
+  it('marks readable stream interruptions after valid chunks as disconnected', async () => {
+    const transport: ChatTransport = {
+      sendMessages: async () => asyncGeneratorWithFailure([
+        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
+      ], new Error('network interrupted')),
+    }
+    const chat = new Chat({ id: 'chat-1', transport, generateId: () => 'assistant-1' })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(chat.status).toBe('disconnected')
+    expect(chat.error?.message).toBe('network interrupted')
+    expect(messageText(chat.messages[1])).toBe('Partial')
+  })
+
+  it('keeps protocol failures as errors after the stream started', async () => {
+    const transport: ChatTransport = {
+      sendMessages: async () => chunksToAsyncIterable([
+        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
+        {
+          type: 'tool-search',
+          toolCallId: 'call-1',
+          toolName: 'search',
+        } as unknown as UIMessageChunk,
+      ]),
+    }
+    const chat = new Chat({ id: 'chat-1', transport, generateId: () => 'assistant-1' })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(chat.status).toBe('error')
+    expect(chat.error?.name).toBe('AIUIProtocolError')
+    expect(chat.error?.message).toBe('Tool chunk state is required.')
+  })
+
 })
 
 class RecordingTransport implements ChatTransport {
@@ -211,6 +382,14 @@ async function* asyncGeneratorUntilAbort(signal?: AbortSignal): AsyncIterable<UI
 
 async function* chunksToAsyncIterable(chunks: UIMessageChunk[]): AsyncIterable<UIMessageChunk> {
   yield* chunks
+}
+
+async function* asyncGeneratorWithFailure(
+  chunks: UIMessageChunk[],
+  error: Error
+): AsyncIterable<UIMessageChunk> {
+  yield* chunks
+  throw error
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

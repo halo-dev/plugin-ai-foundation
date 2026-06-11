@@ -159,12 +159,17 @@ The SDK SHALL provide a typed Java part model for accumulated UI message state.
 - **THEN** each part includes a stable `type` discriminator
 
 #### Scenario: Parts represent accumulated state
-- **WHEN** text or reasoning chunks are aggregated
-- **THEN** the resulting part contains accumulated text rather than per-delta parts
+- **WHEN** text, reasoning, dynamic data, or dynamic tool chunks are aggregated
+- **THEN** the resulting part contains accumulated state rather than per-delta parts
 
 #### Scenario: Data part provides typed access
-- **WHEN** a caller reads a data part
-- **THEN** the caller can cast the data through a typed accessor
+- **WHEN** a caller reads a dynamic data part
+- **THEN** the caller can read its `type`, `name`, `id`, data payload, and transient marker
+- **AND** the caller can cast the data through a typed accessor
+
+#### Scenario: Tool part provides lifecycle access
+- **WHEN** a caller reads a dynamic tool part
+- **THEN** the caller can read its `type`, `toolName`, `toolCallId`, lifecycle state, input, output, error text, approval details, and provider metadata
 
 ### Requirement: UI message stream reader
 The SDK SHALL provide a reader that aggregates UI message streams into assistant message snapshots.
@@ -312,21 +317,21 @@ The SDK SHALL aggregate UI chunks into message parts using stable content rules.
 - **WHEN** text or reasoning deltas arrive for a block id
 - **THEN** the reader appends each delta to the matching part for that block id
 
-#### Scenario: Stable parts replace by id
-- **WHEN** source, file, tool call, tool result, tool error, or tool approval request chunks repeat with the same stable id
+#### Scenario: Stable source and file parts replace by id
+- **WHEN** source or file chunks repeat with the same stable id
 - **THEN** the reader replaces the previous matching part instead of appending duplicates
 
+#### Scenario: Data parts replace by type and id
+- **WHEN** non-transient dynamic data chunks repeat with the same `type` and `id`
+- **THEN** the reader replaces the previous matching data part instead of appending duplicates
+
 #### Scenario: Transient data is not persisted
-- **WHEN** the stream emits a data chunk with `transientData` set to true
-- **THEN** the reader does not add that data to `UIMessage.parts`
+- **WHEN** the stream emits a dynamic data chunk marked transient
+- **THEN** the reader does not add or update that data in `UIMessage.parts`
 
-#### Scenario: Non-transient data is persisted
-- **WHEN** the stream emits a data chunk with `transientData` set to false
-- **THEN** the reader adds or replaces a data part for that data name
-
-#### Scenario: Tool input chunks are not persisted
-- **WHEN** the stream emits tool input start or delta chunks
-- **THEN** the reader does not add those chunks to `UIMessage.parts`
+#### Scenario: Tool lifecycle replaces by toolCallId
+- **WHEN** dynamic tool chunks repeat for the same `toolCallId`
+- **THEN** the reader updates one matching tool part instead of appending separate call, result, error, or approval response parts
 
 ### Requirement: Reader error handling
 The SDK SHALL distinguish protocol error chunks from stream read failures.
@@ -425,12 +430,16 @@ The SDK SHALL let callers validate application-specific metadata, data parts, an
 - **THEN** the validator receives metadata as type `M`
 
 #### Scenario: Data validator can be registered by name
-- **WHEN** a caller registers a data validator for a specific data part name
-- **THEN** that validator runs only for matching `DataPart` instances
+- **WHEN** a caller registers a data validator for a specific dynamic data part name
+- **THEN** that validator runs only for matching `data-*` parts
 
-#### Scenario: Tool validator can inspect tool parts
-- **WHEN** a caller registers a tool validator
-- **THEN** the validator can inspect tool call, tool result, tool error, and tool approval request parts
+#### Scenario: Tool validator can be registered by tool name
+- **WHEN** a caller registers a tool validator for a specific dynamic tool name
+- **THEN** that validator runs only for matching `tool-*` parts
+
+#### Scenario: Unknown payloads pass base validation
+- **WHEN** no caller payload validator is registered for a valid dynamic data or tool part
+- **THEN** validation SHALL still allow the part after base protocol validation succeeds
 
 ### Requirement: Base UI message structural validation
 The SDK SHALL validate the provider-neutral structure required for safe reuse of UI messages.
@@ -439,21 +448,26 @@ The SDK SHALL validate the provider-neutral structure required for safe reuse of
 - **WHEN** a UI message is missing id or role
 - **THEN** validation reports an issue for that message
 
-#### Scenario: Part identity is validated
-- **WHEN** a part that requires an id, name, or tool call id is missing that value
+#### Scenario: Dynamic part identity is validated
+- **WHEN** a dynamic data or tool part is missing required identity fields
 - **THEN** validation reports an issue for that part
 
-#### Scenario: Tool results match prior tool calls
-- **WHEN** a tool result or tool error references a tool call id that does not appear in prior UI message history
-- **THEN** validation reports a tool pairing issue
+#### Scenario: Dynamic name consistency is validated
+- **WHEN** a dynamic data or tool part has a `type` that does not match its `name` or `toolName`
+- **THEN** validation reports an issue for that part
 
-#### Scenario: Tool call final output is unique
-- **WHEN** a tool call id has multiple conflicting final results or errors
-- **THEN** validation reports a tool pairing issue
+#### Scenario: Tool state fields are validated
+- **WHEN** a dynamic tool part has state `output-error`
+- **THEN** validation requires safe error text
 
-#### Scenario: Approval requests remain UI state
-- **WHEN** validation sees a tool approval request part
-- **THEN** validation does not treat it as an executed tool result
+#### Scenario: Terminal tool output is unique
+- **WHEN** a message history contains more than one conflicting terminal state for the same `toolCallId`
+- **THEN** validation reports a tool lifecycle issue
+
+#### Scenario: Pending tool state is allowed
+- **WHEN** a message history contains a dynamic tool part in `input-available` or `approval-requested`
+- **THEN** validation allows the history
+- **AND** the caller decides when to continue generation
 
 ### Requirement: UI message to model message conversion
 The SDK SHALL convert validated UI messages into provider-neutral model messages.
@@ -466,9 +480,13 @@ The SDK SHALL convert validated UI messages into provider-neutral model messages
 - **WHEN** a UI message contains text parts
 - **THEN** conversion includes the accumulated text as model message content
 
-#### Scenario: Tool call and result parts convert when supported
-- **WHEN** UI messages contain structurally valid tool call, tool result, or tool error parts
+#### Scenario: Tool output states convert when supported
+- **WHEN** UI messages contain structurally valid dynamic tool parts with state `output-available` or `output-error`
 - **THEN** conversion maps them to provider-neutral model tool content where the public model message model supports it
+
+#### Scenario: Pending tool states do not convert as output
+- **WHEN** UI messages contain dynamic tool parts with state `input-streaming`, `input-available`, or `approval-requested`
+- **THEN** conversion does not synthesize a tool result for those pending states
 
 #### Scenario: Empty converted messages are skipped by default
 - **WHEN** a UI message has no parts that convert to model content
@@ -479,7 +497,7 @@ The SDK SHALL convert validated UI messages into provider-neutral model messages
 The SDK SHALL treat UI-only parts conservatively during conversion.
 
 #### Scenario: Data parts are skipped without a converter
-- **WHEN** conversion sees a `DataPart` without a registered converter for its name
+- **WHEN** conversion sees a dynamic data part without a registered converter for its name
 - **THEN** conversion does not include that part in model content by default
 - **AND** the conversion result records a warning when warnings are enabled
 
@@ -488,8 +506,8 @@ The SDK SHALL treat UI-only parts conservatively during conversion.
 - **THEN** conversion does not fetch, read, or convert that part by default
 - **AND** the conversion result records a warning when warnings are enabled
 
-#### Scenario: Approval requests are skipped by default
-- **WHEN** conversion sees a `ToolApprovalRequestPart`
+#### Scenario: Pending tool states are skipped by default
+- **WHEN** conversion sees a dynamic tool part that is not in a terminal output state
 - **THEN** conversion does not convert it into a tool result
 - **AND** the conversion result records a warning when warnings are enabled
 
@@ -723,7 +741,7 @@ The SDK SHALL allow the chat handler to start from the chat transport request mo
 - **THEN** finish aggregation uses the effective message history as original messages
 
 ### Requirement: UI message chat transport deferred boundaries
-The SDK SHALL keep resume, stop endpoints, and HTTP framework adapters outside the first transport request contract.
+The SDK SHALL keep stop endpoints, resume/reconnect, and HTTP framework adapters outside the chat transport request contract.
 
 #### Scenario: Stop is not a chat trigger
 - **WHEN** the SDK exposes chat transport triggers
@@ -733,7 +751,7 @@ The SDK SHALL keep resume, stop endpoints, and HTTP framework adapters outside t
 #### Scenario: Resume is not a send trigger
 - **WHEN** the SDK exposes chat transport triggers
 - **THEN** it does not expose a resume trigger
-- **AND** resume remains future work for a separate reconnect contract
+- **AND** resume remains future work for a separate reconnect or replay contract
 
 #### Scenario: WebFlux adapter is not required
 - **WHEN** a caller uses the request contract and chat handler from the API module
@@ -998,57 +1016,42 @@ The SDK SHALL provide a persisted UI Message part for caller approval or denial 
 - **AND** it SHALL NOT synthesize a `tool-error` part for the denial
 
 ### Requirement: UI Message Tool Continuation Validation
-The SDK SHALL validate persisted tool continuation state before converting UI messages to model messages.
+The SDK SHALL validate persisted dynamic tool lifecycle state before converting UI messages to model messages.
 
-#### Scenario: Tool result references prior tool call
-- **WHEN** a UI message contains a `tool-result` part
-- **THEN** validation requires a prior matching `tool-call` by `toolCallId`
+#### Scenario: Tool output references prior tool input
+- **WHEN** a UI message contains a `tool-*` part in state `output-available`
+- **THEN** validation requires the same tool part identity to contain or reference input for that tool call
 
-#### Scenario: Tool error references prior tool call
-- **WHEN** a UI message contains a `tool-error` part
-- **THEN** validation requires a prior matching `tool-call` by `toolCallId`
-
-#### Scenario: Approval response references prior approval request
-- **WHEN** a UI message contains a `tool-approval-response` part
-- **THEN** validation requires a prior matching `tool-approval-request` by `approvalId`
+#### Scenario: Tool error references prior tool input
+- **WHEN** a UI message contains a `tool-*` part in state `output-error`
+- **THEN** validation requires the same tool part identity to contain or reference input for that tool call
 
 #### Scenario: Terminal tool output is unique
-- **WHEN** a UI message history contains multiple final `tool-result` or `tool-error` parts for the same `toolCallId`
+- **WHEN** a UI message history contains multiple conflicting terminal states for the same `toolCallId`
 - **THEN** validation fails
 
-#### Scenario: Denied approval forbids tool output
-- **WHEN** a UI message history contains an approval response with `approved = false`
-- **AND** a later `tool-result` or `tool-error` appears for the same approved tool call
-- **THEN** validation fails
+#### Scenario: Approval denial is terminal error
+- **WHEN** a user denies a pending tool approval
+- **THEN** the persisted tool part state SHALL be `output-error`
+- **AND** validation SHALL treat it as a completed tool lifecycle
 
 #### Scenario: Pending tool state is allowed
-- **WHEN** a UI message history contains a pending `tool-call` or `tool-approval-request` without a final response
+- **WHEN** a UI message history contains a pending dynamic tool part without output
 - **THEN** validation allows the history
 - **AND** the caller decides when to continue generation
 
 ### Requirement: UI Message Tool Boundary Conversion
-The SDK SHALL convert persisted assistant UI messages to provider-neutral model messages while preserving tool boundaries.
+The SDK SHALL convert persisted assistant UI messages to provider-neutral model messages while preserving dynamic tool boundaries.
 
-#### Scenario: Tool response splits assistant segments
-- **WHEN** an assistant UI message contains assistant parts, tool response parts, and later assistant parts
-- **THEN** conversion emits assistant model content before the tool response
-- **AND** emits tool model content for the tool response
-- **AND** emits later assistant model content after the tool response
+#### Scenario: Tool output splits assistant segments
+- **WHEN** an assistant UI message contains assistant parts, dynamic tool output parts, and later assistant parts
+- **THEN** conversion emits assistant model content before the tool output
+- **AND** emits tool model content for the dynamic tool output
+- **AND** emits later assistant model content after the tool output
 
-#### Scenario: Consecutive tool responses share tool message
-- **WHEN** multiple consecutive `tool-result`, `tool-error`, or `tool-approval-response` parts appear
+#### Scenario: Consecutive tool outputs share tool message
+- **WHEN** multiple consecutive dynamic tool parts are in `output-available` or `output-error` state
 - **THEN** conversion MAY emit them in one `ModelMessage.tool(...)`
-- **AND** their order is preserved
-
-#### Scenario: Approval response converts to tool message part
-- **WHEN** an approval response part is converted
-- **THEN** it becomes a `ModelMessagePart` with type `tool-approval-response`
-- **AND** it is emitted in a `TOOL` model message
-
-#### Scenario: Tool result and approval response can share tool message
-- **WHEN** an approved tool flow contains `tool-approval-response` followed by `tool-result`
-- **THEN** conversion MAY emit both parts in the same `TOOL` model message
-- **AND** the approval response precedes the tool result
 
 ### Requirement: UI Message Reasoning Continuation
 The SDK SHALL resolve UI reasoning continuation automatically when streaming from UI messages.
@@ -1173,3 +1176,67 @@ The SDK SHALL keep the finalized first-version backend contract separate from de
 #### Scenario: Npm helper remains deferred
 - **WHEN** the backend contract is completed
 - **THEN** no public npm helper package or frontend helper API is introduced
+
+### Requirement: Dynamic UI message part names
+The SDK SHALL support dynamic `data-*` and `tool-*` UI message part discriminators with strict Halo protocol validation.
+
+#### Scenario: Dynamic data and tool names allow dashed identifiers
+- **WHEN** the SDK validates a dynamic data part name or tool name
+- **THEN** the name MUST match `^[A-Za-z][A-Za-z0-9_-]*$`
+
+#### Scenario: Data type matches name
+- **WHEN** a data part or chunk has `name = "weather"`
+- **THEN** its `type` MUST be `data-weather`
+- **AND** mismatched type and name values MUST fail validation
+
+#### Scenario: Tool type matches toolName
+- **WHEN** a tool part or chunk has `toolName = "getWeather"`
+- **THEN** its `type` MUST be `tool-getWeather`
+- **AND** mismatched type and toolName values MUST fail validation
+
+### Requirement: Dynamic data part lifecycle
+The SDK SHALL model custom UI data as dynamic `data-*` parts with stable identity and transient event behavior.
+
+#### Scenario: Data id is required
+- **WHEN** a data part or chunk is validated
+- **THEN** it MUST include a non-blank `id`
+
+#### Scenario: Persistent data updates by type and id
+- **WHEN** the reader receives multiple non-transient data chunks with the same `type` and `id`
+- **THEN** the response message SHALL contain one data part updated to the latest data value
+
+#### Scenario: Transient data is callback-only state
+- **WHEN** the reader receives a transient data chunk
+- **THEN** the reader SHALL NOT add or update any `UIMessage.parts` entry for that chunk
+- **AND** the transient chunk SHALL remain available to stream consumers as a stream event
+
+#### Scenario: Transient data does not patch persisted data
+- **WHEN** a transient data chunk has the same `type` and `id` as an existing persisted data part
+- **THEN** the persisted data part SHALL remain unchanged
+
+### Requirement: Dynamic tool part lifecycle
+The SDK SHALL model each tool call as one dynamic `tool-*` part whose state represents the current lifecycle.
+
+#### Scenario: Tool input streams into one part
+- **WHEN** the stream emits tool input chunks for a tool call id
+- **THEN** the reader SHALL create or update one matching `tool-*` part with state `input-streaming`
+
+#### Scenario: Tool input availability is persisted
+- **WHEN** the stream emits a complete tool input for a tool call id
+- **THEN** the matching `tool-*` part SHALL have state `input-available`
+- **AND** the part SHALL expose the parsed input
+
+#### Scenario: Tool approval waits on the same part
+- **WHEN** the stream emits a tool approval request for a tool call id
+- **THEN** the matching `tool-*` part SHALL have state `approval-requested`
+- **AND** the part SHALL expose approval id and input needed by the UI
+
+#### Scenario: Tool output completes the same part
+- **WHEN** a caller supplies a tool output for a tool call id
+- **THEN** the matching `tool-*` part SHALL have state `output-available`
+- **AND** the part SHALL expose the output
+
+#### Scenario: Tool error completes the same part
+- **WHEN** a caller supplies a tool error or rejects a tool approval
+- **THEN** the matching `tool-*` part SHALL have state `output-error`
+- **AND** the part SHALL expose safe error text

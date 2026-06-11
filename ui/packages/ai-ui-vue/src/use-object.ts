@@ -9,7 +9,7 @@ export interface UseObjectOptions<T = unknown> {
   id?: string
   api?: string
   schema: SchemaLike<T>
-  initialObject?: DeepPartial<T>
+  initialValue?: DeepPartial<T>
   headers?: Resolvable<HeadersInit | undefined>
   body?: Resolvable<Record<string, unknown> | undefined>
   credentials?: Resolvable<RequestCredentials | undefined>
@@ -24,6 +24,12 @@ export interface UseObjectOptions<T = unknown> {
   onFinish?: (event: { object: T; text: string }) => void
 }
 
+export interface ObjectRequestOptions {
+  headers?: HeadersInit
+  body?: Record<string, unknown>
+  credentials?: RequestCredentials
+}
+
 interface ObjectStore<T> {
   subscribers: number
   object: ReturnType<typeof shallowRef<DeepPartial<T> | undefined>>
@@ -35,7 +41,7 @@ interface ObjectStore<T> {
 
 const stores = new Map<string, ObjectStore<unknown>>()
 
-export function experimental_useObject<T = unknown>(options: UseObjectOptions<T>) {
+export function experimental_useObject<T = unknown, INPUT = unknown>(options: UseObjectOptions<T>) {
   const id = options.id ?? generateId('object')
   const store = getOrCreateStore(id, options)
   store.subscribers += 1
@@ -46,7 +52,7 @@ export function experimental_useObject<T = unknown>(options: UseObjectOptions<T>
     }
   })
 
-  async function submit(input: string, submitOptions: { body?: Record<string, unknown> } = {}) {
+  async function submit(input: INPUT, submitOptions: ObjectRequestOptions = {}) {
     store.isLoading.value = true
     store.error.value = undefined
     store.text = ''
@@ -62,8 +68,8 @@ export function experimental_useObject<T = unknown>(options: UseObjectOptions<T>
         schema: jsonSchema,
         output: { type: 'object', schema: jsonSchema },
       }
-      const headers = await resolve(options.headers)
-      const credentials = await resolve(options.credentials)
+      const headers = mergeHeaders(await resolve(options.headers), submitOptions.headers)
+      const credentials = submitOptions.credentials ?? (await resolve(options.credentials))
       const prepared = await options.prepareRequest?.({
         api: options.api ?? '/api/object',
         body,
@@ -169,7 +175,7 @@ function getOrCreateStore<T>(id: string, options: UseObjectOptions<T>): ObjectSt
   }
   const store: ObjectStore<T> = {
     subscribers: 0,
-    object: shallowRef<DeepPartial<T> | undefined>(options.initialObject),
+    object: shallowRef<DeepPartial<T> | undefined>(options.initialValue),
     error: shallowRef(),
     isLoading: ref(false),
     text: '',
@@ -193,6 +199,10 @@ function headersToRecord(headers: HeadersInit | undefined): Record<string, strin
     return Object.fromEntries(headers)
   }
   return headers as Record<string, string>
+}
+
+function mergeHeaders(...headers: Array<HeadersInit | undefined>): HeadersInit | undefined {
+  return Object.assign({}, ...headers.map(headersToRecord))
 }
 
 export function jsonSchema<T = unknown>(schema: JsonSchema): SchemaLike<T> {

@@ -24,8 +24,6 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { AiModel } from '../models';
 // @ts-ignore
-import type { GenerateTextRequest } from '../models';
-// @ts-ignore
 import type { TestCompletionStreamRequest } from '../models';
 // @ts-ignore
 import type { TestEmbeddingRequest } from '../models';
@@ -35,8 +33,6 @@ import type { TestEmbeddingResponse } from '../models';
 import type { TestObjectStreamRequest } from '../models';
 // @ts-ignore
 import type { TestUiMessageChatRequest } from '../models';
-// @ts-ignore
-import type { TextStreamPart } from '../models';
 // @ts-ignore
 import type { UIMessageChunk } from '../models';
 /**
@@ -170,66 +166,6 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * Test text generation with Halo text stream response.
-         * @param {string} name Model name (AiModel.metadata.name)
-         * @param {boolean} [enableTestTool] Whether to inject the console-only halo_test_info tool for tool calling tests.
-         * @param {boolean} [enableTestToolApproval] Whether the console-only halo_test_info tool should require caller approval before execution.
-         * @param {boolean} [enableToolCallRepair] Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
-         * @param {GenerateTextRequest} [generateTextRequest] 
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        testModelChatStream: async (name: string, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableToolCallRepair?: boolean, generateTextRequest?: GenerateTextRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'name' is not null or undefined
-            assertParamExists('testModelChatStream', 'name', name)
-            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream`
-                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication basicAuth required
-            // http basic authentication required
-            setBasicAuthToObject(localVarRequestOptions, configuration)
-
-            // authentication bearerAuth required
-            // http bearer authentication required
-            await setBearerAuthToObject(localVarHeaderParameter, configuration)
-
-            if (enableTestTool !== undefined) {
-                localVarQueryParameter['enableTestTool'] = enableTestTool;
-            }
-
-            if (enableTestToolApproval !== undefined) {
-                localVarQueryParameter['enableTestToolApproval'] = enableTestToolApproval;
-            }
-
-            if (enableToolCallRepair !== undefined) {
-                localVarQueryParameter['enableToolCallRepair'] = enableToolCallRepair;
-            }
-
-
-    
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(generateTextRequest, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -534,22 +470,6 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Test text generation with Halo text stream response.
-         * @param {string} name Model name (AiModel.metadata.name)
-         * @param {boolean} [enableTestTool] Whether to inject the console-only halo_test_info tool for tool calling tests.
-         * @param {boolean} [enableTestToolApproval] Whether the console-only halo_test_info tool should require caller approval before execution.
-         * @param {boolean} [enableToolCallRepair] Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
-         * @param {GenerateTextRequest} [generateTextRequest] 
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async testModelChatStream(name: string, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableToolCallRepair?: boolean, generateTextRequest?: GenerateTextRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TextStreamPart>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelChatStream(name, enableTestTool, enableTestToolApproval, enableToolCallRepair, generateTextRequest, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelChatStream']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
          * Test prompt completion with plain text stream response.
          * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestCompletionStreamRequest} testCompletionStreamRequest 
@@ -655,15 +575,6 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(axios, basePath));
         },
         /**
-         * Test text generation with Halo text stream response.
-         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<TextStreamPart> {
-            return localVarFp.testModelChatStream(requestParameters.name, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableToolCallRepair, requestParameters.generateTextRequest, options).then((request) => request(axios, basePath));
-        },
-        /**
          * Test prompt completion with plain text stream response.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelCompletionStreamRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -758,48 +669,6 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest 
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModels
      */
     readonly fieldSelector?: Array<string>
-}
-
-/**
- * Request parameters for testModelChatStream operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
- * @export
- * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest
- */
-export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest {
-    /**
-     * Model name (AiModel.metadata.name)
-     * @type {string}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
-     */
-    readonly name: string
-
-    /**
-     * Whether to inject the console-only halo_test_info tool for tool calling tests.
-     * @type {boolean}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
-     */
-    readonly enableTestTool?: boolean
-
-    /**
-     * Whether the console-only halo_test_info tool should require caller approval before execution.
-     * @type {boolean}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
-     */
-    readonly enableTestToolApproval?: boolean
-
-    /**
-     * Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
-     * @type {boolean}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
-     */
-    readonly enableToolCallRepair?: boolean
-
-    /**
-     * 
-     * @type {GenerateTextRequest}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStream
-     */
-    readonly generateTextRequest?: GenerateTextRequest
 }
 
 /**
@@ -966,17 +835,6 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
      */
     public listModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest = {}, options?: RawAxiosRequestConfig) {
         return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Test text generation with Halo text stream response.
-     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest} requestParameters Request parameters.
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
-     */
-    public testModelChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelChatStreamRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelChatStream(requestParameters.name, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableToolCallRepair, requestParameters.generateTextRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

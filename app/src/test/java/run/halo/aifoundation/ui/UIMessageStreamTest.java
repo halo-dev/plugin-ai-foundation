@@ -30,7 +30,7 @@ class UIMessageStreamTest {
         assertThat(UIMessageChunks.textDelta("text-1", "hello").type())
             .isEqualTo(UIMessageChunkType.TEXT_DELTA);
         assertThat(UIMessageChunks.data("sources", List.of("a")).type())
-            .isEqualTo(UIMessageChunkType.DATA);
+            .isEqualTo("data-sources");
         assertThat(UIMessageChunks.transientData("status", "retrieving"))
             .extracting(DataChunk::transientData)
             .isEqualTo(true);
@@ -289,12 +289,12 @@ class UIMessageStreamTest {
                 UIMessageChunkType.REASONING_END,
                 UIMessageChunkType.SOURCE_URL,
                 UIMessageChunkType.FILE,
-                UIMessageChunkType.TOOL_INPUT_START,
-                UIMessageChunkType.TOOL_INPUT_DELTA,
-                UIMessageChunkType.TOOL_CALL,
-                UIMessageChunkType.TOOL_RESULT,
-                UIMessageChunkType.TOOL_ERROR,
-                UIMessageChunkType.TOOL_APPROVAL_REQUEST,
+                "tool-weather",
+                "tool-weather",
+                "tool-weather",
+                "tool-weather",
+                "tool-weather",
+                "tool-payment",
                 UIMessageChunkType.FINISH_STEP,
                 UIMessageChunkType.FINISH,
                 UIMessageChunkType.ERROR,
@@ -336,7 +336,7 @@ class UIMessageStreamTest {
             .contains("\"id\":\"text-1\"")
             .contains("\"delta\":\"hello\"");
         assertThat(mapper.writeValueAsString(UIMessageChunks.data("status", "ready", true)))
-            .contains("\"type\":\"data\"")
+            .contains("\"type\":\"data-status\"")
             .contains("\"transientData\":true");
         assertThat(mapper.writeValueAsString(UIMessageChunks.start("msg-1",
                 Map.of("status", "start"))))

@@ -41,11 +41,11 @@ class UIMessageConversionValidationTest {
         var result = UIMessageConverters.convertToModelMessages(List.of(
             new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
                 UIMessageParts.text("text", "checking"),
-                UIMessageParts.toolCall("call-1", "weather", Map.of("city", "Hangzhou"),
+                UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("city", "Hangzhou"), null, Map.of("temp", 20), null, null,
                     Map.of()),
-                UIMessageParts.toolResult("call-1", "weather", Map.of("temp", 20), Map.of()),
-                UIMessageParts.toolCall("call-2", "search", Map.of("q", "Halo"), Map.of()),
-                UIMessageParts.toolError("call-2", "search", "failed", Map.of())
+                UIMessageParts.tool("call-2", "search", ToolPartState.OUTPUT_ERROR,
+                    Map.of("q", "Halo"), null, null, "failed", null, Map.of())
             ), new Metadata("chat"))
         ));
 
@@ -65,6 +65,62 @@ class UIMessageConversionValidationTest {
         assertThat(result.messages().get(3).getRole()).isEqualTo(ModelMessageRole.TOOL);
         assertThat(result.messages().get(3).getContent()).extracting(ModelMessagePart::getType)
             .containsExactly(PartType.TOOL_ERROR);
+    }
+
+    @Test
+    void convertsDynamicTerminalToolsAndSkipsPendingTools() {
+        var result = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
+                UIMessageParts.text("text", "checking"),
+                UIMessageParts.tool("call-1", "weather", ToolPartState.INPUT_AVAILABLE,
+                    Map.of("city", "Hangzhou"), null, null, null, null, Map.of()),
+                UIMessageParts.tool("call-2", "search", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("q", "Halo"), null, Map.of("result", "Halo"), null, null, Map.of()),
+                UIMessageParts.tool("call-3", "pay", ToolPartState.OUTPUT_ERROR,
+                    Map.of("amount", 1), null, null, "Denied", new ToolApproval(
+                        "approval-1", false, "Denied by user"), Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.warnings()).extracting(UIMessageConversionWarning::code)
+            .containsExactly("tool.pending-skipped");
+        assertThat(result.messages()).hasSize(4);
+        assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
+        assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TEXT, PartType.TOOL_CALL);
+        assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
+        assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_RESULT);
+        assertThat(result.messages().get(1).getContent().get(0).getResult())
+            .isEqualTo(Map.of("result", "Halo"));
+        assertThat(result.messages().get(2).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
+        assertThat(result.messages().get(2).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_CALL);
+        assertThat(result.messages().get(3).getRole()).isEqualTo(ModelMessageRole.TOOL);
+        assertThat(result.messages().get(3).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_ERROR);
+        assertThat(result.messages().get(3).getContent().getFirst().getErrorText())
+            .isEqualTo("Denied");
+    }
+
+    @Test
+    void convertsApprovedToolApprovalWithOriginalToolCall() {
+        var result = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
+                UIMessageParts.tool("call-1", "halo_test_info", ToolPartState.INPUT_AVAILABLE,
+                    Map.of("query", "hello"), null, null, null,
+                    new ToolApproval("approval-1", true, "approved"), Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.warnings()).isEmpty();
+        assertThat(result.messages()).hasSize(2);
+        assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
+        assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST);
+        assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
+        assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_APPROVAL_RESPONSE);
     }
 
     @Test
@@ -88,16 +144,15 @@ class UIMessageConversionValidationTest {
     }
 
     @Test
-    void convertsApprovalRequestAndResponseWithToolBoundaryOrder() {
+    void convertsTerminalToolWithBoundaryOrder() {
         var result = UIMessageConverters.convertToModelMessages(List.of(
             new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
                 UIMessageParts.reasoning("reasoning-1", "Need payment approval.",
                     Map.of("signature", "opaque")),
-                UIMessageParts.toolApprovalRequest("approval-1", "call-1", "pay",
-                    Map.of("amount", 1), 0, Map.of("provider", "meta")),
-                UIMessageParts.toolApprovalResponse("approval-1", "call-1", "pay", true,
-                    "Approved", Map.of("approval", "meta")),
-                UIMessageParts.toolResult("call-1", "pay", Map.of("ok", true), Map.of()),
+                UIMessageParts.tool("call-1", "pay", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("amount", 1), null, Map.of("ok", true),
+                    null, new ToolApproval("approval-1", true, "Approved"),
+                    Map.of("provider", "meta")),
                 UIMessageParts.text("final", "done")
             ), new Metadata("chat"))
         ));
@@ -106,13 +161,12 @@ class UIMessageConversionValidationTest {
         assertThat(result.messages()).hasSize(3);
         assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
         assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.REASONING, PartType.TOOL_APPROVAL_REQUEST);
+            .containsExactly(PartType.REASONING, PartType.TOOL_CALL);
         assertThat(result.messages().get(0).getContent().getFirst().getProviderOptions())
             .isEqualTo(Map.of("signature", "opaque"));
         assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
         assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TOOL_APPROVAL_RESPONSE, PartType.TOOL_RESULT);
-        assertThat(result.messages().get(1).getContent().getFirst().getApproved()).isTrue();
+            .containsExactly(PartType.TOOL_RESULT);
         assertThat(result.messages().get(2).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
         assertThat(result.messages().get(2).getContent()).extracting(ModelMessagePart::getType)
             .containsExactly(PartType.TEXT);
@@ -139,11 +193,11 @@ class UIMessageConversionValidationTest {
     void appliesNamedDataAndCustomPartConverters() {
         var result = UIMessageConverters.convertToModelMessages(List.of(
             new UIMessage<>("user", UIMessageRole.USER, List.of(
-                UIMessageParts.data("post-draft", Map.of("title", "Hello")),
+                UIMessageParts.data("postDraft", Map.of("title", "Hello")),
                 UIMessageParts.sourceUrl("source-1", "https://halo.run", "Halo", Map.of())
             ), new Metadata("chat-1"))
         ), options -> options
-            .dataConverter("post-draft", (part, context) -> List.of(ModelMessagePart.text(
+            .dataConverter("postDraft", (part, context) -> List.of(ModelMessagePart.text(
                 "Draft: " + ((Map<?, ?>) part.data()).get("title")
             )))
             .partConverter((part, context) -> {
@@ -208,49 +262,43 @@ class UIMessageConversionValidationTest {
         var result = UIMessageValidators.safeValidate(List.of(
             new UIMessage<>("", UIMessageRole.USER, List.of(
                 UIMessageParts.text("", "hello"),
-                UIMessageParts.data("", "value")
+                new DataPart("data-status", "", "status", "value", false)
             ), new Metadata("chat"))
         ));
 
         assertThat(result.isValid()).isFalse();
         assertThat(result.issues()).extracting(UIMessageValidationIssue::code)
             .contains("message.id.required", "part.id.required",
-                "part.data.name.required");
+                "part.data.id.required");
         assertThatThrownBy(() -> UIMessageValidators.validate(result.messages()))
             .isInstanceOf(InvalidUIMessageException.class);
     }
 
     @Test
-    void validatesToolPairingAndDuplicateFinalOutputs() {
+    void validatesDuplicateFinalToolOutputs() {
         var result = UIMessageValidators.safeValidate(List.of(
             new UIMessage<>("m1", UIMessageRole.ASSISTANT, List.of(
-                UIMessageParts.toolResult("missing", "weather", "sunny", Map.of()),
-                UIMessageParts.toolCall("call-1", "weather", Map.of("city", "Hangzhou"),
-                    Map.of()),
-                UIMessageParts.toolResult("call-1", "weather", "sunny", Map.of()),
-                UIMessageParts.toolError("call-1", "weather", "failed", Map.of()),
-                UIMessageParts.toolApprovalRequest("approval-1", "call-2", "pay", Map.of(), 0,
-                    Map.of())
+                UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("city", "Hangzhou"), null, "sunny", null, null, Map.of()),
+                UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_ERROR,
+                    Map.of("city", "Hangzhou"), null, null, "failed", null, Map.of())
             ), new Metadata("chat"))
         ));
 
         assertThat(result.issues()).extracting(UIMessageValidationIssue::code)
-            .contains("tool.result.unmatched", "tool.result.duplicate");
-        assertThat(result.issues()).extracting(UIMessageValidationIssue::code)
-            .doesNotContain("tool.approval.executed");
+            .contains("tool.result.duplicate");
     }
 
     @Test
-    void validatesApprovalResponsesAndPendingToolStates() {
+    void validatesApprovalRequestedAndDeniedToolStates() {
         var valid = UIMessageValidators.safeValidate(List.of(
             new UIMessage<>("m1", UIMessageRole.ASSISTANT, List.of(
-                UIMessageParts.toolApprovalRequest("approval-1", "call-1", "pay",
-                    Map.of("amount", 1), 0, Map.of()),
-                UIMessageParts.toolApprovalResponse("approval-1", "call-1", "pay", true,
-                    "Approved", Map.of()),
-                UIMessageParts.toolResult("call-1", "pay", Map.of("ok", true), Map.of()),
-                UIMessageParts.toolApprovalRequest("approval-2", "call-2", "search",
-                    Map.of("q", "Halo"), 1, Map.of())
+                UIMessageParts.tool("call-1", "pay", ToolPartState.APPROVAL_REQUESTED,
+                    Map.of("amount", 1), null, null, null,
+                    new ToolApproval("approval-1", null, null), Map.of()),
+                UIMessageParts.tool("call-2", "pay", ToolPartState.OUTPUT_ERROR,
+                    Map.of("amount", 2), null, null, "Denied",
+                    new ToolApproval("approval-2", false, "Denied"), Map.of())
             ), new Metadata("chat"))
         ));
 
@@ -259,36 +307,28 @@ class UIMessageConversionValidationTest {
     }
 
     @Test
-    void rejectsInvalidApprovalResponses() {
+    void rejectsInvalidDynamicToolFields() {
         var result = UIMessageValidators.safeValidate(List.of(
             new UIMessage<>("m1", UIMessageRole.ASSISTANT, List.of(
-                UIMessageParts.toolApprovalResponse("missing", "call-missing", "pay", true,
-                    null, Map.of()),
-                UIMessageParts.toolApprovalRequest("approval-1", "call-1", "pay",
-                    Map.of("amount", 1), 0, Map.of()),
-                UIMessageParts.toolApprovalResponse("approval-1", "call-1", "pay", false,
-                    "Denied", Map.of()),
-                UIMessageParts.toolApprovalResponse("approval-1", "call-1", "pay", true,
-                    "Approved again", Map.of()),
-                UIMessageParts.toolResult("call-1", "pay", Map.of("ok", true), Map.of()),
-                UIMessageParts.toolApprovalResponse("approval-2", null, null, null,
-                    null, Map.of())
+                new ToolPart("tool-pay", "", "pay", ToolPartState.OUTPUT_ERROR,
+                    Map.of("amount", 1), null, null, "", null, Map.of()),
+                new ToolPart("tool-search", "call-2", "search", null,
+                    Map.of("q", "Halo"), null, null, null, null, Map.of())
             ), new Metadata("chat"))
         ));
 
         assertThat(result.issues()).extracting(UIMessageValidationIssue::code)
             .contains(
-                "tool.approval-response.unmatched",
-                "tool.approval-response.duplicate",
-                "tool.result.after-denied-approval",
-                "part.tool-approval.approved.required"
+                "part.tool.id.required",
+                "part.tool.error-text.required",
+                "part.tool.state.required"
             );
     }
 
     @Test
     void runsValidatorHooksAndCapturesExceptionsWithoutMutation() {
         var originalParts = new ArrayList<UIMessagePart>();
-        originalParts.add(UIMessageParts.data("post-draft", Map.of("title", "")));
+        originalParts.add(UIMessageParts.data("postDraft", Map.of("title", "")));
         var message = new UIMessage<>("m1", UIMessageRole.USER, originalParts,
             new Metadata("chat"));
 
@@ -296,7 +336,7 @@ class UIMessageConversionValidationTest {
             .metadataValidator((current, metadata, context) -> List.of(
                 new UIMessageValidationIssue(current.id(), current.role().name(), null, null,
                     "metadata.invalid", metadata.chatId())))
-            .dataValidator("post-draft", (current, part, context) -> List.of(
+            .dataValidator("postDraft", (current, part, context) -> List.of(
                 new UIMessageValidationIssue(current.id(), current.role().name(), part.type(),
                     part.name(), "part.data.invalid", "draft title is required")))
             .toolValidator((current, part, context) -> {
@@ -309,7 +349,8 @@ class UIMessageConversionValidationTest {
 
         var toolResult = UIMessageValidators.safeValidate(List.of(
             new UIMessage<>("m2", UIMessageRole.ASSISTANT,
-                List.of(UIMessageParts.toolCall("call-1", "weather", Map.of(), Map.of())),
+                List.of(UIMessageParts.tool("call-1", "weather", ToolPartState.INPUT_AVAILABLE,
+                    Map.of(), null, null, null, null, Map.of())),
                 new Metadata("chat"))
         ), options -> options.toolValidator((current, part, context) -> {
             throw new IllegalStateException("tool validator failed");
@@ -317,5 +358,29 @@ class UIMessageConversionValidationTest {
 
         assertThat(toolResult.issues()).extracting(UIMessageValidationIssue::code)
             .contains("validator.exception");
+    }
+
+    @Test
+    void runsNamedDynamicToolValidators() {
+        var result = UIMessageValidators.safeValidate(List.of(
+            new UIMessage<>("m1", UIMessageRole.ASSISTANT, List.of(
+                UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("city", ""), null, Map.of("temp", 20), null, null, Map.of()),
+                UIMessageParts.tool("call-2", "search", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("q", "Halo"), null, Map.of("result", "Halo"), null, null, Map.of())
+            ), new Metadata("chat"))
+        ), options -> options.toolValidator("weather", (current, part, context) -> {
+            var tool = (ToolPart) part;
+            var input = (Map<?, ?>) tool.input();
+            return input.get("city").toString().isBlank()
+                ? List.of(new UIMessageValidationIssue(current.id(), current.role().name(),
+                    tool.type(), tool.toolCallId(), "tool.weather.city.required",
+                    "Weather tool city is required"))
+                : List.of();
+        }));
+
+        assertThat(result.issues()).extracting(UIMessageValidationIssue::code)
+            .contains("tool.weather.city.required")
+            .doesNotContain("validator.exception");
     }
 }

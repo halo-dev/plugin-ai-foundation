@@ -18,6 +18,8 @@ import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolResult;
 import org.junit.jupiter.api.Test;
 
 class UIMessageChatHandlerTest {
@@ -61,6 +63,50 @@ class UIMessageChatHandlerTest {
         assertThat(finish.responseMessage().text()).isEqualTo("Hello");
         assertThat(finish.messages()).hasSize(2);
         assertThat(capturedFinish.get()).isEqualTo(finish);
+    }
+
+    @Test
+    void streamsDynamicToolProtocolThroughResponseAndFinishAggregation() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.start("assistant-1"),
+            TextStreamPart.toolInputStart("input-1", "call-1", "delete-file"),
+            TextStreamPart.toolInputDelta("input-1", "call-1", "delete-file", "{\"path\""),
+            TextStreamPart.toolInputDelta("input-1", "call-1", "delete-file", ":\"/tmp/a\"}"),
+            TextStreamPart.toolCall(ToolCall.builder()
+                .toolCallId("call-1")
+                .toolName("delete-file")
+                .input(Map.of("path", "/tmp/a"))
+                .build()),
+            TextStreamPart.toolResult(ToolResult.builder()
+                .toolCallId("call-1")
+                .toolName("delete-file")
+                .result(Map.of("deleted", true))
+                .build()),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var user = new UIMessage<>("user-1", UIMessageRole.USER,
+            List.of(UIMessageParts.text("user-text", "Weather?")), new Metadata("chat-1"));
+
+        var chat = UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .model(model)
+            .messages(List.of(user))
+            .serializer(chunk -> chunk.type())
+            .metadataSupplier(() -> new Metadata("chat-1")));
+
+        var body = chat.response().body().collectList().block();
+        var finish = chat.finish().block();
+
+        assertThat(body).contains("data: tool-delete-file\n\n");
+        assertThat(finish.responseMessage().parts()).filteredOn(ToolPart.class::isInstance)
+            .singleElement()
+            .satisfies(part -> {
+                var tool = (ToolPart) part;
+                assertThat(tool.type()).isEqualTo("tool-delete-file");
+                assertThat(tool.toolCallId()).isEqualTo("call-1");
+                assertThat(tool.state()).isEqualTo(ToolPartState.OUTPUT_AVAILABLE);
+                assertThat(tool.input()).isEqualTo(Map.of("path", "/tmp/a"));
+                assertThat(tool.output()).isEqualTo(Map.of("deleted", true));
+            });
     }
 
     @Test

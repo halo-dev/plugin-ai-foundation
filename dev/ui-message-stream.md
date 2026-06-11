@@ -194,9 +194,9 @@ X-Halo-AI-UI-Message-Stream: v1
 
 `useChat` 暴露 `messages`、`status`、`error`、`isLoading`，以及 `sendMessage`、
 `regenerate`、`stop`、`setMessages`、`clearError`、`addToolOutput`、
-`addToolResult`、`addToolError`、`addToolApprovalResponse`。同一个 `id` 的多个 `useChat`
-调用会共享消息状态。`addToolOutput` 和 `addToolApprovalResponse` 会从已有 assistant
-message parts 中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
+`rejectToolCall`、`isLastAssistantMessageToolComplete`。同一个 `id` 的多个 `useChat`
+调用会共享消息状态。`addToolOutput` 和 `rejectToolCall` 会从已有 assistant message
+parts 中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
 
 如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成
 assistant 的 text part，但不会提供工具、reasoning、data、source/file 等 UIMessage
@@ -395,67 +395,86 @@ Mono<UIMessageStreamTerminal> terminal = read.finish();
 | `data` 且 `transientData=true` | 不进入 `UIMessage.parts` |
 | `message-metadata` | 合并到 `UIMessage.metadata` |
 | `source-url` / `file` | 写入或替换 source/file part |
-| `tool-call` / `tool-result` / `tool-error` / `tool-approval-request` / `tool-approval-response` | 写入或替换工具相关 part |
-| `tool-input-start` / `tool-input-delta` | 不进入 `UIMessage.parts` |
+| `tool-*` | 按 `toolCallId` 写入或替换同一个动态工具 part |
 | `finish-step` / `error` / `abort` | 只更新终态信息 |
 
 ## 工具续跑
 
-`UIMessage` 不使用 `TOOL` role。工具调用、工具结果、工具错误、审批请求和审批响应都保存在
-assistant `UIMessage.parts()` 中；转换为模型请求时，SDK 会按 part 顺序拆成 assistant
-和 tool `ModelMessage`。
+`UIMessage` 不使用 `TOOL` role。工具生命周期保存在 assistant `UIMessage.parts()` 中的
+动态 `tool-*` part；转换为模型请求时，SDK 会按 part 顺序拆成 assistant 和 tool
+`ModelMessage`。
 
-外部工具执行成功后，把结果追加到包含原始 `tool-call` 的 assistant 消息：
+外部工具执行成功后，把包含原始 `tool-*` part 的 assistant 消息更新为 `output-available`：
 
 ```java
 UIMessage<ChatMetadata> updatedAssistant = assistant.withParts(Stream.concat(
     assistant.parts().stream()
-        .filter(part -> !(part instanceof ToolResultPart result
-            && "call_1".equals(result.toolCallId())))
-        .filter(part -> !(part instanceof ToolErrorPart error
-            && "call_1".equals(error.toolCallId()))),
-    Stream.of(UIMessageParts.toolResult("call_1", "search_docs",
-        Map.of("title", "Halo"), Map.of()))
+        .filter(part -> !(part instanceof ToolPart tool
+            && "call_1".equals(tool.toolCallId()))),
+    Stream.of(UIMessageParts.tool(
+        "call_1",
+        "search_docs",
+        ToolPartState.OUTPUT_AVAILABLE,
+        Map.of("query", "Halo"),
+        null,
+        Map.of("title", "Halo"),
+        null,
+        null,
+        Map.of()))
 ).toList());
 ```
 
-外部工具失败时追加 `tool-error`：
+外部工具失败时把同一个工具 part 更新为 `output-error`：
 
 ```java
-UIMessagePart toolError = UIMessageParts.toolError(
+UIMessagePart toolError = UIMessageParts.tool(
     "call_1",
     "search_docs",
+    ToolPartState.OUTPUT_ERROR,
+    Map.of("query", "Halo"),
+    null,
+    null,
     "文档服务暂时不可用",
+    null,
     Map.of()
 );
 ```
 
-审批通过或拒绝时追加 `tool-approval-response`：
+审批通过时把审批请求对应的工具 part 更新为 `input-available`，并保留审批结果：
 
 ```java
-UIMessagePart approved = UIMessageParts.toolApprovalResponse(
-    "approval_call_1",
+UIMessagePart approved = UIMessageParts.tool(
     "call_1",
     "delete_file",
-    true,
-    "用户已确认",
-    Map.of()
-);
-
-UIMessagePart denied = UIMessageParts.toolApprovalResponse(
-    "approval_call_1",
-    "call_1",
-    "delete_file",
-    false,
-    "用户拒绝删除",
+    ToolPartState.INPUT_AVAILABLE,
+    Map.of("path", "/tmp/example.txt"),
+    null,
+    null,
+    null,
+    new ToolApproval("approval_call_1", true, "用户已确认"),
     Map.of()
 );
 ```
 
-拒绝审批只需要保存 `approved=false` 的审批响应，不需要额外合成 `tool-error`。同一个
-`toolCallId` 最多只能有一个最终输出：`tool-result` 或 `tool-error`。同一个
-`approvalId` 最多只能有一个审批响应。审批或外部工具处理完成后，把更新后的
-`UIMessageChatRequest` 再次传给 `UIMessageChatHandlers.streamText(...)` 即可继续生成。
+审批拒绝时把同一个工具 part 更新为 `output-error`：
+
+```java
+UIMessagePart denied = UIMessageParts.tool(
+    "call_1",
+    "delete_file",
+    ToolPartState.OUTPUT_ERROR,
+    Map.of("path", "/tmp/example.txt"),
+    null,
+    null,
+    "用户拒绝删除",
+    new ToolApproval("approval_call_1", false, "用户拒绝删除"),
+    Map.of()
+);
+```
+
+拒绝审批不需要额外创建第二个 part；同一个 `toolCallId` 始终只保留一个工具 part。
+审批或外部工具处理完成后，把更新后的 `UIMessageChatRequest` 再次传给
+`UIMessageChatHandlers.streamText(...)` 即可继续生成。
 
 ## 消息 Metadata
 
@@ -522,14 +541,14 @@ UIMessageConversionResult conversion =
 | --- | --- |
 | `TextPart` | 转为模型文本 |
 | `ReasoningPart` | 由当前模型能力决定；支持 reasoning history 时保留，不支持时丢弃并记录 warning |
-| `ToolCallPart` | 转为 assistant 工具调用内容 |
-| `ToolResultPart` / `ToolErrorPart` | 转为 tool 消息 |
-| `ToolApprovalRequestPart` | 转为 assistant 审批请求内容 |
-| `ToolApprovalResponsePart` | 转为 tool 消息 |
+| `ToolPart` + `input-available` | 转为 assistant 工具调用内容 |
+| `ToolPart` + `approval-requested` | 转为 assistant 审批请求内容 |
+| `ToolPart` + `output-available` / `output-error` | 转为 tool 消息 |
+| `ToolPart` + 已通过审批的 `input-available` | 转为 assistant 审批请求内容和 tool 审批响应消息 |
 | `DataPart` | 跳过并记录 warning，除非注册 converter |
 | `SourceUrlPart` / `FilePart` | 跳过并记录 warning |
 
-转换会保留工具边界。例如 assistant 文本后面出现 `tool-result`，再出现 assistant 文本，
+转换会保留工具边界。例如 assistant 文本后面出现 `output-available` 工具 part，再出现 assistant 文本，
 结果会拆成 assistant、tool、assistant 三段 `ModelMessage`。连续的 tool 响应可以合并在
 同一个 tool `ModelMessage` 中。
 
@@ -624,6 +643,6 @@ UIMessageChatHandlers.streamText(options -> options
 | --- | --- |
 | WebFlux adapter | 当前由调用方手写少量 request/response 代码 |
 | stop endpoint | 需要 active stream registry 后再设计 |
-| resume/reconnect/replay | 需要 stream id、重放或继续策略 |
+| resume/reconnect/replay | 当前不提供，需要 stream id、重放或继续策略 |
 | active stream registry | 当前不跨请求保存运行中的 stream |
 | stream id 协议 | 后续和停止、恢复、重连一起设计 |

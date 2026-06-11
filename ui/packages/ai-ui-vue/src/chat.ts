@@ -1,19 +1,21 @@
-import { isAbortError, toError } from './errors'
+import { isAbortError, isProtocolError, toError } from './errors'
 import { generateId } from './id'
 import {
-  appendToolApprovalResponse,
-  appendToolError,
-  appendToolResult,
   applyUIMessageChunk,
   createUIMessageReducer,
+  withToolApprovalDecision,
+  withToolError,
+  withToolOutput,
 } from './message-reducer'
-import { DefaultChatTransport, createUserMessage } from './transports'
+import { DefaultChatTransport } from './transports'
 import type {
   ChatRequestOptions,
   ChatStatus,
   ChatTransport,
+  DataPart,
+  FilePart,
   IdGenerator,
-  ToolApprovalRequestPart,
+  ToolPart,
   ToolApprovalResponseInput,
   ToolOutputInput,
   ToolOutputSuccessInput,
@@ -38,6 +40,8 @@ export interface ChatInit<METADATA = unknown> {
   transport?: ChatTransport<METADATA>
   generateId?: IdGenerator
   onError?: (error: Error) => void
+  onData?: (part: DataPart) => void
+  onToolCall?: (part: ToolPart) => void
   onFinish?: (event: {
     message: UIMessage<METADATA>
     messages: UIMessage<METADATA>[]
@@ -54,10 +58,13 @@ export interface SendMessageInput<METADATA = unknown> {
   id?: string
   role?: 'user'
   text?: string
+  files?: SendMessageFileInput[]
   parts?: UIMessage['parts']
   metadata?: METADATA
   messageId?: string
 }
+
+export type SendMessageFileInput = Omit<FilePart, 'type' | 'id'> & { id?: string }
 
 export class Chat<METADATA = unknown> {
   readonly id: string
@@ -65,8 +72,12 @@ export class Chat<METADATA = unknown> {
   private readonly state: ChatStateAdapter<METADATA>
   private readonly transport: ChatTransport<METADATA>
   private readonly onError?: ChatInit<METADATA>['onError']
+  private readonly onData?: ChatInit<METADATA>['onData']
+  private readonly onToolCall?: ChatInit<METADATA>['onToolCall']
   private readonly onFinish?: ChatInit<METADATA>['onFinish']
   private readonly sendAutomaticallyWhen?: ChatInit<METADATA>['sendAutomaticallyWhen']
+  private readonly notifiedToolCalls = new Set<string>()
+  private readonly listeners = new Set<() => void>()
   private activeAbortController?: AbortController
 
   constructor(init: ChatInit<METADATA> = {}) {
@@ -79,6 +90,8 @@ export class Chat<METADATA = unknown> {
       })
     this.transport = init.transport ?? new DefaultChatTransport<METADATA>()
     this.onError = init.onError
+    this.onData = init.onData
+    this.onToolCall = init.onToolCall
     this.onFinish = init.onFinish
     this.sendAutomaticallyWhen = init.sendAutomaticallyWhen
   }
@@ -100,13 +113,20 @@ export class Chat<METADATA = unknown> {
   }
 
   setMessages(messages: UIMessage<METADATA>[]): void {
-    this.state.setMessages([...messages])
+    this.setChatMessages([...messages])
   }
 
   clearError(): void {
-    this.state.setError(undefined)
-    if (this.status === 'error') {
-      this.state.setStatus('ready')
+    this.setChatError(undefined)
+    if (this.status === 'error' || this.status === 'disconnected') {
+      this.setChatStatus('ready')
+    }
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
     }
   }
 
@@ -144,7 +164,17 @@ export class Chat<METADATA = unknown> {
     this.activeAbortController?.abort()
   }
 
-  async addToolResult(
+  isLastAssistantMessageToolComplete(): boolean {
+    const assistant = [...this.messages].reverse().find((message) => message.role === 'assistant')
+    if (!assistant) {
+      return true
+    }
+    return assistant.parts
+      .filter(isToolPart)
+      .every((part) => part.state === 'output-available' || part.state === 'output-error')
+  }
+
+  private async appendToolOutputSuccess(
     input: {
       toolCallId: string
       toolName?: string
@@ -155,12 +185,12 @@ export class Chat<METADATA = unknown> {
   ): Promise<void> {
     const tool = this.resolveToolCall(input.toolCallId, input.toolName)
     this.updateLastAssistant((message) =>
-      appendToolResult(message, { ...input, toolName: tool.toolName })
+      withToolOutput(message, { ...input, toolName: tool.toolName })
     )
     await this.maybeSendAutomatically(options)
   }
 
-  async addToolError(
+  private async appendToolOutputError(
     input: {
       toolCallId: string
       toolName?: string
@@ -171,7 +201,7 @@ export class Chat<METADATA = unknown> {
   ): Promise<void> {
     const tool = this.resolveToolCall(input.toolCallId, input.toolName)
     this.updateLastAssistant((message) =>
-      appendToolError(message, { ...input, toolName: tool.toolName })
+      withToolError(message, { ...input, toolName: tool.toolName })
     )
     await this.maybeSendAutomatically(options)
   }
@@ -179,7 +209,7 @@ export class Chat<METADATA = unknown> {
   async addToolOutput(input: ToolOutputInput, options?: ChatRequestOptions): Promise<void> {
     const toolName = input.toolName ?? input.tool
     if ('state' in input && input.state === 'output-error') {
-      await this.addToolError(
+      await this.appendToolOutputError(
         {
           toolCallId: input.toolCallId,
           toolName,
@@ -191,7 +221,7 @@ export class Chat<METADATA = unknown> {
       return
     }
     const outputInput = input as ToolOutputSuccessInput
-    await this.addToolResult(
+    await this.appendToolOutputSuccess(
       {
         toolCallId: outputInput.toolCallId,
         toolName,
@@ -202,17 +232,25 @@ export class Chat<METADATA = unknown> {
     )
   }
 
-  async addToolApprovalResponse(
-    input: ToolApprovalResponseInput,
+  async rejectToolCall(
+    input: Omit<ToolApprovalResponseInput, 'approved'> & { approved?: false },
     options?: ChatRequestOptions
   ): Promise<void> {
-    const approval = this.resolveApprovalRequest(input.id ?? input.approvalId)
+    const approval =
+      input.id || input.approvalId
+        ? this.resolveApprovalRequest(input.id ?? input.approvalId)
+        : undefined
+    const toolCallId = input.toolCallId ?? approval?.toolCallId
+    if (!toolCallId) {
+      throw new Error('Tool call id is required.')
+    }
+    const tool = this.resolveToolCall(toolCallId, input.toolName ?? input.tool)
     this.updateLastAssistant((message) =>
-      appendToolApprovalResponse(message, {
-        approvalId: approval.approvalId,
-        toolCallId: input.toolCallId ?? approval.toolCallId,
-        toolName: input.toolName ?? input.tool ?? approval.toolName,
-        approved: input.approved,
+      withToolApprovalDecision(message, {
+        approvalId: approval?.approval?.id ?? input.id ?? input.approvalId ?? toolCallId,
+        toolCallId,
+        toolName: input.toolName ?? input.tool ?? tool.toolName,
+        approved: false,
         reason: input.reason,
         providerMetadata: input.providerMetadata,
       })
@@ -222,18 +260,12 @@ export class Chat<METADATA = unknown> {
 
   private applyUserMessage(message: SendMessageInput<METADATA>): void {
     const messages = this.messages
-    const nextMessage =
-      message.text != null
-        ? ({
-            ...createUserMessage(message.text, message.id ?? this.generateId()),
-            metadata: message.metadata,
-          } as UIMessage<METADATA>)
-        : ({
-            id: message.id ?? this.generateId(),
-            role: message.role ?? 'user',
-            parts: message.parts ?? [],
-            metadata: message.metadata,
-          } as UIMessage<METADATA>)
+    const nextMessage = {
+      id: message.id ?? this.generateId(),
+      role: message.role ?? 'user',
+      parts: this.userMessageParts(message),
+      metadata: message.metadata,
+    } as UIMessage<METADATA>
 
     if (message.messageId) {
       const index = messages.findIndex((item) => item.id === message.messageId)
@@ -253,6 +285,28 @@ export class Chat<METADATA = unknown> {
     this.setMessages([...messages, nextMessage])
   }
 
+  private userMessageParts(message: SendMessageInput<METADATA>): UIMessage['parts'] {
+    if (message.parts) {
+      return message.parts
+    }
+    const parts: UIMessage['parts'] = []
+    if (message.text != null) {
+      parts.push({ type: 'text', id: generateId('text'), text: message.text })
+    }
+    for (const file of message.files ?? []) {
+      parts.push({
+        type: 'file',
+        id: file.id ?? generateId('file'),
+        url: file.url,
+        title: file.title,
+        mediaType: file.mediaType,
+        data: file.data,
+        providerMetadata: file.providerMetadata,
+      })
+    }
+    return parts
+  }
+
   private async makeRequest({
     trigger,
     messageId,
@@ -266,43 +320,71 @@ export class Chat<METADATA = unknown> {
     allowAutoSubmit?: boolean
     requestMessages?: UIMessage<METADATA>[]
   }) {
-    this.state.setStatus('submitted')
-    this.state.setError(undefined)
+    const outcome = await this.consumeAssistantStream({
+      reducerMessageId: this.generateId(),
+      createStream: (abortSignal) =>
+        this.transport.sendMessages({
+          chatId: this.id,
+          messages: requestMessages ?? this.messages,
+          trigger,
+          messageId,
+          headers: options?.headers,
+          body: options?.body,
+          credentials: options?.credentials,
+          metadata: options?.metadata,
+          abortSignal,
+        }),
+    })
+
+    if (this.status === 'ready' && !outcome.isError && allowAutoSubmit && (await this.shouldSendAutomatically())) {
+      await this.makeRequest({
+        trigger: 'submit-message',
+        messageId: this.messages[this.messages.length - 1]?.id,
+        options,
+        allowAutoSubmit: false,
+      })
+    }
+  }
+
+  private async consumeAssistantStream({
+    reducerMessageId,
+    createStream,
+  }: {
+    reducerMessageId: string
+    createStream: (abortSignal: AbortSignal) => Promise<AsyncIterable<UIMessageChunk>>
+  }): Promise<{ isAbort: boolean; isError: boolean }> {
+    this.setChatStatus('submitted')
+    this.setChatError(undefined)
     let isAbort = false
     let isError = false
+    let hasStartedReadableStream = false
     const abortController = new AbortController()
     this.activeAbortController = abortController
-    const reducer = createUIMessageReducer<METADATA>({ messageId: this.generateId() })
+    const reducer = createUIMessageReducer<METADATA>({ messageId: reducerMessageId })
 
     try {
-      const stream = await this.transport.sendMessages({
-        chatId: this.id,
-        messages: requestMessages ?? this.messages,
-        trigger,
-        messageId,
-        headers: options?.headers,
-        body: options?.body,
-        credentials: options?.credentials,
-        metadata: options?.metadata,
-        abortSignal: abortController.signal,
-      })
-
+      const stream = await createStream(abortController.signal)
       for await (const chunk of stream) {
-        this.state.setStatus('streaming')
         this.applyAssistantChunk(reducer, chunk)
+        hasStartedReadableStream = true
+        this.setChatStatus('streaming')
       }
-
-      this.state.setStatus('ready')
+      this.setChatStatus('ready')
     } catch (error) {
       if (isAbortError(error) || abortController.signal.aborted) {
         isAbort = true
-        this.state.setStatus('ready')
-        return
+        this.setChatStatus('ready')
+        return { isAbort, isError }
       }
       isError = true
       const normalized = toError(error)
-      this.state.setError(normalized)
-      this.state.setStatus('error')
+      this.setChatError(normalized)
+      if (hasStartedReadableStream && !isProtocolError(normalized)) {
+        isError = false
+        this.setChatStatus('disconnected')
+      } else {
+        this.setChatStatus('error')
+      }
       this.onError?.(normalized)
     } finally {
       if (this.activeAbortController === abortController) {
@@ -316,15 +398,7 @@ export class Chat<METADATA = unknown> {
         isError,
       })
     }
-
-    if (!isError && allowAutoSubmit && (await this.shouldSendAutomatically())) {
-      await this.makeRequest({
-        trigger: 'submit-message',
-        messageId: this.messages[this.messages.length - 1]?.id,
-        options,
-        allowAutoSubmit: false,
-      })
-    }
+    return { isAbort, isError }
   }
 
   private applyAssistantChunk(
@@ -332,6 +406,23 @@ export class Chat<METADATA = unknown> {
     chunk: UIMessageChunk
   ) {
     applyUIMessageChunk(reducer, chunk)
+    if (isDataChunk(chunk)) {
+      this.onData?.({
+        type: chunk.type,
+        id: chunk.id,
+        name: chunk.name,
+        data: chunk.data,
+        transientData: chunk.transient,
+      })
+    }
+    const lastPart = reducer.message.parts[reducer.message.parts.length - 1]
+    if (lastPart && isToolPart(lastPart) && lastPart.state === 'input-available') {
+      const tool = lastPart
+      if (!this.notifiedToolCalls.has(tool.toolCallId)) {
+        this.notifiedToolCalls.add(tool.toolCallId)
+        this.onToolCall?.(tool)
+      }
+    }
     if (!reducer.visible && chunk.type !== 'error' && chunk.type !== 'abort') {
       return
     }
@@ -366,7 +457,7 @@ export class Chat<METADATA = unknown> {
     return { toolName: resolvedToolName }
   }
 
-  private resolveApprovalRequest(approvalId: string | undefined): ToolApprovalRequestPart {
+  private resolveApprovalRequest(approvalId: string | undefined): ToolPart {
     if (!approvalId) {
       throw new Error('Tool approval id is required.')
     }
@@ -396,6 +487,27 @@ export class Chat<METADATA = unknown> {
       return false
     }
     return Boolean(await this.sendAutomaticallyWhen({ messages: this.messages }))
+  }
+
+  private setChatMessages(messages: UIMessage<METADATA>[]): void {
+    this.state.setMessages(messages)
+    this.emitChange()
+  }
+
+  private setChatStatus(status: ChatStatus): void {
+    this.state.setStatus(status)
+    this.emitChange()
+  }
+
+  private setChatError(error: Error | undefined): void {
+    this.state.setError(error)
+    this.emitChange()
+  }
+
+  private emitChange(): void {
+    for (const listener of this.listeners) {
+      listener()
+    }
   }
 }
 
@@ -447,10 +559,7 @@ function findLastToolPart<METADATA>(
     }
     for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = message.parts[partIndex]
-      if (
-        (part.type === 'tool-call' || part.type === 'tool-approval-request') &&
-        part.toolCallId === toolCallId
-      ) {
+      if (isToolPart(part) && part.toolCallId === toolCallId) {
         return { toolName: part.toolName }
       }
     }
@@ -461,7 +570,7 @@ function findLastToolPart<METADATA>(
 function findLastApprovalRequest<METADATA>(
   messages: UIMessage<METADATA>[],
   approvalId: string
-): ToolApprovalRequestPart | undefined {
+): ToolPart | undefined {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex]
     if (message.role !== 'assistant') {
@@ -469,10 +578,22 @@ function findLastApprovalRequest<METADATA>(
     }
     for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = message.parts[partIndex]
-      if (part.type === 'tool-approval-request' && part.approvalId === approvalId) {
+      if (
+        isToolPart(part) &&
+        part.state === 'approval-requested' &&
+        part.approval?.id === approvalId
+      ) {
         return part
       }
     }
   }
   return undefined
+}
+
+function isToolPart(part: UIMessage['parts'][number]): part is ToolPart {
+  return part.type.startsWith('tool-')
+}
+
+function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
+  return chunk.type.startsWith('data-')
 }

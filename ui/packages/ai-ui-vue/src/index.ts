@@ -1,11 +1,8 @@
 export { Chat, createPlainChatState } from './chat'
 export type { ChatInit, ChatStateAdapter, SendMessageInput } from './chat'
-export { AIUIError } from './errors'
+export { AIUIError, AIUIProtocolError, isProtocolError } from './errors'
 export { generateId } from './id'
 export {
-  appendToolApprovalResponse,
-  appendToolError,
-  appendToolResult,
   applyUIMessageChunk,
   createUIMessageReducer,
   messageText,
@@ -30,6 +27,6 @@ export * from './types'
 export { useChat } from './use-chat'
 export type { UseChatOptions } from './use-chat'
 export { useCompletion } from './use-completion'
-export type { UseCompletionOptions } from './use-completion'
+export type { CompletionRequestOptions, UseCompletionOptions } from './use-completion'
 export { experimental_useObject, jsonSchema } from './use-object'
-export type { UseObjectOptions } from './use-object'
+export type { ObjectRequestOptions, UseObjectOptions } from './use-object'

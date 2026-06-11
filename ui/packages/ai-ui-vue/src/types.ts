@@ -2,7 +2,7 @@ export type UIMessageRole = 'system' | 'user' | 'assistant'
 
 export type UIMessageChatTrigger = 'submit-message' | 'regenerate-message'
 
-export type ChatStatus = 'submitted' | 'streaming' | 'ready' | 'error'
+export type ChatStatus = 'submitted' | 'streaming' | 'ready' | 'error' | 'disconnected'
 
 export type FinishReason =
   | 'stop'
@@ -34,11 +34,7 @@ export type UIMessagePart =
   | DataPart
   | SourceUrlPart
   | FilePart
-  | ToolCallPart
-  | ToolResultPart
-  | ToolErrorPart
-  | ToolApprovalRequestPart
-  | ToolApprovalResponsePart
+  | ToolPart
 
 export interface TextPart {
   type: 'text'
@@ -54,7 +50,8 @@ export interface ReasoningPart {
 }
 
 export interface DataPart<T = unknown> {
-  type: 'data'
+  type: `data-${string}`
+  id: string
   name: string
   data: T
   transientData?: boolean
@@ -78,47 +75,29 @@ export interface FilePart {
   providerMetadata?: Record<string, unknown>
 }
 
-export interface ToolCallPart {
-  type: 'tool-call'
-  toolCallId: string
-  toolName: string
-  input?: Record<string, unknown>
-  providerMetadata?: Record<string, unknown>
-}
+export type ToolPartState =
+  | 'input-streaming'
+  | 'input-available'
+  | 'approval-requested'
+  | 'output-available'
+  | 'output-error'
 
-export interface ToolResultPart {
-  type: 'tool-result'
-  toolCallId: string
-  toolName: string
-  result: unknown
-  providerMetadata?: Record<string, unknown>
-}
-
-export interface ToolErrorPart {
-  type: 'tool-error'
-  toolCallId: string
-  toolName: string
-  errorText: string
-  providerMetadata?: Record<string, unknown>
-}
-
-export interface ToolApprovalRequestPart {
-  type: 'tool-approval-request'
-  approvalId: string
-  toolCallId: string
-  toolName: string
-  input?: Record<string, unknown>
-  stepIndex?: number
-  providerMetadata?: Record<string, unknown>
-}
-
-export interface ToolApprovalResponsePart {
-  type: 'tool-approval-response'
-  approvalId: string
-  toolCallId: string
-  toolName: string
-  approved: boolean
+export interface ToolApproval {
+  id: string
+  approved?: boolean
   reason?: string
+}
+
+export interface ToolPart {
+  type: `tool-${string}`
+  toolCallId: string
+  toolName: string
+  state: ToolPartState
+  input?: Record<string, unknown>
+  inputText?: string
+  output?: unknown
+  errorText?: string
+  approval?: ToolApproval
   providerMetadata?: Record<string, unknown>
 }
 
@@ -165,13 +144,7 @@ export type UIMessageChunk =
   | MessageMetadataChunk
   | SourceUrlChunk
   | FileChunk
-  | ToolInputStartChunk
-  | ToolInputDeltaChunk
-  | ToolCallChunk
-  | ToolResultChunk
-  | ToolErrorChunk
-  | ToolApprovalRequestChunk
-  | ToolApprovalResponseChunk
+  | ToolChunk
   | FinishStepChunk
   | FinishChunk
   | ErrorChunk
@@ -217,10 +190,11 @@ export interface ReasoningEndChunk {
 }
 
 export interface DataChunk<T = unknown> {
-  type: 'data'
+  type: `data-${string}`
+  id: string
   name: string
   data: T
-  transientData?: boolean
+  transient?: boolean
 }
 
 export interface MessageMetadataChunk {
@@ -247,62 +221,16 @@ export interface FileChunk {
   providerMetadata?: Record<string, unknown>
 }
 
-export interface ToolInputStartChunk {
-  type: 'tool-input-start'
-  id: string
-  toolCallId?: string
-  toolName?: string
-}
-
-export interface ToolInputDeltaChunk {
-  type: 'tool-input-delta'
-  id: string
-  toolCallId?: string
-  toolName?: string
-  delta: string
-}
-
-export interface ToolCallChunk {
-  type: 'tool-call'
+export interface ToolChunk {
+  type: `tool-${string}`
   toolCallId: string
   toolName: string
+  state: ToolPartState
   input?: Record<string, unknown>
-  providerMetadata?: Record<string, unknown>
-}
-
-export interface ToolResultChunk {
-  type: 'tool-result'
-  toolCallId: string
-  toolName: string
-  result: unknown
-  providerMetadata?: Record<string, unknown>
-}
-
-export interface ToolErrorChunk {
-  type: 'tool-error'
-  toolCallId: string
-  toolName: string
-  errorText: string
-  providerMetadata?: Record<string, unknown>
-}
-
-export interface ToolApprovalRequestChunk {
-  type: 'tool-approval-request'
-  approvalId: string
-  toolCallId: string
-  toolName: string
-  input?: Record<string, unknown>
-  stepIndex?: number
-  providerMetadata?: Record<string, unknown>
-}
-
-export interface ToolApprovalResponseChunk {
-  type: 'tool-approval-response'
-  approvalId: string
-  toolCallId: string
-  toolName: string
-  approved: boolean
-  reason?: string
+  inputTextDelta?: string
+  output?: unknown
+  errorText?: string
+  approval?: ToolApproval
   providerMetadata?: Record<string, unknown>
 }
 

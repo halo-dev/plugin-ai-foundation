@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core'
 import { effectScope, nextTick } from 'vue'
+import { Chat } from './chat'
 import { fromOpenAPIRequestArgs } from './openapi'
 import { DefaultChatTransport } from './transports'
 import { useChat } from './use-chat'
@@ -23,6 +24,41 @@ describe('useChat', () => {
 
       expect(second.messages.value).toHaveLength(2)
     })
+    scope.stop()
+  })
+
+  it('bridges an existing Chat instance', async () => {
+    const chat = new Chat({
+      id: 'external-chat',
+      transport: new DefaultChatTransport({
+        fetch: async () =>
+          new Response(streamFromText('data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n'), {
+            headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
+          }),
+      }),
+    })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const composable = useChat({ chat })
+      await composable.sendMessage({ text: 'Hi' })
+      await nextTick()
+
+      expect(composable.id).toBe('external-chat')
+      expect(composable.messages.value).toHaveLength(2)
+      expect(composable.status.value).toBe('ready')
+    })
+    scope.stop()
+  })
+
+  it('fails fast when an existing Chat is mixed with creation options', () => {
+    const chat = new Chat({ id: 'external-chat' })
+    const scope = effectScope()
+    expect(() =>
+      scope.run(() => {
+        useChat({ chat, id: 'other-chat' })
+      })
+    ).toThrow('useChat({ chat }) cannot be mixed with creation options: id.')
     scope.stop()
   })
 })
@@ -76,6 +112,38 @@ describe('useCompletion', () => {
       expect(url).toBe('/generated/completion/stream')
       expect(body).toEqual({ prompt: 'Say hello' })
       expect(header).toBe('yes')
+    })
+    scope.stop()
+  })
+
+  it('supports per-call completion request options', async () => {
+    let body: unknown
+    let header: string | undefined
+    let credentials: RequestCredentials | undefined
+    const fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body))
+      header = new Headers(init?.headers).get('X-Call') ?? undefined
+      credentials = init?.credentials
+      return new Response(streamFromText('Hello'))
+    }
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const completion = useCompletion({
+        id: 'completion-call-options-test',
+        fetch,
+        body: { global: true },
+        headers: { 'X-Base': 'yes' },
+      })
+      await completion.complete('Say hello', {
+        body: { requestId: 'call-1' },
+        headers: { 'X-Call': 'yes' },
+        credentials: 'include',
+      })
+
+      expect(body).toEqual({ global: true, requestId: 'call-1', prompt: 'Say hello' })
+      expect(header).toBe('yes')
+      expect(credentials).toBe('include')
     })
     scope.stop()
   })
@@ -148,6 +216,45 @@ describe('experimental_useObject', () => {
 
       expect(url).toBe('/generated/object/stream')
       expect(body).toMatchObject({ input: 'Summarize', output: { type: 'object' } })
+    })
+    scope.stop()
+  })
+
+  it('uses initialValue and accepts generic submit input with per-call request options', async () => {
+    let body: unknown
+    let header: string | undefined
+    const fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body))
+      header = new Headers(init?.headers).get('X-Object-Call') ?? undefined
+      return new Response(streamFromText('{"title":"Halo"}'))
+    }
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const object = experimental_useObject<{ title: string }, { prompt: string }>({
+        id: 'object-generic-input-test',
+        fetch,
+        initialValue: { title: 'Draft' },
+        schema: {
+          type: 'object',
+          required: ['title'],
+          properties: { title: { type: 'string' } },
+        },
+      })
+
+      expect(object.object.value).toEqual({ title: 'Draft' })
+      await object.submit(
+        { prompt: 'Summarize' },
+        { body: { requestId: 'object-1' }, headers: { 'X-Object-Call': 'yes' } }
+      )
+
+      expect(body).toMatchObject({
+        input: { prompt: 'Summarize' },
+        requestId: 'object-1',
+        output: { type: 'object' },
+      })
+      expect(header).toBe('yes')
+      expect(object.object.value).toEqual({ title: 'Halo' })
     })
     scope.stop()
   })

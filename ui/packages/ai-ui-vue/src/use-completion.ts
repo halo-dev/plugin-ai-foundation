@@ -23,6 +23,12 @@ export interface UseCompletionOptions {
   onFinish?: (prompt: string, completion: string) => void
 }
 
+export interface CompletionRequestOptions {
+  headers?: HeadersInit
+  body?: Record<string, unknown>
+  credentials?: RequestCredentials
+}
+
 interface CompletionStore {
   subscribers: number
   completion: ReturnType<typeof ref<string>>
@@ -45,7 +51,7 @@ export function useCompletion(options: UseCompletionOptions = {}) {
     }
   })
 
-  async function complete(prompt?: string): Promise<string | undefined> {
+  async function complete(prompt?: string, requestOptions: CompletionRequestOptions = {}): Promise<string | undefined> {
     const actualPrompt = prompt ?? store.input.value ?? ''
     store.status.value = 'loading'
     store.error.value = undefined
@@ -53,9 +59,9 @@ export function useCompletion(options: UseCompletionOptions = {}) {
     const abortController = new AbortController()
     store.abortController = abortController
     try {
-      const body = { ...(await resolve(options.body)), prompt: actualPrompt }
-      const headers = await resolve(options.headers)
-      const credentials = await resolve(options.credentials)
+      const body = { ...(await resolve(options.body)), ...requestOptions.body, prompt: actualPrompt }
+      const headers = mergeHeaders(await resolve(options.headers), requestOptions.headers)
+      const credentials = requestOptions.credentials ?? (await resolve(options.credentials))
       const prepared = await options.prepareRequest?.({
         api: options.api ?? '/api/completion',
         body,
@@ -191,4 +197,8 @@ function headersToRecord(headers: HeadersInit | undefined): Record<string, strin
     return Object.fromEntries(headers)
   }
   return headers as Record<string, string>
+}
+
+function mergeHeaders(...headers: Array<HeadersInit | undefined>): HeadersInit | undefined {
+  return Object.assign({}, ...headers.map(headersToRecord))
 }

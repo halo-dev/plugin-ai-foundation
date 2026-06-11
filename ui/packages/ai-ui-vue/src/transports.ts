@@ -8,6 +8,7 @@ import {
 import type {
   ChatTransport,
   FetchFunction,
+  PreparedRequest,
   Resolvable,
   SendMessagesOptions,
   UIMessage,
@@ -28,18 +29,8 @@ export interface HttpTransportOptions<METADATA = unknown> {
       credentials?: RequestCredentials
     }
   ) =>
-    | {
-        api?: string
-        body?: Record<string, unknown>
-        headers?: HeadersInit
-        credentials?: RequestCredentials
-      }
-    | PromiseLike<{
-        api?: string
-        body?: Record<string, unknown>
-        headers?: HeadersInit
-        credentials?: RequestCredentials
-      }>
+    | PreparedRequest
+    | PromiseLike<PreparedRequest>
 }
 
 export abstract class HttpChatTransport<METADATA = unknown>

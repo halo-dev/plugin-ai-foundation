@@ -1,13 +1,11 @@
+import { AIUIProtocolError } from './errors'
 import { generateId } from './id'
 import type {
-  AbortChunk,
   DataPart,
   FinishChunk,
   ReasoningPart,
   TextPart,
-  ToolApprovalResponsePart,
-  ToolErrorPart,
-  ToolResultPart,
+  ToolPart,
   UIMessage,
   UIMessageChunk,
   UIMessagePart,
@@ -45,6 +43,23 @@ export function applyUIMessageChunk<METADATA>(
   state: UIMessageReducerState<METADATA>,
   chunk: UIMessageChunk
 ): UIMessageReducerState<METADATA> {
+  validateUIMessageChunk(chunk)
+  if (isDataChunk(chunk)) {
+    if (!chunk.transient) {
+      upsertPart(state, {
+        type: chunk.type,
+        id: chunk.id,
+        name: chunk.name,
+        data: chunk.data,
+        transientData: false,
+      })
+    }
+    return state
+  }
+  if (isToolChunk(chunk)) {
+    upsertToolPart(state, chunk)
+    return state
+  }
   switch (chunk.type) {
     case 'start':
       state.message = {
@@ -68,16 +83,6 @@ export function applyUIMessageChunk<METADATA>(
       appendReasoningPart(state, chunk.id, chunk.delta, chunk.providerMetadata)
       break
     case 'reasoning-end':
-      break
-    case 'data':
-      if (!chunk.transientData) {
-        upsertPart(state, {
-          type: 'data',
-          name: chunk.name,
-          data: chunk.data,
-          transientData: false,
-        })
-      }
       break
     case 'message-metadata':
       state.message = {
@@ -105,50 +110,6 @@ export function applyUIMessageChunk<METADATA>(
         providerMetadata: chunk.providerMetadata,
       })
       break
-    case 'tool-input-start':
-    case 'tool-input-delta':
-      break
-    case 'tool-call':
-      upsertPart(state, {
-        type: 'tool-call',
-        toolCallId: chunk.toolCallId,
-        toolName: chunk.toolName,
-        input: chunk.input,
-        providerMetadata: chunk.providerMetadata,
-      })
-      break
-    case 'tool-result':
-      upsertPart(state, {
-        type: 'tool-result',
-        toolCallId: chunk.toolCallId,
-        toolName: chunk.toolName,
-        result: chunk.result,
-        providerMetadata: chunk.providerMetadata,
-      })
-      break
-    case 'tool-error':
-      upsertPart(state, {
-        type: 'tool-error',
-        toolCallId: chunk.toolCallId,
-        toolName: chunk.toolName,
-        errorText: chunk.errorText,
-        providerMetadata: chunk.providerMetadata,
-      })
-      break
-    case 'tool-approval-request':
-      upsertPart(state, {
-        type: 'tool-approval-request',
-        approvalId: chunk.approvalId,
-        toolCallId: chunk.toolCallId,
-        toolName: chunk.toolName,
-        input: chunk.input,
-        stepIndex: chunk.stepIndex,
-        providerMetadata: chunk.providerMetadata,
-      })
-      break
-    case 'tool-approval-response':
-      addToolApprovalResponseToState(state, chunk)
-      break
     case 'finish-step':
       state.terminal = {
         ...state.terminal,
@@ -165,7 +126,7 @@ export function applyUIMessageChunk<METADATA>(
       state.terminal = finishTerminal(state.terminal, chunk)
       break
     case 'error':
-      state.terminal = { ...state.terminal, errorText: chunk.errorText, finishReason: 'error' }
+      state.terminal = { ...state.terminal, errorText: chunk.errorText }
       break
     case 'abort':
       state.terminal = { ...state.terminal, aborted: true }
@@ -174,25 +135,86 @@ export function applyUIMessageChunk<METADATA>(
   return state
 }
 
-export function appendToolResult<METADATA = unknown>(
-  message: UIMessage<METADATA>,
-  result: Omit<ToolResultPart, 'type'>
-): UIMessage<METADATA> {
-  return upsertMessagePart(message, { type: 'tool-result', ...result })
+export function validateUIMessageChunk(chunk: UIMessageChunk): void {
+  if (!chunk || typeof chunk.type !== 'string' || chunk.type.length === 0) {
+    throw new AIUIProtocolError('UI message chunk type is required.')
+  }
+  if (isDataChunk(chunk)) {
+    validateDynamicName(chunk.name, /^[A-Za-z][A-Za-z0-9_-]*$/, 'data name')
+    if (chunk.type !== `data-${chunk.name}`) {
+      throw new AIUIProtocolError(`Data chunk type must be data-${chunk.name}.`)
+    }
+    if (!chunk.id) {
+      throw new AIUIProtocolError('Data chunk id is required.')
+    }
+    return
+  }
+  if (isToolChunk(chunk)) {
+    validateDynamicName(chunk.toolName, /^[A-Za-z][A-Za-z0-9_-]*$/, 'tool name')
+    if (chunk.type !== `tool-${chunk.toolName}`) {
+      throw new AIUIProtocolError(`Tool chunk type must be tool-${chunk.toolName}.`)
+    }
+    if (!chunk.toolCallId) {
+      throw new AIUIProtocolError('Tool chunk toolCallId is required.')
+    }
+    if (!chunk.state) {
+      throw new AIUIProtocolError('Tool chunk state is required.')
+    }
+    if (chunk.state === 'output-error' && !chunk.errorText) {
+      throw new AIUIProtocolError('Tool output-error chunk errorText is required.')
+    }
+  }
 }
 
-export function appendToolError<METADATA = unknown>(
+export function withToolOutput<METADATA = unknown>(
   message: UIMessage<METADATA>,
-  error: Omit<ToolErrorPart, 'type'>
+  result: { toolCallId: string; toolName: string; output?: unknown; result?: unknown; providerMetadata?: Record<string, unknown> }
 ): UIMessage<METADATA> {
-  return upsertMessagePart(message, { type: 'tool-error', ...error })
+  const existing = findToolPart(message, result.toolCallId)
+  return upsertMessagePart(message, {
+    type: `tool-${result.toolName}`,
+    toolCallId: result.toolCallId,
+    toolName: result.toolName,
+    state: 'output-available',
+    input: existing?.input,
+    output: result.output ?? result.result,
+    approval: existing?.approval,
+    providerMetadata: result.providerMetadata ?? existing?.providerMetadata,
+  })
 }
 
-export function appendToolApprovalResponse<METADATA = unknown>(
+export function withToolError<METADATA = unknown>(
   message: UIMessage<METADATA>,
-  response: Omit<ToolApprovalResponsePart, 'type'>
+  error: { toolCallId: string; toolName: string; errorText: string; providerMetadata?: Record<string, unknown> }
 ): UIMessage<METADATA> {
-  return upsertMessagePart(message, { type: 'tool-approval-response', ...response })
+  const existing = findToolPart(message, error.toolCallId)
+  return upsertMessagePart(message, {
+    type: `tool-${error.toolName}`,
+    toolCallId: error.toolCallId,
+    toolName: error.toolName,
+    state: 'output-error',
+    input: existing?.input,
+    errorText: error.errorText,
+    approval: existing?.approval,
+    providerMetadata: error.providerMetadata ?? existing?.providerMetadata,
+  })
+}
+
+export function withToolApprovalDecision<METADATA = unknown>(
+  message: UIMessage<METADATA>,
+  response: { approvalId: string; toolCallId: string; toolName: string; approved: boolean; reason?: string; providerMetadata?: Record<string, unknown> }
+): UIMessage<METADATA> {
+  const existing = findToolPart(message, response.toolCallId)
+  return upsertMessagePart(message, {
+    type: `tool-${response.toolName}`,
+    toolCallId: response.toolCallId,
+    toolName: response.toolName,
+    state: response.approved ? 'input-available' : 'output-error',
+    input: existing?.input,
+    errorText: response.approved ? existing?.errorText : response.reason ?? 'Tool call rejected.',
+    approval: { id: response.approvalId, approved: response.approved, reason: response.reason },
+    providerMetadata: response.providerMetadata ?? existing?.providerMetadata,
+  })
 }
 
 function appendTextPart<METADATA>(
@@ -223,21 +245,6 @@ function appendReasoningPart<METADATA>(
   })
 }
 
-function addToolApprovalResponseToState<METADATA>(
-  state: UIMessageReducerState<METADATA>,
-  response: ToolApprovalResponsePart | Extract<UIMessageChunk, { type: 'tool-approval-response' }>
-) {
-  upsertPart(state, {
-    type: 'tool-approval-response',
-    approvalId: response.approvalId,
-    toolCallId: response.toolCallId,
-    toolName: response.toolName,
-    approved: response.approved,
-    reason: response.reason,
-    providerMetadata: response.providerMetadata,
-  })
-}
-
 function upsertPart<METADATA>(state: UIMessageReducerState<METADATA>, part: UIMessagePart) {
   state.message = upsertMessagePart(state.message, part)
   state.visible = state.visible || isPersistedVisiblePart(part)
@@ -261,27 +268,26 @@ function samePartIdentity(left: UIMessagePart, right: UIMessagePart): boolean {
   if (left.type !== right.type) {
     return false
   }
+  if (isDataPart(right)) {
+    return isDataPart(left) && left.id === right.id
+  }
   switch (right.type) {
     case 'text':
     case 'reasoning':
     case 'file':
       return 'id' in left && left.id === right.id
-    case 'data':
-      return (left as DataPart).name === right.name
     case 'source-url':
       return 'sourceId' in left && left.sourceId === right.sourceId
-    case 'tool-call':
-    case 'tool-result':
-    case 'tool-error':
-      return 'toolCallId' in left && left.toolCallId === right.toolCallId
-    case 'tool-approval-request':
-    case 'tool-approval-response':
-      return 'approvalId' in left && left.approvalId === right.approvalId
+    default:
+      if (isToolPart(right)) {
+        return isToolPart(left) && left.toolCallId === right.toolCallId
+      }
+      return false
   }
 }
 
 function isPersistedVisiblePart(part: UIMessagePart): boolean {
-  return part.type !== 'data' || !part.transientData
+  return !isDataPart(part) || !part.transientData
 }
 
 function finishTerminal(terminal: UIMessageStreamTerminal, chunk: FinishChunk): UIMessageStreamTerminal {
@@ -312,4 +318,52 @@ export function messageText(message: UIMessage): string {
     .filter((part): part is TextPart => part.type === 'text')
     .map((part) => part.text)
     .join('')
+}
+
+function upsertToolPart<METADATA>(state: UIMessageReducerState<METADATA>, chunk: Extract<UIMessageChunk, { type: `tool-${string}` }>) {
+  const existing = findToolPart(state.message, chunk.toolCallId)
+  const inputText =
+    chunk.state === 'input-streaming'
+      ? `${existing?.inputText ?? ''}${chunk.inputTextDelta ?? ''}`
+      : undefined
+  upsertPart(state, {
+    type: chunk.type,
+    toolCallId: chunk.toolCallId,
+    toolName: chunk.toolName,
+    state: chunk.state,
+    input: chunk.input ?? existing?.input,
+    inputText,
+    output: chunk.output ?? existing?.output,
+    errorText: chunk.errorText ?? existing?.errorText,
+    approval: chunk.approval ?? existing?.approval,
+    providerMetadata: chunk.providerMetadata ?? existing?.providerMetadata,
+  })
+}
+
+function findToolPart<METADATA>(message: UIMessage<METADATA>, toolCallId: string): ToolPart | undefined {
+  return message.parts.find(
+    (part): part is ToolPart => isToolPart(part) && part.toolCallId === toolCallId
+  )
+}
+
+function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
+  return chunk.type.startsWith('data-')
+}
+
+function isToolChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `tool-${string}` }> {
+  return chunk.type.startsWith('tool-')
+}
+
+function isDataPart(part: UIMessagePart): part is DataPart {
+  return part.type.startsWith('data-')
+}
+
+function isToolPart(part: UIMessagePart): part is ToolPart {
+  return part.type.startsWith('tool-')
+}
+
+function validateDynamicName(value: string | undefined, pattern: RegExp, label: string): void {
+  if (!value || !pattern.test(value)) {
+    throw new AIUIProtocolError(`${label} must be a simple identifier.`)
+  }
 }

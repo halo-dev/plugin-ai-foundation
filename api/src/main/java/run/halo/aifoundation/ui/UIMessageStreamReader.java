@@ -1,6 +1,5 @@
 package run.halo.aifoundation.ui;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -121,8 +120,7 @@ public final class UIMessageStreamReader {
 
     private static final class State<M> {
         private final UIMessageStreamReaderOptions<M> options;
-        private final ArrayList<UIMessagePart> parts;
-        private UIMessageStreamTerminal terminal = UIMessageStreamTerminal.empty();
+        private final UIMessageChunkReducer reducer;
         private String messageId;
         private M metadata;
         private boolean metadataCreated;
@@ -131,7 +129,7 @@ public final class UIMessageStreamReader {
             this.options = options;
             var existing = options.message();
             this.messageId = existing != null ? existing.id() : null;
-            this.parts = new ArrayList<>(existing != null ? existing.parts() : List.of());
+            this.reducer = new UIMessageChunkReducer(existing != null ? existing.parts() : List.of());
             if (existing != null) {
                 this.metadata = existing.metadata();
                 this.metadataCreated = true;
@@ -142,52 +140,38 @@ public final class UIMessageStreamReader {
             if (chunk == null) {
                 return null;
             }
-            var changed = switch (chunk) {
+            var changed = reducer.accept(chunk);
+            changed = switch (chunk) {
                 case StartChunk start -> {
                     if (messageId == null && start.messageId() != null
                         && !start.messageId().isBlank()) {
                         messageId = start.messageId();
                     }
-                    yield mergeMetadata(start.messageMetadata());
+                    yield changed || mergeMetadata(start.messageMetadata());
                 }
-                case TextStartChunk text -> ensureTextPart(text.id(), "");
-                case TextDeltaChunk text -> appendText(text.id(), text.delta());
-                case TextEndChunk ignored -> false;
-                case ReasoningStartChunk reasoning -> ensureReasoningPart(reasoning.id(), "",
-                    null);
-                case ReasoningDeltaChunk reasoning -> appendReasoning(reasoning.id(),
-                    reasoning.delta(), reasoning.providerMetadata());
-                case ReasoningEndChunk ignored -> false;
-                case DataChunk data -> !data.transientData()
-                    && replaceData(data.name(), data.data());
+                case TextStartChunk ignored -> changed;
+                case TextDeltaChunk ignored -> changed;
+                case TextEndChunk ignored -> changed;
+                case ReasoningStartChunk ignored -> changed;
+                case ReasoningDeltaChunk ignored -> changed;
+                case ReasoningEndChunk ignored -> changed;
+                case DataChunk ignored -> changed;
                 case MessageMetadataChunk metadata -> mergeMetadata(metadata.messageMetadata());
-                case SourceUrlChunk source -> replaceSource(source);
-                case FileChunk file -> replaceFile(file);
-                case ToolCallChunk tool -> replaceToolCall(tool);
-                case ToolResultChunk tool -> replaceToolResult(tool);
-                case ToolErrorChunk tool -> replaceToolError(tool);
-                case ToolApprovalRequestChunk request -> replaceToolApprovalRequest(request);
+                case SourceUrlChunk ignored -> changed;
+                case FileChunk ignored -> changed;
+                case ToolChunk ignored -> changed;
                 case FinishChunk finish -> {
-                    terminal = terminal.withFinish(finish.finishReason(), finish.usage());
-                    yield mergeMetadata(finish.messageMetadata());
+                    yield changed || mergeMetadata(finish.messageMetadata());
                 }
-                case ErrorChunk error -> {
-                    terminal = terminal.withErrorText(error.errorText());
-                    yield false;
-                }
-                case AbortChunk ignored -> {
-                    terminal = terminal.withAborted(true);
-                    yield false;
-                }
-                case FinishStepChunk ignored -> false;
-                case ToolInputStartChunk ignored -> false;
-                case ToolInputDeltaChunk ignored -> false;
+                case ErrorChunk ignored -> changed;
+                case AbortChunk ignored -> changed;
+                case FinishStepChunk ignored -> changed;
             };
             return changed ? responseMessage() : null;
         }
 
         void recordReadError(String errorText) {
-            terminal = terminal.withErrorText(errorText);
+            reducer.recordReadError(errorText);
         }
 
         UIMessage<M> responseMessage() {
@@ -198,64 +182,12 @@ public final class UIMessageStreamReader {
                 metadata = options.metadataSupplier().get();
                 metadataCreated = true;
             }
-            return new UIMessage<>(messageId, UIMessageRole.ASSISTANT, List.copyOf(parts),
+            return new UIMessage<>(messageId, UIMessageRole.ASSISTANT, reducer.parts(),
                 metadata);
         }
 
         UIMessageStreamTerminal terminal() {
-            return terminal;
-        }
-
-        private boolean ensureTextPart(String id, String text) {
-            var index = indexOfText(id);
-            if (index >= 0) {
-                return false;
-            }
-            parts.add(UIMessageParts.text(id, text));
-            return true;
-        }
-
-        private boolean appendText(String id, String delta) {
-            var index = indexOfText(id);
-            if (index < 0) {
-                parts.add(UIMessageParts.text(id, delta != null ? delta : ""));
-            } else {
-                var current = (TextPart) parts.get(index);
-                parts.set(index, UIMessageParts.text(id, current.text() + (delta != null
-                    ? delta
-                    : "")));
-            }
-            return true;
-        }
-
-        private boolean ensureReasoningPart(String id, String text,
-            Map<String, Object> providerMetadata) {
-            var index = indexOfReasoning(id);
-            if (index >= 0) {
-                return false;
-            }
-            parts.add(UIMessageParts.reasoning(id, text, providerMetadata));
-            return true;
-        }
-
-        private boolean appendReasoning(String id, String delta,
-            Map<String, Object> providerMetadata) {
-            var index = indexOfReasoning(id);
-            if (index < 0) {
-                parts.add(UIMessageParts.reasoning(id, delta != null ? delta : "",
-                    providerMetadata));
-            } else {
-                var current = (ReasoningPart) parts.get(index);
-                parts.set(index, UIMessageParts.reasoning(id,
-                    current.text() + (delta != null ? delta : ""), providerMetadata));
-            }
-            return true;
-        }
-
-        private boolean replaceData(String name, Object data) {
-            replace(part -> part instanceof DataPart value && name.equals(value.name()),
-                UIMessageParts.data(name, data));
-            return true;
+            return reducer.terminal();
         }
 
         private boolean mergeMetadata(Object update) {
@@ -272,91 +204,6 @@ public final class UIMessageStreamReader {
             }
             metadata = merged;
             return true;
-        }
-
-        private boolean replaceSource(SourceUrlChunk source) {
-            replace(part -> part instanceof SourceUrlPart value
-                    && source.sourceId().equals(value.sourceId()),
-                UIMessageParts.sourceUrl(source.sourceId(), source.url(), source.title(),
-                    source.providerMetadata()));
-            return true;
-        }
-
-        private boolean replaceFile(FileChunk file) {
-            replace(part -> part instanceof FilePart value && file.fileId().equals(value.fileId()),
-                UIMessageParts.file(file.fileId(), file.url(), file.title(), file.mediaType(),
-                    file.data(), file.providerMetadata()));
-            return true;
-        }
-
-        private boolean replaceToolCall(ToolCallChunk tool) {
-            replace(part -> part instanceof ToolCallPart value
-                    && tool.toolCallId().equals(value.toolCallId()),
-                UIMessageParts.toolCall(tool.toolCallId(), tool.toolName(), tool.input(),
-                    tool.providerMetadata()));
-            return true;
-        }
-
-        private boolean replaceToolResult(ToolResultChunk tool) {
-            replace(part -> part instanceof ToolResultPart value
-                    && tool.toolCallId().equals(value.toolCallId()),
-                UIMessageParts.toolResult(tool.toolCallId(), tool.toolName(), tool.result(),
-                    tool.providerMetadata()));
-            return true;
-        }
-
-        private boolean replaceToolError(ToolErrorChunk tool) {
-            replace(part -> part instanceof ToolErrorPart value
-                    && tool.toolCallId().equals(value.toolCallId()),
-                UIMessageParts.toolError(tool.toolCallId(), tool.toolName(), tool.errorText(),
-                    tool.providerMetadata()));
-            return true;
-        }
-
-        private boolean replaceToolApprovalRequest(ToolApprovalRequestChunk request) {
-            replace(part -> part instanceof ToolApprovalRequestPart value
-                    && approvalKey(request).equals(approvalKey(value)),
-                UIMessageParts.toolApprovalRequest(request.approvalId(), request.toolCallId(),
-                    request.toolName(), request.input(), request.stepIndex(),
-                    request.providerMetadata()));
-            return true;
-        }
-
-        private void replace(java.util.function.Predicate<UIMessagePart> predicate,
-            UIMessagePart replacement) {
-            for (var i = 0; i < parts.size(); i++) {
-                if (predicate.test(parts.get(i))) {
-                    parts.set(i, replacement);
-                    return;
-                }
-            }
-            parts.add(replacement);
-        }
-
-        private int indexOfText(String id) {
-            for (var i = 0; i < parts.size(); i++) {
-                if (parts.get(i) instanceof TextPart part && id.equals(part.id())) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        private int indexOfReasoning(String id) {
-            for (var i = 0; i < parts.size(); i++) {
-                if (parts.get(i) instanceof ReasoningPart part && id.equals(part.id())) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        private static String approvalKey(ToolApprovalRequestChunk request) {
-            return request.approvalId() != null ? request.approvalId() : request.toolCallId();
-        }
-
-        private static String approvalKey(ToolApprovalRequestPart request) {
-            return request.approvalId() != null ? request.approvalId() : request.toolCallId();
         }
     }
 }

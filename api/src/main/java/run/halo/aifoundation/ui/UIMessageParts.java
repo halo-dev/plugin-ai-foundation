@@ -46,6 +46,18 @@ public final class UIMessageParts {
     }
 
     /**
+     * Creates a persisted dynamic data part.
+     *
+     * @param id data part id
+     * @param name data part name
+     * @param data data payload
+     * @return data part
+     */
+    public static DataPart data(String id, String name, Object data) {
+        return new DataPart(id, name, data);
+    }
+
+    /**
      * Creates a persisted source URL part.
      *
      * @param sourceId source id
@@ -76,80 +88,24 @@ public final class UIMessageParts {
     }
 
     /**
-     * Creates a persisted tool call part.
+     * Creates a persisted dynamic tool part.
      *
      * @param toolCallId tool call id
      * @param toolName tool name
+     * @param state tool lifecycle state
      * @param input tool input
+     * @param inputText streamed input text
+     * @param output tool output
+     * @param errorText safe tool error text
+     * @param approval approval metadata
      * @param providerMetadata provider-specific metadata
-     * @return tool call part
+     * @return dynamic tool part
      */
-    public static ToolCallPart toolCall(String toolCallId, String toolName,
-        Map<String, Object> input, Map<String, Object> providerMetadata) {
-        return new ToolCallPart(toolCallId, toolName, input, providerMetadata);
+    public static ToolPart tool(String toolCallId, String toolName, ToolPartState state,
+        Object input, String inputText, Object output, String errorText, ToolApproval approval,
+        Map<String, Object> providerMetadata) {
+        return new ToolPart(ToolPart.typeFor(toolName), toolCallId, toolName, state, input,
+            inputText, output, errorText, approval, providerMetadata);
     }
 
-    /**
-     * Creates a persisted tool result part.
-     *
-     * @param toolCallId tool call id
-     * @param toolName tool name
-     * @param result tool result payload
-     * @param providerMetadata provider-specific metadata
-     * @return tool result part
-     */
-    public static ToolResultPart toolResult(String toolCallId, String toolName, Object result,
-        Map<String, Object> providerMetadata) {
-        return new ToolResultPart(toolCallId, toolName, result, providerMetadata);
-    }
-
-    /**
-     * Creates a persisted tool error part.
-     *
-     * @param toolCallId tool call id
-     * @param toolName tool name
-     * @param errorText caller-facing error text
-     * @param providerMetadata provider-specific metadata
-     * @return tool error part
-     */
-    public static ToolErrorPart toolError(String toolCallId, String toolName, String errorText,
-        Map<String, Object> providerMetadata) {
-        return new ToolErrorPart(toolCallId, toolName, errorText, providerMetadata);
-    }
-
-    /**
-     * Creates a persisted tool approval request part.
-     *
-     * @param approvalId approval request id
-     * @param toolCallId tool call id
-     * @param toolName tool name
-     * @param input tool input
-     * @param stepIndex optional generation step index
-     * @param providerMetadata provider-specific metadata
-     * @return tool approval request part
-     */
-    public static ToolApprovalRequestPart toolApprovalRequest(String approvalId,
-        String toolCallId, String toolName, Map<String, Object> input, Integer stepIndex,
-        Map<String, Object> providerMetadata) {
-        return new ToolApprovalRequestPart(approvalId, toolCallId, toolName, input, stepIndex,
-            providerMetadata);
-    }
-
-    /**
-     * Creates a persisted tool approval response part.
-     *
-     * @param approvalId approval request id being answered
-     * @param toolCallId optional tool call id
-     * @param toolName optional tool name
-     * @param approved whether execution was approved
-     * @param reason optional approval or denial reason
-     * @param providerMetadata provider-specific metadata
-     * @return tool approval response part
-     */
-    public static ToolApprovalResponsePart toolApprovalResponse(String approvalId,
-        String toolCallId, String toolName, Boolean approved, String reason,
-        Map<String, Object> providerMetadata) {
-        return new ToolApprovalResponsePart(approvalId, toolCallId, toolName, approved, reason,
-            providerMetadata);
-    }
 }

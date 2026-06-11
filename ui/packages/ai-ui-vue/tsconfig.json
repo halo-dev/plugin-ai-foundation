@@ -11,6 +11,6 @@
     "rootDir": "src",
     "strict": true,
     "target": "ES2022",
-    "types": ["@rstest/core/importMeta"]
+    "types": ["@rstest/core/importMeta", "node"]
   }
 }

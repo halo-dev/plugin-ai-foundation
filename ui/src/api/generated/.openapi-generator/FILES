@@ -29,16 +29,9 @@ models/embedding-preview.ts
 models/embedding-response-metadata.ts
 models/embedding-usage.ts
 models/embedding-warning.ts
-models/generate-text-request.ts
-models/generation-request-metadata.ts
-models/generation-response-metadata.ts
-models/generation-warning.ts
 models/index.ts
 models/json-patch-inner.ts
-models/language-model-usage.ts
 models/metadata.ts
-models/model-message-part.ts
-models/model-message.ts
 models/model-option-provider.ts
 models/model-option.ts
 models/move-operation.ts
@@ -55,8 +48,5 @@ models/test-object-stream-request.ts
 models/test-operation.ts
 models/test-ui-message-chat-request.ts
 models/test-ui-message.ts
-models/text-stream-part.ts
-models/tool-approval-policy.ts
 models/tool-choice.ts
-models/tool-definition.ts
 models/uimessage-chunk.ts

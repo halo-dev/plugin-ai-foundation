@@ -59,9 +59,8 @@ data: [DONE]
 - `setMessages(messages)`
 - `clearError()`
 - `addToolOutput(...)`
-- `addToolResult(...)`
-- `addToolError(...)`
-- `addToolApprovalResponse(...)`
+- `rejectToolCall(...)`
+- `isLastAssistantMessageToolComplete()`
 
 如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成单个 assistant text part。
 
@@ -176,12 +175,11 @@ const object = experimental_useObject({
 - `fromOpenAPIRequestArgs`
 - `readUIMessageSSEStream`、`readTextStream`、`collectText`
 - `createUIMessageReducer`、`applyUIMessageChunk`、`messageText`
-- `appendToolResult`、`appendToolError`、`appendToolApprovalResponse`
 - `parsePartialJson`、`toJsonSchema`、`validateFinalValue`
 
 ## 工具续跑
 
-Halo `UIMessage` 会把工具调用、工具结果、工具错误、审批请求和审批响应都保存在 assistant message parts 中。外部工具或审批步骤完成后，把对应 part 追加到原 assistant 消息，再重新发送当前消息列表即可继续生成。
+Halo `UIMessage` 会把工具调用生命周期保存在 assistant message 的动态 `tool-*` part 中。外部工具或审批步骤完成后，更新原 assistant 消息中的同一个 tool part，再重新发送当前消息列表即可继续生成。
 
 ```ts
 await chat.addToolOutput({
@@ -189,13 +187,12 @@ await chat.addToolOutput({
   output: { title: 'Halo' },
 })
 
-await chat.addToolApprovalResponse({
+await chat.rejectToolCall({
   id: 'approval_call_1',
-  approved: false,
   reason: '用户拒绝执行',
 })
 ```
 
-`addToolOutput` 会根据已有 `tool-call` part 自动补齐工具名称；`addToolApprovalResponse` 会根据已有 `tool-approval-request` part 自动补齐 `toolCallId` 和工具名称。`addToolResult`、`addToolError` 和底层 `appendTool*` helper 仍然保留，适合自定义 runtime 或不使用 `useChat` 的场景。
+`addToolOutput` 会根据已有 `tool-*` part 自动补齐工具名称。`rejectToolCall` 会根据已有审批请求补齐 `toolCallId` 和工具名称，并把该工具调用标记为 `output-error`。
 
 如果配置了 `sendAutomaticallyWhen` 且返回 `true`，`Chat` 会在工具续跑 part 追加后自动再次提交。

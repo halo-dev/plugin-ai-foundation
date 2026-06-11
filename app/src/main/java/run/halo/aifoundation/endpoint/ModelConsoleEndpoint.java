@@ -37,7 +37,6 @@ import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.chat.StopCondition;
-import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
@@ -68,8 +67,6 @@ import tools.jackson.databind.json.JsonMapper;
 public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private static final int MAX_NAME_GENERATION_ATTEMPTS = 10;
-    private static final String HALO_AI_STREAM_PROTOCOL_HEADER = "X-Halo-AI-Stream-Protocol";
-    private static final String HALO_AI_TEXT_STREAM_PROTOCOL = "text-v1";
     private static final String CONSOLE_TEST_TOOL_NAME = "halo_test_info";
     private static final String CONSOLE_EXTERNAL_TEST_TOOL_NAME = "halo_external_test_info";
     private static final String CONSOLE_REPAIR_TEST_TOOL_NAME = "halo_repair_test_info";
@@ -135,48 +132,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(String.class)
                         .required(true))
                     .response(responseBuilder().implementation(Void.class))
-            )
-            .POST("models/{name}/test-chat/stream", this::testChatStream,
-                builder -> builder.operationId("TestModelChatStream")
-                    .description("Test text generation with Halo text stream response.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .parameter(parameterBuilder()
-                        .name("enableTestTool")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether to inject the console-only halo_test_info tool for "
-                            + "tool calling tests.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .parameter(parameterBuilder()
-                        .name("enableTestToolApproval")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether the console-only halo_test_info tool should require "
-                            + "caller approval before execution.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .parameter(parameterBuilder()
-                        .name("enableToolCallRepair")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether to inject a console-only repairable tool and "
-                            + "deterministic tool-call repair callback.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .requestBody(requestBodyBuilder()
-                        .required(false)
-                        .implementation(GenerateTextRequest.class))
-                    .response(responseBuilder()
-                        .description("Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. "
-                            + "Each data event contains a TextStreamPart JSON object. The stream can "
-                            + "include message lifecycle, step lifecycle, text, tool call, tool result, "
-                            + "tool approval request, tool error, finish, sanitized raw diagnostic, "
-                            + "and error parts, then ends with data: [DONE].")
-                        .implementation(TextStreamPart.class))
             )
             .POST("models/{name}/test-chat/ui-message/stream", this::testUiMessageChatStream,
                 builder -> builder.operationId("TestModelUiMessageChatStream")
@@ -328,29 +283,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Model not found: " + name)))
             .flatMap(client::delete)
             .then(ServerResponse.noContent().build());
-    }
-
-    private Mono<ServerResponse> testChatStream(ServerRequest request) {
-        var modelName = request.pathVariable("name");
-        log.info("testChatStream: modelName={}", modelName);
-
-        return request.bodyToMono(GenerateTextRequest.class)
-            .defaultIfEmpty(new GenerateTextRequest())
-            .flatMap(body -> validateTestChatRequest(body).then(Mono.defer(() -> {
-                var chatRequest = withConsoleTestTool(body, ConsoleTestToolOptions.from(request));
-                Flux<ServerSentEvent<Object>> flux = aiModelService.languageModel(modelName)
-                    .flatMapMany(languageModel -> languageModel.streamText(chatRequest).fullStream())
-                    .onErrorResume(e -> {
-                        log.error("Stream chat failed for model: {}", modelName, e);
-                        return Flux.just(TextStreamPart.error("Chat test failed: " + e.getMessage()));
-                    })
-                    .map(part -> ServerSentEvent.builder((Object) part).build())
-                    .concatWith(Mono.just(ServerSentEvent.builder((Object) "[DONE]").build()));
-                return ServerResponse.ok()
-                    .contentType(MediaType.TEXT_EVENT_STREAM)
-                    .header(HALO_AI_STREAM_PROTOCOL_HEADER, HALO_AI_TEXT_STREAM_PROTOCOL)
-                    .body(flux, ServerSentEvent.class);
-            })));
     }
 
     private Mono<ServerResponse> testUiMessageChatStream(ServerRequest request) {
@@ -978,7 +910,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private static String writeJson(UIMessageChunk chunk) {
         try {
-            return JSON_MAPPER.writeValueAsString(chunk);
+            return JSON_MAPPER.writeValueAsString(UIMessageTransportCodec.chunkToMap(chunk));
         } catch (JacksonException e) {
             throw new IllegalArgumentException("failed to serialize UI message chunk", e);
         }

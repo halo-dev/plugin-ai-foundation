@@ -17,8 +17,19 @@ export class AIUIError extends Error {
   }
 }
 
+export class AIUIProtocolError extends AIUIError {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super(message, options)
+    this.name = 'AIUIProtocolError'
+  }
+}
+
 export function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+export function isProtocolError(error: unknown): boolean {
+  return error instanceof AIUIProtocolError
 }
 
 export function isAbortError(error: unknown): boolean {
