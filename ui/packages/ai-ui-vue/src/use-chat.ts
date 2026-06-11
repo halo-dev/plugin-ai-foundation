@@ -51,6 +51,7 @@ export function useChat<METADATA = unknown>(options: UseChatOptions<METADATA> = 
     setMessages: store.chat.setMessages.bind(store.chat),
     clearError: store.chat.clearError.bind(store.chat),
     addToolOutput: store.chat.addToolOutput.bind(store.chat),
+    addToolApprovalResponse: store.chat.addToolApprovalResponse.bind(store.chat),
     rejectToolCall: store.chat.rejectToolCall.bind(store.chat),
     isLastAssistantMessageToolComplete: store.chat.isLastAssistantMessageToolComplete.bind(store.chat),
   }

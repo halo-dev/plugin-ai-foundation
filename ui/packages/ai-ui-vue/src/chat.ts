@@ -171,7 +171,7 @@ export class Chat<METADATA = unknown> {
     }
     return assistant.parts
       .filter(isToolPart)
-      .every((part) => part.state === 'output-available' || part.state === 'output-error')
+      .every((part) => part.state === 'output-available' || part.state === 'output-error' || part.state === 'output-denied')
   }
 
   private async appendToolOutputSuccess(
@@ -236,6 +236,13 @@ export class Chat<METADATA = unknown> {
     input: Omit<ToolApprovalResponseInput, 'approved'> & { approved?: false },
     options?: ChatRequestOptions
   ): Promise<void> {
+    await this.addToolApprovalResponse({ ...input, approved: false }, options)
+  }
+
+  async addToolApprovalResponse(
+    input: ToolApprovalResponseInput,
+    options?: ChatRequestOptions
+  ): Promise<void> {
     const approval =
       input.id || input.approvalId
         ? this.resolveApprovalRequest(input.id ?? input.approvalId)
@@ -250,7 +257,7 @@ export class Chat<METADATA = unknown> {
         approvalId: approval?.approval?.id ?? input.id ?? input.approvalId ?? toolCallId,
         toolCallId,
         toolName: input.toolName ?? input.tool ?? tool.toolName,
-        approved: false,
+        approved: input.approved,
         reason: input.reason,
         providerMetadata: input.providerMetadata,
       })
@@ -313,15 +320,17 @@ export class Chat<METADATA = unknown> {
     options,
     allowAutoSubmit = true,
     requestMessages,
+    reducerMessage,
   }: {
     trigger: 'submit-message' | 'regenerate-message'
     messageId?: string
     options?: ChatRequestOptions
     allowAutoSubmit?: boolean
     requestMessages?: UIMessage<METADATA>[]
+    reducerMessage?: UIMessage<METADATA>
   }) {
     const outcome = await this.consumeAssistantStream({
-      reducerMessageId: this.generateId(),
+      reducerMessage: reducerMessage ?? { id: this.generateId(), role: 'assistant', parts: [] },
       createStream: (abortSignal) =>
         this.transport.sendMessages({
           chatId: this.id,
@@ -342,15 +351,16 @@ export class Chat<METADATA = unknown> {
         messageId: this.messages[this.messages.length - 1]?.id,
         options,
         allowAutoSubmit: false,
+        reducerMessage: this.lastAssistantMessage(),
       })
     }
   }
 
   private async consumeAssistantStream({
-    reducerMessageId,
+    reducerMessage,
     createStream,
   }: {
-    reducerMessageId: string
+    reducerMessage: UIMessage<METADATA>
     createStream: (abortSignal: AbortSignal) => Promise<AsyncIterable<UIMessageChunk>>
   }): Promise<{ isAbort: boolean; isError: boolean }> {
     this.setChatStatus('submitted')
@@ -360,7 +370,7 @@ export class Chat<METADATA = unknown> {
     let hasStartedReadableStream = false
     const abortController = new AbortController()
     this.activeAbortController = abortController
-    const reducer = createUIMessageReducer<METADATA>({ messageId: reducerMessageId })
+    const reducer = createUIMessageReducer<METADATA>({ message: reducerMessage })
 
     try {
       const stream = await createStream(abortController.signal)
@@ -478,8 +488,13 @@ export class Chat<METADATA = unknown> {
         messageId: this.messages[this.messages.length - 1]?.id,
         options,
         allowAutoSubmit: false,
+        reducerMessage: this.lastAssistantMessage(),
       })
     }
+  }
+
+  private lastAssistantMessage(): UIMessage<METADATA> | undefined {
+    return [...this.messages].reverse().find((message) => message.role === 'assistant')
   }
 
   private async shouldSendAutomatically(): Promise<boolean> {
@@ -596,4 +611,23 @@ function isToolPart(part: UIMessage['parts'][number]): part is ToolPart {
 
 function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
   return chunk.type.startsWith('data-')
+}
+
+export function lastAssistantMessageIsCompleteWithApprovalResponses<METADATA = unknown>({
+  messages,
+}: {
+  messages: UIMessage<METADATA>[]
+}): boolean {
+  const assistant = [...messages].reverse().find((message) => message.role === 'assistant')
+  if (!assistant) {
+    return false
+  }
+  const approvalParts = assistant.parts.filter(
+    (part): part is ToolPart =>
+      isToolPart(part) && (part.state === 'approval-requested' || part.state === 'approval-responded')
+  )
+  return (
+    approvalParts.length > 0 &&
+    approvalParts.every((part) => part.state === 'approval-responded')
+  )
 }

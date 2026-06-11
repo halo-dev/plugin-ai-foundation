@@ -452,8 +452,7 @@ describe('applyWorkbenchUIMessageChunk', () => {
             type: 'tool-pay',
             toolCallId: 'call_1',
             toolName: 'pay',
-            state: 'output-error',
-            errorText: 'Denied',
+            state: 'approval-responded',
             approval: {
               id: 'approval_1',
               approved: false,

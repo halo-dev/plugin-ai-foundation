@@ -88,6 +88,10 @@ public final class UIMessageStreamMapper {
                 part.getToolName(), ToolPartState.APPROVAL_REQUESTED, part.getInput(), null,
                 null, null, new ToolApproval(part.getApprovalId(), null, null),
                 part.getProviderMetadata());
+            case PartType.TOOL_APPROVAL_RESPONSE -> UIMessageChunks.tool(part.getToolCallId(),
+                part.getToolName(), ToolPartState.APPROVAL_RESPONDED, null, null, null, null,
+                new ToolApproval(part.getApprovalId(), part.getApproved(), part.getReason()),
+                part.getProviderMetadata());
             case PartType.FINISH_STEP -> UIMessageChunks.finishStep(part.getStepIndex(),
                 part.getFinishReason(), part.getRawFinishReason(), part.getUsage(),
                 part.getWarnings(), part.getRequest(), part.getResponse(),

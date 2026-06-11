@@ -194,9 +194,10 @@ X-Halo-AI-UI-Message-Stream: v1
 
 `useChat` 暴露 `messages`、`status`、`error`、`isLoading`，以及 `sendMessage`、
 `regenerate`、`stop`、`setMessages`、`clearError`、`addToolOutput`、
-`rejectToolCall`、`isLastAssistantMessageToolComplete`。同一个 `id` 的多个 `useChat`
-调用会共享消息状态。`addToolOutput` 和 `rejectToolCall` 会从已有 assistant message
-parts 中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
+`addToolApprovalResponse`、`rejectToolCall`、`isLastAssistantMessageToolComplete`。
+同一个 `id` 的多个 `useChat` 调用会共享消息状态。`addToolOutput`、
+`addToolApprovalResponse` 和 `rejectToolCall` 会从已有 assistant message parts
+中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
 
 如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成
 assistant 的 text part，但不会提供工具、reasoning、data、source/file 等 UIMessage
@@ -440,13 +441,13 @@ UIMessagePart toolError = UIMessageParts.tool(
 );
 ```
 
-审批通过时把审批请求对应的工具 part 更新为 `input-available`，并保留审批结果：
+审批通过时把审批请求对应的工具 part 更新为 `approval-responded`，并保留审批结果：
 
 ```java
 UIMessagePart approved = UIMessageParts.tool(
     "call_1",
     "delete_file",
-    ToolPartState.INPUT_AVAILABLE,
+    ToolPartState.APPROVAL_RESPONDED,
     Map.of("path", "/tmp/example.txt"),
     null,
     null,
@@ -456,21 +457,25 @@ UIMessagePart approved = UIMessageParts.tool(
 );
 ```
 
-审批拒绝时把同一个工具 part 更新为 `output-error`：
+审批拒绝时同样把工具 part 更新为 `approval-responded`。拒绝审批不是工具执行异常，
+不要把它映射为 `output-error`：
 
 ```java
 UIMessagePart denied = UIMessageParts.tool(
     "call_1",
     "delete_file",
-    ToolPartState.OUTPUT_ERROR,
+    ToolPartState.APPROVAL_RESPONDED,
     Map.of("path", "/tmp/example.txt"),
     null,
     null,
-    "用户拒绝删除",
+    null,
     new ToolApproval("approval_call_1", false, "用户拒绝删除"),
     Map.of()
 );
 ```
+
+如果后端明确返回“因审批拒绝而未执行”的工具终态，可以使用 `output-denied` 表示；
+`output-error` 只表示工具执行过程中的错误。
 
 拒绝审批不需要额外创建第二个 part；同一个 `toolCallId` 始终只保留一个工具 part。
 审批或外部工具处理完成后，把更新后的 `UIMessageChatRequest` 再次传给
@@ -544,7 +549,7 @@ UIMessageConversionResult conversion =
 | `ToolPart` + `input-available` | 转为 assistant 工具调用内容 |
 | `ToolPart` + `approval-requested` | 转为 assistant 审批请求内容 |
 | `ToolPart` + `output-available` / `output-error` | 转为 tool 消息 |
-| `ToolPart` + 已通过审批的 `input-available` | 转为 assistant 审批请求内容和 tool 审批响应消息 |
+| `ToolPart` + `approval-responded` | 转为 assistant 审批请求内容和 tool 审批响应消息 |
 | `DataPart` | 跳过并记录 warning，除非注册 converter |
 | `SourceUrlPart` / `FilePart` | 跳过并记录 warning |
 

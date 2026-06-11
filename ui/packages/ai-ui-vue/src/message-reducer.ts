@@ -209,9 +209,9 @@ export function withToolApprovalDecision<METADATA = unknown>(
     type: `tool-${response.toolName}`,
     toolCallId: response.toolCallId,
     toolName: response.toolName,
-    state: response.approved ? 'input-available' : 'output-error',
+    state: 'approval-responded',
     input: existing?.input,
-    errorText: response.approved ? existing?.errorText : response.reason ?? 'Tool call rejected.',
+    errorText: existing?.errorText,
     approval: { id: response.approvalId, approved: response.approved, reason: response.reason },
     providerMetadata: response.providerMetadata ?? existing?.providerMetadata,
   })

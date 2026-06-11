@@ -20,12 +20,22 @@ public enum ToolPartState {
     APPROVAL_REQUESTED("approval-requested"),
 
     /**
+     * Caller has approved or denied a pending tool approval request.
+     */
+    APPROVAL_RESPONDED("approval-responded"),
+
+    /**
      * Tool execution completed with an output payload.
      */
     OUTPUT_AVAILABLE("output-available"),
 
     /**
-     * Tool execution completed with an error or denial.
+     * Tool execution was denied before execution.
+     */
+    OUTPUT_DENIED("output-denied"),
+
+    /**
+     * Tool execution completed with an error.
      */
     OUTPUT_ERROR("output-error");
 

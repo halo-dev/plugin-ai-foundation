@@ -77,6 +77,14 @@ public class TextStreamPart {
      */
     private String approvalId;
     /**
+     * Approval decision for tool approval response events.
+     */
+    private Boolean approved;
+    /**
+     * Optional approval response reason.
+     */
+    private String reason;
+    /**
      * Tool call id for tool call/result/error events.
      */
     private String toolCallId;

@@ -12,7 +12,7 @@ import java.util.Map;
  * @param input tool input when available
  * @param inputTextDelta streamed input text delta while input is incomplete
  * @param output tool output when available
- * @param errorText safe error text for failed or denied tools
+ * @param errorText safe error text for failed tools
  * @param approval optional approval metadata
  * @param providerMetadata provider-specific metadata
  */

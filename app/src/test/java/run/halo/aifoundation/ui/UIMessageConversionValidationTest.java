@@ -107,7 +107,7 @@ class UIMessageConversionValidationTest {
     void convertsApprovedToolApprovalWithOriginalToolCall() {
         var result = UIMessageConverters.convertToModelMessages(List.of(
             new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
-                UIMessageParts.tool("call-1", "halo_test_info", ToolPartState.INPUT_AVAILABLE,
+                UIMessageParts.tool("call-1", "halo_test_info", ToolPartState.APPROVAL_RESPONDED,
                     Map.of("query", "hello"), null, null, null,
                     new ToolApproval("approval-1", true, "approved"), Map.of())
             ), new Metadata("chat"))
@@ -121,6 +121,27 @@ class UIMessageConversionValidationTest {
         assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
         assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
             .containsExactly(PartType.TOOL_APPROVAL_RESPONSE);
+    }
+
+    @Test
+    void convertsDeniedToolApprovalWithoutToolError() {
+        var result = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
+                UIMessageParts.tool("call-1", "halo_test_info", ToolPartState.APPROVAL_RESPONDED,
+                    Map.of("query", "hello"), null, null, null,
+                    new ToolApproval("approval-1", false, "denied"), Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.warnings()).isEmpty();
+        assertThat(result.messages()).hasSize(2);
+        assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
+        assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST);
+        assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
+        assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_APPROVAL_RESPONSE);
+        assertThat(result.messages().get(1).getContent().getFirst().getApproved()).isFalse();
     }
 
     @Test
@@ -290,14 +311,31 @@ class UIMessageConversionValidationTest {
     }
 
     @Test
-    void validatesApprovalRequestedAndDeniedToolStates() {
+    void validatesDuplicateApprovalResponses() {
+        var result = UIMessageValidators.safeValidate(List.of(
+            new UIMessage<>("m1", UIMessageRole.ASSISTANT, List.of(
+                UIMessageParts.tool("call-1", "pay", ToolPartState.APPROVAL_RESPONDED,
+                    Map.of("amount", 1), null, null, null,
+                    new ToolApproval("approval-1", true, null), Map.of()),
+                UIMessageParts.tool("call-2", "pay", ToolPartState.APPROVAL_RESPONDED,
+                    Map.of("amount", 2), null, null, null,
+                    new ToolApproval("approval-1", false, "Denied"), Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.issues()).extracting(UIMessageValidationIssue::code)
+            .contains("tool.approval.duplicate");
+    }
+
+    @Test
+    void validatesApprovalRequestedAndRespondedToolStates() {
         var valid = UIMessageValidators.safeValidate(List.of(
             new UIMessage<>("m1", UIMessageRole.ASSISTANT, List.of(
                 UIMessageParts.tool("call-1", "pay", ToolPartState.APPROVAL_REQUESTED,
                     Map.of("amount", 1), null, null, null,
                     new ToolApproval("approval-1", null, null), Map.of()),
-                UIMessageParts.tool("call-2", "pay", ToolPartState.OUTPUT_ERROR,
-                    Map.of("amount", 2), null, null, "Denied",
+                UIMessageParts.tool("call-2", "pay", ToolPartState.APPROVAL_RESPONDED,
+                    Map.of("amount", 2), null, null, null,
                     new ToolApproval("approval-2", false, "Denied"), Map.of())
             ), new Metadata("chat"))
         ));

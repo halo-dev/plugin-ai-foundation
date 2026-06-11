@@ -2,6 +2,7 @@ package run.halo.aifoundation.ui;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -90,6 +91,7 @@ public final class UIMessageValidators {
         private final UIMessageValidationOptions<M> options;
         private final ArrayList<UIMessageValidationIssue> issues = new ArrayList<>();
         private final HashMap<String, String> finalToolOutputs = new HashMap<>();
+        private final HashSet<String> approvalResponses = new HashSet<>();
 
         State(List<UIMessage<M>> messages, UIMessageValidationOptions<M> options) {
             this.messages = messages;
@@ -197,14 +199,39 @@ public final class UIMessageValidators {
                 require(message, tool, tool.errorText(), "part.tool.error-text.required",
                     "Tool error text must not be blank");
             }
+            if (tool.state() == ToolPartState.APPROVAL_RESPONDED
+                || tool.state() == ToolPartState.OUTPUT_DENIED) {
+                validateApprovalResponse(message, tool);
+            }
             if (tool.state() == ToolPartState.OUTPUT_AVAILABLE
-                || tool.state() == ToolPartState.OUTPUT_ERROR) {
+                || tool.state() == ToolPartState.OUTPUT_ERROR
+                || tool.state() == ToolPartState.OUTPUT_DENIED) {
                 var previous = finalToolOutputs.putIfAbsent(tool.toolCallId(),
                     tool.state().value());
                 if (previous != null) {
                     issues.add(issue(message, tool, tool.toolCallId(), "tool.result.duplicate",
                         "Tool call id must have at most one final result or error"));
                 }
+            }
+        }
+
+        private void validateApprovalResponse(UIMessage<M> message, ToolPart tool) {
+            if (tool.approval() == null) {
+                issues.add(issue(message, tool, tool.toolCallId(), "part.tool.approval.required",
+                    "Tool approval response must include approval metadata"));
+                return;
+            }
+            require(message, tool, tool.approval().id(), "part.tool.approval.id.required",
+                "Tool approval id must not be blank");
+            if (tool.approval().approved() == null) {
+                issues.add(issue(message, tool, tool.toolCallId(),
+                    "part.tool.approval.approved.required",
+                    "Tool approval response must include an approved decision"));
+            }
+            if (tool.approval().id() != null && !tool.approval().id().isBlank()
+                && !approvalResponses.add(tool.approval().id())) {
+                issues.add(issue(message, tool, tool.toolCallId(), "tool.approval.duplicate",
+                    "Tool approval id must have at most one response"));
             }
         }
 

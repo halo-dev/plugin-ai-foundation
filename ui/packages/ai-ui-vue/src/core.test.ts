@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core'
-import { Chat, createPlainChatState } from './chat'
+import { Chat, createPlainChatState, lastAssistantMessageIsCompleteWithApprovalResponses } from './chat'
 import { applyUIMessageChunk, createUIMessageReducer, messageText, validateUIMessageChunk } from './message-reducer'
 import { readUIMessageSSEStream } from './stream'
 import type { ChatTransport, SendMessagesOptions, UIMessageChunk } from './types'
@@ -255,10 +255,77 @@ describe('Chat', () => {
       type: 'tool-delete_file',
       toolCallId: 'call-2',
       toolName: 'delete_file',
-      state: 'output-error',
-      errorText: 'Denied',
+      state: 'approval-responded',
       approval: { id: 'approval-1', approved: false, reason: 'Denied' },
     }))
+  })
+
+  it('adds approved tool approval response and auto submits from existing assistant state', async () => {
+    const transport = new RecordingTransport([
+      { type: 'tool-delete_file', toolCallId: 'call-2', toolName: 'delete_file', state: 'output-available', output: { ok: true } },
+    ])
+    const chat = new Chat({
+      id: 'chat-1',
+      state: createPlainChatState({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-delete_file',
+                toolCallId: 'call-2',
+                toolName: 'delete_file',
+                state: 'approval-requested',
+                input: { path: '/tmp/a.txt' },
+                approval: { id: 'approval-1' },
+              },
+            ],
+          },
+        ],
+      }),
+      transport,
+      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    })
+
+    await chat.addToolApprovalResponse({ id: 'approval-1', approved: true, reason: 'OK' })
+
+    expect(transport.options?.trigger).toBe('submit-message')
+    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
+      type: 'tool-delete_file',
+      toolCallId: 'call-2',
+      toolName: 'delete_file',
+      state: 'output-available',
+      input: { path: '/tmp/a.txt' },
+      output: { ok: true },
+      approval: { id: 'approval-1', approved: true, reason: 'OK' },
+    }))
+  })
+
+  it('detects approval response completion separately from tool output completion', () => {
+    expect(lastAssistantMessageIsCompleteWithApprovalResponses({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          parts: [
+            { type: 'tool-delete_file', toolCallId: 'call-1', toolName: 'delete_file', state: 'approval-responded', approval: { id: 'approval-1', approved: false } },
+          ],
+        },
+      ],
+    })).toBe(true)
+
+    expect(lastAssistantMessageIsCompleteWithApprovalResponses({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          parts: [
+            { type: 'tool-delete_file', toolCallId: 'call-1', toolName: 'delete_file', state: 'approval-requested', approval: { id: 'approval-1' } },
+          ],
+        },
+      ],
+    })).toBe(false)
   })
 
   it('reports whether the last assistant tool parts are complete', async () => {

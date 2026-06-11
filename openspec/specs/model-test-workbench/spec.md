@@ -229,8 +229,14 @@ The console model test workbench SHALL exercise the public UI message runtime th
 - **AND** the backend SHALL receive trigger `regenerate-message` with the target message id
 
 #### Scenario: Tool output flows through useChat
-- **WHEN** the administrator supplies a result, error, or denial for a pending tool in UI message mode
-- **THEN** the workbench SHALL call `addToolOutput` or `rejectToolCall` from the public runtime
+- **WHEN** the administrator supplies a result or error for a pending tool in UI message mode
+- **THEN** the workbench SHALL call `addToolOutput` from the public runtime
+- **AND** automatic continuation SHALL use the runtime `sendAutomaticallyWhen` path
+
+#### Scenario: Tool approval response flows through useChat
+- **WHEN** the administrator approves or denies a pending tool approval in UI message mode
+- **THEN** the workbench SHALL call `addToolApprovalResponse` or a public alias from the runtime
+- **AND** the workbench SHALL NOT mutate tool approval state through private message patching
 - **AND** automatic continuation SHALL use the runtime `sendAutomaticallyWhen` path
 
 #### Scenario: Display projection does not own protocol state

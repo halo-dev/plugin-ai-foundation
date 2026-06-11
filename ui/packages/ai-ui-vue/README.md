@@ -59,6 +59,7 @@ data: [DONE]
 - `setMessages(messages)`
 - `clearError()`
 - `addToolOutput(...)`
+- `addToolApprovalResponse(...)`
 - `rejectToolCall(...)`
 - `isLastAssistantMessageToolComplete()`
 
@@ -193,6 +194,6 @@ await chat.rejectToolCall({
 })
 ```
 
-`addToolOutput` 会根据已有 `tool-*` part 自动补齐工具名称。`rejectToolCall` 会根据已有审批请求补齐 `toolCallId` 和工具名称，并把该工具调用标记为 `output-error`。
+`addToolOutput` 会根据已有 `tool-*` part 自动补齐工具名称。`addToolApprovalResponse` 会根据已有审批请求补齐 `toolCallId` 和工具名称，并把审批请求标记为 `approval-responded`。`rejectToolCall` 是 `addToolApprovalResponse({ approved: false })` 的便捷别名。拒绝审批不是工具执行异常，不会被标记为 `output-error`。
 
 如果配置了 `sendAutomaticallyWhen` 且返回 `true`，`Chat` 会在工具续跑 part 追加后自动再次提交。

@@ -155,7 +155,14 @@ export interface UIMessagePart {
   mediaType?: string
   toolCallId?: string
   toolName?: string
-  state?: 'input-streaming' | 'input-available' | 'approval-requested' | 'output-available' | 'output-error'
+  state?:
+    | 'input-streaming'
+    | 'input-available'
+    | 'approval-requested'
+    | 'approval-responded'
+    | 'output-available'
+    | 'output-denied'
+    | 'output-error'
   stepIndex?: number
   input?: Record<string, unknown>
   inputText?: string
@@ -712,10 +719,7 @@ function uiMessageToolEventType(part: UIMessagePart): WorkbenchToolEvent['type']
   if (part.state === 'approval-requested') {
     return 'tool-approval-request'
   }
-  if (part.approval?.approved === false) {
-    return 'tool-approval-request'
-  }
-  if (part.state === 'input-available' && part.approval?.approved === true) {
+  if (part.state === 'approval-responded' || part.state === 'output-denied') {
     return 'tool-approval-request'
   }
   switch (part.state) {

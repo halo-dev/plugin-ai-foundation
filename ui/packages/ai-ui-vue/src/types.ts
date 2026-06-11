@@ -79,7 +79,9 @@ export type ToolPartState =
   | 'input-streaming'
   | 'input-available'
   | 'approval-requested'
+  | 'approval-responded'
   | 'output-available'
+  | 'output-denied'
   | 'output-error'
 
 export interface ToolApproval {

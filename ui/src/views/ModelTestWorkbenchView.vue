@@ -22,8 +22,8 @@ import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components
 import { utils } from '@halo-dev/ui-shared'
 import {
   DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
   useChat,
-  type ToolPart as HaloToolPart,
   type UIMessage as HaloUIMessage,
   type UIMessagePart as HaloUIMessagePart,
 } from '@halo-dev/ai-ui-vue'
@@ -122,6 +122,7 @@ const uiChat = useChat<Record<string, unknown>>({
     },
   }),
   generateId: () => activeUiMessageWorkbenchId || utils.id.uuid(),
+  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
 })
 
 const chatModels = computed(() => {
@@ -442,25 +443,35 @@ async function handleToolApproval(options: {
   if (!parameters) {
     return
   }
+  activeUiMessageModelName = model.name
+  activeUiMessageWorkbenchId = message.id
   uiChat.setMessages(workbenchMessagesToHalo(messages.value))
-  if (options.approved) {
-    approveToolCallInUiChat(
-      event.approvalId,
-      'Approved from console test page',
+  isStreaming.value = true
+
+  try {
+    await uiChat.addToolApprovalResponse(
+      {
+        id: event.approvalId,
+        approved: options.approved,
+        reason: options.approved
+          ? 'Approved from console test page'
+          : 'Denied from console test page',
+      },
+      { body: uiMessageRequestBody(parameters) },
     )
-  } else {
-    await uiChat.rejectToolCall({
-      id: event.approvalId,
-      reason: 'Denied from console test page',
-    })
+    if (uiChat.error.value) {
+      appendAssistantError(message.id, `请求失败: ${uiChat.error.value.message}`)
+      return
+    }
+    syncWorkbenchMessageFromUiChat(message)
+    finishAssistantMessage(message.id, 'done')
+  } catch (e) {
+    appendAssistantError(message.id, `请求失败: ${(e as Error).message}`)
+  } finally {
+    isStreaming.value = false
+    activeUiMessageModelName = undefined
+    activeUiMessageWorkbenchId = undefined
   }
-  syncWorkbenchMessageFromUiChat(message)
-  const updatedEvent = message.toolEvents?.find((item) => item.id === options.eventId)
-  if (updatedEvent) {
-    updatedEvent.approvalStatus = options.approved ? 'approved' : 'denied'
-    message.toolEvents = [...(message.toolEvents || [])]
-  }
-  await streamUiMessageChatResponse(model.name, parameters)
 }
 
 async function handleExternalToolResult(options: {
@@ -576,32 +587,6 @@ function syncWorkbenchMessageFromUiChat(message: WorkbenchMessage) {
       message.state,
     )
   }
-}
-
-function approveToolCallInUiChat(approvalId: string, reason: string) {
-  uiChat.setMessages(
-    (uiChat.messages.value ?? []).map((message) => ({
-      ...message,
-      parts: message.parts.map((part) => {
-        if (
-          isHaloToolPart(part) &&
-          part.state === 'approval-requested' &&
-          part.approval?.id === approvalId
-        ) {
-          return {
-            ...part,
-            state: 'input-available',
-            approval: { ...part.approval, approved: true, reason },
-          }
-        }
-        return part
-      }) as HaloUIMessagePart[],
-    })) as HaloUIMessage<Record<string, unknown>>[],
-  )
-}
-
-function isHaloToolPart(part: HaloUIMessagePart): part is HaloToolPart {
-  return part.type.startsWith('tool-')
 }
 
 function workbenchMessagesToHalo(items: WorkbenchMessage[]): HaloUIMessage<Record<string, unknown>>[] {

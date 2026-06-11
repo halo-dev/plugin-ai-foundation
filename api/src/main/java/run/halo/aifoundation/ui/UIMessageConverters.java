@@ -113,7 +113,7 @@ public final class UIMessageConverters {
                 var part = message.parts().get(partIndex);
                 var context = new UIMessageConversionContext<>(messages, message, messageIndex,
                     part, partIndex);
-                if (isApprovedToolApproval(part)) {
+                if (isToolApprovalResponse(part)) {
                     if (!assistantContent.isEmpty()) {
                         emitted |= flushSegment(message, assistantContent, toolContent);
                     }
@@ -167,14 +167,15 @@ public final class UIMessageConverters {
         }
 
         private boolean isToolResponsePart(UIMessagePart part) {
-            return isTerminalToolPart(part) || isApprovedToolApproval(part);
+            return isTerminalToolPart(part) || isToolApprovalResponse(part);
         }
 
-        private boolean isApprovedToolApproval(UIMessagePart part) {
+        private boolean isToolApprovalResponse(UIMessagePart part) {
             return part instanceof ToolPart tool
-                && tool.state() == ToolPartState.INPUT_AVAILABLE
+                && (tool.state() == ToolPartState.APPROVAL_RESPONDED
+                    || tool.state() == ToolPartState.OUTPUT_DENIED)
                 && tool.approval() != null
-                && Boolean.TRUE.equals(tool.approval().approved());
+                && tool.approval().approved() != null;
         }
 
         private boolean isTerminalToolPart(UIMessagePart part) {
@@ -216,7 +217,8 @@ public final class UIMessageConverters {
             }
             return switch (part.state()) {
                 case OUTPUT_AVAILABLE, OUTPUT_ERROR -> convertToolOutput(part);
-                case INPUT_STREAMING, INPUT_AVAILABLE, APPROVAL_REQUESTED -> {
+                case INPUT_STREAMING, INPUT_AVAILABLE, APPROVAL_REQUESTED, APPROVAL_RESPONDED,
+                     OUTPUT_DENIED -> {
                     warning(context.message(), part, "tool.pending-skipped",
                         "Pending UI tool part was skipped.");
                     yield List.of();
@@ -403,7 +405,9 @@ public final class UIMessageConverters {
         if (part instanceof ToolPart tool
             && (tool.state() == ToolPartState.INPUT_STREAMING
                 || tool.state() == ToolPartState.INPUT_AVAILABLE
-                || tool.state() == ToolPartState.APPROVAL_REQUESTED)) {
+                || tool.state() == ToolPartState.APPROVAL_REQUESTED
+                || tool.state() == ToolPartState.APPROVAL_RESPONDED
+                || tool.state() == ToolPartState.OUTPUT_DENIED)) {
             return "tool.pending-skipped";
         }
         if (part instanceof SourceUrlPart) {

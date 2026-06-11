@@ -707,7 +707,7 @@ class ModelConsoleEndpointTest {
                             "type", "tool-halo_test_info",
                             "toolCallId", "call_1",
                             "toolName", "halo_test_info",
-                            "state", "input-available",
+                            "state", "approval-responded",
                             "input", Map.of("query", "hello"),
                             "approval", Map.of(
                                 "id", "approval_1",

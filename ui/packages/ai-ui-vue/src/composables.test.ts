@@ -51,6 +51,40 @@ describe('useChat', () => {
     scope.stop()
   })
 
+  it('exposes tool approval response helper', async () => {
+    const chat = new Chat({
+      id: 'approval-chat',
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          parts: [
+            {
+              type: 'tool-delete_file',
+              toolCallId: 'call-1',
+              toolName: 'delete_file',
+              state: 'approval-requested',
+              approval: { id: 'approval-1' },
+            },
+          ],
+        },
+      ],
+    })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const composable = useChat({ chat })
+      await composable.addToolApprovalResponse({ id: 'approval-1', approved: false })
+      await nextTick()
+
+      expect(composable.messages.value[0].parts[0]).toMatchObject({
+        state: 'approval-responded',
+        approval: { id: 'approval-1', approved: false },
+      })
+    })
+    scope.stop()
+  })
+
   it('fails fast when an existing Chat is mixed with creation options', () => {
     const chat = new Chat({ id: 'external-chat' })
     const scope = effectScope()

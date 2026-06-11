@@ -1,4 +1,4 @@
-export { Chat, createPlainChatState } from './chat'
+export { Chat, createPlainChatState, lastAssistantMessageIsCompleteWithApprovalResponses } from './chat'
 export type { ChatInit, ChatStateAdapter, SendMessageInput } from './chat'
 export { AIUIError, AIUIProtocolError, isProtocolError } from './errors'
 export { generateId } from './id'
