@@ -238,6 +238,76 @@ schema hook 只在前端接收流时生效，不会校验 `setMessages`、构造
 `isError: true`。这些前端校验用于保护 UI 状态，不能替代后端的
 `UIMessageValidators`、HTTP 输入校验或业务权限校验。
 
+### 自定义读取 UIMessage Stream
+
+标准聊天界面应优先使用 `useChat` 或 framework-neutral 的 `Chat`。如果调用方已经自己管理
+HTTP 请求、消息状态、Pinia store、Web Worker 或其他非 Vue runtime，只需要读取已有 Halo
+UIMessage SSE 并聚合 assistant message，可以使用 `readUIMessageStream`。
+
+```ts
+import { readUIMessageStream, type UIMessage } from '@halo-dev/ai-ui-vue'
+
+const response = await fetch('/apis/example.halo.run/v1alpha1/chat/stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    id: 'conversation-1',
+    messages,
+    trigger: 'submit-message',
+  }),
+})
+
+if (!response.ok) {
+  throw new Error(await response.text())
+}
+
+const result = await readUIMessageStream({
+  response,
+  messageId: 'assistant-1',
+  dataPartSchemas: {
+    status: {
+      safeParse: (value) =>
+        typeof value === 'string'
+          ? { success: true, data: value }
+          : { success: false, error: { message: 'status must be a string' } },
+    },
+  },
+  onChunk(chunk) {
+    console.debug('raw chunk', chunk)
+  },
+  onMessage(message: UIMessage) {
+    updateAssistantMessage(message)
+  },
+  onData(part) {
+    console.debug('data', part.name, part.data)
+  },
+  onToolCall(part) {
+    console.debug('tool call', part.toolName, part.input)
+  },
+  onFinish(event) {
+    console.debug(event.status, event.terminal)
+  },
+})
+```
+
+`readUIMessageStream` 只读取已有 stream。调用方仍负责 `fetch`、请求 body、headers、
+credentials、`response.ok` 和非 stream 错误响应处理。传入 `Response` 时，reader 只校验
+Halo UIMessage stream 协议标识和 `response.body`，然后读取 SSE。
+
+callback 语义：
+
+- `onChunk` 在协议和 schema 校验前触发，用于日志或审计，不代表 chunk 已经被接受。
+- `onMessage` 在可见 assistant message 更新后触发，收到浅克隆的完整 message snapshot。
+- `onData` 在 dynamic data chunk 被接受后触发；持久化 data 收到 schema parsed data，
+  transient data 收到 raw data 且不写入 message。
+- `onToolCall` 在 dynamic tool part 首次到达 `input-available` 时触发，同一个
+  `toolCallId` 只触发一次。它只是通知，不会把返回值写成 tool output，也不会自动续跑。
+
+reader 返回 `status`、`message`、`terminal`、`isError`、`isAbort` 和可选 `error`。
+正常完成为 `ready`；协议、schema、parser 或 callback 错误为 `error`；已经接受 chunk 后的
+非协议 stream 中断为 `disconnected`；外部 `abortSignal` 取消为 `aborted`。这个 helper 不提供
+resume、reconnect、replay、text stream、object stream、active stream registry 或工具自动续跑。
+
 如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成
 assistant 的 text part，但不会提供工具、reasoning、data、source/file 等 UIMessage
 事件。

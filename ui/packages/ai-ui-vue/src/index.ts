@@ -30,6 +30,13 @@ export {
   readTextStream,
   readUIMessageSSEStream,
 } from './stream'
+export { readUIMessageStream } from './stream-reader'
+export type {
+  ReadUIMessageStreamOptions,
+  UIMessageStreamFinishEvent,
+  UIMessageStreamReadResult,
+  UIMessageStreamReadStatus,
+} from './stream-reader'
 export { DefaultChatTransport, HttpChatTransport, TextStreamChatTransport, createUserMessage } from './transports'
 export type { HttpTransportOptions } from './transports'
 export * from './types'

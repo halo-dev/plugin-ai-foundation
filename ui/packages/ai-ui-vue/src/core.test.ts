@@ -3,8 +3,9 @@ import { Chat, createPlainChatState, lastAssistantMessageIsCompleteWithApprovalR
 import { AIUISchemaValidationError } from './errors'
 import { applyUIMessageChunk, createUIMessageReducer, messageText, validateUIMessageChunk } from './message-reducer'
 import { readUIMessageSSEStream } from './stream'
+import { readUIMessageStream } from './stream-reader'
 import type { SchemaLike } from './schema'
-import type { ChatTransport, SendMessagesOptions, UIMessageChunk } from './types'
+import type { ChatTransport, SendMessagesOptions, UIMessage, UIMessageChunk } from './types'
 
 describe('Halo UI message stream parser', () => {
   it('reads SSE JSON chunks and skips done marker', async () => {
@@ -174,6 +175,329 @@ describe('UI message reducer', () => {
       })
       expect((error as Error).message).toContain('Async schemas are not supported')
     }
+  })
+})
+
+describe('UI message stream reader', () => {
+  it('reads async chunks into a message result and visible message snapshots', async () => {
+    const chunks: UIMessageChunk[] = [
+      { type: 'start', messageId: 'assistant-1', messageMetadata: { traceId: 'trace-1' } },
+      { type: 'message-metadata', messageMetadata: { stage: 'streaming' } },
+      { type: 'text-delta', id: 'text-1', delta: 'Hi' },
+      { type: 'finish', finishReason: 'stop' },
+    ]
+    const rawChunks: UIMessageChunk[] = []
+    const messages: UIMessage[] = []
+
+    const result = await readUIMessageStream({
+      stream: chunksToAsyncIterable(chunks),
+      metadata: { initial: true },
+      onChunk: (chunk) => {
+        rawChunks.push(chunk)
+      },
+      onMessage: (message) => {
+        messages.push(message)
+        message.parts.push({ type: 'text', id: 'mutated', text: 'ignored' })
+      },
+    })
+
+    expect(rawChunks).toEqual(chunks)
+    expect(messages).toHaveLength(2)
+    expect(result.status).toBe('ready')
+    expect(result.isError).toBe(false)
+    expect(result.message).toMatchObject({
+      id: 'assistant-1',
+      role: 'assistant',
+      metadata: { initial: true, traceId: 'trace-1', stage: 'streaming' },
+    })
+    expect(messageText(result.message)).toBe('Hi')
+    expect(result.message.parts).not.toContainEqual(expect.objectContaining({ id: 'mutated' }))
+    expect(result.terminal.finishReason).toBe('stop')
+  })
+
+  it('reads readable SSE streams and response inputs', async () => {
+    const readableResult = await readUIMessageStream({
+      readableStream: streamFromText(
+        'data: {"type":"text-delta","id":"text-1","delta":"Readable"}\n\n'
+          + 'data: [DONE]\n\n'
+      ),
+      messageId: 'assistant-readable',
+    })
+
+    const response = new Response(
+      streamFromText(
+        'data: {"type":"text-delta","id":"text-1","delta":"Response"}\n\n'
+          + 'data: [DONE]\n\n'
+      ),
+      { headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' } }
+    )
+    const responseResult = await readUIMessageStream({
+      response,
+      messageId: 'assistant-response',
+    })
+
+    expect(readableResult.message.id).toBe('assistant-readable')
+    expect(messageText(readableResult.message)).toBe('Readable')
+    expect(responseResult.message.id).toBe('assistant-response')
+    expect(messageText(responseResult.message)).toBe('Response')
+  })
+
+  it('uses existing messages and generates default message ids', async () => {
+    const existing: UIMessage = {
+      id: 'assistant-existing',
+      role: 'assistant',
+      metadata: { existing: true },
+      parts: [{ type: 'text', id: 'text-1', text: 'Old ' }],
+    }
+
+    const existingResult = await readUIMessageStream({
+      stream: chunksToAsyncIterable([{ type: 'text-delta', id: 'text-1', delta: 'New' }]),
+      message: existing,
+      messageId: 'ignored',
+      metadata: { ignored: true },
+    })
+    const generatedResult = await readUIMessageStream({
+      stream: chunksToAsyncIterable([]),
+      generateId: () => 'assistant-generated',
+    })
+
+    expect(existingResult.message.id).toBe('assistant-existing')
+    expect(existingResult.message.metadata).toEqual({ existing: true })
+    expect(messageText(existingResult.message)).toBe('Old New')
+    expect(generatedResult.message).toEqual({
+      id: 'assistant-generated',
+      role: 'assistant',
+      parts: [],
+      metadata: undefined,
+    })
+    expect(generatedResult.status).toBe('ready')
+  })
+
+  it('applies schemas, data callbacks, transient data and one-time tool callbacks', async () => {
+    const dataEvents: unknown[] = []
+    const toolCalls: unknown[] = []
+    const chunks: UIMessageChunk[] = [
+      { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' } },
+      { type: 'data-status', id: 'status-2', name: 'status', data: { value: 'transient' }, transient: true },
+      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
+      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
+    ]
+
+    const result = await readUIMessageStream({
+      stream: chunksToAsyncIterable(chunks),
+      dataPartSchemas: {
+        status: {
+          safeParse: (value) => ({
+            success: true,
+            data: { ...(value as Record<string, unknown>), parsed: true },
+          }),
+        },
+      },
+      onData: (part) => {
+        dataEvents.push({ ...part })
+        part.data = 'mutated'
+      },
+      onToolCall: (part) => {
+        toolCalls.push({ ...part })
+        part.input = { mutated: true }
+      },
+    })
+
+    expect(dataEvents).toEqual([
+      {
+        type: 'data-status',
+        id: 'status-1',
+        name: 'status',
+        data: { value: 'loading', parsed: true },
+        transientData: false,
+      },
+      {
+        type: 'data-status',
+        id: 'status-2',
+        name: 'status',
+        data: { value: 'transient' },
+        transientData: true,
+      },
+    ])
+    expect(toolCalls).toEqual([
+      expect.objectContaining({
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        state: 'input-available',
+        input: { q: 'Halo' },
+      }),
+    ])
+    expect(result.message.parts).toContainEqual({
+      type: 'data-status',
+      id: 'status-1',
+      name: 'status',
+      data: { value: 'loading', parsed: true },
+      transientData: false,
+    })
+    expect(result.message.parts).not.toContainEqual(expect.objectContaining({ id: 'status-2' }))
+    expect(result.message.parts).toContainEqual(expect.objectContaining({
+      type: 'tool-search',
+      toolCallId: 'call-1',
+      input: { q: 'Halo' },
+    }))
+  })
+
+  it('returns error lifecycle results for schema failures without committing failing chunks', async () => {
+    const errors: Error[] = []
+    const finishes: unknown[] = []
+
+    const result = await readUIMessageStream({
+      stream: chunksToAsyncIterable([
+        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
+        { type: 'data-status', id: 'status-1', name: 'status', data: undefined },
+      ]),
+      dataPartSchemas: {
+        status: {
+          safeParse: () => ({ success: false, error: { message: 'status is required' } }),
+        },
+      },
+      onError: (error) => {
+        errors.push(error)
+      },
+      onFinish: (event) => {
+        finishes.push({ status: event.status, isError: event.isError })
+      },
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.isError).toBe(true)
+    expect(result.error).toBeInstanceOf(AIUISchemaValidationError)
+    expect(errors).toEqual([result.error])
+    expect(finishes).toEqual([{ status: 'error', isError: true }])
+    expect(messageText(result.message)).toBe('Partial')
+    expect(result.message.parts).not.toContainEqual(expect.objectContaining({ id: 'status-1' }))
+  })
+
+  it('returns disconnected after accepted chunks fail with non-protocol errors', async () => {
+    const expected = new Error('network interrupted')
+    const result = await readUIMessageStream({
+      stream: asyncGeneratorWithFailure([
+        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
+      ], expected),
+    })
+
+    expect(result.status).toBe('disconnected')
+    expect(result.isError).toBe(false)
+    expect(result.error).toBe(expected)
+    expect(messageText(result.message)).toBe('Partial')
+  })
+
+  it('returns aborted when the caller aborts the signal', async () => {
+    const controller = new AbortController()
+    const promise = readUIMessageStream({
+      stream: asyncGeneratorUntilAbort(controller.signal),
+      abortSignal: controller.signal,
+      messageId: 'assistant-1',
+    })
+    controller.abort()
+
+    const result = await promise
+
+    expect(result.status).toBe('aborted')
+    expect(result.isAbort).toBe(true)
+  })
+
+  it('calls finish before throwing when throwOnError is enabled', async () => {
+    const finishes: unknown[] = []
+    await expect(
+      readUIMessageStream({
+        stream: chunksToAsyncIterable([
+          {
+            type: 'tool-search',
+            toolCallId: 'call-1',
+            toolName: 'search',
+          } as unknown as UIMessageChunk,
+        ]),
+        throwOnError: true,
+        onFinish: (event) => {
+          finishes.push({ status: event.status, isError: event.isError })
+        },
+      })
+    ).rejects.toThrow('Tool chunk state is required')
+
+    expect(finishes).toEqual([{ status: 'error', isError: true }])
+  })
+
+  it('treats callback failures as reader errors', async () => {
+    const expected = new Error('consumer failed')
+    const result = await readUIMessageStream({
+      stream: chunksToAsyncIterable([
+        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
+      ]),
+      onMessage: () => {
+        throw expected
+      },
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe(expected)
+    expect(messageText(result.message)).toBe('Partial')
+  })
+
+  it('throws onError and onFinish failures after lifecycle callbacks', async () => {
+    const onErrorFailure = new Error('onError failed')
+    await expect(
+      readUIMessageStream({
+        stream: chunksToAsyncIterable([
+          {
+            type: 'tool-search',
+            toolCallId: 'call-1',
+            toolName: 'search',
+          } as unknown as UIMessageChunk,
+        ]),
+        onError: () => {
+          throw onErrorFailure
+        },
+      })
+    ).rejects.toThrow(onErrorFailure)
+
+    const onFinishFailure = new Error('onFinish failed')
+    await expect(
+      readUIMessageStream({
+        stream: chunksToAsyncIterable([]),
+        onFinish: () => {
+          throw onFinishFailure
+        },
+      })
+    ).rejects.toThrow(onFinishFailure)
+  })
+
+  it('stores error chunks in terminal state without throwing', async () => {
+    const result = await readUIMessageStream({
+      stream: chunksToAsyncIterable([
+        { type: 'error', errorText: 'model failed' },
+      ]),
+    })
+
+    expect(result.status).toBe('ready')
+    expect(result.terminal.errorText).toBe('model failed')
+    expect(result.error).toBeUndefined()
+  })
+
+  it('rejects response inputs without bodies and unsupported protocol versions', async () => {
+    await expect(
+      readUIMessageStream({
+        response: new Response(null, {
+          headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
+        }),
+        throwOnError: true,
+      })
+    ).rejects.toThrow('The response body is empty')
+
+    await expect(
+      readUIMessageStream({
+        response: new Response(streamFromText(''), {
+          headers: { 'X-Halo-AI-UI-Message-Stream': 'v2' },
+        }),
+        throwOnError: true,
+      })
+    ).rejects.toThrow('Unsupported Halo UI message stream version: v2')
   })
 })
 

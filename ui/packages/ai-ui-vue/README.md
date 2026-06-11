@@ -98,6 +98,59 @@ const chat = useChat({
 `onData` 也会收到解析后的值。schema 失败会抛出 `AIUISchemaValidationError`，并进入
 `error`、`onError` 和 `onFinish({ isError: true })` 路径。
 
+### Reading UIMessage Streams
+
+标准聊天界面优先使用 `useChat` 或 `Chat`。当你已经自己管理请求发送、消息状态，或者需要在非 Vue runtime 中读取 Halo UIMessage SSE 时，可以使用 `readUIMessageStream` 作为自定义 stream consumer。
+
+```ts
+import { readUIMessageStream, type UIMessage } from '@halo-dev/ai-ui-vue'
+
+const response = await fetch('/apis/example.halo.run/v1alpha1/chat/stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    id: 'conversation-1',
+    messages,
+    trigger: 'submit-message',
+  }),
+})
+
+if (!response.ok) {
+  throw new Error(await response.text())
+}
+
+const result = await readUIMessageStream({
+  response,
+  messageId: 'assistant-1',
+  dataPartSchemas: {
+    status: {
+      safeParse: (value) =>
+        typeof value === 'string'
+          ? { success: true, data: value }
+          : { success: false, error: { message: 'status must be a string' } },
+    },
+  },
+  onChunk(chunk) {
+    console.debug('raw chunk', chunk)
+  },
+  onMessage(message: UIMessage) {
+    updateAssistantMessage(message)
+  },
+  onData(part) {
+    console.debug('data', part.name, part.data)
+  },
+  onToolCall(part) {
+    console.debug('tool call', part.toolName, part.input)
+  },
+})
+
+if (result.status === 'disconnected') {
+  savePartialMessage(result.message)
+}
+```
+
+`readUIMessageStream` 只读取已有 stream；它不发起请求、不检查 `response.ok`、不解析非 stream 错误响应，也不做工具自动续跑。`onChunk` 是原始协议事件，可能随后校验失败；`onMessage`、`onData` 和 `onToolCall` 只在 chunk 被 reducer 接受后触发。该 helper 不提供 resume、reconnect、replay、text stream、object stream 或 active stream registry。
+
 ## Completion
 
 `useCompletion` 会发送 `{ prompt, ...body }`，并读取普通文本流。
