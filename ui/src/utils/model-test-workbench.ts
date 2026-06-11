@@ -1,7 +1,12 @@
 import type { AiModel, OutputSpec, TestUiMessageChatRequest } from '@/api/generated'
 import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import { utils } from '@halo-dev/ui-shared'
-import { DefaultChatTransport, type UIMessageChunk as HaloUIMessageChunk } from '@halo-dev/ai-ui-vue'
+import {
+  DefaultChatTransport,
+  type DataPartSchemas,
+  type MessageMetadataSchema,
+  type UIMessageChunk as HaloUIMessageChunk,
+} from '@halo-dev/ai-ui-vue'
 
 export type ChatRole = 'user' | 'assistant'
 
@@ -177,6 +182,21 @@ export interface UIMessagePart {
   [key: string]: unknown
 }
 
+export const workbenchMessageMetadataSchema: MessageMetadataSchema<Record<string, unknown>> = {
+  safeParse: (value) => {
+    if (!isPlainRecord(value)) {
+      return { success: false, error: { message: 'Workbench message metadata must be an object.' } }
+    }
+    return { success: true, data: value }
+  },
+}
+
+export const workbenchDataPartSchemas: DataPartSchemas = {
+  progress: workbenchDefinedDataSchema('progress'),
+  status: workbenchDefinedDataSchema('status'),
+  weather: workbenchDefinedDataSchema('weather'),
+}
+
 export interface UIMessageChunk {
   type?:
     | 'start'
@@ -225,6 +245,17 @@ export interface UIMessageChunk {
   approval?: UIMessagePart['approval']
   providerMetadata?: Record<string, unknown>
   warnings?: WorkbenchWarning[]
+}
+
+function workbenchDefinedDataSchema(name: string) {
+  return {
+    safeParse: (value: unknown) => {
+      if (value === undefined) {
+        return { success: false, error: { message: `Workbench data part ${name} must define data.` } }
+      }
+      return { success: true, data: value }
+    },
+  }
 }
 
 export type UIMessageChatTrigger = 'submit-message' | 'regenerate-message'

@@ -24,6 +24,32 @@ export class AIUIProtocolError extends AIUIError {
   }
 }
 
+export type AIUISchemaValidationTarget = 'message-metadata' | 'data-part'
+
+export interface AIUISchemaValidationErrorOptions {
+  target: AIUISchemaValidationTarget
+  partType?: string
+  partName?: string
+  partId?: string
+  cause?: unknown
+}
+
+export class AIUISchemaValidationError extends AIUIProtocolError {
+  readonly target: AIUISchemaValidationTarget
+  readonly partType?: string
+  readonly partName?: string
+  readonly partId?: string
+
+  constructor(message: string, options: AIUISchemaValidationErrorOptions) {
+    super(message, { cause: options.cause })
+    this.name = 'AIUISchemaValidationError'
+    this.target = options.target
+    this.partType = options.partType
+    this.partName = options.partName
+    this.partId = options.partId
+  }
+}
+
 export function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }

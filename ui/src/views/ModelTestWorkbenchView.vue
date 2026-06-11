@@ -11,6 +11,8 @@ import {
   createUserUIMessage,
   parseProviderOptionsJson,
   testUiMessageChatStreamUrl,
+  workbenchDataPartSchemas,
+  workbenchMessageMetadataSchema,
   type OutputMode,
   type ReasoningEffort,
   type ReasoningMode,
@@ -123,6 +125,8 @@ const uiChat = useChat<Record<string, unknown>>({
   }),
   generateId: () => activeUiMessageWorkbenchId || utils.id.uuid(),
   sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  messageMetadataSchema: workbenchMessageMetadataSchema,
+  dataPartSchemas: workbenchDataPartSchemas,
 })
 
 const chatModels = computed(() => {

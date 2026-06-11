@@ -65,6 +65,39 @@ data: [DONE]
 
 如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成单个 assistant text part。
 
+### Runtime Schemas
+
+`useChat` 可以在接收 Halo UIMessage SSE 时校验 streamed metadata 和持久化 `data-*` part。
+schema 支持 JSON Schema、`safeParse` / `parse` 风格对象，以及同步 Standard Schema。
+
+```ts
+const chat = useChat({
+  id: 'conversation-1',
+  transport,
+  messageMetadataSchema: {
+    safeParse: (value) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? { success: true, data: value as Record<string, unknown> }
+        : { success: false, error: { message: 'metadata must be an object' } },
+  },
+  dataPartSchemas: {
+    status: {
+      '~standard': {
+        validate: (value) =>
+          typeof value === 'string'
+            ? { value }
+            : { issues: [{ message: 'status must be a string' }] },
+      },
+    },
+  },
+})
+```
+
+`messageMetadataSchema` 校验合并后的 metadata。`dataPartSchemas` 使用 data name 作为 key；
+例如 `data-status` 对应 `status`。校验通过后，解析后的值会写入 `messages`，持久化 data 的
+`onData` 也会收到解析后的值。schema 失败会抛出 `AIUISchemaValidationError`，并进入
+`error`、`onError` 和 `onFinish({ isError: true })` 路径。
+
 ## Completion
 
 `useCompletion` 会发送 `{ prompt, ...body }`，并读取普通文本流。

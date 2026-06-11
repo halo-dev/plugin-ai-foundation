@@ -1,6 +1,7 @@
 import type { AiModel, OutputSpec } from '@/api/generated'
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
+import { AIUISchemaValidationError, validateRuntimeSchema } from '@halo-dev/ai-ui-vue'
 import {
   applyWorkbenchUIMessageChunk,
   buildOutputSpec,
@@ -11,6 +12,8 @@ import {
   parseProviderOptionsJson,
   readTestUiMessageChatStream,
   testUiMessageChatStreamUrl,
+  workbenchDataPartSchemas,
+  workbenchMessageMetadataSchema,
   type WorkbenchMessage,
 } from './model-test-workbench'
 
@@ -37,6 +40,40 @@ describe('parseProviderOptionsJson', () => {
     expect(parseProviderOptionsJson('{').error).toBeTruthy()
     expect(parseProviderOptionsJson('[]').error).toBeTruthy()
     expect(parseProviderOptionsJson('{ "seed": 42 }').error).toBeTruthy()
+  })
+})
+
+describe('workbench runtime schemas', () => {
+  it('accepts object metadata and known data part values', () => {
+    expect(
+      validateRuntimeSchema({ traceId: 'trace-1' }, workbenchMessageMetadataSchema, {
+        target: 'message-metadata',
+      }),
+    ).toEqual({ traceId: 'trace-1' })
+    expect(
+      validateRuntimeSchema({ value: 'loading' }, workbenchDataPartSchemas.status, {
+        target: 'data-part',
+        partName: 'status',
+        partType: 'data-status',
+        partId: 'status-1',
+      }),
+    ).toEqual({ value: 'loading' })
+  })
+
+  it('rejects invalid workbench metadata and missing known data payloads', () => {
+    expect(() =>
+      validateRuntimeSchema('bad', workbenchMessageMetadataSchema, {
+        target: 'message-metadata',
+      })
+    ).toThrow(AIUISchemaValidationError)
+    expect(() =>
+      validateRuntimeSchema(undefined, workbenchDataPartSchemas.status, {
+        target: 'data-part',
+        partName: 'status',
+        partType: 'data-status',
+        partId: 'status-1',
+      })
+    ).toThrow(AIUISchemaValidationError)
   })
 })
 

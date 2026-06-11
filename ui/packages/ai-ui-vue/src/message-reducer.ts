@@ -1,5 +1,6 @@
 import { AIUIProtocolError } from './errors'
 import { generateId } from './id'
+import { validateRuntimeSchema, type DataPartSchemas, type MessageMetadataSchema } from './schema'
 import type {
   DataPart,
   FinishChunk,
@@ -16,12 +17,16 @@ export interface UIMessageReducerState<METADATA = unknown> {
   message: UIMessage<METADATA>
   terminal: UIMessageStreamTerminal
   visible: boolean
+  messageMetadataSchema?: MessageMetadataSchema<METADATA>
+  dataPartSchemas?: DataPartSchemas
 }
 
 export interface CreateReducerOptions<METADATA = unknown> {
   message?: UIMessage<METADATA>
   messageId?: string
   metadata?: METADATA
+  messageMetadataSchema?: MessageMetadataSchema<METADATA>
+  dataPartSchemas?: DataPartSchemas
 }
 
 export function createUIMessageReducer<METADATA = unknown>(
@@ -36,6 +41,8 @@ export function createUIMessageReducer<METADATA = unknown>(
     },
     terminal: {},
     visible: Boolean(options.message?.parts.length),
+    messageMetadataSchema: options.messageMetadataSchema,
+    dataPartSchemas: options.dataPartSchemas,
   }
 }
 
@@ -46,11 +53,12 @@ export function applyUIMessageChunk<METADATA>(
   validateUIMessageChunk(chunk)
   if (isDataChunk(chunk)) {
     if (!chunk.transient) {
+      const data = validateDataPart(state, chunk)
       upsertPart(state, {
         type: chunk.type,
         id: chunk.id,
         name: chunk.name,
-        data: chunk.data,
+        data,
         transientData: false,
       })
     }
@@ -65,7 +73,7 @@ export function applyUIMessageChunk<METADATA>(
       state.message = {
         ...state.message,
         id: chunk.messageId ?? state.message.id,
-        metadata: mergeMetadata(state.message.metadata, chunk.messageMetadata),
+        metadata: mergeAndValidateMetadata(state, chunk.messageMetadata),
       }
       break
     case 'text-start':
@@ -87,7 +95,7 @@ export function applyUIMessageChunk<METADATA>(
     case 'message-metadata':
       state.message = {
         ...state.message,
-        metadata: mergeMetadata(state.message.metadata, chunk.messageMetadata),
+        metadata: mergeAndValidateMetadata(state, chunk.messageMetadata),
       }
       break
     case 'source-url':
@@ -121,7 +129,7 @@ export function applyUIMessageChunk<METADATA>(
     case 'finish':
       state.message = {
         ...state.message,
-        metadata: mergeMetadata(state.message.metadata, chunk.messageMetadata),
+        metadata: mergeAndValidateMetadata(state, chunk.messageMetadata),
       }
       state.terminal = finishTerminal(state.terminal, chunk)
       break
@@ -307,6 +315,35 @@ function mergeMetadata<METADATA>(current: METADATA | undefined, update: unknown)
     return { ...current, ...update } as METADATA
   }
   return update as METADATA
+}
+
+function mergeAndValidateMetadata<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+  update: unknown
+): METADATA | undefined {
+  const merged = mergeMetadata(state.message.metadata, update)
+  if (update == null || !state.messageMetadataSchema) {
+    return merged
+  }
+  return validateRuntimeSchema(merged, state.messageMetadataSchema, {
+    target: 'message-metadata',
+  })
+}
+
+function validateDataPart<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>
+): unknown {
+  const schema = state.dataPartSchemas?.[chunk.name]
+  if (!schema) {
+    return chunk.data
+  }
+  return validateRuntimeSchema(chunk.data, schema, {
+    target: 'data-part',
+    partType: chunk.type,
+    partName: chunk.name,
+    partId: chunk.id,
+  })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

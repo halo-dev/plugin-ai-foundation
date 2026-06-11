@@ -7,6 +7,7 @@ import {
   withToolError,
   withToolOutput,
 } from './message-reducer'
+import type { DataPartSchemas, MessageMetadataSchema } from './schema'
 import { DefaultChatTransport } from './transports'
 import type {
   ChatRequestOptions,
@@ -52,6 +53,8 @@ export interface ChatInit<METADATA = unknown> {
   sendAutomaticallyWhen?: (options: {
     messages: UIMessage<METADATA>[]
   }) => boolean | PromiseLike<boolean>
+  messageMetadataSchema?: MessageMetadataSchema<METADATA>
+  dataPartSchemas?: DataPartSchemas
 }
 
 export interface SendMessageInput<METADATA = unknown> {
@@ -76,6 +79,8 @@ export class Chat<METADATA = unknown> {
   private readonly onToolCall?: ChatInit<METADATA>['onToolCall']
   private readonly onFinish?: ChatInit<METADATA>['onFinish']
   private readonly sendAutomaticallyWhen?: ChatInit<METADATA>['sendAutomaticallyWhen']
+  private readonly messageMetadataSchema?: ChatInit<METADATA>['messageMetadataSchema']
+  private readonly dataPartSchemas?: ChatInit<METADATA>['dataPartSchemas']
   private readonly notifiedToolCalls = new Set<string>()
   private readonly listeners = new Set<() => void>()
   private activeAbortController?: AbortController
@@ -94,6 +99,8 @@ export class Chat<METADATA = unknown> {
     this.onToolCall = init.onToolCall
     this.onFinish = init.onFinish
     this.sendAutomaticallyWhen = init.sendAutomaticallyWhen
+    this.messageMetadataSchema = init.messageMetadataSchema
+    this.dataPartSchemas = init.dataPartSchemas
   }
 
   get messages(): UIMessage<METADATA>[] {
@@ -370,7 +377,11 @@ export class Chat<METADATA = unknown> {
     let hasStartedReadableStream = false
     const abortController = new AbortController()
     this.activeAbortController = abortController
-    const reducer = createUIMessageReducer<METADATA>({ message: reducerMessage })
+    const reducer = createUIMessageReducer<METADATA>({
+      message: reducerMessage,
+      messageMetadataSchema: this.messageMetadataSchema,
+      dataPartSchemas: this.dataPartSchemas,
+    })
 
     try {
       const stream = await createStream(abortController.signal)
@@ -386,6 +397,7 @@ export class Chat<METADATA = unknown> {
         this.setChatStatus('ready')
         return { isAbort, isError }
       }
+      abortController.abort()
       isError = true
       const normalized = toError(error)
       this.setChatError(normalized)
@@ -417,13 +429,7 @@ export class Chat<METADATA = unknown> {
   ) {
     applyUIMessageChunk(reducer, chunk)
     if (isDataChunk(chunk)) {
-      this.onData?.({
-        type: chunk.type,
-        id: chunk.id,
-        name: chunk.name,
-        data: chunk.data,
-        transientData: chunk.transient,
-      })
+      this.onData?.(dataPartFromChunk(reducer.message, chunk))
     }
     const lastPart = reducer.message.parts[reducer.message.parts.length - 1]
     if (lastPart && isToolPart(lastPart) && lastPart.state === 'input-available') {
@@ -611,6 +617,34 @@ function isToolPart(part: UIMessage['parts'][number]): part is ToolPart {
 
 function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
   return chunk.type.startsWith('data-')
+}
+
+function dataPartFromChunk<METADATA>(
+  message: UIMessage<METADATA>,
+  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>
+): DataPart {
+  if (chunk.transient) {
+    return {
+      type: chunk.type,
+      id: chunk.id,
+      name: chunk.name,
+      data: chunk.data,
+      transientData: true,
+    }
+  }
+  const part = message.parts.find(
+    (item): item is DataPart =>
+      item.type === chunk.type &&
+      item.type.startsWith('data-') &&
+      item.id === chunk.id
+  )
+  return part ?? {
+    type: chunk.type,
+    id: chunk.id,
+    name: chunk.name,
+    data: chunk.data,
+    transientData: false,
+  }
 }
 
 export function lastAssistantMessageIsCompleteWithApprovalResponses<METADATA = unknown>({

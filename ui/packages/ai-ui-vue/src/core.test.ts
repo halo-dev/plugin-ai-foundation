@@ -1,7 +1,9 @@
 import { describe, expect, it } from '@rstest/core'
 import { Chat, createPlainChatState, lastAssistantMessageIsCompleteWithApprovalResponses } from './chat'
+import { AIUISchemaValidationError } from './errors'
 import { applyUIMessageChunk, createUIMessageReducer, messageText, validateUIMessageChunk } from './message-reducer'
 import { readUIMessageSSEStream } from './stream'
+import type { SchemaLike } from './schema'
 import type { ChatTransport, SendMessagesOptions, UIMessageChunk } from './types'
 
 describe('Halo UI message stream parser', () => {
@@ -88,6 +90,91 @@ describe('UI message reducer', () => {
       })
     ).toThrow('Tool output-error chunk errorText is required')
   })
+
+  it('parses streamed metadata and persistent data with configured schemas', () => {
+    const state = createUIMessageReducer<{ stage: string; seen: boolean }>({
+      messageId: 'assistant-1',
+      messageMetadataSchema: {
+        safeParse: (value) => ({
+          success: true,
+          data: { ...(value as Record<string, unknown>), seen: true } as { stage: string; seen: boolean },
+        }),
+      },
+      dataPartSchemas: {
+        status: {
+          '~standard': {
+            validate: (value) => ({
+              value: { ...(value as Record<string, unknown>), parsed: true },
+            }),
+          },
+        },
+      },
+    })
+
+    applyUIMessageChunk(state, { type: 'start', messageMetadata: { stage: 'start' } })
+    applyUIMessageChunk(state, { type: 'message-metadata', messageMetadata: { stage: 'streaming' } })
+    applyUIMessageChunk(state, {
+      type: 'data-status',
+      id: 'status-1',
+      name: 'status',
+      data: { value: 'loading' },
+    })
+    applyUIMessageChunk(state, {
+      type: 'data-status',
+      id: 'status-2',
+      name: 'status',
+      data: { value: 'transient' },
+      transient: true,
+    })
+
+    expect(state.message.metadata).toEqual({ stage: 'streaming', seen: true })
+    expect(state.message.parts).toContainEqual({
+      type: 'data-status',
+      id: 'status-1',
+      name: 'status',
+      data: { value: 'loading', parsed: true },
+      transientData: false,
+    })
+    expect(state.message.parts).not.toContainEqual(expect.objectContaining({ id: 'status-2' }))
+  })
+
+  it('rejects async schemas and includes data part error details', () => {
+    const state = createUIMessageReducer({
+      dataPartSchemas: {
+        status: {
+          '~standard': {
+            validate: async () => ({ value: { ok: true } }),
+          },
+        } as SchemaLike,
+      },
+    })
+
+    expect(() =>
+      applyUIMessageChunk(state, {
+        type: 'data-status',
+        id: 'status-1',
+        name: 'status',
+        data: { value: 'loading' },
+      })
+    ).toThrow(AIUISchemaValidationError)
+    try {
+      applyUIMessageChunk(state, {
+        type: 'data-status',
+        id: 'status-1',
+        name: 'status',
+        data: { value: 'loading' },
+      })
+    } catch (error) {
+      expect(error).toBeInstanceOf(AIUISchemaValidationError)
+      expect(error).toMatchObject({
+        target: 'data-part',
+        partType: 'data-status',
+        partName: 'status',
+        partId: 'status-1',
+      })
+      expect((error as Error).message).toContain('Async schemas are not supported')
+    }
+  })
 })
 
 describe('Chat', () => {
@@ -170,6 +257,42 @@ describe('Chat', () => {
     ])
     expect(toolCalls).toEqual([
       expect.objectContaining({ type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available' }),
+    ])
+  })
+
+  it('stores parsed persistent data and sends parsed data to onData', async () => {
+    const dataEvents: unknown[] = []
+    const transport = new RecordingTransport([
+      { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' } },
+    ])
+    const chat = new Chat({
+      id: 'chat-1',
+      transport,
+      dataPartSchemas: {
+        status: {
+          safeParse: () => ({ success: true, data: { value: 'parsed' } }),
+        },
+      },
+      onData: (part) => dataEvents.push(part),
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(chat.messages[1].parts).toContainEqual({
+      type: 'data-status',
+      id: 'status-1',
+      name: 'status',
+      data: { value: 'parsed' },
+      transientData: false,
+    })
+    expect(dataEvents).toEqual([
+      {
+        type: 'data-status',
+        id: 'status-1',
+        name: 'status',
+        data: { value: 'parsed' },
+        transientData: false,
+      },
     ])
   })
 
@@ -408,6 +531,45 @@ describe('Chat', () => {
     expect(chat.status).toBe('error')
     expect(chat.error?.name).toBe('AIUIProtocolError')
     expect(chat.error?.message).toBe('Tool chunk state is required.')
+  })
+
+  it('aborts active request and reports schema failures through error callbacks and finish', async () => {
+    let signal: AbortSignal | undefined
+    const errors: Error[] = []
+    const finishes: Array<{ isError: boolean; messageParts: number }> = []
+    const transport: ChatTransport = {
+      sendMessages: async (options) => {
+        signal = options.abortSignal
+        return chunksToAsyncIterable([
+          { type: 'text-delta', id: 'text-1', delta: 'Partial' },
+          { type: 'data-status', id: 'status-1', name: 'status', data: undefined },
+        ])
+      },
+    }
+    const chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      dataPartSchemas: {
+        status: {
+          safeParse: () => ({ success: false, error: { message: 'status is required' } }),
+        },
+      },
+      onError: (error) => errors.push(error),
+      onFinish: ({ isError, message }) => {
+        finishes.push({ isError, messageParts: message.parts.length })
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(signal?.aborted).toBe(true)
+    expect(chat.status).toBe('error')
+    expect(chat.error).toBeInstanceOf(AIUISchemaValidationError)
+    expect(chat.error).toMatchObject({ target: 'data-part', partName: 'status' })
+    expect(errors).toEqual([chat.error])
+    expect(finishes).toEqual([{ isError: true, messageParts: 1 }])
+    expect(chat.messages[1].parts).toEqual([{ type: 'text', id: 'text-1', text: 'Partial' }])
   })
 
 })

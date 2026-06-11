@@ -77,7 +77,7 @@ describe('useChat', () => {
       await composable.addToolApprovalResponse({ id: 'approval-1', approved: false })
       await nextTick()
 
-      expect(composable.messages.value[0].parts[0]).toMatchObject({
+      expect(composable.messages.value![0].parts[0]).toMatchObject({
         state: 'approval-responded',
         approval: { id: 'approval-1', approved: false },
       })

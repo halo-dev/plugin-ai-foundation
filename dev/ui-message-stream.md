@@ -199,6 +199,45 @@ X-Halo-AI-UI-Message-Stream: v1
 `addToolApprovalResponse` 和 `rejectToolCall` 会从已有 assistant message parts
 中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
 
+前端可以为流式接收阶段配置运行时 schema hooks：
+
+```ts
+import { DefaultChatTransport, useChat } from '@halo-dev/ai-ui-vue'
+
+const chat = useChat({
+  id: 'conversation-1',
+  transport: new DefaultChatTransport({
+    api: '/apis/example.halo.run/v1alpha1/chat/stream',
+  }),
+  messageMetadataSchema: {
+    safeParse: (value) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? { success: true, data: value as Record<string, unknown> }
+        : { success: false, error: { message: 'metadata must be an object' } },
+  },
+  dataPartSchemas: {
+    status: {
+      '~standard': {
+        validate: (value) =>
+          typeof value === 'string'
+            ? { value }
+            : { issues: [{ message: 'status must be a string' }] },
+      },
+    },
+  },
+})
+```
+
+`messageMetadataSchema` 会校验合并后的 streamed metadata，而不是单个
+`message-metadata` patch。`dataPartSchemas` 按 data name 配置，例如
+`data-status` 使用 `status` 作为 key。只有持久化的 `data-*` chunk 会被校验和保存为
+schema 解析后的值；`transient` data 仍只通过 `onData` 传给调用方，不写入消息。
+
+schema hook 只在前端接收流时生效，不会校验 `setMessages`、构造时传入的历史消息或手动创建的
+消息。schema 失败会设置 `error`、触发 `onError`，并让 `onFinish` 收到
+`isError: true`。这些前端校验用于保护 UI 状态，不能替代后端的
+`UIMessageValidators`、HTTP 输入校验或业务权限校验。
+
 如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成
 assistant 的 text part，但不会提供工具、reasoning、data、source/file 等 UIMessage
 事件。

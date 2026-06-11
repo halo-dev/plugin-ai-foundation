@@ -1,6 +1,7 @@
 export { Chat, createPlainChatState, lastAssistantMessageIsCompleteWithApprovalResponses } from './chat'
 export type { ChatInit, ChatStateAdapter, SendMessageInput } from './chat'
-export { AIUIError, AIUIProtocolError, isProtocolError } from './errors'
+export { AIUIError, AIUIProtocolError, AIUISchemaValidationError, isProtocolError } from './errors'
+export type { AIUISchemaValidationErrorOptions, AIUISchemaValidationTarget } from './errors'
 export { generateId } from './id'
 export {
   applyUIMessageChunk,
@@ -8,8 +9,16 @@ export {
   messageText,
 } from './message-reducer'
 export type { CreateReducerOptions, UIMessageReducerState } from './message-reducer'
-export { parsePartialJson, toJsonSchema, validateFinalValue } from './schema'
-export type { SchemaLike } from './schema'
+export { parsePartialJson, toJsonSchema, validateFinalValue, validateRuntimeSchema } from './schema'
+export type {
+  DataPartSchemas,
+  MessageMetadataSchema,
+  RuntimeSchemaValidationContext,
+  SchemaLike,
+  StandardSchemaIssue,
+  StandardSchemaLike,
+  StandardSchemaValidationResult,
+} from './schema'
 export { fromOpenAPIRequestArgs } from './openapi'
 export type { OpenAPIRequestArgs } from './openapi'
 export {

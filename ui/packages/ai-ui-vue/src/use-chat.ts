@@ -133,6 +133,8 @@ function assertNoCreationOptionsWithChat<METADATA>(options: UseChatOptions<METAD
     'onToolCall',
     'onFinish',
     'sendAutomaticallyWhen',
+    'messageMetadataSchema',
+    'dataPartSchemas',
   ]
   const mixedKeys = creationOptionKeys.filter((key) => options[key] !== undefined)
   if (mixedKeys.length > 0) {
