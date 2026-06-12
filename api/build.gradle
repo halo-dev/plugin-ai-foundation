@@ -22,6 +22,9 @@ dependencies {
 }
 
 mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+
     coordinates("run.halo.aifoundation", "api", project.version.toString())
 
     pom {
