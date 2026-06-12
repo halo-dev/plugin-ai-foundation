@@ -1,7 +1,6 @@
 package run.halo.aifoundation.service;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
@@ -9,8 +8,12 @@ import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.embedding.EmbeddingModel;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.service.audit.AuditedEmbeddingModel;
+import run.halo.aifoundation.service.audit.AuditedLanguageModel;
+import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
+import run.halo.aifoundation.service.audit.ModelCallContext;
+import run.halo.aifoundation.service.model.ModelResolution;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AiModelServiceImpl implements AiModelService {
@@ -18,6 +21,7 @@ public class AiModelServiceImpl implements AiModelService {
     private final AiModelResolver modelResolver;
     private final LanguageModelFactory languageModelFactory;
     private final EmbeddingModelFactory embeddingModelFactory;
+    private final CallerPluginAuditRecorder callerPluginAuditRecorder;
 
     @Override
     public Mono<LanguageModel> languageModel() {
@@ -31,7 +35,7 @@ public class AiModelServiceImpl implements AiModelService {
             : modelResolver.defaultLanguageModelName();
         return resolvedModelName
             .flatMap(name -> modelResolver.resolve(name, ModelType.LANGUAGE))
-            .map(languageModelFactory::create);
+            .map(this::createLanguageModel);
     }
 
     @Override
@@ -46,7 +50,21 @@ public class AiModelServiceImpl implements AiModelService {
             : modelResolver.defaultEmbeddingModelName();
         return resolvedModelName
             .flatMap(name -> modelResolver.resolve(name, ModelType.EMBEDDING))
-            .map(embeddingModelFactory::create);
+            .map(this::createEmbeddingModel);
+    }
+
+    private LanguageModel createLanguageModel(ModelResolution resolution) {
+        var context = ModelCallContext.from(resolution, ModelType.LANGUAGE);
+        callerPluginAuditRecorder.recordModelResolution(context);
+        return new AuditedLanguageModel(languageModelFactory.create(resolution), context,
+            callerPluginAuditRecorder);
+    }
+
+    private EmbeddingModel createEmbeddingModel(ModelResolution resolution) {
+        var context = ModelCallContext.from(resolution, ModelType.EMBEDDING);
+        callerPluginAuditRecorder.recordModelResolution(context);
+        return new AuditedEmbeddingModel(embeddingModelFactory.create(resolution), context,
+            callerPluginAuditRecorder);
     }
 
 }

@@ -1,8 +1,9 @@
 package run.halo.aifoundation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.springframework.ai.chat.model.ChatModel;
@@ -26,6 +27,10 @@ import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
 import run.halo.aifoundation.service.embedding.EmbeddingModelRuntimeFactory;
+import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
+import run.halo.aifoundation.service.audit.CallerPluginInfo;
+import run.halo.aifoundation.service.audit.CallerPluginObservationRegistry;
+import run.halo.aifoundation.service.audit.CallerPluginResolver;
 import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
@@ -50,16 +55,32 @@ class AiModelServiceImplTest {
     @Mock
     DefaultModelSlotStore defaultModelSlotStore;
 
+    @Mock
+    CallerPluginResolver callerPluginResolver;
+
+    @Mock
+    CallerPluginObservationRegistry callerPluginObservationRegistry;
+
+    CallerPluginAuditRecorder callerPluginAuditRecorder;
+
     AiModelServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        lenient().when(callerPluginResolver.resolveCurrentCallerSnapshot())
+            .thenReturn(CallerPluginInfo.builder()
+                .detected(false)
+                .detectionSource("none")
+                .build());
+        callerPluginAuditRecorder = new CallerPluginAuditRecorder(callerPluginResolver,
+            callerPluginObservationRegistry);
         service = new AiModelServiceImpl(
             new DefaultAiModelResolver(client, providerClientCache, secretResolver,
                 defaultModelSlotStore),
             new DefaultLanguageModelFactory(providerClientCache,
                 new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport())),
-            new DefaultEmbeddingModelFactory(providerClientCache, new EmbeddingModelRuntimeFactory())
+            new DefaultEmbeddingModelFactory(providerClientCache, new EmbeddingModelRuntimeFactory()),
+            callerPluginAuditRecorder
         );
     }
 
@@ -151,6 +172,40 @@ class AiModelServiceImplTest {
         StepVerifier.create(service.languageModel())
             .assertNext(languageModel -> assertThat(languageModel).isNotNull())
             .verifyComplete();
+    }
+
+    @Test
+    void languageModel_recordsCallerPluginWithoutExplicitCallerPluginProbe() {
+        var model = aiModel("openai-prod-gpt-4-abc", "openai-prod", "gpt-4", "GPT-4", true);
+        var provider = aiProvider("openai-prod", "openai", true);
+        var chatModel = mock(ChatModel.class);
+        var providerType = languageProviderType();
+        var caller = CallerPluginInfo.builder()
+            .detected(true)
+            .detectionSource("stack-classloader")
+            .pluginName("consumer-plugin")
+            .build();
+        var enrichedCaller = CallerPluginInfo.builder()
+            .detected(true)
+            .detectionSource("stack-classloader")
+            .pluginName("consumer-plugin")
+            .displayName("Consumer Plugin")
+            .build();
+
+        when(callerPluginResolver.resolveCurrentCallerSnapshot()).thenReturn(caller);
+        when(callerPluginResolver.resolveCurrentCaller()).thenReturn(Mono.just(enrichedCaller));
+        when(client.fetch(AiModel.class, "openai-prod-gpt-4-abc")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
+            .thenReturn(chatModel);
+
+        StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
+            .assertNext(languageModel -> assertThat(languageModel).isNotNull())
+            .verifyComplete();
+
+        verify(callerPluginObservationRegistry).record(enrichedCaller);
     }
 
     @Test
