@@ -1,6 +1,6 @@
 plugins {
     id 'java-library'
-    id 'maven-publish'
+    id 'com.vanniktech.maven.publish'
     id "io.freefair.lombok" version "9.2.0"
 }
 
@@ -21,40 +21,33 @@ dependencies {
     compileOnly 'io.projectreactor:reactor-core'
 }
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            groupId = 'run.halo.aifoundation'
-            artifactId = 'api'
-            version = project.version
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
 
-            pom {
-                name = 'AI Foundation Plugin API for Halo'
-                description = 'Java SDK for consuming AI model capabilities from plugin-ai-foundation.'
-                url = 'https://github.com/halo-dev/plugin-ai-foundation'
-                licenses {
-                    license {
-                        name = 'The GNU General Public License v3.0'
-                        url = 'https://www.gnu.org/licenses/gpl-3.0.en.html'
-                    }
-                }
-                developers {
-                    developer {
-                        id = 'halo-dev'
-                        name = 'Halo'
-                        email = 'hi@halo.run'
-                    }
-                }
-                scm {
-                    url = 'https://github.com/halo-dev/plugin-ai-foundation'
-                    connection = 'scm:git:git@github.com:halo-dev/plugin-ai-foundation.git'
-                    developerConnection = 'scm:git:ssh://git@github.com:halo-dev/plugin-ai-foundation.git'
-                }
+    coordinates("run.halo.aifoundation", "api", project.version.toString())
+
+    pom {
+        name = 'AI Foundation Plugin API for Halo'
+        description = 'Java SDK for consuming AI model capabilities from plugin-ai-foundation.'
+        url = 'https://github.com/halo-dev/plugin-ai-foundation'
+        licenses {
+            license {
+                name = 'The GNU General Public License v3.0'
+                url = 'https://www.gnu.org/licenses/gpl-3.0.en.html'
             }
         }
-    }
-    repositories {
-        mavenLocal()
+        developers {
+            developer {
+                id = 'halo-dev'
+                name = 'Halo'
+                email = 'hi@halo.run'
+            }
+        }
+        scm {
+            url = 'https://github.com/halo-dev/plugin-ai-foundation'
+            connection = 'scm:git:git@github.com:halo-dev/plugin-ai-foundation.git'
+            developerConnection = 'scm:git:ssh://git@github.com:halo-dev/plugin-ai-foundation.git'
+        }
     }
 }
