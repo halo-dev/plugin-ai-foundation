@@ -1,16 +1,18 @@
-import { VLoading } from '@halo-dev/components'
 import { definePlugin } from '@halo-dev/ui-shared'
 import 'uno.css'
-import { defineAsyncComponent, markRaw } from 'vue'
+import { markRaw } from 'vue'
 import MingcuteAiLine from '~icons/mingcute/ai-line'
+import {
+  AI_MODEL_SELECTOR_FORMKIT_TYPE,
+  aiModelSelectorInput,
+} from './formkit/ai-model-selector-input'
 import { AI_FOUNDATION_ROUTE_NAMES } from './routes'
 
-export default definePlugin({
-  components: {
-    AiModelSelector: defineAsyncComponent({
-      loader: () => import('./formkit/AiModelSelector.vue'),
-      loadingComponent: VLoading,
-    }),
+const pluginModule = {
+  formkit: {
+    inputs: {
+      [AI_MODEL_SELECTOR_FORMKIT_TYPE]: aiModelSelectorInput,
+    },
   },
   routes: [
     {
@@ -70,4 +72,6 @@ export default definePlugin({
     },
   ],
   extensionPoints: {},
-})
+}
+
+export default definePlugin(pluginModule)

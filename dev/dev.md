@@ -580,28 +580,26 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 
 完整聚合、校验和转换规则见 [UI Message Stream](./ui-message-stream.md)。
 
-## 15. 可选前端组件：`AiModelSelector`
+## 15. 可选 FormKit 输入：`aiModelSelector`
 
-`AiModelSelector` 是本插件提供的 FormKit 组件，可在调用方插件设置页中让用户选择模型。
+`aiModelSelector` 是本插件提供的 FormKit 输入类型，可在调用方插件设置页中让用户选择模型。
 保存值是 `AiModel.metadata.name`，可直接传给 `languageModel(modelName)` 或 `embeddingModel(modelName)`。
 
 FormKit Schema 示例：
 
 ```yaml
 formSchema:
-  - $cmp: AiModelSelector
-    props:
-      name: languageModelName
-      label: 语言模型
-      modelType: LANGUAGE
-      clearable: true
-      placeholder: 请选择语言模型
+  - $formkit: aiModelSelector
+    name: languageModelName
+    label: 语言模型
+    modelType: LANGUAGE
+    clearable: true
+    placeholder: 请选择语言模型
 
-  - $cmp: AiModelSelector
-    props:
-      name: embeddingModelName
-      label: 嵌入模型
-      modelType: EMBEDDING
+  - $formkit: aiModelSelector
+    name: embeddingModelName
+    label: 嵌入模型
+    modelType: EMBEDDING
 ```
 
 常用 props：
