@@ -1,6 +1,7 @@
 package run.halo.aifoundation.chat;
 
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.AiModelService;
 
 /**
  * Provider-neutral Java SDK for text generation.
