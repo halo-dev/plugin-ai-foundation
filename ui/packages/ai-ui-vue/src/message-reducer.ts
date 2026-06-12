@@ -6,6 +6,7 @@ import type {
   FinishChunk,
   ReasoningPart,
   TextPart,
+  ToolChunk,
   ToolPart,
   UIMessage,
   UIMessageChunk,
@@ -64,7 +65,11 @@ export function applyUIMessageChunk<METADATA>(
     }
     return state
   }
-  if (isToolChunk(chunk)) {
+  if (isCanonicalToolChunk(chunk)) {
+    upsertToolPart(state, toolPartUpdateFromCanonicalChunk(chunk))
+    return state
+  }
+  if (isLegacyToolChunk(chunk)) {
     upsertToolPart(state, chunk)
     return state
   }
@@ -118,6 +123,8 @@ export function applyUIMessageChunk<METADATA>(
         providerMetadata: chunk.providerMetadata,
       })
       break
+    case 'start-step':
+      break
     case 'finish-step':
       state.terminal = {
         ...state.terminal,
@@ -157,7 +164,26 @@ export function validateUIMessageChunk(chunk: UIMessageChunk): void {
     }
     return
   }
-  if (isToolChunk(chunk)) {
+  if (isCanonicalToolChunk(chunk)) {
+    validateToolIdentity(chunk.type, chunk.toolCallId, chunk.toolName)
+    if (chunk.type === 'tool-input-delta' && !chunk.inputTextDelta) {
+      throw new AIUIProtocolError('Tool input-delta chunk inputTextDelta is required.')
+    }
+    if (chunk.type === 'tool-output-error' && !chunk.errorText) {
+      throw new AIUIProtocolError('Tool output-error chunk errorText is required.')
+    }
+    if (
+      (chunk.type === 'tool-approval-request' || chunk.type === 'tool-approval-response') &&
+      !chunk.approvalId
+    ) {
+      throw new AIUIProtocolError('Tool approval chunk approvalId is required.')
+    }
+    if (chunk.type === 'tool-approval-response' && typeof chunk.approved !== 'boolean') {
+      throw new AIUIProtocolError('Tool approval-response chunk approved is required.')
+    }
+    return
+  }
+  if (isLegacyToolChunk(chunk)) {
     validateDynamicName(chunk.toolName, /^[A-Za-z][A-Za-z0-9_-]*$/, 'tool name')
     if (chunk.type !== `tool-${chunk.toolName}`) {
       throw new AIUIProtocolError(`Tool chunk type must be tool-${chunk.toolName}.`)
@@ -357,7 +383,7 @@ export function messageText(message: UIMessage): string {
     .join('')
 }
 
-function upsertToolPart<METADATA>(state: UIMessageReducerState<METADATA>, chunk: Extract<UIMessageChunk, { type: `tool-${string}` }>) {
+function upsertToolPart<METADATA>(state: UIMessageReducerState<METADATA>, chunk: ToolChunk) {
   const existing = findToolPart(state.message, chunk.toolCallId)
   const inputText =
     chunk.state === 'input-streaming'
@@ -377,6 +403,74 @@ function upsertToolPart<METADATA>(state: UIMessageReducerState<METADATA>, chunk:
   })
 }
 
+function toolPartUpdateFromCanonicalChunk(
+  chunk: Extract<
+    UIMessageChunk,
+    {
+      type:
+        | 'tool-input-start'
+        | 'tool-input-delta'
+        | 'tool-input-available'
+        | 'tool-output-available'
+        | 'tool-output-error'
+        | 'tool-approval-request'
+        | 'tool-approval-response'
+    }
+  >
+): ToolChunk {
+  const base = {
+    type: `tool-${chunk.toolName}` as `tool-${string}`,
+    toolCallId: chunk.toolCallId,
+    toolName: chunk.toolName,
+    providerMetadata: 'providerMetadata' in chunk ? chunk.providerMetadata : undefined,
+  }
+  switch (chunk.type) {
+    case 'tool-input-start':
+      return {
+        ...base,
+        state: 'input-streaming',
+        inputTextDelta: '',
+      }
+    case 'tool-input-delta':
+      return {
+        ...base,
+        state: 'input-streaming',
+        inputTextDelta: chunk.inputTextDelta,
+      }
+    case 'tool-input-available':
+      return {
+        ...base,
+        state: 'input-available',
+        input: chunk.input,
+      }
+    case 'tool-output-available':
+      return {
+        ...base,
+        state: 'output-available',
+        output: chunk.output,
+      }
+    case 'tool-output-error':
+      return {
+        ...base,
+        state: 'output-error',
+        errorText: chunk.errorText,
+      }
+    case 'tool-approval-request':
+      return {
+        ...base,
+        state: 'approval-requested',
+        input: chunk.input,
+        approval: { id: chunk.approvalId },
+      }
+    case 'tool-approval-response':
+      return {
+        ...base,
+        state: 'approval-responded',
+        approval: { id: chunk.approvalId, approved: chunk.approved, reason: chunk.reason },
+      }
+  }
+}
+
 function findToolPart<METADATA>(message: UIMessage<METADATA>, toolCallId: string): ToolPart | undefined {
   return message.parts.find(
     (part): part is ToolPart => isToolPart(part) && part.toolCallId === toolCallId
@@ -387,8 +481,34 @@ function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { 
   return chunk.type.startsWith('data-')
 }
 
-function isToolChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `tool-${string}` }> {
-  return chunk.type.startsWith('tool-')
+function isCanonicalToolChunk(
+  chunk: UIMessageChunk
+): chunk is Extract<
+  UIMessageChunk,
+  {
+    type:
+      | 'tool-input-start'
+      | 'tool-input-delta'
+      | 'tool-input-available'
+      | 'tool-output-available'
+      | 'tool-output-error'
+      | 'tool-approval-request'
+      | 'tool-approval-response'
+  }
+> {
+  return (
+    chunk.type === 'tool-input-start' ||
+    chunk.type === 'tool-input-delta' ||
+    chunk.type === 'tool-input-available' ||
+    chunk.type === 'tool-output-available' ||
+    chunk.type === 'tool-output-error' ||
+    chunk.type === 'tool-approval-request' ||
+    chunk.type === 'tool-approval-response'
+  )
+}
+
+function isLegacyToolChunk(chunk: UIMessageChunk): chunk is ToolChunk {
+  return chunk.type.startsWith('tool-') && !isCanonicalToolChunk(chunk)
 }
 
 function isDataPart(part: UIMessagePart): part is DataPart {
@@ -402,5 +522,12 @@ function isToolPart(part: UIMessagePart): part is ToolPart {
 function validateDynamicName(value: string | undefined, pattern: RegExp, label: string): void {
   if (!value || !pattern.test(value)) {
     throw new AIUIProtocolError(`${label} must be a simple identifier.`)
+  }
+}
+
+function validateToolIdentity(type: string, toolCallId: string | undefined, toolName: string | undefined): void {
+  validateDynamicName(toolName, /^[A-Za-z][A-Za-z0-9_-]*$/, 'tool name')
+  if (!toolCallId) {
+    throw new AIUIProtocolError(`${type} chunk toolCallId is required.`)
   }
 }

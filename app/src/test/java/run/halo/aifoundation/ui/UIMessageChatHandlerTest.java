@@ -66,7 +66,7 @@ class UIMessageChatHandlerTest {
     }
 
     @Test
-    void streamsDynamicToolProtocolThroughResponseAndFinishAggregation() {
+    void streamsCanonicalToolProtocolThroughResponseAndFinishAggregation() {
         var model = new FakeLanguageModel(List.of(
             TextStreamPart.start("assistant-1"),
             TextStreamPart.toolInputStart("input-1", "call-1", "delete-file"),
@@ -96,7 +96,12 @@ class UIMessageChatHandlerTest {
         var body = chat.response().body().collectList().block();
         var finish = chat.finish().block();
 
-        assertThat(body).contains("data: tool-delete-file\n\n");
+        assertThat(body).contains(
+            "data: tool-input-start\n\n",
+            "data: tool-input-delta\n\n",
+            "data: tool-input-available\n\n",
+            "data: tool-output-available\n\n"
+        );
         assertThat(finish.responseMessage().parts()).filteredOn(ToolPart.class::isInstance)
             .singleElement()
             .satisfies(part -> {

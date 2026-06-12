@@ -7,6 +7,8 @@ public final class UIMessageChunkType {
 
     /** Starts an assistant message stream. */
     public static final String START = "start";
+    /** Starts one generation step. */
+    public static final String START_STEP = "start-step";
     /** Persisted text part type. */
     public static final String TEXT = "text";
     /** Opens a streamed text block. */
@@ -35,11 +37,17 @@ public final class UIMessageChunkType {
     public static final String TOOL_INPUT_START = "tool-input-start";
     /** Appends streamed tool input. */
     public static final String TOOL_INPUT_DELTA = "tool-input-delta";
-    /** Tool call chunk or persisted part type. */
+    /** Complete tool input is available. */
+    public static final String TOOL_INPUT_AVAILABLE = "tool-input-available";
+    /** Tool output is available. */
+    public static final String TOOL_OUTPUT_AVAILABLE = "tool-output-available";
+    /** Tool output failed with an error. */
+    public static final String TOOL_OUTPUT_ERROR = "tool-output-error";
+    /** Legacy tool call stream part type. */
     public static final String TOOL_CALL = "tool-call";
-    /** Tool result chunk or persisted part type. */
+    /** Legacy tool result stream part type. */
     public static final String TOOL_RESULT = "tool-result";
-    /** Tool error chunk or persisted part type. */
+    /** Legacy tool error stream part type. */
     public static final String TOOL_ERROR = "tool-error";
     /** Tool approval request chunk or persisted part type. */
     public static final String TOOL_APPROVAL_REQUEST = "tool-approval-request";

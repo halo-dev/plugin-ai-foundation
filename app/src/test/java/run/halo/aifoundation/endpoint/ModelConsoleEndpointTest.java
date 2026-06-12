@@ -528,9 +528,9 @@ class ModelConsoleEndpointTest {
             .expectBody(String.class)
             .consumeWith(response -> {
                 var bodyText = response.getResponseBody();
-                assertThat(bodyText).contains("\"type\":\"tool-halo_test_info\"");
-                assertThat(bodyText).contains("\"state\":\"input-available\"");
+                assertThat(bodyText).contains("\"type\":\"tool-input-available\"");
                 assertThat(bodyText).contains("halo_test_info");
+                assertThat(bodyText).contains("\"input\":{\"query\":\"hello\"}");
             });
 
         var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);

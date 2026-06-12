@@ -76,6 +76,31 @@ class UIMessageTransportCodecTest {
     }
 
     @Test
+    void decodesAndEncodesCanonicalToolAndStepChunks() {
+        var chunks = List.<UIMessageChunk>of(
+            UIMessageChunks.startStep(0),
+            UIMessageChunks.toolInputStart("call-1", "weather"),
+            UIMessageChunks.toolInputDelta("call-1", "weather", "{\"city\""),
+            UIMessageChunks.toolInputAvailable("call-1", "weather",
+                Map.of("city", "Hangzhou"), Map.of("provider", "test")),
+            UIMessageChunks.toolOutputAvailable("call-1", "weather",
+                Map.of("temperature", 20), Map.of("provider", "test")),
+            UIMessageChunks.toolOutputError("call-2", "search", "failed", Map.of()),
+            UIMessageChunks.toolApprovalRequest("approval-1", "call-3", "payment",
+                Map.of("amount", 100), Map.of()),
+            UIMessageChunks.toolApprovalResponse("approval-1", "call-3", "payment", false,
+                "not allowed", Map.of("provider", "test"))
+        );
+
+        for (var chunk : chunks) {
+            var encoded = UIMessageTransportCodec.chunkToMap(chunk);
+            assertThat(encoded).containsEntry("type", chunk.type());
+            assertThat(encoded).doesNotContainValue(null);
+            assertThat(UIMessageTransportCodec.chunkFromMap(encoded)).isEqualTo(chunk);
+        }
+    }
+
+    @Test
     void supportsTypedMetadataMapper() {
         var message = UIMessageTransportCodec.messageFromMap(Map.of(
             "id", "user-1",

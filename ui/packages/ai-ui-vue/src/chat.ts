@@ -390,7 +390,15 @@ export class Chat<METADATA = unknown> {
         hasStartedReadableStream = true
         this.setChatStatus('streaming')
       }
-      this.setChatStatus('ready')
+      if (reducer.terminal.errorText) {
+        isError = true
+        const normalized = new Error(reducer.terminal.errorText)
+        this.setChatError(normalized)
+        this.setChatStatus('error')
+        this.onError?.(normalized)
+      } else {
+        this.setChatStatus('ready')
+      }
     } catch (error) {
       if (isAbortError(error) || abortController.signal.aborted) {
         isAbort = true

@@ -22,6 +22,17 @@ export type {
 export { fromOpenAPIRequestArgs } from './openapi'
 export type { OpenAPIRequestArgs } from './openapi'
 export {
+  AIUIMessageValidationError,
+  assertValidUIMessages,
+  pruneMessages,
+  validateUIMessages,
+} from './persistence'
+export type {
+  PruneMessagesOptions,
+  UIMessageValidationIssue,
+  ValidateUIMessagesOptions,
+} from './persistence'
+export {
   DONE_MARKER,
   HALO_UI_MESSAGE_STREAM_HEADER,
   HALO_UI_MESSAGE_STREAM_VERSION,

@@ -159,12 +159,20 @@ public final class UIMessageStreamReader {
                 case MessageMetadataChunk metadata -> mergeMetadata(metadata.messageMetadata());
                 case SourceUrlChunk ignored -> changed;
                 case FileChunk ignored -> changed;
+                case ToolInputStartChunk ignored -> changed;
+                case ToolInputDeltaChunk ignored -> changed;
+                case ToolInputAvailableChunk ignored -> changed;
+                case ToolOutputAvailableChunk ignored -> changed;
+                case ToolOutputErrorChunk ignored -> changed;
+                case ToolApprovalRequestChunk ignored -> changed;
+                case ToolApprovalResponseChunk ignored -> changed;
                 case ToolChunk ignored -> changed;
                 case FinishChunk finish -> {
                     yield changed || mergeMetadata(finish.messageMetadata());
                 }
                 case ErrorChunk ignored -> changed;
                 case AbortChunk ignored -> changed;
+                case StartStepChunk ignored -> changed;
                 case FinishStepChunk ignored -> changed;
             };
             return changed ? responseMessage() : null;

@@ -38,6 +38,16 @@ public final class UIMessageChunks {
     }
 
     /**
+     * Creates a step start lifecycle chunk.
+     *
+     * @param stepIndex generation step index
+     * @return start step chunk
+     */
+    public static StartStepChunk startStep(Integer stepIndex) {
+        return new StartStepChunk(stepIndex);
+    }
+
+    /**
      * Creates a text start chunk.
      *
      * @param id text part id
@@ -219,6 +229,106 @@ public final class UIMessageChunks {
         ToolApproval approval, Map<String, Object> providerMetadata) {
         return new ToolChunk(ToolChunk.typeFor(toolName), toolCallId, toolName, state, input,
             inputTextDelta, output, errorText, approval, providerMetadata);
+    }
+
+    /**
+     * Creates a canonical tool input start chunk.
+     *
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @return tool input start chunk
+     */
+    public static ToolInputStartChunk toolInputStart(String toolCallId, String toolName) {
+        return new ToolInputStartChunk(toolCallId, toolName);
+    }
+
+    /**
+     * Creates a canonical streamed tool input delta chunk.
+     *
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @param inputTextDelta streamed input text delta
+     * @return tool input delta chunk
+     */
+    public static ToolInputDeltaChunk toolInputDelta(String toolCallId, String toolName,
+        String inputTextDelta) {
+        return new ToolInputDeltaChunk(toolCallId, toolName, inputTextDelta);
+    }
+
+    /**
+     * Creates a canonical completed tool input chunk.
+     *
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @param input parsed tool input
+     * @param providerMetadata provider-specific metadata
+     * @return tool input available chunk
+     */
+    public static ToolInputAvailableChunk toolInputAvailable(String toolCallId, String toolName,
+        Object input, Map<String, Object> providerMetadata) {
+        return new ToolInputAvailableChunk(toolCallId, toolName, input, providerMetadata);
+    }
+
+    /**
+     * Creates a canonical successful tool output chunk.
+     *
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @param output tool output
+     * @param providerMetadata provider-specific metadata
+     * @return tool output available chunk
+     */
+    public static ToolOutputAvailableChunk toolOutputAvailable(String toolCallId, String toolName,
+        Object output, Map<String, Object> providerMetadata) {
+        return new ToolOutputAvailableChunk(toolCallId, toolName, output, providerMetadata);
+    }
+
+    /**
+     * Creates a canonical failed tool output chunk.
+     *
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @param errorText safe tool error text
+     * @param providerMetadata provider-specific metadata
+     * @return tool output error chunk
+     */
+    public static ToolOutputErrorChunk toolOutputError(String toolCallId, String toolName,
+        String errorText, Map<String, Object> providerMetadata) {
+        return new ToolOutputErrorChunk(toolCallId, toolName, errorText, providerMetadata);
+    }
+
+    /**
+     * Creates a canonical tool approval request chunk.
+     *
+     * @param approvalId approval request id
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @param input tool input
+     * @param providerMetadata provider-specific metadata
+     * @return tool approval request chunk
+     */
+    public static ToolApprovalRequestChunk toolApprovalRequest(String approvalId,
+        String toolCallId, String toolName, Object input, Map<String, Object> providerMetadata) {
+        return new ToolApprovalRequestChunk(approvalId, toolCallId, toolName, input,
+            providerMetadata);
+    }
+
+    /**
+     * Creates a canonical tool approval response chunk.
+     *
+     * @param approvalId approval request id
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @param approved approval decision
+     * @param reason optional approval or denial reason
+     * @param providerMetadata provider-specific metadata
+     * @return tool approval response chunk
+     */
+    public static ToolApprovalResponseChunk toolApprovalResponse(String approvalId,
+        String toolCallId, String toolName, Boolean approved, String reason,
+        Map<String, Object> providerMetadata) {
+        return new ToolApprovalResponseChunk(approvalId, toolCallId, toolName, approved, reason,
+            providerMetadata);
     }
 
     /**

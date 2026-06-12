@@ -69,29 +69,24 @@ public final class UIMessageStreamMapper {
                 part.getTitle(), part.getProviderMetadata());
             case PartType.FILE -> UIMessageChunks.file(part.getId(), part.getUrl(),
                 part.getTitle(), part.getMediaType(), part.getData(), part.getProviderMetadata());
-            case PartType.TOOL_INPUT_START -> UIMessageChunks.tool(part.getToolCallId(),
-                part.getToolName(), ToolPartState.INPUT_STREAMING, null, null, null, null,
-                null, null);
-            case PartType.TOOL_INPUT_DELTA -> UIMessageChunks.tool(part.getToolCallId(),
-                part.getToolName(), ToolPartState.INPUT_STREAMING, null, part.getDelta(), null,
-                null, null, null);
-            case PartType.TOOL_CALL -> UIMessageChunks.tool(part.getToolCallId(),
-                part.getToolName(), ToolPartState.INPUT_AVAILABLE, part.getInput(), null,
-                null, null, null, part.getProviderMetadata());
-            case PartType.TOOL_RESULT -> UIMessageChunks.tool(part.getToolCallId(),
-                part.getToolName(), ToolPartState.OUTPUT_AVAILABLE, null, null,
-                part.getResult(), null, null, part.getProviderMetadata());
-            case PartType.TOOL_ERROR -> UIMessageChunks.tool(part.getToolCallId(),
-                part.getToolName(), ToolPartState.OUTPUT_ERROR, null, null, null,
-                part.getErrorText(), null, part.getProviderMetadata());
-            case PartType.TOOL_APPROVAL_REQUEST -> UIMessageChunks.tool(part.getToolCallId(),
-                part.getToolName(), ToolPartState.APPROVAL_REQUESTED, part.getInput(), null,
-                null, null, new ToolApproval(part.getApprovalId(), null, null),
+            case PartType.TOOL_INPUT_START -> UIMessageChunks.toolInputStart(
+                part.getToolCallId(), part.getToolName());
+            case PartType.TOOL_INPUT_DELTA -> UIMessageChunks.toolInputDelta(
+                part.getToolCallId(), part.getToolName(), part.getDelta());
+            case PartType.TOOL_CALL -> UIMessageChunks.toolInputAvailable(part.getToolCallId(),
+                part.getToolName(), part.getInput(), part.getProviderMetadata());
+            case PartType.TOOL_RESULT -> UIMessageChunks.toolOutputAvailable(part.getToolCallId(),
+                part.getToolName(), part.getResult(), part.getProviderMetadata());
+            case PartType.TOOL_ERROR -> UIMessageChunks.toolOutputError(part.getToolCallId(),
+                part.getToolName(), part.getErrorText(), part.getProviderMetadata());
+            case PartType.TOOL_APPROVAL_REQUEST -> UIMessageChunks.toolApprovalRequest(
+                part.getApprovalId(), part.getToolCallId(), part.getToolName(), part.getInput(),
                 part.getProviderMetadata());
-            case PartType.TOOL_APPROVAL_RESPONSE -> UIMessageChunks.tool(part.getToolCallId(),
-                part.getToolName(), ToolPartState.APPROVAL_RESPONDED, null, null, null, null,
-                new ToolApproval(part.getApprovalId(), part.getApproved(), part.getReason()),
+            case PartType.TOOL_APPROVAL_RESPONSE -> UIMessageChunks.toolApprovalResponse(
+                part.getApprovalId(), part.getToolCallId(), part.getToolName(),
+                part.getApproved(), part.getReason(),
                 part.getProviderMetadata());
+            case PartType.START_STEP -> UIMessageChunks.startStep(part.getStepIndex());
             case PartType.FINISH_STEP -> UIMessageChunks.finishStep(part.getStepIndex(),
                 part.getFinishReason(), part.getRawFinishReason(), part.getUsage(),
                 part.getWarnings(), part.getRequest(), part.getResponse(),
@@ -101,7 +96,7 @@ public final class UIMessageStreamMapper {
             case PartType.ERROR -> UIMessageChunks.error(part.getErrorText(), part.getStepIndex(),
                 part.getProviderMetadata());
             case PartType.ABORT -> UIMessageChunks.abort();
-            case PartType.RAW, PartType.START_STEP -> null;
+            case PartType.RAW -> null;
             default -> null;
         };
     }

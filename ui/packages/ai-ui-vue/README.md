@@ -22,6 +22,7 @@ const chat = useChat({
   transport: new DefaultChatTransport({
     api: '/apis/example.halo.run/v1alpha1/chat/stream',
   }),
+  experimental_throttle: { intervalMs: 50 },
 })
 
 await chat.sendMessage({ text: '你好' })
@@ -64,6 +65,13 @@ data: [DONE]
 - `isLastAssistantMessageToolComplete()`
 
 如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成单个 assistant text part。
+
+`experimental_throttle` 只节流 Vue 可见的 `messages` 提交，不会节流 SSE 消费、reducer
+应用、`onData`、`onToolCall` 或终态刷新。`undefined`、`0` 和负数表示不启用；也可以直接传数字：
+
+```ts
+useChat({ transport, experimental_throttle: 50 })
+```
 
 ### Runtime Schemas
 
@@ -150,6 +158,30 @@ if (result.status === 'disconnected') {
 ```
 
 `readUIMessageStream` 只读取已有 stream；它不发起请求、不检查 `response.ok`、不解析非 stream 错误响应，也不做工具自动续跑。`onChunk` 是原始协议事件，可能随后校验失败；`onMessage`、`onData` 和 `onToolCall` 只在 chunk 被 reducer 接受后触发。该 helper 不提供 resume、reconnect、replay、text stream、object stream 或 active stream registry。
+
+### Persistence Helpers
+
+调用方需要保存或重新加载 UI messages 时，可以使用轻量持久化 helper：
+
+```ts
+import {
+  assertValidUIMessages,
+  pruneMessages,
+  validateUIMessages,
+} from '@halo-dev/ai-ui-vue'
+
+const pruned = pruneMessages(messages, { maxMessages: 20 })
+const issues = validateUIMessages(pruned, { dataPartSchemas })
+
+assertValidUIMessages(pruned)
+```
+
+`pruneMessages` 默认保留最近消息、移除尚未闭合的工具 part，并保留文本、推理、source、file、
+data 和已完成/已拒绝/已响应审批的工具 part。`validateUIMessages` 返回 `{ path, code, message }`
+issue 列表；`assertValidUIMessages` 在存在 issue 时抛出 `AIUIMessageValidationError`。
+
+这些 helper 只验证和整理 UI message 结构，不负责转换为模型消息。模型消息转换由后端 Java
+`UIMessageConverters` 完成。
 
 ## Completion
 
@@ -268,6 +300,12 @@ const object = experimental_useObject({
 
 Halo `UIMessage` 会把工具调用生命周期保存在 assistant message 的动态 `tool-*` part 中。外部工具或审批步骤完成后，更新原 assistant 消息中的同一个 tool part，再重新发送当前消息列表即可继续生成。
 
+Halo UIMessage SSE 使用 canonical tool chunks，例如 `tool-input-start`、`tool-input-delta`、
+`tool-input-available`、`tool-output-available`、`tool-output-error`、
+`tool-approval-request` 和 `tool-approval-response`。这些 stream event 会被 reducer 聚合为
+最终的动态 `tool-*` message part。`start-step` 和 `finish-step` 是生命周期事件，不会进入
+`message.parts`。
+
 ```ts
 await chat.addToolOutput({
   toolCallId: 'call_1',
@@ -283,3 +321,5 @@ await chat.rejectToolCall({
 `addToolOutput` 会根据已有 `tool-*` part 自动补齐工具名称。`addToolApprovalResponse` 会根据已有审批请求补齐 `toolCallId` 和工具名称，并把审批请求标记为 `approval-responded`。`rejectToolCall` 是 `addToolApprovalResponse({ approved: false })` 的便捷别名。拒绝审批不是工具执行异常，不会被标记为 `output-error`。
 
 如果配置了 `sendAutomaticallyWhen` 且返回 `true`，`Chat` 会在工具续跑 part 追加后自动再次提交。
+
+当前包不提供 resume/reconnect/replay、`source-document` 占位协议、file 上传管理，或 npm 侧模型消息转换。

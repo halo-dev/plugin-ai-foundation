@@ -2,6 +2,7 @@ import { describe, expect, it } from '@rstest/core'
 import { Chat, createPlainChatState, lastAssistantMessageIsCompleteWithApprovalResponses } from './chat'
 import { AIUISchemaValidationError } from './errors'
 import { applyUIMessageChunk, createUIMessageReducer, messageText, validateUIMessageChunk } from './message-reducer'
+import { AIUIMessageValidationError, assertValidUIMessages, pruneMessages, validateUIMessages } from './persistence'
 import { readUIMessageSSEStream } from './stream'
 import { readUIMessageStream } from './stream-reader'
 import type { SchemaLike } from './schema'
@@ -57,6 +58,63 @@ describe('UI message reducer', () => {
     expect(state.terminal.finishReason).toBe('stop')
   })
 
+  it('reduces canonical tool chunks and keeps start-step lifecycle-only', () => {
+    const state = createUIMessageReducer({ messageId: 'assistant-1' })
+
+    for (const chunk of [
+      { type: 'start-step', stepIndex: 0 },
+      { type: 'tool-input-start', toolCallId: 'call-1', toolName: 'search' },
+      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: '{"q"' },
+      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: ':"Halo"}' },
+      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' }, providerMetadata: { provider: 'test' } },
+      { type: 'tool-output-available', toolCallId: 'call-1', toolName: 'search', output: { ok: true } },
+      { type: 'tool-approval-request', approvalId: 'approval-1', toolCallId: 'call-2', toolName: 'pay', input: { amount: 100 } },
+      { type: 'tool-approval-response', approvalId: 'approval-1', toolCallId: 'call-2', toolName: 'pay', approved: false, reason: 'Denied' },
+      { type: 'tool-output-error', toolCallId: 'call-3', toolName: 'lookup', errorText: 'failed' },
+    ] satisfies UIMessageChunk[]) {
+      applyUIMessageChunk(state, chunk)
+    }
+
+    expect(state.message.parts).toEqual([
+      {
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        state: 'output-available',
+        input: { q: 'Halo' },
+        inputText: undefined,
+        output: { ok: true },
+        errorText: undefined,
+        approval: undefined,
+        providerMetadata: { provider: 'test' },
+      },
+      {
+        type: 'tool-pay',
+        toolCallId: 'call-2',
+        toolName: 'pay',
+        state: 'approval-responded',
+        input: { amount: 100 },
+        inputText: undefined,
+        output: undefined,
+        errorText: undefined,
+        approval: { id: 'approval-1', approved: false, reason: 'Denied' },
+        providerMetadata: undefined,
+      },
+      {
+        type: 'tool-lookup',
+        toolCallId: 'call-3',
+        toolName: 'lookup',
+        state: 'output-error',
+        input: undefined,
+        inputText: undefined,
+        output: undefined,
+        errorText: 'failed',
+        approval: undefined,
+        providerMetadata: undefined,
+      },
+    ])
+  })
+
   it('validates dynamic data and tool chunk protocol', () => {
     expect(() =>
       validateUIMessageChunk({
@@ -90,6 +148,22 @@ describe('UI message reducer', () => {
         state: 'output-error',
       })
     ).toThrow('Tool output-error chunk errorText is required')
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'tool-input-available',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        input: { q: 'Halo' },
+      })
+    ).not.toThrow()
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'tool-approval-response',
+        approvalId: 'approval-1',
+        toolCallId: 'call-1',
+        toolName: 'search',
+      } as unknown as UIMessageChunk)
+    ).toThrow('Tool approval-response chunk approved is required')
   })
 
   it('parses streamed metadata and persistent data with configured schemas', () => {
@@ -279,8 +353,11 @@ describe('UI message stream reader', () => {
     const chunks: UIMessageChunk[] = [
       { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' } },
       { type: 'data-status', id: 'status-2', name: 'status', data: { value: 'transient' }, transient: true },
-      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
-      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
+      { type: 'start-step', stepIndex: 0 },
+      { type: 'tool-input-start', toolCallId: 'call-1', toolName: 'search' },
+      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: '{"q"' },
+      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' } },
+      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' } },
     ]
 
     const result = await readUIMessageStream({
@@ -501,6 +578,133 @@ describe('UI message stream reader', () => {
   })
 })
 
+describe('UI message persistence helpers', () => {
+  it('prunes newest messages and removes pending tool parts by default', () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'old',
+        role: 'user',
+        parts: [{ type: 'text', id: 'text-old', text: 'old' }],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        parts: [
+          { type: 'tool-search', toolCallId: 'pending', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
+          { type: 'tool-pay', toolCallId: 'approval', toolName: 'pay', state: 'approval-requested', approval: { id: 'approval-1' } },
+        ],
+      },
+      {
+        id: 'assistant-2',
+        role: 'assistant',
+        parts: [
+          { type: 'text', id: 'text-1', text: 'answer' },
+          { type: 'tool-search', toolCallId: 'done', toolName: 'search', state: 'output-available', output: { ok: true } },
+          { type: 'tool-pay', toolCallId: 'denied', toolName: 'pay', state: 'approval-responded', approval: { id: 'approval-2', approved: false } },
+        ],
+      },
+    ]
+
+    expect(pruneMessages(messages, { maxMessages: 2 })).toEqual([
+      {
+        id: 'assistant-2',
+        role: 'assistant',
+        parts: [
+          { type: 'text', id: 'text-1', text: 'answer' },
+          { type: 'tool-search', toolCallId: 'done', toolName: 'search', state: 'output-available', output: { ok: true } },
+          { type: 'tool-pay', toolCallId: 'denied', toolName: 'pay', state: 'approval-responded', approval: { id: 'approval-2', approved: false } },
+        ],
+      },
+    ])
+  })
+
+  it('validates message shape and returns stable issue paths and codes', () => {
+    const issues = validateUIMessages([
+      {
+        id: '',
+        role: 'assistant',
+        parts: [
+          { type: 'data-status', id: '', name: 'other', data: 'bad' },
+          { type: 'tool-search', toolCallId: 'call-1', toolName: 'lookup', state: 'output-error' },
+        ],
+      } as UIMessage,
+    ])
+
+    expect(issues).toEqual([
+      { path: '$[0].id', code: 'message.id.required', message: 'UI message id is required.' },
+      { path: '$[0].parts[0].id', code: 'part.data.id.required', message: 'Data part id is required.' },
+      { path: '$[0].parts[0].type', code: 'part.data.type.invalid', message: 'Data part type must be data-other.' },
+      { path: '$[0].parts[1].type', code: 'part.tool.type.invalid', message: 'Tool part type must be tool-lookup.' },
+      { path: '$[0].parts[1].errorText', code: 'part.tool.error.required', message: 'Tool output-error part errorText is required.' },
+    ])
+  })
+
+  it('asserts validation failures with a public error type', () => {
+    expect(() =>
+      assertValidUIMessages([
+        { id: 'assistant-1', role: 'assistant', parts: [{ type: 'unknown' } as never] },
+      ])
+    ).toThrow(AIUIMessageValidationError)
+  })
+
+  it('uses metadata and data schemas during validation', () => {
+    const valid = validateUIMessages(
+      [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          metadata: { stage: 'done' },
+          parts: [{ type: 'data-status', id: 'status-1', name: 'status', data: { value: 'ok' } }],
+        },
+      ],
+      {
+        messageMetadataSchema: {
+          safeParse: () => ({ success: true, data: { stage: 'done' } }),
+        },
+        dataPartSchemas: {
+          status: {
+            safeParse: () => ({ success: true, data: { value: 'ok' } }),
+          },
+        },
+      }
+    )
+    const invalid = validateUIMessages(
+      [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          metadata: { stage: 'done' },
+          parts: [{ type: 'data-status', id: 'status-1', name: 'status', data: { value: 'bad' } }],
+        },
+      ],
+      {
+        messageMetadataSchema: {
+          safeParse: () => ({ success: false, error: { message: 'bad metadata' } }),
+        },
+        dataPartSchemas: {
+          status: {
+            safeParse: () => ({ success: false, error: { message: 'bad data' } }),
+          },
+        },
+      }
+    )
+
+    expect(valid).toEqual([])
+    expect(invalid).toEqual([
+      {
+        path: '$[0].metadata',
+        code: 'message.metadata.schema',
+        message: 'UI message message-metadata validation failed: bad metadata',
+      },
+      {
+        path: '$[0].parts[0].data',
+        code: 'part.data.schema',
+        message: 'UI message data-part validation failed: bad data',
+      },
+    ])
+  })
+})
+
 describe('Chat', () => {
   it('sends Halo chat request shape and appends streamed assistant response', async () => {
     const transport = new RecordingTransport([
@@ -565,7 +769,9 @@ describe('Chat', () => {
     const toolCalls: unknown[] = []
     const transport = new RecordingTransport([
       { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' }, transient: true },
-      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
+      { type: 'tool-input-start', toolCallId: 'call-1', toolName: 'search' },
+      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: '{"q":"Halo"}' },
+      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' } },
     ])
     const chat = new Chat({
       id: 'chat-1',
@@ -894,6 +1100,32 @@ describe('Chat', () => {
     expect(errors).toEqual([chat.error])
     expect(finishes).toEqual([{ isError: true, messageParts: 1 }])
     expect(chat.messages[1].parts).toEqual([{ type: 'text', id: 'text-1', text: 'Partial' }])
+  })
+
+  it('reports terminal error chunks through chat error state and lifecycle callbacks', async () => {
+    const errors: Error[] = []
+    const finishes: Array<{ isError: boolean; errorText?: string; messageParts: number }> = []
+    const chat = new Chat({
+      id: 'chat-1',
+      transport: new RecordingTransport([{ type: 'error', errorText: 'model failed' }]),
+      generateId: () => 'assistant-1',
+      onError: (error) => errors.push(error),
+      onFinish: ({ isError, terminal, message }) => {
+        finishes.push({
+          isError,
+          errorText: terminal.errorText,
+          messageParts: message.parts.length,
+        })
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(chat.status).toBe('error')
+    expect(chat.error?.message).toBe('model failed')
+    expect(errors).toEqual([chat.error])
+    expect(finishes).toEqual([{ isError: true, errorText: 'model failed', messageParts: 0 }])
+    expect(chat.messages).toContainEqual({ id: 'assistant-1', role: 'assistant', parts: [] })
   })
 
 })

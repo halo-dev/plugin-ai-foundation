@@ -40,16 +40,11 @@ public final class UIMessageTransportCodec {
             return new DataChunk(type, stringValue(map.get("id")), stringValue(map.get("name")),
                 map.get("data"), booleanValueOrDefault(map.get("transient"), false));
         }
-        if (type.startsWith("tool-")) {
-            return new ToolChunk(type, stringValue(map.get("toolCallId")),
-                stringValue(map.get("toolName")), toolStateValue(map.get("state")),
-                map.get("input"), stringValue(map.get("inputTextDelta")), map.get("output"),
-                stringValue(map.get("errorText")), approvalValue(map.get("approval")),
-                objectMap(map.get("providerMetadata")));
-        }
         return switch (type) {
             case UIMessageChunkType.START -> new StartChunk(stringValue(map.get("messageId")),
                 map.get("messageMetadata"));
+            case UIMessageChunkType.START_STEP -> UIMessageChunks.startStep(
+                integerValue(map.get("stepIndex")));
             case UIMessageChunkType.TEXT_START -> UIMessageChunks.textStart(stringValue(map.get("id")));
             case UIMessageChunkType.TEXT_DELTA -> UIMessageChunks.textDelta(stringValue(map.get("id")),
                 stringValue(map.get("delta")));
@@ -72,14 +67,50 @@ public final class UIMessageTransportCodec {
                 stringValue(map.get("url")), stringValue(map.get("title")),
                 stringValue(map.get("mediaType")), map.get("data"),
                 objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_INPUT_START -> UIMessageChunks.toolInputStart(
+                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")));
+            case UIMessageChunkType.TOOL_INPUT_DELTA -> UIMessageChunks.toolInputDelta(
+                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                stringValue(map.get("inputTextDelta")));
+            case UIMessageChunkType.TOOL_INPUT_AVAILABLE -> UIMessageChunks.toolInputAvailable(
+                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                map.get("input"), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_OUTPUT_AVAILABLE -> UIMessageChunks.toolOutputAvailable(
+                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                map.get("output"), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_OUTPUT_ERROR -> UIMessageChunks.toolOutputError(
+                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                stringValue(map.get("errorText")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_APPROVAL_REQUEST -> UIMessageChunks.toolApprovalRequest(
+                stringValue(map.get("approvalId")), stringValue(map.get("toolCallId")),
+                stringValue(map.get("toolName")), map.get("input"),
+                objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_APPROVAL_RESPONSE -> UIMessageChunks.toolApprovalResponse(
+                stringValue(map.get("approvalId")), stringValue(map.get("toolCallId")),
+                stringValue(map.get("toolName")), booleanValue(map.get("approved")),
+                stringValue(map.get("reason")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.FINISH_STEP -> UIMessageChunks.finishStep(
+                integerValue(map.get("stepIndex")), finishReasonValue(map.get("finishReason")),
+                stringValue(map.get("rawFinishReason")), null, List.of(), null, null,
+                objectMap(map.get("providerMetadata")));
             case UIMessageChunkType.FINISH -> UIMessageChunks.finish(
                 finishReasonValue(map.get("finishReason")), stringValue(map.get("rawFinishReason")),
                 null, map.get("messageMetadata"));
             case UIMessageChunkType.ERROR -> new ErrorChunk(stringValue(map.get("errorText")),
                 integerValue(map.get("stepIndex")), objectMap(map.get("metadata")));
             case UIMessageChunkType.ABORT -> UIMessageChunks.abort();
-            default -> throw invalid("transport.chunk.type.unsupported",
-                "Unsupported UI message chunk type: " + type);
+            default -> {
+                if (type.startsWith("tool-")) {
+                    yield new ToolChunk(type, stringValue(map.get("toolCallId")),
+                        stringValue(map.get("toolName")), toolStateValue(map.get("state")),
+                        map.get("input"), stringValue(map.get("inputTextDelta")),
+                        map.get("output"), stringValue(map.get("errorText")),
+                        approvalValue(map.get("approval")),
+                        objectMap(map.get("providerMetadata")));
+                }
+                throw invalid("transport.chunk.type.unsupported",
+                    "Unsupported UI message chunk type: " + type);
+            }
         };
     }
 
@@ -100,6 +131,7 @@ public final class UIMessageTransportCodec {
                 put(map, "messageId", start.messageId());
                 put(map, "messageMetadata", start.messageMetadata());
             }
+            case StartStepChunk startStep -> put(map, "stepIndex", startStep.stepIndex());
             case TextStartChunk text -> put(map, "id", text.id());
             case TextDeltaChunk text -> {
                 put(map, "id", text.id());
@@ -134,6 +166,48 @@ public final class UIMessageTransportCodec {
                 put(map, "mediaType", file.mediaType());
                 put(map, "data", file.data());
                 put(map, "providerMetadata", nonEmpty(file.providerMetadata()));
+            }
+            case ToolInputStartChunk tool -> {
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+            }
+            case ToolInputDeltaChunk tool -> {
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+                put(map, "inputTextDelta", tool.inputTextDelta());
+            }
+            case ToolInputAvailableChunk tool -> {
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+                put(map, "input", tool.input());
+                put(map, "providerMetadata", nonEmpty(tool.providerMetadata()));
+            }
+            case ToolOutputAvailableChunk tool -> {
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+                put(map, "output", tool.output());
+                put(map, "providerMetadata", nonEmpty(tool.providerMetadata()));
+            }
+            case ToolOutputErrorChunk tool -> {
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+                put(map, "errorText", tool.errorText());
+                put(map, "providerMetadata", nonEmpty(tool.providerMetadata()));
+            }
+            case ToolApprovalRequestChunk tool -> {
+                put(map, "approvalId", tool.approvalId());
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+                put(map, "input", tool.input());
+                put(map, "providerMetadata", nonEmpty(tool.providerMetadata()));
+            }
+            case ToolApprovalResponseChunk tool -> {
+                put(map, "approvalId", tool.approvalId());
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+                put(map, "approved", tool.approved());
+                put(map, "reason", tool.reason());
+                put(map, "providerMetadata", nonEmpty(tool.providerMetadata()));
             }
             case ToolChunk tool -> {
                 put(map, "toolCallId", tool.toolCallId());

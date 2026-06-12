@@ -50,8 +50,30 @@ public final class UIMessageChunkReducer {
             case MessageMetadataChunk ignored -> false;
             case SourceUrlChunk source -> replaceSource(source);
             case FileChunk file -> replaceFile(file);
+            case ToolInputStartChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.INPUT_STREAMING, null, "", null, null, null, Map.of());
+            case ToolInputDeltaChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.INPUT_STREAMING, null, tool.inputTextDelta(), null, null, null,
+                Map.of());
+            case ToolInputAvailableChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.INPUT_AVAILABLE, tool.input(), null, null, null, null,
+                tool.providerMetadata());
+            case ToolOutputAvailableChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.OUTPUT_AVAILABLE, null, null, tool.output(), null, null,
+                tool.providerMetadata());
+            case ToolOutputErrorChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.OUTPUT_ERROR, null, null, null, tool.errorText(), null,
+                tool.providerMetadata());
+            case ToolApprovalRequestChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.APPROVAL_REQUESTED, tool.input(), null, null, null,
+                new ToolApproval(tool.approvalId(), null, null), tool.providerMetadata());
+            case ToolApprovalResponseChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.APPROVAL_RESPONDED, null, null, null, null,
+                new ToolApproval(tool.approvalId(), tool.approved(), tool.reason()),
+                tool.providerMetadata());
             case ToolChunk tool -> replaceTool(tool);
             case FinishStepChunk ignored -> false;
+            case StartStepChunk ignored -> false;
             case FinishChunk finish -> {
                 terminal = terminal.withFinish(finish.finishReason(), finish.usage());
                 yield false;
@@ -161,23 +183,32 @@ public final class UIMessageChunkReducer {
     }
 
     private boolean replaceTool(ToolChunk tool) {
-        var existing = findTool(tool.toolCallId());
-        var inputText = switch (tool.state()) {
+        return replaceTool(tool.toolCallId(), tool.toolName(), tool.state(), tool.input(),
+            tool.inputTextDelta(), tool.output(), tool.errorText(), tool.approval(),
+            tool.providerMetadata());
+    }
+
+    private boolean replaceTool(String toolCallId, String toolName, ToolPartState state,
+        Object input, String inputTextDelta, Object output, String errorText,
+        ToolApproval approval, Map<String, Object> providerMetadata) {
+        var existing = findTool(toolCallId);
+        var inputText = switch (state) {
             case INPUT_STREAMING -> (existing != null ? existing.inputText() : "")
-                + (tool.inputTextDelta() != null ? tool.inputTextDelta() : "");
+                + (inputTextDelta != null ? inputTextDelta : "");
             default -> null;
         };
-        replaceByIdentity(UIMessageParts.tool(tool.toolCallId(), tool.toolName(), tool.state(),
-            tool.input() != null ? tool.input() : existing != null ? existing.input() : null,
+        var metadata = providerMetadata == null ? Map.<String, Object>of() : providerMetadata;
+        replaceByIdentity(UIMessageParts.tool(toolCallId, toolName, state,
+            input != null ? input : existing != null ? existing.input() : null,
             inputText,
-            tool.output() != null ? tool.output() : existing != null ? existing.output() : null,
-            tool.errorText() != null ? tool.errorText()
+            output != null ? output : existing != null ? existing.output() : null,
+            errorText != null ? errorText
                 : existing != null ? existing.errorText() : null,
-            tool.approval() != null ? tool.approval()
+            approval != null ? approval
                 : existing != null ? existing.approval() : null,
-            tool.providerMetadata().isEmpty() && existing != null
+            metadata.isEmpty() && existing != null
                 ? existing.providerMetadata()
-                : tool.providerMetadata()));
+                : metadata));
         return true;
     }
 

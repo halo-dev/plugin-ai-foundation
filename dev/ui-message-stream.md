@@ -505,8 +505,16 @@ Mono<UIMessageStreamTerminal> terminal = read.finish();
 | `data` 且 `transientData=true` | 不进入 `UIMessage.parts` |
 | `message-metadata` | 合并到 `UIMessage.metadata` |
 | `source-url` / `file` | 写入或替换 source/file part |
-| `tool-*` | 按 `toolCallId` 写入或替换同一个动态工具 part |
-| `finish-step` / `error` / `abort` | 只更新终态信息 |
+| `tool-input-start` / `tool-input-delta` | 聚合为同一个动态 `tool-*` part 的 `input-streaming` 状态 |
+| `tool-input-available` | 聚合为同一个动态 `tool-*` part 的 `input-available` 状态 |
+| `tool-output-available` / `tool-output-error` | 聚合为同一个动态 `tool-*` part 的完成状态 |
+| `tool-approval-request` / `tool-approval-response` | 聚合为同一个动态 `tool-*` part 的审批状态 |
+| `start-step` / `finish-step` / `error` / `abort` | 只更新生命周期或终态信息，不进入 `UIMessage.parts` |
+
+SSE 传输层使用 `tool-input-*`、`tool-output-*` 和 `tool-approval-*` 这类 canonical
+tool chunk 表达“流中发生的事件”。聚合后的 assistant `UIMessage.parts` 仍然使用动态
+`tool-*` part 表达最终 UI 状态。旧的动态 `tool-*` chunk 只作为内部兼容读取形态保留，
+不作为外部 stream 协议推荐。
 
 ## 工具续跑
 
@@ -760,3 +768,6 @@ UIMessageChatHandlers.streamText(options -> options
 | resume/reconnect/replay | 当前不提供，需要 stream id、重放或继续策略 |
 | active stream registry | 当前不跨请求保存运行中的 stream |
 | stream id 协议 | 后续和停止、恢复、重连一起设计 |
+| source-document | 当前后端没有 document source 语义，暂不提供前端占位协议 |
+| file 扩展/上传管理 | 当前只保留已有 file chunk/part 字段，不管理浏览器上传 |
+| npm 侧模型消息转换 | 模型消息转换由 Java `UIMessageConverters` 完成，前端 helper 只处理 UI message |

@@ -38,6 +38,41 @@ public final class UIMessageChunkValidator {
         }
         switch (chunk) {
             case DataChunk data -> validateData(data, issues);
+            case ToolInputStartChunk tool -> validateToolIdentity(tool.type(), tool.toolCallId(),
+                tool.toolName(), issues);
+            case ToolInputDeltaChunk tool -> {
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
+                require(tool.type(), tool.toolCallId(), tool.inputTextDelta(),
+                    "chunk.tool.input-delta.required",
+                    "Tool input delta must not be blank", issues);
+            }
+            case ToolInputAvailableChunk tool -> validateToolIdentity(tool.type(),
+                tool.toolCallId(), tool.toolName(), issues);
+            case ToolOutputAvailableChunk tool -> validateToolIdentity(tool.type(),
+                tool.toolCallId(), tool.toolName(), issues);
+            case ToolOutputErrorChunk tool -> {
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
+                require(tool.type(), tool.toolCallId(), tool.errorText(),
+                    "chunk.tool.error-text.required", "Tool error text must not be blank",
+                    issues);
+            }
+            case ToolApprovalRequestChunk tool -> {
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
+                require(tool.type(), tool.toolCallId(), tool.approvalId(),
+                    "chunk.tool.approval-id.required",
+                    "Tool approval id must not be blank", issues);
+            }
+            case ToolApprovalResponseChunk tool -> {
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
+                require(tool.type(), tool.toolCallId(), tool.approvalId(),
+                    "chunk.tool.approval-id.required",
+                    "Tool approval id must not be blank", issues);
+                if (tool.approved() == null) {
+                    issues.add(issue(tool.type(), tool.toolCallId(),
+                        "chunk.tool.approved.required",
+                        "Tool approval response approved value must not be null"));
+                }
+            }
             case ToolChunk tool -> validateTool(tool, issues);
             default -> {
             }
@@ -60,12 +95,7 @@ public final class UIMessageChunkValidator {
     }
 
     private static void validateTool(ToolChunk tool, List<UIMessageValidationIssue> issues) {
-        require(tool.type(), tool.toolCallId(), tool.type(), "chunk.tool.type.required",
-            "Tool chunk type must not be blank", issues);
-        require(tool.type(), tool.toolCallId(), tool.toolCallId(), "chunk.tool.id.required",
-            "Tool call id must not be blank", issues);
-        require(tool.type(), tool.toolCallId(), tool.toolName(), "chunk.tool.name.required",
-            "Tool name must not be blank", issues);
+        validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
         if (tool.state() == null) {
             issues.add(issue(tool.type(), tool.toolCallId(), "chunk.tool.state.required",
                 "Tool chunk state must not be null"));
@@ -81,6 +111,16 @@ public final class UIMessageChunkValidator {
             issues.add(issue(tool.type(), tool.toolCallId(), "chunk.tool.error-text.required",
                 "Tool error text must not be blank"));
         }
+    }
+
+    private static void validateToolIdentity(String type, String toolCallId, String toolName,
+        List<UIMessageValidationIssue> issues) {
+        require(type, toolCallId, type, "chunk.tool.type.required",
+            "Tool chunk type must not be blank", issues);
+        require(type, toolCallId, toolCallId, "chunk.tool.id.required",
+            "Tool call id must not be blank", issues);
+        require(type, toolCallId, toolName, "chunk.tool.name.required",
+            "Tool name must not be blank", issues);
     }
 
     private static void require(String partType, String partId, String value, String code,

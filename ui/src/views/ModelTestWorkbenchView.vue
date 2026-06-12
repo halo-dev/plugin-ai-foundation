@@ -127,6 +127,11 @@ const uiChat = useChat<Record<string, unknown>>({
   sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   messageMetadataSchema: workbenchMessageMetadataSchema,
   dataPartSchemas: workbenchDataPartSchemas,
+  onFinish: ({ terminal }) => {
+    if (activeUiMessageWorkbenchId && terminal.errorText) {
+      appendAssistantError(activeUiMessageWorkbenchId, `请求失败: ${terminal.errorText}`)
+    }
+  },
 })
 
 const chatModels = computed(() => {
@@ -734,7 +739,13 @@ function appendAssistantWarnings(
 function appendAssistantError(messageId: string, content: string) {
   const message = messages.value.find((item) => item.id === messageId)
   if (message) {
-    message.content += content
+    const normalizedContent = content.trim()
+    if (message.state === 'error' && message.content.includes(normalizedContent)) {
+      return
+    }
+    message.content = message.content.trim()
+      ? `${message.content.trim()}\n\n${normalizedContent}`
+      : normalizedContent
     message.state = 'error'
     if (message.reasoningState === 'streaming') {
       message.reasoningState = 'done'

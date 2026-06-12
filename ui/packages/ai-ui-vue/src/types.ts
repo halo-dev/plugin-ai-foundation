@@ -136,6 +136,7 @@ export interface ToolApprovalResponseInput {
 
 export type UIMessageChunk =
   | StartChunk
+  | StartStepChunk
   | TextStartChunk
   | TextDeltaChunk
   | TextEndChunk
@@ -146,6 +147,13 @@ export type UIMessageChunk =
   | MessageMetadataChunk
   | SourceUrlChunk
   | FileChunk
+  | ToolInputStartChunk
+  | ToolInputDeltaChunk
+  | ToolInputAvailableChunk
+  | ToolOutputAvailableChunk
+  | ToolOutputErrorChunk
+  | ToolApprovalRequestChunk
+  | ToolApprovalResponseChunk
   | ToolChunk
   | FinishStepChunk
   | FinishChunk
@@ -156,6 +164,11 @@ export interface StartChunk {
   type: 'start'
   messageId?: string
   messageMetadata?: unknown
+}
+
+export interface StartStepChunk {
+  type: 'start-step'
+  stepIndex?: number
 }
 
 export interface TextStartChunk {
@@ -233,6 +246,62 @@ export interface ToolChunk {
   output?: unknown
   errorText?: string
   approval?: ToolApproval
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface ToolInputStartChunk {
+  type: 'tool-input-start'
+  toolCallId: string
+  toolName: string
+}
+
+export interface ToolInputDeltaChunk {
+  type: 'tool-input-delta'
+  toolCallId: string
+  toolName: string
+  inputTextDelta: string
+}
+
+export interface ToolInputAvailableChunk {
+  type: 'tool-input-available'
+  toolCallId: string
+  toolName: string
+  input?: Record<string, unknown>
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface ToolOutputAvailableChunk {
+  type: 'tool-output-available'
+  toolCallId: string
+  toolName: string
+  output?: unknown
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface ToolOutputErrorChunk {
+  type: 'tool-output-error'
+  toolCallId: string
+  toolName: string
+  errorText: string
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface ToolApprovalRequestChunk {
+  type: 'tool-approval-request'
+  approvalId: string
+  toolCallId: string
+  toolName: string
+  input?: Record<string, unknown>
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface ToolApprovalResponseChunk {
+  type: 'tool-approval-response'
+  approvalId: string
+  toolCallId: string
+  toolName: string
+  approved: boolean
+  reason?: string
   providerMetadata?: Record<string, unknown>
 }
 

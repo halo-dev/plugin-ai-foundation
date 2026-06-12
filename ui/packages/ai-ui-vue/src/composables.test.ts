@@ -3,6 +3,7 @@ import { effectScope, nextTick } from 'vue'
 import { Chat } from './chat'
 import { fromOpenAPIRequestArgs } from './openapi'
 import { DefaultChatTransport } from './transports'
+import type { ChatTransport, UIMessageChunk } from './types'
 import { useChat } from './use-chat'
 import { useCompletion } from './use-completion'
 import { experimental_useObject } from './use-object'
@@ -93,6 +94,74 @@ describe('useChat', () => {
         useChat({ chat, id: 'other-chat' })
       })
     ).toThrow('useChat({ chat }) cannot be mixed with creation options: id.')
+    scope.stop()
+  })
+
+  it('throttles Vue-visible message commits without delaying tool callbacks', async () => {
+    const release = deferred<void>()
+    const toolCalls: unknown[] = []
+    const transport: ChatTransport = {
+      async sendMessages() {
+        return pausedToolStream(release.promise)
+      },
+    }
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const composable = useChat({
+        id: 'throttled-chat',
+        transport,
+        experimental_throttle: 50,
+        onToolCall: (part) => toolCalls.push({ ...part }),
+      })
+      const pending = composable.sendMessage({ text: 'Hi' })
+
+      await waitFor(() => toolCalls.length === 1)
+      expect(toolCalls).toEqual([
+        expect.objectContaining({
+          type: 'tool-search',
+          toolCallId: 'call-1',
+          toolName: 'search',
+          state: 'input-available',
+        }),
+      ])
+      expect(composable.messages.value).toHaveLength(1)
+
+      release.resolve()
+      await pending
+      await nextTick()
+
+      expect(composable.status.value).toBe('ready')
+      expect(composable.messages.value).toHaveLength(2)
+      expect(composable.messages.value[1].parts).toContainEqual(
+        expect.objectContaining({
+          type: 'tool-search',
+          toolCallId: 'call-1',
+          state: 'input-available',
+        })
+      )
+    })
+    scope.stop()
+  })
+
+  it('accepts object throttle options', async () => {
+    const fetch = async () =>
+      new Response(streamFromText('data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n'), {
+        headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
+      })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const composable = useChat({
+        id: 'object-throttle-chat',
+        transport: new DefaultChatTransport({ fetch }),
+        experimental_throttle: { intervalMs: 1 },
+      })
+      await composable.sendMessage({ text: 'Hi' })
+      await nextTick()
+
+      expect(composable.messages.value).toHaveLength(2)
+    })
     scope.stop()
   })
 })
@@ -301,4 +370,35 @@ function streamFromText(text: string): ReadableStream<Uint8Array> {
       controller.close()
     },
   })
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
+async function* pausedToolStream(release: Promise<void>): AsyncIterable<UIMessageChunk> {
+  yield {
+    type: 'tool-input-available',
+    toolCallId: 'call-1',
+    toolName: 'search',
+    input: { q: 'Halo' },
+  }
+  await release
+  yield { type: 'finish', finishReason: 'stop' }
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const started = Date.now()
+  while (!predicate()) {
+    if (Date.now() - started > 1000) {
+      throw new Error('timed out waiting for condition')
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
 }

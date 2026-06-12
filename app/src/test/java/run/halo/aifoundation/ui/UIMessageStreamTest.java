@@ -18,6 +18,7 @@ import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
+import run.halo.aifoundation.tool.ToolApprovalResponse;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
@@ -229,6 +230,7 @@ class UIMessageStreamTest {
     void streamTextResultMapsFullStreamToUiChunksAndSkipsRawDiagnostics() {
         var stream = new StreamTextResult(Flux.just(
             TextStreamPart.start("msg-1"),
+            TextStreamPart.startStep(0),
             TextStreamPart.textStart("text-1"),
             TextStreamPart.textDelta("text-1", "hello"),
             TextStreamPart.textEnd("text-1"),
@@ -267,6 +269,14 @@ class UIMessageStreamTest {
                 .stepIndex(0)
                 .providerMetadata(Map.of("provider", "test"))
                 .build()),
+            TextStreamPart.toolApprovalResponse(ToolApprovalResponse.builder()
+                .approvalId("approval-1")
+                .toolCallId("call-3")
+                .toolName("payment")
+                .approved(false)
+                .reason("not allowed")
+                .providerMetadata(Map.of("provider", "test"))
+                .build()),
             TextStreamPart.finishStep(0, FinishReason.STOP, "stop", null, List.of(), null,
                 null, Map.of("provider", "test")),
             TextStreamPart.raw(Map.of("debug", true)),
@@ -281,6 +291,7 @@ class UIMessageStreamTest {
             .extracting(UIMessageChunk::type)
             .containsExactly(
                 UIMessageChunkType.START,
+                UIMessageChunkType.START_STEP,
                 UIMessageChunkType.TEXT_START,
                 UIMessageChunkType.TEXT_DELTA,
                 UIMessageChunkType.TEXT_END,
@@ -289,12 +300,13 @@ class UIMessageStreamTest {
                 UIMessageChunkType.REASONING_END,
                 UIMessageChunkType.SOURCE_URL,
                 UIMessageChunkType.FILE,
-                "tool-weather",
-                "tool-weather",
-                "tool-weather",
-                "tool-weather",
-                "tool-weather",
-                "tool-payment",
+                UIMessageChunkType.TOOL_INPUT_START,
+                UIMessageChunkType.TOOL_INPUT_DELTA,
+                UIMessageChunkType.TOOL_INPUT_AVAILABLE,
+                UIMessageChunkType.TOOL_OUTPUT_AVAILABLE,
+                UIMessageChunkType.TOOL_OUTPUT_ERROR,
+                UIMessageChunkType.TOOL_APPROVAL_REQUEST,
+                UIMessageChunkType.TOOL_APPROVAL_RESPONSE,
                 UIMessageChunkType.FINISH_STEP,
                 UIMessageChunkType.FINISH,
                 UIMessageChunkType.ERROR,
@@ -304,7 +316,7 @@ class UIMessageStreamTest {
             UIMessageChunkType.MESSAGE_METADATA));
         assertThat((StartChunk) chunks.getFirst()).extracting(StartChunk::messageMetadata)
             .isNull();
-        assertThat((FinishChunk) chunks.get(16)).extracting(FinishChunk::messageMetadata)
+        assertThat((FinishChunk) chunks.get(18)).extracting(FinishChunk::messageMetadata)
             .isNull();
     }
 

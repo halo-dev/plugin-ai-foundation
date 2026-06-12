@@ -6,7 +6,10 @@ import type { ChatStatus, UIMessage } from './types'
 export interface UseChatOptions<METADATA = unknown> extends Omit<ChatInit<METADATA>, 'state'> {
   id?: string
   chat?: Chat<METADATA>
+  experimental_throttle?: ExperimentalThrottleOption
 }
+
+export type ExperimentalThrottleOption = number | { intervalMs?: number }
 
 interface ChatStore<METADATA = unknown> {
   subscribers: number
@@ -15,6 +18,7 @@ interface ChatStore<METADATA = unknown> {
   error: ReturnType<typeof shallowRef<Error | undefined>>
   chat: Chat<METADATA>
   unsubscribe?: () => void
+  flushMessages?: () => void
 }
 
 const stores = new Map<string, ChatStore<unknown>>()
@@ -48,7 +52,10 @@ export function useChat<METADATA = unknown>(options: UseChatOptions<METADATA> = 
     sendMessage: store.chat.sendMessage.bind(store.chat),
     regenerate: store.chat.regenerate.bind(store.chat),
     stop: store.chat.stop.bind(store.chat),
-    setMessages: store.chat.setMessages.bind(store.chat),
+    setMessages: (messages: UIMessage<METADATA>[]) => {
+      store.chat.setMessages(messages)
+      store.flushMessages?.()
+    },
     clearError: store.chat.clearError.bind(store.chat),
     addToolOutput: store.chat.addToolOutput.bind(store.chat),
     addToolApprovalResponse: store.chat.addToolApprovalResponse.bind(store.chat),
@@ -68,20 +75,29 @@ function getOrCreateExternalChatStore<METADATA>(
   }
 
   const messages = shallowRef<UIMessage<METADATA>[]>(chat.messages)
+  const committer = createMessageCommitter(messages, chat.messages, options.experimental_throttle)
   const status = ref<ChatStatus>(chat.status)
   const error = shallowRef<Error | undefined>(chat.error)
   const sync = () => {
-    messages.value = chat.messages
+    committer.set(chat.messages)
     status.value = chat.status
     error.value = chat.error
+    if (shouldFlushMessagesForStatus(chat.status)) {
+      committer.flush()
+    }
   }
+  const unsubscribe = chat.subscribe(sync)
   const store = {
     subscribers: 0,
     messages,
     status,
     error,
     chat,
-    unsubscribe: chat.subscribe(sync),
+    unsubscribe: () => {
+      unsubscribe()
+      committer.dispose()
+    },
+    flushMessages: committer.flush,
   }
   externalChatStores.set(chat as Chat<unknown>, store as ChatStore<unknown>)
   return store
@@ -97,18 +113,22 @@ function getOrCreateChatStore<METADATA>(
   }
 
   const messages = shallowRef<UIMessage<METADATA>[]>(options.messages ?? [])
+  const committer = createMessageCommitter(messages, messages.value, options.experimental_throttle)
   const status = ref<ChatStatus>('ready')
   const error = shallowRef<Error | undefined>()
   const chat = new Chat<METADATA>({
     ...options,
     id,
     state: {
-      getMessages: () => messages.value,
+      getMessages: () => committer.current(),
       setMessages: (next) => {
-        messages.value = next
+        committer.set(next)
       },
       getStatus: () => status.value,
       setStatus: (next) => {
+        if (shouldFlushMessagesForStatus(next)) {
+          committer.flush()
+        }
         status.value = next
       },
       getError: () => error.value,
@@ -117,7 +137,15 @@ function getOrCreateChatStore<METADATA>(
       },
     },
   })
-  const store = { subscribers: 0, messages, status, error, chat }
+  const store = {
+    subscribers: 0,
+    messages,
+    status,
+    error,
+    chat,
+    unsubscribe: committer.dispose,
+    flushMessages: committer.flush,
+  }
   stores.set(id, store as ChatStore<unknown>)
   return store
 }
@@ -140,4 +168,62 @@ function assertNoCreationOptionsWithChat<METADATA>(options: UseChatOptions<METAD
   if (mixedKeys.length > 0) {
     throw new Error(`useChat({ chat }) cannot be mixed with creation options: ${mixedKeys.join(', ')}.`)
   }
+}
+
+function createMessageCommitter<METADATA>(
+  target: ReturnType<typeof shallowRef<UIMessage<METADATA>[]>>,
+  initial: UIMessage<METADATA>[],
+  option: ExperimentalThrottleOption | undefined
+) {
+  let currentMessages = initial
+  let pendingMessages: UIMessage<METADATA>[] | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const intervalMs = resolveThrottleInterval(option)
+
+  const flush = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = undefined
+    }
+    if (pendingMessages) {
+      target.value = pendingMessages
+      pendingMessages = undefined
+    }
+  }
+
+  const schedule = () => {
+    if (!intervalMs) {
+      flush()
+      return
+    }
+    if (!timer) {
+      timer = setTimeout(flush, intervalMs)
+    }
+  }
+
+  return {
+    current: () => currentMessages,
+    set: (messages: UIMessage<METADATA>[]) => {
+      currentMessages = messages
+      pendingMessages = messages
+      schedule()
+    },
+    flush,
+    dispose: () => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      timer = undefined
+      pendingMessages = undefined
+    },
+  }
+}
+
+function resolveThrottleInterval(option: ExperimentalThrottleOption | undefined): number | undefined {
+  const intervalMs = typeof option === 'number' ? option : option?.intervalMs
+  return typeof intervalMs === 'number' && intervalMs > 0 ? intervalMs : undefined
+}
+
+function shouldFlushMessagesForStatus(status: ChatStatus): boolean {
+  return status === 'submitted' || status === 'ready' || status === 'error' || status === 'disconnected'
 }
