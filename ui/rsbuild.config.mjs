@@ -22,6 +22,9 @@ export default rsbuildConfig({
         distPath: {
           root: outDir,
         },
+        externals: {
+          '@formkit/vue': 'FormKitVue',
+        },
       },
       plugins: [pluginSass()],
       tools: {

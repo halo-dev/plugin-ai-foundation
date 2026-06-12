@@ -6,6 +6,7 @@ import {
   modelFeatureOptionsForProviderType,
   modelTypeOptionsForProviderType,
 } from '@/utils/model'
+import type { FormKitTypeDefinition } from '@formkit/core'
 import { submitForm } from '@formkit/core'
 import { computed } from 'vue'
 
@@ -103,6 +104,11 @@ defineExpose({
       :value="formState?.features"
     />
 
-    <FormKit type="switch" name="enabled" label="启用" :value="formState?.enabled ?? true" />
+    <FormKit
+      :type="'switch' as unknown as FormKitTypeDefinition<boolean>"
+      name="enabled"
+      label="启用"
+      :value="formState?.enabled ?? true"
+    />
   </FormKit>
 </template>

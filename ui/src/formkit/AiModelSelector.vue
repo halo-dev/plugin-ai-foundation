@@ -3,7 +3,6 @@ import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { groupModelOptionsByProvider } from '@/utils/model-options'
 
-import type { FormKitMessage, FormKitNode } from '@formkit/core'
 import { VLoading } from '@halo-dev/components'
 import { onClickOutside } from '@vueuse/core'
 import { useFuse } from '@vueuse/integrations/useFuse'
@@ -30,8 +29,6 @@ const props = withDefaults(
     name?: string
     label?: string
     help?: string
-    validation?: string | unknown[]
-    validationMessages?: Record<string, string>
     modelType?: string
     providerName?: string
     providerType?: string
@@ -49,8 +46,6 @@ const props = withDefaults(
     name: undefined,
     label: undefined,
     help: undefined,
-    validation: undefined,
-    validationMessages: undefined,
     modelType: undefined,
     providerName: undefined,
     providerType: undefined,
@@ -76,7 +71,6 @@ const rootRef = ref<HTMLElement>()
 const triggerRef = ref<HTMLElement>()
 const dropdownRef = ref<HTMLElement>()
 const searchInputRef = ref<HTMLInputElement>()
-const hiddenFormkitRef = ref<{ node: FormKitNode } | null>(null)
 const isOpen = ref(false)
 const activeModelName = ref<string>()
 const selectedModelSnapshot = ref<ModelOption>()
@@ -138,16 +132,6 @@ const selectedDisplayName = computed(() => {
     selectedModelSnapshot.value,
     selectedValue.value,
   )
-})
-
-const fieldErrors = computed<string[]>(() => {
-  const messages = hiddenFormkitRef.value?.node?.context?.messages as
-    | Record<string, FormKitMessage>
-    | undefined
-  if (!messages) return []
-  return Object.values(messages)
-    .filter((msg) => msg.visible && msg.type === 'validation')
-    .map((msg) => String(msg.value))
 })
 
 onClickOutside(
@@ -376,15 +360,6 @@ onBeforeUnmount(() => {
     class=":uno: py-4 text-sm transition-all formkit-disabled:pointer-events-none formkit-disabled:cursor-not-allowed first:pt-0 last:pb-0 formkit-disabled:opacity-70"
     :data-disabled="effectiveDisabled || undefined"
   >
-    <FormKit
-      ref="hiddenFormkitRef"
-      type="hidden"
-      :name="name"
-      :value="selectedValue || undefined"
-      :validation="props.validation"
-      :validation-messages="props.validationMessages"
-    />
-
     <label v-if="effectiveLabel" class=":uno: mb-1.5 block text-sm text-gray-700 font-medium">
       {{ effectiveLabel }}
     </label>
@@ -573,10 +548,5 @@ onBeforeUnmount(() => {
     </div>
 
     <p v-if="effectiveHelp" class=":uno: mt-2 text-xs text-gray-500">{{ effectiveHelp }}</p>
-    <ul v-if="fieldErrors.length" class=":uno: mt-1.5 space-y-0.5">
-      <li v-for="error in fieldErrors" :key="error" class=":uno: text-xs text-red-500 leading-4">
-        {{ error }}
-      </li>
-    </ul>
   </div>
 </template>
