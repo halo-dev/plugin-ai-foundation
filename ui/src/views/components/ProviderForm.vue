@@ -19,6 +19,8 @@ const providerTypeOptions = computed(() => {
   return providerTypes.value.map((t) => ({
     value: t.providerType,
     label: t.displayName,
+    icon: t.iconUrl,
+    description: t.description || ' '
   }))
 })
 
