@@ -42,8 +42,8 @@ WIP
 
 ## 开发环境
 
-- Java 21+
-- Node.js 18+
+- Java 21
+- Node.js 24
 - pnpm
 - Docker（`haloServer` 开发服务器需要）
 

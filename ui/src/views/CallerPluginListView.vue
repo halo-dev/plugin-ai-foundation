@@ -78,7 +78,7 @@ function linkItems(caller: CallerPluginInfo) {
           <div
             v-for="caller in callers"
             :key="caller.pluginName || displayName(caller)"
-            class=":uno: flex flex-col gap-3 border-b border-gray-100 px-4 py-4 last:border-b-0 lg:flex-row lg:items-center"
+            class=":uno: flex flex-col gap-3 border-b border-gray-100 px-4 py-4 lg:flex-row lg:items-center last:border-b-0"
           >
             <div class=":uno: min-w-0 flex-1">
               <div class=":uno: flex flex-wrap items-center gap-2">
@@ -86,7 +86,7 @@ function linkItems(caller: CallerPluginInfo) {
                   {{ displayName(caller) }}
                 </span>
                 <span
-                  class=":uno: inline-flex h-6 items-center rounded-md bg-emerald-50 px-2 text-xs text-emerald-700 font-medium"
+                  class=":uno: h-6 inline-flex items-center rounded-md bg-emerald-50 px-2 text-xs text-emerald-700 font-medium"
                 >
                   {{ caller.detectionSource || 'auto' }}
                 </span>
@@ -107,7 +107,7 @@ function linkItems(caller: CallerPluginInfo) {
                 :href="item.url"
                 target="_blank"
                 rel="noreferrer"
-                class=":uno: inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 bg-white px-3 text-xs text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                class=":uno: h-8 inline-flex items-center gap-1 border border-gray-200 rounded-md bg-white px-3 text-xs text-gray-700 hover:border-gray-300 hover:bg-gray-50"
               >
                 <span>{{ item.label }}</span>
                 <MingcuteExternalLinkLine class=":uno: size-3.5" />

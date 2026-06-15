@@ -142,7 +142,7 @@ defineExpose({
     />
 
     <FormKit
-      :type="'secret' as unknown as FormKitTypeDefinition<string | undefined>"
+      :type="'secret' as unknown as FormKitTypeDefinition<string>"
       name="apiKeySecretName"
       label="API Key"
       :value="formState?.apiKeySecretName"
