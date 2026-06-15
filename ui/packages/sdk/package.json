@@ -1,5 +1,5 @@
 {
-  "name": "@halo-dev/ai-ui-vue",
+  "name": "@halo-dev/ai-foundation-sdk",
   "version": "0.1.0",
   "description": "Vue runtime helpers for Halo AI UI streams.",
   "keywords": [
@@ -21,7 +21,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/halo-dev/plugin-ai-foundation.git",
-    "directory": "ui/packages/ai-ui-vue"
+    "directory": "ui/packages/sdk"
   },
   "type": "module",
   "sideEffects": false,
