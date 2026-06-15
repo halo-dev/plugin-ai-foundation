@@ -1,7 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "build": "run-p type-check \"build-only {@}\" --",
+    "build": "pnpm type-check && pnpm build-only",
     "build-only": "pnpm -C packages/sdk run build && rsbuild build",
     "dev": "rsbuild build --watch --env-mode=development",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path ../.gitignore",
@@ -23,8 +23,8 @@
   "dependencies": {
     "@formkit/core": "2.1.0",
     "@formkit/vue": "2.1.0",
-    "@halo-dev/api-client": "^2.25.1",
     "@halo-dev/ai-foundation-sdk": "workspace:*",
+    "@halo-dev/api-client": "^2.25.1",
     "@halo-dev/components": "^2.25.1",
     "@halo-dev/ui-shared": "^2.25.1",
     "@tanstack/vue-query": "^4.44.0",
@@ -60,7 +60,6 @@
     "eslint-plugin-oxlint": "^0.16.12",
     "eslint-plugin-vue": "~10.0.1",
     "happy-dom": "^20.9.0",
-    "npm-run-all2": "^7.0.2",
     "oxlint": "^0.16.12",
     "prettier": "^3.8.3",
     "prettier-plugin-organize-imports": "^4.3.0",
