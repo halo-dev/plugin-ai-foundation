@@ -1,0 +1,68 @@
+{
+  "name": "data-parts",
+  "description": "Persistent and transient dynamic data chunks reduce differently.",
+  "chunks": [
+    {
+      "type": "start",
+      "messageId": "assistant-data"
+    },
+    {
+      "type": "data-weather",
+      "id": "weather-1",
+      "name": "weather",
+      "data": {
+        "city": "Hangzhou",
+        "status": "loading"
+      },
+      "transient": true
+    },
+    {
+      "type": "data-weather",
+      "id": "weather-1",
+      "name": "weather",
+      "data": {
+        "city": "Hangzhou",
+        "status": "sunny"
+      }
+    },
+    {
+      "type": "data-weather",
+      "id": "weather-1",
+      "name": "weather",
+      "data": {
+        "city": "Hangzhou",
+        "status": "cloudy"
+      }
+    },
+    {
+      "type": "finish",
+      "finishReason": "stop"
+    }
+  ],
+  "expectedMessage": {
+    "id": "assistant-data",
+    "role": "assistant",
+    "metadata": {},
+    "parts": [
+      {
+        "type": "data-weather",
+        "id": "weather-1",
+        "name": "weather",
+        "data": {
+          "city": "Hangzhou",
+          "status": "cloudy"
+        }
+      }
+    ]
+  },
+  "expectedTransientEvents": [
+    {
+      "type": "data-weather",
+      "id": "weather-1",
+      "name": "weather"
+    }
+  ],
+  "expectedTerminal": {
+    "finishReason": "stop"
+  }
+}

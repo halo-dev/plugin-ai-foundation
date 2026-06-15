@@ -76,5 +76,7 @@ application-local.yaml
 application-local.properties
 
 /ui/build/
+/ui/packages/*/dist/
+/ui/packages/*/*.tsbuildinfo
 /app/workplace/
 /src/main/resources/console/

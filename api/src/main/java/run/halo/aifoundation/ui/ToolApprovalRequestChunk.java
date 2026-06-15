@@ -3,19 +3,22 @@ package run.halo.aifoundation.ui;
 import java.util.Map;
 
 /**
- * Stream chunk asking the application to approve or deny a tool call.
+ * Canonical tool lifecycle chunk requesting caller approval before execution.
  *
- * @param approvalId stable approval identifier
- * @param toolCallId tool call identifier
+ * @param approvalId approval request id
+ * @param toolCallId stable tool call id
  * @param toolName tool name
- * @param input proposed tool input
- * @param stepIndex generation step index
+ * @param input tool input awaiting approval
  * @param providerMetadata provider-specific metadata
  */
 public record ToolApprovalRequestChunk(String approvalId, String toolCallId, String toolName,
-                                       Map<String, Object> input, Integer stepIndex,
-                                       Map<String, Object> providerMetadata)
+                                       Object input, Map<String, Object> providerMetadata)
     implements UIMessageChunk {
+
+    public ToolApprovalRequestChunk {
+        providerMetadata = providerMetadata == null ? Map.of() : Map.copyOf(providerMetadata);
+    }
+
     @Override
     public String type() {
         return UIMessageChunkType.TOOL_APPROVAL_REQUEST;

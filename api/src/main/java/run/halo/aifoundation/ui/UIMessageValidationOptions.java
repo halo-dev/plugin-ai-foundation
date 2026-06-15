@@ -15,6 +15,8 @@ public final class UIMessageValidationOptions<M> {
     private final List<UIMessageMetadataValidator<M>> metadataValidators = new ArrayList<>();
     private final Map<String, List<UIMessageDataValidator<M>>> dataValidators =
         new LinkedHashMap<>();
+    private final Map<String, List<UIMessageToolValidator<M>>> namedToolValidators =
+        new LinkedHashMap<>();
     private final List<UIMessageToolValidator<M>> toolValidators = new ArrayList<>();
 
     /**
@@ -57,6 +59,23 @@ public final class UIMessageValidationOptions<M> {
         return this;
     }
 
+    /**
+     * Adds a validator for a named dynamic {@link ToolPart}.
+     *
+     * @param toolName tool name
+     * @param validator tool validator
+     * @return this options object
+     */
+    public UIMessageValidationOptions<M> toolValidator(String toolName,
+        UIMessageToolValidator<M> validator) {
+        if (toolName == null || toolName.isBlank()) {
+            throw new IllegalArgumentException("tool validator name must not be blank");
+        }
+        namedToolValidators.computeIfAbsent(toolName, ignored -> new ArrayList<>())
+            .add(Objects.requireNonNull(validator, "validator must not be null"));
+        return this;
+    }
+
     List<UIMessageMetadataValidator<M>> metadataValidators() {
         return metadataValidators;
     }
@@ -67,5 +86,9 @@ public final class UIMessageValidationOptions<M> {
 
     List<UIMessageToolValidator<M>> toolValidators() {
         return toolValidators;
+    }
+
+    Map<String, List<UIMessageToolValidator<M>>> namedToolValidators() {
+        return namedToolValidators;
     }
 }

@@ -2,12 +2,14 @@ package run.halo.aifoundation.ui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
 import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.tool.ToolApprovalResponse;
 
 /**
  * Converts persisted UI messages back into provider-neutral model messages.
@@ -111,6 +113,25 @@ public final class UIMessageConverters {
                 var part = message.parts().get(partIndex);
                 var context = new UIMessageConversionContext<>(messages, message, messageIndex,
                     part, partIndex);
+                if (isToolApprovalResponse(part)) {
+                    if (!assistantContent.isEmpty()) {
+                        emitted |= flushSegment(message, assistantContent, toolContent);
+                    }
+                    assistantContent.addAll(convertToolCall((ToolPart) part));
+                    assistantContent.add(convertToolApprovalRequest((ToolPart) part));
+                    emitted |= flushSegment(message, assistantContent, toolContent);
+                    toolContent.add(convertToolApprovalResponse((ToolPart) part));
+                    continue;
+                }
+                if (isTerminalToolPart(part)) {
+                    if (!toolContent.isEmpty()) {
+                        emitted |= flushSegment(message, assistantContent, toolContent);
+                    }
+                    assistantContent.addAll(convertToolCall((ToolPart) part));
+                    emitted |= flushSegment(message, assistantContent, toolContent);
+                    toolContent.addAll(convertToolOutput((ToolPart) part));
+                    continue;
+                }
                 var converted = convertPart(part, context);
                 if (isToolResponsePart(part)) {
                     toolContent.addAll(converted);
@@ -146,9 +167,21 @@ public final class UIMessageConverters {
         }
 
         private boolean isToolResponsePart(UIMessagePart part) {
-            return part instanceof ToolResultPart
-                || part instanceof ToolErrorPart
-                || part instanceof ToolApprovalResponsePart;
+            return isTerminalToolPart(part) || isToolApprovalResponse(part);
+        }
+
+        private boolean isToolApprovalResponse(UIMessagePart part) {
+            return part instanceof ToolPart tool
+                && (tool.state() == ToolPartState.APPROVAL_RESPONDED
+                    || tool.state() == ToolPartState.OUTPUT_DENIED)
+                && tool.approval() != null
+                && tool.approval().approved() != null;
+        }
+
+        private boolean isTerminalToolPart(UIMessagePart part) {
+            return part instanceof ToolPart tool
+                && (tool.state() == ToolPartState.OUTPUT_AVAILABLE
+                    || tool.state() == ToolPartState.OUTPUT_ERROR);
         }
 
         private List<ModelMessagePart> convertPart(UIMessagePart part,
@@ -163,51 +196,8 @@ public final class UIMessageConverters {
                     ? List.of(ModelMessagePart.text(text.text()))
                     : List.of();
             }
-            if (part instanceof ToolCallPart tool) {
-                return List.of(ModelMessagePart.builder()
-                    .type(PartType.TOOL_CALL)
-                    .toolCallId(tool.toolCallId())
-                    .toolName(tool.toolName())
-                    .input(tool.input())
-                    .build());
-            }
-            if (part instanceof ToolResultPart tool) {
-                return List.of(ModelMessagePart.builder()
-                    .type(PartType.TOOL_RESULT)
-                    .toolCallId(tool.toolCallId())
-                    .toolName(tool.toolName())
-                    .result(tool.result())
-                    .build());
-            }
-            if (part instanceof ToolErrorPart tool) {
-                return List.of(ModelMessagePart.builder()
-                    .type(PartType.TOOL_ERROR)
-                    .toolCallId(tool.toolCallId())
-                    .toolName(tool.toolName())
-                    .errorText(tool.errorText())
-                    .build());
-            }
-            if (part instanceof ToolApprovalRequestPart tool) {
-                return List.of(ModelMessagePart.builder()
-                    .type(PartType.TOOL_APPROVAL_REQUEST)
-                    .approvalId(tool.approvalId())
-                    .toolCallId(tool.toolCallId())
-                    .toolName(tool.toolName())
-                    .input(tool.input())
-                    .stepIndex(tool.stepIndex())
-                    .providerOptions(tool.providerMetadata())
-                    .build());
-            }
-            if (part instanceof ToolApprovalResponsePart tool) {
-                return List.of(ModelMessagePart.builder()
-                    .type(PartType.TOOL_APPROVAL_RESPONSE)
-                    .approvalId(tool.approvalId())
-                    .toolCallId(tool.toolCallId())
-                    .toolName(tool.toolName())
-                    .approved(tool.approved())
-                    .reason(tool.reason())
-                    .providerOptions(tool.providerMetadata())
-                    .build());
+            if (part instanceof ToolPart tool) {
+                return convertTool(tool, context);
             }
             if (part instanceof ReasoningPart reasoning) {
                 return convertReasoning(reasoning, context);
@@ -216,6 +206,73 @@ public final class UIMessageConverters {
                 return convertData(data, context);
             }
             return convertCustomOrUnsupported(part, context);
+        }
+
+        private List<ModelMessagePart> convertTool(ToolPart part,
+            UIMessageConversionContext<M> context) {
+            if (part.state() == null) {
+                warning(context.message(), part, "tool.pending-skipped",
+                    "UI tool part without a lifecycle state was skipped.");
+                return List.of();
+            }
+            return switch (part.state()) {
+                case OUTPUT_AVAILABLE, OUTPUT_ERROR -> convertToolOutput(part);
+                case INPUT_STREAMING, INPUT_AVAILABLE, APPROVAL_REQUESTED, APPROVAL_RESPONDED,
+                     OUTPUT_DENIED -> {
+                    warning(context.message(), part, "tool.pending-skipped",
+                        "Pending UI tool part was skipped.");
+                    yield List.of();
+                }
+            };
+        }
+
+        private List<ModelMessagePart> convertToolCall(ToolPart part) {
+            return List.of(ModelMessagePart.builder()
+                .type(PartType.TOOL_CALL)
+                .toolCallId(part.toolCallId())
+                .toolName(part.toolName())
+                .input(inputMap(part.input()))
+                .build());
+        }
+
+        private List<ModelMessagePart> convertToolOutput(ToolPart part) {
+            return switch (part.state()) {
+                case OUTPUT_AVAILABLE -> List.of(ModelMessagePart.builder()
+                    .type(PartType.TOOL_RESULT)
+                    .toolCallId(part.toolCallId())
+                    .toolName(part.toolName())
+                    .result(part.output())
+                    .build());
+                case OUTPUT_ERROR -> List.of(ModelMessagePart.builder()
+                    .type(PartType.TOOL_ERROR)
+                    .toolCallId(part.toolCallId())
+                    .toolName(part.toolName())
+                    .errorText(part.errorText())
+                    .build());
+                default -> List.of();
+            };
+        }
+
+        private ModelMessagePart convertToolApprovalResponse(ToolPart part) {
+            return ModelMessagePart.toolApprovalResponse(ToolApprovalResponse.builder()
+                .approvalId(part.approval().id())
+                .toolCallId(part.toolCallId())
+                .toolName(part.toolName())
+                .approved(part.approval().approved())
+                .reason(part.approval().reason())
+                .providerMetadata(part.providerMetadata())
+                .build());
+        }
+
+        private ModelMessagePart convertToolApprovalRequest(ToolPart part) {
+            return ModelMessagePart.builder()
+                .type(PartType.TOOL_APPROVAL_REQUEST)
+                .approvalId(part.approval().id())
+                .toolCallId(part.toolCallId())
+                .toolName(part.toolName())
+                .input(inputMap(part.input()))
+                .providerOptions(part.providerMetadata())
+                .build();
         }
 
         private List<ModelMessagePart> convertReasoning(ReasoningPart part,
@@ -345,14 +402,19 @@ public final class UIMessageConverters {
         if (part instanceof DataPart) {
             return "data.converter-missing";
         }
+        if (part instanceof ToolPart tool
+            && (tool.state() == ToolPartState.INPUT_STREAMING
+                || tool.state() == ToolPartState.INPUT_AVAILABLE
+                || tool.state() == ToolPartState.APPROVAL_REQUESTED
+                || tool.state() == ToolPartState.APPROVAL_RESPONDED
+                || tool.state() == ToolPartState.OUTPUT_DENIED)) {
+            return "tool.pending-skipped";
+        }
         if (part instanceof SourceUrlPart) {
             return "source.skipped";
         }
         if (part instanceof FilePart) {
             return "file.skipped";
-        }
-        if (part instanceof ToolApprovalRequestPart) {
-            return "tool.approval-request-skipped";
         }
         if (part instanceof ReasoningPart) {
             return "reasoning.provider-state-unsupported";
@@ -368,7 +430,7 @@ public final class UIMessageConverters {
             return value.id();
         }
         if (part instanceof DataPart value) {
-            return value.name();
+            return value.id();
         }
         if (part instanceof SourceUrlPart value) {
             return value.sourceId();
@@ -376,25 +438,21 @@ public final class UIMessageConverters {
         if (part instanceof FilePart value) {
             return value.fileId();
         }
-        if (part instanceof ToolCallPart value) {
+        if (part instanceof ToolPart value) {
             return value.toolCallId();
-        }
-        if (part instanceof ToolResultPart value) {
-            return value.toolCallId();
-        }
-        if (part instanceof ToolErrorPart value) {
-            return value.toolCallId();
-        }
-        if (part instanceof ToolApprovalRequestPart value) {
-            return value.toolCallId();
-        }
-        if (part instanceof ToolApprovalResponsePart value) {
-            return value.approvalId();
         }
         return null;
     }
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> inputMap(Object input) {
+        if (input instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
     }
 }
