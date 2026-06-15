@@ -6,6 +6,7 @@ export * from './ai-provider';
 export * from './ai-provider-list';
 export * from './ai-provider-spec';
 export * from './ai-provider-status';
+export * from './caller-plugin-info';
 export * from './copy-operation';
 export * from './default-model-slots';
 export * from './discovered-model-item';

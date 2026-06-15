@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.24.2"
+    "version" : "2.25.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:46055",
+    "url" : "http://localhost:43123",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -854,6 +854,28 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/observed-caller-plugins" : {
+      "get" : {
+        "description" : "List caller plugins observed by AI Foundation since startup.",
+        "operationId" : "ListObservedCallerPlugins",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/CallerPluginInfo"
+                  }
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/CallerPlugin" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/provider-types" : {
       "get" : {
         "description" : "List all available provider types with metadata.",
@@ -1326,6 +1348,44 @@
             "type" : "string",
             "description" : "Current phase of the provider",
             "enum" : [ "UNKNOWN", "OK", "ERROR" ]
+          }
+        }
+      },
+      "CallerPluginInfo" : {
+        "type" : "object",
+        "properties" : {
+          "authorName" : {
+            "type" : "string"
+          },
+          "authorWebsite" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "detected" : {
+            "type" : "boolean"
+          },
+          "detectionSource" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "homepage" : {
+            "type" : "string"
+          },
+          "issues" : {
+            "type" : "string"
+          },
+          "pluginName" : {
+            "type" : "string"
+          },
+          "repo" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
           }
         }
       },

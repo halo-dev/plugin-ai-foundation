@@ -2,6 +2,7 @@ import { axiosInstance } from '@halo-dev/api-client'
 import {
   AiModelV1alpha1Api,
   AiProviderV1alpha1Api,
+  ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApi,
   ConsoleApiAifoundationHaloRunV1alpha1DefaultModelSlotApi,
   ConsoleApiAifoundationHaloRunV1alpha1ModelApi,
   ConsoleApiAifoundationHaloRunV1alpha1ModelOptionApi,
@@ -15,6 +16,11 @@ const aiCoreApiClient = {
 }
 
 const aiConsoleApiClient = {
+  callerPlugin: new ConsoleApiAifoundationHaloRunV1alpha1CallerPluginApi(
+    undefined,
+    '',
+    axiosInstance,
+  ),
   defaultModelSlot: new ConsoleApiAifoundationHaloRunV1alpha1DefaultModelSlotApi(
     undefined,
     '',

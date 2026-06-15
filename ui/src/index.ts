@@ -58,6 +58,14 @@ export default definePlugin({
               ),
           },
           {
+            path: 'callers',
+            name: AI_FOUNDATION_ROUTE_NAMES.CALLERS,
+            component: () =>
+              import(
+                /* webpackChunkName: "AiFoundationCallers" */ './views/CallerPluginListView.vue'
+              ),
+          },
+          {
             path: 'test',
             name: AI_FOUNDATION_ROUTE_NAMES.TEST,
             component: () =>
