@@ -33,6 +33,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "tsc -p tsconfig.build.json",
     "test": "rstest run --config rstest.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
