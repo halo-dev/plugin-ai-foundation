@@ -3,11 +3,12 @@ package run.halo.aifoundation.ui;
 /**
  * One frontend-facing event in the Halo UI message stream protocol.
  */
-public sealed interface UIMessageChunk permits StartChunk, TextStartChunk, TextDeltaChunk,
-    TextEndChunk, ReasoningStartChunk, ReasoningDeltaChunk, ReasoningEndChunk, DataChunk,
-    MessageMetadataChunk, SourceUrlChunk, FileChunk, ToolInputStartChunk, ToolInputDeltaChunk,
-    ToolCallChunk, ToolResultChunk, ToolErrorChunk, ToolApprovalRequestChunk, FinishStepChunk,
-    FinishChunk, ErrorChunk, AbortChunk {
+public sealed interface UIMessageChunk permits StartChunk, StartStepChunk, TextStartChunk,
+    TextDeltaChunk, TextEndChunk, ReasoningStartChunk, ReasoningDeltaChunk, ReasoningEndChunk,
+    DataChunk, MessageMetadataChunk, SourceUrlChunk, FileChunk, ToolInputStartChunk,
+    ToolInputDeltaChunk, ToolInputAvailableChunk, ToolOutputAvailableChunk, ToolOutputErrorChunk,
+    ToolApprovalRequestChunk, ToolApprovalResponseChunk, ToolChunk, FinishStepChunk, FinishChunk,
+    ErrorChunk, AbortChunk {
 
     /**
      * Stable protocol discriminator for this chunk.

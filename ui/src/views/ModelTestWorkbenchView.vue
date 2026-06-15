@@ -4,29 +4,31 @@ import { ModelOptionModelTypeEnum, type TestEmbeddingResponse } from '@/api/gene
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import {
-  applyWorkbenchStreamPart,
-  applyWorkbenchUIMessageChunk,
+  applyWorkbenchUIMessageSnapshot,
   buildOutputSpec,
   buildReasoningOptions,
-  buildTestChatRequest,
-  buildTestUiMessageChatRequest,
   createAssistantUIMessage,
   createUserUIMessage,
   parseProviderOptionsJson,
-  readTestChatStream,
-  readTestUiMessageChatStream,
-  type ChatStreamProtocol,
-  type GenerateTextRequest,
+  testUiMessageChatStreamUrl,
+  workbenchDataPartSchemas,
+  workbenchMessageMetadataSchema,
   type OutputMode,
   type ReasoningEffort,
   type ReasoningMode,
-  type TextStreamPart,
-  type UIMessageChunk,
   type UIMessagePart,
   type WorkbenchMessage,
+  type WorkbenchWarning,
 } from '@/utils/model-test-workbench'
 import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
 import { utils } from '@halo-dev/ui-shared'
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+  useChat,
+  type UIMessage as HaloUIMessage,
+  type UIMessagePart as HaloUIMessagePart,
+} from '@halo-dev/ai-ui-vue'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
@@ -54,7 +56,6 @@ const {
 
 const selectedModelName = useRouteQuery<string | undefined>('model')
 const testMode = shallowRef<'chat' | 'embedding'>('chat')
-const chatProtocol = shallowRef<ChatStreamProtocol>('text')
 
 const messages = ref<WorkbenchMessage[]>([])
 const input = shallowRef('')
@@ -105,7 +106,33 @@ const embeddingResult = shallowRef<TestEmbeddingResponse | undefined>()
 const embeddingError = shallowRef('')
 const isEmbeddingTesting = shallowRef(false)
 
-let abortController: AbortController | null = null
+let activeUiMessageModelName: string | undefined
+let activeUiMessageWorkbenchId: string | undefined
+
+const uiChat = useChat<Record<string, unknown>>({
+  id: 'model-test-workbench-ui-message',
+  transport: new DefaultChatTransport({
+    api: '',
+    prepareSendMessagesRequest: ({ body }) => {
+      if (!activeUiMessageModelName) {
+        throw new Error('未选择模型')
+      }
+      return {
+        api: testUiMessageChatStreamUrl(activeUiMessageModelName, chatStreamOptions()),
+        body,
+      }
+    },
+  }),
+  generateId: () => activeUiMessageWorkbenchId || utils.id.uuid(),
+  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  messageMetadataSchema: workbenchMessageMetadataSchema,
+  dataPartSchemas: workbenchDataPartSchemas,
+  onFinish: ({ terminal }) => {
+    if (activeUiMessageWorkbenchId && terminal.errorText) {
+      appendAssistantError(activeUiMessageWorkbenchId, `请求失败: ${terminal.errorText}`)
+    }
+  },
+})
 
 const chatModels = computed(() => {
   return (modelOptions.value || []).filter((model) => {
@@ -184,6 +211,14 @@ watch(
   { deep: true },
 )
 
+watch(
+  uiChat.messages,
+  (uiMessages) => {
+    syncActiveUiMessageSnapshot(uiMessages ?? [])
+  },
+  { deep: true },
+)
+
 async function sendMessage(content?: string) {
   const text = (content ?? input.value).trim()
   const model = selectedModel.value
@@ -218,62 +253,19 @@ async function sendMessage(content?: string) {
     id: utils.id.uuid(),
     role: 'user',
     content: text,
-  }
-  if (chatProtocol.value === 'ui-message') {
-    userMessage.uiMessage = createUserUIMessage(userMessage.id, text)
+    uiMessage: createUserUIMessage(utils.id.uuid(), text),
   }
   messages.value.push(userMessage)
   input.value = ''
   shouldAutoScroll.value = true
 
   const parameters = buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
-
-  if (chatProtocol.value === 'ui-message') {
-    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters)
-    await streamUiMessageChatResponse(requestBody, model.name)
-    return
-  }
-
-  const requestBody = buildTestChatRequest(messages.value, parameters)
-  await streamChatResponse(requestBody, model.name)
-}
-
-async function streamChatResponse(requestBody: GenerateTextRequest, modelName: string) {
-  const model = activeModels.value.find((m) => m.name === modelName)
-  if (!model) return
-
-  const assistantMessage = createAssistantMessage(model)
-  messages.value.push(assistantMessage)
-
-  const controller = new AbortController()
-  abortController = controller
-  isStreaming.value = true
-
-  try {
-    await readTestChatStream({
-      modelName,
-      requestBody,
-      signal: controller.signal,
-      streamOptions: chatStreamOptions(),
-      onChunks: (chunks) => handleChunks(assistantMessage.id, chunks),
-    })
-    finishAssistantMessage(assistantMessage.id, 'done')
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') {
-      return
-    }
-    appendAssistantError(assistantMessage.id, `请求失败: ${(e as Error).message}`)
-  } finally {
-    if (abortController === controller) {
-      isStreaming.value = false
-      abortController = null
-    }
-  }
+  await streamUiMessageChatResponse(model.name, parameters)
 }
 
 async function streamUiMessageChatResponse(
-  requestBody: ReturnType<typeof buildTestUiMessageChatRequest>,
   modelName: string,
+  parameters: ReturnType<typeof buildChatParameters>,
   targetMessage?: WorkbenchMessage,
 ) {
   const model = activeModels.value.find((m) => m.name === modelName)
@@ -294,18 +286,17 @@ async function streamUiMessageChatResponse(
     messages.value.push(assistantMessage)
   }
 
-  const controller = new AbortController()
-  abortController = controller
+  activeUiMessageModelName = modelName
+  activeUiMessageWorkbenchId = assistantMessage.id
+  uiChat.setMessages(workbenchMessagesToHalo(messages.value.filter((item) => item !== assistantMessage)))
   isStreaming.value = true
 
   try {
-    await readTestUiMessageChatStream({
-      modelName,
-      requestBody,
-      signal: controller.signal,
-      streamOptions: chatStreamOptions(),
-      onChunks: (chunks) => handleUIMessageChunks(assistantMessage.id, chunks),
-    })
+    await uiChat.sendMessage(undefined, { body: uiMessageRequestBody(parameters) })
+    if (uiChat.error.value) {
+      appendAssistantError(assistantMessage.id, `请求失败: ${uiChat.error.value.message}`)
+      return
+    }
     finishAssistantMessage(assistantMessage.id, 'done')
   } catch (e) {
     if ((e as Error).name === 'AbortError') {
@@ -313,10 +304,51 @@ async function streamUiMessageChatResponse(
     }
     appendAssistantError(assistantMessage.id, `请求失败: ${(e as Error).message}`)
   } finally {
-    if (abortController === controller) {
-      isStreaming.value = false
-      abortController = null
+    isStreaming.value = false
+    activeUiMessageModelName = undefined
+    activeUiMessageWorkbenchId = undefined
+  }
+}
+
+async function regenerateUiMessageChatResponse(
+  targetMessage: WorkbenchMessage,
+  modelName: string,
+  parameters: ReturnType<typeof buildChatParameters>,
+  messageId: string,
+) {
+  const model = activeModels.value.find((m) => m.name === modelName)
+  if (!model) return
+
+  uiChat.setMessages(workbenchMessagesToHalo(messages.value))
+  targetMessage.uiMessage = createAssistantUIMessage(messageId)
+  targetMessage.content = ''
+  targetMessage.reasoningContent = undefined
+  targetMessage.reasoningState = undefined
+  targetMessage.toolEvents = undefined
+  targetMessage.transientData = undefined
+  targetMessage.warnings = undefined
+  targetMessage.state = 'streaming'
+
+  activeUiMessageModelName = modelName
+  activeUiMessageWorkbenchId = targetMessage.id
+  isStreaming.value = true
+
+  try {
+    await uiChat.regenerate({ messageId, body: uiMessageRequestBody(parameters) })
+    if (uiChat.error.value) {
+      appendAssistantError(targetMessage.id, `请求失败: ${uiChat.error.value.message}`)
+      return
     }
+    finishAssistantMessage(targetMessage.id, 'done')
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') {
+      return
+    }
+    appendAssistantError(targetMessage.id, `请求失败: ${(e as Error).message}`)
+  } finally {
+    isStreaming.value = false
+    activeUiMessageModelName = undefined
+    activeUiMessageWorkbenchId = undefined
   }
 }
 
@@ -375,45 +407,12 @@ async function handleRegenerate(messageIndex: number) {
 
   const parameters = buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
 
-  if (chatProtocol.value === 'ui-message') {
-    const targetMessage = messages.value[messageIndex]
-    const messageId = targetMessage?.uiMessage?.id
-    if (!targetMessage || targetMessage.role !== 'assistant' || !messageId) {
-      return
-    }
-    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters, {
-      trigger: 'regenerate-message',
-      messageId,
-    })
-    await streamUiMessageChatResponse(requestBody, model.name, targetMessage)
+  const targetMessage = messages.value[messageIndex]
+  const messageId = targetMessage?.uiMessage?.id
+  if (!targetMessage || targetMessage.role !== 'assistant' || !messageId) {
     return
   }
-
-  messages.value = messages.value.slice(0, messageIndex)
-
-  const requestBody = buildTestChatRequest(messages.value, parameters)
-
-  await streamChatResponse(requestBody, model.name)
-}
-
-function handleChunks(messageId: string, chunks: TextStreamPart[]) {
-  const message = messages.value.find((item) => item.id === messageId)
-  if (!message) {
-    return
-  }
-  for (const chunk of chunks) {
-    applyWorkbenchStreamPart(message, chunk)
-  }
-}
-
-function handleUIMessageChunks(messageId: string, chunks: UIMessageChunk[]) {
-  const message = messages.value.find((item) => item.id === messageId)
-  if (!message) {
-    return
-  }
-  for (const chunk of chunks) {
-    applyWorkbenchUIMessageChunk(message, chunk)
-  }
+  await regenerateUiMessageChatResponse(targetMessage, model.name, parameters, messageId)
 }
 
 function chatStreamOptions() {
@@ -439,87 +438,49 @@ async function handleToolApproval(options: {
   }
   const message = messages.value.find((item) => item.id === options.messageId)
   const event = message?.toolEvents?.find((item) => item.id === options.eventId)
-  if (!message || !event || event.type !== 'tool-approval-request' || !event.approvalId) {
+  if (
+    !message ||
+    !isLastAssistantMessage(message) ||
+    !event ||
+    event.type !== 'tool-approval-request' ||
+    !event.approvalId ||
+    event.approvalStatus !== 'pending'
+  ) {
     return
   }
-  if (chatProtocol.value === 'ui-message') {
-    event.approvalStatus = options.approved ? 'approved' : 'denied'
-    message.toolEvents = [...(message.toolEvents || [])]
-    appendUIMessageToolPart(message, 'tool-approval-response', event.approvalId, {
-      type: 'tool-approval-response',
-      approvalId: event.approvalId,
-      toolCallId: event.toolCallId,
-      toolName: event.toolName,
-      approved: options.approved,
-      reason: options.approved
-        ? 'Approved from console test page'
-        : 'Denied from console test page',
-    })
-    const parameters = buildValidatedChatParameters()
-    if (!parameters) {
-      return
-    }
-    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters)
-    await streamUiMessageChatResponse(requestBody, model.name)
+  const parameters = buildValidatedChatParameters()
+  if (!parameters) {
     return
   }
+  activeUiMessageModelName = model.name
+  activeUiMessageWorkbenchId = message.id
+  uiChat.setMessages(workbenchMessagesToHalo(messages.value))
+  isStreaming.value = true
 
-  event.approvalStatus = options.approved ? 'approved' : 'denied'
-  message.toolEvents = [...(message.toolEvents || [])]
-  const approvalResponseMessage = {
-    role: 'TOOL' as const,
-    content: [
+  try {
+    await uiChat.addToolApprovalResponse(
       {
-        type: 'tool-approval-response' as const,
-        approvalId: event.approvalId,
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
+        id: event.approvalId,
         approved: options.approved,
         reason: options.approved
           ? 'Approved from console test page'
           : 'Denied from console test page',
       },
-    ],
+      { body: uiMessageRequestBody(parameters) },
+    )
+    if (uiChat.error.value) {
+      appendAssistantError(message.id, `请求失败: ${uiChat.error.value.message}`)
+      return
+    }
+    syncWorkbenchMessageFromUiChat(message)
+    finishAssistantMessage(message.id, 'done')
+  } catch (e) {
+    appendAssistantError(message.id, `请求失败: ${(e as Error).message}`)
+  } finally {
+    isStreaming.value = false
+    activeUiMessageModelName = undefined
+    activeUiMessageWorkbenchId = undefined
   }
-  message.followingMessages = [
-    ...(message.followingMessages || []).filter(
-      (item) =>
-        !item.content.some(
-          (part) => part.type === 'tool-approval-response' && part.approvalId === event.approvalId,
-        ),
-    ),
-    approvalResponseMessage,
-  ]
-
-  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
-  if (providerOptions.error) {
-    providerOptionsError.value = providerOptions.error
-    return
-  }
-  providerOptionsError.value = ''
-  const headers = parseStringMapJson(chatHeadersText.value)
-  if (headers.error) {
-    chatHeadersError.value = headers.error
-    return
-  }
-  chatHeadersError.value = ''
-  const outputSpec = buildOutputSpec({
-    mode: outputMode.value,
-    schemaText: outputSchemaText.value,
-    choicesText: outputChoicesText.value,
-  })
-  if (outputSpec.error) {
-    outputError.value = outputSpec.error
-    return
-  }
-  outputError.value = ''
-
-  const requestBody = buildTestChatRequest(
-    messages.value,
-    buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
-  )
-
-  await streamChatResponse(requestBody, model.name)
 }
 
 async function handleExternalToolResult(options: {
@@ -572,113 +533,137 @@ async function continueExternalTool(
   }
   const message = messages.value.find((item) => item.id === messageId)
   const event = message?.toolEvents?.find((item) => item.id === eventId)
-  if (!message || !event || event.type !== 'tool-call' || !event.toolCallId || !event.toolName) {
+  if (
+    !message ||
+    !isLastAssistantMessage(message) ||
+    !event ||
+    event.type !== 'tool-call' ||
+    !event.toolCallId ||
+    !event.toolName ||
+    event.externalStatus !== 'pending'
+  ) {
     return
   }
-  if (chatProtocol.value === 'ui-message') {
-    event.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
-    message.toolEvents = [...(message.toolEvents || [])]
-    appendUIMessageToolPart(message, payload.type, event.toolCallId, {
-      type: payload.type,
-      toolCallId: event.toolCallId,
-      toolName: event.toolName,
-      ...(payload.type === 'tool-result'
-        ? { result: payload.result }
-        : { errorText: payload.errorText }),
-    })
-    const parameters = buildValidatedChatParameters()
-    if (!parameters) {
-      return
-    }
-    const requestBody = buildTestUiMessageChatRequest(messages.value, parameters)
-    await streamUiMessageChatResponse(requestBody, model.name)
+  const parameters = buildValidatedChatParameters()
+  if (!parameters) {
     return
   }
-
-  event.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
-  message.toolEvents = [...(message.toolEvents || [])]
-  const externalToolMessage = {
-    role: 'TOOL' as const,
-    content: [
-      payload.type === 'tool-result'
-        ? {
-            type: 'tool-result' as const,
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            result: payload.result,
-          }
-        : {
-            type: 'tool-error' as const,
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            errorText: payload.errorText,
-          },
-    ],
-  }
-  message.followingMessages = [
-    ...(message.followingMessages || []).filter(
-      (item) =>
-        !item.content.some(
-          (part) =>
-            (part.type === 'tool-result' || part.type === 'tool-error') &&
-            part.toolCallId === event.toolCallId,
-        ),
-    ),
-    externalToolMessage,
-  ]
-
-  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
-  if (providerOptions.error) {
-    providerOptionsError.value = providerOptions.error
-    return
-  }
-  providerOptionsError.value = ''
-  const headers = parseStringMapJson(chatHeadersText.value)
-  if (headers.error) {
-    chatHeadersError.value = headers.error
-    return
-  }
-  chatHeadersError.value = ''
-  const outputSpec = buildOutputSpec({
-    mode: outputMode.value,
-    schemaText: outputSchemaText.value,
-    choicesText: outputChoicesText.value,
-  })
-  if (outputSpec.error) {
-    outputError.value = outputSpec.error
-    return
-  }
-  outputError.value = ''
-
-  const requestBody = buildTestChatRequest(
-    messages.value,
-    buildChatParameters(providerOptions.value, headers.value, outputSpec.value),
+  uiChat.setMessages(workbenchMessagesToHalo(messages.value))
+  await uiChat.addToolOutput(
+    payload.type === 'tool-result'
+      ? { toolCallId: event.toolCallId, output: payload.result }
+      : { toolCallId: event.toolCallId, state: 'output-error', errorText: payload.errorText },
   )
-
-  await streamChatResponse(requestBody, model.name)
+  syncWorkbenchMessageFromUiChat(message)
+  const updatedEvent = message.toolEvents?.find((item) => item.id === eventId)
+  if (updatedEvent) {
+    updatedEvent.externalStatus = payload.type === 'tool-result' ? 'completed' : 'failed'
+    message.toolEvents = [...(message.toolEvents || [])]
+  }
+  await streamUiMessageChatResponse(model.name, parameters)
 }
 
-function appendUIMessageToolPart(
+function isLastAssistantMessage(message: WorkbenchMessage) {
+  return [...messages.value].reverse().find((item) => item.role === 'assistant')?.id === message.id
+}
+
+function syncActiveUiMessageSnapshot(uiMessages: readonly unknown[]) {
+  if (!activeUiMessageWorkbenchId) {
+    return
+  }
+  const target = messages.value.find((item) => item.id === activeUiMessageWorkbenchId)
+  const assistant = [...uiMessages]
+    .reverse()
+    .find((item): item is HaloUIMessage<Record<string, unknown>> => {
+      return (item as HaloUIMessage<Record<string, unknown>> | undefined)?.role === 'assistant'
+    })
+  if (!target || !assistant) {
+    return
+  }
+  applyWorkbenchUIMessageSnapshot(target, haloMessageToWorkbench(assistant), 'streaming')
+}
+
+function syncWorkbenchMessageFromUiChat(message: WorkbenchMessage) {
+  const uiMessageId = message.uiMessage?.id
+  if (!uiMessageId) {
+    return
+  }
+  const next = (uiChat.messages.value ?? []).find((item) => item.id === uiMessageId)
+  if (next) {
+    applyWorkbenchUIMessageSnapshot(
+      message,
+      haloMessageToWorkbench(next as unknown as HaloUIMessage<Record<string, unknown>>),
+      message.state,
+    )
+  }
+}
+
+function workbenchMessagesToHalo(items: WorkbenchMessage[]): HaloUIMessage<Record<string, unknown>>[] {
+  return items
+    .map(workbenchMessageToHalo)
+    .filter((message): message is HaloUIMessage<Record<string, unknown>> => !!message)
+}
+
+function workbenchMessageToHalo(
   message: WorkbenchMessage,
-  type: UIMessagePart['type'],
-  key: string,
-  part: UIMessagePart,
-) {
-  message.uiMessage ||= createAssistantUIMessage(message.id)
-  message.uiMessage.parts = [
-    ...message.uiMessage.parts.filter((item) => {
-      if (type === 'tool-approval-response') {
-        return item.type !== type || item.approvalId !== key
-      }
-      if (type === 'tool-result' || type === 'tool-error') {
-        return (
-          item.toolCallId !== key || (item.type !== 'tool-result' && item.type !== 'tool-error')
-        )
-      }
-      return item.type !== type || item.toolCallId !== key
-    }),
-    part,
-  ]
+): HaloUIMessage<Record<string, unknown>> | undefined {
+  if (message.uiMessage?.parts.length) {
+    return {
+      id: message.uiMessage.id,
+      role: message.uiMessage.role === 'ASSISTANT' ? 'assistant' : 'user',
+      parts: message.uiMessage.parts.map(workbenchPartToHalo) as HaloUIMessagePart[],
+      metadata: message.uiMessage.metadata,
+    }
+  }
+  const content = message.content.trim()
+  if (!content || (message.role === 'assistant' && message.state === 'error')) {
+    return undefined
+  }
+  return {
+    id: message.id,
+    role: message.role,
+    parts: [{ type: 'text', id: `${message.id}-text`, text: content }],
+  }
+}
+
+function workbenchPartToHalo(part: UIMessagePart): HaloUIMessagePart {
+  if (part.type === 'file') {
+    return { ...part, id: String(part.id || part.fileId || utils.id.uuid()) } as HaloUIMessagePart
+  }
+  return { ...part } as HaloUIMessagePart
+}
+
+function haloMessageToWorkbench(
+  message: HaloUIMessage<Record<string, unknown>>,
+): NonNullable<WorkbenchMessage['uiMessage']> {
+  return {
+    id: message.id,
+    role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
+    parts: message.parts.map(haloPartToWorkbench),
+    metadata: message.metadata,
+  }
+}
+
+function haloPartToWorkbench(part: HaloUIMessagePart): UIMessagePart {
+  if (part.type === 'file') {
+    return { ...part, fileId: part.id } as UIMessagePart
+  }
+  return { ...part } as UIMessagePart
+}
+
+function uiMessageRequestBody(parameters: ReturnType<typeof buildChatParameters>) {
+  return {
+    system: parameters.systemPrompt?.trim() || undefined,
+    temperature: parameters.temperature,
+    topP: parameters.topP,
+    maxOutputTokens: parameters.maxOutputTokens,
+    seed: parameters.seed,
+    maxRetries: parameters.maxRetries,
+    reasoning: parameters.reasoning,
+    providerOptions: parameters.providerOptions,
+    headers: parameters.headers,
+    output: parameters.output,
+  }
 }
 
 function buildValidatedChatParameters(): ReturnType<typeof buildChatParameters> | undefined {
@@ -743,7 +728,7 @@ function buildChatParameters(
 
 function appendAssistantWarnings(
   messageId: string,
-  warnings: NonNullable<TextStreamPart['warnings']>,
+  warnings: WorkbenchWarning[],
 ) {
   const message = messages.value.find((item) => item.id === messageId)
   if (message) {
@@ -754,7 +739,13 @@ function appendAssistantWarnings(
 function appendAssistantError(messageId: string, content: string) {
   const message = messages.value.find((item) => item.id === messageId)
   if (message) {
-    message.content += content
+    const normalizedContent = content.trim()
+    if (message.state === 'error' && message.content.includes(normalizedContent)) {
+      return
+    }
+    message.content = message.content.trim()
+      ? `${message.content.trim()}\n\n${normalizedContent}`
+      : normalizedContent
     message.state = 'error'
     if (message.reasoningState === 'streaming') {
       message.reasoningState = 'done'
@@ -773,23 +764,17 @@ function finishAssistantMessage(messageId: string, state: WorkbenchMessage['stat
 }
 
 function stopGeneration() {
-  abortCurrentRequest(true)
-}
-
-function abortCurrentRequest(markStopped: boolean) {
-  const controller = abortController
-  controller?.abort()
+  uiChat.stop()
   const streamingMessage = [...messages.value].reverse().find((item) => item.state === 'streaming')
-  if (markStopped && streamingMessage) {
+  if (streamingMessage) {
     streamingMessage.state = 'stopped'
     if (streamingMessage.reasoningState === 'streaming') {
       streamingMessage.reasoningState = 'done'
     }
   }
-  if (controller && abortController === controller) {
-    isStreaming.value = false
-    abortController = null
-  }
+  isStreaming.value = false
+  activeUiMessageModelName = undefined
+  activeUiMessageWorkbenchId = undefined
 }
 
 function clearMessages() {
@@ -797,6 +782,7 @@ function clearMessages() {
     stopGeneration()
   }
   messages.value = []
+  uiChat.setMessages([])
   shouldAutoScroll.value = true
 }
 
@@ -914,7 +900,7 @@ async function runEmbeddingTest() {
 }
 
 onBeforeUnmount(() => {
-  abortCurrentRequest(false)
+  uiChat.stop()
 })
 </script>
 
@@ -999,38 +985,6 @@ onBeforeUnmount(() => {
                 >
                   <RiStackLine class=":uno: size-3.5" />
                   嵌入
-                </button>
-              </div>
-
-              <div
-                v-if="testMode === 'chat'"
-                class=":uno: h-9 inline-flex flex-none items-center border border-slate-200 rounded-lg bg-white !p-0.5"
-              >
-                <button
-                  type="button"
-                  class=":uno: h-7 inline-flex items-center rounded-md text-xs font-medium transition-all !px-3"
-                  :class="
-                    chatProtocol === 'text'
-                      ? ':uno: bg-slate-900 text-white shadow-sm'
-                      : ':uno: text-slate-500 hover:text-slate-800'
-                  "
-                  :disabled="isStreaming"
-                  @click="chatProtocol = 'text'"
-                >
-                  Text
-                </button>
-                <button
-                  type="button"
-                  class=":uno: h-7 inline-flex items-center rounded-md text-xs font-medium transition-all !px-3"
-                  :class="
-                    chatProtocol === 'ui-message'
-                      ? ':uno: bg-slate-900 text-white shadow-sm'
-                      : ':uno: text-slate-500 hover:text-slate-800'
-                  "
-                  :disabled="isStreaming"
-                  @click="chatProtocol = 'ui-message'"
-                >
-                  UI Message
                 </button>
               </div>
 

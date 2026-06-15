@@ -186,3 +186,82 @@ The model test workbench SHALL provide a focused end-to-end flow for exercising 
 - **WHEN** the administrator disables the repair test option
 - **THEN** the backend test endpoint SHALL NOT inject the repair test tool
 - **AND** it SHALL NOT configure repair logic for the test request
+
+### Requirement: Workbench dogfoods ai-ui-vue chat runtime
+The model test workbench SHALL use `@halo-dev/ai-ui-vue` for its UIMessage chat stream state and parsing path while preserving the existing console UI.
+
+#### Scenario: Workbench uses package chat runtime
+- **WHEN** the administrator sends a chat test message through the workbench with the UIMessage protocol selected
+- **THEN** the workbench SHALL use the package `useChat` runtime or transport to send a `UIMessageChatRequest`
+- **AND** it SHALL consume the Halo UIMessage stream response through the package stream parser
+
+#### Scenario: Workbench preserves UI rendering
+- **WHEN** the workbench is migrated to the package runtime
+- **THEN** the visible console layout, Chinese labels, Markdown rendering, and Halo component usage SHALL remain owned by the console UI
+- **AND** the package SHALL NOT introduce visual components for this migration
+
+#### Scenario: Workbench preserves cancellation
+- **WHEN** the administrator stops an in-progress package-backed chat response
+- **THEN** the active stream request SHALL be aborted
+- **AND** the partial assistant message SHALL remain visible
+
+#### Scenario: Workbench preserves tool continuation
+- **WHEN** the administrator supplies external tool results, tool errors, or approval responses in UIMessage protocol mode
+- **THEN** the workbench SHALL use `useChat` tool continuation helpers or equivalent package state mutations to persist the matching assistant parts
+- **AND** it SHALL resubmit the updated conversation through the Halo UIMessage chat endpoint
+
+### Requirement: Workbench Dogfoods Public UI Message Runtime
+The console model test workbench SHALL exercise the public UI message runtime through the same `useChat` path intended for consumer Vue applications.
+
+#### Scenario: UI message mode owns send through useChat
+- **WHEN** the administrator sends a message in UI message mode
+- **THEN** the workbench SHALL call the public `useChat` send action
+- **AND** it SHALL NOT bypass the runtime by manually posting the chat request and reducing chunks with private workbench-only code
+
+#### Scenario: UI message mode owns stop through useChat
+- **WHEN** the administrator stops an in-progress UI message stream
+- **THEN** the workbench SHALL call the public `useChat` stop action
+- **AND** the partial assistant message SHALL remain projected from the runtime message state
+
+#### Scenario: UI message mode owns regeneration through useChat
+- **WHEN** the administrator regenerates an assistant message in UI message mode
+- **THEN** the workbench SHALL call the public `useChat` regenerate action
+- **AND** the backend SHALL receive trigger `regenerate-message` with the target message id
+
+#### Scenario: Tool output flows through useChat
+- **WHEN** the administrator supplies a result or error for a pending tool in UI message mode
+- **THEN** the workbench SHALL call `addToolOutput` from the public runtime
+- **AND** automatic continuation SHALL use the runtime `sendAutomaticallyWhen` path
+
+#### Scenario: Tool approval response flows through useChat
+- **WHEN** the administrator approves or denies a pending tool approval in UI message mode
+- **THEN** the workbench SHALL call `addToolApprovalResponse` or a public alias from the runtime
+- **AND** the workbench SHALL NOT mutate tool approval state through private message patching
+- **AND** automatic continuation SHALL use the runtime `sendAutomaticallyWhen` path
+
+#### Scenario: Display projection does not own protocol state
+- **WHEN** the workbench displays text, reasoning, data, metadata, tool states, finish, error, or abort information
+- **THEN** those display fields SHALL be projected from the runtime `UIMessage` state or runtime callbacks
+- **AND** the projection layer SHALL NOT become a second source of truth for protocol state
+
+#### Scenario: No UI redesign is required
+- **WHEN** the workbench is updated for the stabilized runtime
+- **THEN** the existing chat UI, model selector, parameter sidebar, message list, input area, and tool toggles SHALL remain the primary interface
+
+### Requirement: Workbench Dogfoods UI Runtime Schema Hooks
+The console model test workbench SHALL lightly exercise UI runtime schema hooks through its existing `useChat` integration.
+
+#### Scenario: Workbench configures broad metadata schema
+- **WHEN** the workbench creates its UI message chat runtime
+- **THEN** it SHALL configure a message metadata schema that accepts absent metadata and object-shaped metadata
+- **AND** it SHALL NOT add new administrator controls for metadata schema configuration
+
+#### Scenario: Workbench configures broad data schemas
+- **WHEN** the workbench consumes known test data parts
+- **THEN** it SHALL configure data part schemas that reject undefined persistent data payloads
+- **AND** it SHALL NOT validate transient data through those schemas
+
+#### Scenario: Workbench schema failures use runtime error display
+- **WHEN** a schema validation failure occurs in the workbench chat runtime
+- **THEN** the existing chat error display path SHALL show the runtime error
+- **AND** the workbench SHALL NOT add a separate schema-specific error panel

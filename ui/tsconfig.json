@@ -6,7 +6,8 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@halo-dev/ai-ui-vue": ["./packages/ai-ui-vue/src/index.ts"]
     }
   }
 }

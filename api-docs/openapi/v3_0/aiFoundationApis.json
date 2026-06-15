@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.24.2"
+    "version" : "2.25.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:56856",
+    "url" : "http://localhost:43123",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -681,64 +681,6 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
-    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/stream" : {
-      "post" : {
-        "description" : "Test text generation with Halo text stream response.",
-        "operationId" : "TestModelChatStream",
-        "parameters" : [ {
-          "description" : "Model name (AiModel.metadata.name)",
-          "in" : "path",
-          "name" : "name",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "description" : "Whether to inject the console-only halo_test_info tool for tool calling tests.",
-          "in" : "query",
-          "name" : "enableTestTool",
-          "schema" : {
-            "type" : "boolean"
-          }
-        }, {
-          "description" : "Whether the console-only halo_test_info tool should require caller approval before execution.",
-          "in" : "query",
-          "name" : "enableTestToolApproval",
-          "schema" : {
-            "type" : "boolean"
-          }
-        }, {
-          "description" : "Whether to inject a console-only repairable tool and deterministic tool-call repair callback.",
-          "in" : "query",
-          "name" : "enableToolCallRepair",
-          "schema" : {
-            "type" : "boolean"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "*/*" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/GenerateTextRequest"
-              }
-            }
-          }
-        },
-        "responses" : {
-          "default" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TextStreamPart"
-                }
-              }
-            },
-            "description" : "Server-Sent Events using X-Halo-AI-Stream-Protocol: text-v1. Each data event contains a TextStreamPart JSON object. The stream can include message lifecycle, step lifecycle, text, tool call, tool result, tool approval request, tool error, finish, sanitized raw diagnostic, and error parts, then ends with data: [DONE]."
-          }
-        },
-        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
-      }
-    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-chat/ui-message/stream" : {
       "post" : {
         "description" : "Test text generation with Halo UI Message stream response.",
@@ -798,6 +740,44 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-completion/stream" : {
+      "post" : {
+        "description" : "Test prompt completion with plain text stream response.",
+        "operationId" : "TestModelCompletionStream",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestCompletionStreamRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Plain text stream containing generated text deltas."
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-embedding" : {
       "post" : {
         "description" : "Test embedding generation with embedding settings and diagnostics.",
@@ -831,6 +811,44 @@
               }
             },
             "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-object/stream" : {
+      "post" : {
+        "description" : "Test structured object generation with plain JSON text stream response.",
+        "operationId" : "TestModelObjectStream",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestObjectStreamRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Plain text stream containing generated JSON text deltas. The final generated value is validated as structured output."
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
@@ -1529,176 +1547,6 @@
           }
         }
       },
-      "GenerateTextRequest" : {
-        "type" : "object",
-        "properties" : {
-          "context" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "frequencyPenalty" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "headers" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "string"
-            }
-          },
-          "maxOutputTokens" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "maxRetries" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "messages" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ModelMessage"
-            }
-          },
-          "metadata" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "output" : {
-            "$ref" : "#/components/schemas/OutputSpec"
-          },
-          "presencePenalty" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "prompt" : {
-            "type" : "string"
-          },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
-          },
-          "reasoning" : {
-            "$ref" : "#/components/schemas/ReasoningOptions"
-          },
-          "seed" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "stopSequences" : {
-            "type" : "array",
-            "items" : {
-              "type" : "string"
-            }
-          },
-          "system" : {
-            "type" : "string"
-          },
-          "temperature" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "toolChoice" : {
-            "$ref" : "#/components/schemas/ToolChoice"
-          },
-          "tools" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ToolDefinition"
-            }
-          },
-          "topK" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "topP" : {
-            "type" : "number",
-            "format" : "double"
-          }
-        }
-      },
-      "GenerationRequestMetadata" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "string"
-          },
-          "metadata" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "model" : {
-            "type" : "string"
-          }
-        }
-      },
-      "GenerationResponseMetadata" : {
-        "type" : "object",
-        "properties" : {
-          "body" : {
-            "type" : "object"
-          },
-          "headers" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "array",
-              "items" : {
-                "type" : "string"
-              }
-            }
-          },
-          "id" : {
-            "type" : "string"
-          },
-          "messages" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ModelMessage"
-            }
-          },
-          "metadata" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "model" : {
-            "type" : "string"
-          },
-          "timestamp" : {
-            "type" : "string",
-            "format" : "date-time"
-          }
-        }
-      },
-      "GenerationWarning" : {
-        "type" : "object",
-        "properties" : {
-          "code" : {
-            "type" : "string"
-          },
-          "message" : {
-            "type" : "string"
-          },
-          "providerMetadata" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          }
-        }
-      },
       "JsonPatch" : {
         "minItems" : 1,
         "uniqueItems" : true,
@@ -1718,30 +1566,6 @@
           }, {
             "$ref" : "#/components/schemas/CopyOperation"
           } ]
-        }
-      },
-      "LanguageModelUsage" : {
-        "type" : "object",
-        "properties" : {
-          "inputTokens" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "outputTokens" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "raw" : {
-            "type" : "object"
-          },
-          "reasoningTokens" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "totalTokens" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
         }
       },
       "Metadata" : {
@@ -1799,72 +1623,6 @@
           }
         },
         "description" : "Metadata of Extension."
-      },
-      "ModelMessage" : {
-        "type" : "object",
-        "properties" : {
-          "content" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ModelMessagePart"
-            }
-          },
-          "role" : {
-            "type" : "string",
-            "enum" : [ "SYSTEM", "USER", "ASSISTANT", "TOOL" ]
-          }
-        }
-      },
-      "ModelMessagePart" : {
-        "type" : "object",
-        "properties" : {
-          "approvalId" : {
-            "type" : "string"
-          },
-          "approved" : {
-            "type" : "boolean"
-          },
-          "errorText" : {
-            "type" : "string"
-          },
-          "input" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "reason" : {
-            "type" : "string"
-          },
-          "result" : {
-            "type" : "object"
-          },
-          "signature" : {
-            "type" : "string"
-          },
-          "stepIndex" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "text" : {
-            "type" : "string"
-          },
-          "toolCallId" : {
-            "type" : "string"
-          },
-          "toolName" : {
-            "type" : "string"
-          },
-          "type" : {
-            "type" : "string"
-          }
-        }
       },
       "ModelOption" : {
         "type" : "object",
@@ -2139,6 +1897,85 @@
           }
         }
       },
+      "TestCompletionStreamRequest" : {
+        "type" : "object",
+        "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "prompt" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "TestEmbeddingRequest" : {
         "type" : "object",
         "properties" : {
@@ -2209,6 +2046,100 @@
             "items" : {
               "$ref" : "#/components/schemas/EmbeddingWarning"
             }
+          }
+        }
+      },
+      "TestObjectStreamRequest" : {
+        "type" : "object",
+        "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "input" : {
+            "type" : "string"
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "output" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "prompt" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "schema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
           }
         }
       },
@@ -2354,112 +2285,6 @@
           }
         }
       },
-      "TextStreamPart" : {
-        "type" : "object",
-        "properties" : {
-          "approvalId" : {
-            "type" : "string"
-          },
-          "data" : {
-            "type" : "object"
-          },
-          "delta" : {
-            "type" : "string"
-          },
-          "errorText" : {
-            "type" : "string"
-          },
-          "finishReason" : {
-            "type" : "string",
-            "enum" : [ "STOP", "LENGTH", "CONTENT_FILTER", "TOOL_CALLS", "ERROR", "OTHER", "UNKNOWN" ]
-          },
-          "id" : {
-            "type" : "string"
-          },
-          "input" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "mediaType" : {
-            "type" : "string"
-          },
-          "messageId" : {
-            "type" : "string"
-          },
-          "metadata" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "providerMetadata" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "rawFinishReason" : {
-            "type" : "string"
-          },
-          "request" : {
-            "$ref" : "#/components/schemas/GenerationRequestMetadata"
-          },
-          "response" : {
-            "$ref" : "#/components/schemas/GenerationResponseMetadata"
-          },
-          "result" : {
-            "type" : "object"
-          },
-          "signature" : {
-            "type" : "string"
-          },
-          "stepIndex" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "title" : {
-            "type" : "string"
-          },
-          "toolCallId" : {
-            "type" : "string"
-          },
-          "toolName" : {
-            "type" : "string"
-          },
-          "type" : {
-            "type" : "string"
-          },
-          "url" : {
-            "type" : "string"
-          },
-          "usage" : {
-            "$ref" : "#/components/schemas/LanguageModelUsage"
-          },
-          "warnings" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/GenerationWarning"
-            }
-          }
-        }
-      },
-      "ToolApprovalPolicy" : {
-        "type" : "object",
-        "properties" : {
-          "mode" : {
-            "type" : "string",
-            "enum" : [ "NEVER", "ALWAYS", "DYNAMIC" ]
-          },
-          "predicate" : {
-            "$ref" : "#/components/schemas/ToolApprovalPredicate"
-          }
-        }
-      },
-      "ToolApprovalPredicate" : {
-        "type" : "object"
-      },
       "ToolChoice" : {
         "type" : "object",
         "properties" : {
@@ -2471,50 +2296,6 @@
             "enum" : [ "AUTO", "NONE", "REQUIRED", "TOOL" ]
           }
         }
-      },
-      "ToolDefinition" : {
-        "type" : "object",
-        "properties" : {
-          "approvalPolicy" : {
-            "$ref" : "#/components/schemas/ToolApprovalPolicy"
-          },
-          "description" : {
-            "type" : "string"
-          },
-          "executor" : {
-            "$ref" : "#/components/schemas/ToolExecutor"
-          },
-          "inputExamples" : {
-            "type" : "array",
-            "items" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
-          },
-          "inputSchema" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "name" : {
-            "type" : "string"
-          },
-          "outputSchema" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object"
-            }
-          },
-          "strict" : {
-            "type" : "boolean"
-          }
-        }
-      },
-      "ToolExecutor" : {
-        "type" : "object"
       },
       "UIMessageChunk" : {
         "type" : "object",

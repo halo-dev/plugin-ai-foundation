@@ -194,12 +194,16 @@ Consumer documentation SHALL explain how plugin authors validate persisted UI me
 
 #### Scenario: Conversion warnings are documented
 - **WHEN** a plugin author reads the UI message conversion documentation
-- **THEN** the guide explains that data, source, file, approval, and unsupported reasoning state may be skipped by default
+- **THEN** the guide explains that data, source, file, pending tool state, and unsupported reasoning state may be skipped by default
 - **AND** the guide shows how to inspect conversion warnings
 
 #### Scenario: Data part extension is documented
 - **WHEN** a plugin author reads the UI message conversion documentation
-- **THEN** the guide shows registering data validators or converters by data name
+- **THEN** the guide shows registering data validators or converters by dynamic data name
+
+#### Scenario: Tool part extension is documented
+- **WHEN** a plugin author reads the UI message conversion documentation
+- **THEN** the guide shows registering tool validators or converters by dynamic tool name
 
 #### Scenario: Reasoning conversion boundary is documented
 - **WHEN** a plugin author reads the UI message conversion documentation
@@ -230,7 +234,7 @@ Consumer documentation SHALL explain how plugin authors use the framework-neutra
 #### Scenario: Chat handler workflow is documented
 - **WHEN** a plugin author reads the UI message stream guide
 - **THEN** the guide shows resolving a `LanguageModel`
-- **AND** passing persisted `UIMessage` values to the chat handler
+- **AND** passing persisted `UIMessage` values or `UIMessageChatRequest` to the chat handler
 - **AND** returning the handler response descriptor
 - **AND** saving updated messages from finish
 
@@ -239,13 +243,10 @@ Consumer documentation SHALL explain how plugin authors use the framework-neutra
 - **THEN** the guide explains that request customizers can set generation options
 - **AND** it explains that customizers must not set `prompt` or `messages`
 
-#### Scenario: Conversion warnings are documented for handler users
-- **WHEN** a plugin author reads the chat handler documentation
-- **THEN** the guide shows reading conversion warnings from the chat result
-
-#### Scenario: Finish reactivity is documented
-- **WHEN** a plugin author reads the chat handler documentation
-- **THEN** the guide explains that finish is completed when the UI stream is consumed
+#### Scenario: Runtime services boundary is documented
+- **WHEN** a plugin author reads the stream recovery documentation
+- **THEN** the guide explains that this change does not add runtime stream recovery services
+- **AND** ordinary UI message streaming does not require a services locator
 
 ### Requirement: Documentation Tracks Deferred UI Message Chat Work
 Consumer documentation SHALL record chat-handler-adjacent work that remains intentionally deferred.
@@ -609,3 +610,83 @@ Consumer documentation SHALL remain focused on public SDK workflows while descri
 #### Scenario: Documentation validation covers changed examples
 - **WHEN** documentation validation runs after the migration
 - **THEN** it SHALL fail on stale public SDK examples, missing required sections, or references that imply consumers must use Spring AI classes
+
+### Requirement: Documentation Covers Stabilized UI Message Runtime
+Consumer documentation SHALL explain the stabilized UI message runtime in `dev/ui-message-stream.md`.
+
+#### Scenario: UI message guide is the detailed entrypoint
+- **WHEN** a plugin author needs UI message stream or frontend runtime guidance
+- **THEN** `dev/ui-message-stream.md` SHALL be the detailed documentation entrypoint
+- **AND** `dev/dev.md` SHALL NOT duplicate the detailed UI message runtime guide
+
+#### Scenario: Dynamic data parts are documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide SHALL explain dynamic `data-*` part naming, required ids, persistent data updates, transient data events, and frontend `onData`
+
+#### Scenario: Dynamic tool lifecycle is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide SHALL explain dynamic `tool-*` parts, lifecycle states, `onToolCall`, `addToolOutput`, `rejectToolCall`, and automatic continuation
+
+#### Scenario: Deferred stream recovery boundary is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide SHALL explain that resume/reconnect/replay is deferred from this change
+- **AND** it SHALL avoid documenting placeholder recovery APIs that are not wired into the runtime
+
+#### Scenario: Java API usage is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide SHALL show framework-neutral Java request handling, validation, conversion, stream response creation, and finish persistence
+
+#### Scenario: Vue runtime usage is documented
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide SHALL show `useChat`, `DefaultChatTransport`, dynamic data rendering, dynamic tool rendering, `useCompletion`, and `experimental_useObject` examples
+
+#### Scenario: Documentation reflects real wiring
+- **WHEN** the guide describes a capability
+- **THEN** that capability SHALL be wired through the Java API, npm runtime, or workbench dogfood path described by the implementation
+- **AND** the guide SHALL NOT describe placeholder APIs that are not used by the runtime
+
+### Requirement: Documentation Covers UI Runtime Schema Hooks
+Consumer documentation SHALL explain frontend runtime schema hooks for UI message metadata and persisted dynamic data parts.
+
+#### Scenario: UI message guide documents schema hook scope
+- **WHEN** a plugin author reads the UI message stream guide
+- **THEN** the guide SHALL explain `messageMetadataSchema` and `dataPartSchemas`
+- **AND** it SHALL state that these hooks validate frontend runtime stream data
+- **AND** it SHALL state that they do not replace backend `UIMessageValidators`
+
+#### Scenario: UI message guide documents data schema keys
+- **WHEN** a plugin author configures data part schemas
+- **THEN** the guide SHALL show schemas keyed by data part name
+- **AND** it SHALL avoid requiring callers to key schemas by full `data-*` protocol type
+
+#### Scenario: UI message guide documents schema failure behavior
+- **WHEN** a plugin author reads the schema hook section
+- **THEN** the guide SHALL explain that schema failures enter the normal chat error lifecycle
+- **AND** it SHALL mention that the active stream is aborted and the failing update is not committed
+
+#### Scenario: Package README mentions schema hooks
+- **WHEN** a user reads the package README
+- **THEN** it SHALL include a concise example of configuring metadata and data part schemas
+
+### Requirement: Documentation Covers Custom UIMessage Stream Reading
+Consumer documentation SHALL explain how callers can read existing UIMessage streams without using the full chat runtime.
+
+#### Scenario: Reader is documented as custom consumer path
+- **WHEN** a user reads the package README or UI message stream guide
+- **THEN** the documentation SHALL state that standard chat interfaces should use `Chat` or `useChat`
+- **AND** it SHALL present `readUIMessageStream` for callers that already manage requests, state, or non-Vue runtime integration themselves
+
+#### Scenario: Fetch example handles HTTP status outside reader
+- **WHEN** the documentation shows `readUIMessageStream` with `fetch`
+- **THEN** the example SHALL handle `response.ok` before calling the helper
+- **AND** it SHALL pass the successful `Response` to `readUIMessageStream`
+- **AND** it SHALL NOT imply that the helper sends requests or owns HTTP error parsing
+
+#### Scenario: Reader callbacks are explained
+- **WHEN** the documentation describes reader callbacks
+- **THEN** it SHALL distinguish raw `onChunk` from accepted `onMessage`, `onData`, and `onToolCall` events
+- **AND** it SHALL mention that `onToolCall` is notification-only and does not automatically submit tool output
+
+#### Scenario: Reader limitations are documented
+- **WHEN** the documentation describes reader scope
+- **THEN** it SHALL state that the helper does not implement resume, reconnect, replay, text streams, object streams, or automatic tool continuation

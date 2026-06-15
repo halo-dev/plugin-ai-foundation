@@ -1,0 +1,71 @@
+{
+  "name": "tool-lifecycle",
+  "description": "A dynamic tool part moves from input streaming to terminal output.",
+  "chunks": [
+    {
+      "type": "start",
+      "messageId": "assistant-tool"
+    },
+    {
+      "type": "tool-getWeather",
+      "toolName": "getWeather",
+      "toolCallId": "call-weather-1",
+      "state": "input-streaming",
+      "inputTextDelta": "{\"city\""
+    },
+    {
+      "type": "tool-getWeather",
+      "toolName": "getWeather",
+      "toolCallId": "call-weather-1",
+      "state": "input-streaming",
+      "inputTextDelta": ":\"Hangzhou\"}"
+    },
+    {
+      "type": "tool-getWeather",
+      "toolName": "getWeather",
+      "toolCallId": "call-weather-1",
+      "state": "input-available",
+      "input": {
+        "city": "Hangzhou"
+      }
+    },
+    {
+      "type": "tool-getWeather",
+      "toolName": "getWeather",
+      "toolCallId": "call-weather-1",
+      "state": "output-available",
+      "input": {
+        "city": "Hangzhou"
+      },
+      "output": {
+        "status": "sunny"
+      }
+    },
+    {
+      "type": "finish",
+      "finishReason": "tool-calls"
+    }
+  ],
+  "expectedMessage": {
+    "id": "assistant-tool",
+    "role": "assistant",
+    "metadata": {},
+    "parts": [
+      {
+        "type": "tool-getWeather",
+        "toolName": "getWeather",
+        "toolCallId": "call-weather-1",
+        "state": "output-available",
+        "input": {
+          "city": "Hangzhou"
+        },
+        "output": {
+          "status": "sunny"
+        }
+      }
+    ]
+  },
+  "expectedTerminal": {
+    "finishReason": "tool-calls"
+  }
+}

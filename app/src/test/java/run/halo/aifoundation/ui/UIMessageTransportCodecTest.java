@@ -21,14 +21,13 @@ class UIMessageTransportCodecTest {
             UIMessageParts.sourceUrl("source-1", "https://halo.run", "Halo", Map.of()),
             UIMessageParts.file("file-1", "https://example.com/a.txt", "a.txt", "text/plain",
                 null, Map.of("provider", "meta")),
-            UIMessageParts.toolCall("call-1", "weather", Map.of("city", "Hangzhou"),
-                Map.of()),
-            UIMessageParts.toolResult("call-1", "weather", Map.of("temp", 20), Map.of()),
-            UIMessageParts.toolError("call-2", "search", "failed", Map.of()),
-            UIMessageParts.toolApprovalRequest("approval-1", "call-3", "pay",
-                Map.of("amount", 1), 0, Map.of()),
-            UIMessageParts.toolApprovalResponse("approval-1", "call-3", "pay", true,
-                "Approved", Map.of("approval", "meta"))
+            UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("city", "Hangzhou"), null, Map.of("temp", 20), null, null, Map.of()),
+            UIMessageParts.tool("call-2", "search", ToolPartState.OUTPUT_ERROR,
+                Map.of("q", "Halo"), null, null, "failed", null, Map.of()),
+            UIMessageParts.tool("call-3", "pay", ToolPartState.APPROVAL_REQUESTED,
+                Map.of("amount", 1), null, null, null, new ToolApproval("approval-1", null,
+                    null), Map.of("approval", "meta"))
         );
 
         for (var part : parts) {
@@ -51,9 +50,12 @@ class UIMessageTransportCodecTest {
                 "role", "assistant",
                 "metadata", Map.of("chatId", "chat-1"),
                 "parts", List.of(Map.of(
-                    "type", "tool-approval-response",
-                    "approvalId", "approval-1",
-                    "approved", true
+                    "type", "tool-pay",
+                    "toolCallId", "call-1",
+                    "toolName", "pay",
+                    "state", "output-error",
+                    "errorText", "Denied",
+                    "approval", Map.of("id", "approval-1", "approved", false)
                 ))
             ))
         );
@@ -66,11 +68,36 @@ class UIMessageTransportCodecTest {
         assertThat(request.messages()).hasSize(1);
         assertThat(request.messages().getFirst().metadata()).isEqualTo(Map.of("chatId", "chat-1"));
         assertThat(request.messages().getFirst().parts().getFirst())
-            .isInstanceOf(ToolApprovalResponsePart.class);
+            .isInstanceOf(ToolPart.class);
 
         var encoded = UIMessageTransportCodec.chatRequestToMap(request);
         assertThat(encoded).containsEntry("trigger", "regenerate-message");
         assertThat(encoded).containsKey("messages");
+    }
+
+    @Test
+    void decodesAndEncodesCanonicalToolAndStepChunks() {
+        var chunks = List.<UIMessageChunk>of(
+            UIMessageChunks.startStep(0),
+            UIMessageChunks.toolInputStart("call-1", "weather"),
+            UIMessageChunks.toolInputDelta("call-1", "weather", "{\"city\""),
+            UIMessageChunks.toolInputAvailable("call-1", "weather",
+                Map.of("city", "Hangzhou"), Map.of("provider", "test")),
+            UIMessageChunks.toolOutputAvailable("call-1", "weather",
+                Map.of("temperature", 20), Map.of("provider", "test")),
+            UIMessageChunks.toolOutputError("call-2", "search", "failed", Map.of()),
+            UIMessageChunks.toolApprovalRequest("approval-1", "call-3", "payment",
+                Map.of("amount", 100), Map.of()),
+            UIMessageChunks.toolApprovalResponse("approval-1", "call-3", "payment", false,
+                "not allowed", Map.of("provider", "test"))
+        );
+
+        for (var chunk : chunks) {
+            var encoded = UIMessageTransportCodec.chunkToMap(chunk);
+            assertThat(encoded).containsEntry("type", chunk.type());
+            assertThat(encoded).doesNotContainValue(null);
+            assertThat(UIMessageTransportCodec.chunkFromMap(encoded)).isEqualTo(chunk);
+        }
     }
 
     @Test

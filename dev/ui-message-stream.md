@@ -56,7 +56,7 @@ public Mono<ServerResponse> chat(ServerRequest request) {
 X-Halo-AI-UI-Message-Stream: v1
 ```
 
-`body()` 会按 SSE 发送 JSON chunk，并在正常结束时追加：
+`body()` 会按 SSE 发送 JSON 数据块，并在正常结束时追加：
 
 ```text
 data: [DONE]
@@ -73,7 +73,7 @@ return ServerResponse.ok()
     .body(response.body(), String.class);
 ```
 
-第二种，使用结构化 stream 自己构造 `ServerSentEvent`：
+第二种，使用结构化流自己构造 `ServerSentEvent`：
 
 ```java
 Flux<ServerSentEvent<String>> events = response.stream().chunks()
@@ -129,7 +129,7 @@ UIMessageChatRequest<Map<String, Object>> chatRequest =
     UIMessageTransportCodec.chatRequestFromMap(payload);
 ```
 
-如果 `metadata` 使用自己的类型，传入 mapper：
+如果 `metadata` 使用自己的类型，传入映射函数：
 
 ```java
 record ChatMetadata(String conversationId, String status) {
@@ -150,13 +150,269 @@ Map<String, Object> requestMap =
     UIMessageTransportCodec.chatRequestToMap(chatRequest);
 ```
 
-`UIMessageTransportCodec` 只负责结构转换。未知 part 类型、非法 role、非法 trigger、
+`UIMessageTransportCodec` 只负责结构转换。未知消息片段类型、非法角色、非法触发类型、
 缺少必填字段会抛出 `InvalidUIMessageException`；HTTP 接口通常应把它转换成
 `400 Bad Request`。业务语义校验仍使用 `UIMessageValidators`。
 
+## Vue 前端接入
+
+Vue 前端可以使用 `@halo-dev/ai-ui-vue` 直接消费 Halo UIMessage SSE 协议：
+
+```ts
+import { DefaultChatTransport, useChat } from '@halo-dev/ai-ui-vue'
+
+const chat = useChat({
+  id: 'conversation-1',
+  transport: new DefaultChatTransport({
+    api: '/apis/example.halo.run/v1alpha1/chat/stream',
+  }),
+})
+
+await chat.sendMessage({ text: '你好' })
+```
+
+`DefaultChatTransport` 会向后端发送 `UIMessageChatRequest`：
+
+```json
+{
+  "id": "conversation-1",
+  "messages": [],
+  "trigger": "submit-message",
+  "messageId": null
+}
+```
+
+响应必须是 Halo UIMessage SSE：
+
+```http
+Content-Type: text/event-stream
+X-Halo-AI-UI-Message-Stream: v1
+```
+
+每个 SSE `data:` 是一个 JSON `UIMessageChunk`，正常结束时发送 `data: [DONE]`。
+如果响应带有 `X-Halo-AI-UI-Message-Stream`，前端会校验它必须为 `v1`。
+
+`useChat` 暴露 `messages`、`status`、`error`、`isLoading`，以及 `sendMessage`、
+`regenerate`、`stop`、`setMessages`、`clearError`、`addToolOutput`、
+`addToolApprovalResponse`、`rejectToolCall`、`isLastAssistantMessageToolComplete`。
+同一个 `id` 的多个 `useChat` 调用会共享消息状态。`addToolOutput`、
+`addToolApprovalResponse` 和 `rejectToolCall` 会从已有 assistant 消息片段
+中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
+
+前端可以为流式接收阶段配置运行时 schema 钩子：
+
+```ts
+import { DefaultChatTransport, useChat } from '@halo-dev/ai-ui-vue'
+
+const chat = useChat({
+  id: 'conversation-1',
+  transport: new DefaultChatTransport({
+    api: '/apis/example.halo.run/v1alpha1/chat/stream',
+  }),
+  messageMetadataSchema: {
+    safeParse: (value) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? { success: true, data: value as Record<string, unknown> }
+        : { success: false, error: { message: 'metadata must be an object' } },
+  },
+  dataPartSchemas: {
+    status: {
+      '~standard': {
+        validate: (value) =>
+          typeof value === 'string'
+            ? { value }
+            : { issues: [{ message: 'status must be a string' }] },
+      },
+    },
+  },
+})
+```
+
+`messageMetadataSchema` 会校验合并后的流式 metadata，而不是单个
+`message-metadata` 更新。`dataPartSchemas` 按 data 名称配置，例如
+`data-status` 使用 `status` 作为键。只有持久化的 `data-*` 数据块会被校验和保存为
+schema 解析后的值；`transient` data 仍只通过 `onData` 传给调用方，不写入消息。
+
+schema 钩子只在前端接收流时生效，不会校验 `setMessages`、构造时传入的历史消息或手动创建的
+消息。schema 失败会设置 `error`、触发 `onError`，并让 `onFinish` 收到
+`isError: true`。这些前端校验用于保护 UI 状态，不能替代后端的
+`UIMessageValidators`、HTTP 输入校验或业务权限校验。
+
+### 自定义读取 UIMessage 流
+
+标准聊天界面应优先使用 `useChat` 或框架无关的 `Chat`。如果调用方已经自己管理
+HTTP 请求、消息状态、Pinia 状态存储、Web Worker 或其他非 Vue 运行时，只需要读取已有 Halo
+UIMessage SSE 并聚合 assistant 消息，可以使用 `readUIMessageStream`。
+
+```ts
+import { readUIMessageStream, type UIMessage } from '@halo-dev/ai-ui-vue'
+
+const response = await fetch('/apis/example.halo.run/v1alpha1/chat/stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    id: 'conversation-1',
+    messages,
+    trigger: 'submit-message',
+  }),
+})
+
+if (!response.ok) {
+  throw new Error(await response.text())
+}
+
+const result = await readUIMessageStream({
+  response,
+  messageId: 'assistant-1',
+  dataPartSchemas: {
+    status: {
+      safeParse: (value) =>
+        typeof value === 'string'
+          ? { success: true, data: value }
+          : { success: false, error: { message: 'status must be a string' } },
+    },
+  },
+  onChunk(chunk) {
+    console.debug('raw chunk', chunk)
+  },
+  onMessage(message: UIMessage) {
+    updateAssistantMessage(message)
+  },
+  onData(part) {
+    console.debug('data', part.name, part.data)
+  },
+  onToolCall(part) {
+    console.debug('tool call', part.toolName, part.input)
+  },
+  onFinish(event) {
+    console.debug(event.status, event.terminal)
+  },
+})
+```
+
+`readUIMessageStream` 只读取已有流。调用方仍负责 `fetch`、请求 body、headers、
+credentials、`response.ok` 和非流式错误响应处理。传入 `Response` 时，读取器只校验
+Halo UIMessage 流协议标识和 `response.body`，然后读取 SSE。
+
+回调语义：
+
+- `onChunk` 在协议和 schema 校验前触发，用于日志或审计，不代表数据块已经被接受。
+- `onMessage` 在可见 assistant 消息更新后触发，收到浅克隆的完整消息快照。
+- `onData` 在动态 data 数据块被接受后触发；持久化 data 收到 schema 解析后的数据，
+  transient data 收到原始数据且不写入消息。
+- `onToolCall` 在动态 tool 消息片段首次到达 `input-available` 时触发，同一个
+  `toolCallId` 只触发一次。它只是通知，不会把返回值写成工具输出，也不会自动续跑。
+
+读取器返回 `status`、`message`、`terminal`、`isError`、`isAbort` 和可选 `error`。
+正常完成为 `ready`；协议、schema、解析器或回调错误为 `error`；已经接受数据块后的
+非协议流中断为 `disconnected`；外部 `abortSignal` 取消为 `aborted`。
+`readUIMessageStream` 是底层读取工具，只负责把 UIMessage 数据块流聚合为
+assistant 消息；请求发送、普通文本流、对象流、工具续跑、重连恢复等聊天工作流能力应由
+`useChat`、`Chat` 或调用方自己的编排层处理。
+
+如果后端只返回普通文本流，可以使用 `TextStreamChatTransport`。它会把文本增量包装成
+assistant 的文本消息片段，但不会提供工具、reasoning、data、来源/文件等 UIMessage
+事件。
+
+## Completion 与对象流
+
+`@halo-dev/ai-ui-vue` 还提供两个文本流组合式函数：
+
+```ts
+import { experimental_useObject, jsonSchema, useCompletion } from '@halo-dev/ai-ui-vue'
+
+const completion = useCompletion({
+  api: '/apis/example.halo.run/v1alpha1/completion/stream',
+  body: { temperature: 0.2 },
+})
+
+await completion.complete('写一个标题')
+
+const object = experimental_useObject<{ title: string; summary: string }>({
+  api: '/apis/example.halo.run/v1alpha1/object/stream',
+  schema: jsonSchema({
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      summary: { type: 'string' },
+    },
+    required: ['title', 'summary'],
+  }),
+})
+
+await object.submit('总结这篇文章')
+```
+
+`useCompletion` 会发送 `{ "prompt": "...", ...body }`，并读取普通文本流。
+
+`experimental_useObject` 会发送 `{ "input": "...", "schema": {...}, "output": {...}, ...body }`。
+其中 `schema` 是 JSON Schema，`output` 默认是：
+
+```json
+{
+  "type": "object",
+  "schema": {
+    "type": "object"
+  }
+}
+```
+
+后端应返回模型生成的 JSON 文本流。前端会在流式读取时尽量解析部分 JSON 快照，并在流结束后
+对最终 JSON 做校验；后端仍应依赖结构化输出能力对最终结果负责，不能只把任意文本拼成 JSON
+返回。
+
+## OpenAPI 与流式前端
+
+OpenAPI 生成客户端适合生成类型、路径、headers 和请求体，但常见 Axios 操作方法会把
+响应抽象成 `Promise`，不适合作为浏览器端 `ReadableStream` / SSE 的消费入口。推荐模式是：
+
+1. 使用 OpenAPI 生成的参数构造器构造请求参数。
+2. 使用 `fromOpenAPIRequestArgs(...)` 转成 `@halo-dev/ai-ui-vue` 的预处理请求。
+3. 仍由 `DefaultChatTransport`、`useCompletion` 或 `experimental_useObject` 负责读取流。
+
+```ts
+import {
+  DefaultChatTransport,
+  fromOpenAPIRequestArgs,
+  useChat,
+} from '@halo-dev/ai-ui-vue'
+import { ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator } from './api/generated'
+
+const paramCreator = ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator()
+
+const chat = useChat({
+  id: 'conversation-1',
+  transport: new DefaultChatTransport({
+    api: '',
+    prepareSendMessagesRequest: async ({ body }) => {
+      return fromOpenAPIRequestArgs(args, body)
+    },
+  }),
+})
+```
+
+`useCompletion` 和 `experimental_useObject` 可通过 `prepareRequest` 使用同样的模式：
+
+```ts
+const completion = useCompletion({
+  prepareRequest: async ({ body }) => {
+    const args = await paramCreator.testModelCompletionStream('model-name', body)
+    return fromOpenAPIRequestArgs(args, body)
+  },
+})
+
+const object = experimental_useObject({
+  schema,
+  prepareRequest: async ({ body }) => {
+    const args = await paramCreator.testModelObjectStream('model-name', body)
+    return fromOpenAPIRequestArgs(args, body)
+  },
+})
+```
+
 ## 保存消息
 
-推荐在 `onFinish` 中保存 `finish.messages()`。它已经包含本次 assistant 响应：
+推荐在 `onFinish` 中保存 `finish.messages()`。它已经包含本轮 assistant 响应：
 
 ```java
 UIMessageChatResult<ChatMetadata> chat = UIMessageChatHandlers.streamText(options -> options
@@ -171,8 +427,8 @@ UIMessageChatResult<ChatMetadata> chat = UIMessageChatHandlers.streamText(option
     }));
 ```
 
-如果本次响应是在继续已有 assistant 消息，`finish.isContinuation()` 会返回 `true`。
-判断规则是：原始消息最后一条是 assistant，且 id 与本次响应消息 id 相同，则替换最后一条；
+如果响应是在继续已有 assistant 消息，`finish.isContinuation()` 会返回 `true`。
+判断规则是：原始消息最后一条是 assistant，且 id 与响应消息 id 相同，则替换最后一条；
 否则追加新的 assistant 消息。
 
 ## 返回结构化流
@@ -213,16 +469,16 @@ UIMessageStream stream = UIMessageStreams.createWithOptions(options -> options
 | 方法 | 作用 |
 | --- | --- |
 | `writeData(name, data)` | 写入会保存到 `UIMessage.parts` 的数据 |
-| `writeTransientData(name, data)` | 写入只给当前界面使用的数据 |
+| `writeTransientData(name, data)` | 写入只给本轮界面使用的数据 |
 | `writeMessageMetadata(metadata)` | 更新消息级 metadata |
 | `writeText(text)` | 写入完整文本块 |
 | `merge(stream)` | 合并另一个 `UIMessageStream` |
 
-`transientData=true` 的 data chunk 不会保存到 `UIMessage.parts`。
+`transientData=true` 的 data 数据块不会保存到 `UIMessage.parts`。
 
 ## 聚合为 UIMessage
 
-需要手动读取 chunk 并得到最终消息时，使用 `UIMessageStreamReader`：
+需要手动读取数据块并得到最终消息时，使用 `UIMessageStreamReader`：
 
 ```java
 ReadUIMessageStreamResult<ChatMetadata> read = UIMessageStreamReader.read(options -> options
@@ -243,75 +499,106 @@ Mono<UIMessageStreamTerminal> terminal = read.finish();
 
 ## 聚合规则
 
-| chunk | 聚合结果 |
+| 数据块 | 聚合结果 |
 | --- | --- |
 | `text-start` / `text-delta` / `text-end` | 累加为 `TextPart` |
 | `reasoning-start` / `reasoning-delta` / `reasoning-end` | 累加为 `ReasoningPart` |
 | `data` 且 `transientData=false` | 写入或替换 `DataPart` |
 | `data` 且 `transientData=true` | 不进入 `UIMessage.parts` |
 | `message-metadata` | 合并到 `UIMessage.metadata` |
-| `source-url` / `file` | 写入或替换 source/file part |
-| `tool-call` / `tool-result` / `tool-error` / `tool-approval-request` / `tool-approval-response` | 写入或替换工具相关 part |
-| `tool-input-start` / `tool-input-delta` | 不进入 `UIMessage.parts` |
-| `finish-step` / `error` / `abort` | 只更新终态信息 |
+| `source-url` / `file` | 写入或替换来源/文件消息片段 |
+| `tool-input-start` / `tool-input-delta` | 聚合为同一个动态 `tool-*` 消息片段的 `input-streaming` 状态 |
+| `tool-input-available` | 聚合为同一个动态 `tool-*` 消息片段的 `input-available` 状态 |
+| `tool-output-available` / `tool-output-error` | 聚合为同一个动态 `tool-*` 消息片段的完成状态 |
+| `tool-approval-request` / `tool-approval-response` | 聚合为同一个动态 `tool-*` 消息片段的审批状态 |
+| `start-step` / `finish-step` / `error` / `abort` | 只更新生命周期或终态信息，不进入 `UIMessage.parts` |
+
+SSE 传输层使用 `tool-input-*`、`tool-output-*` 和 `tool-approval-*` 这类规范工具数据块
+表达“流中发生的事件”。聚合后的 assistant `UIMessage.parts` 仍然使用动态
+`tool-*` 消息片段表达最终 UI 状态。旧的动态 `tool-*` 数据块只作为内部兼容读取形态保留，
+不作为外部流协议推荐。
 
 ## 工具续跑
 
-`UIMessage` 不使用 `TOOL` role。工具调用、工具结果、工具错误、审批请求和审批响应都保存在
-assistant `UIMessage.parts()` 中；转换为模型请求时，SDK 会按 part 顺序拆成 assistant
-和 tool `ModelMessage`。
+`UIMessage` 不使用 `TOOL` 角色。工具生命周期保存在 assistant `UIMessage.parts()` 中的
+动态 `tool-*` 消息片段；转换为模型请求时，SDK 会按消息片段顺序拆成 assistant 和 tool
+`ModelMessage`。
 
-外部工具执行成功后，把结果追加到包含原始 `tool-call` 的 assistant 消息：
+外部工具执行成功后，把包含原始 `tool-*` 消息片段的 assistant 消息更新为 `output-available`：
 
 ```java
 UIMessage<ChatMetadata> updatedAssistant = assistant.withParts(Stream.concat(
     assistant.parts().stream()
-        .filter(part -> !(part instanceof ToolResultPart result
-            && "call_1".equals(result.toolCallId())))
-        .filter(part -> !(part instanceof ToolErrorPart error
-            && "call_1".equals(error.toolCallId()))),
-    Stream.of(UIMessageParts.toolResult("call_1", "search_docs",
-        Map.of("title", "Halo"), Map.of()))
+        .filter(part -> !(part instanceof ToolPart tool
+            && "call_1".equals(tool.toolCallId()))),
+    Stream.of(UIMessageParts.tool(
+        "call_1",
+        "search_docs",
+        ToolPartState.OUTPUT_AVAILABLE,
+        Map.of("query", "Halo"),
+        null,
+        Map.of("title", "Halo"),
+        null,
+        null,
+        Map.of()))
 ).toList());
 ```
 
-外部工具失败时追加 `tool-error`：
+外部工具失败时把同一个工具消息片段更新为 `output-error`：
 
 ```java
-UIMessagePart toolError = UIMessageParts.toolError(
+UIMessagePart toolError = UIMessageParts.tool(
     "call_1",
     "search_docs",
+    ToolPartState.OUTPUT_ERROR,
+    Map.of("query", "Halo"),
+    null,
+    null,
     "文档服务暂时不可用",
+    null,
     Map.of()
 );
 ```
 
-审批通过或拒绝时追加 `tool-approval-response`：
+审批通过时把审批请求对应的工具消息片段更新为 `approval-responded`，并保留审批结果：
 
 ```java
-UIMessagePart approved = UIMessageParts.toolApprovalResponse(
-    "approval_call_1",
+UIMessagePart approved = UIMessageParts.tool(
     "call_1",
     "delete_file",
-    true,
-    "用户已确认",
-    Map.of()
-);
-
-UIMessagePart denied = UIMessageParts.toolApprovalResponse(
-    "approval_call_1",
-    "call_1",
-    "delete_file",
-    false,
-    "用户拒绝删除",
+    ToolPartState.APPROVAL_RESPONDED,
+    Map.of("path", "/tmp/example.txt"),
+    null,
+    null,
+    null,
+    new ToolApproval("approval_call_1", true, "用户已确认"),
     Map.of()
 );
 ```
 
-拒绝审批只需要保存 `approved=false` 的审批响应，不需要额外合成 `tool-error`。同一个
-`toolCallId` 最多只能有一个最终输出：`tool-result` 或 `tool-error`。同一个
-`approvalId` 最多只能有一个审批响应。审批或外部工具处理完成后，把更新后的
-`UIMessageChatRequest` 再次传给 `UIMessageChatHandlers.streamText(...)` 即可继续生成。
+审批拒绝时同样把工具消息片段更新为 `approval-responded`。拒绝审批不是工具执行异常，
+不要把它映射为 `output-error`：
+
+```java
+UIMessagePart denied = UIMessageParts.tool(
+    "call_1",
+    "delete_file",
+    ToolPartState.APPROVAL_RESPONDED,
+    Map.of("path", "/tmp/example.txt"),
+    null,
+    null,
+    null,
+    new ToolApproval("approval_call_1", false, "用户拒绝删除"),
+    Map.of()
+);
+```
+
+如果后端明确返回“因审批拒绝而未执行”的工具终态，可以使用 `output-denied` 表示；
+`output-error` 只表示工具执行过程中的错误。
+
+拒绝审批不需要额外创建第二个消息片段；同一个 `toolCallId` 始终只保留一个工具消息片段。
+审批或外部工具处理完成后，把更新后的 `UIMessageChatRequest` 再次传给
+`UIMessageChatHandlers.streamText(...)` 即可继续生成。
 
 ## 消息 Metadata
 
@@ -320,9 +607,9 @@ UIMessagePart denied = UIMessageParts.toolApprovalResponse(
 
 默认合并规则：
 
-| 当前值 | 更新值 | 结果 |
+| 已有值 | 更新值 | 结果 |
 | --- | --- | --- |
-| `Map` | `Map` | 浅合并，后来的 key 覆盖前面的 key |
+| `Map` | `Map` | 浅合并，后来的键覆盖前面的键 |
 | 任意值 | `null` | 保持不变 |
 | 非 `Map` | 非 `Map` | 用更新值替换 |
 
@@ -346,9 +633,9 @@ ReadUIMessageStreamResult<ChatMetadata> read = UIMessageStreamReader.read(option
     }));
 ```
 
-当前版本不会自动把 usage、finish reason、model id、request metadata 或 response metadata
-提升为 `UIMessage.metadata`。需要这些字段时，请显式写入 `message-metadata`，或包一层
-自己的 stream。
+`usage`、`finish reason`、`model id`、request metadata 和 response metadata 属于流
+终态或服务商诊断信息，不会被自动提升为 `UIMessage.metadata`。需要把这些字段保存到消息时，
+请显式写入 `message-metadata`，或包一层自己的流。
 
 ## 校验和转换
 
@@ -374,25 +661,25 @@ UIMessageConversionResult conversion =
 
 默认转换策略：
 
-| UI part | 默认结果 |
+| UI 消息片段 | 默认结果 |
 | --- | --- |
 | `TextPart` | 转为模型文本 |
-| `ReasoningPart` | 由当前模型能力决定；支持 reasoning history 时保留，不支持时丢弃并记录 warning |
-| `ToolCallPart` | 转为 assistant 工具调用内容 |
-| `ToolResultPart` / `ToolErrorPart` | 转为 tool 消息 |
-| `ToolApprovalRequestPart` | 转为 assistant 审批请求内容 |
-| `ToolApprovalResponsePart` | 转为 tool 消息 |
-| `DataPart` | 跳过并记录 warning，除非注册 converter |
-| `SourceUrlPart` / `FilePart` | 跳过并记录 warning |
+| `ReasoningPart` | 由模型能力决定；支持 reasoning history 时保留，不支持时丢弃并记录警告 |
+| `ToolPart` + `input-available` | 转为 assistant 工具调用内容 |
+| `ToolPart` + `approval-requested` | 转为 assistant 审批请求内容 |
+| `ToolPart` + `output-available` / `output-error` | 转为工具消息 |
+| `ToolPart` + `approval-responded` | 转为 assistant 审批请求内容和工具审批响应消息 |
+| `DataPart` | 跳过并记录警告，除非注册转换器 |
+| `SourceUrlPart` / `FilePart` | 跳过并记录警告 |
 
-转换会保留工具边界。例如 assistant 文本后面出现 `tool-result`，再出现 assistant 文本，
-结果会拆成 assistant、tool、assistant 三段 `ModelMessage`。连续的 tool 响应可以合并在
-同一个 tool `ModelMessage` 中。
+转换会保留工具边界。例如 assistant 文本后面出现 `output-available` 工具消息片段，再出现 assistant 文本，
+结果会拆成 assistant、tool、assistant 三段 `ModelMessage`。连续的工具响应可以合并在
+同一个工具 `ModelMessage` 中。
 
 通过 `UIMessageChatHandlers.streamText(model, request, ...)` 调用时，推理默认使用
 `UIReasoningConversion.AUTO`。SDK 会根据 `LanguageModel.capabilities()` 自动决定是否
 回传 reasoning history：支持时保留可见推理文本和 `providerMetadata`，不支持时丢弃
-reasoning part，避免继续对话失败。
+reasoning 消息片段，避免继续对话失败。
 
 如果直接调用 `UIMessageConverters.convertToModelMessages(...)`，没有模型上下文，
 `AUTO` 会按 `PRESERVE_PROVIDER_STATE` 处理。需要固定行为时，可以显式设置
@@ -409,7 +696,7 @@ List<ModelMessage> modelMessages = UIMessageConverters.toModelMessages(validMess
 
 ## 重新生成
 
-重新生成不是 provider 失败重试。它表示用户要求重新生成某条 assistant 消息：
+重新生成不是服务商失败重试。它表示用户要求重新生成某条 assistant 消息：
 
 ```java
 UIMessageChatRequest<ChatMetadata> request = new UIMessageChatRequest<>(
@@ -424,8 +711,8 @@ UIMessageChatRequest<ChatMetadata> request = new UIMessageChatRequest<>(
 
 - `messageId` 必须存在。
 - `messageId` 必须指向 assistant 消息。
-- handler 会在调用模型前移除目标 assistant 消息以及它后面的消息。
-- provider 失败重试仍通过 `request(builder -> builder.maxRetries(...))` 控制。
+- 处理器会在调用模型前移除目标 assistant 消息以及它后面的消息。
+- 服务商失败重试仍通过 `request(builder -> builder.maxRetries(...))` 控制。
 
 ## 中断
 
@@ -450,7 +737,7 @@ UIMessageChatResult<ChatMetadata> chat = UIMessageChatHandlers.streamText(model,
 Flux<String> body = cancellation.cancelWhenSubscriberCancels(chat.response().body());
 ```
 
-取消被识别后，stream 会写出 `abort` chunk，而不是 `error` chunk。
+取消被识别后，流会写出 `abort` 数据块，而不是 `error` 数据块。
 `finish.terminal().aborted()` 为 `true`。是否保存已经生成的部分 assistant 消息由业务决定。
 
 ## 错误处理
@@ -459,8 +746,8 @@ Flux<String> body = cancellation.cancelWhenSubscriberCancels(chat.response().bod
 | --- | --- |
 | 输入校验失败 | 抛出 `InvalidUIMessageException`，不会调用模型 |
 | 转换后没有模型消息 | 抛出 `IllegalArgumentException`，不会调用模型 |
-| 模型或 writer 抛错 | 默认写出 `error` chunk |
-| 读流聚合抛错 | 默认写入终态 error text，可用 `terminateOnError(true)` 改为传播异常 |
+| 模型或写入器抛错 | 默认写出 `error` 数据块 |
+| 读流聚合抛错 | 默认写入终态错误文本，可用 `terminateOnError(true)` 改为传播异常 |
 | `onFinish` 抛错 | `UIMessageChatResult.finish()` 失败 |
 
 可以用 `onError(...)` 改写返回给前端的错误文本：
@@ -471,16 +758,3 @@ UIMessageChatHandlers.streamText(options -> options
     .messages(messages)
     .onError(error -> "生成失败，请稍后重试"));
 ```
-
-## 当前边界
-
-本版本暂不包含以下能力：
-
-| 能力 | 说明 |
-| --- | --- |
-| 前端 npm helper | 后续单独基于前端使用方式设计 |
-| WebFlux adapter | 当前由调用方手写少量 request/response 代码 |
-| stop endpoint | 需要 active stream registry 后再设计 |
-| resume/reconnect/replay | 需要 stream id、重放或继续策略 |
-| active stream registry | 当前不跨请求保存运行中的 stream |
-| stream id 协议 | 后续和停止、恢复、重连一起设计 |
