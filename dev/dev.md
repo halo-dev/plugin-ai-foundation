@@ -4,23 +4,34 @@
 
 ## 1. 接入插件
 
-当前 `api` 模块还没有发布到 Maven 仓库，可以先使用本地 jar：
+`api` 模块会自动发布到 Maven Central。普通插件项目直接通过
+Maven 接入即可：
 
 ```groovy
 dependencies {
-    compileOnly files("${rootDir}/api-1.0.0-SNAPSHOT.jar")
-    testImplementation files("${rootDir}/api-1.0.0-SNAPSHOT.jar")
+    compileOnly "run.halo.aifoundation:api:1.0.0-SNAPSHOT"
+    testImplementation "run.halo.aifoundation:api:1.0.0-SNAPSHOT"
 }
 ```
 
-后续版本发布到 Maven 仓库后改为：
+如果使用 `SNAPSHOT` 版本，需要在调用方插件的仓库配置中加入 Maven Central
+Snapshots 仓库：
 
 ```groovy
-dependencies {
-    compileOnly "run.halo.aifoundation:api:1.0.0"
-    testImplementation "run.halo.aifoundation:api:1.0.0"
+repositories {
+    maven {
+        url = uri('https://central.sonatype.com/repository/maven-snapshots/')
+        mavenContent {
+            snapshotsOnly()
+        }
+    }
+    mavenCentral()
 }
 ```
+
+`main` 分支推送后会自动发布当前 `gradle.properties` 中的 `SNAPSHOT` 版本；
+
+推送 `v*` 标签后会发布对应的正式版本，例如 `v1.0.0` 会发布 `run.halo.aifoundation:api:1.0.0`。使用正式版本时不需要配置 Snapshots 仓库。
 
 `plugin.yaml` 中需要添加插件依赖声明：
 
