@@ -2,8 +2,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "pnpm type-check && pnpm build-only",
-    "build-only": "pnpm -C packages/sdk run build && rsbuild build",
+    "build": "pnpm -C packages/sdk run build && pnpm type-check && pnpm build-only",
+    "build-only": "rsbuild build",
     "dev": "rsbuild build --watch --env-mode=development",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path ../.gitignore",
     "lint:eslint": "eslint . --fix",
