@@ -21,6 +21,10 @@ const tabs: Tab[] = [
     value: AI_FOUNDATION_ROUTE_NAMES.DEFAULTS,
   },
   {
+    label: '调用插件',
+    value: AI_FOUNDATION_ROUTE_NAMES.CALLERS,
+  },
+  {
     label: '测试',
     value: AI_FOUNDATION_ROUTE_NAMES.TEST,
   },
