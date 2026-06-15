@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import type { ProviderFormState } from '@/types/form'
+import type { FormKitTypeDefinition } from '@formkit/core'
 import { submitForm } from '@formkit/core'
 import { computed, shallowRef, watch } from 'vue'
 
@@ -16,12 +17,19 @@ const { data: providerTypes } = useProviderTypesFetch()
 
 const providerTypeOptions = computed(() => {
   if (!providerTypes.value) return []
-  return providerTypes.value.map((t) => ({
-    value: t.providerType,
-    label: t.displayName,
-    icon: t.iconUrl,
-    description: t.description || ' '
-  }))
+  return providerTypes.value.flatMap((t) => {
+    if (!t.providerType || !t.displayName) {
+      return []
+    }
+    return [
+      {
+        value: t.providerType,
+        label: t.displayName,
+        icon: t.iconUrl,
+        description: t.description || ' ',
+      },
+    ]
+  })
 })
 
 const providerType = shallowRef(props.formState?.providerType)
@@ -134,7 +142,7 @@ defineExpose({
     />
 
     <FormKit
-      type="secret"
+      :type="'secret' as unknown as FormKitTypeDefinition<string | undefined>"
       name="apiKeySecretName"
       label="API Key"
       :value="formState?.apiKeySecretName"
@@ -164,6 +172,11 @@ defineExpose({
       :value="formState?.proxyPort"
     />
 
-    <FormKit type="switch" name="enabled" label="启用" :value="formState?.enabled ?? true" />
+    <FormKit
+      :type="'switch' as unknown as FormKitTypeDefinition<boolean>"
+      name="enabled"
+      label="启用"
+      :value="formState?.enabled ?? true"
+    />
   </FormKit>
 </template>

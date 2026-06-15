@@ -21,11 +21,12 @@
     ]
   },
   "dependencies": {
-    "@formkit/core": "^1.7.2",
-    "@halo-dev/api-client": "^2.24.0",
+    "@formkit/core": "2.1.0",
+    "@formkit/vue": "2.1.0",
+    "@halo-dev/api-client": "^2.25.1",
     "@halo-dev/ai-ui-vue": "workspace:*",
-    "@halo-dev/components": "^2.24.0",
-    "@halo-dev/ui-shared": "^2.24.0",
+    "@halo-dev/components": "^2.25.1",
+    "@halo-dev/ui-shared": "^2.25.1",
     "@tanstack/vue-query": "^4.44.0",
     "@vueuse/core": "^14.3.0",
     "@vueuse/integrations": "^14.3.0",
@@ -39,8 +40,8 @@
     "vue-router": "5.0.6"
   },
   "devDependencies": {
-    "@formkit/themes": "^2.0.0",
-    "@halo-dev/ui-plugin-bundler-kit": "^2.24.0",
+    "@formkit/themes": "2.1.0",
+    "@halo-dev/ui-plugin-bundler-kit": "^2.25.1",
     "@iconify-json/mingcute": "^1.2.7",
     "@iconify-json/ri": "^1.2.10",
     "@rsbuild/core": "^2.0.6",
