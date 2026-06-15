@@ -140,8 +140,9 @@ describe('useChat', () => {
       await nextTick()
 
       expect(composable.status.value).toBe('ready')
-      expect(composable.messages.value).toHaveLength(2)
-      expect(composable.messages.value[1].parts).toContainEqual(
+      const messages = composable.messages.value!
+      expect(messages).toHaveLength(2)
+      expect(messages[1]!.parts).toContainEqual(
         expect.objectContaining({
           type: 'tool-search',
           toolCallId: 'call-1',

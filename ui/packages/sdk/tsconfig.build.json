@@ -5,6 +5,7 @@
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": false,
+    "incremental": false,
     "noEmit": false,
     "allowImportingTsExtensions": false,
     "outDir": "dist",

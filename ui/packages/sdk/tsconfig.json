@@ -2,7 +2,6 @@
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "include": ["src/**/*.ts", "src/**/*.test.ts"],
   "compilerOptions": {
-    "composite": true,
     "declaration": true,
     "declarationMap": true,
     "module": "ESNext",
