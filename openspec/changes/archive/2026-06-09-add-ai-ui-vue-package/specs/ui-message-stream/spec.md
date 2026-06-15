@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Frontend package can consume UI message streams
-The Halo UI message stream protocol SHALL be consumable by the `@halo-dev/ai-ui-vue` default chat transport without backend-specific adapters in the frontend.
+The Halo UI message stream protocol SHALL be consumable by the `@halo-dev/ai-foundation-sdk` default chat transport without backend-specific adapters in the frontend.
 
 #### Scenario: SSE events contain UI message chunks
 - **WHEN** a backend endpoint returns a Halo UI message stream response
@@ -19,7 +19,7 @@ The Halo UI message stream protocol SHALL be consumable by the `@halo-dev/ai-ui-
 - **AND** the trigger values SHALL include `submit-message` and `regenerate-message`
 
 ### Requirement: Frontend package documentation for UI message streams
-Consumer documentation SHALL explain how Halo plugin authors expose endpoints for `@halo-dev/ai-ui-vue`.
+Consumer documentation SHALL explain how Halo plugin authors expose endpoints for `@halo-dev/ai-foundation-sdk`.
 
 #### Scenario: Chat endpoint example
 - **WHEN** a plugin author reads `dev/ui-message-stream.md`

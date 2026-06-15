@@ -1,11 +1,11 @@
-# @halo-dev/ai-ui-vue
+# @halo-dev/ai-foundation-sdk
 
 面向 Vue 的 Halo AI UI 前端工具包，提供聊天、补全、结构化对象生成所需的 composable、传输层和流处理工具。
 
 ## 安装
 
 ```sh
-pnpm add @halo-dev/ai-ui-vue
+pnpm add @halo-dev/ai-foundation-sdk
 ```
 
 这个包可以安全地在 SSR 环境中导入。`fetch` 等浏览器 API 只会在真正发起请求时读取；服务端渲染、单元测试或自定义运行时中可以传入自己的 `fetch`。
@@ -15,7 +15,7 @@ pnpm add @halo-dev/ai-ui-vue
 `useChat` 管理 Halo `UIMessage` 状态，并把 `UIMessageChatRequest` 发送到 Halo UIMessage SSE 端点。
 
 ```ts
-import { DefaultChatTransport, useChat } from '@halo-dev/ai-ui-vue'
+import { DefaultChatTransport, useChat } from '@halo-dev/ai-foundation-sdk'
 
 const chat = useChat({
   id: 'conversation-1',
@@ -111,7 +111,7 @@ const chat = useChat({
 标准聊天界面优先使用 `useChat` 或 `Chat`。当你已经自己管理请求发送、消息状态，或者需要在非 Vue runtime 中读取 Halo UIMessage SSE 时，可以使用 `readUIMessageStream` 作为自定义 stream consumer。
 
 ```ts
-import { readUIMessageStream, type UIMessage } from '@halo-dev/ai-ui-vue'
+import { readUIMessageStream, type UIMessage } from '@halo-dev/ai-foundation-sdk'
 
 const response = await fetch('/apis/example.halo.run/v1alpha1/chat/stream', {
   method: 'POST',
@@ -168,7 +168,7 @@ import {
   assertValidUIMessages,
   pruneMessages,
   validateUIMessages,
-} from '@halo-dev/ai-ui-vue'
+} from '@halo-dev/ai-foundation-sdk'
 
 const pruned = pruneMessages(messages, { maxMessages: 20 })
 const issues = validateUIMessages(pruned, { dataPartSchemas })
@@ -188,7 +188,7 @@ issue 列表；`assertValidUIMessages` 在存在 issue 时抛出 `AIUIMessageVal
 `useCompletion` 会发送 `{ prompt, ...body }`，并读取普通文本流。
 
 ```ts
-import { useCompletion } from '@halo-dev/ai-ui-vue'
+import { useCompletion } from '@halo-dev/ai-foundation-sdk'
 
 const completion = useCompletion({
   api: '/apis/example.halo.run/v1alpha1/completion/stream',
@@ -205,7 +205,7 @@ await completion.complete('写一个标题')
 `experimental_useObject` 会发送 `{ input, schema, output, ...body }`，并读取模型生成的 JSON 文本流。读取过程中会尽量解析部分 JSON 快照，流结束后会用传入的 JSON Schema 或 Zod-like schema 校验最终对象。
 
 ```ts
-import { experimental_useObject, jsonSchema } from '@halo-dev/ai-ui-vue'
+import { experimental_useObject, jsonSchema } from '@halo-dev/ai-foundation-sdk'
 
 const object = experimental_useObject<{
   title: string
@@ -249,7 +249,7 @@ import {
   DefaultChatTransport,
   fromOpenAPIRequestArgs,
   useChat,
-} from '@halo-dev/ai-ui-vue'
+} from '@halo-dev/ai-foundation-sdk'
 import { ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator } from './api/generated'
 
 const paramCreator = ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator()

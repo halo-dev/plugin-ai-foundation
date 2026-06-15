@@ -10,7 +10,7 @@ The current UI message runtime covers the first usable chat path, but its protoc
 - Add a single tool lifecycle model with `input-streaming`, `input-available`, `approval-requested`, `output-available`, and `output-error` states.
 - Add `onData`, `onToolCall`, `addToolOutput`, `rejectToolCall`, and a helper for automatic continuation when the last assistant message's tools are complete.
 - Split Java UI message responsibilities into focused model, identity, validation, reduction, codec, reader/writer, conversion, and chat handling classes.
-- Update `@halo-dev/ai-ui-vue` around a framework-neutral `Chat` core and Vue-only adapter, including `disconnected` status.
+- Update `@halo-dev/ai-foundation-sdk` around a framework-neutral `Chat` core and Vue-only adapter, including `disconnected` status.
 - Keep `useCompletion` and `experimental_useObject` as lightweight helpers, with small API cleanup only.
 - Dogfood the new runtime in the model test workbench without redesigning the UI.
 - Update `dev/ui-message-stream.md` as the detailed integration guide for consumer plugins.

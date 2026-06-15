@@ -62,6 +62,6 @@
 
 - [x] 10.1 Run OpenSpec validation for `stabilize-ui-message-runtime`.
 - [x] 10.2 Run focused Java tests for UI message model, reducer, validation, conversion, and chat handling.
-- [x] 10.3 Run frontend package typecheck and tests for `@halo-dev/ai-ui-vue`.
+- [x] 10.3 Run frontend package typecheck and tests for `@halo-dev/ai-foundation-sdk`.
 - [x] 10.4 Run workbench-related frontend typecheck after dogfood wiring.
 - [x] 10.5 Run a final search for removed old tool API references and update any remaining caller paths.

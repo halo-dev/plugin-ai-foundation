@@ -21,7 +21,7 @@ The package SHALL expose a public `readUIMessageStream` helper for callers that 
 - **AND** it SHALL NOT parse non-stream HTTP error bodies
 
 #### Scenario: Reader is exported
-- **WHEN** a caller imports from `@halo-dev/ai-ui-vue`
+- **WHEN** a caller imports from `@halo-dev/ai-foundation-sdk`
 - **THEN** `readUIMessageStream` and its public option/result/status types SHALL be exported from the package entrypoint
 
 ### Requirement: Reader message creation options

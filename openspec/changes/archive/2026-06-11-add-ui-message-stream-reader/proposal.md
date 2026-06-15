@@ -4,7 +4,7 @@ Callers that do not want to use `Chat` or `useChat` currently have to manually c
 
 ## What Changes
 
-- Add a public `readUIMessageStream` helper to `@halo-dev/ai-ui-vue` for reading an existing Halo UIMessage stream into an assistant message result.
+- Add a public `readUIMessageStream` helper to `@halo-dev/ai-foundation-sdk` for reading an existing Halo UIMessage stream into an assistant message result.
 - Support `AsyncIterable<UIMessageChunk>`, UIMessage SSE `ReadableStream<Uint8Array>`, and `Response` inputs.
 - Reuse the existing reducer, runtime schema hooks, data callback semantics, and one-time tool-call notification semantics.
 - Return structured lifecycle results including final message, terminal information, status, error flags, and optional errors.

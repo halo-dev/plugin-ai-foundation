@@ -28,7 +28,7 @@ import {
   useChat,
   type UIMessage as HaloUIMessage,
   type UIMessagePart as HaloUIMessagePart,
-} from '@halo-dev/ai-ui-vue'
+} from '@halo-dev/ai-foundation-sdk'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'

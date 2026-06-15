@@ -3,7 +3,7 @@
 Define the publishable Vue runtime package for building Halo AI chat, completion, and structured object streaming interfaces.
 ## Requirements
 ### Requirement: Publishable Vue runtime package
-The system SHALL provide a publishable `@halo-dev/ai-ui-vue` package that is separate from the plugin console UI.
+The system SHALL provide a publishable `@halo-dev/ai-foundation-sdk` package that is separate from the plugin console UI.
 
 #### Scenario: Package is separate from console source
 - **WHEN** the frontend workspace is installed
@@ -419,7 +419,7 @@ The package SHALL expose a public `readUIMessageStream` helper for callers that 
 - **AND** it SHALL NOT parse non-stream HTTP error bodies
 
 #### Scenario: Reader is exported
-- **WHEN** a caller imports from `@halo-dev/ai-ui-vue`
+- **WHEN** a caller imports from `@halo-dev/ai-foundation-sdk`
 - **THEN** `readUIMessageStream` and its public option/result/status types SHALL be exported from the package entrypoint
 
 ### Requirement: Reader message creation options

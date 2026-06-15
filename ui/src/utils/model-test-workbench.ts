@@ -6,7 +6,7 @@ import {
   type DataPartSchemas,
   type MessageMetadataSchema,
   type UIMessageChunk as HaloUIMessageChunk,
-} from '@halo-dev/ai-ui-vue'
+} from '@halo-dev/ai-foundation-sdk'
 
 export type ChatRole = 'user' | 'assistant'
 

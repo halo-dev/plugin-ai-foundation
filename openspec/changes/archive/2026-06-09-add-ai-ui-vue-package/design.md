@@ -10,7 +10,7 @@ The new package must be publishable for external Vue users and reusable by the c
 
 **Goals:**
 
-- Add `@halo-dev/ai-ui-vue` as a publishable Vue runtime package at `ui/packages/ai-ui-vue`.
+- Add `@halo-dev/ai-foundation-sdk` as a publishable Vue runtime package at `ui/packages/ai-ui-vue`.
 - Implement `useChat`, `useCompletion`, and `experimental_useObject` for Vue.
 - Include framework-neutral runtime primitives in the package: `Chat`, transports, stream readers, reducers, shared stores, tool continuation helpers, and TypeScript wire-contract types.
 - Make `Chat` independent from Vue by using a state adapter and callbacks; Vue composables provide refs and lifecycle cleanup.
@@ -22,7 +22,7 @@ The new package must be publishable for external Vue users and reusable by the c
 
 **Non-Goals:**
 
-- Do not add visual UI components to `@halo-dev/ai-ui-vue`.
+- Do not add visual UI components to `@halo-dev/ai-foundation-sdk`.
 - Do not depend on Halo Console-only packages or the generated console API client from the package.
 - Do not implement Vercel/AI SDK data-stream compatibility in the first release.
 - Do not add direct server-side Java SDK transports.
@@ -33,7 +33,7 @@ The new package must be publishable for external Vue users and reusable by the c
 
 ### Package Layout
 
-Create `ui/packages/ai-ui-vue` and extend `ui/pnpm-workspace.yaml` to include packages. The package name is `@halo-dev/ai-ui-vue`, version `0.1.0`, ESM-only, with explicit `exports`, generated `.d.ts`, and `files: ["dist"]`.
+Create `ui/packages/ai-ui-vue` and extend `ui/pnpm-workspace.yaml` to include packages. The package name is `@halo-dev/ai-foundation-sdk`, version `0.1.0`, ESM-only, with explicit `exports`, generated `.d.ts`, and `files: ["dist"]`.
 
 Rationale: this keeps npm-package code separate from plugin console code while allowing the console UI to consume it through the workspace. It also follows the package shape used by other `@halo-dev` frontend packages.
 

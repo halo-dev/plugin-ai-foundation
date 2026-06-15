@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Workbench dogfoods ai-ui-vue chat runtime
-The model test workbench SHALL use `@halo-dev/ai-ui-vue` for its UIMessage chat stream state and parsing path while preserving the existing console UI.
+The model test workbench SHALL use `@halo-dev/ai-foundation-sdk` for its UIMessage chat stream state and parsing path while preserving the existing console UI.
 
 #### Scenario: Workbench uses package chat transport
 - **WHEN** the administrator sends a chat test message through the workbench

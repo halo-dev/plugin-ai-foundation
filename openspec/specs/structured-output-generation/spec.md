@@ -204,7 +204,7 @@ The system SHALL map provider-neutral structured output requests to Spring AI 2.
 - **AND** structured output parsing SHALL apply to the final answer step as before the Spring AI upgrade
 
 ### Requirement: Object streaming endpoint contract
-The system SHALL support frontend object generation endpoints that consume `@halo-dev/ai-ui-vue` object requests and stream JSON text.
+The system SHALL support frontend object generation endpoints that consume `@halo-dev/ai-foundation-sdk` object requests and stream JSON text.
 
 #### Scenario: Endpoint derives object output from schema
 - **WHEN** an object streaming request contains `schema` and omits `output`

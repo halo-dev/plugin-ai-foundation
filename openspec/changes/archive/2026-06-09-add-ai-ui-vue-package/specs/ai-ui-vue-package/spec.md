@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Publishable Vue runtime package
-The system SHALL provide a publishable `@halo-dev/ai-ui-vue` package that is separate from the plugin console UI.
+The system SHALL provide a publishable `@halo-dev/ai-foundation-sdk` package that is separate from the plugin console UI.
 
 #### Scenario: Package is separate from console source
 - **WHEN** the frontend workspace is installed

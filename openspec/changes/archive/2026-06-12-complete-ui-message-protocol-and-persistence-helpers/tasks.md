@@ -33,5 +33,5 @@
 - [x] 5.1 Update `dev/ui-message-stream.md` and package documentation to describe canonical tool stream chunks, final dynamic tool parts, `start-step`, persistence helpers, and throttle behavior.
 - [x] 5.2 Ensure docs explicitly defer stream resume, `source-document`, file expansion, and npm-side model-message conversion.
 - [x] 5.3 Run focused backend tests for UI message stream mapping/codec/reducer behavior.
-- [x] 5.4 Run package tests for `@halo-dev/ai-ui-vue`.
+- [x] 5.4 Run package tests for `@halo-dev/ai-foundation-sdk`.
 - [x] 5.5 Run `git diff --check`.

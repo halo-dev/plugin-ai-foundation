@@ -7,7 +7,7 @@
 
     "paths": {
       "@/*": ["./src/*"],
-      "@halo-dev/ai-ui-vue": ["./packages/ai-ui-vue/src/index.ts"]
+      "@halo-dev/ai-foundation-sdk": ["./packages/ai-ui-vue/src/index.ts"]
     }
   }
 }

@@ -4,7 +4,7 @@ Halo AI Foundation already provides backend UI message streams and structured ou
 
 ## What Changes
 
-- Add a publishable `@halo-dev/ai-ui-vue` package under `ui/packages/ai-ui-vue`.
+- Add a publishable `@halo-dev/ai-foundation-sdk` package under `ui/packages/ai-ui-vue`.
 - Provide Vue composables and supporting runtime APIs equivalent in scope to AI SDK UI for Vue: `useChat`, `useCompletion`, and `experimental_useObject`.
 - Provide framework-neutral chat core primitives inside the package, including `Chat`, Halo chat transports, stream readers, message reducers, tool continuation helpers, and public TypeScript types for Halo UI messages.
 - Support Halo UIMessage SSE streams and text streams as the package transport protocols.

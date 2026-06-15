@@ -1,7 +1,7 @@
 ## 1. Package Setup
 
 - [x] 1.1 Extend `ui/pnpm-workspace.yaml` to include `ui/packages/*`.
-- [x] 1.2 Create `ui/packages/ai-ui-vue` with package metadata for `@halo-dev/ai-ui-vue@0.1.0`.
+- [x] 1.2 Create `ui/packages/ai-ui-vue` with package metadata for `@halo-dev/ai-foundation-sdk@0.1.0`.
 - [x] 1.3 Configure package TypeScript, build, exports, declaration output, and test setup.
 - [x] 1.4 Verify the selected build tool can produce ESM and `.d.ts` output without console-only dependencies.
 
@@ -43,7 +43,7 @@
 
 ## 6. Workbench Dogfood
 
-- [x] 6.1 Add the local workspace dependency from the console UI to `@halo-dev/ai-ui-vue`.
+- [x] 6.1 Add the local workspace dependency from the console UI to `@halo-dev/ai-foundation-sdk`.
 - [x] 6.2 Migrate the model test workbench chat UIMessage stream state and parsing path to the package runtime.
 - [x] 6.3 Preserve existing console layout, Chinese UI text, Markdown rendering, model attribution, parameter handling, and Halo components.
 - [x] 6.4 Preserve stop behavior, reasoning display separation, external tool result/error continuation, and approval response continuation.
@@ -52,7 +52,7 @@
 ## 7. Documentation
 
 - [x] 7.1 Write the package README with install instructions, exports, `useChat`, `useCompletion`, `experimental_useObject`, transports, and backend protocol examples.
-- [x] 7.2 Update `dev/ui-message-stream.md` with `@halo-dev/ai-ui-vue` chat endpoint integration guidance.
+- [x] 7.2 Update `dev/ui-message-stream.md` with `@halo-dev/ai-foundation-sdk` chat endpoint integration guidance.
 - [x] 7.3 Document object streaming request shape and final validation responsibilities in `dev/ui-message-stream.md`.
 - [x] 7.4 Ensure docs use Halo-owned wording and avoid presenting the package as an AI SDK-branded wrapper.
 
@@ -62,4 +62,4 @@
 - [x] 8.2 Run frontend type-check and relevant workbench tests.
 - [x] 8.3 Run backend tests for changed endpoint behavior when backend code changes.
 - [x] 8.4 Run `git diff --check` (raw check reports regenerated client whitespace; non-generated diff check passes).
-- [x] 8.5 Review package dependency tree to confirm no console-only dependencies are bundled into `@halo-dev/ai-ui-vue`.
+- [x] 8.5 Review package dependency tree to confirm no console-only dependencies are bundled into `@halo-dev/ai-foundation-sdk`.
