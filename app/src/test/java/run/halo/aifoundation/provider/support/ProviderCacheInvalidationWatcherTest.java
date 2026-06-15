@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
 import reactor.core.publisher.Flux;
+import run.halo.app.extension.AbstractExtension;
 import run.halo.app.extension.GroupVersionKind;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
@@ -88,14 +89,42 @@ class ProviderCacheInvalidationWatcherTest {
 
     @Test
     void onDelete_nonAiProvider_doesNothing() {
+        var extension = unrelatedExtension("unrelated");
+
+        watcher.onDelete(extension);
+
+        verify(providerClientCache, never()).invalidate(any());
+    }
+
+    @Test
+    void onDelete_secret_triggersInvalidateForReferencingProviders() {
         var secret = new Secret();
         var metadata = new Metadata();
-        metadata.setName("my-secret");
+        metadata.setName("api-key-secret");
         secret.setMetadata(metadata);
+
+        var provider1 = aiProvider("provider-a", "openai");
+        provider1.getSpec().setApiKeySecretName("api-key-secret");
+        var provider2 = aiProvider("provider-b", "deepseek");
+        provider2.getSpec().setApiKeySecretName("api-key-secret");
+        var provider3 = aiProvider("provider-c", "ollama");
+        provider3.getSpec().setApiKeySecretName("other-secret");
+
+        when(client.listAll(eq(AiProvider.class), any(ListOptions.class), any(Sort.class)))
+            .thenReturn(Flux.just(provider1, provider2, provider3));
 
         watcher.onDelete(secret);
 
-        verify(providerClientCache, never()).invalidate(any());
+        // Allow async subscription to complete
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        verify(providerClientCache).invalidate("provider-a");
+        verify(providerClientCache).invalidate("provider-b");
+        verify(providerClientCache, never()).invalidate("provider-c");
     }
 
     @Test
@@ -156,5 +185,18 @@ class ProviderCacheInvalidationWatcherTest {
         spec.setDisplayName(name);
         provider.setSpec(spec);
         return provider;
+    }
+
+    private TestExtension unrelatedExtension(String name) {
+        var extension = new TestExtension();
+        extension.setApiVersion("test.halo.run/v1alpha1");
+        extension.setKind("Unrelated");
+        var metadata = new Metadata();
+        metadata.setName(name);
+        extension.setMetadata(metadata);
+        return extension;
+    }
+
+    static class TestExtension extends AbstractExtension {
     }
 }
