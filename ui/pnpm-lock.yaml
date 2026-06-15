@@ -14,6 +14,9 @@ importers:
       '@formkit/vue':
         specifier: 2.1.0
         version: 2.1.0(vue@3.5.34(typescript@5.8.3))
+      '@halo-dev/ai-ui-vue':
+        specifier: workspace:*
+        version: link:packages/ai-ui-vue
       '@halo-dev/api-client':
         specifier: ^2.25.1
         version: 2.25.1(axios@1.16.1)
@@ -141,6 +144,21 @@ importers:
       vue-tsc:
         specifier: ^3.2.9
         version: 3.2.9(typescript@5.8.3)
+
+  packages/ai-ui-vue:
+    devDependencies:
+      '@rstest/core':
+        specifier: ^0.10.0
+        version: 0.10.0(core-js@3.47.0)(happy-dom@20.9.0)
+      '@vue/tsconfig':
+        specifier: ^0.7.0
+        version: 0.7.0(typescript@5.8.3)(vue@3.5.34(typescript@5.8.3))
+      typescript:
+        specifier: ~5.8.3
+        version: 5.8.3
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.34(typescript@5.8.3)
 
 packages:
 

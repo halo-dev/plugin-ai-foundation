@@ -1,9 +1,14 @@
 import type { AiModel, OutputSpec, TestUiMessageChatRequest } from '@/api/generated'
 import { AiModelSpecModelTypeEnum } from '@/api/generated'
 import { utils } from '@halo-dev/ui-shared'
+import {
+  DefaultChatTransport,
+  type DataPartSchemas,
+  type MessageMetadataSchema,
+  type UIMessageChunk as HaloUIMessageChunk,
+} from '@halo-dev/ai-ui-vue'
 
 export type ChatRole = 'user' | 'assistant'
-export type ChatStreamProtocol = 'text' | 'ui-message'
 
 export interface WorkbenchMessage {
   id: string
@@ -11,10 +16,6 @@ export interface WorkbenchMessage {
   content: string
   uiMessage?: UIMessage<Record<string, unknown>>
   transientData?: Record<string, unknown>
-  leadingMessages?: ModelMessage[]
-  followingMessages?: ModelMessage[]
-  historyParts?: ModelMessagePart[]
-  responseMessages?: ModelMessage[]
   reasoningContent?: string
   reasoningState?: 'streaming' | 'done'
   toolEvents?: WorkbenchToolEvent[]
@@ -131,101 +132,11 @@ export interface ReasoningOptions {
   effort?: ReasoningEffort
 }
 
-export interface SseParseResult<T> {
-  buffer: string
-  chunks: T[]
-}
-
-export interface ModelMessagePart {
-  type:
-    | 'text'
-    | 'reasoning'
-    | 'tool-call'
-    | 'tool-result'
-    | 'tool-error'
-    | 'tool-approval-request'
-    | 'tool-approval-response'
-  text?: string
-  approvalId?: string
-  toolCallId?: string
-  toolName?: string
-  stepIndex?: number
-  input?: Record<string, unknown>
-  result?: unknown
-  errorText?: string
-  approved?: boolean
-  reason?: string
-}
-
-export interface ModelMessage {
-  role: 'USER' | 'ASSISTANT' | 'TOOL'
-  content: ModelMessagePart[]
-}
-
-export interface GenerateTextRequest {
-  system?: string
-  messages?: ModelMessage[]
-  temperature?: number
-  topP?: number
-  maxOutputTokens?: number
-  seed?: number
-  maxRetries?: number
-  reasoning?: ReasoningOptions
-  providerOptions?: Record<string, Record<string, unknown>>
-  headers?: Record<string, string>
-  output?: OutputSpec
-}
-
 export interface ChatStreamOptions {
   testToolEnabled?: boolean
   testToolApprovalEnabled?: boolean
   externalTestToolEnabled?: boolean
   toolCallRepairEnabled?: boolean
-}
-
-export interface TextStreamPart {
-  type?:
-    | 'start'
-    | 'start-step'
-    | 'text-start'
-    | 'text-delta'
-    | 'text-end'
-    | 'reasoning-start'
-    | 'reasoning-delta'
-    | 'reasoning-end'
-    | 'tool-input-start'
-    | 'tool-input-delta'
-    | 'tool-call'
-    | 'tool-result'
-    | 'tool-error'
-    | 'tool-approval-request'
-    | 'source'
-    | 'file'
-    | 'finish-step'
-    | 'finish'
-    | 'raw'
-    | 'abort'
-    | 'error'
-    | (string & {})
-  messageId?: string
-  id?: string
-  stepIndex?: number
-  delta?: string
-  providerMetadata?: Record<string, unknown>
-  approvalId?: string
-  toolCallId?: string
-  toolName?: string
-  input?: Record<string, unknown>
-  result?: unknown
-  errorText?: string
-  url?: string
-  title?: string
-  mediaType?: string
-  data?: unknown
-  warnings?: WorkbenchWarning[]
-  response?: {
-    messages?: ModelMessage[]
-  }
 }
 
 export interface UIMessage<M = Record<string, unknown>> {
@@ -241,22 +152,49 @@ export interface UIMessagePart {
   text?: string
   name?: string
   data?: unknown
+  transientData?: boolean
   sourceId?: string
   fileId?: string
   url?: string
   title?: string
   mediaType?: string
-  approvalId?: string
   toolCallId?: string
   toolName?: string
+  state?:
+    | 'input-streaming'
+    | 'input-available'
+    | 'approval-requested'
+    | 'approval-responded'
+    | 'output-available'
+    | 'output-denied'
+    | 'output-error'
   stepIndex?: number
   input?: Record<string, unknown>
-  result?: unknown
+  inputText?: string
+  output?: unknown
   errorText?: string
-  approved?: boolean
-  reason?: string
+  approval?: {
+    id: string
+    approved?: boolean
+    reason?: string
+  }
   providerMetadata?: Record<string, unknown>
   [key: string]: unknown
+}
+
+export const workbenchMessageMetadataSchema: MessageMetadataSchema<Record<string, unknown>> = {
+  safeParse: (value) => {
+    if (!isPlainRecord(value)) {
+      return { success: false, error: { message: 'Workbench message metadata must be an object.' } }
+    }
+    return { success: true, data: value }
+  },
+}
+
+export const workbenchDataPartSchemas: DataPartSchemas = {
+  progress: workbenchDefinedDataSchema('progress'),
+  status: workbenchDefinedDataSchema('status'),
+  weather: workbenchDefinedDataSchema('weather'),
 }
 
 export interface UIMessageChunk {
@@ -290,20 +228,34 @@ export interface UIMessageChunk {
   name?: string
   data?: unknown
   transientData?: boolean
+  transient?: boolean
   sourceId?: string
   fileId?: string
   url?: string
   title?: string
   mediaType?: string
-  approvalId?: string
   toolCallId?: string
   toolName?: string
+  state?: UIMessagePart['state']
   stepIndex?: number
   input?: Record<string, unknown>
-  result?: unknown
+  inputTextDelta?: string
+  output?: unknown
   errorText?: string
+  approval?: UIMessagePart['approval']
   providerMetadata?: Record<string, unknown>
   warnings?: WorkbenchWarning[]
+}
+
+function workbenchDefinedDataSchema(name: string) {
+  return {
+    safeParse: (value: unknown) => {
+      if (value === undefined) {
+        return { success: false, error: { message: `Workbench data part ${name} must define data.` } }
+      }
+      return { success: true, data: value }
+    },
+  }
 }
 
 export type UIMessageChatTrigger = 'submit-message' | 'regenerate-message'
@@ -425,29 +377,6 @@ export function buildReasoningOptions(options: {
   }
 }
 
-export function buildTestChatRequest(
-  messages: WorkbenchMessage[],
-  parameters: ChatParameters,
-  options?: {
-    extraMessages?: ModelMessage[]
-  },
-): GenerateTextRequest {
-  const requestMessages = buildRequestMessages(messages, options?.extraMessages)
-  return {
-    system: normalizedSystemPrompt(parameters),
-    messages: requestMessages,
-    temperature: parameters.temperature,
-    topP: parameters.topP,
-    maxOutputTokens: parameters.maxOutputTokens,
-    seed: parameters.seed,
-    maxRetries: parameters.maxRetries,
-    reasoning: parameters.reasoning,
-    providerOptions: parameters.providerOptions,
-    headers: parameters.headers,
-    output: parameters.output,
-  }
-}
-
 export function buildTestUiMessageChatRequest(
   messages: WorkbenchMessage[],
   parameters: ChatParameters,
@@ -507,138 +436,8 @@ function toUIMessage(message: WorkbenchMessage): UIMessage | undefined {
   }
 }
 
-function buildRequestMessages(
-  messages: WorkbenchMessage[],
-  extraMessages?: ModelMessage[],
-): ModelMessage[] {
-  const requestMessages: ModelMessage[] = []
-  for (const message of messages) {
-    appendWorkbenchMessage(requestMessages, message)
-  }
-  if (extraMessages?.length) {
-    requestMessages.push(...extraMessages)
-  }
-  return requestMessages
-}
-
-function appendWorkbenchMessage(requestMessages: ModelMessage[], message: WorkbenchMessage) {
-  if (message.responseMessages?.length) {
-    requestMessages.push(...message.responseMessages)
-    appendFollowingMessages(requestMessages, message)
-    return
-  }
-  appendLeadingMessages(requestMessages, message)
-  const modelMessage = toModelMessage(message)
-  if (modelMessage) {
-    requestMessages.push(modelMessage)
-  }
-  appendFollowingMessages(requestMessages, message)
-}
-
-function toModelMessage(message: WorkbenchMessage): ModelMessage | undefined {
-  const content = message.content.trim()
-  const historyParts = message.role === 'assistant' ? message.historyParts || [] : []
-  if (
-    (!content && !historyParts.length) ||
-    (message.role === 'assistant' && message.state === 'error')
-  ) {
-    return undefined
-  }
-  const parts = [...historyParts]
-  if (content) {
-    parts.push({ type: 'text', text: content })
-  }
-  return {
-    role: message.role === 'assistant' ? 'ASSISTANT' : 'USER',
-    content: parts,
-  }
-}
-
-function appendLeadingMessages(requestMessages: ModelMessage[], message: WorkbenchMessage) {
-  if (message.leadingMessages?.length) {
-    requestMessages.push(...message.leadingMessages)
-  }
-}
-
-function appendFollowingMessages(requestMessages: ModelMessage[], message: WorkbenchMessage) {
-  if (message.followingMessages?.length) {
-    requestMessages.push(...message.followingMessages)
-  }
-}
-
 function normalizedSystemPrompt(parameters: ChatParameters) {
   return parameters.systemPrompt?.trim() || undefined
-}
-
-export function parseSseJsonLines<T>(buffer: string, text: string): SseParseResult<T> {
-  const lines = (buffer + text).split('\n')
-  const nextBuffer = lines.pop() || ''
-  const chunks: T[] = []
-
-  for (const line of lines) {
-    appendSseJsonChunk(chunks, line)
-  }
-
-  return {
-    buffer: nextBuffer,
-    chunks,
-  }
-}
-
-export function flushSseJsonBuffer<T>(buffer: string) {
-  const chunks: T[] = []
-  appendSseJsonChunk(chunks, buffer.trim())
-  return chunks
-}
-
-function appendSseJsonChunk<T>(chunks: T[], line: string) {
-  let data = line.trim()
-  if (!data.startsWith('data:')) {
-    return
-  }
-  while (data.startsWith('data:')) {
-    data = data.slice(5).trim()
-  }
-  if (data && data !== '[DONE]') {
-    chunks.push(JSON.parse(data) as T)
-  }
-}
-
-export async function readTestChatStream(options: {
-  modelName: string
-  requestBody: GenerateTextRequest
-  streamOptions: ChatStreamOptions
-  signal: AbortSignal
-  onChunks: (chunks: TextStreamPart[]) => void
-}) {
-  const response = await fetch(testChatStreamUrl(options.modelName, options.streamOptions), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(options.requestBody),
-    signal: options.signal,
-  })
-  if (!response.ok) {
-    throw new Error((await response.text()) || `HTTP ${response.status}`)
-  }
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new Error('无法读取响应流')
-  }
-
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    const parsed = parseSseJsonLines<TextStreamPart>(
-      buffer,
-      decoder.decode(value, { stream: true }),
-    )
-    buffer = parsed.buffer
-    options.onChunks(parsed.chunks)
-  }
-  options.onChunks(flushSseJsonBuffer<TextStreamPart>(buffer))
 }
 
 export async function readTestUiMessageChatStream(options: {
@@ -648,43 +447,22 @@ export async function readTestUiMessageChatStream(options: {
   signal: AbortSignal
   onChunks: (chunks: UIMessageChunk[]) => void
 }) {
-  const response = await fetch(
-    testUiMessageChatStreamUrl(options.modelName, options.streamOptions),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(options.requestBody),
-      signal: options.signal,
-    },
-  )
-  if (!response.ok) {
-    throw new Error((await response.text()) || `HTTP ${response.status}`)
+  const requestBody = options.requestBody as Record<string, unknown>
+  const transport = new DefaultChatTransport({
+    api: testUiMessageChatStreamUrl(options.modelName, options.streamOptions),
+    fetch,
+  })
+  const stream = await transport.sendMessages({
+    chatId: String(requestBody.id || utils.id.uuid()),
+    messages: (options.requestBody.messages || []) as never[],
+    trigger: (options.requestBody.trigger || 'submit-message') as 'submit-message' | 'regenerate-message',
+    messageId: options.requestBody.messageId,
+    body: requestBody,
+    abortSignal: options.signal,
+  })
+  for await (const chunk of stream) {
+    options.onChunks([chunk as HaloUIMessageChunk as UIMessageChunk])
   }
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new Error('无法读取响应流')
-  }
-
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    const parsed = parseSseJsonLines<UIMessageChunk>(
-      buffer,
-      decoder.decode(value, { stream: true }),
-    )
-    buffer = parsed.buffer
-    options.onChunks(parsed.chunks)
-  }
-  options.onChunks(flushSseJsonBuffer<UIMessageChunk>(buffer))
-}
-
-export function testChatStreamUrl(modelName: string, options: ChatStreamOptions) {
-  const params = chatStreamQueryParams(options)
-  const query = params.toString()
-  return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-chat/stream${query ? `?${query}` : ''}`
 }
 
 export function testUiMessageChatStreamUrl(modelName: string, options: ChatStreamOptions) {
@@ -708,86 +486,6 @@ function chatStreamQueryParams(options: ChatStreamOptions) {
     params.set('enableToolCallRepair', 'true')
   }
   return params
-}
-
-export function isRenderableTextDelta(
-  part: TextStreamPart,
-): part is TextStreamPart & { type: 'text-delta'; delta: string } {
-  return part.type === 'text-delta' && !!part.delta
-}
-
-export function isRenderableReasoningDelta(
-  part: TextStreamPart,
-): part is TextStreamPart & { type: 'reasoning-delta'; delta: string } {
-  return part.type === 'reasoning-delta' && !!part.delta
-}
-
-export function isTerminalTextStreamPart(part: TextStreamPart) {
-  return part.type === 'finish' || part.type === 'error' || part.type === 'abort'
-}
-
-export function toToolEvent(part: TextStreamPart): WorkbenchToolEvent | undefined {
-  if (!isToolStreamPartType(part.type)) {
-    return undefined
-  }
-
-  return {
-    id: `${part.type}-${part.approvalId || part.toolCallId || utils.id.uuid()}`,
-    type: part.type,
-    approvalId: part.approvalId,
-    toolCallId: part.toolCallId,
-    toolName: part.toolName,
-    stepIndex: part.stepIndex,
-    input: part.input,
-    result: part.result,
-    errorText: part.errorText,
-    approvalStatus: part.type === 'tool-approval-request' ? 'pending' : undefined,
-    externalStatus: part.type === 'tool-call' ? 'pending' : undefined,
-    summary: toolEventSummary(part),
-  }
-}
-
-export function applyWorkbenchStreamPart(message: WorkbenchMessage, part: TextStreamPart) {
-  const toolEvent = toToolEvent(part)
-  if (toolEvent) {
-    appendWorkbenchToolEvent(message, toolEvent)
-    return
-  }
-  if (part.type === 'error') {
-    appendWorkbenchError(message, part.errorText || '请求失败')
-    return
-  }
-  if (part.type === 'reasoning-start') {
-    message.reasoningState = 'streaming'
-    return
-  }
-  if (isRenderableReasoningDelta(part)) {
-    message.reasoningContent = `${message.reasoningContent || ''}${part.delta}`
-    message.reasoningState = 'streaming'
-    return
-  }
-  if (part.type === 'reasoning-end') {
-    message.reasoningState = 'done'
-    return
-  }
-  if (isRenderableTextDelta(part)) {
-    message.content += part.delta
-    return
-  }
-  if (part.type === 'finish-step') {
-    if (part.response?.messages?.length) {
-      message.responseMessages = part.response.messages
-      message.leadingMessages = undefined
-      message.historyParts = undefined
-    }
-    if (part.warnings?.length) {
-      message.warnings = [...(message.warnings || []), ...part.warnings]
-    }
-    return
-  }
-  if (isTerminalTextStreamPart(part)) {
-    finishWorkbenchMessage(message, 'done')
-  }
 }
 
 export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: UIMessageChunk) {
@@ -836,14 +534,16 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
     projectUIMessage(message)
     return
   }
-  if (chunk.type === 'data') {
+  if (isUIMessageDataChunk(chunk)) {
     if (chunk.name) {
-      if (chunk.transientData) {
-        message.transientData = { ...(message.transientData || {}), [chunk.name]: chunk.data }
+      if (chunk.transientData || chunk.transient) {
+        message.transientData = { ...message.transientData, [chunk.name]: chunk.data }
       } else {
-        upsertUIMessagePart(uiMessage, 'data', chunk.name, {
+        upsertUIMessagePart(uiMessage, chunk.type, chunk.id || chunk.name, {
+          id: chunk.id || chunk.name,
           name: chunk.name,
           data: chunk.data,
+          transientData: false,
         })
       }
     }
@@ -873,17 +573,25 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
     return
   }
   if (isUIMessageToolPartType(chunk.type)) {
-    const key = chunk.type === 'tool-approval-request' ? chunk.approvalId : chunk.toolCallId
-    if (key) {
-      upsertUIMessagePart(uiMessage, chunk.type, key, {
-        approvalId: chunk.approvalId,
+    if (chunk.toolCallId) {
+      const existing = uiMessage.parts.find(
+        (part) => isUIMessageToolPartType(part.type) && part.toolCallId === chunk.toolCallId,
+      )
+      const inputText =
+        chunk.state === 'input-streaming'
+          ? `${existing?.inputText || ''}${chunk.inputTextDelta || ''}`
+          : existing?.inputText
+      upsertUIMessagePart(uiMessage, chunk.type, chunk.toolCallId, {
         toolCallId: chunk.toolCallId,
         toolName: chunk.toolName,
-        input: chunk.input,
-        result: chunk.result,
-        errorText: chunk.errorText,
+        state: chunk.state,
+        input: chunk.input || existing?.input,
+        inputText,
+        output: chunk.output ?? existing?.output,
+        errorText: chunk.errorText || existing?.errorText,
+        approval: chunk.approval || existing?.approval,
         stepIndex: chunk.stepIndex,
-        providerMetadata: chunk.providerMetadata,
+        providerMetadata: chunk.providerMetadata || existing?.providerMetadata,
       })
       projectUIMessage(message)
     }
@@ -908,6 +616,25 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
   if (chunk.type === 'abort') {
     finishWorkbenchMessage(message, 'stopped')
   }
+}
+
+export function applyWorkbenchUIMessageSnapshot(
+  message: WorkbenchMessage,
+  uiMessage: UIMessage<Record<string, unknown>>,
+  state: WorkbenchMessage['state'] = 'streaming',
+) {
+  message.uiMessage = {
+    ...uiMessage,
+    parts: uiMessage.parts.map((part) => ({ ...part })),
+  }
+  message.state = state
+  if (message.reasoningState === 'streaming' && state !== 'streaming') {
+    message.reasoningState = 'done'
+  }
+  if (message.uiMessage.parts.some((part) => part.type === 'reasoning')) {
+    message.reasoningState = state === 'streaming' ? 'streaming' : 'done'
+  }
+  projectUIMessage(message)
 }
 
 function ensureAssistantUIMessage(message: WorkbenchMessage): UIMessage<Record<string, unknown>> {
@@ -935,8 +662,8 @@ function upsertUIMessagePart(
 }
 
 function uiMessagePartKey(type: string) {
-  if (type === 'data') {
-    return 'name'
+  if (isUIMessageDataPartType(type)) {
+    return 'id'
   }
   if (type === 'source-url') {
     return 'sourceId'
@@ -944,10 +671,7 @@ function uiMessagePartKey(type: string) {
   if (type === 'file') {
     return 'fileId'
   }
-  if (type === 'tool-approval-request') {
-    return 'approvalId'
-  }
-  if (type === 'tool-call' || type === 'tool-result' || type === 'tool-error') {
+  if (isUIMessageToolPartType(type)) {
     return 'toolCallId'
   }
   return 'id'
@@ -993,130 +717,90 @@ function projectUIMessage(message: WorkbenchMessage) {
 }
 
 function uiMessagePartsToToolEvents(parts: UIMessagePart[]): WorkbenchToolEvent[] {
-  const terminalToolParts = parts.filter(
-    (part) => part.type === 'tool-result' || part.type === 'tool-error',
-  )
-  const approvalRequestParts = parts.filter((part) => part.type === 'tool-approval-request')
-  const approvalResponseParts = parts.filter((part) => part.type === 'tool-approval-response')
   return parts
-    .map((part) =>
-      uiMessagePartToToolEvent(
-        part,
-        terminalToolParts,
-        approvalRequestParts,
-        approvalResponseParts,
-      ),
-    )
+    .map((part) => uiMessagePartToToolEvent(part))
     .filter((event): event is WorkbenchToolEvent => !!event)
 }
 
-function uiMessagePartToToolEvent(
-  part: UIMessagePart,
-  terminalToolParts: UIMessagePart[],
-  approvalRequestParts: UIMessagePart[],
-  approvalResponseParts: UIMessagePart[],
-): WorkbenchToolEvent | undefined {
+function uiMessagePartToToolEvent(part: UIMessagePart): WorkbenchToolEvent | undefined {
   if (!isUIMessageToolPartType(part.type)) {
     return undefined
   }
+  const eventType = uiMessageToolEventType(part)
+  if (!eventType) return undefined
+  const approvalId = part.approval?.id
+  const result = part.output
   return {
-    id: `${part.type}-${part.approvalId || part.toolCallId || utils.id.uuid()}`,
-    type: part.type,
-    approvalId: part.approvalId,
+    id: `${eventType}-${approvalId || part.toolCallId || utils.id.uuid()}`,
+    type: eventType,
+    approvalId,
     toolCallId: part.toolCallId,
     toolName: part.toolName,
     stepIndex: part.stepIndex,
     input: part.input,
-    result: part.result,
+    result,
     errorText: part.errorText,
-    approvalStatus:
-      part.type === 'tool-approval-request'
-        ? toolApprovalStatus(part.approvalId, approvalResponseParts)
-        : undefined,
-    externalStatus:
-      part.type === 'tool-call' && !hasApprovalRequest(part.toolCallId, approvalRequestParts)
-        ? toolCallStatus(part.toolCallId, terminalToolParts)
-        : undefined,
-    summary: toolEventSummary(part as TextStreamPart),
+    approvalStatus: eventType === 'tool-approval-request' ? toolApprovalStatus(part) : undefined,
+    externalStatus: eventType === 'tool-call' ? toolCallStatus(part) : undefined,
+    summary: uiMessageToolEventSummary(part, eventType),
   }
 }
 
-function hasApprovalRequest(toolCallId: string | undefined, approvalRequestParts: UIMessagePart[]) {
-  return !!toolCallId && approvalRequestParts.some((part) => part.toolCallId === toolCallId)
+function uiMessageToolEventType(part: UIMessagePart): WorkbenchToolEvent['type'] | undefined {
+  if (part.state === 'approval-requested') {
+    return 'tool-approval-request'
+  }
+  if (part.state === 'approval-responded' || part.state === 'output-denied') {
+    return 'tool-approval-request'
+  }
+  switch (part.state) {
+    case 'input-streaming':
+    case 'input-available':
+      return 'tool-call'
+    case 'output-available':
+      return 'tool-result'
+    case 'output-error':
+      return 'tool-error'
+    default:
+      return undefined
+  }
 }
 
-function toolApprovalStatus(
-  approvalId: string | undefined,
-  approvalResponseParts: UIMessagePart[],
-): WorkbenchToolEvent['approvalStatus'] {
-  if (!approvalId) {
-    return undefined
+function toolApprovalStatus(part: UIMessagePart): WorkbenchToolEvent['approvalStatus'] {
+  if (part.approval?.approved === true) {
+    return 'approved'
   }
-  const response = approvalResponseParts.find((part) => part.approvalId === approvalId)
-  if (!response) {
+  if (part.approval?.approved === false) {
+    return 'denied'
+  }
+  if (part.approval?.id) {
     return 'pending'
   }
-  return response.approved === false ? 'denied' : 'approved'
+  return undefined
 }
 
-function toolCallStatus(
-  toolCallId: string | undefined,
-  terminalToolParts: UIMessagePart[],
-): WorkbenchToolEvent['externalStatus'] {
-  if (!toolCallId) {
-    return undefined
-  }
-  const terminalPart = terminalToolParts.find((part) => part.toolCallId === toolCallId)
-  if (terminalPart?.type === 'tool-result') {
+function toolCallStatus(part: UIMessagePart): WorkbenchToolEvent['externalStatus'] {
+  if (part.state === 'output-available') {
     return 'completed'
   }
-  if (terminalPart?.type === 'tool-error') {
+  if (part.state === 'output-error') {
     return 'failed'
   }
   return 'pending'
 }
 
-function isUIMessageToolPartType(type: string | undefined): type is WorkbenchToolEvent['type'] {
-  return (
-    type === 'tool-call' ||
-    type === 'tool-result' ||
-    type === 'tool-error' ||
-    type === 'tool-approval-request'
-  )
+function isUIMessageToolPartType(
+  type: string | undefined,
+): type is `tool-${string}` {
+  return !!type && type.startsWith('tool-')
 }
 
-function isToolStreamPartType(type: TextStreamPart['type']): type is WorkbenchToolEvent['type'] {
-  return (
-    type === 'tool-call' ||
-    type === 'tool-result' ||
-    type === 'tool-error' ||
-    type === 'tool-approval-request'
-  )
+function isUIMessageDataChunk(chunk: UIMessageChunk): chunk is UIMessageChunk & { type: `data-${string}` } {
+  return isUIMessageDataPartType(chunk.type)
 }
 
-function appendWorkbenchToolEvent(message: WorkbenchMessage, event: WorkbenchToolEvent) {
-  if (
-    event.toolCallId &&
-    (event.type === 'tool-result' ||
-      event.type === 'tool-error' ||
-      event.type === 'tool-approval-request')
-  ) {
-    message.toolEvents = (message.toolEvents || []).map((item) => {
-      if (item.type !== 'tool-call' || item.toolCallId !== event.toolCallId) {
-        return item
-      }
-      return {
-        ...item,
-        externalStatus:
-          event.type === 'tool-result'
-            ? 'completed'
-            : event.type === 'tool-error'
-              ? 'failed'
-              : undefined,
-      }
-    })
-  }
-  message.toolEvents = [...(message.toolEvents || []), event]
+function isUIMessageDataPartType(type: string | undefined): type is `data-${string}` {
+  return !!type && type.startsWith('data-')
 }
 
 function appendWorkbenchError(message: WorkbenchMessage, content: string) {
@@ -1136,16 +820,18 @@ function finishWorkbenchMessage(message: WorkbenchMessage, state: WorkbenchMessa
   }
 }
 
-function toolEventSummary(part: TextStreamPart) {
-  switch (part.type) {
+function uiMessageToolEventSummary(
+  part: UIMessagePart,
+  eventType: WorkbenchToolEvent['type'],
+) {
+  switch (eventType) {
     case 'tool-call':
-      return stringifyCompact(part.input)
+    case 'tool-approval-request':
+      return stringifyCompact(part.input ?? part.inputText)
     case 'tool-result':
-      return stringifyCompact(part.result)
+      return stringifyCompact(part.output)
     case 'tool-error':
       return part.errorText || '工具执行失败'
-    case 'tool-approval-request':
-      return stringifyCompact(part.input)
     default:
       return ''
   }

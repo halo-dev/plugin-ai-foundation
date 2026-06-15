@@ -1,25 +1,19 @@
 import type { AiModel, OutputSpec } from '@/api/generated'
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
+import { AIUISchemaValidationError, validateRuntimeSchema } from '@halo-dev/ai-ui-vue'
 import {
-  applyWorkbenchStreamPart,
   applyWorkbenchUIMessageChunk,
   buildOutputSpec,
   buildReasoningOptions,
-  buildTestChatRequest,
   buildTestUiMessageChatRequest,
   createUserUIMessage,
   filterEnabledChatModels,
-  flushSseJsonBuffer,
-  isRenderableReasoningDelta,
-  isRenderableTextDelta,
-  isTerminalTextStreamPart,
   parseProviderOptionsJson,
-  parseSseJsonLines,
-  testChatStreamUrl,
+  readTestUiMessageChatStream,
   testUiMessageChatStreamUrl,
-  toToolEvent,
-  type TextStreamPart,
+  workbenchDataPartSchemas,
+  workbenchMessageMetadataSchema,
   type WorkbenchMessage,
 } from './model-test-workbench'
 
@@ -49,399 +43,40 @@ describe('parseProviderOptionsJson', () => {
   })
 })
 
-describe('buildTestChatRequest', () => {
-  it('builds messages and parameters for streaming test requests', () => {
-    const messages: WorkbenchMessage[] = [
-      { id: '1', role: 'user', content: 'Hello' },
-      { id: '2', role: 'assistant', content: 'Hi', reasoningContent: 'Think', state: 'done' },
-      { id: '3', role: 'assistant', content: 'Failed', state: 'error' },
-    ]
-
+describe('workbench runtime schemas', () => {
+  it('accepts object metadata and known data part values', () => {
     expect(
-      buildTestChatRequest(messages, {
-        systemPrompt: 'You are concise.',
-        temperature: 0.2,
-        topP: 0.9,
-        maxOutputTokens: 128,
-        reasoning: buildReasoningOptions({ mode: 'DISABLED' }),
-        providerOptions: { openai: { seed: 42 } },
-        output: { type: 'OBJECT', schema: { type: 'object' } } as unknown as OutputSpec,
+      validateRuntimeSchema({ traceId: 'trace-1' }, workbenchMessageMetadataSchema, {
+        target: 'message-metadata',
       }),
-    ).toMatchObject({
-      system: 'You are concise.',
-      messages: [
-        { role: 'USER', content: [{ type: 'text', text: 'Hello' }] },
-        {
-          role: 'ASSISTANT',
-          content: [{ type: 'text', text: 'Hi' }],
-        },
-      ],
-      temperature: 0.2,
-      topP: 0.9,
-      maxOutputTokens: 128,
-      reasoning: { mode: 'DISABLED' },
-      providerOptions: { openai: { seed: 42 } },
-      output: { type: 'OBJECT', schema: { type: 'object' } },
-    })
+    ).toEqual({ traceId: 'trace-1' })
+    expect(
+      validateRuntimeSchema({ value: 'loading' }, workbenchDataPartSchemas.status, {
+        target: 'data-part',
+        partName: 'status',
+        partType: 'data-status',
+        partId: 'status-1',
+      }),
+    ).toEqual({ value: 'loading' })
   })
 
-  it('does not send displayed reasoning back as chat history', () => {
-    expect(
-      buildTestChatRequest(
-        [
-          { id: '1', role: 'user', content: 'Hello' },
-          { id: '2', role: 'assistant', content: 'Hi', reasoningContent: 'Think', state: 'done' },
-          { id: '3', role: 'user', content: 'Continue' },
-        ],
-        {},
-      ),
-    ).toMatchObject({
-      messages: [
-        { role: 'USER', content: [{ type: 'text', text: 'Hello' }] },
-        { role: 'ASSISTANT', content: [{ type: 'text', text: 'Hi' }] },
-        { role: 'USER', content: [{ type: 'text', text: 'Continue' }] },
-      ],
-    })
-  })
-
-  it('uses returned response messages before approval continuation messages', () => {
-    expect(
-      buildTestChatRequest(
-        [
-          { id: '1', role: 'user', content: 'Remove file' },
-          {
-            id: '2',
-            role: 'assistant',
-            content: '',
-            state: 'done',
-            responseMessages: [
-              {
-                role: 'ASSISTANT',
-                content: [
-                  {
-                    type: 'tool-call',
-                    toolCallId: 'call_1',
-                    toolName: 'run',
-                    input: { command: 'rm file' },
-                  },
-                  {
-                    type: 'tool-approval-request',
-                    approvalId: 'approval_call_1',
-                    toolCallId: 'call_1',
-                    toolName: 'run',
-                    stepIndex: 1,
-                    input: { command: 'rm file' },
-                  },
-                ],
-              },
-            ],
-            followingMessages: [
-              {
-                role: 'TOOL',
-                content: [
-                  {
-                    type: 'tool-approval-response',
-                    approvalId: 'approval_call_1',
-                    toolCallId: 'call_1',
-                    toolName: 'run',
-                    approved: false,
-                    reason: 'Denied from console test page',
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            id: '3',
-            role: 'assistant',
-            content: '工具执行被拒绝',
-            state: 'done',
-            responseMessages: [
-              {
-                role: 'TOOL',
-                content: [
-                  {
-                    type: 'tool-error',
-                    toolCallId: 'call_1',
-                    toolName: 'run',
-                    errorText: 'Tool execution denied: Denied from console test page',
-                  },
-                ],
-              },
-              { role: 'ASSISTANT', content: [{ type: 'text', text: '工具执行被拒绝' }] },
-            ],
-          },
-        ],
-        {},
-      ).messages,
-    ).toEqual([
-      { role: 'USER', content: [{ type: 'text', text: 'Remove file' }] },
-      {
-        role: 'ASSISTANT',
-        content: [
-          {
-            type: 'tool-call',
-            toolCallId: 'call_1',
-            toolName: 'run',
-            input: { command: 'rm file' },
-          },
-          {
-            type: 'tool-approval-request',
-            approvalId: 'approval_call_1',
-            toolCallId: 'call_1',
-            toolName: 'run',
-            stepIndex: 1,
-            input: { command: 'rm file' },
-          },
-        ],
-      },
-      {
-        role: 'TOOL',
-        content: [
-          {
-            type: 'tool-approval-response',
-            approvalId: 'approval_call_1',
-            toolCallId: 'call_1',
-            toolName: 'run',
-            approved: false,
-            reason: 'Denied from console test page',
-          },
-        ],
-      },
-      {
-        role: 'TOOL',
-        content: [
-          {
-            type: 'tool-error',
-            toolCallId: 'call_1',
-            toolName: 'run',
-            errorText: 'Tool execution denied: Denied from console test page',
-          },
-        ],
-      },
-      { role: 'ASSISTANT', content: [{ type: 'text', text: '工具执行被拒绝' }] },
-    ])
-  })
-
-  it('uses returned external tool-call messages before external results', () => {
-    expect(
-      buildTestChatRequest(
-        [
-          { id: '1', role: 'user', content: 'Get external info' },
-          {
-            id: '2',
-            role: 'assistant',
-            content: '',
-            state: 'done',
-            responseMessages: [
-              {
-                role: 'ASSISTANT',
-                content: [
-                  {
-                    type: 'tool-call',
-                    toolCallId: 'call_1',
-                    toolName: 'halo_external_test_info',
-                    input: { query: 'Halo' },
-                  },
-                ],
-              },
-            ],
-            followingMessages: [
-              {
-                role: 'TOOL',
-                content: [
-                  {
-                    type: 'tool-result',
-                    toolCallId: 'call_1',
-                    toolName: 'halo_external_test_info',
-                    result: { ok: true },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-        {},
-      ).messages,
-    ).toEqual([
-      { role: 'USER', content: [{ type: 'text', text: 'Get external info' }] },
-      {
-        role: 'ASSISTANT',
-        content: [
-          {
-            type: 'tool-call',
-            toolCallId: 'call_1',
-            toolName: 'halo_external_test_info',
-            input: { query: 'Halo' },
-          },
-        ],
-      },
-      {
-        role: 'TOOL',
-        content: [
-          {
-            type: 'tool-result',
-            toolCallId: 'call_1',
-            toolName: 'halo_external_test_info',
-            result: { ok: true },
-          },
-        ],
-      },
-    ])
-  })
-
-  it('uses returned external tool-call messages before external errors', () => {
-    expect(
-      buildTestChatRequest(
-        [
-          { id: '1', role: 'user', content: 'Get external info' },
-          {
-            id: '2',
-            role: 'assistant',
-            content: '',
-            state: 'done',
-            responseMessages: [
-              {
-                role: 'ASSISTANT',
-                content: [
-                  {
-                    type: 'tool-call',
-                    toolCallId: 'call_1',
-                    toolName: 'halo_external_test_info',
-                    input: { query: 'Halo' },
-                  },
-                ],
-              },
-            ],
-            followingMessages: [
-              {
-                role: 'TOOL',
-                content: [
-                  {
-                    type: 'tool-error',
-                    toolCallId: 'call_1',
-                    toolName: 'halo_external_test_info',
-                    errorText: 'External timeout',
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            id: '3',
-            role: 'assistant',
-            content: '外部工具超时',
-            state: 'done',
-            responseMessages: [
-              { role: 'ASSISTANT', content: [{ type: 'text', text: '外部工具超时' }] },
-            ],
-          },
-        ],
-        {},
-      ).messages,
-    ).toEqual([
-      { role: 'USER', content: [{ type: 'text', text: 'Get external info' }] },
-      {
-        role: 'ASSISTANT',
-        content: [
-          {
-            type: 'tool-call',
-            toolCallId: 'call_1',
-            toolName: 'halo_external_test_info',
-            input: { query: 'Halo' },
-          },
-        ],
-      },
-      {
-        role: 'TOOL',
-        content: [
-          {
-            type: 'tool-error',
-            toolCallId: 'call_1',
-            toolName: 'halo_external_test_info',
-            errorText: 'External timeout',
-          },
-        ],
-      },
-      { role: 'ASSISTANT', content: [{ type: 'text', text: '外部工具超时' }] },
-    ])
-  })
-
-  it('uses repaired response messages once for continued requests', () => {
-    expect(
-      buildTestChatRequest(
-        [
-          { id: '1', role: 'user', content: 'Repair tool input' },
-          {
-            id: '2',
-            role: 'assistant',
-            content: '',
-            state: 'done',
-            responseMessages: [
-              {
-                role: 'ASSISTANT',
-                content: [
-                  {
-                    type: 'tool-call',
-                    toolCallId: 'call_1',
-                    toolName: 'halo_repair_test_info',
-                    input: { query: 'repair me', repairSource: 'console-test' },
-                  },
-                ],
-              },
-              {
-                role: 'TOOL',
-                content: [
-                  {
-                    type: 'tool-result',
-                    toolCallId: 'call_1',
-                    toolName: 'halo_repair_test_info',
-                    result: { ok: true },
-                  },
-                ],
-              },
-            ],
-            historyParts: [
-              {
-                type: 'tool-call',
-                toolCallId: 'call_1',
-                toolName: 'halo_repair_test_info',
-                input: { message: 'repair me' },
-              },
-            ],
-          },
-          { id: '3', role: 'user', content: 'Continue' },
-        ],
-        {},
-      ).messages,
-    ).toEqual([
-      { role: 'USER', content: [{ type: 'text', text: 'Repair tool input' }] },
-      {
-        role: 'ASSISTANT',
-        content: [
-          {
-            type: 'tool-call',
-            toolCallId: 'call_1',
-            toolName: 'halo_repair_test_info',
-            input: { query: 'repair me', repairSource: 'console-test' },
-          },
-        ],
-      },
-      {
-        role: 'TOOL',
-        content: [
-          {
-            type: 'tool-result',
-            toolCallId: 'call_1',
-            toolName: 'halo_repair_test_info',
-            result: { ok: true },
-          },
-        ],
-      },
-      { role: 'USER', content: [{ type: 'text', text: 'Continue' }] },
-    ])
+  it('rejects invalid workbench metadata and missing known data payloads', () => {
+    expect(() =>
+      validateRuntimeSchema('bad', workbenchMessageMetadataSchema, {
+        target: 'message-metadata',
+      })
+    ).toThrow(AIUISchemaValidationError)
+    expect(() =>
+      validateRuntimeSchema(undefined, workbenchDataPartSchemas.status, {
+        target: 'data-part',
+        partName: 'status',
+        partType: 'data-status',
+        partId: 'status-1',
+      })
+    ).toThrow(AIUISchemaValidationError)
   })
 })
+
 
 describe('buildTestUiMessageChatRequest', () => {
   it('preserves UI messages and generation parameters for submit requests', () => {
@@ -544,27 +179,24 @@ describe('buildTestUiMessageChatRequest', () => {
               role: 'ASSISTANT',
               parts: [
                 {
-                  type: 'tool-approval-request',
-                  approvalId: 'approval_1',
+                  type: 'tool-pay',
                   toolCallId: 'call_1',
                   toolName: 'pay',
+                  state: 'output-available',
+                  input: { amount: 1 },
+                  output: { ok: true },
+                  approval: {
+                    id: 'approval_1',
+                    approved: true,
+                    reason: 'Approved from console test page',
+                  },
                 },
                 {
-                  type: 'tool-approval-response',
-                  approvalId: 'approval_1',
-                  approved: true,
-                  reason: 'Approved from console test page',
-                },
-                {
-                  type: 'tool-result',
-                  toolCallId: 'call_1',
-                  toolName: 'pay',
-                  result: { ok: true },
-                },
-                {
-                  type: 'tool-error',
+                  type: 'tool-search',
                   toolCallId: 'call_2',
                   toolName: 'search',
+                  state: 'output-error',
+                  input: { q: 'Halo' },
                   errorText: 'failed',
                 },
               ],
@@ -579,27 +211,24 @@ describe('buildTestUiMessageChatRequest', () => {
         role: 'ASSISTANT',
         parts: [
           {
-            type: 'tool-approval-request',
-            approvalId: 'approval_1',
+            type: 'tool-pay',
             toolCallId: 'call_1',
             toolName: 'pay',
+            state: 'output-available',
+            input: { amount: 1 },
+            output: { ok: true },
+            approval: {
+              id: 'approval_1',
+              approved: true,
+              reason: 'Approved from console test page',
+            },
           },
           {
-            type: 'tool-approval-response',
-            approvalId: 'approval_1',
-            approved: true,
-            reason: 'Approved from console test page',
-          },
-          {
-            type: 'tool-result',
-            toolCallId: 'call_1',
-            toolName: 'pay',
-            result: { ok: true },
-          },
-          {
-            type: 'tool-error',
+            type: 'tool-search',
             toolCallId: 'call_2',
             toolName: 'search',
+            state: 'output-error',
+            input: { q: 'Halo' },
             errorText: 'failed',
           },
         ],
@@ -645,112 +274,6 @@ describe('buildOutputSpec', () => {
   })
 })
 
-describe('parseSseJsonLines', () => {
-  it('parses complete data lines and preserves partial buffer', () => {
-    const result = parseSseJsonLines<{ content: string }>(
-      '',
-      'data: {"delta":"Hel"}\n\ndata: [DONE]\n\ndata: {"delta":"lo"}',
-    )
-
-    expect(result.chunks).toEqual([{ delta: 'Hel' }])
-    expect(flushSseJsonBuffer<{ delta: string }>(result.buffer)).toEqual([{ delta: 'lo' }])
-  })
-
-  it('accepts nested data prefixes from double-encoded SSE lines', () => {
-    const result = parseSseJsonLines<{ type: string; messageId: string }>(
-      '',
-      'data: data: {"type":"start","messageId":"msg_1"}\n\ndata: data: [DONE]\n\n',
-    )
-
-    expect(result.chunks).toEqual([{ type: 'start', messageId: 'msg_1' }])
-  })
-
-  it('keeps rich stream parts for the caller to classify', () => {
-    const result = parseSseJsonLines<TextStreamPart>(
-      '',
-      [
-        'data: {"type":"start-step","stepIndex":0}',
-        'data: {"type":"raw","metadata":{"safe":"ok"}}',
-        'data: {"type":"tool-call","toolCallId":"call_1","toolName":"weather","input":{"location":"SF"}}',
-        'data: {"type":"tool-input-start","toolCallId":"call_3","toolName":"weather","id":"input_1"}',
-        'data: {"type":"tool-input-delta","toolCallId":"call_3","toolName":"weather","id":"input_1","delta":"{\\"location\\""}',
-        'data: {"type":"tool-result","toolCallId":"call_1","toolName":"weather","result":{"temperature":22}}',
-        'data: {"type":"tool-error","toolCallId":"call_2","toolName":"search","errorText":"failed"}',
-        'data: {"type":"source","id":"src_1","url":"https://example.com","title":"Example"}',
-        'data: {"type":"file","id":"file_1","title":"answer.txt","mediaType":"text/plain"}',
-        'data: {"type":"reasoning-delta","delta":"Thinking","providerMetadata":{"deepseek":{}}}',
-        'data: {"type":"unknown-provider-part"}',
-        'data: {"type":"text-delta","delta":"**Hi**"}',
-        'data: {"type":"finish"}',
-        '',
-      ].join('\n'),
-    )
-
-    expect(result.chunks.map((chunk) => chunk.type)).toEqual([
-      'start-step',
-      'raw',
-      'tool-call',
-      'tool-input-start',
-      'tool-input-delta',
-      'tool-result',
-      'tool-error',
-      'source',
-      'file',
-      'reasoning-delta',
-      'unknown-provider-part',
-      'text-delta',
-      'finish',
-    ])
-    expect(result.chunks[2]).toMatchObject({
-      toolCallId: 'call_1',
-      toolName: 'weather',
-      input: { location: 'SF' },
-    })
-    expect(result.chunks[5]).toMatchObject({
-      toolCallId: 'call_1',
-      toolName: 'weather',
-      result: { temperature: 22 },
-    })
-    expect(result.chunks[6]).toMatchObject({
-      toolCallId: 'call_2',
-      toolName: 'search',
-      errorText: 'failed',
-    })
-    expect(result.chunks[7]).toMatchObject({
-      type: 'source',
-      url: 'https://example.com',
-      title: 'Example',
-    })
-    expect(result.chunks[8]).toMatchObject({
-      type: 'file',
-      title: 'answer.txt',
-      mediaType: 'text/plain',
-    })
-    expect(result.chunks.filter(isRenderableTextDelta).map((chunk) => chunk.delta)).toEqual([
-      '**Hi**',
-    ])
-    expect(result.chunks.filter(isRenderableReasoningDelta).map((chunk) => chunk.delta)).toEqual([
-      'Thinking',
-    ])
-    expect(result.chunks.filter(isTerminalTextStreamPart).map((chunk) => chunk.type)).toEqual([
-      'finish',
-    ])
-  })
-})
-
-describe('testChatStreamUrl', () => {
-  it('adds enabled console test flags as query parameters', () => {
-    expect(
-      testChatStreamUrl('model/name', {
-        testToolEnabled: true,
-        externalTestToolEnabled: true,
-        toolCallRepairEnabled: false,
-      }),
-    ).toBe(
-      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/stream?enableTestTool=true&enableExternalTestTool=true',
-    )
-  })
-})
 
 describe('testUiMessageChatStreamUrl', () => {
   it('uses the UI Message stream path with the shared console flags', () => {
@@ -766,69 +289,59 @@ describe('testUiMessageChatStreamUrl', () => {
   })
 })
 
-describe('applyWorkbenchStreamPart', () => {
-  it('accumulates text, reasoning, response messages, warnings, and finish state', () => {
-    const message: WorkbenchMessage = {
-      id: 'assistant',
-      role: 'assistant',
-      content: '',
-      state: 'streaming',
-      leadingMessages: [{ role: 'USER', content: [{ type: 'text', text: 'hello' }] }],
-      historyParts: [{ type: 'text', text: 'old' }],
+describe('readTestUiMessageChatStream', () => {
+  it('reads Halo UI Message SSE chunks through the shared package transport', async () => {
+    const originalFetch = globalThis.fetch
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ input, init })
+      return new Response(
+        streamFromText(
+          'data: {"type":"start","messageId":"assistant-ui"}\n\n'
+            + 'data: {"type":"text-delta","id":"answer","delta":"Hi"}\n\n'
+            + 'data: [DONE]\n\n',
+        ),
+        {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'X-Halo-AI-UI-Message-Stream': 'v1',
+          },
+        },
+      )
+    }) as typeof fetch
+
+    try {
+      const chunks: unknown[] = []
+      await readTestUiMessageChatStream({
+        modelName: 'model/name',
+        requestBody: {
+          id: 'chat-1',
+          messages: [],
+          trigger: 'submit-message',
+        },
+        streamOptions: { testToolEnabled: true },
+        signal: new AbortController().signal,
+        onChunks: (nextChunks) => chunks.push(...nextChunks),
+      })
+
+      expect(String(calls[0]?.input)).toBe(
+        '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/ui-message/stream?enableTestTool=true',
+      )
+      expect(JSON.parse(String(calls[0]?.init?.body))).toMatchObject({
+        id: 'chat-1',
+        messages: [],
+        trigger: 'submit-message',
+      })
+      expect(chunks).toEqual([
+        { type: 'start', messageId: 'assistant-ui' },
+        { type: 'text-delta', id: 'answer', delta: 'Hi' },
+      ])
+    } finally {
+      globalThis.fetch = originalFetch
     }
-
-    applyWorkbenchStreamPart(message, { type: 'reasoning-start' })
-    applyWorkbenchStreamPart(message, { type: 'reasoning-delta', delta: 'think' })
-    applyWorkbenchStreamPart(message, { type: 'reasoning-end' })
-    applyWorkbenchStreamPart(message, { type: 'text-delta', delta: 'answer' })
-    applyWorkbenchStreamPart(message, {
-      type: 'finish-step',
-      warnings: [{ code: 'w', message: 'warn' }],
-      response: {
-        messages: [{ role: 'ASSISTANT', content: [{ type: 'text', text: 'answer' }] }],
-      },
-    })
-    applyWorkbenchStreamPart(message, { type: 'finish' })
-
-    expect(message).toMatchObject({
-      content: 'answer',
-      reasoningContent: 'think',
-      reasoningState: 'done',
-      state: 'done',
-      warnings: [{ code: 'w', message: 'warn' }],
-      responseMessages: [{ role: 'ASSISTANT', content: [{ type: 'text', text: 'answer' }] }],
-      leadingMessages: undefined,
-      historyParts: undefined,
-    })
-  })
-
-  it('updates pending tool-call status when a result arrives', () => {
-    const message: WorkbenchMessage = {
-      id: 'assistant',
-      role: 'assistant',
-      content: '',
-      state: 'streaming',
-    }
-
-    applyWorkbenchStreamPart(message, {
-      type: 'tool-call',
-      toolCallId: 'call_1',
-      toolName: 'search',
-      input: { q: 'Halo' },
-    })
-    applyWorkbenchStreamPart(message, {
-      type: 'tool-result',
-      toolCallId: 'call_1',
-      toolName: 'search',
-      result: { ok: true },
-    })
-
-    expect(message.toolEvents).toMatchObject([
-      { type: 'tool-call', toolCallId: 'call_1', externalStatus: 'completed' },
-      { type: 'tool-result', toolCallId: 'call_1' },
-    ])
   })
 })
+
 
 describe('applyWorkbenchUIMessageChunk', () => {
   it('aggregates text, reasoning, metadata, data, tool parts, warnings, and finish state', () => {
@@ -855,27 +368,31 @@ describe('applyWorkbenchUIMessageChunk', () => {
     applyWorkbenchUIMessageChunk(message, { type: 'text-start', id: 'answer' })
     applyWorkbenchUIMessageChunk(message, { type: 'text-delta', id: 'answer', delta: 'Hi' })
     applyWorkbenchUIMessageChunk(message, {
-      type: 'data',
+      type: 'data-weather',
+      id: 'weather',
       name: 'weather',
       data: { temp: 22 },
     })
     applyWorkbenchUIMessageChunk(message, {
-      type: 'data',
+      type: 'data-progress',
+      id: 'progress',
       name: 'progress',
       data: { percent: 50 },
-      transientData: true,
+      transient: true,
     })
     applyWorkbenchUIMessageChunk(message, {
-      type: 'tool-call',
+      type: 'tool-search',
       toolCallId: 'call_1',
       toolName: 'search',
+      state: 'input-available',
       input: { q: 'Halo' },
     })
     applyWorkbenchUIMessageChunk(message, {
-      type: 'tool-result',
+      type: 'tool-search',
       toolCallId: 'call_1',
       toolName: 'search',
-      result: { ok: true },
+      state: 'output-available',
+      output: { ok: true },
     })
     applyWorkbenchUIMessageChunk(message, {
       type: 'finish-step',
@@ -905,28 +422,23 @@ describe('applyWorkbenchUIMessageChunk', () => {
             providerMetadata: { provider: { id: 'reasoning-id' } },
           },
           { type: 'text', id: 'answer', text: 'Hi' },
-          { type: 'data', name: 'weather', data: { temp: 22 } },
+          { type: 'data-weather', id: 'weather', name: 'weather', data: { temp: 22 } },
           {
-            type: 'tool-call',
+            type: 'tool-search',
             toolCallId: 'call_1',
             toolName: 'search',
+            state: 'output-available',
             input: { q: 'Halo' },
-          },
-          {
-            type: 'tool-result',
-            toolCallId: 'call_1',
-            toolName: 'search',
-            result: { ok: true },
+            output: { ok: true },
           },
         ],
       },
       toolEvents: [
         {
-          type: 'tool-call',
+          type: 'tool-result',
           toolCallId: 'call_1',
-          externalStatus: 'completed',
+          result: { ok: true },
         },
-        { type: 'tool-result', toolCallId: 'call_1' },
       ],
     })
   })
@@ -940,29 +452,30 @@ describe('applyWorkbenchUIMessageChunk', () => {
     }
 
     applyWorkbenchUIMessageChunk(message, {
-      type: 'tool-call',
+      type: 'tool-search',
       toolCallId: 'call_1',
       toolName: 'search',
+      state: 'input-available',
       input: { q: 'Halo' },
     })
     applyWorkbenchUIMessageChunk(message, {
-      type: 'tool-error',
+      type: 'tool-search',
       toolCallId: 'call_1',
       toolName: 'search',
+      state: 'output-error',
       errorText: 'failed',
     })
 
     expect(message.toolEvents).toMatchObject([
       {
-        type: 'tool-call',
+        type: 'tool-error',
         toolCallId: 'call_1',
-        externalStatus: 'failed',
+        errorText: 'failed',
       },
-      { type: 'tool-error', toolCallId: 'call_1' },
     ])
   })
 
-  it('projects UI Message approval responses onto approval requests', () => {
+  it('projects UI Message approval decisions onto dynamic tool parts', () => {
     const message: WorkbenchMessage = {
       id: 'assistant',
       role: 'assistant',
@@ -973,16 +486,15 @@ describe('applyWorkbenchUIMessageChunk', () => {
         role: 'ASSISTANT',
         parts: [
           {
-            type: 'tool-approval-request',
-            approvalId: 'approval_1',
+            type: 'tool-pay',
             toolCallId: 'call_1',
             toolName: 'pay',
-          },
-          {
-            type: 'tool-approval-response',
-            approvalId: 'approval_1',
-            approved: false,
-            reason: 'Denied',
+            state: 'approval-responded',
+            approval: {
+              id: 'approval_1',
+              approved: false,
+              reason: 'Denied',
+            },
           },
         ],
       },
@@ -1010,17 +522,12 @@ describe('applyWorkbenchUIMessageChunk', () => {
         role: 'ASSISTANT',
         parts: [
           {
-            type: 'tool-call',
+            type: 'tool-halo_test_info',
             toolCallId: 'call_1',
             toolName: 'halo_test_info',
+            state: 'approval-requested',
             input: { query: '这是一个测试调用' },
-          },
-          {
-            type: 'tool-approval-request',
-            approvalId: 'approval_1',
-            toolCallId: 'call_1',
-            toolName: 'halo_test_info',
-            input: { query: '这是一个测试调用' },
+            approval: { id: 'approval_1' },
           },
         ],
       },
@@ -1029,11 +536,6 @@ describe('applyWorkbenchUIMessageChunk', () => {
     applyWorkbenchUIMessageChunk(message, { type: 'finish' })
 
     expect(message.toolEvents).toMatchObject([
-      {
-        type: 'tool-call',
-        toolCallId: 'call_1',
-        externalStatus: undefined,
-      },
       {
         type: 'tool-approval-request',
         approvalId: 'approval_1',
@@ -1091,43 +593,6 @@ describe('applyWorkbenchUIMessageChunk', () => {
   })
 })
 
-describe('toToolEvent', () => {
-  it('converts tool stream parts to compact workbench events', () => {
-    expect(
-      toToolEvent({
-        type: 'tool-call',
-        toolCallId: 'call_1',
-        toolName: 'halo_test_info',
-        input: { query: 'hello' },
-      }),
-    ).toMatchObject({
-      type: 'tool-call',
-      toolCallId: 'call_1',
-      toolName: 'halo_test_info',
-      externalStatus: 'pending',
-      summary: '{"query":"hello"}',
-    })
-
-    expect(toToolEvent({ type: 'text-delta', delta: 'hello' })).toBeUndefined()
-
-    expect(
-      toToolEvent({
-        type: 'tool-approval-request',
-        approvalId: 'approval_call_1',
-        toolCallId: 'call_1',
-        toolName: 'run',
-        stepIndex: 1,
-        input: { command: 'rm file' },
-      }),
-    ).toMatchObject({
-      type: 'tool-approval-request',
-      approvalId: 'approval_call_1',
-      stepIndex: 1,
-      approvalStatus: 'pending',
-      summary: '{"command":"rm file"}',
-    })
-  })
-})
 
 function model(
   name: string,
@@ -1148,4 +613,13 @@ function model(
       adapterType: 'openai-chat',
     },
   }
+}
+
+function streamFromText(text: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text))
+      controller.close()
+    },
+  })
 }

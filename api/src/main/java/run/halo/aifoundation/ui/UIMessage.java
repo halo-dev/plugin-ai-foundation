@@ -156,23 +156,11 @@ public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> pa
         if (part instanceof FilePart value) {
             return value.fileId();
         }
-        if (part instanceof ToolCallPart value) {
+        if (part instanceof ToolPart value) {
             return value.toolCallId();
-        }
-        if (part instanceof ToolResultPart value) {
-            return value.toolCallId();
-        }
-        if (part instanceof ToolErrorPart value) {
-            return value.toolCallId();
-        }
-        if (part instanceof ToolApprovalRequestPart value) {
-            return value.approvalId() != null ? value.approvalId() : value.toolCallId();
-        }
-        if (part instanceof ToolApprovalResponsePart value) {
-            return value.approvalId() != null ? value.approvalId() : value.toolCallId();
         }
         if (part instanceof DataPart value) {
-            return value.name();
+            return value.id();
         }
         return null;
     }

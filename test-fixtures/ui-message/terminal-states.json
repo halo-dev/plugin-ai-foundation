@@ -1,0 +1,42 @@
+{
+  "name": "terminal-states",
+  "description": "Terminal chunks update terminal state without becoming message parts.",
+  "chunks": [
+    {
+      "type": "start",
+      "messageId": "assistant-terminal"
+    },
+    {
+      "type": "text-start",
+      "id": "text-1"
+    },
+    {
+      "type": "text-delta",
+      "id": "text-1",
+      "delta": "partial"
+    },
+    {
+      "type": "error",
+      "errorText": "stream failed"
+    },
+    {
+      "type": "abort"
+    }
+  ],
+  "expectedMessage": {
+    "id": "assistant-terminal",
+    "role": "assistant",
+    "metadata": {},
+    "parts": [
+      {
+        "type": "text",
+        "id": "text-1",
+        "text": "partial"
+      }
+    ]
+  },
+  "expectedTerminal": {
+    "errorText": "stream failed",
+    "aborted": true
+  }
+}

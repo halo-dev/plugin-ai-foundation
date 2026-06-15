@@ -1,17 +1,15 @@
 package run.halo.aifoundation.ui;
 
 /**
- * Stream chunk carrying partial tool input.
+ * Canonical tool input lifecycle chunk carrying streamed tool input text.
  *
- * <p>Tool input chunks are progress events and are not persisted into {@link UIMessage#parts()}.
- *
- * @param id stable streamed input block identifier
- * @param toolCallId tool call identifier
+ * @param toolCallId stable tool call id
  * @param toolName tool name
- * @param delta input fragment
+ * @param inputTextDelta incremental tool input text
  */
-public record ToolInputDeltaChunk(String id, String toolCallId, String toolName, String delta)
+public record ToolInputDeltaChunk(String toolCallId, String toolName, String inputTextDelta)
     implements UIMessageChunk {
+
     @Override
     public String type() {
         return UIMessageChunkType.TOOL_INPUT_DELTA;

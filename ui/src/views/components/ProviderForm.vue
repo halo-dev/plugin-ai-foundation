@@ -25,6 +25,8 @@ const providerTypeOptions = computed(() => {
       {
         value: t.providerType,
         label: t.displayName,
+        icon: t.iconUrl,
+        description: t.description || ' ',
       },
     ]
   })

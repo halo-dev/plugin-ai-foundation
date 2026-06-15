@@ -51,7 +51,7 @@ class UIMessageStreamReaderTest {
 
         assertThat(json)
             .contains("\"type\":\"text\"")
-            .contains("\"type\":\"data\"")
+            .contains("\"type\":\"data-status\"")
             .contains("\"metadata\":{\"chatId\":\"chat-1\"}");
     }
 
@@ -103,16 +103,24 @@ class UIMessageStreamReaderTest {
             UIMessageChunks.sourceUrl("source-1", "https://new.example", "New", Map.of()),
             UIMessageChunks.file("file-1", "old", "old.txt", "text/plain", "old", Map.of()),
             UIMessageChunks.file("file-1", "new", "new.txt", "text/plain", "new", Map.of()),
-            UIMessageChunks.toolCall("call-1", "weather", Map.of("city", "A"), Map.of()),
-            UIMessageChunks.toolCall("call-1", "weather", Map.of("city", "B"), Map.of()),
-            UIMessageChunks.toolResult("call-1", "weather", "old", Map.of()),
-            UIMessageChunks.toolResult("call-1", "weather", "new", Map.of()),
-            UIMessageChunks.toolError("call-2", "weather", "old", Map.of()),
-            UIMessageChunks.toolError("call-2", "weather", "new", Map.of()),
-            UIMessageChunks.toolApprovalRequest("approval-1", "call-3", "pay",
-                Map.of("amount", 1), 0, Map.of()),
-            UIMessageChunks.toolApprovalRequest("approval-1", "call-3", "pay",
-                Map.of("amount", 2), 0, Map.of()),
+            UIMessageChunks.tool("call-1", "weather", ToolPartState.INPUT_AVAILABLE,
+                Map.of("city", "A"), null, null, null, null, Map.of()),
+            UIMessageChunks.tool("call-1", "weather", ToolPartState.INPUT_AVAILABLE,
+                Map.of("city", "B"), null, null, null, null, Map.of()),
+            UIMessageChunks.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                null, null, "old", null, null, Map.of()),
+            UIMessageChunks.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                null, null, "new", null, null, Map.of()),
+            UIMessageChunks.tool("call-2", "weather", ToolPartState.OUTPUT_ERROR,
+                null, null, null, "old", null, Map.of()),
+            UIMessageChunks.tool("call-2", "weather", ToolPartState.OUTPUT_ERROR,
+                null, null, null, "new", null, Map.of()),
+            UIMessageChunks.tool("call-3", "pay", ToolPartState.APPROVAL_REQUESTED,
+                Map.of("amount", 1), null, null, null, new ToolApproval("approval-1", null,
+                    null), Map.of()),
+            UIMessageChunks.tool("call-3", "pay", ToolPartState.APPROVAL_REQUESTED,
+                Map.of("amount", 2), null, null, null, new ToolApproval("approval-1", null,
+                    null), Map.of()),
             UIMessageChunks.data("status", "old"),
             UIMessageChunks.data("status", "new")
         )));
@@ -122,32 +130,68 @@ class UIMessageStreamReaderTest {
         assertThat(response.parts()).containsExactly(
             UIMessageParts.sourceUrl("source-1", "https://new.example", "New", Map.of()),
             UIMessageParts.file("file-1", "new", "new.txt", "text/plain", "new", Map.of()),
-            UIMessageParts.toolCall("call-1", "weather", Map.of("city", "B"), Map.of()),
-            UIMessageParts.toolResult("call-1", "weather", "new", Map.of()),
-            UIMessageParts.toolError("call-2", "weather", "new", Map.of()),
-            UIMessageParts.toolApprovalRequest("approval-1", "call-3", "pay",
-                Map.of("amount", 2), 0, Map.of()),
+            UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("city", "B"), null, "new", null, null, Map.of()),
+            UIMessageParts.tool("call-2", "weather", ToolPartState.OUTPUT_ERROR,
+                null, null, null, "new", null, Map.of()),
+            UIMessageParts.tool("call-3", "pay", ToolPartState.APPROVAL_REQUESTED,
+                Map.of("amount", 2), null, null, null, new ToolApproval("approval-1", null,
+                    null), Map.of()),
             UIMessageParts.data("status", "new")
         );
     }
 
     @Test
-    void readerExcludesTransientToolInputAndLifecycleChunks() {
+    void readerExcludesTransientDataAndLifecycleChunks() {
         var result = UIMessageStreamReader.read(new UIMessageStream(Flux.just(
             UIMessageChunks.start("msg-1"),
             UIMessageChunks.transientData("status", "retrieving"),
-            UIMessageChunks.toolInputStart("input-1", "call-1", "weather"),
-            UIMessageChunks.toolInputDelta("input-1", "call-1", "weather", "{\"city\""),
+            UIMessageChunks.startStep(0),
+            UIMessageChunks.toolInputStart("call-1", "weather"),
+            UIMessageChunks.toolInputDelta("call-1", "weather", "{\"city\""),
             UIMessageChunks.finishStep(0, null, null, null, List.of(), null, null, Map.of()),
             UIMessageChunks.error("failed"),
             UIMessageChunks.abort(),
             UIMessageChunks.finish(null, null, null)
         )));
 
-        assertThat(result.messages().collectList().block()).isEmpty();
-        assertThat(result.responseMessage().block().parts()).isEmpty();
+        assertThat(result.messages().collectList().block()).hasSize(2);
+        assertThat(result.responseMessage().block().parts()).containsExactly(
+            UIMessageParts.tool("call-1", "weather", ToolPartState.INPUT_STREAMING,
+                null, "{\"city\"", null, null, null, Map.of())
+        );
         assertThat(result.finish().block())
             .isEqualTo(new UIMessageStreamTerminal(null, null, true, "failed"));
+    }
+
+    @Test
+    void readerReducesCanonicalToolChunksToDynamicToolParts() {
+        var result = UIMessageStreamReader.read(new UIMessageStream(Flux.just(
+            UIMessageChunks.toolInputStart("call-1", "weather"),
+            UIMessageChunks.toolInputDelta("call-1", "weather", "{\"city\""),
+            UIMessageChunks.toolInputDelta("call-1", "weather", ":\"Hangzhou\"}"),
+            UIMessageChunks.toolInputAvailable("call-1", "weather",
+                Map.of("city", "Hangzhou"), Map.of("provider", "test")),
+            UIMessageChunks.toolOutputAvailable("call-1", "weather",
+                Map.of("temperature", 20), Map.of()),
+            UIMessageChunks.toolApprovalRequest("approval-1", "call-2", "payment",
+                Map.of("amount", 100), Map.of()),
+            UIMessageChunks.toolApprovalResponse("approval-1", "call-2", "payment", false,
+                "not allowed", Map.of("provider", "test")),
+            UIMessageChunks.toolOutputError("call-3", "search", "failed", Map.of())
+        )));
+
+        assertThat(result.responseMessage().block().parts()).containsExactly(
+            UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("city", "Hangzhou"), null, Map.of("temperature", 20), null, null,
+                Map.of("provider", "test")),
+            UIMessageParts.tool("call-2", "payment", ToolPartState.APPROVAL_RESPONDED,
+                Map.of("amount", 100), null, null, null,
+                new ToolApproval("approval-1", false, "not allowed"),
+                Map.of("provider", "test")),
+            UIMessageParts.tool("call-3", "search", ToolPartState.OUTPUT_ERROR,
+                null, null, null, "failed", null, Map.of())
+        );
     }
 
     @Test
