@@ -1,9 +1,11 @@
-# Refer https://docs.halo.run/developer-guide/plugin/basics/manifest
-
 apiVersion: plugin.halo.run/v1alpha1
 kind: Plugin
 metadata:
   name: ai-foundation
+  annotations:
+    # Add supports for Halo App Store
+    # https://www.halo.run/store/apps/app-acslk9nu
+    "store.halo.run/app-id": "app-acslk9nu"
 spec:
   enabled: true
   requires: ">=2.25.0"
@@ -12,7 +14,7 @@ spec:
     website: https://github.com/halo-dev
   logo: icon.png
   configMapName: ai-foundation-configmap
-  homepage: https://github.com/halo-dev/plugin-ai-foundation#readme
+  homepage: https://www.halo.run/store/apps/app-acslk9nu
   repo: https://github.com/halo-dev/plugin-ai-foundation
   issues: https://github.com/halo-dev/plugin-ai-foundation/issues
   displayName: "AI Foundation"
