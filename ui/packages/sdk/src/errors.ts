@@ -2,7 +2,10 @@ export class AIUIError extends Error {
   readonly status?: number
   readonly response?: Response
 
-  constructor(message: string, options: { status?: number; response?: Response; cause?: unknown } = {}) {
+  constructor(
+    message: string,
+    options: { status?: number; response?: Response; cause?: unknown } = {},
+  ) {
     super(message)
     this.name = 'AIUIError'
     this.status = options.status

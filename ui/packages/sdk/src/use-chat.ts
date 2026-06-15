@@ -47,7 +47,9 @@ export function useChat<METADATA = unknown>(options: UseChatOptions<METADATA> = 
     messages: readonly(store.messages),
     status: readonly(store.status),
     error: readonly(store.error),
-    isLoading: computed(() => store.status.value === 'submitted' || store.status.value === 'streaming'),
+    isLoading: computed(
+      () => store.status.value === 'submitted' || store.status.value === 'streaming',
+    ),
     chat: store.chat,
     sendMessage: store.chat.sendMessage.bind(store.chat),
     regenerate: store.chat.regenerate.bind(store.chat),
@@ -60,13 +62,15 @@ export function useChat<METADATA = unknown>(options: UseChatOptions<METADATA> = 
     addToolOutput: store.chat.addToolOutput.bind(store.chat),
     addToolApprovalResponse: store.chat.addToolApprovalResponse.bind(store.chat),
     rejectToolCall: store.chat.rejectToolCall.bind(store.chat),
-    isLastAssistantMessageToolComplete: store.chat.isLastAssistantMessageToolComplete.bind(store.chat),
+    isLastAssistantMessageToolComplete: store.chat.isLastAssistantMessageToolComplete.bind(
+      store.chat,
+    ),
   }
 }
 
 function getOrCreateExternalChatStore<METADATA>(
   chat: Chat<METADATA>,
-  options: UseChatOptions<METADATA>
+  options: UseChatOptions<METADATA>,
 ): ChatStore<METADATA> {
   assertNoCreationOptionsWithChat(options)
   const existing = externalChatStores.get(chat as Chat<unknown>)
@@ -105,7 +109,7 @@ function getOrCreateExternalChatStore<METADATA>(
 
 function getOrCreateChatStore<METADATA>(
   id: string,
-  options: UseChatOptions<METADATA>
+  options: UseChatOptions<METADATA>,
 ): ChatStore<METADATA> {
   const existing = stores.get(id)
   if (existing) {
@@ -166,14 +170,16 @@ function assertNoCreationOptionsWithChat<METADATA>(options: UseChatOptions<METAD
   ]
   const mixedKeys = creationOptionKeys.filter((key) => options[key] !== undefined)
   if (mixedKeys.length > 0) {
-    throw new Error(`useChat({ chat }) cannot be mixed with creation options: ${mixedKeys.join(', ')}.`)
+    throw new Error(
+      `useChat({ chat }) cannot be mixed with creation options: ${mixedKeys.join(', ')}.`,
+    )
   }
 }
 
 function createMessageCommitter<METADATA>(
   target: ReturnType<typeof shallowRef<UIMessage<METADATA>[]>>,
   initial: UIMessage<METADATA>[],
-  option: ExperimentalThrottleOption | undefined
+  option: ExperimentalThrottleOption | undefined,
 ) {
   let currentMessages = initial
   let pendingMessages: UIMessage<METADATA>[] | undefined
@@ -219,11 +225,15 @@ function createMessageCommitter<METADATA>(
   }
 }
 
-function resolveThrottleInterval(option: ExperimentalThrottleOption | undefined): number | undefined {
+function resolveThrottleInterval(
+  option: ExperimentalThrottleOption | undefined,
+): number | undefined {
   const intervalMs = typeof option === 'number' ? option : option?.intervalMs
   return typeof intervalMs === 'number' && intervalMs > 0 ? intervalMs : undefined
 }
 
 function shouldFlushMessagesForStatus(status: ChatStatus): boolean {
-  return status === 'submitted' || status === 'ready' || status === 'error' || status === 'disconnected'
+  return (
+    status === 'submitted' || status === 'ready' || status === 'error' || status === 'disconnected'
+  )
 }

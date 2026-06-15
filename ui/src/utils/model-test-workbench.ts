@@ -1,12 +1,12 @@
 import type { AiModel, OutputSpec, TestUiMessageChatRequest } from '@/api/generated'
 import { AiModelSpecModelTypeEnum } from '@/api/generated'
-import { utils } from '@halo-dev/ui-shared'
 import {
   DefaultChatTransport,
   type DataPartSchemas,
-  type MessageMetadataSchema,
   type UIMessageChunk as HaloUIMessageChunk,
+  type MessageMetadataSchema,
 } from '@halo-dev/ai-foundation-sdk'
+import { utils } from '@halo-dev/ui-shared'
 
 export type ChatRole = 'user' | 'assistant'
 
@@ -251,7 +251,10 @@ function workbenchDefinedDataSchema(name: string) {
   return {
     safeParse: (value: unknown) => {
       if (value === undefined) {
-        return { success: false, error: { message: `Workbench data part ${name} must define data.` } }
+        return {
+          success: false,
+          error: { message: `Workbench data part ${name} must define data.` },
+        }
       }
       return { success: true, data: value }
     },
@@ -455,7 +458,9 @@ export async function readTestUiMessageChatStream(options: {
   const stream = await transport.sendMessages({
     chatId: String(requestBody.id || utils.id.uuid()),
     messages: (options.requestBody.messages || []) as never[],
-    trigger: (options.requestBody.trigger || 'submit-message') as 'submit-message' | 'regenerate-message',
+    trigger: (options.requestBody.trigger || 'submit-message') as
+      | 'submit-message'
+      | 'regenerate-message',
     messageId: options.requestBody.messageId,
     body: requestBody,
     abortSignal: options.signal,
@@ -789,13 +794,13 @@ function toolCallStatus(part: UIMessagePart): WorkbenchToolEvent['externalStatus
   return 'pending'
 }
 
-function isUIMessageToolPartType(
-  type: string | undefined,
-): type is `tool-${string}` {
+function isUIMessageToolPartType(type: string | undefined): type is `tool-${string}` {
   return !!type && type.startsWith('tool-')
 }
 
-function isUIMessageDataChunk(chunk: UIMessageChunk): chunk is UIMessageChunk & { type: `data-${string}` } {
+function isUIMessageDataChunk(
+  chunk: UIMessageChunk,
+): chunk is UIMessageChunk & { type: `data-${string}` } {
   return isUIMessageDataPartType(chunk.type)
 }
 
@@ -820,10 +825,7 @@ function finishWorkbenchMessage(message: WorkbenchMessage, state: WorkbenchMessa
   }
 }
 
-function uiMessageToolEventSummary(
-  part: UIMessagePart,
-  eventType: WorkbenchToolEvent['type'],
-) {
+function uiMessageToolEventSummary(part: UIMessagePart, eventType: WorkbenchToolEvent['type']) {
   switch (eventType) {
     case 'tool-call':
     case 'tool-approval-request':

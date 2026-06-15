@@ -30,12 +30,13 @@ export class AIUIMessageValidationError extends AIUIProtocolError {
 
 export function pruneMessages<METADATA = unknown>(
   messages: UIMessage<METADATA>[],
-  options: PruneMessagesOptions = {}
+  options: PruneMessagesOptions = {},
 ): UIMessage<METADATA>[] {
   const maxMessages = options.maxMessages
-  const retained = typeof maxMessages === 'number' && maxMessages >= 0
-    ? messages.slice(Math.max(0, messages.length - maxMessages))
-    : [...messages]
+  const retained =
+    typeof maxMessages === 'number' && maxMessages >= 0
+      ? messages.slice(Math.max(0, messages.length - maxMessages))
+      : [...messages]
   const removePendingToolParts = options.removePendingToolParts !== false
   const pruned: UIMessage<METADATA>[] = []
 
@@ -54,7 +55,7 @@ export function pruneMessages<METADATA = unknown>(
 
 export function validateUIMessages<METADATA = unknown>(
   messages: UIMessage<METADATA>[],
-  options: ValidateUIMessagesOptions<METADATA> = {}
+  options: ValidateUIMessagesOptions<METADATA> = {},
 ): UIMessageValidationIssue[] {
   const issues: UIMessageValidationIssue[] = []
   if (!Array.isArray(messages)) {
@@ -70,7 +71,7 @@ export function validateUIMessages<METADATA = unknown>(
 
 export function assertValidUIMessages<METADATA = unknown>(
   messages: UIMessage<METADATA>[],
-  options: ValidateUIMessagesOptions<METADATA> = {}
+  options: ValidateUIMessagesOptions<METADATA> = {},
 ): void {
   const issues = validateUIMessages(messages, options)
   if (issues.length > 0) {
@@ -82,7 +83,7 @@ function validateMessage<METADATA>(
   message: UIMessage<METADATA>,
   path: string,
   options: ValidateUIMessagesOptions<METADATA>,
-  issues: UIMessageValidationIssue[]
+  issues: UIMessageValidationIssue[],
 ) {
   if (!isRecord(message)) {
     issues.push(issue(path, 'message.type', 'UI message must be an object.'))
@@ -116,7 +117,7 @@ function validatePart(
   part: UIMessagePart,
   path: string,
   options: ValidateUIMessagesOptions,
-  issues: UIMessageValidationIssue[]
+  issues: UIMessageValidationIssue[],
 ) {
   if (!isRecord(part)) {
     issues.push(issue(path, 'part.type', 'UI message part must be an object.'))
@@ -136,22 +137,70 @@ function validatePart(
   }
   switch (part.type) {
     case 'text':
-      requireString(part.id, `${path}.id`, 'part.text.id.required', 'Text part id is required.', issues)
-      requireString(part.text, `${path}.text`, 'part.text.text.required', 'Text part text is required.', issues)
+      requireString(
+        part.id,
+        `${path}.id`,
+        'part.text.id.required',
+        'Text part id is required.',
+        issues,
+      )
+      requireString(
+        part.text,
+        `${path}.text`,
+        'part.text.text.required',
+        'Text part text is required.',
+        issues,
+      )
       break
     case 'reasoning':
-      requireString(part.id, `${path}.id`, 'part.reasoning.id.required', 'Reasoning part id is required.', issues)
-      requireString(part.text, `${path}.text`, 'part.reasoning.text.required', 'Reasoning part text is required.', issues)
+      requireString(
+        part.id,
+        `${path}.id`,
+        'part.reasoning.id.required',
+        'Reasoning part id is required.',
+        issues,
+      )
+      requireString(
+        part.text,
+        `${path}.text`,
+        'part.reasoning.text.required',
+        'Reasoning part text is required.',
+        issues,
+      )
       break
     case 'source-url':
-      requireString(part.sourceId, `${path}.sourceId`, 'part.source-url.id.required', 'Source URL part sourceId is required.', issues)
-      requireString(part.url, `${path}.url`, 'part.source-url.url.required', 'Source URL part url is required.', issues)
+      requireString(
+        part.sourceId,
+        `${path}.sourceId`,
+        'part.source-url.id.required',
+        'Source URL part sourceId is required.',
+        issues,
+      )
+      requireString(
+        part.url,
+        `${path}.url`,
+        'part.source-url.url.required',
+        'Source URL part url is required.',
+        issues,
+      )
       break
     case 'file':
-      requireString(part.id, `${path}.id`, 'part.file.id.required', 'File part id is required.', issues)
+      requireString(
+        part.id,
+        `${path}.id`,
+        'part.file.id.required',
+        'File part id is required.',
+        issues,
+      )
       break
     default:
-      issues.push(issue(`${path}.type`, 'part.type.unsupported', `Unsupported UI message part type: ${(part as { type: string }).type}.`))
+      issues.push(
+        issue(
+          `${path}.type`,
+          'part.type.unsupported',
+          `Unsupported UI message part type: ${(part as { type: string }).type}.`,
+        ),
+      )
   }
 }
 
@@ -159,13 +208,21 @@ function validateDataPart(
   part: DataPart,
   path: string,
   options: ValidateUIMessagesOptions,
-  issues: UIMessageValidationIssue[]
+  issues: UIMessageValidationIssue[],
 ) {
   const expectedType = `data-${part.name}`
   requireString(part.id, `${path}.id`, 'part.data.id.required', 'Data part id is required.', issues)
-  requireString(part.name, `${path}.name`, 'part.data.name.required', 'Data part name is required.', issues)
+  requireString(
+    part.name,
+    `${path}.name`,
+    'part.data.name.required',
+    'Data part name is required.',
+    issues,
+  )
   if (part.type !== expectedType) {
-    issues.push(issue(`${path}.type`, 'part.data.type.invalid', `Data part type must be ${expectedType}.`))
+    issues.push(
+      issue(`${path}.type`, 'part.data.type.invalid', `Data part type must be ${expectedType}.`),
+    )
   }
   const schema = options.dataPartSchemas?.[part.name]
   if (schema) {
@@ -184,33 +241,66 @@ function validateDataPart(
 
 function validateToolPart(part: ToolPart, path: string, issues: UIMessageValidationIssue[]) {
   const expectedType = `tool-${part.toolName}`
-  requireString(part.toolCallId, `${path}.toolCallId`, 'part.tool.id.required', 'Tool part toolCallId is required.', issues)
-  requireString(part.toolName, `${path}.toolName`, 'part.tool.name.required', 'Tool part toolName is required.', issues)
+  requireString(
+    part.toolCallId,
+    `${path}.toolCallId`,
+    'part.tool.id.required',
+    'Tool part toolCallId is required.',
+    issues,
+  )
+  requireString(
+    part.toolName,
+    `${path}.toolName`,
+    'part.tool.name.required',
+    'Tool part toolName is required.',
+    issues,
+  )
   if (part.type !== expectedType) {
-    issues.push(issue(`${path}.type`, 'part.tool.type.invalid', `Tool part type must be ${expectedType}.`))
+    issues.push(
+      issue(`${path}.type`, 'part.tool.type.invalid', `Tool part type must be ${expectedType}.`),
+    )
   }
   if (!isNonEmptyString(part.state)) {
     issues.push(issue(`${path}.state`, 'part.tool.state.required', 'Tool part state is required.'))
   }
   if (part.state === 'output-error' && !isNonEmptyString(part.errorText)) {
-    issues.push(issue(`${path}.errorText`, 'part.tool.error.required', 'Tool output-error part errorText is required.'))
+    issues.push(
+      issue(
+        `${path}.errorText`,
+        'part.tool.error.required',
+        'Tool output-error part errorText is required.',
+      ),
+    )
   }
   if (
     (part.state === 'approval-requested' || part.state === 'approval-responded') &&
     !part.approval?.id
   ) {
-    issues.push(issue(`${path}.approval.id`, 'part.tool.approval.id.required', 'Tool approval id is required.'))
+    issues.push(
+      issue(
+        `${path}.approval.id`,
+        'part.tool.approval.id.required',
+        'Tool approval id is required.',
+      ),
+    )
   }
   if (part.state === 'approval-responded' && typeof part.approval?.approved !== 'boolean') {
-    issues.push(issue(`${path}.approval.approved`, 'part.tool.approval.approved.required', 'Tool approval response approved value is required.'))
+    issues.push(
+      issue(
+        `${path}.approval.approved`,
+        'part.tool.approval.approved.required',
+        'Tool approval response approved value is required.',
+      ),
+    )
   }
 }
 
 function isPendingToolPart(part: UIMessagePart): boolean {
-  return isToolPart(part) && (
-    part.state === 'input-streaming' ||
-    part.state === 'input-available' ||
-    part.state === 'approval-requested'
+  return (
+    isToolPart(part) &&
+    (part.state === 'input-streaming' ||
+      part.state === 'input-available' ||
+      part.state === 'approval-requested')
   )
 }
 
@@ -239,7 +329,7 @@ function requireString(
   path: string,
   code: string,
   message: string,
-  issues: UIMessageValidationIssue[]
+  issues: UIMessageValidationIssue[],
 ) {
   if (!isNonEmptyString(value)) {
     issues.push(issue(path, code, message))

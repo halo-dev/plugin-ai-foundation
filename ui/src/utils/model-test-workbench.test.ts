@@ -1,7 +1,7 @@
 import type { AiModel, OutputSpec } from '@/api/generated'
 import { AiModelSpecFeaturesEnum, AiModelSpecModelTypeEnum } from '@/api/generated'
-import { describe, expect, it } from '@rstest/core'
 import { AIUISchemaValidationError, validateRuntimeSchema } from '@halo-dev/ai-foundation-sdk'
+import { describe, expect, it } from '@rstest/core'
 import {
   applyWorkbenchUIMessageChunk,
   buildOutputSpec,
@@ -64,7 +64,7 @@ describe('workbench runtime schemas', () => {
     expect(() =>
       validateRuntimeSchema('bad', workbenchMessageMetadataSchema, {
         target: 'message-metadata',
-      })
+      }),
     ).toThrow(AIUISchemaValidationError)
     expect(() =>
       validateRuntimeSchema(undefined, workbenchDataPartSchemas.status, {
@@ -72,11 +72,10 @@ describe('workbench runtime schemas', () => {
         partName: 'status',
         partType: 'data-status',
         partId: 'status-1',
-      })
+      }),
     ).toThrow(AIUISchemaValidationError)
   })
 })
-
 
 describe('buildTestUiMessageChatRequest', () => {
   it('preserves UI messages and generation parameters for submit requests', () => {
@@ -274,7 +273,6 @@ describe('buildOutputSpec', () => {
   })
 })
 
-
 describe('testUiMessageChatStreamUrl', () => {
   it('uses the UI Message stream path with the shared console flags', () => {
     expect(
@@ -297,9 +295,9 @@ describe('readTestUiMessageChatStream', () => {
       calls.push({ input, init })
       return new Response(
         streamFromText(
-          'data: {"type":"start","messageId":"assistant-ui"}\n\n'
-            + 'data: {"type":"text-delta","id":"answer","delta":"Hi"}\n\n'
-            + 'data: [DONE]\n\n',
+          'data: {"type":"start","messageId":"assistant-ui"}\n\n' +
+            'data: {"type":"text-delta","id":"answer","delta":"Hi"}\n\n' +
+            'data: [DONE]\n\n',
         ),
         {
           headers: {
@@ -341,7 +339,6 @@ describe('readTestUiMessageChatStream', () => {
     }
   })
 })
-
 
 describe('applyWorkbenchUIMessageChunk', () => {
   it('aggregates text, reasoning, metadata, data, tool parts, warnings, and finish state', () => {
@@ -592,7 +589,6 @@ describe('applyWorkbenchUIMessageChunk', () => {
     expect(message.content).toBe('partial')
   })
 })
-
 
 function model(
   name: string,

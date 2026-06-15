@@ -13,19 +13,20 @@ export interface OpenAPIRequestArgs {
 
 export function fromOpenAPIRequestArgs(
   args: OpenAPIRequestArgs,
-  fallbackBody?: Record<string, unknown>
+  fallbackBody?: Record<string, unknown>,
 ): PreparedRequest {
   return {
     api: args.url,
     headers: args.options?.headers,
     body: normalizeBody(args.options?.data, fallbackBody),
-    credentials: args.options?.credentials ?? (args.options?.withCredentials ? 'include' : undefined),
+    credentials:
+      args.options?.credentials ?? (args.options?.withCredentials ? 'include' : undefined),
   }
 }
 
 function normalizeBody(
   body: unknown,
-  fallbackBody?: Record<string, unknown>
+  fallbackBody?: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
   if (isRecord(body)) {
     return body

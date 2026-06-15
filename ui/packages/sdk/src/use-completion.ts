@@ -51,7 +51,10 @@ export function useCompletion(options: UseCompletionOptions = {}) {
     }
   })
 
-  async function complete(prompt?: string, requestOptions: CompletionRequestOptions = {}): Promise<string | undefined> {
+  async function complete(
+    prompt?: string,
+    requestOptions: CompletionRequestOptions = {},
+  ): Promise<string | undefined> {
     const actualPrompt = prompt ?? store.input.value ?? ''
     store.status.value = 'loading'
     store.error.value = undefined
@@ -59,7 +62,11 @@ export function useCompletion(options: UseCompletionOptions = {}) {
     const abortController = new AbortController()
     store.abortController = abortController
     try {
-      const body = { ...(await resolve(options.body)), ...requestOptions.body, prompt: actualPrompt }
+      const body = {
+        ...(await resolve(options.body)),
+        ...requestOptions.body,
+        prompt: actualPrompt,
+      }
       const headers = mergeHeaders(await resolve(options.headers), requestOptions.headers)
       const credentials = requestOptions.credentials ?? (await resolve(options.credentials))
       const prepared = await options.prepareRequest?.({
@@ -109,7 +116,9 @@ export function useCompletion(options: UseCompletionOptions = {}) {
   }
 
   function handleInputChange(event: Event | string) {
-    setInput(typeof event === 'string' ? event : (event.target as HTMLInputElement | null)?.value ?? '')
+    setInput(
+      typeof event === 'string' ? event : ((event.target as HTMLInputElement | null)?.value ?? ''),
+    )
   }
 
   async function handleSubmit(event?: Event) {

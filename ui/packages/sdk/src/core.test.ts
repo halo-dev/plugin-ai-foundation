@@ -1,19 +1,33 @@
 import { describe, expect, it } from '@rstest/core'
-import { Chat, createPlainChatState, lastAssistantMessageIsCompleteWithApprovalResponses } from './chat'
+import {
+  Chat,
+  createPlainChatState,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from './chat'
 import { AIUISchemaValidationError } from './errors'
-import { applyUIMessageChunk, createUIMessageReducer, messageText, validateUIMessageChunk } from './message-reducer'
-import { AIUIMessageValidationError, assertValidUIMessages, pruneMessages, validateUIMessages } from './persistence'
+import {
+  applyUIMessageChunk,
+  createUIMessageReducer,
+  messageText,
+  validateUIMessageChunk,
+} from './message-reducer'
+import {
+  AIUIMessageValidationError,
+  assertValidUIMessages,
+  pruneMessages,
+  validateUIMessages,
+} from './persistence'
+import type { SchemaLike } from './schema'
 import { readUIMessageSSEStream } from './stream'
 import { readUIMessageStream } from './stream-reader'
-import type { SchemaLike } from './schema'
 import type { ChatTransport, SendMessagesOptions, UIMessage, UIMessageChunk } from './types'
 
 describe('Halo UI message stream parser', () => {
   it('reads SSE JSON chunks and skips done marker', async () => {
     const stream = streamFromText(
-      'data: {"type":"start","messageId":"a"}\n\n'
-        + 'data: {"type":"text-delta","id":"t","delta":"Hi"}\n\n'
-        + 'data: [DONE]\n\n'
+      'data: {"type":"start","messageId":"a"}\n\n' +
+        'data: {"type":"text-delta","id":"t","delta":"Hi"}\n\n' +
+        'data: [DONE]\n\n',
     )
 
     const chunks = []
@@ -46,15 +60,31 @@ describe('UI message reducer', () => {
       { type: 'text-delta', id: 'text-1', delta: 'Hello' },
       { type: 'reasoning-delta', id: 'reasoning-1', delta: 'Thinking' },
       { type: 'data-status', id: 'status', name: 'status', data: 'done' },
-      { type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
+      {
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        state: 'input-available',
+        input: { q: 'Halo' },
+      },
       { type: 'finish', finishReason: 'stop' },
     ] satisfies UIMessageChunk[]) {
       applyUIMessageChunk(state, chunk)
     }
 
     expect(messageText(state.message)).toBe('Hello')
-    expect(state.message.parts).toContainEqual({ type: 'reasoning', id: 'reasoning-1', text: 'Thinking' })
-    expect(state.message.parts).toContainEqual({ type: 'data-status', id: 'status', name: 'status', data: 'done', transientData: false })
+    expect(state.message.parts).toContainEqual({
+      type: 'reasoning',
+      id: 'reasoning-1',
+      text: 'Thinking',
+    })
+    expect(state.message.parts).toContainEqual({
+      type: 'data-status',
+      id: 'status',
+      name: 'status',
+      data: 'done',
+      transientData: false,
+    })
     expect(state.terminal.finishReason).toBe('stop')
   })
 
@@ -64,12 +94,46 @@ describe('UI message reducer', () => {
     for (const chunk of [
       { type: 'start-step', stepIndex: 0 },
       { type: 'tool-input-start', toolCallId: 'call-1', toolName: 'search' },
-      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: '{"q"' },
-      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: ':"Halo"}' },
-      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' }, providerMetadata: { provider: 'test' } },
-      { type: 'tool-output-available', toolCallId: 'call-1', toolName: 'search', output: { ok: true } },
-      { type: 'tool-approval-request', approvalId: 'approval-1', toolCallId: 'call-2', toolName: 'pay', input: { amount: 100 } },
-      { type: 'tool-approval-response', approvalId: 'approval-1', toolCallId: 'call-2', toolName: 'pay', approved: false, reason: 'Denied' },
+      {
+        type: 'tool-input-delta',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        inputTextDelta: '{"q"',
+      },
+      {
+        type: 'tool-input-delta',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        inputTextDelta: ':"Halo"}',
+      },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        input: { q: 'Halo' },
+        providerMetadata: { provider: 'test' },
+      },
+      {
+        type: 'tool-output-available',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        output: { ok: true },
+      },
+      {
+        type: 'tool-approval-request',
+        approvalId: 'approval-1',
+        toolCallId: 'call-2',
+        toolName: 'pay',
+        input: { amount: 100 },
+      },
+      {
+        type: 'tool-approval-response',
+        approvalId: 'approval-1',
+        toolCallId: 'call-2',
+        toolName: 'pay',
+        approved: false,
+        reason: 'Denied',
+      },
       { type: 'tool-output-error', toolCallId: 'call-3', toolName: 'lookup', errorText: 'failed' },
     ] satisfies UIMessageChunk[]) {
       applyUIMessageChunk(state, chunk)
@@ -122,7 +186,7 @@ describe('UI message reducer', () => {
         toolCallId: 'call-1',
         toolName: 'delete-file',
         state: 'input-available',
-      })
+      }),
     ).not.toThrow()
     expect(() =>
       validateUIMessageChunk({
@@ -130,7 +194,7 @@ describe('UI message reducer', () => {
         id: 'data-1',
         name: 'post-draft',
         data: {},
-      })
+      }),
     ).not.toThrow()
     expect(() =>
       validateUIMessageChunk({
@@ -138,7 +202,7 @@ describe('UI message reducer', () => {
         toolCallId: 'call-1',
         toolName: 'delete-file',
         state: 'input-available',
-      })
+      }),
     ).toThrow('Tool chunk type must be tool-delete-file')
     expect(() =>
       validateUIMessageChunk({
@@ -146,7 +210,7 @@ describe('UI message reducer', () => {
         toolCallId: 'call-1',
         toolName: 'search',
         state: 'output-error',
-      })
+      }),
     ).toThrow('Tool output-error chunk errorText is required')
     expect(() =>
       validateUIMessageChunk({
@@ -154,7 +218,7 @@ describe('UI message reducer', () => {
         toolCallId: 'call-1',
         toolName: 'search',
         input: { q: 'Halo' },
-      })
+      }),
     ).not.toThrow()
     expect(() =>
       validateUIMessageChunk({
@@ -162,7 +226,7 @@ describe('UI message reducer', () => {
         approvalId: 'approval-1',
         toolCallId: 'call-1',
         toolName: 'search',
-      } as unknown as UIMessageChunk)
+      } as unknown as UIMessageChunk),
     ).toThrow('Tool approval-response chunk approved is required')
   })
 
@@ -172,7 +236,10 @@ describe('UI message reducer', () => {
       messageMetadataSchema: {
         safeParse: (value) => ({
           success: true,
-          data: { ...(value as Record<string, unknown>), seen: true } as { stage: string; seen: boolean },
+          data: { ...(value as Record<string, unknown>), seen: true } as {
+            stage: string
+            seen: boolean
+          },
         }),
       },
       dataPartSchemas: {
@@ -187,7 +254,10 @@ describe('UI message reducer', () => {
     })
 
     applyUIMessageChunk(state, { type: 'start', messageMetadata: { stage: 'start' } })
-    applyUIMessageChunk(state, { type: 'message-metadata', messageMetadata: { stage: 'streaming' } })
+    applyUIMessageChunk(state, {
+      type: 'message-metadata',
+      messageMetadata: { stage: 'streaming' },
+    })
     applyUIMessageChunk(state, {
       type: 'data-status',
       id: 'status-1',
@@ -230,7 +300,7 @@ describe('UI message reducer', () => {
         id: 'status-1',
         name: 'status',
         data: { value: 'loading' },
-      })
+      }),
     ).toThrow(AIUISchemaValidationError)
     try {
       applyUIMessageChunk(state, {
@@ -292,18 +362,16 @@ describe('UI message stream reader', () => {
   it('reads readable SSE streams and response inputs', async () => {
     const readableResult = await readUIMessageStream({
       readableStream: streamFromText(
-        'data: {"type":"text-delta","id":"text-1","delta":"Readable"}\n\n'
-          + 'data: [DONE]\n\n'
+        'data: {"type":"text-delta","id":"text-1","delta":"Readable"}\n\n' + 'data: [DONE]\n\n',
       ),
       messageId: 'assistant-readable',
     })
 
     const response = new Response(
       streamFromText(
-        'data: {"type":"text-delta","id":"text-1","delta":"Response"}\n\n'
-          + 'data: [DONE]\n\n'
+        'data: {"type":"text-delta","id":"text-1","delta":"Response"}\n\n' + 'data: [DONE]\n\n',
       ),
-      { headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' } }
+      { headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' } },
     )
     const responseResult = await readUIMessageStream({
       response,
@@ -352,12 +420,33 @@ describe('UI message stream reader', () => {
     const toolCalls: unknown[] = []
     const chunks: UIMessageChunk[] = [
       { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' } },
-      { type: 'data-status', id: 'status-2', name: 'status', data: { value: 'transient' }, transient: true },
+      {
+        type: 'data-status',
+        id: 'status-2',
+        name: 'status',
+        data: { value: 'transient' },
+        transient: true,
+      },
       { type: 'start-step', stepIndex: 0 },
       { type: 'tool-input-start', toolCallId: 'call-1', toolName: 'search' },
-      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: '{"q"' },
-      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' } },
-      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' } },
+      {
+        type: 'tool-input-delta',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        inputTextDelta: '{"q"',
+      },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        input: { q: 'Halo' },
+      },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        input: { q: 'Halo' },
+      },
     ]
 
     const result = await readUIMessageStream({
@@ -413,11 +502,13 @@ describe('UI message stream reader', () => {
       transientData: false,
     })
     expect(result.message.parts).not.toContainEqual(expect.objectContaining({ id: 'status-2' }))
-    expect(result.message.parts).toContainEqual(expect.objectContaining({
-      type: 'tool-search',
-      toolCallId: 'call-1',
-      input: { q: 'Halo' },
-    }))
+    expect(result.message.parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        input: { q: 'Halo' },
+      }),
+    )
   })
 
   it('returns error lifecycle results for schema failures without committing failing chunks', async () => {
@@ -454,9 +545,10 @@ describe('UI message stream reader', () => {
   it('returns disconnected after accepted chunks fail with non-protocol errors', async () => {
     const expected = new Error('network interrupted')
     const result = await readUIMessageStream({
-      stream: asyncGeneratorWithFailure([
-        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
-      ], expected),
+      stream: asyncGeneratorWithFailure(
+        [{ type: 'text-delta', id: 'text-1', delta: 'Partial' }],
+        expected,
+      ),
     })
 
     expect(result.status).toBe('disconnected')
@@ -495,7 +587,7 @@ describe('UI message stream reader', () => {
         onFinish: (event) => {
           finishes.push({ status: event.status, isError: event.isError })
         },
-      })
+      }),
     ).rejects.toThrow('Tool chunk state is required')
 
     expect(finishes).toEqual([{ status: 'error', isError: true }])
@@ -504,9 +596,7 @@ describe('UI message stream reader', () => {
   it('treats callback failures as reader errors', async () => {
     const expected = new Error('consumer failed')
     const result = await readUIMessageStream({
-      stream: chunksToAsyncIterable([
-        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
-      ]),
+      stream: chunksToAsyncIterable([{ type: 'text-delta', id: 'text-1', delta: 'Partial' }]),
       onMessage: () => {
         throw expected
       },
@@ -531,7 +621,7 @@ describe('UI message stream reader', () => {
         onError: () => {
           throw onErrorFailure
         },
-      })
+      }),
     ).rejects.toThrow(onErrorFailure)
 
     const onFinishFailure = new Error('onFinish failed')
@@ -541,15 +631,13 @@ describe('UI message stream reader', () => {
         onFinish: () => {
           throw onFinishFailure
         },
-      })
+      }),
     ).rejects.toThrow(onFinishFailure)
   })
 
   it('stores error chunks in terminal state without throwing', async () => {
     const result = await readUIMessageStream({
-      stream: chunksToAsyncIterable([
-        { type: 'error', errorText: 'model failed' },
-      ]),
+      stream: chunksToAsyncIterable([{ type: 'error', errorText: 'model failed' }]),
     })
 
     expect(result.status).toBe('ready')
@@ -564,7 +652,7 @@ describe('UI message stream reader', () => {
           headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
         }),
         throwOnError: true,
-      })
+      }),
     ).rejects.toThrow('The response body is empty')
 
     await expect(
@@ -573,7 +661,7 @@ describe('UI message stream reader', () => {
           headers: { 'X-Halo-AI-UI-Message-Stream': 'v2' },
         }),
         throwOnError: true,
-      })
+      }),
     ).rejects.toThrow('Unsupported Halo UI message stream version: v2')
   })
 })
@@ -590,8 +678,20 @@ describe('UI message persistence helpers', () => {
         id: 'assistant-1',
         role: 'assistant',
         parts: [
-          { type: 'tool-search', toolCallId: 'pending', toolName: 'search', state: 'input-available', input: { q: 'Halo' } },
-          { type: 'tool-pay', toolCallId: 'approval', toolName: 'pay', state: 'approval-requested', approval: { id: 'approval-1' } },
+          {
+            type: 'tool-search',
+            toolCallId: 'pending',
+            toolName: 'search',
+            state: 'input-available',
+            input: { q: 'Halo' },
+          },
+          {
+            type: 'tool-pay',
+            toolCallId: 'approval',
+            toolName: 'pay',
+            state: 'approval-requested',
+            approval: { id: 'approval-1' },
+          },
         ],
       },
       {
@@ -599,8 +699,20 @@ describe('UI message persistence helpers', () => {
         role: 'assistant',
         parts: [
           { type: 'text', id: 'text-1', text: 'answer' },
-          { type: 'tool-search', toolCallId: 'done', toolName: 'search', state: 'output-available', output: { ok: true } },
-          { type: 'tool-pay', toolCallId: 'denied', toolName: 'pay', state: 'approval-responded', approval: { id: 'approval-2', approved: false } },
+          {
+            type: 'tool-search',
+            toolCallId: 'done',
+            toolName: 'search',
+            state: 'output-available',
+            output: { ok: true },
+          },
+          {
+            type: 'tool-pay',
+            toolCallId: 'denied',
+            toolName: 'pay',
+            state: 'approval-responded',
+            approval: { id: 'approval-2', approved: false },
+          },
         ],
       },
     ]
@@ -611,8 +723,20 @@ describe('UI message persistence helpers', () => {
         role: 'assistant',
         parts: [
           { type: 'text', id: 'text-1', text: 'answer' },
-          { type: 'tool-search', toolCallId: 'done', toolName: 'search', state: 'output-available', output: { ok: true } },
-          { type: 'tool-pay', toolCallId: 'denied', toolName: 'pay', state: 'approval-responded', approval: { id: 'approval-2', approved: false } },
+          {
+            type: 'tool-search',
+            toolCallId: 'done',
+            toolName: 'search',
+            state: 'output-available',
+            output: { ok: true },
+          },
+          {
+            type: 'tool-pay',
+            toolCallId: 'denied',
+            toolName: 'pay',
+            state: 'approval-responded',
+            approval: { id: 'approval-2', approved: false },
+          },
         ],
       },
     ])
@@ -632,10 +756,26 @@ describe('UI message persistence helpers', () => {
 
     expect(issues).toEqual([
       { path: '$[0].id', code: 'message.id.required', message: 'UI message id is required.' },
-      { path: '$[0].parts[0].id', code: 'part.data.id.required', message: 'Data part id is required.' },
-      { path: '$[0].parts[0].type', code: 'part.data.type.invalid', message: 'Data part type must be data-other.' },
-      { path: '$[0].parts[1].type', code: 'part.tool.type.invalid', message: 'Tool part type must be tool-lookup.' },
-      { path: '$[0].parts[1].errorText', code: 'part.tool.error.required', message: 'Tool output-error part errorText is required.' },
+      {
+        path: '$[0].parts[0].id',
+        code: 'part.data.id.required',
+        message: 'Data part id is required.',
+      },
+      {
+        path: '$[0].parts[0].type',
+        code: 'part.data.type.invalid',
+        message: 'Data part type must be data-other.',
+      },
+      {
+        path: '$[0].parts[1].type',
+        code: 'part.tool.type.invalid',
+        message: 'Tool part type must be tool-lookup.',
+      },
+      {
+        path: '$[0].parts[1].errorText',
+        code: 'part.tool.error.required',
+        message: 'Tool output-error part errorText is required.',
+      },
     ])
   })
 
@@ -643,7 +783,7 @@ describe('UI message persistence helpers', () => {
     expect(() =>
       assertValidUIMessages([
         { id: 'assistant-1', role: 'assistant', parts: [{ type: 'unknown' } as never] },
-      ])
+      ]),
     ).toThrow(AIUIMessageValidationError)
   })
 
@@ -666,7 +806,7 @@ describe('UI message persistence helpers', () => {
             safeParse: () => ({ success: true, data: { value: 'ok' } }),
           },
         },
-      }
+      },
     )
     const invalid = validateUIMessages(
       [
@@ -686,7 +826,7 @@ describe('UI message persistence helpers', () => {
             safeParse: () => ({ success: false, error: { message: 'bad data' } }),
           },
         },
-      }
+      },
     )
 
     expect(valid).toEqual([])
@@ -731,7 +871,12 @@ describe('Chat', () => {
     await chat.sendMessage({
       text: 'Read this',
       files: [
-        { id: 'file-1', url: 'https://example.com/report.pdf', mediaType: 'application/pdf', title: 'Report' },
+        {
+          id: 'file-1',
+          url: 'https://example.com/report.pdf',
+          mediaType: 'application/pdf',
+          title: 'Report',
+        },
       ],
     })
 
@@ -768,10 +913,26 @@ describe('Chat', () => {
     const dataEvents: unknown[] = []
     const toolCalls: unknown[] = []
     const transport = new RecordingTransport([
-      { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' }, transient: true },
+      {
+        type: 'data-status',
+        id: 'status-1',
+        name: 'status',
+        data: { value: 'loading' },
+        transient: true,
+      },
       { type: 'tool-input-start', toolCallId: 'call-1', toolName: 'search' },
-      { type: 'tool-input-delta', toolCallId: 'call-1', toolName: 'search', inputTextDelta: '{"q":"Halo"}' },
-      { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search', input: { q: 'Halo' } },
+      {
+        type: 'tool-input-delta',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        inputTextDelta: '{"q":"Halo"}',
+      },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        input: { q: 'Halo' },
+      },
     ])
     const chat = new Chat({
       id: 'chat-1',
@@ -783,10 +944,21 @@ describe('Chat', () => {
     await chat.sendMessage({ text: 'Hello' })
 
     expect(dataEvents).toEqual([
-      { type: 'data-status', id: 'status-1', name: 'status', data: { value: 'loading' }, transientData: true },
+      {
+        type: 'data-status',
+        id: 'status-1',
+        name: 'status',
+        data: { value: 'loading' },
+        transientData: true,
+      },
     ])
     expect(toolCalls).toEqual([
-      expect.objectContaining({ type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available' }),
+      expect.objectContaining({
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        toolName: 'search',
+        state: 'input-available',
+      }),
     ])
   })
 
@@ -831,7 +1003,11 @@ describe('Chat', () => {
     const state = createPlainChatState({
       messages: [
         { id: 'user-1', role: 'user', parts: [{ type: 'text', id: 'text-1', text: 'Hello' }] },
-        { id: 'assistant-1', role: 'assistant', parts: [{ type: 'text', id: 'text-2', text: 'Old' }] },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          parts: [{ type: 'text', id: 'text-2', text: 'Old' }],
+        },
       ],
     })
     const chat = new Chat({ id: 'chat-1', state, transport, generateId: () => 'assistant-2' })
@@ -852,7 +1028,18 @@ describe('Chat', () => {
       id: 'chat-1',
       state: createPlainChatState({
         messages: [
-          { id: 'assistant-1', role: 'assistant', parts: [{ type: 'tool-search-web', toolCallId: 'call-1', toolName: 'search-web', state: 'input-available' }] },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-search-web',
+                toolCallId: 'call-1',
+                toolName: 'search-web',
+                state: 'input-available',
+              },
+            ],
+          },
         ],
       }),
       transport,
@@ -861,13 +1048,15 @@ describe('Chat', () => {
 
     await chat.addToolOutput({ toolCallId: 'call-1', toolName: 'search-web', output: { ok: true } })
 
-    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
-      type: 'tool-search-web',
-      toolCallId: 'call-1',
-      toolName: 'search-web',
-      state: 'output-available',
-      output: { ok: true },
-    }))
+    expect(chat.messages[0].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-search-web',
+        toolCallId: 'call-1',
+        toolName: 'search-web',
+        state: 'output-available',
+        output: { ok: true },
+      }),
+    )
     expect(transport.options?.trigger).toBe('submit-message')
   })
 
@@ -880,7 +1069,12 @@ describe('Chat', () => {
             id: 'assistant-1',
             role: 'assistant',
             parts: [
-              { type: 'tool-search-web', toolCallId: 'call-1', toolName: 'search-web', state: 'input-available' },
+              {
+                type: 'tool-search-web',
+                toolCallId: 'call-1',
+                toolName: 'search-web',
+                state: 'input-available',
+              },
               {
                 type: 'tool-delete_file',
                 toolCallId: 'call-2',
@@ -897,25 +1091,35 @@ describe('Chat', () => {
     await chat.addToolOutput({ toolCallId: 'call-1', output: { ok: true } })
     await chat.rejectToolCall({ id: 'approval-1', reason: 'Denied' })
 
-    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
-      type: 'tool-search-web',
-      toolCallId: 'call-1',
-      toolName: 'search-web',
-      state: 'output-available',
-      output: { ok: true },
-    }))
-    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
-      type: 'tool-delete_file',
-      toolCallId: 'call-2',
-      toolName: 'delete_file',
-      state: 'approval-responded',
-      approval: { id: 'approval-1', approved: false, reason: 'Denied' },
-    }))
+    expect(chat.messages[0].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-search-web',
+        toolCallId: 'call-1',
+        toolName: 'search-web',
+        state: 'output-available',
+        output: { ok: true },
+      }),
+    )
+    expect(chat.messages[0].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-delete_file',
+        toolCallId: 'call-2',
+        toolName: 'delete_file',
+        state: 'approval-responded',
+        approval: { id: 'approval-1', approved: false, reason: 'Denied' },
+      }),
+    )
   })
 
   it('adds approved tool approval response and auto submits from existing assistant state', async () => {
     const transport = new RecordingTransport([
-      { type: 'tool-delete_file', toolCallId: 'call-2', toolName: 'delete_file', state: 'output-available', output: { ok: true } },
+      {
+        type: 'tool-delete_file',
+        toolCallId: 'call-2',
+        toolName: 'delete_file',
+        state: 'output-available',
+        output: { ok: true },
+      },
     ])
     const chat = new Chat({
       id: 'chat-1',
@@ -944,41 +1148,59 @@ describe('Chat', () => {
     await chat.addToolApprovalResponse({ id: 'approval-1', approved: true, reason: 'OK' })
 
     expect(transport.options?.trigger).toBe('submit-message')
-    expect(chat.messages[0].parts).toContainEqual(expect.objectContaining({
-      type: 'tool-delete_file',
-      toolCallId: 'call-2',
-      toolName: 'delete_file',
-      state: 'output-available',
-      input: { path: '/tmp/a.txt' },
-      output: { ok: true },
-      approval: { id: 'approval-1', approved: true, reason: 'OK' },
-    }))
+    expect(chat.messages[0].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-delete_file',
+        toolCallId: 'call-2',
+        toolName: 'delete_file',
+        state: 'output-available',
+        input: { path: '/tmp/a.txt' },
+        output: { ok: true },
+        approval: { id: 'approval-1', approved: true, reason: 'OK' },
+      }),
+    )
   })
 
   it('detects approval response completion separately from tool output completion', () => {
-    expect(lastAssistantMessageIsCompleteWithApprovalResponses({
-      messages: [
-        {
-          id: 'assistant-1',
-          role: 'assistant',
-          parts: [
-            { type: 'tool-delete_file', toolCallId: 'call-1', toolName: 'delete_file', state: 'approval-responded', approval: { id: 'approval-1', approved: false } },
-          ],
-        },
-      ],
-    })).toBe(true)
+    expect(
+      lastAssistantMessageIsCompleteWithApprovalResponses({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-delete_file',
+                toolCallId: 'call-1',
+                toolName: 'delete_file',
+                state: 'approval-responded',
+                approval: { id: 'approval-1', approved: false },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(true)
 
-    expect(lastAssistantMessageIsCompleteWithApprovalResponses({
-      messages: [
-        {
-          id: 'assistant-1',
-          role: 'assistant',
-          parts: [
-            { type: 'tool-delete_file', toolCallId: 'call-1', toolName: 'delete_file', state: 'approval-requested', approval: { id: 'approval-1' } },
-          ],
-        },
-      ],
-    })).toBe(false)
+    expect(
+      lastAssistantMessageIsCompleteWithApprovalResponses({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-delete_file',
+                toolCallId: 'call-1',
+                toolName: 'delete_file',
+                state: 'approval-requested',
+                approval: { id: 'approval-1' },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(false)
   })
 
   it('reports whether the last assistant tool parts are complete', async () => {
@@ -987,7 +1209,14 @@ describe('Chat', () => {
         {
           id: 'assistant-1',
           role: 'assistant',
-          parts: [{ type: 'tool-search', toolCallId: 'call-1', toolName: 'search', state: 'input-available' }],
+          parts: [
+            {
+              type: 'tool-search',
+              toolCallId: 'call-1',
+              toolName: 'search',
+              state: 'input-available',
+            },
+          ],
         },
       ],
     })
@@ -1030,9 +1259,11 @@ describe('Chat', () => {
 
   it('marks readable stream interruptions after valid chunks as disconnected', async () => {
     const transport: ChatTransport = {
-      sendMessages: async () => asyncGeneratorWithFailure([
-        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
-      ], new Error('network interrupted')),
+      sendMessages: async () =>
+        asyncGeneratorWithFailure(
+          [{ type: 'text-delta', id: 'text-1', delta: 'Partial' }],
+          new Error('network interrupted'),
+        ),
     }
     const chat = new Chat({ id: 'chat-1', transport, generateId: () => 'assistant-1' })
 
@@ -1045,14 +1276,15 @@ describe('Chat', () => {
 
   it('keeps protocol failures as errors after the stream started', async () => {
     const transport: ChatTransport = {
-      sendMessages: async () => chunksToAsyncIterable([
-        { type: 'text-delta', id: 'text-1', delta: 'Partial' },
-        {
-          type: 'tool-search',
-          toolCallId: 'call-1',
-          toolName: 'search',
-        } as unknown as UIMessageChunk,
-      ]),
+      sendMessages: async () =>
+        chunksToAsyncIterable([
+          { type: 'text-delta', id: 'text-1', delta: 'Partial' },
+          {
+            type: 'tool-search',
+            toolCallId: 'call-1',
+            toolName: 'search',
+          } as unknown as UIMessageChunk,
+        ]),
     }
     const chat = new Chat({ id: 'chat-1', transport, generateId: () => 'assistant-1' })
 
@@ -1127,7 +1359,6 @@ describe('Chat', () => {
     expect(finishes).toEqual([{ isError: true, errorText: 'model failed', messageParts: 0 }])
     expect(chat.messages).toContainEqual({ id: 'assistant-1', role: 'assistant', parts: [] })
   })
-
 })
 
 class RecordingTransport implements ChatTransport {
@@ -1157,11 +1388,9 @@ async function* asyncGeneratorUntilAbort(signal?: AbortSignal): AsyncIterable<UI
       reject(new DOMException('Aborted', 'AbortError'))
       return
     }
-    signal?.addEventListener(
-      'abort',
-      () => reject(new DOMException('Aborted', 'AbortError')),
-      { once: true }
-    )
+    signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), {
+      once: true,
+    })
   })
 }
 
@@ -1171,7 +1400,7 @@ async function* chunksToAsyncIterable(chunks: UIMessageChunk[]): AsyncIterable<U
 
 async function* asyncGeneratorWithFailure(
   chunks: UIMessageChunk[],
-  error: Error
+  error: Error,
 ): AsyncIterable<UIMessageChunk> {
   yield* chunks
   throw error

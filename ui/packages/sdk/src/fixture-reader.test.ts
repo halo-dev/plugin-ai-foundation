@@ -16,7 +16,9 @@ export interface UIMessageFixture {
 
 const fixtureNames = ['data-parts', 'tool-lifecycle', 'terminal-states'] as const
 
-export async function readUIMessageFixture(name: (typeof fixtureNames)[number]): Promise<UIMessageFixture> {
+export async function readUIMessageFixture(
+  name: (typeof fixtureNames)[number],
+): Promise<UIMessageFixture> {
   const sourceDir = dirname(fileURLToPath(import.meta.url))
   const fixturePath = resolve(sourceDir, '../../../../test-fixtures/ui-message', `${name}.json`)
   return JSON.parse(await readFile(fixturePath, 'utf8')) as UIMessageFixture
@@ -55,7 +57,9 @@ function normalize(value: unknown): unknown {
   }
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key, entry]) => entry !== undefined && !(key === 'transientData' && entry === false))
-      .map(([key, entry]) => [key, normalize(entry)])
+      .filter(
+        ([key, entry]) => entry !== undefined && !(key === 'transientData' && entry === false),
+      )
+      .map(([key, entry]) => [key, normalize(entry)]),
   )
 }

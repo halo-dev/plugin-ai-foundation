@@ -41,7 +41,7 @@ export async function* readTextStream(stream: ReadableStream<Uint8Array>): Async
 }
 
 export async function* readUIMessageSSEStream(
-  stream: ReadableStream<Uint8Array>
+  stream: ReadableStream<Uint8Array>,
 ): AsyncIterable<UIMessageChunk> {
   let buffer = ''
   for await (const text of readTextStream(stream)) {

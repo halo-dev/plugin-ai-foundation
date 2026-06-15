@@ -1,10 +1,6 @@
 import { AIUIError } from './errors'
 import { generateId } from './id'
-import {
-  assertHaloUIMessageStreamResponse,
-  readTextStream,
-  readUIMessageSSEStream,
-} from './stream'
+import { assertHaloUIMessageStreamResponse, readTextStream, readUIMessageSSEStream } from './stream'
 import type {
   ChatTransport,
   FetchFunction,
@@ -27,15 +23,11 @@ export interface HttpTransportOptions<METADATA = unknown> {
       body?: Record<string, unknown>
       headers?: HeadersInit
       credentials?: RequestCredentials
-    }
-  ) =>
-    | PreparedRequest
-    | PromiseLike<PreparedRequest>
+    },
+  ) => PreparedRequest | PromiseLike<PreparedRequest>
 }
 
-export abstract class HttpChatTransport<METADATA = unknown>
-  implements ChatTransport<METADATA>
-{
+export abstract class HttpChatTransport<METADATA = unknown> implements ChatTransport<METADATA> {
   protected readonly api: string
   protected readonly credentials?: Resolvable<RequestCredentials | undefined>
   protected readonly headers?: Resolvable<HeadersInit | undefined>
@@ -52,7 +44,9 @@ export abstract class HttpChatTransport<METADATA = unknown>
     this.prepareSendMessagesRequest = options.prepareSendMessagesRequest
   }
 
-  async sendMessages(options: SendMessagesOptions<METADATA>): Promise<AsyncIterable<UIMessageChunk>> {
+  async sendMessages(
+    options: SendMessagesOptions<METADATA>,
+  ): Promise<AsyncIterable<UIMessageChunk>> {
     const baseBody = await resolve(this.body)
     const baseHeaders = mergeHeaders(await resolve(this.headers), options.headers)
     const baseCredentials = options.credentials ?? (await resolve(this.credentials))

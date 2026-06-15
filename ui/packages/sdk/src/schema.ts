@@ -1,4 +1,8 @@
-import { AIUIError, AIUISchemaValidationError, type AIUISchemaValidationErrorOptions } from './errors'
+import {
+  AIUIError,
+  AIUISchemaValidationError,
+  type AIUISchemaValidationErrorOptions,
+} from './errors'
 import type { JsonSchema } from './types'
 
 export interface StandardSchemaIssue {
@@ -14,14 +18,16 @@ export interface StandardSchemaLike<T = unknown> {
   '~standard': {
     version?: number
     vendor?: string
-    validate: (value: unknown) => StandardSchemaValidationResult<T> | PromiseLike<StandardSchemaValidationResult<T>>
+    validate: (
+      value: unknown,
+    ) => StandardSchemaValidationResult<T> | PromiseLike<StandardSchemaValidationResult<T>>
   }
 }
 
 export type SafeParseSchema<T = unknown> = {
-  safeParse: (value: unknown) =>
-    | { success: true; data: T }
-    | { success: false; error?: { message?: string } | unknown }
+  safeParse: (
+    value: unknown,
+  ) => { success: true; data: T } | { success: false; error?: { message?: string } | unknown }
   parse?: (value: unknown) => T
   toJSONSchema?: () => JsonSchema
   toJsonSchema?: () => JsonSchema
@@ -74,7 +80,7 @@ export function validateFinalValue<T>(value: unknown, schema: SchemaLike<T>): T 
 export function validateRuntimeSchema<T>(
   value: unknown,
   schema: SchemaLike<T>,
-  context: RuntimeSchemaValidationContext
+  context: RuntimeSchemaValidationContext,
 ): T {
   return validateSchemaValue(value, schema, {
     makeError: (message, cause) =>
@@ -152,7 +158,7 @@ function validateSchemaValue<T>(
   schema: SchemaLike<T>,
   options: {
     makeError: (message: string, cause?: unknown) => Error
-  }
+  },
 ): T {
   if (isStandardSchema(schema)) {
     try {
@@ -237,7 +243,9 @@ function validateJsonSchemaValue(value: unknown, schema: JsonSchema, path: strin
       throw new AIUIError(`${path} must be an array`)
     }
     if (schema.items) {
-      value.forEach((item, index) => validateJsonSchemaValue(item, schema.items!, `${path}[${index}]`))
+      value.forEach((item, index) =>
+        validateJsonSchemaValue(item, schema.items!, `${path}[${index}]`),
+      )
     }
     return
   }
@@ -265,7 +273,9 @@ function matchesType(value: unknown, type: string): boolean {
 }
 
 function isJsonSchema(schema: SchemaLike): schema is JsonSchema {
-  return typeof schema === 'object' && schema !== null && ('type' in schema || 'properties' in schema)
+  return (
+    typeof schema === 'object' && schema !== null && ('type' in schema || 'properties' in schema)
+  )
 }
 
 function isStandardSchema<T>(schema: SchemaLike<T>): schema is StandardSchemaLike<T> {
@@ -278,7 +288,11 @@ function isStandardSchema<T>(schema: SchemaLike<T>): schema is StandardSchemaLik
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return typeof value === 'object' && value !== null && typeof (value as PromiseLike<unknown>).then === 'function'
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as PromiseLike<unknown>).then === 'function'
+  )
 }
 
 function isAdapterError(error: unknown): error is AIUIError | AIUISchemaValidationError {

@@ -31,7 +31,7 @@ export interface CreateReducerOptions<METADATA = unknown> {
 }
 
 export function createUIMessageReducer<METADATA = unknown>(
-  options: CreateReducerOptions<METADATA> = {}
+  options: CreateReducerOptions<METADATA> = {},
 ): UIMessageReducerState<METADATA> {
   return {
     message: options.message ?? {
@@ -49,7 +49,7 @@ export function createUIMessageReducer<METADATA = unknown>(
 
 export function applyUIMessageChunk<METADATA>(
   state: UIMessageReducerState<METADATA>,
-  chunk: UIMessageChunk
+  chunk: UIMessageChunk,
 ): UIMessageReducerState<METADATA> {
   validateUIMessageChunk(chunk)
   if (isDataChunk(chunk)) {
@@ -202,7 +202,13 @@ export function validateUIMessageChunk(chunk: UIMessageChunk): void {
 
 export function withToolOutput<METADATA = unknown>(
   message: UIMessage<METADATA>,
-  result: { toolCallId: string; toolName: string; output?: unknown; result?: unknown; providerMetadata?: Record<string, unknown> }
+  result: {
+    toolCallId: string
+    toolName: string
+    output?: unknown
+    result?: unknown
+    providerMetadata?: Record<string, unknown>
+  },
 ): UIMessage<METADATA> {
   const existing = findToolPart(message, result.toolCallId)
   return upsertMessagePart(message, {
@@ -219,7 +225,12 @@ export function withToolOutput<METADATA = unknown>(
 
 export function withToolError<METADATA = unknown>(
   message: UIMessage<METADATA>,
-  error: { toolCallId: string; toolName: string; errorText: string; providerMetadata?: Record<string, unknown> }
+  error: {
+    toolCallId: string
+    toolName: string
+    errorText: string
+    providerMetadata?: Record<string, unknown>
+  },
 ): UIMessage<METADATA> {
   const existing = findToolPart(message, error.toolCallId)
   return upsertMessagePart(message, {
@@ -236,7 +247,14 @@ export function withToolError<METADATA = unknown>(
 
 export function withToolApprovalDecision<METADATA = unknown>(
   message: UIMessage<METADATA>,
-  response: { approvalId: string; toolCallId: string; toolName: string; approved: boolean; reason?: string; providerMetadata?: Record<string, unknown> }
+  response: {
+    approvalId: string
+    toolCallId: string
+    toolName: string
+    approved: boolean
+    reason?: string
+    providerMetadata?: Record<string, unknown>
+  },
 ): UIMessage<METADATA> {
   const existing = findToolPart(message, response.toolCallId)
   return upsertMessagePart(message, {
@@ -254,10 +272,10 @@ export function withToolApprovalDecision<METADATA = unknown>(
 function appendTextPart<METADATA>(
   state: UIMessageReducerState<METADATA>,
   id: string,
-  delta: string
+  delta: string,
 ) {
   const part = state.message.parts.find(
-    (item): item is TextPart => item.type === 'text' && item.id === id
+    (item): item is TextPart => item.type === 'text' && item.id === id,
   )
   upsertPart(state, { type: 'text', id, text: `${part?.text ?? ''}${delta ?? ''}` })
 }
@@ -266,10 +284,10 @@ function appendReasoningPart<METADATA>(
   state: UIMessageReducerState<METADATA>,
   id: string,
   delta: string,
-  providerMetadata?: Record<string, unknown>
+  providerMetadata?: Record<string, unknown>,
 ) {
   const part = state.message.parts.find(
-    (item): item is ReasoningPart => item.type === 'reasoning' && item.id === id
+    (item): item is ReasoningPart => item.type === 'reasoning' && item.id === id,
   )
   upsertPart(state, {
     type: 'reasoning',
@@ -286,7 +304,7 @@ function upsertPart<METADATA>(state: UIMessageReducerState<METADATA>, part: UIMe
 
 function upsertMessagePart<METADATA>(
   message: UIMessage<METADATA>,
-  part: UIMessagePart
+  part: UIMessagePart,
 ): UIMessage<METADATA> {
   const index = message.parts.findIndex((item) => samePartIdentity(item, part))
   const parts = [...message.parts]
@@ -324,7 +342,10 @@ function isPersistedVisiblePart(part: UIMessagePart): boolean {
   return !isDataPart(part) || !part.transientData
 }
 
-function finishTerminal(terminal: UIMessageStreamTerminal, chunk: FinishChunk): UIMessageStreamTerminal {
+function finishTerminal(
+  terminal: UIMessageStreamTerminal,
+  chunk: FinishChunk,
+): UIMessageStreamTerminal {
   return {
     ...terminal,
     finishReason: chunk.finishReason,
@@ -333,7 +354,10 @@ function finishTerminal(terminal: UIMessageStreamTerminal, chunk: FinishChunk): 
   }
 }
 
-function mergeMetadata<METADATA>(current: METADATA | undefined, update: unknown): METADATA | undefined {
+function mergeMetadata<METADATA>(
+  current: METADATA | undefined,
+  update: unknown,
+): METADATA | undefined {
   if (update == null) {
     return current
   }
@@ -345,7 +369,7 @@ function mergeMetadata<METADATA>(current: METADATA | undefined, update: unknown)
 
 function mergeAndValidateMetadata<METADATA>(
   state: UIMessageReducerState<METADATA>,
-  update: unknown
+  update: unknown,
 ): METADATA | undefined {
   const merged = mergeMetadata(state.message.metadata, update)
   if (update == null || !state.messageMetadataSchema) {
@@ -358,7 +382,7 @@ function mergeAndValidateMetadata<METADATA>(
 
 function validateDataPart<METADATA>(
   state: UIMessageReducerState<METADATA>,
-  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>
+  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>,
 ): unknown {
   const schema = state.dataPartSchemas?.[chunk.name]
   if (!schema) {
@@ -416,7 +440,7 @@ function toolPartUpdateFromCanonicalChunk(
         | 'tool-approval-request'
         | 'tool-approval-response'
     }
-  >
+  >,
 ): ToolChunk {
   const base = {
     type: `tool-${chunk.toolName}` as `tool-${string}`,
@@ -471,19 +495,22 @@ function toolPartUpdateFromCanonicalChunk(
   }
 }
 
-function findToolPart<METADATA>(message: UIMessage<METADATA>, toolCallId: string): ToolPart | undefined {
+function findToolPart<METADATA>(
+  message: UIMessage<METADATA>,
+  toolCallId: string,
+): ToolPart | undefined {
   return message.parts.find(
-    (part): part is ToolPart => isToolPart(part) && part.toolCallId === toolCallId
+    (part): part is ToolPart => isToolPart(part) && part.toolCallId === toolCallId,
   )
 }
 
-function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
+function isDataChunk(
+  chunk: UIMessageChunk,
+): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
   return chunk.type.startsWith('data-')
 }
 
-function isCanonicalToolChunk(
-  chunk: UIMessageChunk
-): chunk is Extract<
+function isCanonicalToolChunk(chunk: UIMessageChunk): chunk is Extract<
   UIMessageChunk,
   {
     type:
@@ -525,7 +552,11 @@ function validateDynamicName(value: string | undefined, pattern: RegExp, label: 
   }
 }
 
-function validateToolIdentity(type: string, toolCallId: string | undefined, toolName: string | undefined): void {
+function validateToolIdentity(
+  type: string,
+  toolCallId: string | undefined,
+  toolName: string | undefined,
+): void {
   validateDynamicName(toolName, /^[A-Za-z][A-Za-z0-9_-]*$/, 'tool name')
   if (!toolCallId) {
     throw new AIUIProtocolError(`${type} chunk toolCallId is required.`)

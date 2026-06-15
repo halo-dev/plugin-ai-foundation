@@ -11,9 +11,12 @@ import { experimental_useObject } from './use-object'
 describe('useChat', () => {
   it('shares state by id', async () => {
     const fetch = async () =>
-      new Response(streamFromText('data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n'), {
-        headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
-      })
+      new Response(
+        streamFromText('data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n'),
+        {
+          headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
+        },
+      )
 
     const scope = effectScope()
     await scope.run(async () => {
@@ -33,9 +36,14 @@ describe('useChat', () => {
       id: 'external-chat',
       transport: new DefaultChatTransport({
         fetch: async () =>
-          new Response(streamFromText('data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n'), {
-            headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
-          }),
+          new Response(
+            streamFromText(
+              'data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n',
+            ),
+            {
+              headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
+            },
+          ),
       }),
     })
 
@@ -92,7 +100,7 @@ describe('useChat', () => {
     expect(() =>
       scope.run(() => {
         useChat({ chat, id: 'other-chat' })
-      })
+      }),
     ).toThrow('useChat({ chat }) cannot be mixed with creation options: id.')
     scope.stop()
   })
@@ -138,7 +146,7 @@ describe('useChat', () => {
           type: 'tool-search',
           toolCallId: 'call-1',
           state: 'input-available',
-        })
+        }),
       )
     })
     scope.stop()
@@ -146,9 +154,12 @@ describe('useChat', () => {
 
   it('accepts object throttle options', async () => {
     const fetch = async () =>
-      new Response(streamFromText('data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n'), {
-        headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
-      })
+      new Response(
+        streamFromText('data: {"type":"text-delta","id":"t","delta":"Hello"}\n\ndata: [DONE]\n\n'),
+        {
+          headers: { 'X-Halo-AI-UI-Message-Stream': 'v1' },
+        },
+      )
 
     const scope = effectScope()
     await scope.run(async () => {
@@ -348,7 +359,7 @@ describe('experimental_useObject', () => {
       expect(object.object.value).toEqual({ title: 'Draft' })
       await object.submit(
         { prompt: 'Summarize' },
-        { body: { requestId: 'object-1' }, headers: { 'X-Object-Call': 'yes' } }
+        { body: { requestId: 'object-1' }, headers: { 'X-Object-Call': 'yes' } },
       )
 
       expect(body).toMatchObject({

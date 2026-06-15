@@ -44,15 +44,16 @@ export interface UIMessageStreamReadResult<METADATA = unknown> {
   error?: Error
 }
 
-export type UIMessageStreamFinishEvent<METADATA = unknown> =
-  UIMessageStreamReadResult<METADATA>
+export type UIMessageStreamFinishEvent<METADATA = unknown> = UIMessageStreamReadResult<METADATA>
 
 export async function readUIMessageStream<METADATA = unknown>(
-  options: ReadUIMessageStreamOptions<METADATA>
+  options: ReadUIMessageStreamOptions<METADATA>,
 ): Promise<UIMessageStreamReadResult<METADATA>> {
   const reducer = createUIMessageReducer<METADATA>({
     message: options.message,
-    messageId: options.message ? undefined : options.messageId ?? options.generateId?.() ?? generateId('msg'),
+    messageId: options.message
+      ? undefined
+      : (options.messageId ?? options.generateId?.() ?? generateId('msg')),
     metadata: options.message ? undefined : options.metadata,
     messageMetadataSchema: options.messageMetadataSchema,
     dataPartSchemas: options.dataPartSchemas,
@@ -71,7 +72,10 @@ export async function readUIMessageStream<METADATA = unknown>(
       applyUIMessageChunk(reducer, chunk)
       hasAcceptedChunk = true
       if (isDataChunk(chunk)) {
-        await callReaderCallback(options.onData, cloneDataPart(dataPartFromChunk(reducer.message, chunk)))
+        await callReaderCallback(
+          options.onData,
+          cloneDataPart(dataPartFromChunk(reducer.message, chunk)),
+        )
       }
       const lastPart = reducer.message.parts[reducer.message.parts.length - 1]
       if (
@@ -113,7 +117,11 @@ export async function readUIMessageStream<METADATA = unknown>(
     error,
   }
 
-  await options.onFinish?.({ ...result, message: cloneMessage(result.message), terminal: { ...result.terminal } })
+  await options.onFinish?.({
+    ...result,
+    message: cloneMessage(result.message),
+    terminal: { ...result.terminal },
+  })
 
   if (onErrorFailure) {
     throw onErrorFailure
@@ -136,7 +144,7 @@ class ReaderCallbackError extends Error {
 
 async function callReaderCallback<T>(
   callback: ((value: T) => void | Promise<void>) | undefined,
-  value: T
+  value: T,
 ): Promise<void> {
   if (!callback) {
     return
@@ -149,7 +157,7 @@ async function callReaderCallback<T>(
 }
 
 function streamFromOptions<METADATA>(
-  options: ReadUIMessageStreamOptions<METADATA>
+  options: ReadUIMessageStreamOptions<METADATA>,
 ): AsyncIterable<UIMessageChunk> {
   if (options.stream) {
     return options.stream
@@ -169,7 +177,7 @@ function streamFromOptions<METADATA>(
 
 async function* streamWithAbort<T>(
   stream: AsyncIterable<T>,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
 ): AsyncIterable<T> {
   const iterator = stream[Symbol.asyncIterator]()
   try {
@@ -188,7 +196,7 @@ async function* streamWithAbort<T>(
 
 function nextWithAbort<T>(
   iterator: AsyncIterator<T>,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
 ): Promise<IteratorResult<T>> {
   if (!abortSignal) {
     return iterator.next()
@@ -221,7 +229,7 @@ async function* emptyStream(): AsyncIterable<UIMessageChunk> {
 
 function dataPartFromChunk<METADATA>(
   message: UIMessage<METADATA>,
-  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>
+  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>,
 ): DataPart {
   if (chunk.transient) {
     return {
@@ -234,17 +242,17 @@ function dataPartFromChunk<METADATA>(
   }
   const part = message.parts.find(
     (item): item is DataPart =>
-      item.type === chunk.type &&
-      item.type.startsWith('data-') &&
-      item.id === chunk.id
+      item.type === chunk.type && item.type.startsWith('data-') && item.id === chunk.id,
   )
-  return part ?? {
-    type: chunk.type,
-    id: chunk.id,
-    name: chunk.name,
-    data: chunk.data,
-    transientData: false,
-  }
+  return (
+    part ?? {
+      type: chunk.type,
+      id: chunk.id,
+      name: chunk.name,
+      data: chunk.data,
+      transientData: false,
+    }
+  )
 }
 
 function cloneMessage<METADATA>(message: UIMessage<METADATA>): UIMessage<METADATA> {
@@ -266,7 +274,9 @@ function cloneToolPart(part: ToolPart): ToolPart {
   return { ...part }
 }
 
-function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
+function isDataChunk(
+  chunk: UIMessageChunk,
+): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
   return chunk.type.startsWith('data-')
 }
 

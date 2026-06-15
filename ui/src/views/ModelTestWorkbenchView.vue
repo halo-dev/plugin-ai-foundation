@@ -20,8 +20,6 @@ import {
   type WorkbenchMessage,
   type WorkbenchWarning,
 } from '@/utils/model-test-workbench'
-import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
-import { utils } from '@halo-dev/ui-shared'
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
@@ -29,6 +27,8 @@ import {
   type UIMessage as HaloUIMessage,
   type UIMessagePart as HaloUIMessagePart,
 } from '@halo-dev/ai-foundation-sdk'
+import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
+import { utils } from '@halo-dev/ui-shared'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
@@ -288,7 +288,9 @@ async function streamUiMessageChatResponse(
 
   activeUiMessageModelName = modelName
   activeUiMessageWorkbenchId = assistantMessage.id
-  uiChat.setMessages(workbenchMessagesToHalo(messages.value.filter((item) => item !== assistantMessage)))
+  uiChat.setMessages(
+    workbenchMessagesToHalo(messages.value.filter((item) => item !== assistantMessage)),
+  )
   isStreaming.value = true
 
   try {
@@ -598,7 +600,9 @@ function syncWorkbenchMessageFromUiChat(message: WorkbenchMessage) {
   }
 }
 
-function workbenchMessagesToHalo(items: WorkbenchMessage[]): HaloUIMessage<Record<string, unknown>>[] {
+function workbenchMessagesToHalo(
+  items: WorkbenchMessage[],
+): HaloUIMessage<Record<string, unknown>>[] {
   return items
     .map(workbenchMessageToHalo)
     .filter((message): message is HaloUIMessage<Record<string, unknown>> => !!message)
@@ -726,10 +730,7 @@ function buildChatParameters(
   }
 }
 
-function appendAssistantWarnings(
-  messageId: string,
-  warnings: WorkbenchWarning[],
-) {
+function appendAssistantWarnings(messageId: string, warnings: WorkbenchWarning[]) {
   const message = messages.value.find((item) => item.id === messageId)
   if (message) {
     message.warnings = [...(message.warnings || []), ...warnings]

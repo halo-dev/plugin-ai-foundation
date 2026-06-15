@@ -16,10 +16,10 @@ import type {
   DataPart,
   FilePart,
   IdGenerator,
-  ToolPart,
   ToolApprovalResponseInput,
   ToolOutputInput,
   ToolOutputSuccessInput,
+  ToolPart,
   UIMessage,
   UIMessageChunk,
   UIMessageStreamTerminal,
@@ -137,7 +137,10 @@ export class Chat<METADATA = unknown> {
     }
   }
 
-  async sendMessage(message?: SendMessageInput<METADATA>, options?: ChatRequestOptions): Promise<void> {
+  async sendMessage(
+    message?: SendMessageInput<METADATA>,
+    options?: ChatRequestOptions,
+  ): Promise<void> {
     if (message) {
       this.applyUserMessage(message)
     }
@@ -164,7 +167,12 @@ export class Chat<METADATA = unknown> {
 
     const keepUntil = messages[index].role === 'assistant' ? index : index + 1
     this.setMessages(messages.slice(0, keepUntil))
-    await this.makeRequest({ trigger: 'regenerate-message', messageId, options, requestMessages: messages })
+    await this.makeRequest({
+      trigger: 'regenerate-message',
+      messageId,
+      options,
+      requestMessages: messages,
+    })
   }
 
   stop(): void {
@@ -178,7 +186,12 @@ export class Chat<METADATA = unknown> {
     }
     return assistant.parts
       .filter(isToolPart)
-      .every((part) => part.state === 'output-available' || part.state === 'output-error' || part.state === 'output-denied')
+      .every(
+        (part) =>
+          part.state === 'output-available' ||
+          part.state === 'output-error' ||
+          part.state === 'output-denied',
+      )
   }
 
   private async appendToolOutputSuccess(
@@ -188,11 +201,11 @@ export class Chat<METADATA = unknown> {
       result: unknown
       providerMetadata?: Record<string, unknown>
     },
-    options?: ChatRequestOptions
+    options?: ChatRequestOptions,
   ): Promise<void> {
     const tool = this.resolveToolCall(input.toolCallId, input.toolName)
     this.updateLastAssistant((message) =>
-      withToolOutput(message, { ...input, toolName: tool.toolName })
+      withToolOutput(message, { ...input, toolName: tool.toolName }),
     )
     await this.maybeSendAutomatically(options)
   }
@@ -204,11 +217,11 @@ export class Chat<METADATA = unknown> {
       errorText: string
       providerMetadata?: Record<string, unknown>
     },
-    options?: ChatRequestOptions
+    options?: ChatRequestOptions,
   ): Promise<void> {
     const tool = this.resolveToolCall(input.toolCallId, input.toolName)
     this.updateLastAssistant((message) =>
-      withToolError(message, { ...input, toolName: tool.toolName })
+      withToolError(message, { ...input, toolName: tool.toolName }),
     )
     await this.maybeSendAutomatically(options)
   }
@@ -223,7 +236,7 @@ export class Chat<METADATA = unknown> {
           errorText: input.errorText,
           providerMetadata: input.providerMetadata,
         },
-        options
+        options,
       )
       return
     }
@@ -235,20 +248,20 @@ export class Chat<METADATA = unknown> {
         result: outputInput.output ?? outputInput.result,
         providerMetadata: outputInput.providerMetadata,
       },
-      options
+      options,
     )
   }
 
   async rejectToolCall(
     input: Omit<ToolApprovalResponseInput, 'approved'> & { approved?: false },
-    options?: ChatRequestOptions
+    options?: ChatRequestOptions,
   ): Promise<void> {
     await this.addToolApprovalResponse({ ...input, approved: false }, options)
   }
 
   async addToolApprovalResponse(
     input: ToolApprovalResponseInput,
-    options?: ChatRequestOptions
+    options?: ChatRequestOptions,
   ): Promise<void> {
     const approval =
       input.id || input.approvalId
@@ -267,7 +280,7 @@ export class Chat<METADATA = unknown> {
         approved: input.approved,
         reason: input.reason,
         providerMetadata: input.providerMetadata,
-      })
+      }),
     )
     await this.maybeSendAutomatically(options)
   }
@@ -289,10 +302,7 @@ export class Chat<METADATA = unknown> {
       if (messages[index].role !== 'user') {
         throw new Error(`message with id ${message.messageId} is not a user message`)
       }
-      this.setMessages([
-        ...messages.slice(0, index),
-        { ...nextMessage, id: message.messageId },
-      ])
+      this.setMessages([...messages.slice(0, index), { ...nextMessage, id: message.messageId }])
       return
     }
 
@@ -352,7 +362,12 @@ export class Chat<METADATA = unknown> {
         }),
     })
 
-    if (this.status === 'ready' && !outcome.isError && allowAutoSubmit && (await this.shouldSendAutomatically())) {
+    if (
+      this.status === 'ready' &&
+      !outcome.isError &&
+      allowAutoSubmit &&
+      (await this.shouldSendAutomatically())
+    ) {
       await this.makeRequest({
         trigger: 'submit-message',
         messageId: this.messages[this.messages.length - 1]?.id,
@@ -433,7 +448,7 @@ export class Chat<METADATA = unknown> {
 
   private applyAssistantChunk(
     reducer: ReturnType<typeof createUIMessageReducer<METADATA>>,
-    chunk: UIMessageChunk
+    chunk: UIMessageChunk,
   ) {
     applyUIMessageChunk(reducer, chunk)
     if (isDataChunk(chunk)) {
@@ -579,7 +594,7 @@ function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
 
 function findLastToolPart<METADATA>(
   messages: UIMessage<METADATA>[],
-  toolCallId: string
+  toolCallId: string,
 ): { toolName: string } | undefined {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex]
@@ -598,7 +613,7 @@ function findLastToolPart<METADATA>(
 
 function findLastApprovalRequest<METADATA>(
   messages: UIMessage<METADATA>[],
-  approvalId: string
+  approvalId: string,
 ): ToolPart | undefined {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex]
@@ -623,13 +638,15 @@ function isToolPart(part: UIMessage['parts'][number]): part is ToolPart {
   return part.type.startsWith('tool-')
 }
 
-function isDataChunk(chunk: UIMessageChunk): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
+function isDataChunk(
+  chunk: UIMessageChunk,
+): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
   return chunk.type.startsWith('data-')
 }
 
 function dataPartFromChunk<METADATA>(
   message: UIMessage<METADATA>,
-  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>
+  chunk: Extract<UIMessageChunk, { type: `data-${string}` }>,
 ): DataPart {
   if (chunk.transient) {
     return {
@@ -642,17 +659,17 @@ function dataPartFromChunk<METADATA>(
   }
   const part = message.parts.find(
     (item): item is DataPart =>
-      item.type === chunk.type &&
-      item.type.startsWith('data-') &&
-      item.id === chunk.id
+      item.type === chunk.type && item.type.startsWith('data-') && item.id === chunk.id,
   )
-  return part ?? {
-    type: chunk.type,
-    id: chunk.id,
-    name: chunk.name,
-    data: chunk.data,
-    transientData: false,
-  }
+  return (
+    part ?? {
+      type: chunk.type,
+      id: chunk.id,
+      name: chunk.name,
+      data: chunk.data,
+      transientData: false,
+    }
+  )
 }
 
 export function lastAssistantMessageIsCompleteWithApprovalResponses<METADATA = unknown>({
@@ -666,10 +683,10 @@ export function lastAssistantMessageIsCompleteWithApprovalResponses<METADATA = u
   }
   const approvalParts = assistant.parts.filter(
     (part): part is ToolPart =>
-      isToolPart(part) && (part.state === 'approval-requested' || part.state === 'approval-responded')
+      isToolPart(part) &&
+      (part.state === 'approval-requested' || part.state === 'approval-responded'),
   )
   return (
-    approvalParts.length > 0 &&
-    approvalParts.every((part) => part.state === 'approval-responded')
+    approvalParts.length > 0 && approvalParts.every((part) => part.state === 'approval-responded')
   )
 }
