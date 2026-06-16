@@ -279,10 +279,11 @@ describe('testUiMessageChatStreamUrl', () => {
       testUiMessageChatStreamUrl('model/name', {
         testToolEnabled: true,
         externalTestToolEnabled: true,
+        agentTestToolsEnabled: true,
         toolCallRepairEnabled: true,
       }),
     ).toBe(
-      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/ui-message/stream?enableTestTool=true&enableExternalTestTool=true&enableToolCallRepair=true',
+      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-chat/ui-message/stream?enableTestTool=true&enableExternalTestTool=true&enableAgentTestTools=true&enableToolCallRepair=true',
     )
   })
 })

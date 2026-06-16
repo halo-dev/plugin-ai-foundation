@@ -120,7 +120,9 @@ describe('useChat', () => {
         id: 'throttled-chat',
         transport,
         experimental_throttle: 50,
-        onToolCall: (part) => toolCalls.push({ ...part }),
+        onToolCall: (part) => {
+          toolCalls.push({ ...part })
+        },
       })
       const pending = composable.sendMessage({ text: 'Hi' })
 

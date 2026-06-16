@@ -13,6 +13,7 @@ import {
   testUiMessageChatStreamUrl,
   workbenchDataPartSchemas,
   workbenchMessageMetadataSchema,
+  type ExamplePrompt,
   type OutputMode,
   type ReasoningEffort,
   type ReasoningMode,
@@ -22,10 +23,11 @@ import {
 } from '@/utils/model-test-workbench'
 import {
   DefaultChatTransport,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageHasCompletedToolContinuations,
   useChat,
   type UIMessage as HaloUIMessage,
   type UIMessagePart as HaloUIMessagePart,
+  type ToolPart,
 } from '@halo-dev/ai-foundation-sdk'
 import { IconRefreshLine, VButton, VEmpty, VLoading } from '@halo-dev/components'
 import { utils } from '@halo-dev/ui-shared'
@@ -70,6 +72,7 @@ const reasoningEffort = shallowRef<ReasoningEffort>('MEDIUM')
 const testToolEnabled = shallowRef(false)
 const testToolApprovalEnabled = shallowRef(false)
 const externalTestToolEnabled = shallowRef(false)
+const agentTestToolsEnabled = shallowRef(false)
 const toolCallRepairEnabled = shallowRef(false)
 const outputMode = shallowRef<OutputMode>('TEXT')
 const outputSchemaText = shallowRef(`{
@@ -108,6 +111,7 @@ const isEmbeddingTesting = shallowRef(false)
 
 let activeUiMessageModelName: string | undefined
 let activeUiMessageWorkbenchId: string | undefined
+let activeUiMessageParameters: ReturnType<typeof buildChatParameters> | undefined
 
 const uiChat = useChat<Record<string, unknown>>({
   id: 'model-test-workbench-ui-message',
@@ -124,9 +128,51 @@ const uiChat = useChat<Record<string, unknown>>({
     },
   }),
   generateId: () => activeUiMessageWorkbenchId || utils.id.uuid(),
-  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+  maxAutomaticSteps: 5,
   messageMetadataSchema: workbenchMessageMetadataSchema,
   dataPartSchemas: workbenchDataPartSchemas,
+  onToolCall: (part) => {
+    if (!agentTestToolsEnabled.value || !isWorkbenchAgentTool(part)) {
+      return
+    }
+    void executeWorkbenchAgentTool(part)
+      .then((output) =>
+        uiChat.addToolOutput(
+          {
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            output,
+          },
+          activeUiMessageParameters
+            ? { body: uiMessageRequestBody(activeUiMessageParameters) }
+            : undefined,
+        ),
+      )
+      .catch((error) =>
+        uiChat.addToolOutput(
+          {
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            state: 'output-error',
+            errorText: error instanceof Error ? error.message : 'Agent 工具执行失败',
+          },
+          activeUiMessageParameters
+            ? { body: uiMessageRequestBody(activeUiMessageParameters) }
+            : undefined,
+        ),
+      )
+  },
+  onAutomaticStepLimitExceeded: () => {
+    if (activeUiMessageWorkbenchId) {
+      appendAssistantWarnings(activeUiMessageWorkbenchId, [
+        {
+          code: 'agent-auto-step-limit',
+          message: 'Agent 工具自动续跑已达到上限，请继续手动发送消息或调整提示词。',
+        },
+      ])
+    }
+  },
   onFinish: ({ terminal }) => {
     if (activeUiMessageWorkbenchId && terminal.errorText) {
       appendAssistantError(activeUiMessageWorkbenchId, `请求失败: ${terminal.errorText}`)
@@ -288,6 +334,7 @@ async function streamUiMessageChatResponse(
 
   activeUiMessageModelName = modelName
   activeUiMessageWorkbenchId = assistantMessage.id
+  activeUiMessageParameters = parameters
   uiChat.setMessages(
     workbenchMessagesToHalo(messages.value.filter((item) => item !== assistantMessage)),
   )
@@ -309,6 +356,7 @@ async function streamUiMessageChatResponse(
     isStreaming.value = false
     activeUiMessageModelName = undefined
     activeUiMessageWorkbenchId = undefined
+    activeUiMessageParameters = undefined
   }
 }
 
@@ -333,6 +381,7 @@ async function regenerateUiMessageChatResponse(
 
   activeUiMessageModelName = modelName
   activeUiMessageWorkbenchId = targetMessage.id
+  activeUiMessageParameters = parameters
   isStreaming.value = true
 
   try {
@@ -351,6 +400,7 @@ async function regenerateUiMessageChatResponse(
     isStreaming.value = false
     activeUiMessageModelName = undefined
     activeUiMessageWorkbenchId = undefined
+    activeUiMessageParameters = undefined
   }
 }
 
@@ -422,6 +472,7 @@ function chatStreamOptions() {
     testToolEnabled: testToolEnabled.value,
     testToolApprovalEnabled: testToolApprovalEnabled.value,
     externalTestToolEnabled: externalTestToolEnabled.value,
+    agentTestToolsEnabled: agentTestToolsEnabled.value,
     toolCallRepairEnabled: toolCallRepairEnabled.value,
   }
 }
@@ -456,6 +507,7 @@ async function handleToolApproval(options: {
   }
   activeUiMessageModelName = model.name
   activeUiMessageWorkbenchId = message.id
+  activeUiMessageParameters = parameters
   uiChat.setMessages(workbenchMessagesToHalo(messages.value))
   isStreaming.value = true
 
@@ -482,6 +534,70 @@ async function handleToolApproval(options: {
     isStreaming.value = false
     activeUiMessageModelName = undefined
     activeUiMessageWorkbenchId = undefined
+    activeUiMessageParameters = undefined
+  }
+}
+
+function isWorkbenchAgentTool(part: ToolPart) {
+  return part.toolName === 'get_current_page_context' || part.toolName === 'halo_agent_test_action'
+}
+
+async function executeWorkbenchAgentTool(part: ToolPart): Promise<Record<string, unknown>> {
+  switch (part.toolName) {
+    case 'get_current_page_context':
+      return currentWorkbenchPageContext()
+    case 'halo_agent_test_action':
+      return executeWorkbenchAgentTestAction(part.input ?? {})
+    default:
+      throw new Error(`未知 Agent 测试工具：${part.toolName}`)
+  }
+}
+
+function currentWorkbenchPageContext(): Record<string, unknown> {
+  const selected = selectedModel.value
+  const lastUserMessage = [...messages.value].reverse().find((message) => message.role === 'user')
+  return {
+    ok: true,
+    url: window.location.href,
+    title: document.title,
+    selectedText: window.getSelection()?.toString() || '',
+    channel: 'console-model-test-workbench',
+    page: {
+      name: 'AI Foundation 模型测试工作台',
+      mode: testMode.value,
+      capabilities: ['model-selection', 'chat-stream-test', 'agent-tool-continuation-test'],
+    },
+    model: selected
+      ? {
+          name: selected.name,
+          displayName: selected.displayName,
+          modelId: selected.modelId,
+          provider: selected.provider?.displayName || selected.provider?.name,
+        }
+      : undefined,
+    conversation: {
+      messages: messages.value.length,
+      lastUserText: lastUserMessage?.content || '',
+    },
+    nextAction:
+      '如果需要验证客户端工具续跑，可以调用 halo_agent_test_action；否则直接根据当前上下文回答用户。',
+  }
+}
+
+function executeWorkbenchAgentTestAction(input: Record<string, unknown>): Record<string, unknown> {
+  const message = typeof input.message === 'string' ? input.message.trim() : ''
+  if (!message) {
+    return {
+      ok: false,
+      code: 'EMPTY_AGENT_TEST_MESSAGE',
+      message: '缺少需要回显的测试内容',
+    }
+  }
+  return {
+    ok: true,
+    echo: message,
+    target: 'console-model-test-workbench',
+    message: '后台测试工作台前端 Agent 工具执行成功。',
   }
 }
 
@@ -776,6 +892,7 @@ function stopGeneration() {
   isStreaming.value = false
   activeUiMessageModelName = undefined
   activeUiMessageWorkbenchId = undefined
+  activeUiMessageParameters = undefined
 }
 
 function clearMessages() {
@@ -799,8 +916,15 @@ watch(testToolEnabled, (enabled) => {
   }
 })
 
-function handleExampleSelect(content: string) {
-  input.value = content
+function handleExampleSelect(prompt: ExamplePrompt) {
+  input.value = prompt.content
+  if (prompt.id === 'agent-tool-test') {
+    testToolEnabled.value = false
+    testToolApprovalEnabled.value = false
+    externalTestToolEnabled.value = false
+    agentTestToolsEnabled.value = true
+    toolCallRepairEnabled.value = false
+  }
   chatInputRef.value?.focus()
 }
 
@@ -1115,6 +1239,7 @@ onBeforeUnmount(() => {
         :test-tool-enabled="testToolEnabled"
         :test-tool-approval-enabled="testToolApprovalEnabled"
         :external-test-tool-enabled="externalTestToolEnabled"
+        :agent-test-tools-enabled="agentTestToolsEnabled"
         :tool-call-repair-enabled="toolCallRepairEnabled"
         :output-mode="outputMode"
         :output-schema-text="outputSchemaText"
@@ -1141,6 +1266,7 @@ onBeforeUnmount(() => {
         @update:test-tool-enabled="testToolEnabled = $event"
         @update:test-tool-approval-enabled="testToolApprovalEnabled = $event"
         @update:external-test-tool-enabled="externalTestToolEnabled = $event"
+        @update:agent-test-tools-enabled="agentTestToolsEnabled = $event"
         @update:tool-call-repair-enabled="toolCallRepairEnabled = $event"
         @update:output-mode="outputMode = $event"
         @update:output-schema-text="outputSchemaText = $event"

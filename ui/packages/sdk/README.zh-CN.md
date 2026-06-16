@@ -70,7 +70,6 @@ X-Halo-AI-UI-Message-Stream: v1
 - `addToolOutput(...)`
 - `addToolApprovalResponse(...)`
 - `rejectToolCall(...)`
-- `isLastAssistantMessageToolComplete()`
 
 如果 endpoint 返回普通文本而不是 Halo UIMessage SSE，可以使用 `TextStreamChatTransport`。
 它会把文本增量包装成单个 assistant text part。
@@ -309,17 +308,18 @@ await chat.rejectToolCall({
 `addToolApprovalResponse({ approved: false })` 的快捷方式；拒绝审批不会被视为工具执行错误。
 
 如果 `sendAutomaticallyWhen` 返回 `true`，`Chat` 会在工具续跑 part 追加后再次发送请求。
-导出的 `lastAssistantMessageIsCompleteWithApprovalResponses` predicate 适合审批驱动的续跑。
+导出的 `lastAssistantMessageHasCompletedToolContinuations` predicate 会同时覆盖工具输出、
+工具错误、拒绝输出和审批响应，并且不会在还有其他工具调用 pending 时提前续跑。
 
 ```ts
 import {
-  lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageHasCompletedToolContinuations,
   useChat,
 } from '@halo-dev/ai-foundation-sdk'
 
 const chat = useChat({
   transport,
-  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
 })
 ```
 
@@ -376,7 +376,7 @@ const object = experimental_useObject({
 
 需要构建自定义适配层时，可以直接使用这些导出：
 
-- `Chat`、`createPlainChatState`、`lastAssistantMessageIsCompleteWithApprovalResponses`
+- `Chat`、`createPlainChatState`、`lastAssistantMessageHasCompletedToolContinuations`
 - `DefaultChatTransport`、`HttpChatTransport`、`TextStreamChatTransport`、`createUserMessage`
 - `fromOpenAPIRequestArgs`
 - `readUIMessageStream`、`readUIMessageSSEStream`、`readTextStream`、`collectText`

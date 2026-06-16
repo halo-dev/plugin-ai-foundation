@@ -779,6 +779,53 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
+    void testUiMessageChatStream_acceptsAgentToolContinuation() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.textDelta("text-1", "Continued"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post()
+            .uri("/models/gpt-4/test-chat/ui-message/stream?enableAgentTestTools=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "id", "chat-1",
+                "messages", List.of(
+                    uiMessage("user-1", "user", "user-text", "查看页面上下文"),
+                    uiMessageWithParts("assistant-1", List.of(
+                        Map.of(
+                            "type", "tool-get_current_page_context",
+                            "toolCallId", "call_1",
+                            "toolName", "get_current_page_context",
+                            "state", "output-available",
+                            "input", Map.of(),
+                            "output", Map.of(
+                                "ok", true,
+                                "channel", "console-model-test-workbench"
+                            )
+                        )
+                    ))
+                ),
+                "trigger", "submit-message"
+            ))
+            .exchange()
+            .expectStatus().isOk();
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getMessages()).hasSize(3);
+        assertThat(request.getMessages().get(1).getContent().getFirst().getType())
+            .isEqualTo("tool-call");
+        assertThat(request.getMessages().get(2).getRole().name()).isEqualTo("TOOL");
+        assertThat(request.getMessages().get(2).getContent().getFirst().getType())
+            .isEqualTo("tool-result");
+    }
+
+    @Test
     void testUiMessageChatStream_acceptsExternalToolErrorContinuation() {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));

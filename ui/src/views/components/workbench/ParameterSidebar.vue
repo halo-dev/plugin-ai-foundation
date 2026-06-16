@@ -19,6 +19,7 @@ const props = defineProps<{
   testToolEnabled?: boolean
   testToolApprovalEnabled?: boolean
   externalTestToolEnabled?: boolean
+  agentTestToolsEnabled?: boolean
   toolCallRepairEnabled?: boolean
   outputMode?: OutputMode
   outputSchemaText?: string
@@ -48,6 +49,7 @@ const emit = defineEmits<{
   (e: 'update:testToolEnabled', value: boolean): void
   (e: 'update:testToolApprovalEnabled', value: boolean): void
   (e: 'update:externalTestToolEnabled', value: boolean): void
+  (e: 'update:agentTestToolsEnabled', value: boolean): void
   (e: 'update:toolCallRepairEnabled', value: boolean): void
   (e: 'update:outputMode', value: OutputMode): void
   (e: 'update:outputSchemaText', value: string): void
@@ -423,14 +425,22 @@ function updateNumberField(key: NumberFieldKey, value: string) {
             </div>
             <div class=":uno: mt-2 flex items-center gap-2">
               <VSwitch
+                :model-value="agentTestToolsEnabled"
+                @update:model-value="emit('update:agentTestToolsEnabled', $event)"
+              />
+              <span class=":uno: text-xs text-slate-700">启用 Agent 工具测试</span>
+            </div>
+            <div class=":uno: mt-2 flex items-center gap-2">
+              <VSwitch
                 :model-value="toolCallRepairEnabled"
                 @update:model-value="emit('update:toolCallRepairEnabled', $event)"
               />
               <span class=":uno: text-xs text-slate-700">启用工具调用修复</span>
             </div>
             <div class=":uno: mt-1 text-[10px] text-slate-400">
-              后台会注入 halo_test_info；外部工具会注入 halo_external_test_info；修复测试会注入
-              halo_repair_test_info。
+              halo_test_info 可用于服务端工具测试；外部工具会注入
+              halo_external_test_info；修复测试会注入 halo_repair_test_info；前端自动工具会注入
+              get_current_page_context 和 halo_agent_test_action，并由工作台前端自动回填工具结果。
             </div>
           </div>
         </details>

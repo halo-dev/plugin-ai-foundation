@@ -69,6 +69,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private static final int MAX_NAME_GENERATION_ATTEMPTS = 10;
     private static final String CONSOLE_TEST_TOOL_NAME = "halo_test_info";
     private static final String CONSOLE_EXTERNAL_TEST_TOOL_NAME = "halo_external_test_info";
+    private static final String CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME = "get_current_page_context";
+    private static final String CONSOLE_AGENT_ECHO_TOOL_NAME = "halo_agent_test_action";
     private static final String CONSOLE_REPAIR_TEST_TOOL_NAME = "halo_repair_test_info";
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
@@ -158,10 +160,24 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(Boolean.class)
                         .required(false))
                     .parameter(parameterBuilder()
+                        .name("enableExternalTestTool")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject the console-only halo_external_test_info "
+                            + "tool that must be executed by the workbench caller.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .parameter(parameterBuilder()
                         .name("enableToolCallRepair")
                         .in(ParameterIn.QUERY)
                         .description("Whether to inject a console-only repairable tool and "
                             + "deterministic tool-call repair callback.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .parameter(parameterBuilder()
+                        .name("enableAgentTestTools")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject console-only browser Agent test tools "
+                            + "that are executed by the workbench frontend.")
                         .implementation(Boolean.class)
                         .required(false))
                     .requestBody(requestBodyBuilder()
@@ -316,7 +332,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 if (error instanceof ResponseStatusException) {
                     return Mono.error(error);
                 }
-                log.error("UI message stream chat failed for model: {}", modelName, error);
+                log.error("UI message stream chat failed for model: {}, error={}",
+                    modelName, safeMessage(error), error);
                 return uiMessageStreamResponse(new UIMessageStreamResponse(new UIMessageStream(
                     Flux.just(run.halo.aifoundation.ui.UIMessageChunks.error(
                         "Chat test failed: " + safeMessage(error)))
@@ -411,6 +428,12 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .orElse(false);
     }
 
+    private static boolean consoleAgentTestToolsEnabled(ServerRequest request) {
+        return request.queryParam("enableAgentTestTools")
+            .map(Boolean::parseBoolean)
+            .orElse(false);
+    }
+
     private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request,
         ConsoleTestToolOptions options) {
         if (!options.hasAnyEnabled()) {
@@ -422,12 +445,18 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         }
         tools.removeIf(tool -> CONSOLE_TEST_TOOL_NAME.equals(tool.getName())
             || CONSOLE_EXTERNAL_TEST_TOOL_NAME.equals(tool.getName())
+            || CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME.equals(tool.getName())
+            || CONSOLE_AGENT_ECHO_TOOL_NAME.equals(tool.getName())
             || CONSOLE_REPAIR_TEST_TOOL_NAME.equals(tool.getName()));
         if (options.basicEnabled() || options.approvalEnabled()) {
             tools.add(consoleTestTool(options.approvalEnabled()));
         }
         if (options.externalEnabled()) {
             tools.add(consoleExternalTestTool());
+        }
+        if (options.agentEnabled()) {
+            tools.add(consoleAgentPageContextTool());
+            tools.add(consoleAgentTestActionTool());
         }
         if (options.repairEnabled()) {
             tools.add(consoleRepairTestTool());
@@ -586,6 +615,37 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         "description", "希望外部系统查询或处理的文本"
                     )
                 )
+            ))
+            .build();
+    }
+
+    private ToolDefinition consoleAgentPageContextTool() {
+        return ToolDefinition.builder()
+            .name(CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME)
+            .description("Halo 控制台 Agent 浏览器工具测试：读取当前后台测试工作台页面上下文，"
+                + "包括页面标题、地址、选中模型、测试模式和最近用户消息。该工具由前端执行，"
+                + "用于验证客户端 Agent 工具调用与自动续跑。")
+            .inputSchema(Map.of(
+                "type", "object",
+                "properties", Map.of()
+            ))
+            .build();
+    }
+
+    private ToolDefinition consoleAgentTestActionTool() {
+        return ToolDefinition.builder()
+            .name(CONSOLE_AGENT_ECHO_TOOL_NAME)
+            .description("Halo 控制台 Agent 浏览器工具测试：执行一个中性的前端测试动作并回显输入，"
+                + "不会修改真实业务数据。该工具由前端执行，用于验证工具结果回传后模型继续生成。")
+            .inputSchema(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "message", Map.of(
+                        "type", "string",
+                        "description", "需要前端测试工具回显的内容"
+                    )
+                ),
+                "required", List.of("message")
             ))
             .build();
     }
@@ -917,6 +977,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     private static String safeMessage(Throwable error) {
+        if (error instanceof InvalidUIMessageException invalid) {
+            return invalid.getMessage() + ": " + invalid.issues();
+        }
         return error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
     }
 
@@ -924,6 +987,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         boolean basicEnabled,
         boolean approvalEnabled,
         boolean externalEnabled,
+        boolean agentEnabled,
         boolean repairEnabled
     ) {
         static ConsoleTestToolOptions from(ServerRequest request) {
@@ -931,12 +995,14 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 consoleTestToolEnabled(request),
                 consoleTestToolApprovalEnabled(request),
                 consoleExternalTestToolEnabled(request),
+                consoleAgentTestToolsEnabled(request),
                 consoleToolCallRepairEnabled(request)
             );
         }
 
         boolean hasAnyEnabled() {
-            return basicEnabled || approvalEnabled || externalEnabled || repairEnabled;
+            return basicEnabled || approvalEnabled || externalEnabled || agentEnabled
+                || repairEnabled;
         }
     }
 

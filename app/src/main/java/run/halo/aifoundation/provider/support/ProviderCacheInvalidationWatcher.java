@@ -78,6 +78,9 @@ public class ProviderCacheInvalidationWatcher implements Watcher {
             var providerName = extension.getMetadata().getName();
             providerClientCache.invalidate(providerName);
             log.info("Invalidated cache for AiProvider delete: {}", providerName);
+        } else if (SECRET_GVK.equals(gvk)) {
+            var secretName = extension.getMetadata().getName();
+            invalidateProvidersBySecret(secretName);
         }
     }
 
