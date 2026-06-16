@@ -99,6 +99,13 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     content:
       '请调用 halo_repair_test_info 工具。请把参数写成 {"message":"repair me"}，然后告诉我工具返回的内容。',
   },
+  {
+    id: 'agent-tool-test',
+    icon: 'ri-window-line',
+    title: '前端自动工具',
+    content:
+      '请调用 get_current_page_context 查看当前后台测试工作台上下文。拿到工具结果后不要再调用其他工具，直接总结当前页面上下文。',
+  },
 ]
 
 export async function copyToClipboard(text: string): Promise<boolean> {
@@ -136,6 +143,7 @@ export interface ChatStreamOptions {
   testToolEnabled?: boolean
   testToolApprovalEnabled?: boolean
   externalTestToolEnabled?: boolean
+  agentTestToolsEnabled?: boolean
   toolCallRepairEnabled?: boolean
 }
 
@@ -486,6 +494,9 @@ function chatStreamQueryParams(options: ChatStreamOptions) {
   }
   if (options.externalTestToolEnabled) {
     params.set('enableExternalTestTool', 'true')
+  }
+  if (options.agentTestToolsEnabled) {
+    params.set('enableAgentTestTools', 'true')
   }
   if (options.toolCallRepairEnabled) {
     params.set('enableToolCallRepair', 'true')

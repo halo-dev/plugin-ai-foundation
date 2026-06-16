@@ -2,7 +2,9 @@ import { describe, expect, it } from '@rstest/core'
 import {
   Chat,
   createPlainChatState,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageHasCompletedToolContinuations,
+  lastAssistantMessageHasRespondedToToolApprovals,
+  lastAssistantMessageIsCompleteWithToolCalls,
 } from './chat'
 import { AIUISchemaValidationError } from './errors'
 import {
@@ -938,7 +940,9 @@ describe('Chat', () => {
       id: 'chat-1',
       transport,
       onData: (part) => dataEvents.push(part),
-      onToolCall: (part) => toolCalls.push(part),
+      onToolCall: (part) => {
+        toolCalls.push(part)
+      },
     })
 
     await chat.sendMessage({ text: 'Hello' })
@@ -1142,7 +1146,7 @@ describe('Chat', () => {
         ],
       }),
       transport,
-      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+      sendAutomaticallyWhen: lastAssistantMessageHasRespondedToToolApprovals,
     })
 
     await chat.addToolApprovalResponse({ id: 'approval-1', approved: true, reason: 'OK' })
@@ -1163,7 +1167,7 @@ describe('Chat', () => {
 
   it('detects approval response completion separately from tool output completion', () => {
     expect(
-      lastAssistantMessageIsCompleteWithApprovalResponses({
+      lastAssistantMessageHasRespondedToToolApprovals({
         messages: [
           {
             id: 'assistant-1',
@@ -1183,7 +1187,7 @@ describe('Chat', () => {
     ).toBe(true)
 
     expect(
-      lastAssistantMessageIsCompleteWithApprovalResponses({
+      lastAssistantMessageHasRespondedToToolApprovals({
         messages: [
           {
             id: 'assistant-1',
@@ -1203,8 +1207,498 @@ describe('Chat', () => {
     ).toBe(false)
   })
 
-  it('reports whether the last assistant tool parts are complete', async () => {
+  it('detects completed tool calls separately from approval responses', () => {
+    expect(
+      lastAssistantMessageIsCompleteWithToolCalls({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-search',
+                toolCallId: 'call-1',
+                toolName: 'search',
+                state: 'output-available',
+                output: { ok: true },
+              },
+              {
+                type: 'tool-read',
+                toolCallId: 'call-2',
+                toolName: 'read',
+                state: 'output-error',
+                errorText: 'failed',
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(true)
+
+    expect(
+      lastAssistantMessageIsCompleteWithToolCalls({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-search',
+                toolCallId: 'call-1',
+                toolName: 'search',
+                state: 'approval-responded',
+                approval: { id: 'approval-1', approved: true },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(false)
+
+    expect(
+      lastAssistantMessageIsCompleteWithToolCalls({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-search',
+                toolCallId: 'call-1',
+                toolName: 'search',
+                state: 'input-available',
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(false)
+  })
+
+  it('detects completed mixed tool continuations without ignoring pending tool calls', () => {
+    expect(
+      lastAssistantMessageHasCompletedToolContinuations({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-search',
+                toolCallId: 'call-1',
+                toolName: 'search',
+                state: 'output-available',
+                output: { ok: true },
+              },
+              {
+                type: 'tool-delete_file',
+                toolCallId: 'call-2',
+                toolName: 'delete_file',
+                state: 'approval-responded',
+                approval: { id: 'approval-1', approved: true },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(true)
+
+    expect(
+      lastAssistantMessageHasCompletedToolContinuations({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-search',
+                toolCallId: 'call-1',
+                toolName: 'search',
+                state: 'input-available',
+              },
+              {
+                type: 'tool-delete_file',
+                toolCallId: 'call-2',
+                toolName: 'delete_file',
+                state: 'approval-responded',
+                approval: { id: 'approval-1', approved: true },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(false)
+  })
+
+  it('auto submits multiple distinct completed tool states until final text', async () => {
+    const transport = new SequenceTransport([
+      [{ type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search' }],
+      [{ type: 'tool-input-available', toolCallId: 'call-2', toolName: 'read' }],
+      [{ type: 'text-delta', id: 'text-1', delta: 'Done' }],
+    ])
+    let chat: Chat
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+      onToolCall: (part) => {
+        void chat.addToolOutput({
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          output: { ok: true, call: part.toolCallId },
+        })
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(transport.calls).toHaveLength(3)
+    expect(messageText(chat.messages[1])).toBe('Done')
+    expect(chat.messages[1].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        state: 'output-available',
+      }),
+    )
+    expect(chat.messages[1].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-read',
+        toolCallId: 'call-2',
+        state: 'output-available',
+      }),
+    )
+  })
+
+  it('preserves onToolCall output when finish chunks arrive after the tool input', async () => {
+    const transport = new SequenceTransport([
+      [
+        { type: 'text-start', id: 'text-1' },
+        { type: 'text-delta', id: 'text-1', delta: 'Checking' },
+        { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'inspect', input: {} },
+        {
+          type: 'finish-step',
+          finishReason: 'tool-calls',
+          rawFinishReason: 'TOOL_CALLS',
+        },
+        {
+          type: 'finish',
+          finishReason: 'tool-calls',
+          rawFinishReason: 'TOOL_CALLS',
+        },
+      ],
+      [{ type: 'text-delta', id: 'text-2', delta: 'Done' }],
+    ])
+    let chat: Chat
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+      onToolCall: (part) => {
+        void chat.addToolOutput(
+          {
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            output: { ok: true },
+          },
+          { body: { fromToolOutput: true } },
+        )
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(transport.calls).toHaveLength(2)
+    expect(transport.calls[1].body).toEqual({ fromToolOutput: true })
+    expect(chat.messages[1].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-inspect',
+        toolCallId: 'call-1',
+        state: 'output-available',
+        output: { ok: true },
+      }),
+    )
+    expect(messageText(chat.messages[1])).toBe('CheckingDone')
+  })
+
+  it('auto submits when asynchronous onToolCall output resolves before the stream finishes', async () => {
+    const toolOutputAdded = deferred<void>()
+    const calls: SendMessagesOptions[] = []
+    let chat: Chat
+    const transport: ChatTransport = {
+      async sendMessages(options) {
+        calls.push(options)
+        if (calls.length === 1) {
+          return asyncToolStream(toolOutputAdded.promise)
+        }
+        return chunksToAsyncIterable([{ type: 'text-delta', id: 'text-2', delta: 'Done' }])
+      },
+    }
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+      onToolCall: async (part) => {
+        try {
+          await Promise.resolve()
+          await chat.addToolOutput(
+            {
+              toolCallId: part.toolCallId,
+              toolName: part.toolName,
+              output: { ok: true },
+            },
+            { body: { fromAsyncToolOutput: true } },
+          )
+          toolOutputAdded.resolve()
+        } catch (error) {
+          toolOutputAdded.reject(error)
+          throw error
+        }
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1].body).toEqual({ fromAsyncToolOutput: true })
+    expect(chat.messages[1].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-inspect',
+        toolCallId: 'call-1',
+        state: 'output-available',
+        output: { ok: true },
+      }),
+    )
+    expect(messageText(chat.messages[1])).toBe('Done')
+  })
+
+  it('does not resubmit consumed tool output when the continuation response uses a new message id', async () => {
+    const transport = new SequenceTransport([
+      [{ type: 'tool-input-available', toolCallId: 'call-1', toolName: 'inspect', input: {} }],
+      [
+        { type: 'start', messageId: 'assistant-2' },
+        { type: 'text-delta', id: 'text-2', delta: 'No comment area.' },
+        { type: 'finish', finishReason: 'stop' },
+      ],
+      [{ type: 'text-delta', id: 'text-3', delta: 'Unexpected' }],
+    ])
+    let chat: Chat
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+      onToolCall: (part) => {
+        void chat.addToolOutput({
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          output: { ok: true },
+        })
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(transport.calls).toHaveLength(2)
+    expect(messageText(chat.messages[2])).toBe('No comment area.')
+    expect(chat.messages[2].parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-inspect',
+        toolCallId: 'call-1',
+        state: 'output-available',
+        output: { ok: true },
+      }),
+    )
+  })
+
+  it('does not resubmit consumed tool output after an idle automatic check', async () => {
+    const transport = new SequenceTransport([
+      [{ type: 'tool-input-available', toolCallId: 'call-1', toolName: 'inspect', input: {} }],
+      [{ type: 'text-delta', id: 'text-1', delta: 'Done' }],
+      [{ type: 'text-delta', id: 'text-2', delta: 'Unexpected' }],
+    ])
+    let chat: Chat
+    let allowAutomaticContinuation = true
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: ({ messages }) =>
+        allowAutomaticContinuation &&
+        lastAssistantMessageHasCompletedToolContinuations({ messages }),
+      onToolCall: (part) => {
+        void chat.addToolOutput({
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          output: { ok: true },
+        })
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+    expect(transport.calls).toHaveLength(2)
+
+    allowAutomaticContinuation = false
+    chat.setMessages([
+      ...chat.messages,
+      {
+        id: 'assistant-idle',
+        role: 'assistant',
+        parts: [{ type: 'text', id: 'text-idle', text: 'Idle.' }],
+      },
+    ])
+    await chat.addToolOutput({
+      toolCallId: 'call-1',
+      toolName: 'inspect',
+      output: { ok: true },
+    })
+
+    allowAutomaticContinuation = true
+    chat.setMessages(chat.messages.filter((message) => message.id !== 'assistant-idle'))
+    await chat.addToolOutput({
+      toolCallId: 'call-1',
+      toolName: 'inspect',
+      output: { ok: true },
+    })
+
+    expect(transport.calls).toHaveLength(2)
+  })
+
+  it('does not resubmit consumed tool output when the output object changes shape later', async () => {
+    const transport = new SequenceTransport([
+      [{ type: 'tool-input-available', toolCallId: 'call-1', toolName: 'inspect', input: {} }],
+      [{ type: 'text-delta', id: 'text-1', delta: 'Done' }],
+      [{ type: 'text-delta', id: 'text-2', delta: 'Unexpected' }],
+    ])
+    let chat: Chat
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+      onToolCall: (part) => {
+        void chat.addToolOutput({
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          output: { ok: true },
+        })
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+    expect(transport.calls).toHaveLength(2)
+
+    chat.setMessages(
+      chat.messages.map((message) => {
+        if (message.role !== 'assistant') {
+          return message
+        }
+        return {
+          ...message,
+          parts: message.parts.map((part) =>
+            part.type === 'tool-inspect' ? { ...part, output: { ok: true, hydrated: true } } : part,
+          ),
+        }
+      }),
+    )
+
+    await chat.addToolOutput({
+      toolCallId: 'call-1',
+      toolName: 'inspect',
+      output: { ok: true, hydrated: true },
+    })
+
+    expect(transport.calls).toHaveLength(2)
+  })
+
+  it('compacts duplicate final tool results before sending continuation requests', async () => {
+    const transport = new SequenceTransport([[{ type: 'text-delta', id: 'text-1', delta: 'Done' }]])
     const chat = new Chat({
+      id: 'chat-1',
+      transport,
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          parts: [{ type: 'text', id: 'text-user', text: 'Hello' }],
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          parts: [
+            {
+              type: 'tool-inspect',
+              toolCallId: 'call-1',
+              toolName: 'inspect',
+              state: 'output-available',
+              output: { stale: true },
+            },
+            {
+              type: 'tool-inspect',
+              toolCallId: 'call-1',
+              toolName: 'inspect',
+              state: 'output-available',
+              output: { ok: true },
+            },
+          ],
+        },
+      ],
+    })
+
+    await chat.sendMessage()
+
+    const sentAssistant = transport.calls[0].messages[1]
+    expect(sentAssistant.parts).toEqual([
+      expect.objectContaining({
+        toolCallId: 'call-1',
+        state: 'output-available',
+        output: { ok: true },
+      }),
+    ])
+  })
+
+  it('stops automatic continuation at the configured step limit', async () => {
+    const limitEvents: unknown[] = []
+    const transport = new SequenceTransport([
+      [{ type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search' }],
+      [{ type: 'tool-input-available', toolCallId: 'call-2', toolName: 'read' }],
+      [{ type: 'text-delta', id: 'text-1', delta: 'Unexpected' }],
+    ])
+    let chat: Chat
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      maxAutomaticSteps: 1,
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+      onAutomaticStepLimitExceeded: (event) => limitEvents.push(event),
+      onToolCall: (part) => {
+        void chat.addToolOutput({
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          output: { ok: true },
+        })
+      },
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(transport.calls).toHaveLength(2)
+    expect(chat.status).toBe('ready')
+    expect(limitEvents).toEqual([
+      expect.objectContaining({
+        maxAutomaticSteps: 1,
+      }),
+    ])
+    expect(messageText(chat.messages[1])).toBe('')
+  })
+
+  it('lets onToolCall synchronously add output after message state is committed', async () => {
+    let chat: Chat
+    chat = new Chat({
       messages: [
         {
           id: 'assistant-1',
@@ -1219,11 +1713,79 @@ describe('Chat', () => {
           ],
         },
       ],
+      transport: new RecordingTransport([
+        { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search' },
+      ]),
+      onToolCall: (part) => {
+        void chat.addToolOutput({ toolCallId: part.toolCallId, output: { ok: true } })
+      },
     })
 
-    expect(chat.isLastAssistantMessageToolComplete()).toBe(false)
-    await chat.addToolOutput({ toolCallId: 'call-1', output: { ok: true } })
-    expect(chat.isLastAssistantMessageToolComplete()).toBe(true)
+    await chat.sendMessage({ text: 'Hello' })
+
+    expect(chat.error).toBeUndefined()
+    expect(chat.messages[chat.messages.length - 1]?.parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-search',
+        toolCallId: 'call-1',
+        state: 'output-available',
+        output: { ok: true },
+      }),
+    )
+  })
+
+  it('surfaces onToolCall async failures through chat error state', async () => {
+    const expected = new Error('tool handler failed')
+    const errors: Error[] = []
+    const chat = new Chat({
+      id: 'chat-1',
+      transport: new RecordingTransport([
+        { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search' },
+      ]),
+      onError: (error) => errors.push(error),
+      onToolCall: () => Promise.reject(expected),
+    })
+
+    await chat.sendMessage({ text: 'Hello' })
+    await waitFor(() => chat.status === 'error')
+
+    expect(chat.error).toBe(expected)
+    expect(errors).toEqual([expected])
+  })
+
+  it('surfaces sendAutomaticallyWhen failures through chat error state', async () => {
+    const expected = new Error('predicate failed')
+    const errors: Error[] = []
+    const chat = new Chat({
+      id: 'chat-1',
+      state: createPlainChatState({
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-search',
+                toolCallId: 'call-1',
+                toolName: 'search',
+                state: 'input-available',
+              },
+            ],
+          },
+        ],
+      }),
+      onError: (error) => errors.push(error),
+      sendAutomaticallyWhen: () => {
+        throw expected
+      },
+    })
+
+    await expect(chat.addToolOutput({ toolCallId: 'call-1', output: { ok: true } })).rejects.toBe(
+      expected,
+    )
+    expect(chat.status).toBe('error')
+    expect(chat.error).toBe(expected)
+    expect(errors).toEqual([expected])
   })
 
   it('aborts active response and keeps partial message', async () => {
@@ -1238,6 +1800,48 @@ describe('Chat', () => {
 
     expect(chat.status).toBe('ready')
     expect(chat.messages).toHaveLength(2)
+  })
+
+  it('does not auto submit pending tool continuations after abort', async () => {
+    const calls: SendMessagesOptions[] = []
+    let chat: Chat
+    const transport: ChatTransport = {
+      sendMessages: async (options) => {
+        calls.push(options)
+        if (calls.length === 1) {
+          return asyncToolGeneratorUntilAbort(options.abortSignal)
+        }
+        return chunksToAsyncIterable([{ type: 'text-delta', id: 'text-2', delta: 'Unexpected' }])
+      },
+    }
+    chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+      onToolCall: (part) => {
+        void chat.addToolOutput({
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          output: { ok: true },
+        })
+      },
+    })
+    const pending = chat.sendMessage({ text: 'Hello' })
+
+    await waitFor(() =>
+      chat.messages.some((message) =>
+        message.parts.some(
+          (part) =>
+            part.type === 'tool-search' && 'state' in part && part.state === 'output-available',
+        ),
+      ),
+    )
+    chat.stop()
+    await pending
+
+    expect(chat.status).toBe('ready')
+    expect(calls).toHaveLength(1)
   })
 
   it('marks pre-stream failures as errors', async () => {
@@ -1372,6 +1976,17 @@ class RecordingTransport implements ChatTransport {
   }
 }
 
+class SequenceTransport implements ChatTransport {
+  readonly calls: SendMessagesOptions[] = []
+
+  constructor(private readonly chunksByCall: UIMessageChunk[][]) {}
+
+  async sendMessages(options: SendMessagesOptions): Promise<AsyncIterable<UIMessageChunk>> {
+    this.calls.push(options)
+    return chunksToAsyncIterable(this.chunksByCall[this.calls.length - 1] ?? [])
+  }
+}
+
 function streamFromText(text: string): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
@@ -1394,8 +2009,36 @@ async function* asyncGeneratorUntilAbort(signal?: AbortSignal): AsyncIterable<UI
   })
 }
 
+async function* asyncToolGeneratorUntilAbort(signal?: AbortSignal): AsyncIterable<UIMessageChunk> {
+  yield { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'search' }
+  await new Promise<void>((_resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+    signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), {
+      once: true,
+    })
+  })
+}
+
 async function* chunksToAsyncIterable(chunks: UIMessageChunk[]): AsyncIterable<UIMessageChunk> {
   yield* chunks
+}
+
+async function* asyncToolStream(toolOutputAdded: Promise<void>): AsyncIterable<UIMessageChunk> {
+  yield { type: 'tool-input-available', toolCallId: 'call-1', toolName: 'inspect', input: {} }
+  await toolOutputAdded
+  yield {
+    type: 'finish-step',
+    finishReason: 'tool-calls',
+    rawFinishReason: 'TOOL_CALLS',
+  }
+  yield {
+    type: 'finish',
+    finishReason: 'tool-calls',
+    rawFinishReason: 'TOOL_CALLS',
+  }
 }
 
 async function* asyncGeneratorWithFailure(
@@ -1414,4 +2057,18 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
