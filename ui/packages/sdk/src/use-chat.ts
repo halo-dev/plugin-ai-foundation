@@ -62,9 +62,6 @@ export function useChat<METADATA = unknown>(options: UseChatOptions<METADATA> = 
     addToolOutput: store.chat.addToolOutput.bind(store.chat),
     addToolApprovalResponse: store.chat.addToolApprovalResponse.bind(store.chat),
     rejectToolCall: store.chat.rejectToolCall.bind(store.chat),
-    isLastAssistantMessageToolComplete: store.chat.isLastAssistantMessageToolComplete.bind(
-      store.chat,
-    ),
   }
 }
 
@@ -163,8 +160,10 @@ function assertNoCreationOptionsWithChat<METADATA>(options: UseChatOptions<METAD
     'onError',
     'onData',
     'onToolCall',
+    'onAutomaticStepLimitExceeded',
     'onFinish',
     'sendAutomaticallyWhen',
+    'maxAutomaticSteps',
     'messageMetadataSchema',
     'dataPartSchemas',
   ]

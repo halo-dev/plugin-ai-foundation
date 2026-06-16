@@ -1,7 +1,9 @@
 export {
   Chat,
   createPlainChatState,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageHasCompletedToolContinuations,
+  lastAssistantMessageHasRespondedToToolApprovals,
+  lastAssistantMessageIsCompleteWithToolCalls,
 } from './chat'
 export type { ChatInit, ChatStateAdapter, SendMessageInput } from './chat'
 export { AIUIError, AIUIProtocolError, AIUISchemaValidationError, isProtocolError } from './errors'

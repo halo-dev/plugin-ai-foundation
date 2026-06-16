@@ -1,14 +1,15 @@
 <script lang="ts" setup>
-import { EXAMPLE_PROMPTS } from '@/utils/model-test-workbench'
+import { EXAMPLE_PROMPTS, type ExamplePrompt } from '@/utils/model-test-workbench'
 import RiCodeBoxLine from '~icons/ri/code-box-line'
 import RiLightbulbLine from '~icons/ri/lightbulb-line'
 import RiQuillPenLine from '~icons/ri/quill-pen-line'
 import RiTableLine from '~icons/ri/table-line'
 import RiToolsLine from '~icons/ri/tools-line'
 import RiTranslate2 from '~icons/ri/translate-2'
+import RiWindowLine from '~icons/ri/window-line'
 
 const emit = defineEmits<{
-  (e: 'select', content: string): void
+  (e: 'select', prompt: ExamplePrompt): void
 }>()
 
 const iconMap: Record<string, typeof RiQuillPenLine> = {
@@ -18,6 +19,7 @@ const iconMap: Record<string, typeof RiQuillPenLine> = {
   'ri-table-line': RiTableLine,
   'ri-translate-2': RiTranslate2,
   'ri-tools-line': RiToolsLine,
+  'ri-window-line': RiWindowLine,
 }
 </script>
 
@@ -53,7 +55,7 @@ const iconMap: Record<string, typeof RiQuillPenLine> = {
         :key="prompt.id"
         type="button"
         class=":uno: group min-h-25 flex items-start gap-3 border border-slate-200 rounded-lg bg-white text-left shadow-sm transition-all hover:border-teal-300 !p-3 hover:shadow-md hover:-translate-y-0.5"
-        @click="emit('select', prompt.content)"
+        @click="emit('select', prompt)"
       >
         <span
           class=":uno: mt-0.5 h-8 w-8 flex flex-none items-center justify-center rounded-md bg-slate-100 text-slate-500 transition-colors group-hover:bg-teal-50 group-hover:text-teal-600"

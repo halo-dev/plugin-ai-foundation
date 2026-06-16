@@ -73,7 +73,6 @@ X-Halo-AI-UI-Message-Stream: v1
 - `addToolOutput(...)`
 - `addToolApprovalResponse(...)`
 - `rejectToolCall(...)`
-- `isLastAssistantMessageToolComplete()`
 
 If the endpoint returns plain text instead of Halo UIMessage SSE, use
 `TextStreamChatTransport`. It wraps the text deltas into one assistant text part.
@@ -327,18 +326,19 @@ tool execution error.
 
 If `sendAutomaticallyWhen` returns `true`, `Chat` sends another request after a
 tool continuation part is appended. The exported
-`lastAssistantMessageIsCompleteWithApprovalResponses` predicate is useful for
-approval-driven continuation.
+`lastAssistantMessageHasCompletedToolContinuations` predicate covers completed
+tool outputs, tool errors, denied outputs, and approval responses without
+continuing while another tool call is still pending.
 
 ```ts
 import {
-  lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageHasCompletedToolContinuations,
   useChat,
 } from '@halo-dev/ai-foundation-sdk'
 
 const chat = useChat({
   transport,
-  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
 })
 ```
 
@@ -398,7 +398,7 @@ const object = experimental_useObject({
 
 Use these exports when building custom adapters:
 
-- `Chat`, `createPlainChatState`, `lastAssistantMessageIsCompleteWithApprovalResponses`
+- `Chat`, `createPlainChatState`, `lastAssistantMessageHasCompletedToolContinuations`
 - `DefaultChatTransport`, `HttpChatTransport`, `TextStreamChatTransport`, `createUserMessage`
 - `fromOpenAPIRequestArgs`
 - `readUIMessageStream`, `readUIMessageSSEStream`, `readTextStream`, `collectText`

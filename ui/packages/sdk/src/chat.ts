@@ -42,7 +42,11 @@ export interface ChatInit<METADATA = unknown> {
   generateId?: IdGenerator
   onError?: (error: Error) => void
   onData?: (part: DataPart) => void
-  onToolCall?: (part: ToolPart) => void
+  onToolCall?: (part: ToolPart) => void | Promise<void>
+  onAutomaticStepLimitExceeded?: (event: {
+    messages: UIMessage<METADATA>[]
+    maxAutomaticSteps: number
+  }) => void
   onFinish?: (event: {
     message: UIMessage<METADATA>
     messages: UIMessage<METADATA>[]
@@ -53,6 +57,7 @@ export interface ChatInit<METADATA = unknown> {
   sendAutomaticallyWhen?: (options: {
     messages: UIMessage<METADATA>[]
   }) => boolean | PromiseLike<boolean>
+  maxAutomaticSteps?: number
   messageMetadataSchema?: MessageMetadataSchema<METADATA>
   dataPartSchemas?: DataPartSchemas
 }
@@ -77,13 +82,20 @@ export class Chat<METADATA = unknown> {
   private readonly onError?: ChatInit<METADATA>['onError']
   private readonly onData?: ChatInit<METADATA>['onData']
   private readonly onToolCall?: ChatInit<METADATA>['onToolCall']
+  private readonly onAutomaticStepLimitExceeded?: ChatInit<METADATA>['onAutomaticStepLimitExceeded']
   private readonly onFinish?: ChatInit<METADATA>['onFinish']
   private readonly sendAutomaticallyWhen?: ChatInit<METADATA>['sendAutomaticallyWhen']
+  private readonly maxAutomaticSteps: number
   private readonly messageMetadataSchema?: ChatInit<METADATA>['messageMetadataSchema']
   private readonly dataPartSchemas?: ChatInit<METADATA>['dataPartSchemas']
   private readonly notifiedToolCalls = new Set<string>()
+  private readonly consumedAutomaticContinuationKeys = new Set<string>()
   private readonly listeners = new Set<() => void>()
   private activeAbortController?: AbortController
+  private automaticStepCount = 0
+  private hasPendingAutomaticContinuation = false
+  private pendingAutomaticContinuationOptions?: ChatRequestOptions
+  private toolCallbackFailure?: Error
 
   constructor(init: ChatInit<METADATA> = {}) {
     this.generateId = init.generateId ?? (() => generateId('msg'))
@@ -97,8 +109,10 @@ export class Chat<METADATA = unknown> {
     this.onError = init.onError
     this.onData = init.onData
     this.onToolCall = init.onToolCall
+    this.onAutomaticStepLimitExceeded = init.onAutomaticStepLimitExceeded
     this.onFinish = init.onFinish
     this.sendAutomaticallyWhen = init.sendAutomaticallyWhen
+    this.maxAutomaticSteps = normalizeMaxAutomaticSteps(init.maxAutomaticSteps)
     this.messageMetadataSchema = init.messageMetadataSchema
     this.dataPartSchemas = init.dataPartSchemas
   }
@@ -141,6 +155,7 @@ export class Chat<METADATA = unknown> {
     message?: SendMessageInput<METADATA>,
     options?: ChatRequestOptions,
   ): Promise<void> {
+    this.resetAutomaticContinuation()
     if (message) {
       this.applyUserMessage(message)
     }
@@ -155,6 +170,7 @@ export class Chat<METADATA = unknown> {
     messageId,
     ...options
   }: { messageId?: string } & ChatRequestOptions = {}): Promise<void> {
+    this.resetAutomaticContinuation()
     const messages = this.messages
     const index =
       messageId == null
@@ -179,21 +195,6 @@ export class Chat<METADATA = unknown> {
     this.activeAbortController?.abort()
   }
 
-  isLastAssistantMessageToolComplete(): boolean {
-    const assistant = [...this.messages].reverse().find((message) => message.role === 'assistant')
-    if (!assistant) {
-      return true
-    }
-    return assistant.parts
-      .filter(isToolPart)
-      .every(
-        (part) =>
-          part.state === 'output-available' ||
-          part.state === 'output-error' ||
-          part.state === 'output-denied',
-      )
-  }
-
   private async appendToolOutputSuccess(
     input: {
       toolCallId: string
@@ -207,7 +208,7 @@ export class Chat<METADATA = unknown> {
     this.updateLastAssistant((message) =>
       withToolOutput(message, { ...input, toolName: tool.toolName }),
     )
-    await this.maybeSendAutomatically(options)
+    await this.maybeSendAutomaticallyAfterToolUpdate(options)
   }
 
   private async appendToolOutputError(
@@ -223,7 +224,7 @@ export class Chat<METADATA = unknown> {
     this.updateLastAssistant((message) =>
       withToolError(message, { ...input, toolName: tool.toolName }),
     )
-    await this.maybeSendAutomatically(options)
+    await this.maybeSendAutomaticallyAfterToolUpdate(options)
   }
 
   async addToolOutput(input: ToolOutputInput, options?: ChatRequestOptions): Promise<void> {
@@ -282,7 +283,7 @@ export class Chat<METADATA = unknown> {
         providerMetadata: input.providerMetadata,
       }),
     )
-    await this.maybeSendAutomatically(options)
+    await this.maybeSendAutomaticallyAfterToolUpdate(options)
   }
 
   private applyUserMessage(message: SendMessageInput<METADATA>): void {
@@ -335,14 +336,12 @@ export class Chat<METADATA = unknown> {
     trigger,
     messageId,
     options,
-    allowAutoSubmit = true,
     requestMessages,
     reducerMessage,
   }: {
     trigger: 'submit-message' | 'regenerate-message'
     messageId?: string
     options?: ChatRequestOptions
-    allowAutoSubmit?: boolean
     requestMessages?: UIMessage<METADATA>[]
     reducerMessage?: UIMessage<METADATA>
   }) {
@@ -351,7 +350,7 @@ export class Chat<METADATA = unknown> {
       createStream: (abortSignal) =>
         this.transport.sendMessages({
           chatId: this.id,
-          messages: requestMessages ?? this.messages,
+          messages: compactDuplicateFinalToolParts(requestMessages ?? this.messages),
           trigger,
           messageId,
           headers: options?.headers,
@@ -362,19 +361,10 @@ export class Chat<METADATA = unknown> {
         }),
     })
 
-    if (
-      this.status === 'ready' &&
-      !outcome.isError &&
-      allowAutoSubmit &&
-      (await this.shouldSendAutomatically())
-    ) {
-      await this.makeRequest({
-        trigger: 'submit-message',
-        messageId: this.messages[this.messages.length - 1]?.id,
-        options,
-        allowAutoSubmit: false,
-        reducerMessage: this.lastAssistantMessage(),
-      })
+    if (this.status === 'ready' && !outcome.isAbort && !outcome.isError) {
+      await this.maybeSendAutomatically(this.consumePendingAutomaticContinuationOptions(options))
+    } else {
+      this.clearPendingAutomaticContinuation()
     }
   }
 
@@ -387,6 +377,7 @@ export class Chat<METADATA = unknown> {
   }): Promise<{ isAbort: boolean; isError: boolean }> {
     this.setChatStatus('submitted')
     this.setChatError(undefined)
+    this.toolCallbackFailure = undefined
     let isAbort = false
     let isError = false
     let hasStartedReadableStream = false
@@ -405,7 +396,10 @@ export class Chat<METADATA = unknown> {
         hasStartedReadableStream = true
         this.setChatStatus('streaming')
       }
-      if (reducer.terminal.errorText) {
+      if (this.toolCallbackFailure) {
+        isError = true
+        this.failChat(this.toolCallbackFailure)
+      } else if (reducer.terminal.errorText) {
         isError = true
         const normalized = new Error(reducer.terminal.errorText)
         this.setChatError(normalized)
@@ -451,6 +445,7 @@ export class Chat<METADATA = unknown> {
     chunk: UIMessageChunk,
   ) {
     applyUIMessageChunk(reducer, chunk)
+    let notifyTool: ToolPart | undefined
     if (isDataChunk(chunk)) {
       this.onData?.(dataPartFromChunk(reducer.message, chunk))
     }
@@ -459,7 +454,7 @@ export class Chat<METADATA = unknown> {
       const tool = lastPart
       if (!this.notifiedToolCalls.has(tool.toolCallId)) {
         this.notifiedToolCalls.add(tool.toolCallId)
-        this.onToolCall?.(tool)
+        notifyTool = tool
       }
     }
     if (!reducer.visible && chunk.type !== 'error' && chunk.type !== 'abort') {
@@ -468,9 +463,13 @@ export class Chat<METADATA = unknown> {
     const messages = this.messages
     const last = messages[messages.length - 1]
     if (last?.role === 'assistant' && last.id === reducer.message.id) {
+      reducer.message = preserveExternalToolUpdates(reducer.message, last)
       this.setMessages([...messages.slice(0, -1), reducer.message])
     } else {
       this.setMessages([...messages, reducer.message])
+    }
+    if (notifyTool) {
+      this.notifyToolCall(notifyTool)
     }
   }
 
@@ -511,15 +510,42 @@ export class Chat<METADATA = unknown> {
     if (this.status === 'submitted' || this.status === 'streaming') {
       return
     }
-    if (await this.shouldSendAutomatically()) {
-      await this.makeRequest({
-        trigger: 'submit-message',
-        messageId: this.messages[this.messages.length - 1]?.id,
-        options,
-        allowAutoSubmit: false,
-        reducerMessage: this.lastAssistantMessage(),
-      })
+    if (!(await this.shouldSendAutomatically())) {
+      this.resetAutomaticContinuationIfIdle()
+      return
     }
+    const continuationKeys = automaticContinuationKeys(this.messages)
+    const unconsumedKeys = continuationKeys.filter(
+      (key) => !this.consumedAutomaticContinuationKeys.has(key),
+    )
+    if (unconsumedKeys.length === 0) {
+      return
+    }
+    if (this.automaticStepCount >= this.maxAutomaticSteps) {
+      this.onAutomaticStepLimitExceeded?.({
+        messages: this.messages,
+        maxAutomaticSteps: this.maxAutomaticSteps,
+      })
+      return
+    }
+    for (const key of continuationKeys) {
+      this.consumedAutomaticContinuationKeys.add(key)
+    }
+    this.automaticStepCount += 1
+    await this.makeRequest({
+      trigger: 'submit-message',
+      messageId: this.messages[this.messages.length - 1]?.id,
+      options,
+      reducerMessage: this.lastAssistantMessage(),
+    })
+  }
+
+  private async maybeSendAutomaticallyAfterToolUpdate(options?: ChatRequestOptions): Promise<void> {
+    if (this.status === 'submitted' || this.status === 'streaming') {
+      this.rememberPendingAutomaticContinuation(options)
+      return
+    }
+    await this.maybeSendAutomatically(options)
   }
 
   private lastAssistantMessage(): UIMessage<METADATA> | undefined {
@@ -530,7 +556,73 @@ export class Chat<METADATA = unknown> {
     if (!this.sendAutomaticallyWhen) {
       return false
     }
-    return Boolean(await this.sendAutomaticallyWhen({ messages: this.messages }))
+    try {
+      return Boolean(await this.sendAutomaticallyWhen({ messages: this.messages }))
+    } catch (error) {
+      throw this.failChat(error)
+    }
+  }
+
+  private notifyToolCall(tool: ToolPart): void {
+    try {
+      const result = this.onToolCall?.(tool)
+      if (isPromiseLike(result)) {
+        result.catch((error) => {
+          const normalized = toError(error)
+          this.toolCallbackFailure = normalized
+          if (this.status !== 'submitted' && this.status !== 'streaming') {
+            this.failChat(normalized)
+          }
+        })
+      }
+    } catch (error) {
+      throw toError(error)
+    }
+  }
+
+  private failChat(error: unknown): Error {
+    const normalized = toError(error)
+    this.setChatError(normalized)
+    this.setChatStatus('error')
+    this.onError?.(normalized)
+    return normalized
+  }
+
+  private resetAutomaticContinuation(): void {
+    this.automaticStepCount = 0
+    this.consumedAutomaticContinuationKeys.clear()
+    this.clearPendingAutomaticContinuation()
+  }
+
+  private rememberPendingAutomaticContinuation(options?: ChatRequestOptions): void {
+    this.hasPendingAutomaticContinuation = true
+    if (options) {
+      this.pendingAutomaticContinuationOptions = options
+    }
+  }
+
+  private consumePendingAutomaticContinuationOptions(
+    fallback?: ChatRequestOptions,
+  ): ChatRequestOptions | undefined {
+    const options = this.hasPendingAutomaticContinuation
+      ? (this.pendingAutomaticContinuationOptions ?? fallback)
+      : fallback
+    this.hasPendingAutomaticContinuation = false
+    this.pendingAutomaticContinuationOptions = undefined
+    return options
+  }
+
+  private clearPendingAutomaticContinuation(): void {
+    this.hasPendingAutomaticContinuation = false
+    this.pendingAutomaticContinuationOptions = undefined
+  }
+
+  private resetAutomaticContinuationIfIdle(): void {
+    const assistant = this.lastAssistantMessage()
+    if (!assistant || !assistant.parts.some(isPendingToolPart)) {
+      this.automaticStepCount = 0
+      this.clearPendingAutomaticContinuation()
+    }
   }
 
   private setChatMessages(messages: UIMessage<METADATA>[]): void {
@@ -638,6 +730,182 @@ function isToolPart(part: UIMessage['parts'][number]): part is ToolPart {
   return part.type.startsWith('tool-')
 }
 
+function isPendingToolPart(part: UIMessage['parts'][number]): boolean {
+  return (
+    isToolPart(part) &&
+    (part.state === 'input-streaming' ||
+      part.state === 'input-available' ||
+      part.state === 'approval-requested')
+  )
+}
+
+function isCompletedToolResultPart(part: UIMessage['parts'][number]): part is ToolPart {
+  return (
+    isToolPart(part) &&
+    (part.state === 'output-available' ||
+      part.state === 'output-error' ||
+      part.state === 'output-denied')
+  )
+}
+
+function isRespondedToolApprovalPart(part: UIMessage['parts'][number]): part is ToolPart {
+  return isToolPart(part) && part.state === 'approval-responded'
+}
+
+function isContinuableToolPart(part: UIMessage['parts'][number]): part is ToolPart {
+  return isCompletedToolResultPart(part) || isRespondedToolApprovalPart(part)
+}
+
+function hasContinuableToolState(part: ToolPart): boolean {
+  return hasFinalToolResultState(part) || part.state === 'approval-responded'
+}
+
+function hasFinalToolResultState(part: ToolPart): boolean {
+  return (
+    part.state === 'output-available' ||
+    part.state === 'output-error' ||
+    part.state === 'output-denied'
+  )
+}
+
+function preserveExternalToolUpdates<METADATA>(
+  reducerMessage: UIMessage<METADATA>,
+  currentMessage: UIMessage<METADATA>,
+): UIMessage<METADATA> {
+  const externallyUpdatedTools = new Map(
+    currentMessage.parts
+      .filter((part): part is ToolPart => isToolPart(part) && hasContinuableToolState(part))
+      .map((part) => [part.toolCallId, part]),
+  )
+  if (externallyUpdatedTools.size === 0) {
+    return reducerMessage
+  }
+  let changed = false
+  const parts = reducerMessage.parts.map((part) => {
+    if (!isToolPart(part) || hasContinuableToolState(part)) {
+      return part
+    }
+    const external = externallyUpdatedTools.get(part.toolCallId) as ToolPart | undefined
+    if (!external) {
+      return part
+    }
+    changed = true
+    return {
+      ...part,
+      ...external,
+      input: external.input ?? part.input,
+      inputText: external.inputText ?? part.inputText,
+      providerMetadata: external.providerMetadata ?? part.providerMetadata,
+    }
+  })
+  return changed ? { ...reducerMessage, parts } : reducerMessage
+}
+
+function compactDuplicateFinalToolParts<METADATA>(
+  messages: UIMessage<METADATA>[],
+): UIMessage<METADATA>[] {
+  const seenFinalToolCalls = new Set<string>()
+  let changed = false
+  const compacted = [...messages]
+    .reverse()
+    .map((message) => {
+      if (message.role !== 'assistant') {
+        return message
+      }
+      const parts = [...message.parts]
+        .reverse()
+        .filter((part) => {
+          if (!isToolPart(part) || !hasFinalToolResultState(part)) {
+            return true
+          }
+          if (seenFinalToolCalls.has(part.toolCallId)) {
+            changed = true
+            return false
+          }
+          seenFinalToolCalls.add(part.toolCallId)
+          return true
+        })
+        .reverse()
+      return parts.length === message.parts.length ? message : { ...message, parts }
+    })
+    .reverse()
+  return changed ? compacted : messages
+}
+
+function automaticContinuationKeys<METADATA>(messages: UIMessage<METADATA>[]): string[] {
+  const assistant = [...messages].reverse().find((message) => message.role === 'assistant')
+  if (!assistant) {
+    return []
+  }
+  const toolParts = assistant.parts.filter(isContinuableToolPart)
+  if (toolParts.length === 0) {
+    return []
+  }
+  return Array.from(new Set(toolParts.map(automaticContinuationPartKey)))
+}
+
+function automaticContinuationPartKey(part: ToolPart): string {
+  return stableStringify({
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    state: part.state,
+    approvalId: part.approval?.id,
+    approved: part.approval?.approved,
+  })
+}
+
+function normalizeMaxAutomaticSteps(value: number | undefined): number {
+  if (!Number.isFinite(value) || value == null || value < 1) {
+    return 5
+  }
+  return Math.floor(value)
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
+}
+
+function stableStringify(value: unknown): string {
+  const seen = new WeakSet<object>()
+  const stringify = (current: unknown): string => {
+    if (current === undefined) {
+      return '"[Undefined]"'
+    }
+    if (typeof current === 'bigint') {
+      return JSON.stringify(current.toString())
+    }
+    if (
+      current === null ||
+      typeof current === 'string' ||
+      typeof current === 'number' ||
+      typeof current === 'boolean'
+    ) {
+      return JSON.stringify(current)
+    }
+    if (typeof current !== 'object') {
+      return JSON.stringify(String(current))
+    }
+    if (seen.has(current)) {
+      return '"[Circular]"'
+    }
+    seen.add(current)
+    if (Array.isArray(current)) {
+      return `[${current.map(stringify).join(',')}]`
+    }
+    const object = current as Record<string, unknown>
+    const entries = Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stringify(object[key])}`)
+    return `{${entries.join(',')}}`
+  }
+  return stringify(value)
+}
+
 function isDataChunk(
   chunk: UIMessageChunk,
 ): chunk is Extract<UIMessageChunk, { type: `data-${string}` }> {
@@ -672,7 +940,33 @@ function dataPartFromChunk<METADATA>(
   )
 }
 
-export function lastAssistantMessageIsCompleteWithApprovalResponses<METADATA = unknown>({
+export function lastAssistantMessageIsCompleteWithToolCalls<METADATA = unknown>({
+  messages,
+}: {
+  messages: UIMessage<METADATA>[]
+}): boolean {
+  const assistant = [...messages].reverse().find((message) => message.role === 'assistant')
+  if (!assistant) {
+    return false
+  }
+  const toolParts = assistant.parts.filter(isToolPart)
+  return toolParts.length > 0 && toolParts.every(isCompletedToolResultPart)
+}
+
+export function lastAssistantMessageHasCompletedToolContinuations<METADATA = unknown>({
+  messages,
+}: {
+  messages: UIMessage<METADATA>[]
+}): boolean {
+  const assistant = [...messages].reverse().find((message) => message.role === 'assistant')
+  if (!assistant) {
+    return false
+  }
+  const toolParts = assistant.parts.filter(isToolPart)
+  return toolParts.length > 0 && toolParts.every(isContinuableToolPart)
+}
+
+export function lastAssistantMessageHasRespondedToToolApprovals<METADATA = unknown>({
   messages,
 }: {
   messages: UIMessage<METADATA>[]
@@ -686,7 +980,5 @@ export function lastAssistantMessageIsCompleteWithApprovalResponses<METADATA = u
       isToolPart(part) &&
       (part.state === 'approval-requested' || part.state === 'approval-responded'),
   )
-  return (
-    approvalParts.length > 0 && approvalParts.every((part) => part.state === 'approval-responded')
-  )
+  return approvalParts.length > 0 && approvalParts.every(isRespondedToolApprovalPart)
 }
