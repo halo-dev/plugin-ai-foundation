@@ -603,21 +603,21 @@ formSchema:
   - $formkit: aiModelSelector
     name: languageModelName
     label: 语言模型
-    modelType: LANGUAGE
+    modelType: language
     clearable: true
     placeholder: 请选择语言模型
 
   - $formkit: aiModelSelector
     name: embeddingModelName
     label: 嵌入模型
-    modelType: EMBEDDING
+    modelType: embedding
 ```
 
 常用 props：
 
 | Prop | 说明 |
 | --- | --- |
-| `modelType` | 筛选 `LANGUAGE` 或 `EMBEDDING` |
+| `modelType` | 筛选 `language` 或 `embedding` |
 | `providerName` | 筛选指定 `AiProvider.metadata.name` |
 | `providerType` | 筛选指定供应方类型 |
 | `available` | 只显示可用模型，默认 `true` |
