@@ -906,7 +906,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class=":uno: h-[calc(100vh-9.25rem)] min-h-[34rem] bg-[#eef3f7] p-2">
+  <div class=":uno: h-[calc(100vh-7.5rem)] min-h-[34rem] bg-[#eef3f7] p-2">
     <VLoading v-if="isLoading" />
 
     <VEmpty
@@ -921,7 +921,7 @@ onBeforeUnmount(() => {
 
     <div
       v-else
-      class=":uno: grid grid-cols-1 h-full min-h-0 overflow-hidden border border-slate-200/80 rounded-lg bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)] lg:grid-cols-[minmax(0,1fr)_23rem]"
+      class=":uno: grid grid-cols-1 h-full min-h-0 overflow-hidden border border-slate-200/80 rounded-lg bg-white lg:grid-cols-[minmax(0,1fr)_23rem]"
     >
       <section class=":uno: min-h-0 min-w-0 flex flex-col bg-[#f8fafc]">
         <header class=":uno: border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur">

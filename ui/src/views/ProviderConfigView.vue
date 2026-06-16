@@ -5,7 +5,7 @@ import ProviderList from './components/ProviderList.vue'
 
 <template>
   <div
-    class=":uno: grid grid-cols-1 h-[calc(100vh-8.25rem)] min-h-[34rem] gap-3 p-2 sm:grid-cols-[20rem_minmax(0,1fr)]"
+    class=":uno: grid grid-cols-1 h-[calc(100vh-7.5rem)] min-h-[34rem] gap-3 p-2 sm:grid-cols-[20rem_minmax(0,1fr)]"
   >
     <div class=":uno: h-72 min-h-0 sm:h-auto">
       <ProviderList />

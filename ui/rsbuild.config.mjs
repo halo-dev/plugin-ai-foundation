@@ -5,7 +5,7 @@ import Icons from 'unplugin-icons/rspack'
 
 const MANIFEST_PATH = '../app/src/main/resources/plugin.yaml'
 const OUT_DIR_PROD = './build/dist'
-const OUT_DIR_DEV = '../app/build/resources/main/console'
+const OUT_DIR_DEV = '../app/build/resources/main/ui'
 
 export default rsbuildConfig({
   manifestPath: MANIFEST_PATH,
