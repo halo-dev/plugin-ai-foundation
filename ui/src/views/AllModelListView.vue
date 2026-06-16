@@ -72,7 +72,7 @@ function openProviderConfig() {
   <div class=":uno: p-2">
     <VCard :body-class="['!p-0']">
       <template #header>
-        <div class=":uno: block w-full border-b border-gray-100 bg-white px-4 py-3">
+        <div class=":uno: block w-full bg-white px-4 py-3">
           <div class=":uno: mb-3 min-w-0 flex flex-col gap-1">
             <div class=":uno: text-sm text-gray-950 font-semibold">模型列表</div>
             <div class=":uno: text-xs text-gray-500">{{ resultText }}</div>
