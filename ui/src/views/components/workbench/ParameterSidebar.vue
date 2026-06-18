@@ -7,7 +7,7 @@ import RiFlaskLine from '~icons/ri/flask-line'
 import RiSettings3Line from '~icons/ri/settings-3-line'
 
 const props = defineProps<{
-  mode: 'chat' | 'embedding'
+  mode: 'chat' | 'embedding' | 'rerank'
   systemPrompt?: string
   temperature?: number
   topP?: number
@@ -498,7 +498,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
         </details>
       </template>
 
-      <template v-else>
+      <template v-else-if="mode === 'embedding'">
         <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
           <summary
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"

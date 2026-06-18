@@ -4,6 +4,7 @@ import org.pf4j.ExtensionPoint;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.embedding.EmbeddingModel;
+import run.halo.aifoundation.rerank.RerankingModel;
 
 /**
  * Cross-plugin entry point for resolving AI models managed by plugin-ai-foundation.
@@ -36,4 +37,15 @@ public interface AiModelService extends ExtensionPoint {
      * is {@code null} or blank, resolves the configured default embedding model.
      */
     Mono<EmbeddingModel> embeddingModel(String modelName);
+
+    /**
+     * Resolves the configured default reranking model.
+     */
+    Mono<RerankingModel> rerankingModel();
+
+    /**
+     * Resolves an enabled reranking model by {@code AiModel.metadata.name}. When {@code modelName}
+     * is {@code null} or blank, resolves the configured default reranking model.
+     */
+    Mono<RerankingModel> rerankingModel(String modelName);
 }

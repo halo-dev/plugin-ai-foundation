@@ -7,6 +7,7 @@ import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
 
 public class AuditedLanguageModel implements LanguageModel {
 
@@ -31,13 +32,13 @@ public class AuditedLanguageModel implements LanguageModel {
     @Override
     public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
         auditRecorder.recordModelInvocation(context, "language.generateText");
-        return delegate.generateText(request);
+        return LanguageModelMiddlewares.applyRequestMiddleware(delegate, request);
     }
 
     @Override
     public StreamTextResult streamText(GenerateTextRequest request) {
         auditRecorder.recordModelInvocation(context, "language.streamText");
-        return delegate.streamText(request);
+        return LanguageModelMiddlewares.applyRequestStreamMiddleware(delegate, request);
     }
 
     @Override

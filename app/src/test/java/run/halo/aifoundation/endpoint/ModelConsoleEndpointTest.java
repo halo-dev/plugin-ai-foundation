@@ -33,6 +33,11 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.rerank.RerankDocument;
+import run.halo.aifoundation.rerank.RerankRequest;
+import run.halo.aifoundation.rerank.RerankResponse;
+import run.halo.aifoundation.rerank.RerankResult;
+import run.halo.aifoundation.rerank.RerankingModel;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -996,6 +1001,49 @@ class ModelConsoleEndpointTest {
             .expectStatus().isBadRequest();
 
         verify(aiModelService, never()).languageModel(any());
+    }
+
+    @Test
+    void testRerank_mapsRequestToRerankingModel() {
+        var rerankingModel = mock(RerankingModel.class);
+        when(aiModelService.rerankingModel("rerank-model")).thenReturn(Mono.just(rerankingModel));
+        when(rerankingModel.rerank(any(RerankRequest.class))).thenAnswer(invocation -> {
+            RerankRequest request = invocation.getArgument(0);
+            return Mono.just(RerankResponse.builder()
+                .query(request.getQuery())
+                .results(List.of(RerankResult.builder()
+                    .index(1)
+                    .document(request.getDocuments().get(1))
+                    .score(0.91)
+                    .build()))
+                .build());
+        });
+
+        webTestClient.post().uri("/models/rerank-model/test-rerank")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "query", "Halo RAG",
+                "documents", List.of("generic cms", "Halo AI Foundation"),
+                "topN", 1,
+                "providerOptions", Map.of("cohere", Map.of("truncate", "END"))
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.query").isEqualTo("Halo RAG")
+            .jsonPath("$.resultsCount").isEqualTo(1)
+            .jsonPath("$.results[0].index").isEqualTo(1)
+            .jsonPath("$.results[0].score").isEqualTo(0.91);
+
+        var captor = ArgumentCaptor.forClass(RerankRequest.class);
+        verify(rerankingModel).rerank(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getQuery()).isEqualTo("Halo RAG");
+        assertThat(request.getDocuments())
+            .extracting(RerankDocument::getText)
+            .containsExactly("generic cms", "Halo AI Foundation");
+        assertThat(request.getTopN()).isEqualTo(1);
+        assertThat(request.getProviderOptions()).containsKey("cohere");
     }
 
     // ---- helpers ----

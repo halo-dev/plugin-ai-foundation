@@ -413,6 +413,9 @@ UIMessageChatResult<ChatMetadata> chat = UIMessageChatHandlers.streamText(option
     .model(model)
     .messages(messages)
     .serializer(chunk -> objectMapper.writeValueAsString(chunk))
+    .prepare(context -> repository.permissions(context.getMessages())
+        .then(Mono.fromRunnable(() -> context.getRequestBuilder()
+            .middleware(RagMiddlewares.rag(retriever)))))
     .metadataSupplier(() -> new ChatMetadata(conversationId))
     .onFinish(finish -> {
         List<UIMessage<ChatMetadata>> updatedMessages = finish.messages();
@@ -424,6 +427,11 @@ UIMessageChatResult<ChatMetadata> chat = UIMessageChatHandlers.streamText(option
 如果响应是在继续已有 assistant 消息，`finish.isContinuation()` 会返回 `true`。
 判断规则是：原始消息最后一条是 assistant，且 id 与响应消息 id 相同，则替换最后一条；
 否则追加新的 assistant 消息。
+
+`prepare(...)` 是异步 hook，执行顺序在 UI 消息校验、转换为模型消息之后，在最终
+`LanguageModel.streamText(...)` 之前。它可以读取 `chatRequest`、有效 UI messages、
+转换结果和 `GenerateTextRequestBuilder`，适合做权限检查、仓库解析、RAG 配置和
+request-scoped middleware 附加。
 
 ## 返回结构化流
 
@@ -467,6 +475,17 @@ UIMessageStream stream = UIMessageStreams.createWithOptions(options -> options
 | `writeMessageMetadata(metadata)` | 更新消息级 metadata                   |
 | `writeText(text)`                | 写入完整文本块                        |
 | `merge(stream)`                  | 合并另一个 `UIMessageStream`          |
+
+RAG source 默认使用标准 source chunk，最终会持久化为 `SourceUrlPart`。AI Foundation
+约定的 RAG 自定义 data 名称为：
+
+| 名称 | 用途 |
+| --- | --- |
+| `RagUIMessageDataNames.SOURCES` | 仅发送可展示 source references |
+| `RagUIMessageDataNames.RETRIEVED_DATA` | 调用方显式选择时发送完整检索数据 |
+
+默认推荐 `RagUIMessageOutputMode.SOURCES_ONLY`。只有确认前端和存储层可以接收检索全文时，
+才使用 `SOURCES_WITH_RETRIEVED_DATA`。
 
 `transientData=true` 的 data 数据块不会保存到 `UIMessage.parts`。
 

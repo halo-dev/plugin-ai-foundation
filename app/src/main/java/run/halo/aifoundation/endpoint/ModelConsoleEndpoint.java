@@ -36,6 +36,12 @@ import run.halo.aifoundation.embedding.EmbeddingUtils;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.rerank.RerankDocument;
+import run.halo.aifoundation.rerank.RerankRequest;
+import run.halo.aifoundation.rerank.RerankResponse;
+import run.halo.aifoundation.rerank.RerankResponseMetadata;
+import run.halo.aifoundation.rerank.RerankUsage;
+import run.halo.aifoundation.rerank.RerankWarning;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
@@ -239,6 +245,21 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(TestEmbeddingRequest.class))
                     .response(responseBuilder().implementation(TestEmbeddingResponse.class))
             )
+            .POST("models/{name}/test-rerank", this::testRerank,
+                builder -> builder.operationId("TestModelRerank")
+                    .description("Test reranking with candidate documents and diagnostics.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(TestRerankRequest.class))
+                    .response(responseBuilder().implementation(TestRerankResponse.class))
+            )
             .build();
     }
 
@@ -401,6 +422,23 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .metadata(Map.of("source", "console-test"))
                         .build())
                     .map(TestEmbeddingResponse::from)))
+            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+    }
+
+    private Mono<ServerResponse> testRerank(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testRerank: modelName={}", modelName);
+        return request.bodyToMono(TestRerankRequest.class)
+            .flatMap(body -> validateTestRerankRequest(body)
+                .then(aiModelService.rerankingModel(modelName))
+                .flatMap(model -> model.rerank(RerankRequest.builder()
+                        .query(body.getQuery())
+                        .documents(toRerankDocuments(body.getDocuments()))
+                        .topN(body.getTopN())
+                        .providerOptions(body.getProviderOptions())
+                        .metadata(Map.of("source", "console-test"))
+                        .build())
+                    .map(TestRerankResponse::from)))
             .flatMap(response -> ServerResponse.ok().bodyValue(response));
     }
 
@@ -755,6 +793,47 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return Mono.empty();
     }
 
+    private Mono<Void> validateTestRerankRequest(TestRerankRequest request) {
+        if (request == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "request body is required"));
+        }
+        if (request.getQuery() == null || request.getQuery().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "query must not be blank"));
+        }
+        if (request.getDocuments() == null || request.getDocuments().isEmpty()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At least one document is required"));
+        }
+        if (request.getDocuments().size() > 50) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At most 50 documents can be tested at once"));
+        }
+        if (request.getTopN() != null && request.getTopN() <= 0) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "topN must be positive"));
+        }
+        for (var document : request.getDocuments()) {
+            if (document == null || document.isBlank()) {
+                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Rerank documents must not be blank"));
+            }
+        }
+        return Mono.empty();
+    }
+
+    private static List<RerankDocument> toRerankDocuments(List<String> documents) {
+        var result = new ArrayList<RerankDocument>();
+        for (int i = 0; i < documents.size(); i++) {
+            result.add(RerankDocument.builder()
+                .id(String.valueOf(i))
+                .text(documents.get(i))
+                .build());
+        }
+        return List.copyOf(result);
+    }
+
     private boolean isSupportedTestChatPart(run.halo.aifoundation.message.ModelMessageRole role,
         run.halo.aifoundation.message.ModelMessagePart part) {
         if (PartType.isText(part.getType())) {
@@ -1057,6 +1136,17 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestRerankRequest {
+        private String query;
+        private List<String> documents;
+        private Integer topN;
+        private Map<String, Map<String, Object>> providerOptions;
+    }
+
+    @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class TestCompletionStreamRequest {
@@ -1194,6 +1284,59 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private int index;
         private int dimensions;
         private List<Float> preview;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestRerankResponse {
+        private String query;
+        private int resultsCount;
+        private List<RerankPreview> results;
+        private RerankUsage usage;
+        private RerankResponseMetadata response;
+        private List<RerankWarning> warnings;
+        private Map<String, Object> providerMetadata;
+
+        static TestRerankResponse from(RerankResponse response) {
+            var results = response.getResults() != null
+                ? response.getResults()
+                : List.<run.halo.aifoundation.rerank.RerankResult>of();
+            return TestRerankResponse.builder()
+                .query(response.getQuery())
+                .resultsCount(results.size())
+                .results(results.stream()
+                    .map(result -> RerankPreview.builder()
+                        .index(result.getIndex())
+                        .documentId(result.getDocument() != null
+                            ? result.getDocument().getId()
+                            : null)
+                        .text(result.getDocument() != null
+                            ? result.getDocument().getText()
+                            : null)
+                        .score(result.getScore())
+                        .providerMetadata(result.getProviderMetadata())
+                        .build())
+                    .toList())
+                .usage(response.getUsage())
+                .response(response.getResponse())
+                .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
+                .providerMetadata(response.getProviderMetadata())
+                .build();
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RerankPreview {
+        private int index;
+        private String documentId;
+        private String text;
+        private Double score;
+        private Map<String, Object> providerMetadata;
     }
 
 }

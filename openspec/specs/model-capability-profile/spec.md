@@ -103,3 +103,15 @@ The system SHALL normalize provider discovery metadata into the existing model c
 - **WHEN** a model ID does not contain generic inference tokens and remote metadata does not identify its type
 - **THEN** the backend SHALL NOT classify it using provider-specific model family catalogs
 - **AND** the admin SHALL be able to correct the model type and features before import
+
+### Requirement: Rerank model profile
+The system SHALL treat `rerank` as a first-class model type in model profiles and discovery results.
+
+#### Scenario: Persist rerank model type
+- **WHEN** an administrator configures a reranking model
+- **THEN** the `AiModel` persists `modelType = rerank`
+
+#### Scenario: Discovery reports rerank support
+- **WHEN** provider discovery identifies a reranking-capable model
+- **THEN** the discovered model profile reports the rerank model type without requiring a separate capability label
+

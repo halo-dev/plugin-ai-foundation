@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import { ModelOptionModelTypeEnum, type TestEmbeddingResponse } from '@/api/generated'
+import {
+  ModelOptionModelTypeEnum,
+  type TestEmbeddingResponse,
+  type TestRerankResponse,
+} from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import {
@@ -43,6 +47,7 @@ import ChatMessageItem from './components/workbench/ChatMessageItem.vue'
 import EmbeddingTestPanel from './components/workbench/EmbeddingTestPanel.vue'
 import ExamplePrompts from './components/workbench/ExamplePrompts.vue'
 import ParameterSidebar from './components/workbench/ParameterSidebar.vue'
+import RerankTestPanel from './components/workbench/RerankTestPanel.vue'
 
 const modelType = shallowRef<string | undefined>()
 const availableOnly = shallowRef<boolean | undefined>(true)
@@ -57,7 +62,7 @@ const {
 })
 
 const selectedModelName = useRouteQuery<string | undefined>('model')
-const testMode = shallowRef<'chat' | 'embedding'>('chat')
+const testMode = shallowRef<'chat' | 'embedding' | 'rerank'>('chat')
 
 const messages = ref<WorkbenchMessage[]>([])
 const input = shallowRef('')
@@ -108,6 +113,16 @@ const embeddingProviderOptionsError = shallowRef('')
 const embeddingResult = shallowRef<TestEmbeddingResponse | undefined>()
 const embeddingError = shallowRef('')
 const isEmbeddingTesting = shallowRef(false)
+
+const rerankQuery = shallowRef('Halo AI Foundation 如何支持 RAG?')
+const rerankDocuments = shallowRef(
+  'AI Foundation 提供统一的语言模型、嵌入和 UI Message 能力\nHalo 是一个开源建站工具\nRAG 通常需要检索、上下文注入和来源展示',
+)
+const rerankProviderOptionsText = shallowRef('{}')
+const rerankProviderOptionsError = shallowRef('')
+const rerankResult = shallowRef<TestRerankResponse | undefined>()
+const rerankError = shallowRef('')
+const isRerankTesting = shallowRef(false)
 
 let activeUiMessageModelName: string | undefined
 let activeUiMessageWorkbenchId: string | undefined
@@ -190,12 +205,23 @@ const embeddingModels = computed(() => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Embedding
   })
 })
+const rerankModels = computed(() => {
+  return (modelOptions.value || []).filter((model) => {
+    return model.name && model.modelType === ModelOptionModelTypeEnum.Rerank
+  })
+})
 const activeModels = computed(() =>
-  testMode.value === 'embedding' ? embeddingModels.value : chatModels.value,
+  testMode.value === 'embedding'
+    ? embeddingModels.value
+    : testMode.value === 'rerank'
+      ? rerankModels.value
+      : chatModels.value,
 )
 const activeModelType = computed(() =>
   testMode.value === 'embedding'
     ? ModelOptionModelTypeEnum.Embedding
+    : testMode.value === 'rerank'
+      ? ModelOptionModelTypeEnum.Rerank
     : ModelOptionModelTypeEnum.Language,
 )
 
@@ -228,6 +254,8 @@ watch(
     const selected = models.find((item) => item.name === selectedModelName.value)
     if (selected?.modelType === ModelOptionModelTypeEnum.Embedding) {
       testMode.value = 'embedding'
+    } else if (selected?.modelType === ModelOptionModelTypeEnum.Rerank) {
+      testMode.value = 'rerank'
     } else if (selected?.modelType === ModelOptionModelTypeEnum.Language) {
       testMode.value = 'chat'
     }
@@ -1024,6 +1052,51 @@ async function runEmbeddingTest() {
   }
 }
 
+async function runRerankTest() {
+  const model = selectedModel.value
+  if (!model?.name || isRerankTesting.value) {
+    return
+  }
+  const documents = rerankDocuments.value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  if (!rerankQuery.value.trim()) {
+    rerankError.value = '请输入 Query'
+    return
+  }
+  if (!documents.length) {
+    rerankError.value = '请至少输入一个候选文档'
+    return
+  }
+  const providerOptions = parseProviderOptionsJson(rerankProviderOptionsText.value)
+  if (providerOptions.error) {
+    rerankProviderOptionsError.value = providerOptions.error
+    return
+  }
+  rerankProviderOptionsError.value = ''
+  rerankError.value = ''
+  rerankResult.value = undefined
+  isRerankTesting.value = true
+  try {
+    const { data } = await aiConsoleApiClient.model.testModelRerank({
+      name: model.name,
+      testRerankRequest: {
+        query: rerankQuery.value,
+        documents,
+        providerOptions: providerOptions.value as
+          | { [key: string]: { [key: string]: object } }
+          | undefined,
+      },
+    })
+    rerankResult.value = data
+  } catch (e) {
+    rerankError.value = `请求失败: ${(e as Error).message}`
+  } finally {
+    isRerankTesting.value = false
+  }
+}
+
 onBeforeUnmount(() => {
   uiChat.stop()
 })
@@ -1034,9 +1107,9 @@ onBeforeUnmount(() => {
     <VLoading v-if="isLoading" />
 
     <VEmpty
-      v-else-if="!chatModels.length && !embeddingModels.length"
+      v-else-if="!chatModels.length && !embeddingModels.length && !rerankModels.length"
       title="暂无可测试的模型"
-      message="你可以在配置选项卡中添加或启用支持对话或嵌入能力的模型"
+      message="你可以在配置选项卡中添加或启用支持对话、嵌入或 Rerank 能力的模型"
     >
       <template #actions>
         <VButton :loading="isFetching" @click="refetch()">刷新</VButton>
@@ -1070,7 +1143,13 @@ onBeforeUnmount(() => {
                   <span
                     class=":uno: hidden border border-emerald-200 rounded bg-emerald-50 text-[10px] text-emerald-700 font-medium sm:inline-flex !px-1.5 !py-0.5"
                   >
-                    {{ testMode === 'chat' ? 'Language' : 'Embedding' }}
+                    {{
+                      testMode === 'chat'
+                        ? 'Language'
+                        : testMode === 'embedding'
+                          ? 'Embedding'
+                          : 'Rerank'
+                    }}
                   </span>
                 </div>
                 <div class=":uno: mt-0.5 truncate text-xs text-slate-500">
@@ -1091,7 +1170,7 @@ onBeforeUnmount(() => {
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="isStreaming || isEmbeddingTesting || !chatModels.length"
+                  :disabled="isStreaming || isEmbeddingTesting || isRerankTesting || !chatModels.length"
                   @click="testMode = 'chat'"
                 >
                   <RiMessage3Line class=":uno: size-3.5" />
@@ -1105,11 +1184,27 @@ onBeforeUnmount(() => {
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="isStreaming || isEmbeddingTesting || !embeddingModels.length"
+                  :disabled="
+                    isStreaming || isEmbeddingTesting || isRerankTesting || !embeddingModels.length
+                  "
                   @click="testMode = 'embedding'"
                 >
                   <RiStackLine class=":uno: size-3.5" />
                   嵌入
+                </button>
+                <button
+                  type="button"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
+                  :class="
+                    testMode === 'rerank'
+                      ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
+                      : ':uno: text-slate-500 hover:text-slate-800'
+                  "
+                  :disabled="isStreaming || isEmbeddingTesting || isRerankTesting || !rerankModels.length"
+                  @click="testMode = 'rerank'"
+                >
+                  <RiStackLine class=":uno: size-3.5" />
+                  Rerank
                 </button>
               </div>
 
@@ -1118,7 +1213,7 @@ onBeforeUnmount(() => {
                 name="model"
                 :model-type="activeModelType"
                 :available="availableOnly"
-                :disabled="isStreaming || isEmbeddingTesting"
+                :disabled="isStreaming || isEmbeddingTesting || isRerankTesting"
                 placeholder="选择测试模型"
                 search-placeholder="搜索模型..."
                 full-width
@@ -1182,7 +1277,7 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <template v-else>
+        <template v-else-if="testMode === 'embedding'">
           <EmbeddingTestPanel
             :inputs="embeddingInputs"
             :result="embeddingResult"
@@ -1223,6 +1318,23 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+        </template>
+
+        <template v-else>
+          <RerankTestPanel
+            :query="rerankQuery"
+            :documents="rerankDocuments"
+            :provider-options-text="rerankProviderOptionsText"
+            :provider-options-error="rerankProviderOptionsError"
+            :result="rerankResult"
+            :error="rerankError"
+            :is-loading="isRerankTesting"
+            :disabled="!selectedModel"
+            @update:query="rerankQuery = $event"
+            @update:documents="rerankDocuments = $event"
+            @update:provider-options-text="rerankProviderOptionsText = $event"
+            @run="runRerankTest"
+          />
         </template>
       </section>
 

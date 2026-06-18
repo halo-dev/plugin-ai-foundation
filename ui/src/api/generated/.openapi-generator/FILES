@@ -43,11 +43,17 @@ models/provider-type-info.ts
 models/reasoning-options.ts
 models/remove-operation.ts
 models/replace-operation.ts
+models/rerank-preview.ts
+models/rerank-response-metadata.ts
+models/rerank-usage.ts
+models/rerank-warning.ts
 models/test-completion-stream-request.ts
 models/test-embedding-request.ts
 models/test-embedding-response.ts
 models/test-object-stream-request.ts
 models/test-operation.ts
+models/test-rerank-request.ts
+models/test-rerank-response.ts
 models/test-ui-message-chat-request.ts
 models/test-ui-message.ts
 models/tool-choice.ts

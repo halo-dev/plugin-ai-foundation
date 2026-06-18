@@ -11,4 +11,6 @@ public interface AiModelResolver {
     Mono<String> defaultLanguageModelName();
 
     Mono<String> defaultEmbeddingModelName();
+
+    Mono<String> defaultRerankModelName();
 }

@@ -5,7 +5,7 @@
     "version" : "2.25.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:43123",
+    "url" : "http://localhost:55534",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -708,9 +708,23 @@
             "type" : "boolean"
           }
         }, {
+          "description" : "Whether to inject the console-only halo_external_test_info tool that must be executed by the workbench caller.",
+          "in" : "query",
+          "name" : "enableExternalTestTool",
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
           "description" : "Whether to inject a console-only repairable tool and deterministic tool-call repair callback.",
           "in" : "query",
           "name" : "enableToolCallRepair",
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "Whether to inject console-only browser Agent test tools that are executed by the workbench frontend.",
+          "in" : "query",
+          "name" : "enableAgentTestTools",
           "schema" : {
             "type" : "boolean"
           }
@@ -849,6 +863,44 @@
               }
             },
             "description" : "Plain text stream containing generated JSON text deltas. The final generated value is validated as structured output."
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-rerank" : {
+      "post" : {
+        "description" : "Test reranking with candidate documents and diagnostics.",
+        "operationId" : "TestModelRerank",
+        "parameters" : [ {
+          "description" : "Model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestRerankRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TestRerankResponse"
+                }
+              }
+            },
+            "description" : "default response"
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
@@ -1897,6 +1949,78 @@
           }
         }
       },
+      "RerankPreview" : {
+        "type" : "object",
+        "properties" : {
+          "documentId" : {
+            "type" : "string"
+          },
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "score" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RerankResponseMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RerankUsage" : {
+        "type" : "object",
+        "properties" : {
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "RerankWarning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          }
+        }
+      },
       "TestCompletionStreamRequest" : {
         "type" : "object",
         "properties" : {
@@ -2159,6 +2283,69 @@
           },
           "value" : {
             "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "TestRerankRequest" : {
+        "type" : "object",
+        "properties" : {
+          "documents" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "query" : {
+            "type" : "string"
+          },
+          "topN" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "TestRerankResponse" : {
+        "type" : "object",
+        "properties" : {
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "query" : {
+            "type" : "string"
+          },
+          "response" : {
+            "$ref" : "#/components/schemas/RerankResponseMetadata"
+          },
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RerankPreview"
+            }
+          },
+          "resultsCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/RerankUsage"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RerankWarning"
+            }
           }
         }
       },

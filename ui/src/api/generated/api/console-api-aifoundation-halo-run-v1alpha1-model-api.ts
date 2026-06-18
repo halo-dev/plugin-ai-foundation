@@ -32,6 +32,10 @@ import type { TestEmbeddingResponse } from '../models';
 // @ts-ignore
 import type { TestObjectStreamRequest } from '../models';
 // @ts-ignore
+import type { TestRerankRequest } from '../models';
+// @ts-ignore
+import type { TestRerankResponse } from '../models';
+// @ts-ignore
 import type { TestUiMessageChatRequest } from '../models';
 // @ts-ignore
 import type { UIMessageChunk } from '../models';
@@ -314,16 +318,65 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             };
         },
         /**
+         * Test reranking with candidate documents and diagnostics.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestRerankRequest} testRerankRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelRerank: async (name: string, testRerankRequest: TestRerankRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('testModelRerank', 'name', name)
+            // verify required parameter 'testRerankRequest' is not null or undefined
+            assertParamExists('testModelRerank', 'testRerankRequest', testRerankRequest)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-rerank`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(testRerankRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Test text generation with Halo UI Message stream response.
          * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestUiMessageChatRequest} testUiMessageChatRequest 
          * @param {boolean} [enableTestTool] Whether to inject the console-only halo_test_info tool for tool calling tests.
          * @param {boolean} [enableTestToolApproval] Whether the console-only halo_test_info tool should require caller approval before execution.
+         * @param {boolean} [enableExternalTestTool] Whether to inject the console-only halo_external_test_info tool that must be executed by the workbench caller.
          * @param {boolean} [enableToolCallRepair] Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
+         * @param {boolean} [enableAgentTestTools] Whether to inject console-only browser Agent test tools that are executed by the workbench frontend.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelUiMessageChatStream: async (name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableToolCallRepair?: boolean, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        testModelUiMessageChatStream: async (name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableExternalTestTool?: boolean, enableToolCallRepair?: boolean, enableAgentTestTools?: boolean, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
             assertParamExists('testModelUiMessageChatStream', 'name', name)
             // verify required parameter 'testUiMessageChatRequest' is not null or undefined
@@ -357,8 +410,16 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
                 localVarQueryParameter['enableTestToolApproval'] = enableTestToolApproval;
             }
 
+            if (enableExternalTestTool !== undefined) {
+                localVarQueryParameter['enableExternalTestTool'] = enableExternalTestTool;
+            }
+
             if (enableToolCallRepair !== undefined) {
                 localVarQueryParameter['enableToolCallRepair'] = enableToolCallRepair;
+            }
+
+            if (enableAgentTestTools !== undefined) {
+                localVarQueryParameter['enableAgentTestTools'] = enableAgentTestTools;
             }
 
 
@@ -509,17 +570,32 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Test reranking with candidate documents and diagnostics.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestRerankRequest} testRerankRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async testModelRerank(name: string, testRerankRequest: TestRerankRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TestRerankResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelRerank(name, testRerankRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelRerank']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Test text generation with Halo UI Message stream response.
          * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestUiMessageChatRequest} testUiMessageChatRequest 
          * @param {boolean} [enableTestTool] Whether to inject the console-only halo_test_info tool for tool calling tests.
          * @param {boolean} [enableTestToolApproval] Whether the console-only halo_test_info tool should require caller approval before execution.
+         * @param {boolean} [enableExternalTestTool] Whether to inject the console-only halo_external_test_info tool that must be executed by the workbench caller.
          * @param {boolean} [enableToolCallRepair] Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
+         * @param {boolean} [enableAgentTestTools] Whether to inject console-only browser Agent test tools that are executed by the workbench frontend.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async testModelUiMessageChatStream(name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableToolCallRepair?: boolean, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UIMessageChunk>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelUiMessageChatStream(name, testUiMessageChatRequest, enableTestTool, enableTestToolApproval, enableToolCallRepair, options);
+        async testModelUiMessageChatStream(name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableExternalTestTool?: boolean, enableToolCallRepair?: boolean, enableAgentTestTools?: boolean, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UIMessageChunk>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelUiMessageChatStream(name, testUiMessageChatRequest, enableTestTool, enableTestToolApproval, enableExternalTestTool, enableToolCallRepair, enableAgentTestTools, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelUiMessageChatStream']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -602,13 +678,22 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.testModelObjectStream(requestParameters.name, requestParameters.testObjectStreamRequest, options).then((request) => request(axios, basePath));
         },
         /**
+         * Test reranking with candidate documents and diagnostics.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerankRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelRerank(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerankRequest, options?: RawAxiosRequestConfig): AxiosPromise<TestRerankResponse> {
+            return localVarFp.testModelRerank(requestParameters.name, requestParameters.testRerankRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Test text generation with Halo UI Message stream response.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStreamRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
         testModelUiMessageChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<UIMessageChunk> {
-            return localVarFp.testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableToolCallRepair, options).then((request) => request(axios, basePath));
+            return localVarFp.testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableExternalTestTool, requestParameters.enableToolCallRepair, requestParameters.enableAgentTestTools, options).then((request) => request(axios, basePath));
         },
         /**
          * Update an AI model.
@@ -735,6 +820,27 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelObjectStr
 }
 
 /**
+ * Request parameters for testModelRerank operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerankRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerankRequest {
+    /**
+     * Model name (AiModel.metadata.name)
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerank
+     */
+    readonly name: string
+
+    /**
+     * 
+     * @type {TestRerankRequest}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerank
+     */
+    readonly testRerankRequest: TestRerankRequest
+}
+
+/**
  * Request parameters for testModelUiMessageChatStream operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
  * @export
  * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStreamRequest
@@ -769,11 +875,25 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessage
     readonly enableTestToolApproval?: boolean
 
     /**
+     * Whether to inject the console-only halo_external_test_info tool that must be executed by the workbench caller.
+     * @type {boolean}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStream
+     */
+    readonly enableExternalTestTool?: boolean
+
+    /**
      * Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
      * @type {boolean}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStream
      */
     readonly enableToolCallRepair?: boolean
+
+    /**
+     * Whether to inject console-only browser Agent test tools that are executed by the workbench frontend.
+     * @type {boolean}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStream
+     */
+    readonly enableAgentTestTools?: boolean
 }
 
 /**
@@ -871,6 +991,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
     }
 
     /**
+     * Test reranking with candidate documents and diagnostics.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerankRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
+     */
+    public testModelRerank(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelRerankRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelRerank(requestParameters.name, requestParameters.testRerankRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
      * Test text generation with Halo UI Message stream response.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStreamRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -878,7 +1009,7 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
     public testModelUiMessageChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStreamRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableToolCallRepair, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableExternalTestTool, requestParameters.enableToolCallRepair, requestParameters.enableAgentTestTools, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

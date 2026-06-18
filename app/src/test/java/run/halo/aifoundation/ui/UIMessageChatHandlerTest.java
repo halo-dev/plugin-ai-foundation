@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import reactor.core.publisher.Flux;
@@ -15,8 +16,10 @@ import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolResult;
@@ -202,11 +205,12 @@ class UIMessageChatHandlerTest {
         ));
         var source = new CancellationSource();
 
-        UIMessageChatHandlers.<Metadata>streamText(options -> options
+        var chat = UIMessageChatHandlers.<Metadata>streamText(options -> options
             .model(model)
             .messages(List.of(new UIMessage<>("user", UIMessageRole.USER,
                 List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat"))))
             .cancellationToken(source.token()));
+        chat.response().stream().collectList().block();
 
         assertThat(model.capturedRequest.getCancellationToken()).isSameAs(source.token());
     }
@@ -218,10 +222,11 @@ class UIMessageChatHandlerTest {
             TextStreamPart.finish(null, null, null)
         ));
 
-        UIMessageChatHandlers.<Metadata>streamText(options -> options
+        var chat = UIMessageChatHandlers.<Metadata>streamText(options -> options
             .model(model)
             .messages(List.of(new UIMessage<>("user", UIMessageRole.USER,
                 List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat")))));
+        chat.response().stream().collectList().block();
 
         assertThat(model.capturedRequest.getCancellationToken()).isNull();
     }
@@ -496,6 +501,75 @@ class UIMessageChatHandlerTest {
         assertThat(model.capturedRequest.getMessages().getFirst().getContent())
             .extracting(run.halo.aifoundation.message.ModelMessagePart::getType)
             .containsExactly("reasoning", "text");
+    }
+
+    @Test
+    void asyncPrepareCanMutateFinalRequestBeforeModelInvocation() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.textDelta("text-1", "answer"),
+            TextStreamPart.finish(null, null, null)
+        ));
+
+        var chat = UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .model(model)
+            .messages(List.of(new UIMessage<>("user", UIMessageRole.USER,
+                List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat"))))
+            .prepare(context -> Mono.delay(Duration.ofMillis(1))
+                .then(Mono.fromRunnable(() -> context.getRequestBuilder()
+                    .system("prepared system")))));
+
+        chat.response().stream().collectList().block();
+
+        assertThat(model.capturedRequest.getSystem()).isEqualTo("prepared system");
+    }
+
+    @Test
+    void chatOptionsAttachRequestScopedMiddleware() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.textDelta("text-1", "answer"),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var middleware = new LanguageModelMiddleware() {
+        };
+
+        var chat = UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .model(model)
+            .messages(List.of(new UIMessage<>("user", UIMessageRole.USER,
+                List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat"))))
+            .middleware(middleware));
+
+        chat.response().stream().collectList().block();
+
+        assertThat(model.capturedRequest.getMiddleware()).containsExactly(middleware);
+    }
+
+    @Test
+    void sourceChunksArePersistedBeforeAssistantText() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.start("assistant-1"),
+            TextStreamPart.source(GenerationContentPart.source("src-1", "https://halo.run",
+                "Halo", Map.of("sourceType", "url"))),
+            TextStreamPart.textStart("text-1"),
+            TextStreamPart.textDelta("text-1", "answer"),
+            TextStreamPart.textEnd("text-1"),
+            TextStreamPart.finish(null, null, null)
+        ));
+
+        var chat = UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .model(model)
+            .messages(List.of(new UIMessage<>("user", UIMessageRole.USER,
+                List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat")))));
+
+        var chunks = chat.response().stream().collectList().block();
+        var finish = chat.finish().block();
+
+        assertThat(chunks).extracting(UIMessageChunk::type)
+            .containsSubsequence(UIMessageChunkType.SOURCE_URL, UIMessageChunkType.TEXT_START,
+                UIMessageChunkType.TEXT_DELTA);
+        assertThat(finish.responseMessage().parts())
+            .filteredOn(SourceUrlPart.class::isInstance)
+            .singleElement()
+            .satisfies(part -> assertThat(((SourceUrlPart) part).sourceId()).isEqualTo("src-1"));
     }
 
     private static final class FakeLanguageModel implements LanguageModel {

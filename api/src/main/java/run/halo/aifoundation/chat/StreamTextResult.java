@@ -9,6 +9,7 @@ import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.source.SourceReference;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
@@ -132,6 +133,10 @@ public class StreamTextResult {
 
     public Mono<List<GenerationContentPart>> content() {
         return result.flatMap(value -> Mono.justOrEmpty(value.getContent()));
+    }
+
+    public Mono<List<SourceReference>> sources() {
+        return result.map(GenerateTextResult::getSources);
     }
 
     public Mono<List<ReasoningPart>> reasoning() {

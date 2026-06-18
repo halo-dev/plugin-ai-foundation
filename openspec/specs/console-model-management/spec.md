@@ -2,9 +2,7 @@
 
 ## Purpose
 Define console workflows for creating, editing, discovering, and managing AI providers and models.
-
 ## Requirements
-
 ### Requirement: Create new provider
 The Console UI SHALL allow admins to create a new `AiProvider` Extension by selecting a provider type and filling in configuration fields.
 
@@ -69,3 +67,15 @@ The Console UI SHALL allow admins to edit an existing `AiProvider`'s configurati
 - **AND** leaving Base URL blank SHALL keep using the provider type default base URL
 - **AND** `openailike` SHALL require manual `baseUrl` input because it has no default
 - **AND** `ollama` MAY expose `baseUrl` for local endpoint customization while providing a default local URL
+
+### Requirement: Console supports reranking model management
+The console SHALL allow administrators to create, edit, view, and select reranking models using generated API clients and provider metadata.
+
+#### Scenario: Create reranking model
+- **WHEN** an administrator creates an AI model
+- **THEN** the console allows selecting model type `rerank` only when the selected provider type supports reranking or manual configuration permits it
+
+#### Scenario: Select reranking model
+- **WHEN** a model selector is filtered to reranking models
+- **THEN** it lists enabled models with model type `rerank`
+
