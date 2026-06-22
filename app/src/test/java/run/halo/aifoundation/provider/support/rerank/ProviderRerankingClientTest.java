@@ -180,6 +180,50 @@ class ProviderRerankingClientTest {
     }
 
     @Test
+    void standardClient_mapsRequestAndCustomHeaders() throws Exception {
+        var capture = new AtomicReference<RequestCapture>();
+        var server = server(exchange -> {
+            capture.set(capture(exchange));
+            respond(exchange, 200, """
+                {
+                  "id":"standard-1",
+                  "model":"rerank-standard",
+                  "results":[{"index":0,"relevance_score":0.81,"document":"first"}]
+                }
+                """);
+        });
+
+        try {
+            var client = new StandardRerankingClient("openrouter", baseUrl(server), "/rerank",
+                "rerank-standard", "sk-test", WebClient.builder(),
+                Map.of("X-Test-Header", "enabled"));
+
+            StepVerifier.create(client.rerank(request("openrouter")))
+                .assertNext(response -> {
+                    assertThat(response.getResponse().getId()).isEqualTo("standard-1");
+                    assertThat(response.getResponse().getModel()).isEqualTo("rerank-standard");
+                    assertThat(response.getResults().getFirst().getScore()).isEqualTo(0.81);
+                    assertThat(response.getProviderMetadata()).containsEntry("providerType",
+                        "openrouter");
+                })
+                .verifyComplete();
+
+            assertThat(capture.get().path()).isEqualTo("/rerank");
+            assertThat(capture.get().authorization()).isEqualTo("Bearer sk-test");
+            assertThat(capture.get().header("X-Test-Header")).isEqualTo("enabled");
+            assertThat(capture.get().body())
+                .contains("\"model\":\"rerank-standard\"")
+                .contains("\"query\":\"query\"")
+                .contains("\"documents\":[\"first\",\"second\"]")
+                .contains("\"top_n\":2")
+                .contains("\"return_documents\":true")
+                .contains("\"return_raw_scores\":true");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void clientReportsProviderHttpErrors() throws Exception {
         var server = server(exchange -> respond(exchange, 429, "{\"error\":\"too many\"}"));
 
@@ -227,6 +271,7 @@ class ProviderRerankingClientTest {
         return new RequestCapture(
             exchange.getRequestURI().getPath(),
             exchange.getRequestHeaders().getFirst("Authorization"),
+            Map.copyOf(exchange.getRequestHeaders()),
             new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)
         );
     }
@@ -240,7 +285,17 @@ class ProviderRerankingClientTest {
         }
     }
 
-    private record RequestCapture(String path, String authorization, String body) {
+    private record RequestCapture(String path, String authorization, Map<String, List<String>> headers,
+                                  String body) {
+        String header(String name) {
+            return headers.entrySet().stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase(name))
+                .map(Map.Entry::getValue)
+                .filter(values -> values != null && !values.isEmpty())
+                .map(List::getFirst)
+                .findFirst()
+                .orElse(null);
+        }
     }
 
     private interface ExchangeHandler {

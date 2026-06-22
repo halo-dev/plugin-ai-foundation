@@ -37,7 +37,7 @@ Reranking model adapters SHALL use a provider-neutral adapter type for native re
 
 #### Scenario: Existing rerank runtime remains provider-neutral
 - **WHEN** a caller resolves a reranking model through `AiModelService`
-- **THEN** the runtime SHALL expose the same provider-neutral `RerankingModel` API regardless of whether the underlying provider is ZhiPu, DashScope, or SiliconFlow
+- **THEN** the runtime SHALL expose the same provider-neutral `RerankingModel` API regardless of the underlying native rerank provider
 
 ### Requirement: Provider-backed reranking clients normalize provider responses
 Provider-backed reranking clients SHALL normalize provider-specific rerank responses into `RerankResponse` with original document indexes, relevance scores, provider metadata, warnings, and usage when available.
@@ -63,4 +63,3 @@ Provider-backed reranking clients SHALL translate HTTP, network, authentication,
 - **WHEN** a provider ignores unsupported provider options or omits optional usage metadata
 - **THEN** the response MAY include warnings
 - **AND** the rerank operation SHALL continue when ranked results can still be normalized
-

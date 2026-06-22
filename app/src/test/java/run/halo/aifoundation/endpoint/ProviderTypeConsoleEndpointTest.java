@@ -6,9 +6,13 @@ import static org.mockito.Mockito.when;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import run.halo.aifoundation.provider.AiHubMixProvider;
 import run.halo.aifoundation.provider.DashScopeProvider;
+import run.halo.aifoundation.provider.DouBaoProvider;
+import run.halo.aifoundation.provider.ErnieProvider;
 import run.halo.aifoundation.provider.GiteeMoArkProvider;
 import run.halo.aifoundation.provider.OllamaProvider;
+import run.halo.aifoundation.provider.OpenRouterProvider;
 import run.halo.aifoundation.provider.SiliconFlowProvider;
 import run.halo.aifoundation.provider.XiaomiMiMoProvider;
 import run.halo.aifoundation.provider.ZhiPuProvider;
@@ -90,7 +94,12 @@ class ProviderTypeConsoleEndpointTest {
             .thenReturn(Map.of(
                 "zhipuai", new ZhiPuProvider(),
                 "dashscope", new DashScopeProvider(),
-                "siliconflow", new SiliconFlowProvider()
+                "siliconflow", new SiliconFlowProvider(),
+                "ernie", new ErnieProvider(),
+                "openrouter", new OpenRouterProvider(),
+                "gitee-moark", new GiteeMoArkProvider(),
+                "aihubmix", new AiHubMixProvider(),
+                "doubao", new DouBaoProvider()
             ));
 
         webTestClient.get().uri("/provider-types")
@@ -105,11 +114,31 @@ class ProviderTypeConsoleEndpointTest {
             .isEqualTo("rerank")
             .jsonPath("$[?(@.providerType == 'siliconflow')].supportedAdapterTypes[2]")
             .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'ernie')].supportedAdapterTypes[2]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'openrouter')].supportedAdapterTypes[2]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'gitee-moark')].supportedAdapterTypes[1]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'aihubmix')].supportedAdapterTypes[2]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'doubao')].supportedAdapterTypes[2]")
+            .isEqualTo("rerank")
             .jsonPath("$[?(@.providerType == 'zhipuai')].supportedModelTypes[2]")
             .isEqualTo("rerank")
             .jsonPath("$[?(@.providerType == 'dashscope')].supportedModelTypes[2]")
             .isEqualTo("rerank")
             .jsonPath("$[?(@.providerType == 'siliconflow')].supportedModelTypes[2]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'ernie')].supportedModelTypes[2]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'openrouter')].supportedModelTypes[2]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'gitee-moark')].supportedModelTypes[1]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'aihubmix')].supportedModelTypes[2]")
+            .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'doubao')].supportedModelTypes[2]")
             .isEqualTo("rerank");
     }
 }

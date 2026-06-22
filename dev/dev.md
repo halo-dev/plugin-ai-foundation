@@ -461,7 +461,7 @@ return aiModelService()
         .build()));
 ```
 
-当前内置 provider-backed Rerank 适配覆盖智谱 AI、DashScope 和 SiliconFlow。AI Foundation 不在代码或文档中维护推荐模型清单；管理员应根据供应商控制台和实际可用模型，手动创建 `modelType=rerank` 的模型，或使用远程发现结果导入。
+当前内置 provider-backed Rerank 适配覆盖智谱 AI、DashScope、SiliconFlow、文心一言、豆包、OpenRouter、Gitee 模力方舟和 AIHubMix。AI Foundation 不在代码或文档中维护推荐模型清单；管理员应根据供应商控制台和实际可用模型，手动创建 `modelType=rerank` 的模型，或使用远程发现结果导入。
 
 远程发现的边界是：
 

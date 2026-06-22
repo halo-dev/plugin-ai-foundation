@@ -23,7 +23,7 @@ Define provider model discovery behavior and metadata inference rules.
 Provider model discovery SHALL include reranking models only when remote provider metadata explicitly declares rerank type or rerank capability.
 
 #### Scenario: Remote metadata declares rerank model
-- **WHEN** ZhiPu, DashScope, or SiliconFlow model discovery receives a remote model item explicitly classified as rerank-capable
+- **WHEN** a rerank-supporting provider's model discovery receives a remote model item explicitly classified as rerank-capable
 - **THEN** the discovered model SHALL be normalized with model type `rerank`
 - **AND** the adapter type SHALL be the neutral rerank adapter type
 - **AND** the model profile SHALL use high-confidence remote metadata
@@ -40,4 +40,3 @@ Rerank model discovery failures SHALL NOT prevent administrators from manually c
 - **WHEN** remote discovery for a rerank-supporting provider fails due to provider error, missing capability metadata, or network failure
 - **THEN** the console SHALL keep manual model creation available for that provider
 - **AND** the failure SHALL be reported through the existing discovery error path
-

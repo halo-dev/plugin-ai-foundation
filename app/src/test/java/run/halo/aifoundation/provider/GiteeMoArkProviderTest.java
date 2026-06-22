@@ -37,8 +37,9 @@ class GiteeMoArkProviderTest {
     }
 
     @Test
-    void supportsOnlyOpenAiChatAdapter() {
-        assertThat(providerType.getSupportedAdapterTypes()).containsExactly(AdapterType.OPENAI_CHAT);
+    void supportsOpenAiChatAndRerankAdapters() {
+        assertThat(providerType.getSupportedAdapterTypes())
+            .containsExactly(AdapterType.OPENAI_CHAT, AdapterType.RERANK);
         assertThat(providerType.maxEmbeddingsPerCall()).isZero();
         assertThat(providerType.supportsParallelCalls()).isFalse();
         assertThat(providerType.buildEmbeddingModel(provider(null), "sk-test",

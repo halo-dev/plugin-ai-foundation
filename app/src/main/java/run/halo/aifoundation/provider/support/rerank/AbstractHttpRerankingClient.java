@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -46,6 +47,7 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
                 if (apiKey != null && !apiKey.isBlank()) {
                     headers.setBearerAuth(apiKey);
                 }
+                customizeHeaders(headers);
             })
             .bodyValue(body)
             .exchangeToMono(response -> {
@@ -60,6 +62,9 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
     protected abstract URI endpoint(RerankRequest request);
 
     protected abstract Map<String, Object> requestBody(RerankRequest request);
+
+    protected void customizeHeaders(HttpHeaders headers) {
+    }
 
     protected List<?> resultNodes(Map<String, Object> root) {
         var topLevel = listValue(root.get("results"));
