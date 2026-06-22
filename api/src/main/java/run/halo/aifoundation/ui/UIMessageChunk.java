@@ -5,10 +5,10 @@ package run.halo.aifoundation.ui;
  */
 public sealed interface UIMessageChunk permits StartChunk, StartStepChunk, TextStartChunk,
     TextDeltaChunk, TextEndChunk, ReasoningStartChunk, ReasoningDeltaChunk, ReasoningEndChunk,
-    DataChunk, MessageMetadataChunk, SourceUrlChunk, FileChunk, ToolInputStartChunk,
-    ToolInputDeltaChunk, ToolInputAvailableChunk, ToolOutputAvailableChunk, ToolOutputErrorChunk,
-    ToolApprovalRequestChunk, ToolApprovalResponseChunk, ToolChunk, FinishStepChunk, FinishChunk,
-    ErrorChunk, AbortChunk {
+    DataChunk, MessageMetadataChunk, SourceUrlChunk, SourceDocumentChunk, FileChunk,
+    ToolInputStartChunk, ToolInputDeltaChunk, ToolInputAvailableChunk, ToolOutputAvailableChunk,
+    ToolOutputErrorChunk, ToolApprovalRequestChunk, ToolApprovalResponseChunk, ToolChunk,
+    FinishStepChunk, FinishChunk, ErrorChunk, AbortChunk {
 
     /**
      * Stable protocol discriminator for this chunk.

@@ -63,6 +63,10 @@ public final class UIMessageTransportCodec {
             case UIMessageChunkType.SOURCE_URL -> UIMessageChunks.sourceUrl(
                 stringValue(map.get("sourceId")), stringValue(map.get("url")),
                 stringValue(map.get("title")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.SOURCE_DOCUMENT -> UIMessageChunks.sourceDocument(
+                stringValue(map.get("sourceId")), stringValue(map.get("mediaType")),
+                stringValue(map.get("title")), stringValue(map.get("filename")),
+                objectMap(map.get("providerMetadata")));
             case UIMessageChunkType.FILE -> UIMessageChunks.file(stringValue(map.get("fileId")),
                 stringValue(map.get("url")), stringValue(map.get("title")),
                 stringValue(map.get("mediaType")), map.get("data"),
@@ -157,6 +161,13 @@ public final class UIMessageTransportCodec {
                 put(map, "sourceId", source.sourceId());
                 put(map, "url", source.url());
                 put(map, "title", source.title());
+                put(map, "providerMetadata", nonEmpty(source.providerMetadata()));
+            }
+            case SourceDocumentChunk source -> {
+                put(map, "sourceId", source.sourceId());
+                put(map, "mediaType", source.mediaType());
+                put(map, "title", source.title());
+                put(map, "filename", source.filename());
                 put(map, "providerMetadata", nonEmpty(source.providerMetadata()));
             }
             case FileChunk file -> {
@@ -285,6 +296,10 @@ public final class UIMessageTransportCodec {
             case UIMessageChunkType.SOURCE_URL -> UIMessageParts.sourceUrl(
                 stringValue(map.get("sourceId")), stringValue(map.get("url")),
                 stringValue(map.get("title")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.SOURCE_DOCUMENT -> UIMessageParts.sourceDocument(
+                stringValue(map.get("sourceId")), stringValue(map.get("mediaType")),
+                stringValue(map.get("title")), stringValue(map.get("filename")),
+                objectMap(map.get("providerMetadata")));
             case UIMessageChunkType.FILE -> UIMessageParts.file(stringValue(map.get("fileId")),
                 stringValue(map.get("url")), stringValue(map.get("title")),
                 stringValue(map.get("mediaType")), map.get("data"),
@@ -337,6 +352,13 @@ public final class UIMessageTransportCodec {
                 put(map, "sourceId", source.sourceId());
                 put(map, "url", source.url());
                 put(map, "title", source.title());
+                put(map, "providerMetadata", nonEmpty(source.providerMetadata()));
+            }
+            case SourceDocumentPart source -> {
+                put(map, "sourceId", source.sourceId());
+                put(map, "mediaType", source.mediaType());
+                put(map, "title", source.title());
+                put(map, "filename", source.filename());
                 put(map, "providerMetadata", nonEmpty(source.providerMetadata()));
             }
             case FilePart file -> {

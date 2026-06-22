@@ -72,6 +72,21 @@ public final class UIMessageParts {
     }
 
     /**
+     * Creates a persisted document source part.
+     *
+     * @param sourceId source id
+     * @param mediaType document media type
+     * @param title display title
+     * @param filename optional filename
+     * @param providerMetadata provider-specific metadata
+     * @return document source part
+     */
+    public static SourceDocumentPart sourceDocument(String sourceId, String mediaType,
+        String title, String filename, Map<String, Object> providerMetadata) {
+        return new SourceDocumentPart(sourceId, mediaType, title, filename, providerMetadata);
+    }
+
+    /**
      * Creates a persisted file part.
      *
      * @param fileId file id

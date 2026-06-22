@@ -404,6 +404,21 @@ describe('applyWorkbenchUIMessageChunk', () => {
       transient: true,
     })
     applyWorkbenchUIMessageChunk(message, {
+      type: 'source-url',
+      sourceId: 'url-1',
+      url: 'https://halo.run',
+      title: 'Halo',
+      providerMetadata: { sourceType: 'url' },
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'source-document',
+      sourceId: 'post-1',
+      mediaType: 'text/markdown',
+      title: 'Post',
+      filename: 'post.md',
+      providerMetadata: { sourceType: 'post' },
+    })
+    applyWorkbenchUIMessageChunk(message, {
       type: 'tool-search',
       toolCallId: 'call_1',
       toolName: 'search',
@@ -438,6 +453,23 @@ describe('applyWorkbenchUIMessageChunk', () => {
         sources: [{ id: 'source-1', metadata: { rerankScore: 0.95 } }],
         events: [{ type: 'rerank-finish', sourceCount: 1 }],
       },
+      sourceReferences: [
+        {
+          id: 'url-1',
+          type: 'source-url',
+          title: 'Halo',
+          url: 'https://halo.run',
+          providerMetadata: { sourceType: 'url' },
+        },
+        {
+          id: 'post-1',
+          type: 'source-document',
+          title: 'Post',
+          mediaType: 'text/markdown',
+          filename: 'post.md',
+          providerMetadata: { sourceType: 'post' },
+        },
+      ],
       warnings: [{ code: 'w', message: 'warn' }],
       uiMessage: {
         id: 'assistant-ui',
@@ -467,6 +499,21 @@ describe('applyWorkbenchUIMessageChunk', () => {
               sources: [{ id: 'source-1', metadata: { rerankScore: 0.95 } }],
               events: [{ type: 'rerank-finish', sourceCount: 1 }],
             },
+          },
+          {
+            type: 'source-url',
+            sourceId: 'url-1',
+            url: 'https://halo.run',
+            title: 'Halo',
+            providerMetadata: { sourceType: 'url' },
+          },
+          {
+            type: 'source-document',
+            sourceId: 'post-1',
+            mediaType: 'text/markdown',
+            title: 'Post',
+            filename: 'post.md',
+            providerMetadata: { sourceType: 'post' },
           },
           {
             type: 'tool-search',

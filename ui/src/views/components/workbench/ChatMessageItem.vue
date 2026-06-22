@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { renderMarkdown } from '@/utils/markdown'
-import type { WorkbenchMessage } from '@/utils/model-test-workbench'
+import type { WorkbenchMessage, WorkbenchSourceReference } from '@/utils/model-test-workbench'
 import { copyToClipboard } from '@/utils/model-test-workbench'
 import { VTag } from '@halo-dev/components'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import RiCheckLine from '~icons/ri/check-line'
 import RiCpuLine from '~icons/ri/cpu-line'
 import RiFileCopyLine from '~icons/ri/file-copy-line'
@@ -39,6 +39,11 @@ const emit = defineEmits<{
 const copied = ref(false)
 const externalResultInputs = ref<Record<string, string>>({})
 const externalErrorInputs = ref<Record<string, string>>({})
+const sourceReferences = computed(() => props.message.sourceReferences || [])
+const urlSourceReferences = computed(() => sourceReferences.value.filter((source) => source.url))
+const documentSourceReferences = computed(() =>
+  sourceReferences.value.filter((source) => !source.url),
+)
 
 async function handleCopy() {
   const ok = await copyToClipboard(props.message.content)
@@ -96,6 +101,13 @@ function handleExternalToolError(eventId: string) {
     eventId,
     errorText: externalErrorInput(eventId),
   })
+}
+
+function sourceSubtitle(source: WorkbenchSourceReference) {
+  if (source.type === 'source-url') {
+    return source.url || 'URL'
+  }
+  return [source.filename, source.mediaType].filter(Boolean).join(' · ') || 'Document'
 }
 </script>
 
@@ -333,6 +345,42 @@ function handleExternalToolError(eventId: string) {
             renderMarkdown(message.content || (message.state === 'streaming' ? '思考中...' : ''))
           "
         />
+
+        <div
+          v-if="message.role === 'assistant' && sourceReferences.length"
+          class=":uno: mt-3 border-t border-slate-100 pt-2"
+        >
+          <div class=":uno: mb-1.5 text-[11px] text-slate-500 font-medium">Sources</div>
+          <div class=":uno: flex flex-wrap gap-1.5">
+            <a
+              v-for="source in urlSourceReferences"
+              :key="`${source.type}-${source.id || source.url}`"
+              :href="source.url"
+              target="_blank"
+              rel="noreferrer"
+              class=":uno: max-w-full border border-slate-200 rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-700 no-underline hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+            >
+              <span class=":uno: block truncate font-medium">
+                {{ source.title || source.id || source.url }}
+              </span>
+              <span class=":uno: block truncate text-[11px] text-slate-500">
+                {{ sourceSubtitle(source) }}
+              </span>
+            </a>
+            <div
+              v-for="source in documentSourceReferences"
+              :key="`${source.type}-${source.id || source.title}`"
+              class=":uno: max-w-full border border-slate-200 rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-700"
+            >
+              <span class=":uno: block truncate font-medium">
+                {{ source.title || source.id || 'Source' }}
+              </span>
+              <span class=":uno: block truncate text-[11px] text-slate-500">
+                {{ sourceSubtitle(source) }}
+              </span>
+            </div>
+          </div>
+        </div>
 
         <span
           v-if="message.role === 'assistant' && message.state === 'streaming'"

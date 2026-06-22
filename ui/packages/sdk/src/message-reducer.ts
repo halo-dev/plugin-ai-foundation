@@ -112,6 +112,16 @@ export function applyUIMessageChunk<METADATA>(
         providerMetadata: chunk.providerMetadata,
       })
       break
+    case 'source-document':
+      upsertPart(state, {
+        type: 'source-document',
+        sourceId: chunk.sourceId,
+        mediaType: chunk.mediaType,
+        title: chunk.title,
+        filename: chunk.filename,
+        providerMetadata: chunk.providerMetadata,
+      })
+      break
     case 'file':
       upsertPart(state, {
         type: 'file',
@@ -196,6 +206,17 @@ export function validateUIMessageChunk(chunk: UIMessageChunk): void {
     }
     if (chunk.state === 'output-error' && !chunk.errorText) {
       throw new AIUIProtocolError('Tool output-error chunk errorText is required.')
+    }
+  }
+  if (chunk.type === 'source-document') {
+    if (!chunk.sourceId) {
+      throw new AIUIProtocolError('Document source chunk sourceId is required.')
+    }
+    if (!chunk.mediaType) {
+      throw new AIUIProtocolError('Document source chunk mediaType is required.')
+    }
+    if (!chunk.title) {
+      throw new AIUIProtocolError('Document source chunk title is required.')
     }
   }
 }
@@ -329,6 +350,8 @@ function samePartIdentity(left: UIMessagePart, right: UIMessagePart): boolean {
     case 'file':
       return 'id' in left && left.id === right.id
     case 'source-url':
+      return 'sourceId' in left && left.sourceId === right.sourceId
+    case 'source-document':
       return 'sourceId' in left && left.sourceId === right.sourceId
     default:
       if (isToolPart(right)) {

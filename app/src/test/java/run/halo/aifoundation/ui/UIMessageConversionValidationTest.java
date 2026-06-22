@@ -283,14 +283,17 @@ class UIMessageConversionValidationTest {
         var result = UIMessageValidators.safeValidate(List.of(
             new UIMessage<>("", UIMessageRole.USER, List.of(
                 UIMessageParts.text("", "hello"),
-                new DataPart("data-status", "", "status", "value", false)
+                new DataPart("data-status", "", "status", "value", false),
+                UIMessageParts.sourceDocument("", "", "", null, Map.of())
             ), new Metadata("chat"))
         ));
 
         assertThat(result.isValid()).isFalse();
         assertThat(result.issues()).extracting(UIMessageValidationIssue::code)
             .contains("message.id.required", "part.id.required",
-                "part.data.id.required");
+                "part.data.id.required", "part.source.id.required",
+                "part.source-document.media-type.required",
+                "part.source-document.title.required");
         assertThatThrownBy(() -> UIMessageValidators.validate(result.messages()))
             .isInstanceOf(InvalidUIMessageException.class);
     }

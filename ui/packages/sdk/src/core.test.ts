@@ -61,6 +61,14 @@ describe('UI message reducer', () => {
       { type: 'text-start', id: 'text-1' },
       { type: 'text-delta', id: 'text-1', delta: 'Hello' },
       { type: 'reasoning-delta', id: 'reasoning-1', delta: 'Thinking' },
+      {
+        type: 'source-document',
+        sourceId: 'source-1',
+        mediaType: 'text/plain',
+        title: 'Source',
+        filename: 'source.txt',
+        providerMetadata: { sourceType: 'post' },
+      },
       { type: 'data-status', id: 'status', name: 'status', data: 'done' },
       {
         type: 'tool-search',
@@ -79,6 +87,14 @@ describe('UI message reducer', () => {
       type: 'reasoning',
       id: 'reasoning-1',
       text: 'Thinking',
+    })
+    expect(state.message.parts).toContainEqual({
+      type: 'source-document',
+      sourceId: 'source-1',
+      mediaType: 'text/plain',
+      title: 'Source',
+      filename: 'source.txt',
+      providerMetadata: { sourceType: 'post' },
     })
     expect(state.message.parts).toContainEqual({
       type: 'data-status',
@@ -230,6 +246,21 @@ describe('UI message reducer', () => {
         toolName: 'search',
       } as unknown as UIMessageChunk),
     ).toThrow('Tool approval-response chunk approved is required')
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'source-document',
+        sourceId: 'source-1',
+        mediaType: 'text/plain',
+        title: 'Source',
+      }),
+    ).not.toThrow()
+    expect(() =>
+      validateUIMessageChunk({
+        type: 'source-document',
+        sourceId: 'source-1',
+        mediaType: 'text/plain',
+      } as unknown as UIMessageChunk),
+    ).toThrow('Document source chunk title is required')
   })
 
   it('parses streamed metadata and persistent data with configured schemas', () => {

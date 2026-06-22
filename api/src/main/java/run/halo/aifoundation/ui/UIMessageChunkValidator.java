@@ -38,6 +38,8 @@ public final class UIMessageChunkValidator {
         }
         switch (chunk) {
             case DataChunk data -> validateData(data, issues);
+            case SourceUrlChunk source -> validateSourceUrl(source, issues);
+            case SourceDocumentChunk source -> validateSourceDocument(source, issues);
             case ToolInputStartChunk tool -> validateToolIdentity(tool.type(), tool.toolCallId(),
                 tool.toolName(), issues);
             case ToolInputDeltaChunk tool -> {
@@ -92,6 +94,26 @@ public final class UIMessageChunkValidator {
         } catch (IllegalArgumentException e) {
             issues.add(issue(data.type(), data.id(), "chunk.data.type.invalid", e.getMessage()));
         }
+    }
+
+    private static void validateSourceUrl(SourceUrlChunk source,
+        List<UIMessageValidationIssue> issues) {
+        require(source.type(), source.sourceId(), source.sourceId(),
+            "chunk.source.id.required", "Source id must not be blank", issues);
+        require(source.type(), source.sourceId(), source.url(),
+            "chunk.source-url.url.required", "Source URL must not be blank", issues);
+    }
+
+    private static void validateSourceDocument(SourceDocumentChunk source,
+        List<UIMessageValidationIssue> issues) {
+        require(source.type(), source.sourceId(), source.sourceId(),
+            "chunk.source.id.required", "Source id must not be blank", issues);
+        require(source.type(), source.sourceId(), source.mediaType(),
+            "chunk.source-document.media-type.required",
+            "Document source media type must not be blank", issues);
+        require(source.type(), source.sourceId(), source.title(),
+            "chunk.source-document.title.required", "Document source title must not be blank",
+            issues);
     }
 
     private static void validateTool(ToolChunk tool, List<UIMessageValidationIssue> issues) {

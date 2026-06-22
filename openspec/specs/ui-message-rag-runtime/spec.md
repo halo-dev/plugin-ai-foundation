@@ -43,12 +43,3 @@ The console RAG test endpoint SHALL stream responses using the Halo UIMessage st
 #### Scenario: RAG test stream preserves source order
 - **WHEN** reranking changes the source order
 - **THEN** the UIMessage data parts SHALL allow the workbench to display both original source indexes and final source order
-
-### Requirement: Console RAG test endpoint remains test-scoped
-The console RAG test endpoint SHALL be a workbench diagnostic endpoint and SHALL NOT become a public Java SDK RAG API.
-
-#### Scenario: Consumer plugin builds production RAG
-- **WHEN** a consumer plugin needs production RAG behavior
-- **THEN** documentation SHALL direct it to compose `RagRetriever`, `RagLanguageModelMiddleware`, and optional `RerankingModelRagSourceReranker`
-- **AND** it SHALL NOT depend on the console RAG test endpoint
-

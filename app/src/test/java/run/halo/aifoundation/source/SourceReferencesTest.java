@@ -12,6 +12,9 @@ import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.ui.SourceDocumentChunk;
+import run.halo.aifoundation.ui.SourceDocumentPart;
+import run.halo.aifoundation.ui.SourceUrlPart;
 
 class SourceReferencesTest {
 
@@ -58,6 +61,57 @@ class SourceReferencesTest {
         assertThat(content.getMetadata()).containsEntry("sourceType", "url");
         assertThat(uiPart.sourceId()).isEqualTo("src-1");
         assertThat(uiPart.url()).isEqualTo("https://example.com/docs");
+    }
+
+    @Test
+    void mapsSourceReferenceToUrlOrDocumentUiParts() {
+        var urlReference = SourceReference.builder()
+            .id("url-1")
+            .url("https://example.com")
+            .title("URL")
+            .metadata(Map.of("mediaType", "text/html"))
+            .build();
+        var documentReference = SourceReference.builder()
+            .id("post-1")
+            .sourceType("post")
+            .metadata(Map.of("mediaType", "text/markdown", "filename", "post.md",
+                "postName", "hello"))
+            .build();
+
+        assertThat(SourceReferences.toUIMessagePart(urlReference))
+            .isInstanceOfSatisfying(SourceUrlPart.class, part -> {
+                assertThat(part.sourceId()).isEqualTo("url-1");
+                assertThat(part.providerMetadata()).containsEntry("mediaType", "text/html");
+            });
+        assertThat(SourceReferences.toUIMessagePart(documentReference))
+            .isInstanceOfSatisfying(SourceDocumentPart.class, part -> {
+                assertThat(part.sourceId()).isEqualTo("post-1");
+                assertThat(part.mediaType()).isEqualTo("text/markdown");
+                assertThat(part.title()).isEqualTo("post-1");
+                assertThat(part.filename()).isEqualTo("post.md");
+                assertThat(part.providerMetadata())
+                    .containsEntry("postName", "hello")
+                    .containsEntry("sourceType", "post")
+                    .doesNotContainKeys("mediaType", "filename", "content");
+            });
+        assertThat(SourceReferences.toUIMessageChunk(documentReference))
+            .isInstanceOfSatisfying(SourceDocumentChunk.class,
+                chunk -> assertThat(chunk.mediaType()).isEqualTo("text/markdown"));
+    }
+
+    @Test
+    void mapsDocumentSourcesWithDisplaySafeDefaults() {
+        var reference = SourceReferences.fromRetrievedSource(RetrievedSource.builder()
+            .id("chunk-1")
+            .content("private context")
+            .build());
+
+        assertThat(SourceReferences.toUIMessagePart(reference))
+            .isInstanceOfSatisfying(SourceDocumentPart.class, part -> {
+                assertThat(part.mediaType()).isEqualTo("text/plain");
+                assertThat(part.title()).isEqualTo("chunk-1");
+                assertThat(part.providerMetadata()).doesNotContainKey("content");
+            });
     }
 
     @Test

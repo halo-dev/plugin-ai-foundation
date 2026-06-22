@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import reactor.core.publisher.Flux;
@@ -83,10 +84,11 @@ class RagLanguageModelMiddlewareTest {
     }
 
     @Test
-    void rerankingModelAdapterReturnsSourcesInRankedOrder() {
+    void rerankingModelAdapterReturnsSourcesInRankedOrderAndPreservesMetadata() {
         RerankingModel rerankingModel = request -> Mono.just(RerankResponse.builder()
             .results(List.of(
-                RerankResult.builder().index(1).score(0.9).build(),
+                RerankResult.builder().index(1).score(0.9)
+                    .providerMetadata(Map.of("rank", 1)).build(),
                 RerankResult.builder().index(0).score(0.5).build()
             ))
             .build());
@@ -100,6 +102,42 @@ class RagLanguageModelMiddlewareTest {
                 .extracting(RetrievedSource::getId)
                 .containsExactly("s2", "s1"))
             .verifyComplete();
+
+        StepVerifier.create(adapter.rerank(RagSourceRerankRequest.builder()
+                .query("halo")
+                .sources(List.of(source("s1", "one"), RetrievedSource.builder()
+                    .id("s2")
+                    .content("two")
+                    .score(0.42)
+                    .metadata(Map.of("origin", "retriever"))
+                    .build()))
+                .build()))
+            .assertNext(sources -> assertThat(sources.getFirst())
+                .satisfies(source -> {
+                    assertThat(source.getScore()).isEqualTo(0.42);
+                    assertThat(source.getMetadata())
+                        .containsEntry("origin", "retriever")
+                        .containsEntry("rerankScore", 0.9)
+                        .containsEntry("rerankProviderMetadata", Map.of("rank", 1));
+                }))
+            .verifyComplete();
+    }
+
+    @Test
+    void rerankingModelAdapterFailsInvalidResultIndex() {
+        RerankingModel rerankingModel = request -> Mono.just(RerankResponse.builder()
+            .results(List.of(RerankResult.builder().index(9).score(0.9).build()))
+            .build());
+        var adapter = new RerankingModelRagSourceReranker(rerankingModel);
+
+        StepVerifier.create(adapter.rerank(RagSourceRerankRequest.builder()
+                .query("halo")
+                .sources(List.of(source("s1", "one")))
+                .build()))
+            .expectErrorSatisfies(error -> assertThat(error)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside submitted sources"))
+            .verify();
     }
 
     @Test

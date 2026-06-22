@@ -5,6 +5,7 @@ import java.util.function.Function;
 import reactor.core.publisher.Flux;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.source.SourceReferences;
 
 /**
  * Converts low-level model stream parts into frontend-facing UI message chunks.
@@ -65,8 +66,8 @@ public final class UIMessageStreamMapper {
             case PartType.REASONING_DELTA -> UIMessageChunks.reasoningDelta(part.getId(),
                 part.getDelta(), part.getProviderMetadata());
             case PartType.REASONING_END -> UIMessageChunks.reasoningEnd(part.getId());
-            case PartType.SOURCE -> UIMessageChunks.sourceUrl(part.getId(), part.getUrl(),
-                part.getTitle(), part.getProviderMetadata());
+            case PartType.SOURCE -> SourceReferences.toUIMessageChunk(
+                SourceReferences.fromStreamPart(part));
             case PartType.FILE -> UIMessageChunks.file(part.getId(), part.getUrl(),
                 part.getTitle(), part.getMediaType(), part.getData(), part.getProviderMetadata());
             case PartType.TOOL_INPUT_START -> UIMessageChunks.toolInputStart(

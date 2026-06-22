@@ -195,6 +195,21 @@ public final class UIMessageChunks {
     }
 
     /**
+     * Creates a document source chunk.
+     *
+     * @param sourceId source id
+     * @param mediaType document media type
+     * @param title display title
+     * @param filename optional filename
+     * @param providerMetadata provider-specific metadata
+     * @return document source chunk
+     */
+    public static SourceDocumentChunk sourceDocument(String sourceId, String mediaType,
+        String title, String filename, Map<String, Object> providerMetadata) {
+        return new SourceDocumentChunk(sourceId, mediaType, title, filename, providerMetadata);
+    }
+
+    /**
      * Creates a file chunk.
      *
      * @param fileId file id

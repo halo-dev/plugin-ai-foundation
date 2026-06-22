@@ -5,8 +5,12 @@ import java.util.List;
 import java.util.Map;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.ui.UIMessageChunk;
+import run.halo.aifoundation.ui.UIMessagePart;
 import run.halo.aifoundation.ui.SourceUrlPart;
 import run.halo.aifoundation.ui.UIMessageParts;
+import run.halo.aifoundation.ui.UIMessageChunks;
 
 /**
  * Mapping helpers between retrieval sources, public references, and transport parts.
@@ -18,6 +22,10 @@ public final class SourceReferences {
 
     private static final String SOURCE_TYPE_KEY = "sourceType";
     private static final String SCORE_KEY = "score";
+    private static final String MEDIA_TYPE_KEY = "mediaType";
+    private static final String FILENAME_KEY = "filename";
+    private static final String DEFAULT_MEDIA_TYPE = "text/plain";
+    private static final String DEFAULT_TITLE = "Source";
 
     private SourceReferences() {
     }
@@ -70,6 +78,28 @@ public final class SourceReferences {
     }
 
     /**
+     * Maps a source stream part to a display-safe reference.
+     */
+    public static SourceReference fromStreamPart(TextStreamPart part) {
+        if (part == null || !PartType.SOURCE.equals(part.getType())) {
+            return null;
+        }
+        var metadata = part.getProviderMetadata() != null
+            ? part.getProviderMetadata()
+            : Map.<String, Object>of();
+        var sourceType = value(metadata.get(SOURCE_TYPE_KEY));
+        var score = doubleValue(metadata.get(SCORE_KEY));
+        return SourceReference.builder()
+            .id(part.getId())
+            .sourceType(sourceType(sourceType, part.getUrl()))
+            .title(part.getTitle())
+            .url(part.getUrl())
+            .score(score)
+            .metadata(metadata)
+            .build();
+    }
+
+    /**
      * Extracts source references from generation content parts.
      */
     public static List<SourceReference> fromContent(List<GenerationContentPart> content) {
@@ -101,6 +131,42 @@ public final class SourceReferences {
             sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
     }
 
+    /**
+     * Maps a source reference to a UI message source part.
+     *
+     * <p>URL sources are represented as {@code source-url}; all other sources are represented as
+     * {@code source-document}. Retrieved content is never exposed by this mapping.
+     */
+    public static UIMessagePart toUIMessagePart(SourceReference source) {
+        if (source == null) {
+            return null;
+        }
+        if (hasUrl(source)) {
+            return toSourceUrlPart(source);
+        }
+        var metadata = sanitizedMetadata(source.getMetadata(), source.getSourceType(),
+            source.getScore());
+        return UIMessageParts.sourceDocument(source.getId(), mediaType(metadata),
+            title(source), filename(metadata), providerMetadataWithoutDocumentFields(metadata));
+    }
+
+    /**
+     * Maps a source reference to a UI message stream chunk.
+     */
+    public static UIMessageChunk toUIMessageChunk(SourceReference source) {
+        if (source == null) {
+            return null;
+        }
+        if (hasUrl(source)) {
+            return UIMessageChunks.sourceUrl(source.getId(), source.getUrl(), source.getTitle(),
+                sanitizedMetadata(source.getMetadata(), source.getSourceType(), source.getScore()));
+        }
+        var metadata = sanitizedMetadata(source.getMetadata(), source.getSourceType(),
+            source.getScore());
+        return UIMessageChunks.sourceDocument(source.getId(), mediaType(metadata), title(source),
+            filename(metadata), providerMetadataWithoutDocumentFields(metadata));
+    }
+
     private static Map<String, Object> sanitizedMetadata(Map<String, Object> metadata,
         String sourceType, Double score) {
         var result = new LinkedHashMap<String, Object>();
@@ -122,6 +188,41 @@ public final class SourceReferences {
             return sourceType;
         }
         return url != null && !url.isBlank() ? URL_SOURCE_TYPE : DEFAULT_SOURCE_TYPE;
+    }
+
+    private static boolean hasUrl(SourceReference source) {
+        return source.getUrl() != null && !source.getUrl().isBlank();
+    }
+
+    private static String mediaType(Map<String, Object> metadata) {
+        var mediaType = value(metadata.get(MEDIA_TYPE_KEY));
+        return mediaType != null && !mediaType.isBlank() ? mediaType : DEFAULT_MEDIA_TYPE;
+    }
+
+    private static String filename(Map<String, Object> metadata) {
+        var filename = value(metadata.get(FILENAME_KEY));
+        return filename != null && !filename.isBlank() ? filename : null;
+    }
+
+    private static String title(SourceReference source) {
+        if (source.getTitle() != null && !source.getTitle().isBlank()) {
+            return source.getTitle();
+        }
+        if (source.getId() != null && !source.getId().isBlank()) {
+            return source.getId();
+        }
+        return DEFAULT_TITLE;
+    }
+
+    private static Map<String, Object> providerMetadataWithoutDocumentFields(
+        Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return Map.of();
+        }
+        var result = new LinkedHashMap<>(metadata);
+        result.remove(MEDIA_TYPE_KEY);
+        result.remove(FILENAME_KEY);
+        return result.isEmpty() ? Map.of() : Map.copyOf(result);
     }
 
     private static String value(Object value) {

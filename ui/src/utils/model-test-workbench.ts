@@ -23,6 +23,7 @@ export interface WorkbenchMessage {
   modelDisplayName?: string
   state?: 'streaming' | 'done' | 'error' | 'stopped'
   warnings?: WorkbenchWarning[]
+  sourceReferences?: WorkbenchSourceReference[]
   ragInput?: RagInputDiagnostics
   ragDiagnostics?: RagRunDiagnostics
 }
@@ -30,6 +31,16 @@ export interface WorkbenchMessage {
 export interface WorkbenchWarning {
   code?: string
   message?: string
+}
+
+export interface WorkbenchSourceReference {
+  id?: string
+  type: 'source-url' | 'source-document'
+  title?: string
+  url?: string
+  mediaType?: string
+  filename?: string
+  providerMetadata?: Record<string, unknown>
 }
 
 export interface WorkbenchToolEvent {
@@ -254,6 +265,7 @@ export interface UIMessageChunk {
     | 'data'
     | 'message-metadata'
     | 'source-url'
+    | 'source-document'
     | 'file'
     | 'tool-input-start'
     | 'tool-input-delta'
@@ -279,6 +291,7 @@ export interface UIMessageChunk {
   url?: string
   title?: string
   mediaType?: string
+  filename?: string
   toolCallId?: string
   toolName?: string
   state?: UIMessagePart['state']
@@ -623,6 +636,17 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
     projectUIMessage(message)
     return
   }
+  if (chunk.type === 'source-document' && chunk.sourceId) {
+    upsertUIMessagePart(uiMessage, 'source-document', chunk.sourceId, {
+      sourceId: chunk.sourceId,
+      mediaType: chunk.mediaType,
+      title: chunk.title,
+      filename: chunk.filename,
+      providerMetadata: chunk.providerMetadata,
+    })
+    projectUIMessage(message)
+    return
+  }
   if (chunk.type === 'file' && chunk.fileId) {
     upsertUIMessagePart(uiMessage, 'file', chunk.fileId, {
       fileId: chunk.fileId,
@@ -728,7 +752,7 @@ function uiMessagePartKey(type: string) {
   if (isUIMessageDataPartType(type)) {
     return 'id'
   }
-  if (type === 'source-url') {
+  if (type === 'source-url' || type === 'source-document') {
     return 'sourceId'
   }
   if (type === 'file') {
@@ -777,12 +801,28 @@ function projectUIMessage(message: WorkbenchMessage) {
       .join('') || undefined
   const toolEvents = uiMessagePartsToToolEvents(uiMessage.parts)
   message.toolEvents = toolEvents.length ? toolEvents : undefined
+  const sourceReferences = uiMessagePartsToSourceReferences(uiMessage.parts)
+  message.sourceReferences = sourceReferences.length ? sourceReferences : undefined
   message.ragInput = normalizeRagInputDiagnostics(
     findDataPart(uiMessage, 'rag-input')?.data ?? message.ragInput,
   )
   message.ragDiagnostics = normalizeRagRunDiagnostics(
     findDataPart(uiMessage, 'rag-diagnostics')?.data ?? message.ragDiagnostics,
   )
+}
+
+function uiMessagePartsToSourceReferences(parts: UIMessagePart[]): WorkbenchSourceReference[] {
+  return parts
+    .filter((part) => part.type === 'source-url' || part.type === 'source-document')
+    .map((part) => ({
+      id: part.sourceId,
+      type: part.type as WorkbenchSourceReference['type'],
+      title: part.title,
+      url: part.url,
+      mediaType: part.mediaType,
+      filename: stringValue(part.filename),
+      providerMetadata: part.providerMetadata,
+    }))
 }
 
 function findDataPart(message: UIMessage, name: string) {

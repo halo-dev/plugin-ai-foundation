@@ -49,6 +49,7 @@ public final class UIMessageChunkReducer {
                 && replaceData(data.type(), data.id(), data.name(), data.data());
             case MessageMetadataChunk ignored -> false;
             case SourceUrlChunk source -> replaceSource(source);
+            case SourceDocumentChunk source -> replaceSource(source);
             case FileChunk file -> replaceFile(file);
             case ToolInputStartChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
                 ToolPartState.INPUT_STREAMING, null, "", null, null, null, Map.of());
@@ -172,6 +173,14 @@ public final class UIMessageChunkReducer {
                 && source.sourceId().equals(value.sourceId()),
             UIMessageParts.sourceUrl(source.sourceId(), source.url(), source.title(),
                 source.providerMetadata()));
+        return true;
+    }
+
+    private boolean replaceSource(SourceDocumentChunk source) {
+        replace(part -> part instanceof SourceDocumentPart value
+                && source.sourceId().equals(value.sourceId()),
+            UIMessageParts.sourceDocument(source.sourceId(), source.mediaType(), source.title(),
+                source.filename(), source.providerMetadata()));
         return true;
     }
 
