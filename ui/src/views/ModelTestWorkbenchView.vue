@@ -1431,8 +1431,7 @@ onBeforeUnmount(() => {
                     isStreaming ||
                     isEmbeddingTesting ||
                     isRerankTesting ||
-                    isRagTesting ||
-                    !chatModels.length
+                    isRagTesting
                   "
                   @click="testMode = 'chat'"
                 >
@@ -1451,8 +1450,7 @@ onBeforeUnmount(() => {
                     isStreaming ||
                     isEmbeddingTesting ||
                     isRerankTesting ||
-                    isRagTesting ||
-                    !embeddingModels.length
+                    isRagTesting
                   "
                   @click="testMode = 'embedding'"
                 >
@@ -1471,8 +1469,7 @@ onBeforeUnmount(() => {
                     isStreaming ||
                     isEmbeddingTesting ||
                     isRerankTesting ||
-                    isRagTesting ||
-                    !rerankModels.length
+                    isRagTesting
                   "
                   @click="testMode = 'rerank'"
                 >
@@ -1491,8 +1488,7 @@ onBeforeUnmount(() => {
                     isStreaming ||
                     isEmbeddingTesting ||
                     isRerankTesting ||
-                    isRagTesting ||
-                    !chatModels.length
+                    isRagTesting
                   "
                   @click="testMode = 'rag'"
                 >
