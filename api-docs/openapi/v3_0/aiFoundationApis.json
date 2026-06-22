@@ -5,7 +5,7 @@
     "version" : "2.25.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:55534",
+    "url" : "http://localhost:42694",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -868,6 +868,44 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-rag/ui-message/stream" : {
+      "post" : {
+        "description" : "Test single-query RAG with manual sources and Halo UI Message stream response.",
+        "operationId" : "TestModelRagUiMessageStream",
+        "parameters" : [ {
+          "description" : "Language model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestRagRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UIMessageChunk"
+                }
+              }
+            },
+            "description" : "Server-Sent Events using the Halo UI Message stream protocol."
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-rerank" : {
       "post" : {
         "description" : "Test reranking with candidate documents and diagnostics.",
@@ -1235,7 +1273,7 @@
           "adapterType" : {
             "type" : "string",
             "description" : "Internal invocation adapter",
-            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "cohere-rerank", "ollama-chat", "ollama-embedding" ]
+            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
           },
           "discoveryConfidence" : {
             "type" : "string",
@@ -1485,7 +1523,7 @@
         "properties" : {
           "adapterType" : {
             "type" : "string",
-            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "cohere-rerank", "ollama-chat", "ollama-embedding" ]
+            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
           },
           "confidence" : {
             "type" : "string",
@@ -1876,7 +1914,7 @@
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "cohere-rerank", "ollama-chat", "ollama-embedding" ]
+              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
             }
           },
           "supportedFeatures" : {
@@ -2283,6 +2321,181 @@
           },
           "value" : {
             "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "TestRagOptions" : {
+        "type" : "object",
+        "properties" : {
+          "contextHeader" : {
+            "type" : "string"
+          },
+          "emptyContextPolicy" : {
+            "type" : "string",
+            "enum" : [ "SKIP_MODEL", "CONTINUE_WITHOUT_CONTEXT" ]
+          },
+          "emptyContextText" : {
+            "type" : "string"
+          },
+          "maxContextCharacters" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "minScore" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "promptPlacement" : {
+            "type" : "string",
+            "enum" : [ "LAST_USER_MESSAGE", "SYSTEM", "NEW_USER_MESSAGE" ]
+          },
+          "rerankFailurePolicy" : {
+            "type" : "string",
+            "enum" : [ "FAIL", "USE_EMPTY_CONTEXT", "CONTINUE_WITHOUT_CONTEXT", "USE_RETRIEVED_ORDER" ]
+          },
+          "retrievalFailurePolicy" : {
+            "type" : "string",
+            "enum" : [ "FAIL", "USE_EMPTY_CONTEXT", "CONTINUE_WITHOUT_CONTEXT", "USE_RETRIEVED_ORDER" ]
+          },
+          "retrieverOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          }
+        }
+      },
+      "TestRagRequest" : {
+        "type" : "object",
+        "properties" : {
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "frequencyPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "maxOutputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "query" : {
+            "type" : "string"
+          },
+          "ragOptions" : {
+            "$ref" : "#/components/schemas/TestRagOptions"
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "rerankModelName" : {
+            "type" : "string"
+          },
+          "rerankProviderOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sources" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TestRagSource"
+            }
+          },
+          "stopSequences" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "temperature" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topN" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topP" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "TestRagSource" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "score" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "sourceType" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "usedForContext" : {
+            "type" : "boolean"
+          },
+          "visible" : {
+            "type" : "boolean"
           }
         }
       },

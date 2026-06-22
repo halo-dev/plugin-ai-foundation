@@ -268,20 +268,20 @@ class AiModelServiceImplTest {
 
     @Test
     void rerankingModel_withoutName_resolvesConfiguredModel() {
-        var slots = defaultSlots(null, null, "cohere-rerank-model");
-        var model = aiModel("cohere-rerank-model", "cohere-prod",
+        var slots = defaultSlots(null, null, "native-rerank-model");
+        var model = aiModel("native-rerank-model", "rerank-provider",
             "rerank-v3.5", "Rerank", true, ModelType.RERANK);
-        var provider = aiProvider("cohere-prod", "cohere", true);
+        var provider = aiProvider("rerank-provider", "native-rerank", true);
         ProviderRerankingClient rerankingClient = request -> Mono.just(RerankResponse.builder()
             .query(request.getQuery())
             .build());
         var providerType = mock(AiProviderType.class);
 
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
-        when(client.fetch(AiModel.class, "cohere-rerank-model")).thenReturn(Mono.just(model));
-        when(client.fetch(AiProvider.class, "cohere-prod")).thenReturn(Mono.just(provider));
+        when(client.fetch(AiModel.class, "native-rerank-model")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
-        when(providerClientCache.getProviderType("cohere")).thenReturn(providerType);
+        when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
         when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", "rerank-v3.5"))
             .thenReturn(rerankingClient);
 
@@ -303,19 +303,19 @@ class AiModelServiceImplTest {
 
     @Test
     void rerankingModel_unsupportedProvider_emitsModelNotFoundException() {
-        var model = aiModel("cohere-rerank-model", "cohere-prod",
+        var model = aiModel("native-rerank-model", "rerank-provider",
             "rerank-v3.5", "Rerank", true, ModelType.RERANK);
-        var provider = aiProvider("cohere-prod", "cohere", true);
+        var provider = aiProvider("rerank-provider", "native-rerank", true);
         var providerType = mock(AiProviderType.class);
 
-        when(client.fetch(AiModel.class, "cohere-rerank-model")).thenReturn(Mono.just(model));
-        when(client.fetch(AiProvider.class, "cohere-prod")).thenReturn(Mono.just(provider));
+        when(client.fetch(AiModel.class, "native-rerank-model")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
-        when(providerClientCache.getProviderType("cohere")).thenReturn(providerType);
+        when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
         when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", "rerank-v3.5"))
             .thenReturn(null);
 
-        StepVerifier.create(service.rerankingModel("cohere-rerank-model"))
+        StepVerifier.create(service.rerankingModel("native-rerank-model"))
             .expectErrorSatisfies(error -> assertThat(error)
                 .isInstanceOf(ModelNotFoundException.class)
                 .hasMessageContaining("does not support reranking"))

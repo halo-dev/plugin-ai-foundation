@@ -5,11 +5,14 @@ import static org.springdoc.core.fn.builders.parameter.Builder.parameterBuilder;
 import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuilder;
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
-import java.util.LinkedHashMap;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -36,13 +39,26 @@ import run.halo.aifoundation.embedding.EmbeddingUtils;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.rag.RagEmptyContextPolicy;
+import run.halo.aifoundation.rag.RagFailurePolicy;
+import run.halo.aifoundation.rag.RagLanguageModelMiddleware;
+import run.halo.aifoundation.rag.RagLifecycle;
+import run.halo.aifoundation.rag.RagLifecycleEvent;
+import run.halo.aifoundation.rag.RagMiddlewareOptions;
+import run.halo.aifoundation.rag.RagPromptPlacement;
+import run.halo.aifoundation.rag.RagSourceRerankRequest;
+import run.halo.aifoundation.rag.RagSourceReranker;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankResponseMetadata;
+import run.halo.aifoundation.rerank.RerankResult;
 import run.halo.aifoundation.rerank.RerankUsage;
 import run.halo.aifoundation.rerank.RerankWarning;
+import run.halo.aifoundation.rerank.RerankingModel;
 import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.source.RetrievedContext;
+import run.halo.aifoundation.source.RetrievedSource;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
@@ -53,6 +69,7 @@ import run.halo.aifoundation.ui.UIMessageChatHandlers;
 import run.halo.aifoundation.ui.UIMessageChatRequest;
 import run.halo.aifoundation.ui.UIMessageChatTrigger;
 import run.halo.aifoundation.ui.UIMessageChunk;
+import run.halo.aifoundation.ui.UIMessageChunks;
 import run.halo.aifoundation.ui.UIMessageStream;
 import run.halo.aifoundation.ui.UIMessageStreamResponse;
 import run.halo.aifoundation.ui.UIMessageTransportCodec;
@@ -260,6 +277,24 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(TestRerankRequest.class))
                     .response(responseBuilder().implementation(TestRerankResponse.class))
             )
+            .POST("models/{name}/test-rag/ui-message/stream", this::testRagUiMessageStream,
+                builder -> builder.operationId("TestModelRagUiMessageStream")
+                    .description("Test single-query RAG with manual sources and Halo UI Message "
+                        + "stream response.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Language model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(TestRagRequest.class))
+                    .response(responseBuilder()
+                        .description("Server-Sent Events using the Halo UI Message stream protocol.")
+                        .implementation(UIMessageChunk.class))
+            )
             .build();
     }
 
@@ -339,7 +374,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                             .request(builder -> applyConsoleGenerationOptions(builder, body,
                                 ConsoleTestToolOptions.from(request)))
                             .cancellationToken(cancellation.token())
-                            .onError(error -> "Chat test failed: " + safeMessage(error))
+                            .onError(ModelConsoleEndpoint::safeMessage)
                             .onFinish(finish -> log.debug(
                                 "UI message chat test finished: modelName={}, messages={}, "
                                     + "aborted={}, errorText={}",
@@ -356,8 +391,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 log.error("UI message stream chat failed for model: {}, error={}",
                     modelName, safeMessage(error), error);
                 return uiMessageStreamResponse(new UIMessageStreamResponse(new UIMessageStream(
-                    Flux.just(run.halo.aifoundation.ui.UIMessageChunks.error(
-                        "Chat test failed: " + safeMessage(error)))
+                    Flux.just(UIMessageChunks.error(safeMessage(error), null,
+                        Map.of("exceptionType", "error")))
                 ), ModelConsoleEndpoint::writeJson), UIMessageCancellations.create());
             });
     }
@@ -366,6 +401,11 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         UIMessageCancellation cancellation) {
         Flux<ServerSentEvent<Object>> flux = cancellation.cancelWhenSubscriberCancels(
                 response.stream())
+            .onErrorResume(error -> {
+                log.error("UI message stream failed: {}", safeMessage(error), error);
+                return Flux.just(UIMessageChunks.error(safeMessage(error), null,
+                    Map.of("exceptionType", "error")));
+            })
             .map(chunk -> ServerSentEvent.builder((Object) writeJson(chunk)).build())
             .concatWith(Mono.just(ServerSentEvent.builder((Object) UIMessageStreamResponse.DONE_MARKER)
                 .build()));
@@ -440,6 +480,145 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .build())
                     .map(TestRerankResponse::from)))
             .flatMap(response -> ServerResponse.ok().bodyValue(response));
+    }
+
+    private Mono<ServerResponse> testRagUiMessageStream(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testRagUiMessageStream: modelName={}", modelName);
+        return request.bodyToMono(TestRagRequest.class)
+            .flatMap(body -> validateTestRagRequest(body).then(Mono.defer(() -> {
+                var cancellation = UIMessageCancellations.create();
+                var diagnostics = new RagTestDiagnostics(toRetrievedSources(body));
+                return aiModelService.languageModel(modelName)
+                    .flatMap(languageModel -> testRagReranker(body, diagnostics)
+                        .map(optionalReranker -> {
+                            var reranker = optionalReranker.orElse(null);
+                            var generation = ragGenerationRequest(body, cancellation, diagnostics,
+                                reranker);
+                            var result = languageModel.streamText(generation);
+                            var chunks = Flux.concat(
+                                Flux.just(UIMessageChunks.data("rag-input", diagnostics.input())),
+                                result.toUIMessageStream().chunks(),
+                                Flux.defer(() -> Flux.just(UIMessageChunks.data("rag-diagnostics",
+                                    diagnostics.snapshot())))
+                            );
+                            return new UIMessageStreamResponse(new UIMessageStream(chunks));
+                        }))
+                    .flatMap(response -> uiMessageStreamResponse(response, cancellation));
+            })));
+    }
+
+    private GenerateTextRequest ragGenerationRequest(TestRagRequest body,
+        UIMessageCancellation cancellation, RagTestDiagnostics diagnostics,
+        RagSourceReranker reranker) {
+        var ragOptions = body.getRagOptions() != null ? body.getRagOptions() : new TestRagOptions();
+        var retrievedSources = diagnostics.retrievedSources(body.getTopN(),
+            ragOptions.getMinScore(), reranker != null);
+        return GenerateTextRequest.builder()
+            .prompt(body.getQuery())
+            .system(body.getSystem())
+            .temperature(body.getTemperature())
+            .topP(body.getTopP())
+            .topK(body.getTopK())
+            .presencePenalty(body.getPresencePenalty())
+            .frequencyPenalty(body.getFrequencyPenalty())
+            .stopSequences(body.getStopSequences())
+            .maxOutputTokens(body.getMaxOutputTokens())
+            .seed(body.getSeed())
+            .maxRetries(body.getMaxRetries())
+            .providerOptions(body.getProviderOptions())
+            .reasoning(body.getReasoning())
+            .headers(body.getHeaders())
+            .metadata(Map.of("source", "console-rag-test"))
+            .context(body.getContext())
+            .cancellationToken(cancellation.token())
+            .middleware(new RagLanguageModelMiddleware(RagMiddlewareOptions.builder()
+                .retriever(retrievalRequest -> Mono.just(RetrievedContext.builder()
+                    .query(retrievalRequest.getQuery())
+                    .sources(retrievedSources)
+                    .metadata(Map.of("source", "console-rag-test"))
+                    .build()))
+                .reranker(reranker)
+                .maxResults(null)
+                .minScore(ragOptions.getMinScore())
+                .maxContextCharacters(ragOptions.getMaxContextCharacters())
+                .promptPlacement(ragOptions.getPromptPlacement())
+                .emptyContextPolicy(ragOptions.getEmptyContextPolicy())
+                .retrievalFailurePolicy(ragOptions.getRetrievalFailurePolicy())
+                .rerankFailurePolicy(ragOptions.getRerankFailurePolicy())
+                .emptyContextText(ragOptions.getEmptyContextText())
+                .contextHeader(ragOptions.getContextHeader())
+                .metadata(Map.of("source", "console-rag-test"))
+                .context(body.getContext())
+                .retrieverOptions(ragOptions.getRetrieverOptions())
+                .lifecycle(diagnostics.lifecycle())
+                .build()))
+            .build();
+    }
+
+    private Mono<Optional<RagSourceReranker>> testRagReranker(TestRagRequest body,
+        RagTestDiagnostics diagnostics) {
+        if (body.getRerankModelName() == null || body.getRerankModelName().isBlank()) {
+            return Mono.just(Optional.empty());
+        }
+        return aiModelService.rerankingModel(body.getRerankModelName())
+            .map(model -> new ConsoleRagSourceReranker(model, body.getTopN(),
+                body.getRerankProviderOptions(), diagnostics))
+            .map(Optional::<RagSourceReranker>of);
+    }
+
+    private Mono<Void> validateTestRagRequest(TestRagRequest request) {
+        if (request == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "request body is required"));
+        }
+        if (request.getQuery() == null || request.getQuery().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "query must not be blank"));
+        }
+        if (request.getSources() == null || request.getSources().isEmpty()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At least one source is required"));
+        }
+        if (request.getSources().size() > 50) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At most 50 sources can be tested at once"));
+        }
+        if (request.getTopN() != null && request.getTopN() <= 0) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "topN must be positive"));
+        }
+        for (var source : request.getSources()) {
+            if (source == null || source.getContent() == null || source.getContent().isBlank()) {
+                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "RAG source content must not be blank"));
+            }
+        }
+        return Mono.empty();
+    }
+
+    private List<RetrievedSource> toRetrievedSources(TestRagRequest request) {
+        var sources = new ArrayList<RetrievedSource>();
+        for (int i = 0; i < request.getSources().size(); i++) {
+            var source = request.getSources().get(i);
+            var metadata = new LinkedHashMap<String, Object>();
+            if (source.getMetadata() != null) {
+                metadata.putAll(source.getMetadata());
+            }
+            metadata.put("originalIndex", i);
+            sources.add(RetrievedSource.builder()
+                .id(hasText(source.getId()) ? source.getId() : String.valueOf(i))
+                .sourceType(source.getSourceType())
+                .title(source.getTitle())
+                .url(source.getUrl())
+                .content(source.getContent())
+                .score(source.getScore())
+                .metadata(Map.copyOf(metadata))
+                .usedForContext(source.getUsedForContext())
+                .visible(source.getVisible())
+                .build());
+        }
+        return List.copyOf(sources);
     }
 
     private static boolean consoleTestToolEnabled(ServerRequest request) {
@@ -1147,6 +1326,65 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestRagRequest {
+        private String query;
+        private String system;
+        private List<TestRagSource> sources;
+        private String rerankModelName;
+        private Integer topN;
+        private Double temperature;
+        private Double topP;
+        private Integer topK;
+        private Double presencePenalty;
+        private Double frequencyPenalty;
+        private List<String> stopSequences;
+        private Integer maxOutputTokens;
+        private Integer seed;
+        private Integer maxRetries;
+        private Map<String, Map<String, Object>> providerOptions;
+        private Map<String, Map<String, Object>> rerankProviderOptions;
+        private run.halo.aifoundation.chat.ReasoningOptions reasoning;
+        private Map<String, String> headers;
+        private Map<String, Object> context;
+        private TestRagOptions ragOptions;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestRagSource {
+        private String id;
+        private String sourceType;
+        private String title;
+        private String url;
+        private String content;
+        private Double score;
+        private Map<String, Object> metadata;
+        private Boolean usedForContext;
+        private Boolean visible;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestRagOptions {
+        private Double minScore;
+        private Integer maxContextCharacters;
+        private RagPromptPlacement promptPlacement;
+        private RagEmptyContextPolicy emptyContextPolicy;
+        private RagFailurePolicy retrievalFailurePolicy;
+        private RagFailurePolicy rerankFailurePolicy;
+        private String emptyContextText;
+        private String contextHeader;
+        private Map<String, Object> retrieverOptions;
+    }
+
+    @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class TestCompletionStreamRequest {
@@ -1324,6 +1562,199 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
                 .providerMetadata(response.getProviderMetadata())
                 .build();
+        }
+    }
+
+    private static class ConsoleRagSourceReranker implements RagSourceReranker {
+
+        private final RerankingModel model;
+        private final Integer topN;
+        private final Map<String, Map<String, Object>> providerOptions;
+        private final RagTestDiagnostics diagnostics;
+
+        ConsoleRagSourceReranker(RerankingModel model, Integer topN,
+            Map<String, Map<String, Object>> providerOptions, RagTestDiagnostics diagnostics) {
+            this.model = model;
+            this.topN = topN;
+            this.providerOptions = providerOptions;
+            this.diagnostics = diagnostics;
+        }
+
+        @Override
+        public Mono<List<RetrievedSource>> rerank(RagSourceRerankRequest request) {
+            var documents = request.getSources().stream()
+                .map(source -> RerankDocument.builder()
+                    .id(source.getId())
+                    .text(source.getContent())
+                    .metadata(source.getMetadata())
+                    .build())
+                .toList();
+            return model.rerank(RerankRequest.builder()
+                    .query(request.getQuery())
+                    .documents(documents)
+                    .topN(topN != null ? topN : request.getTopN())
+                    .providerOptions(providerOptions)
+                    .metadata(request.getMetadata())
+                    .context(request.getContext())
+                    .build())
+                .map(response -> response.getResults() != null ? response.getResults() : List.<RerankResult>of())
+                .map(results -> results.stream()
+                    .filter(result -> result.getIndex() >= 0
+                        && result.getIndex() < request.getSources().size())
+                    .map(result -> withRerankMetadata(request.getSources().get(result.getIndex()),
+                        result))
+                    .toList())
+                .doOnNext(diagnostics::finalSources);
+        }
+
+        private RetrievedSource withRerankMetadata(RetrievedSource source, RerankResult result) {
+            var metadata = new LinkedHashMap<String, Object>();
+            if (source.getMetadata() != null) {
+                metadata.putAll(source.getMetadata());
+            }
+            metadata.put("rerankScore", result.getScore());
+            if (result.getProviderMetadata() != null && !result.getProviderMetadata().isEmpty()) {
+                metadata.put("rerankProviderMetadata", result.getProviderMetadata());
+            }
+            return RetrievedSource.builder()
+                .id(source.getId())
+                .sourceType(source.getSourceType())
+                .title(source.getTitle())
+                .url(source.getUrl())
+                .content(source.getContent())
+                .score(source.getScore())
+                .metadata(Map.copyOf(metadata))
+                .usedForContext(source.getUsedForContext())
+                .visible(source.getVisible())
+                .build();
+        }
+    }
+
+    private static class RagTestDiagnostics {
+
+        private final List<RetrievedSource> originalSources;
+        private final AtomicReference<List<RetrievedSource>> finalSources =
+            new AtomicReference<>(List.of());
+        private final CopyOnWriteArrayList<Map<String, Object>> events = new CopyOnWriteArrayList<>();
+
+        RagTestDiagnostics(List<RetrievedSource> originalSources) {
+            this.originalSources = originalSources;
+        }
+
+        List<RetrievedSource> originalSources() {
+            return originalSources;
+        }
+
+        List<RetrievedSource> retrievedSources(Integer topN, Double minScore, boolean willRerank) {
+            var sources = originalSources.stream()
+                .filter(source -> source.getUsedForContext() == null
+                    || Boolean.TRUE.equals(source.getUsedForContext()))
+                .filter(source -> source.getContent() != null && !source.getContent().isBlank())
+                .filter(source -> minScore == null || source.getScore() == null
+                    || source.getScore() >= minScore)
+                .limit(!willRerank && topN != null ? topN : Long.MAX_VALUE)
+                .toList();
+            if (!willRerank) {
+                finalSources(sources);
+            }
+            return sources;
+        }
+
+        void finalSources(List<RetrievedSource> sources) {
+            finalSources.set(sources != null ? List.copyOf(sources) : List.of());
+        }
+
+        RagLifecycle lifecycle() {
+            return new RagLifecycle() {
+                @Override
+                public Mono<Void> onRetrievalStart(RagLifecycleEvent event) {
+                    return record("retrieval-start", event);
+                }
+
+                @Override
+                public Mono<Void> onRetrievalFinish(RagLifecycleEvent event) {
+                    return record("retrieval-finish", event);
+                }
+
+                @Override
+                public Mono<Void> onRerankStart(RagLifecycleEvent event) {
+                    return record("rerank-start", event);
+                }
+
+                @Override
+                public Mono<Void> onRerankFinish(RagLifecycleEvent event) {
+                    return record("rerank-finish", event);
+                }
+
+                @Override
+                public Mono<Void> onContextPacked(RagLifecycleEvent event) {
+                    return record("context-packed", event);
+                }
+
+                @Override
+                public Mono<Void> onError(RagLifecycleEvent event) {
+                    return record("error", event);
+                }
+            };
+        }
+
+        Map<String, Object> input() {
+            return Map.of(
+                "sources", previews(originalSources),
+                "sourceCount", originalSources.size()
+            );
+        }
+
+        Map<String, Object> snapshot() {
+            var finalItems = finalSources.get();
+            return Map.of(
+                "sources", previews(finalItems.isEmpty() ? originalSources : finalItems),
+                "originalSources", previews(originalSources),
+                "finalSources", previews(finalItems),
+                "sourceCount", originalSources.size(),
+                "events", List.copyOf(events)
+            );
+        }
+
+        private Mono<Void> record(String type, RagLifecycleEvent event) {
+            var payload = new LinkedHashMap<String, Object>();
+            payload.put("type", type);
+            payload.put("stage", event.getStage());
+            payload.put("query", event.getQuery());
+            putIfPresent(payload, "sourceCount", event.getSourceCount());
+            putIfPresent(payload, "contextCharacters", event.getContextCharacters());
+            putIfPresent(payload, "warningCode", event.getWarningCode());
+            putIfPresent(payload, "errorType", event.getErrorType());
+            putIfPresent(payload, "errorMessage", event.getErrorMessage());
+            putIfPresent(payload, "metadata", event.getMetadata());
+            putIfPresent(payload, "context", event.getContext());
+            events.add(Map.copyOf(payload));
+            return Mono.empty();
+        }
+
+        private static List<Map<String, Object>> previews(List<RetrievedSource> sources) {
+            return sources.stream()
+                .map(RagTestDiagnostics::preview)
+                .toList();
+        }
+
+        private static Map<String, Object> preview(RetrievedSource source) {
+            var payload = new LinkedHashMap<String, Object>();
+            putIfPresent(payload, "id", source.getId());
+            putIfPresent(payload, "sourceType", source.getSourceType());
+            putIfPresent(payload, "title", source.getTitle());
+            putIfPresent(payload, "url", source.getUrl());
+            putIfPresent(payload, "score", source.getScore());
+            putIfPresent(payload, "metadata", source.getMetadata());
+            putIfPresent(payload, "usedForContext", source.getUsedForContext());
+            putIfPresent(payload, "visible", source.getVisible());
+            return Map.copyOf(payload);
+        }
+
+        private static void putIfPresent(Map<String, Object> payload, String key, Object value) {
+            if (value != null) {
+                payload.put(key, value);
+            }
         }
     }
 

@@ -37,7 +37,7 @@ class SiliconFlowProviderTest {
 
             StepVerifier.create(providerType.discoverModels(provider(baseUrl), "sk-test"))
                 .assertNext(models -> {
-                    assertThat(models).hasSize(2);
+                    assertThat(models).hasSize(3);
                     assertThat(models.get(0).modelId()).isEqualTo("Qwen/Qwen2.5-7B-Instruct");
                     assertThat(models.get(0).modelType()).isEqualTo(ModelType.LANGUAGE);
                     assertThat(models.get(0).features()).containsExactly(ModelFeature.STREAMING);
@@ -51,13 +51,21 @@ class SiliconFlowProviderTest {
                     assertThat(models.get(1).adapterType()).isEqualTo(AdapterType.OPENAI_EMBEDDING);
                     assertThat(models.get(1).source()).isEqualTo(DiscoverySource.REMOTE);
                     assertThat(models.get(1).confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+
+                    assertThat(models.get(2).modelId()).isEqualTo("BAAI/bge-reranker-v2-m3");
+                    assertThat(models.get(2).modelType()).isEqualTo(ModelType.RERANK);
+                    assertThat(models.get(2).features()).isEmpty();
+                    assertThat(models.get(2).adapterType()).isEqualTo(AdapterType.RERANK);
+                    assertThat(models.get(2).source()).isEqualTo(DiscoverySource.REMOTE);
+                    assertThat(models.get(2).confidence()).isEqualTo(DiscoveryConfidence.HIGH);
                 })
                 .verifyComplete();
 
             assertThat(requests)
                 .containsExactlyInAnyOrder(
                     new RequestCapture("sub_type=chat", "Bearer sk-test"),
-                    new RequestCapture("sub_type=embedding", "Bearer sk-test")
+                    new RequestCapture("sub_type=embedding", "Bearer sk-test"),
+                    new RequestCapture("sub_type=reranker", "Bearer sk-test")
                 );
         } finally {
             server.stop(0);
@@ -74,6 +82,7 @@ class SiliconFlowProviderTest {
             var body = switch (query) {
                 case "sub_type=chat" -> "{\"data\":[{\"id\":\"Qwen/Qwen2.5-7B-Instruct\"}]}";
                 case "sub_type=embedding" -> "{\"data\":[{\"id\":\"BAAI/bge-m3\"}]}";
+                case "sub_type=reranker" -> "{\"data\":[{\"id\":\"BAAI/bge-reranker-v2-m3\"}]}";
                 default -> "{\"data\":[]}";
             };
             var bytes = body.getBytes(StandardCharsets.UTF_8);

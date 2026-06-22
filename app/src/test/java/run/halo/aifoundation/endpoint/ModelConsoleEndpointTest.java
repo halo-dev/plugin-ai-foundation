@@ -23,6 +23,7 @@ import run.halo.aifoundation.chat.FinishReason;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.part.TextStreamPart;
@@ -61,13 +62,13 @@ class ModelConsoleEndpointTest {
                 ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING));
         when(mockType.getSupportedAdapterTypes())
             .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
-                AdapterType.COHERE_RERANK, AdapterType.OPENAI_IMAGE));
+                AdapterType.RERANK, AdapterType.OPENAI_IMAGE));
         when(mockType.recommendAdapterType(ModelType.LANGUAGE))
             .thenReturn(Optional.of(AdapterType.OPENAI_CHAT));
         when(mockType.recommendAdapterType(ModelType.EMBEDDING))
             .thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
         when(mockType.recommendAdapterType(ModelType.RERANK))
-            .thenReturn(Optional.of(AdapterType.COHERE_RERANK));
+            .thenReturn(Optional.of(AdapterType.RERANK));
         when(mockType.recommendAdapterType(ModelType.IMAGE_GENERATION))
             .thenReturn(Optional.of(AdapterType.OPENAI_IMAGE));
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
@@ -210,7 +211,7 @@ class ModelConsoleEndpointTest {
         var m = model("rerank", "openai-prod", "rerank-v1");
         m.getSpec().setModelType(ModelType.RERANK);
         m.getSpec().setFeatures(List.of());
-        m.getSpec().setAdapterType(AdapterType.COHERE_RERANK);
+        m.getSpec().setAdapterType(AdapterType.RERANK);
         var generatedName = AiModelNameGenerator.generate("openai-prod", "rerank-v1");
 
         when(client.fetch(AiProvider.class, "openai-prod"))
@@ -508,6 +509,27 @@ class ModelConsoleEndpointTest {
         assertThat(request.getMessages().getFirst().getRole().name()).isEqualTo("USER");
         assertThat(request.getMessages().getFirst().getContent().getFirst().getText())
             .isEqualTo("Hello");
+    }
+
+    @Test
+    void testUiMessageChatStream_streamErrorReturnsErrorChunkAndDone() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream 401"))));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(uiMessageBody("Hello"))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .contains("\"type\":\"error\"")
+                .contains("\"errorText\":\"upstream 401\"")
+                .contains("upstream 401")
+                .contains("[DONE]"));
     }
 
     @Test
@@ -1046,7 +1068,175 @@ class ModelConsoleEndpointTest {
         assertThat(request.getProviderOptions()).containsKey("cohere");
     }
 
+    @Test
+    void testRagUiMessageStream_streamsAnswerSourcesAndDiagnosticsWithoutRerank() {
+        var languageModel = ragAwareLanguageModel("RAG answer");
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+
+        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "query", "What is Halo AI Foundation?",
+                "sources", List.of(
+                    Map.of(
+                        "id", "source-1",
+                        "title", "Halo AI",
+                        "url", "https://example.test/halo-ai",
+                        "content", "Halo AI Foundation provides shared AI runtime APIs.",
+                        "score", 0.82,
+                        "metadata", Map.of("kind", "doc")
+                    )
+                ),
+                "topN", 1
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+            .expectBody(String.class)
+            .consumeWith(response -> {
+                var body = response.getResponseBody();
+                assertThat(body)
+                    .contains("\"type\":\"data-rag-input\"")
+                    .contains("\"type\":\"source-url\"")
+                    .contains("\"sourceId\":\"source-1\"")
+                    .contains("\"type\":\"text-delta\"")
+                    .contains("RAG answer")
+                    .contains("\"type\":\"data-rag-diagnostics\"")
+                    .contains("retrieval-finish")
+                    .contains("context-packed")
+                    .contains("[DONE]");
+            });
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        assertThat(captor.getValue().getMiddleware()).hasSize(1);
+    }
+
+    @Test
+    void testRagUiMessageStream_usesOptionalRerankModel() {
+        var languageModel = ragAwareLanguageModel("Reranked answer");
+        var rerankingModel = mock(RerankingModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(aiModelService.rerankingModel("rerank-model")).thenReturn(Mono.just(rerankingModel));
+        when(rerankingModel.rerank(any(RerankRequest.class))).thenAnswer(invocation -> {
+            RerankRequest request = invocation.getArgument(0);
+            return Mono.just(RerankResponse.builder()
+                .query(request.getQuery())
+                .results(List.of(RerankResult.builder()
+                    .index(1)
+                    .document(request.getDocuments().get(1))
+                    .score(0.97)
+                    .build()))
+                .build());
+        });
+
+        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "query", "What is Halo AI Foundation?",
+                "sources", List.of(
+                    Map.of("id", "source-1", "content", "Generic CMS content"),
+                    Map.of("id", "source-2", "content", "AI Foundation RAG content")
+                ),
+                "rerankModelName", "rerank-model",
+                "topN", 1,
+                "rerankProviderOptions", Map.of("zhipuai", Map.of("return_raw_scores", true))
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .contains("\"sourceId\":\"source-2\"")
+                .contains("rerank-finish")
+                .contains("rerankScore"));
+
+        var captor = ArgumentCaptor.forClass(RerankRequest.class);
+        verify(rerankingModel).rerank(captor.capture());
+        assertThat(captor.getValue().getProviderOptions()).containsKey("zhipuai");
+        assertThat(captor.getValue().getDocuments())
+            .extracting(RerankDocument::getText)
+            .containsExactly("Generic CMS content", "AI Foundation RAG content");
+    }
+
+    @Test
+    void testRagUiMessageStream_rejectsEmptySourcesWithoutCallingModel() {
+        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "query", "What is Halo AI Foundation?",
+                "sources", List.of()
+            ))
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        verify(aiModelService, never()).languageModel(any());
+    }
+
+    @Test
+    void testRagUiMessageStream_streamErrorReturnsErrorChunkAndDone() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.error(new IllegalStateException("upstream 401"))));
+
+        webTestClient.post().uri("/models/gpt-4/test-rag/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "query", "What is Halo AI Foundation?",
+                "sources", List.of(Map.of(
+                    "id", "source-1",
+                    "content", "Halo AI Foundation provides shared AI runtime APIs."
+                ))
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .contains("\"type\":\"data-rag-input\"")
+                .contains("\"type\":\"error\"")
+                .contains("exceptionType")
+                .contains("upstream 401")
+                .contains("[DONE]"));
+    }
+
     // ---- helpers ----
+
+    private LanguageModel ragAwareLanguageModel(String answer) {
+        var languageModel = mock(LanguageModel.class);
+        when(languageModel.streamText(any(GenerateTextRequest.class))).thenAnswer(invocation -> {
+            GenerateTextRequest request = invocation.getArgument(0);
+            return LanguageModelMiddlewares.applyRequestStreamMiddleware(terminalModel(answer),
+                request);
+        });
+        return languageModel;
+    }
+
+    private LanguageModel terminalModel(String answer) {
+        return new LanguageModel() {
+            @Override
+            public Mono<run.halo.aifoundation.chat.GenerateTextResult> generateText(String prompt) {
+                return Mono.empty();
+            }
+
+            @Override
+            public Mono<run.halo.aifoundation.chat.GenerateTextResult> generateText(
+                GenerateTextRequest request) {
+                return Mono.empty();
+            }
+
+            @Override
+            public StreamTextResult streamText(GenerateTextRequest request) {
+                return streamResult(Flux.just(
+                    TextStreamPart.start("rag-message"),
+                    TextStreamPart.textStart("text-1"),
+                    TextStreamPart.textDelta("text-1", answer),
+                    TextStreamPart.textEnd("text-1"),
+                    TextStreamPart.finish(FinishReason.STOP, "stop", null)
+                ));
+            }
+        };
+    }
 
     private StreamTextResult streamResult(Flux<TextStreamPart> fullStream) {
         var shared = fullStream.cache();

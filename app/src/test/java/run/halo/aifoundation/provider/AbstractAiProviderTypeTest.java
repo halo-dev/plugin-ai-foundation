@@ -168,6 +168,67 @@ class AbstractAiProviderTypeTest {
     }
 
     @Test
+    void discoverModels_mapsExplicitRemoteRerankMetadata() throws Exception {
+        var body = """
+            {"data":[
+              {"id":"opaque-model","type":"reranker"},
+              {"id":"capability-model","capabilities":["rerank"]}
+            ]}
+            """;
+        var server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        var serverThread = Thread.ofVirtual().start(() -> handleSingleHttpRequest(server, body));
+
+        try {
+            var provider = providerWithBaseUrl("http://127.0.0.1:" + server.getLocalPort());
+
+            StepVerifier.create(new RerankTestProviderType().discoverModels(provider, "key"))
+                .assertNext(models -> {
+                    assertThat(models).hasSize(2);
+                    assertThat(models)
+                        .extracting(DiscoveredModel::modelType)
+                        .containsExactly(ModelType.RERANK, ModelType.RERANK);
+                    assertThat(models)
+                        .extracting(DiscoveredModel::adapterType)
+                        .containsExactly(AdapterType.RERANK, AdapterType.RERANK);
+                    assertThat(models)
+                        .extracting(DiscoveredModel::source)
+                        .containsExactly(DiscoverySource.REMOTE, DiscoverySource.REMOTE);
+                    assertThat(models)
+                        .extracting(DiscoveredModel::confidence)
+                        .containsExactly(DiscoveryConfidence.HIGH, DiscoveryConfidence.HIGH);
+                })
+                .verifyComplete();
+        } finally {
+            server.close();
+            serverThread.join();
+        }
+    }
+
+    @Test
+    void discoverModels_doesNotInferRerankFromModelId() throws Exception {
+        var body = "{\"data\":[{\"id\":\"my-reranker-model\"}]}";
+        var server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        var serverThread = Thread.ofVirtual().start(() -> handleSingleHttpRequest(server, body));
+
+        try {
+            var provider = providerWithBaseUrl("http://127.0.0.1:" + server.getLocalPort());
+
+            StepVerifier.create(new RerankTestProviderType().discoverModels(provider, "key"))
+                .assertNext(models -> {
+                    assertThat(models).singleElement()
+                        .extracting(DiscoveredModel::modelType, DiscoveredModel::adapterType,
+                            DiscoveredModel::source, DiscoveredModel::confidence)
+                        .containsExactly(ModelType.LANGUAGE, AdapterType.OPENAI_CHAT,
+                            DiscoverySource.RULE, DiscoveryConfidence.LOW);
+                })
+                .verifyComplete();
+        } finally {
+            server.close();
+            serverThread.join();
+        }
+    }
+
+    @Test
     void remoteDiscoveredModel_buildsHighConfidenceProfile() {
         var profile = new TestProviderType().remoteDiscoveredModel("remote-embedding",
             ModelType.EMBEDDING, Set.of(), AdapterType.OPENAI_EMBEDDING);
@@ -227,6 +288,14 @@ class AbstractAiProviderTypeTest {
         provider.getSpec().setProxyHost(proxyHost);
         provider.getSpec().setProxyPort(proxyPort);
         return provider;
+    }
+
+    static class RerankTestProviderType extends TestProviderType {
+        @Override
+        public java.util.List<AdapterType> getSupportedAdapterTypes() {
+            return java.util.List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
+                AdapterType.RERANK);
+        }
     }
 
     private void handleSingleProxyRequest(ServerSocket serverSocket, CompletableFuture<Boolean> proxyHit) {

@@ -258,6 +258,72 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 
 工具入参修复使用 `toolCallRepair(...)`。它只处理“已知工具、服务端执行、入参 schema 校验失败”的场景。
 
+## 8. Rerank 模型
+
+Rerank 通过 `AiModelService.rerankingModel(...)` 获取，调用形态与语言模型、嵌入模型保持一致：
+
+```java
+return aiModelService()
+    .flatMap(service -> service.rerankingModel(rerankModelName))
+    .flatMap(model -> model.rerank(RerankRequest.builder()
+        .query("Halo AI Foundation 如何支持 RAG?")
+        .documents(
+            "AI Foundation 提供统一 AI 能力。",
+            "RAG 通常需要检索、重排和上下文注入。")
+        .topN(2)
+        .build()));
+```
+
+当前内置 provider-backed Rerank 适配覆盖智谱 AI、DashScope 和 SiliconFlow。AI Foundation 不在代码或文档中维护推荐模型清单；管理员应根据供应商控制台和实际可用模型，手动创建 `modelType=rerank` 的模型，或使用远程发现结果导入。
+
+远程发现的边界是：
+
+- 只有供应商返回显式的 rerank 类型、能力字段，或供应商官方 typed endpoint 明确返回 reranker 分组时，发现结果才会标记为 `rerank`。
+- 如果远程接口只返回模型 ID，AI Foundation 不会因为模型名包含 `rerank`、`reranker` 等字符串就推断为 Rerank。
+- 发现不到 Rerank 模型不代表供应商不可用；手动创建模型仍然是兜底方式。
+
+Provider options 仍按供应商命名空间传递：
+
+```java
+RerankRequest request = RerankRequest.builder()
+    .query(query)
+    .documents(documents)
+    .providerOptions(Map.of(
+        "zhipuai", Map.of("return_raw_scores", true)))
+    .build();
+```
+
+## 9. RAG 组合
+
+AI Foundation 的生产 RAG 入口是 SDK 组合，而不是控制台测试接口。调用方插件负责检索来源，AI Foundation 负责把检索、可选重排、上下文注入、source 输出和模型调用串起来：
+
+```java
+RagRetriever retriever = request -> Mono.just(RetrievedContext.builder()
+    .query(request.getQuery())
+    .sources(mySearch(request.getQuery()))
+    .build());
+
+return aiModelService()
+    .flatMap(service -> Mono.zip(
+        service.languageModel(languageModelName),
+        service.rerankingModel(rerankModelName)))
+    .flatMap(tuple -> {
+        var languageModel = tuple.getT1();
+        var reranker = new RerankingModelRagSourceReranker(tuple.getT2());
+        var request = GenerateTextRequest.builder()
+            .prompt("请基于资料回答用户问题")
+            .middleware(new RagLanguageModelMiddleware(RagMiddlewareOptions.builder()
+                .retriever(retriever)
+                .reranker(reranker)
+                .maxResults(6)
+                .build()))
+            .build();
+        return languageModel.generateText(request);
+    });
+```
+
+控制台「模型测试工作台」里的 RAG 模式只用于验证单个查询：它接收手动来源、可选 Rerank 模型、top count 和 provider options，然后通过 UI Message stream 返回答案、source 引用和 `rag-input` / `rag-diagnostics` 数据块。它不提供知识库、向量库、文档库、爬虫或生产检索配置。
+
 ## 8. 结构化输出
 
 优先使用 `OutputSpec`，不要靠手写提示词解析 JSON：
