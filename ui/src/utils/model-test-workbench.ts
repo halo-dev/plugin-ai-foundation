@@ -23,11 +23,24 @@ export interface WorkbenchMessage {
   modelDisplayName?: string
   state?: 'streaming' | 'done' | 'error' | 'stopped'
   warnings?: WorkbenchWarning[]
+  sourceReferences?: WorkbenchSourceReference[]
+  ragInput?: RagInputDiagnostics
+  ragDiagnostics?: RagRunDiagnostics
 }
 
 export interface WorkbenchWarning {
   code?: string
   message?: string
+}
+
+export interface WorkbenchSourceReference {
+  id?: string
+  type: 'source-url' | 'source-document'
+  title?: string
+  url?: string
+  mediaType?: string
+  filename?: string
+  providerMetadata?: Record<string, unknown>
 }
 
 export interface WorkbenchToolEvent {
@@ -44,6 +57,39 @@ export interface WorkbenchToolEvent {
   externalStatus?: 'pending' | 'completed' | 'failed'
   continuationSupported?: boolean
   summary: string
+}
+
+export interface RagSourcePreview {
+  id?: string
+  sourceType?: string
+  title?: string
+  url?: string
+  score?: number
+  metadata?: Record<string, unknown>
+  usedForContext?: boolean
+  visible?: boolean
+}
+
+export interface RagLifecyclePreview {
+  type?: string
+  stage?: string
+  query?: string
+  sourceCount?: number
+  contextCharacters?: number
+  warningCode?: string
+  errorType?: string
+  errorMessage?: string
+  metadata?: Record<string, unknown>
+  context?: Record<string, unknown>
+}
+
+export interface RagInputDiagnostics {
+  sourceCount?: number
+  sources?: RagSourcePreview[]
+}
+
+export interface RagRunDiagnostics extends RagInputDiagnostics {
+  events?: RagLifecyclePreview[]
 }
 
 export interface ExamplePrompt {
@@ -203,6 +249,8 @@ export const workbenchDataPartSchemas: DataPartSchemas = {
   progress: workbenchDefinedDataSchema('progress'),
   status: workbenchDefinedDataSchema('status'),
   weather: workbenchDefinedDataSchema('weather'),
+  'rag-input': workbenchDefinedDataSchema('rag-input'),
+  'rag-diagnostics': workbenchDefinedDataSchema('rag-diagnostics'),
 }
 
 export interface UIMessageChunk {
@@ -217,6 +265,7 @@ export interface UIMessageChunk {
     | 'data'
     | 'message-metadata'
     | 'source-url'
+    | 'source-document'
     | 'file'
     | 'tool-input-start'
     | 'tool-input-delta'
@@ -242,6 +291,7 @@ export interface UIMessageChunk {
   url?: string
   title?: string
   mediaType?: string
+  filename?: string
   toolCallId?: string
   toolName?: string
   state?: UIMessagePart['state']
@@ -251,6 +301,7 @@ export interface UIMessageChunk {
   output?: unknown
   errorText?: string
   approval?: UIMessagePart['approval']
+  metadata?: Record<string, unknown>
   providerMetadata?: Record<string, unknown>
   warnings?: WorkbenchWarning[]
 }
@@ -484,6 +535,10 @@ export function testUiMessageChatStreamUrl(modelName: string, options: ChatStrea
   return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-chat/ui-message/stream${query ? `?${query}` : ''}`
 }
 
+export function testRagUiMessageStreamUrl(modelName: string) {
+  return `/apis/console.api.aifoundation.halo.run/v1alpha1/models/${encodeURIComponent(modelName)}/test-rag/ui-message/stream`
+}
+
 function chatStreamQueryParams(options: ChatStreamOptions) {
   const params = new URLSearchParams()
   if (options.testToolEnabled) {
@@ -552,6 +607,11 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
   }
   if (isUIMessageDataChunk(chunk)) {
     if (chunk.name) {
+      if (chunk.name === 'rag-input') {
+        message.ragInput = normalizeRagInputDiagnostics(chunk.data)
+      } else if (chunk.name === 'rag-diagnostics') {
+        message.ragDiagnostics = normalizeRagRunDiagnostics(chunk.data)
+      }
       if (chunk.transientData || chunk.transient) {
         message.transientData = { ...message.transientData, [chunk.name]: chunk.data }
       } else {
@@ -571,6 +631,17 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
       sourceId: chunk.sourceId,
       url: chunk.url,
       title: chunk.title,
+      providerMetadata: chunk.providerMetadata,
+    })
+    projectUIMessage(message)
+    return
+  }
+  if (chunk.type === 'source-document' && chunk.sourceId) {
+    upsertUIMessagePart(uiMessage, 'source-document', chunk.sourceId, {
+      sourceId: chunk.sourceId,
+      mediaType: chunk.mediaType,
+      title: chunk.title,
+      filename: chunk.filename,
       providerMetadata: chunk.providerMetadata,
     })
     projectUIMessage(message)
@@ -681,7 +752,7 @@ function uiMessagePartKey(type: string) {
   if (isUIMessageDataPartType(type)) {
     return 'id'
   }
-  if (type === 'source-url') {
+  if (type === 'source-url' || type === 'source-document') {
     return 'sourceId'
   }
   if (type === 'file') {
@@ -730,6 +801,102 @@ function projectUIMessage(message: WorkbenchMessage) {
       .join('') || undefined
   const toolEvents = uiMessagePartsToToolEvents(uiMessage.parts)
   message.toolEvents = toolEvents.length ? toolEvents : undefined
+  const sourceReferences = uiMessagePartsToSourceReferences(uiMessage.parts)
+  message.sourceReferences = sourceReferences.length ? sourceReferences : undefined
+  message.ragInput = normalizeRagInputDiagnostics(
+    findDataPart(uiMessage, 'rag-input')?.data ?? message.ragInput,
+  )
+  message.ragDiagnostics = normalizeRagRunDiagnostics(
+    findDataPart(uiMessage, 'rag-diagnostics')?.data ?? message.ragDiagnostics,
+  )
+}
+
+function uiMessagePartsToSourceReferences(parts: UIMessagePart[]): WorkbenchSourceReference[] {
+  return parts
+    .filter((part) => part.type === 'source-url' || part.type === 'source-document')
+    .map((part) => ({
+      id: part.sourceId,
+      type: part.type as WorkbenchSourceReference['type'],
+      title: part.title,
+      url: part.url,
+      mediaType: part.mediaType,
+      filename: stringValue(part.filename),
+      providerMetadata: part.providerMetadata,
+    }))
+}
+
+function findDataPart(message: UIMessage, name: string) {
+  return message.parts.find((part) => isUIMessageDataPartType(part.type) && part.name === name)
+}
+
+function normalizeRagInputDiagnostics(value: unknown): RagInputDiagnostics | undefined {
+  if (!isPlainRecord(value)) {
+    return undefined
+  }
+  return {
+    sourceCount: numberValue(value.sourceCount),
+    sources: arrayValue(value.sources).map(normalizeRagSourcePreview),
+  }
+}
+
+function normalizeRagRunDiagnostics(value: unknown): RagRunDiagnostics | undefined {
+  if (!isPlainRecord(value)) {
+    return undefined
+  }
+  return {
+    ...normalizeRagInputDiagnostics(value),
+    events: arrayValue(value.events).map(normalizeRagLifecyclePreview),
+  }
+}
+
+function normalizeRagSourcePreview(value: unknown): RagSourcePreview {
+  const source = isPlainRecord(value) ? value : {}
+  return {
+    id: stringValue(source.id),
+    sourceType: stringValue(source.sourceType),
+    title: stringValue(source.title),
+    url: stringValue(source.url),
+    score: numberValue(source.score),
+    metadata: plainRecordValue(source.metadata),
+    usedForContext: booleanValue(source.usedForContext),
+    visible: booleanValue(source.visible),
+  }
+}
+
+function normalizeRagLifecyclePreview(value: unknown): RagLifecyclePreview {
+  const event = isPlainRecord(value) ? value : {}
+  return {
+    type: stringValue(event.type),
+    stage: stringValue(event.stage),
+    query: stringValue(event.query),
+    sourceCount: numberValue(event.sourceCount),
+    contextCharacters: numberValue(event.contextCharacters),
+    warningCode: stringValue(event.warningCode),
+    errorType: stringValue(event.errorType),
+    errorMessage: stringValue(event.errorMessage),
+    metadata: plainRecordValue(event.metadata),
+    context: plainRecordValue(event.context),
+  }
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function plainRecordValue(value: unknown): Record<string, unknown> | undefined {
+  return isPlainRecord(value) ? value : undefined
 }
 
 function uiMessagePartsToToolEvents(parts: UIMessagePart[]): WorkbenchToolEvent[] {

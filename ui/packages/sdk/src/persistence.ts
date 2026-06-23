@@ -184,6 +184,29 @@ function validatePart(
         issues,
       )
       break
+    case 'source-document':
+      requireString(
+        part.sourceId,
+        `${path}.sourceId`,
+        'part.source-document.id.required',
+        'Document source part sourceId is required.',
+        issues,
+      )
+      requireString(
+        part.mediaType,
+        `${path}.mediaType`,
+        'part.source-document.media-type.required',
+        'Document source part mediaType is required.',
+        issues,
+      )
+      requireString(
+        part.title,
+        `${path}.title`,
+        'part.source-document.title.required',
+        'Document source part title is required.',
+        issues,
+      )
+      break
     case 'file':
       requireString(
         part.id,

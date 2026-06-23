@@ -8,8 +8,11 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.rerank.DashScopeRerankingClient;
 
 @Component
 public class DashScopeProvider extends AbstractAiProviderType {
@@ -65,7 +68,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
     }
 
     @Override
@@ -79,6 +82,13 @@ public class DashScopeProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
+        String modelId) {
+        return new DashScopeRerankingClient(rerankEndpointRoot(provider), modelId, apiKey,
+            webClientBuilder(provider));
+    }
+
+    @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoningControlOptions = ReasoningControlOptions.unsupported();
         return openAiCompatibleLanguageModelProviderOptions(reasoningControlOptions, null, true);
@@ -87,4 +97,30 @@ public class DashScopeProvider extends AbstractAiProviderType {
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
         return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
-    }}
+    }
+
+    @Override
+    public RerankingModelProviderOptions rerankingModelProviderOptions() {
+        return RerankingModelProviderOptions.builder()
+            .providerOptionsSupported(true)
+            .build();
+    }
+
+    private String rerankEndpointRoot(AiProvider provider) {
+        var baseUrl = trimTrailingSlash(resolveBaseUrl(provider));
+        if (baseUrl.endsWith("/compatible-mode/v1")) {
+            return baseUrl.substring(0, baseUrl.length() - "/compatible-mode/v1".length());
+        }
+        if (baseUrl.endsWith("/compatible-api/v1")) {
+            return baseUrl.substring(0, baseUrl.length() - "/compatible-api/v1".length());
+        }
+        return baseUrl;
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (value == null || value.isBlank() || !value.endsWith("/")) {
+            return value;
+        }
+        return value.substring(0, value.length() - 1);
+    }
+}

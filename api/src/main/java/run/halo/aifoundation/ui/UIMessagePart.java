@@ -8,7 +8,7 @@ package run.halo.aifoundation.ui;
  * not represented as parts.
  */
 public sealed interface UIMessagePart permits TextPart, ReasoningPart, DataPart, ToolPart,
-    SourceUrlPart, FilePart {
+    SourceUrlPart, SourceDocumentPart, FilePart {
 
     /**
      * Stable discriminator used by serializers and callers.

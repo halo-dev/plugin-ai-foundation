@@ -28,6 +28,20 @@ public interface EmbeddingModel {
     Mono<float[]> embedQuery(String text);
 
     /**
+     * Embeds a single generic text value and returns the vector.
+     */
+    default Mono<float[]> embedValue(String text) {
+        return embed(List.of(text)).map(response -> response.getEmbeddings().getFirst());
+    }
+
+    /**
+     * Embeds generic text values and returns vectors in the same order as inputs.
+     */
+    default Mono<List<float[]>> embedValues(List<String> inputs) {
+        return embed(inputs).map(EmbeddingResponse::getEmbeddings);
+    }
+
+    /**
      * Maximum provider batch size used by this model.
      */
     int maxEmbeddingsPerCall();

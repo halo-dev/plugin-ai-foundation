@@ -158,6 +158,7 @@ public final class UIMessageStreamReader {
                 case DataChunk ignored -> changed;
                 case MessageMetadataChunk metadata -> mergeMetadata(metadata.messageMetadata());
                 case SourceUrlChunk ignored -> changed;
+                case SourceDocumentChunk ignored -> changed;
                 case FileChunk ignored -> changed;
                 case ToolInputStartChunk ignored -> changed;
                 case ToolInputDeltaChunk ignored -> changed;

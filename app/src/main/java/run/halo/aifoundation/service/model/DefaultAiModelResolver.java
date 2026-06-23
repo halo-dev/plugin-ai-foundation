@@ -66,6 +66,11 @@ public class DefaultAiModelResolver implements AiModelResolver {
         return defaultSlotName("embedding", DefaultModelSlots::getEmbeddingModelName);
     }
 
+    @Override
+    public Mono<String> defaultRerankModelName() {
+        return defaultSlotName("rerank", DefaultModelSlots::getRerankModelName);
+    }
+
     private Mono<AiModel> fetchAiModel(String modelName) {
         return client.fetch(AiModel.class, modelName)
             .switchIfEmpty(Mono.error(new ModelNotFoundException(modelName)));

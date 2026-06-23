@@ -239,6 +239,9 @@ class UIMessageStreamTest {
             TextStreamPart.reasoningEnd("reasoning-1"),
             TextStreamPart.source(GenerationContentPart.source("source-1",
                 "https://example.com", "Example", Map.of("rank", 1))),
+            TextStreamPart.source(GenerationContentPart.source("source-2",
+                null, null, Map.of("sourceType", "post", "mediaType", "text/markdown",
+                    "filename", "post.md"))),
             TextStreamPart.file(GenerationContentPart.file("file-1", "https://example.com/a.txt",
                 "a.txt", "text/plain", "abc", Map.of("size", 3))),
             TextStreamPart.toolInputStart("input-1", "call-1", "weather"),
@@ -299,6 +302,7 @@ class UIMessageStreamTest {
                 UIMessageChunkType.REASONING_DELTA,
                 UIMessageChunkType.REASONING_END,
                 UIMessageChunkType.SOURCE_URL,
+                UIMessageChunkType.SOURCE_DOCUMENT,
                 UIMessageChunkType.FILE,
                 UIMessageChunkType.TOOL_INPUT_START,
                 UIMessageChunkType.TOOL_INPUT_DELTA,
@@ -316,7 +320,7 @@ class UIMessageStreamTest {
             UIMessageChunkType.MESSAGE_METADATA));
         assertThat((StartChunk) chunks.getFirst()).extracting(StartChunk::messageMetadata)
             .isNull();
-        assertThat((FinishChunk) chunks.get(18)).extracting(FinishChunk::messageMetadata)
+        assertThat((FinishChunk) chunks.get(19)).extracting(FinishChunk::messageMetadata)
             .isNull();
     }
 

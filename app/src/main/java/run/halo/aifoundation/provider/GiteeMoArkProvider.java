@@ -5,6 +5,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.rerank.StandardRerankingClient;
 
 @Component
 public class GiteeMoArkProvider extends AbstractAiProviderType {
@@ -60,7 +63,7 @@ public class GiteeMoArkProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.RERANK);
     }
 
     @Override
@@ -76,5 +79,27 @@ public class GiteeMoArkProvider extends AbstractAiProviderType {
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
         return buildOpenAiCompatibleChatModel(provider, apiKey, modelId);
+    }
+
+    @Override
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
+        String modelId) {
+        return new StandardRerankingClient(getProviderType(), trimTrailingSlash(resolveBaseUrl(provider)),
+            "/rerank", modelId, apiKey, webClientBuilder(provider),
+            java.util.Map.of("X-Failover-Enabled", "true"));
+    }
+
+    @Override
+    public RerankingModelProviderOptions rerankingModelProviderOptions() {
+        return RerankingModelProviderOptions.builder()
+            .providerOptionsSupported(true)
+            .build();
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (value == null || value.isBlank() || !value.endsWith("/")) {
+            return value;
+        }
+        return value.substring(0, value.length() - 1);
     }
 }

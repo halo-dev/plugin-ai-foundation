@@ -33,6 +33,7 @@ export type UIMessagePart =
   | ReasoningPart
   | DataPart
   | SourceUrlPart
+  | SourceDocumentPart
   | FilePart
   | ToolPart
 
@@ -62,6 +63,15 @@ export interface SourceUrlPart {
   sourceId: string
   url: string
   title?: string
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface SourceDocumentPart {
+  type: 'source-document'
+  sourceId: string
+  mediaType: string
+  title: string
+  filename?: string
   providerMetadata?: Record<string, unknown>
 }
 
@@ -146,6 +156,7 @@ export type UIMessageChunk =
   | DataChunk
   | MessageMetadataChunk
   | SourceUrlChunk
+  | SourceDocumentChunk
   | FileChunk
   | ToolInputStartChunk
   | ToolInputDeltaChunk
@@ -223,6 +234,15 @@ export interface SourceUrlChunk {
   id?: string
   url: string
   title?: string
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface SourceDocumentChunk {
+  type: 'source-document'
+  sourceId: string
+  mediaType: string
+  title: string
+  filename?: string
   providerMetadata?: Record<string, unknown>
 }
 

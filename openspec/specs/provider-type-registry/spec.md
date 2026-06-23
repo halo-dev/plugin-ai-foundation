@@ -152,3 +152,29 @@ Provider type implementations SHALL construct chat and embedding model clients u
 #### Scenario: Provider metadata remains unchanged
 - **WHEN** clients query provider type metadata
 - **THEN** provider type identifiers, display metadata, built-in flags, base URL requirements, supported model types, supported adapter types, and read-only completions path metadata SHALL remain unchanged by the Spring AI upgrade
+
+### Requirement: Provider types expose reranking support
+Provider types SHALL be able to declare whether they support reranking and construct provider-specific reranking clients.
+
+#### Scenario: Reranking endpoint advertised
+- **WHEN** a provider type supports reranking
+- **THEN** provider type metadata includes reranking support so model configuration and discovery can expose it
+
+#### Scenario: Provider constructs reranking client
+- **WHEN** a reranking model is resolved for a supporting provider
+- **THEN** the provider type constructs the reranking runtime client using the provider resource, resolved API key, and provider model id
+
+### Requirement: Existing providers expose native rerank support
+Provider types with documented native rerank APIs SHALL expose native reranking support through provider metadata and runtime construction.
+
+#### Scenario: Native rerank provider advertises rerank support
+- **WHEN** provider type metadata is requested for ZhiPu, DashScope, SiliconFlow, Ernie, DouBao, OpenRouter, Gitee MoArk, or AIHubMix
+- **THEN** supported model types SHALL include `rerank`
+- **AND** supported adapter types SHALL include the neutral rerank adapter type
+
+### Requirement: Existing providers construct reranking clients
+Provider types with documented native rerank APIs SHALL construct reranking clients using the configured provider resource, resolved API key, and provider model id.
+
+#### Scenario: Resolve native reranking model
+- **WHEN** a reranking `AiModel` is backed by ZhiPu, DashScope, SiliconFlow, Ernie, DouBao, OpenRouter, Gitee MoArk, or AIHubMix
+- **THEN** model resolution SHALL construct the provider's native reranking client

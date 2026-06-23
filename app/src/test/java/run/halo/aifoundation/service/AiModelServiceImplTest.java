@@ -24,7 +24,9 @@ import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.SecretResolver;
+import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
 import run.halo.aifoundation.service.embedding.EmbeddingModelRuntimeFactory;
 import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
@@ -35,6 +37,8 @@ import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
+import run.halo.aifoundation.service.rerank.DefaultRerankingModelFactory;
+import run.halo.aifoundation.service.rerank.RerankingModelRuntimeFactory;
 import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.Metadata;
@@ -80,6 +84,8 @@ class AiModelServiceImplTest {
             new DefaultLanguageModelFactory(providerClientCache,
                 new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport())),
             new DefaultEmbeddingModelFactory(providerClientCache, new EmbeddingModelRuntimeFactory()),
+            new DefaultRerankingModelFactory(providerClientCache,
+                new RerankingModelRuntimeFactory()),
             callerPluginAuditRecorder
         );
     }
@@ -260,6 +266,62 @@ class AiModelServiceImplTest {
             .verify();
     }
 
+    @Test
+    void rerankingModel_withoutName_resolvesConfiguredModel() {
+        var slots = defaultSlots(null, null, "native-rerank-model");
+        var model = aiModel("native-rerank-model", "rerank-provider",
+            "rerank-v3.5", "Rerank", true, ModelType.RERANK);
+        var provider = aiProvider("rerank-provider", "native-rerank", true);
+        ProviderRerankingClient rerankingClient = request -> Mono.just(RerankResponse.builder()
+            .query(request.getQuery())
+            .build());
+        var providerType = mock(AiProviderType.class);
+
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
+        when(client.fetch(AiModel.class, "native-rerank-model")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
+        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", "rerank-v3.5"))
+            .thenReturn(rerankingClient);
+
+        StepVerifier.create(service.rerankingModel())
+            .assertNext(rerankingModel -> assertThat(rerankingModel).isNotNull())
+            .verifyComplete();
+    }
+
+    @Test
+    void rerankingModel_wrongModelType_emitsIncompatibleModelTypeException() {
+        var model = aiModel("embedding", "openai-prod", "text-embedding-3-small",
+            "Embedding", true, ModelType.EMBEDDING);
+        when(client.fetch(AiModel.class, "embedding")).thenReturn(Mono.just(model));
+
+        StepVerifier.create(service.rerankingModel("embedding"))
+            .expectError(IncompatibleModelTypeException.class)
+            .verify();
+    }
+
+    @Test
+    void rerankingModel_unsupportedProvider_emitsModelNotFoundException() {
+        var model = aiModel("native-rerank-model", "rerank-provider",
+            "rerank-v3.5", "Rerank", true, ModelType.RERANK);
+        var provider = aiProvider("rerank-provider", "native-rerank", true);
+        var providerType = mock(AiProviderType.class);
+
+        when(client.fetch(AiModel.class, "native-rerank-model")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
+        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", "rerank-v3.5"))
+            .thenReturn(null);
+
+        StepVerifier.create(service.rerankingModel("native-rerank-model"))
+            .expectErrorSatisfies(error -> assertThat(error)
+                .isInstanceOf(ModelNotFoundException.class)
+                .hasMessageContaining("does not support reranking"))
+            .verify();
+    }
+
     // ---- helpers ----
 
     private AiModel aiModel(String name, String providerName, String modelId,
@@ -297,9 +359,15 @@ class AiModelServiceImplTest {
     }
 
     private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName) {
+        return defaultSlots(languageModelName, embeddingModelName, null);
+    }
+
+    private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName,
+        String rerankModelName) {
         var slots = new DefaultModelSlots();
         slots.setLanguageModelName(languageModelName);
         slots.setEmbeddingModelName(embeddingModelName);
+        slots.setRerankModelName(rerankModelName);
         return slots;
     }
 

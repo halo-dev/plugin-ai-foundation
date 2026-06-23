@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.ReasoningPart;
+import run.halo.aifoundation.source.SourceReference;
+import run.halo.aifoundation.source.SourceReferences;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
@@ -50,6 +52,11 @@ public class GenerationStep {
      * Structured content parts produced or appended during this step.
      */
     private List<GenerationContentPart> content;
+    /**
+     * Display-safe source references used or returned during this step. When unset, this is derived
+     * from source content parts.
+     */
+    private List<SourceReference> sources;
     /**
      * Reasoning parts produced by this step when available.
      */
@@ -102,4 +109,8 @@ public class GenerationStep {
      * Provider-specific metadata for this step.
      */
     private Map<String, Object> providerMetadata;
+
+    public List<SourceReference> getSources() {
+        return sources != null ? sources : SourceReferences.fromContent(content);
+    }
 }

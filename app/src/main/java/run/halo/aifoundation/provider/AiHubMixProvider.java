@@ -17,9 +17,12 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiReasoningOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.rerank.StandardRerankingClient;
 
 @Component
 public class AiHubMixProvider extends AbstractAiProviderType {
@@ -77,7 +80,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
     }
 
     @Override
@@ -90,6 +93,13 @@ public class AiHubMixProvider extends AbstractAiProviderType {
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         return buildOpenAiCompatibleEmbeddingModel(provider, apiKey, modelId,
             Map.of("APP-Code", APP_CODE));
+    }
+
+    @Override
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
+        String modelId) {
+        return new StandardRerankingClient(getProviderType(), trimTrailingSlash(resolveBaseUrl(provider)),
+            "/rerank", modelId, apiKey, webClientBuilder(provider), Map.of("APP-Code", APP_CODE));
     }
 
     @Override
@@ -131,6 +141,13 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
     }
 
+    @Override
+    public RerankingModelProviderOptions rerankingModelProviderOptions() {
+        return RerankingModelProviderOptions.builder()
+            .providerOptionsSupported(true)
+            .build();
+    }
+
     private String modelCatalogBaseUrl(AiProvider provider) {
         var baseUrl = trimTrailingSlash(resolveBaseUrl(provider));
         if (baseUrl.endsWith("/v1")) {
@@ -160,6 +177,11 @@ public class AiHubMixProvider extends AbstractAiProviderType {
             || containsToken(node.get("type"), "embedding")) {
             return remoteDiscoveredModel(modelId, ModelType.EMBEDDING, Set.of(),
                 AdapterType.OPENAI_EMBEDDING);
+        }
+
+        if (containsToken(node.get("types"), "rerank")
+            || containsToken(node.get("type"), "rerank")) {
+            return remoteDiscoveredModel(modelId, ModelType.RERANK, Set.of(), AdapterType.RERANK);
         }
 
         if (containsLanguageType(node)) {

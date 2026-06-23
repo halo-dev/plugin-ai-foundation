@@ -2,9 +2,7 @@
 
 ## Purpose
 Define console workflows for creating, editing, discovering, and managing AI providers and models.
-
 ## Requirements
-
 ### Requirement: Create new provider
 The Console UI SHALL allow admins to create a new `AiProvider` Extension by selecting a provider type and filling in configuration fields.
 
@@ -69,3 +67,34 @@ The Console UI SHALL allow admins to edit an existing `AiProvider`'s configurati
 - **AND** leaving Base URL blank SHALL keep using the provider type default base URL
 - **AND** `openailike` SHALL require manual `baseUrl` input because it has no default
 - **AND** `ollama` MAY expose `baseUrl` for local endpoint customization while providing a default local URL
+
+### Requirement: Console supports reranking model management
+The console SHALL allow administrators to create, edit, view, and select reranking models using generated API clients and provider metadata.
+
+#### Scenario: Create reranking model
+- **WHEN** an administrator creates an AI model
+- **THEN** the console allows selecting model type `rerank` only when the selected provider type supports reranking or manual configuration permits it
+
+#### Scenario: Select reranking model
+- **WHEN** a model selector is filtered to reranking models
+- **THEN** it lists enabled models with model type `rerank`
+
+### Requirement: Console creates provider-backed rerank models
+The console SHALL allow administrators to create reranking models for providers whose metadata declares native rerank support.
+
+#### Scenario: Create provider-backed rerank model
+- **WHEN** an administrator selects a provider whose metadata declares native rerank support while creating an AI model
+- **THEN** the console SHALL allow selecting model type `rerank`
+- **AND** the model SHALL be saved with the neutral rerank adapter type
+
+#### Scenario: Provider does not declare rerank support
+- **WHEN** an administrator selects a provider whose metadata does not declare native rerank support
+- **THEN** the console SHALL NOT present provider-backed rerank as a supported model type for that provider
+
+### Requirement: Console tests provider-backed rerank models
+The console SHALL support testing provider-backed rerank models through the generated rerank test API.
+
+#### Scenario: Test native rerank model
+- **WHEN** an administrator opens a configured native reranking model in the workbench
+- **THEN** the rerank test mode SHALL call the generated rerank endpoint
+- **AND** ranked results, scores, original indexes, warnings, and provider metadata SHALL be displayed when returned

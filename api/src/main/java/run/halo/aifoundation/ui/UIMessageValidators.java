@@ -160,6 +160,7 @@ public final class UIMessageValidators {
                 }
                 case SourceUrlPart source -> require(message, part, source.sourceId(),
                     "part.source.id.required", "Source part id must not be blank");
+                case SourceDocumentPart source -> validateSourceDocumentPart(message, source);
                 case FilePart file -> require(message, part, file.fileId(),
                     "part.file.id.required", "File part id must not be blank");
                 case ToolPart tool -> {
@@ -177,6 +178,16 @@ public final class UIMessageValidators {
                 issues.add(issue(message, data, data.id(), "part.data.type.invalid",
                     e.getMessage()));
             }
+        }
+
+        private void validateSourceDocumentPart(UIMessage<M> message, SourceDocumentPart source) {
+            require(message, source, source.sourceId(), "part.source.id.required",
+                "Source part id must not be blank");
+            require(message, source, source.mediaType(),
+                "part.source-document.media-type.required",
+                "Document source media type must not be blank");
+            require(message, source, source.title(), "part.source-document.title.required",
+                "Document source title must not be blank");
         }
 
         private void validateToolPart(UIMessage<M> message, ToolPart tool) {

@@ -3,12 +3,15 @@ package run.halo.aifoundation.ui;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
 import run.halo.aifoundation.control.CancellationToken;
+import reactor.core.publisher.Mono;
 
 /**
  * Options for the framework-neutral UI message chat handler.
@@ -26,6 +29,8 @@ public final class UIMessageChatOptions<M> {
     private Consumer<GenerateTextRequest.GenerateTextRequestBuilder> requestCustomizer =
         builder -> {
         };
+    private UIMessageChatPrepare<M> prepareHandler = context -> Mono.empty();
+    private final List<LanguageModelMiddleware> middleware = new ArrayList<>();
     private Consumer<UIMessageValidationOptions<M>> validationCustomizer = options -> {
     };
     private Consumer<UIMessageConversionOptions<M>> conversionCustomizer = options -> {
@@ -135,6 +140,34 @@ public final class UIMessageChatOptions<M> {
         Consumer<GenerateTextRequest.GenerateTextRequestBuilder> customizer) {
         this.requestCustomizer = Objects.requireNonNull(customizer,
             "customizer must not be null");
+        return this;
+    }
+
+    /**
+     * Registers an async prepare hook before the final model request is executed.
+     *
+     * @param prepare prepare hook
+     * @return this options object
+     */
+    public UIMessageChatOptions<M> prepare(UIMessageChatPrepare<M> prepare) {
+        this.prepareHandler = Objects.requireNonNull(prepare, "prepare must not be null");
+        return this;
+    }
+
+    /**
+     * Adds request-scoped language model middleware.
+     *
+     * @param middleware middleware entries
+     * @return this options object
+     */
+    public UIMessageChatOptions<M> middleware(LanguageModelMiddleware... middleware) {
+        if (middleware != null) {
+            for (var entry : middleware) {
+                if (entry != null) {
+                    this.middleware.add(entry);
+                }
+            }
+        }
         return this;
     }
 
@@ -251,6 +284,14 @@ public final class UIMessageChatOptions<M> {
 
     Consumer<GenerateTextRequest.GenerateTextRequestBuilder> requestCustomizer() {
         return requestCustomizer;
+    }
+
+    UIMessageChatPrepare<M> prepareHandler() {
+        return prepareHandler;
+    }
+
+    List<LanguageModelMiddleware> middleware() {
+        return List.copyOf(middleware);
     }
 
     Consumer<UIMessageValidationOptions<M>> validationCustomizer() {

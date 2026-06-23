@@ -11,6 +11,7 @@ import {
   filterEnabledChatModels,
   parseProviderOptionsJson,
   readTestUiMessageChatStream,
+  testRagUiMessageStreamUrl,
   testUiMessageChatStreamUrl,
   workbenchDataPartSchemas,
   workbenchMessageMetadataSchema,
@@ -341,6 +342,14 @@ describe('readTestUiMessageChatStream', () => {
   })
 })
 
+describe('testRagUiMessageStreamUrl', () => {
+  it('builds the encoded RAG stream URL', () => {
+    expect(testRagUiMessageStreamUrl('model/name')).toBe(
+      '/apis/console.api.aifoundation.halo.run/v1alpha1/models/model%2Fname/test-rag/ui-message/stream',
+    )
+  })
+})
+
 describe('applyWorkbenchUIMessageChunk', () => {
   it('aggregates text, reasoning, metadata, data, tool parts, warnings, and finish state', () => {
     const message: WorkbenchMessage = {
@@ -372,11 +381,42 @@ describe('applyWorkbenchUIMessageChunk', () => {
       data: { temp: 22 },
     })
     applyWorkbenchUIMessageChunk(message, {
+      type: 'data-rag-input',
+      id: 'rag-input',
+      name: 'rag-input',
+      data: { sourceCount: 1, sources: [{ id: 'source-1', score: 0.9 }] },
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'data-rag-diagnostics',
+      id: 'rag-diagnostics',
+      name: 'rag-diagnostics',
+      data: {
+        sourceCount: 1,
+        sources: [{ id: 'source-1', metadata: { rerankScore: 0.95 } }],
+        events: [{ type: 'rerank-finish', sourceCount: 1 }],
+      },
+    })
+    applyWorkbenchUIMessageChunk(message, {
       type: 'data-progress',
       id: 'progress',
       name: 'progress',
       data: { percent: 50 },
       transient: true,
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'source-url',
+      sourceId: 'url-1',
+      url: 'https://halo.run',
+      title: 'Halo',
+      providerMetadata: { sourceType: 'url' },
+    })
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'source-document',
+      sourceId: 'post-1',
+      mediaType: 'text/markdown',
+      title: 'Post',
+      filename: 'post.md',
+      providerMetadata: { sourceType: 'post' },
     })
     applyWorkbenchUIMessageChunk(message, {
       type: 'tool-search',
@@ -407,6 +447,29 @@ describe('applyWorkbenchUIMessageChunk', () => {
       reasoningState: 'done',
       state: 'done',
       transientData: { progress: { percent: 50 } },
+      ragInput: { sourceCount: 1, sources: [{ id: 'source-1', score: 0.9 }] },
+      ragDiagnostics: {
+        sourceCount: 1,
+        sources: [{ id: 'source-1', metadata: { rerankScore: 0.95 } }],
+        events: [{ type: 'rerank-finish', sourceCount: 1 }],
+      },
+      sourceReferences: [
+        {
+          id: 'url-1',
+          type: 'source-url',
+          title: 'Halo',
+          url: 'https://halo.run',
+          providerMetadata: { sourceType: 'url' },
+        },
+        {
+          id: 'post-1',
+          type: 'source-document',
+          title: 'Post',
+          mediaType: 'text/markdown',
+          filename: 'post.md',
+          providerMetadata: { sourceType: 'post' },
+        },
+      ],
       warnings: [{ code: 'w', message: 'warn' }],
       uiMessage: {
         id: 'assistant-ui',
@@ -421,6 +484,37 @@ describe('applyWorkbenchUIMessageChunk', () => {
           },
           { type: 'text', id: 'answer', text: 'Hi' },
           { type: 'data-weather', id: 'weather', name: 'weather', data: { temp: 22 } },
+          {
+            type: 'data-rag-input',
+            id: 'rag-input',
+            name: 'rag-input',
+            data: { sourceCount: 1, sources: [{ id: 'source-1', score: 0.9 }] },
+          },
+          {
+            type: 'data-rag-diagnostics',
+            id: 'rag-diagnostics',
+            name: 'rag-diagnostics',
+            data: {
+              sourceCount: 1,
+              sources: [{ id: 'source-1', metadata: { rerankScore: 0.95 } }],
+              events: [{ type: 'rerank-finish', sourceCount: 1 }],
+            },
+          },
+          {
+            type: 'source-url',
+            sourceId: 'url-1',
+            url: 'https://halo.run',
+            title: 'Halo',
+            providerMetadata: { sourceType: 'url' },
+          },
+          {
+            type: 'source-document',
+            sourceId: 'post-1',
+            mediaType: 'text/markdown',
+            title: 'Post',
+            filename: 'post.md',
+            providerMetadata: { sourceType: 'post' },
+          },
           {
             type: 'tool-search',
             toolCallId: 'call_1',
@@ -588,6 +682,31 @@ describe('applyWorkbenchUIMessageChunk', () => {
 
     expect(message.state).toBe('stopped')
     expect(message.content).toBe('partial')
+  })
+
+  it('marks error chunks as failed terminal messages', () => {
+    const message: WorkbenchMessage = {
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      state: 'streaming',
+      reasoningState: 'streaming',
+      uiMessage: {
+        id: 'assistant-ui',
+        role: 'ASSISTANT',
+        parts: [],
+      },
+    }
+
+    applyWorkbenchUIMessageChunk(message, {
+      type: 'error',
+      errorText: 'OpenAI-compatible chat request failed: status=401',
+      metadata: { exceptionType: 'error' },
+    })
+
+    expect(message.state).toBe('error')
+    expect(message.reasoningState).toBe('done')
+    expect(message.content).toBe('OpenAI-compatible chat request failed: status=401')
   })
 })
 

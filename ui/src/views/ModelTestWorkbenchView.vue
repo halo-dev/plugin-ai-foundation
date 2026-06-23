@@ -1,6 +1,11 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import { ModelOptionModelTypeEnum, type TestEmbeddingResponse } from '@/api/generated'
+import {
+  ModelOptionModelTypeEnum,
+  type TestEmbeddingResponse,
+  type TestRagSource,
+  type TestRerankResponse,
+} from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import {
@@ -10,6 +15,7 @@ import {
   createAssistantUIMessage,
   createUserUIMessage,
   parseProviderOptionsJson,
+  testRagUiMessageStreamUrl,
   testUiMessageChatStreamUrl,
   workbenchDataPartSchemas,
   workbenchMessageMetadataSchema,
@@ -43,6 +49,8 @@ import ChatMessageItem from './components/workbench/ChatMessageItem.vue'
 import EmbeddingTestPanel from './components/workbench/EmbeddingTestPanel.vue'
 import ExamplePrompts from './components/workbench/ExamplePrompts.vue'
 import ParameterSidebar from './components/workbench/ParameterSidebar.vue'
+import RagTestPanel from './components/workbench/RagTestPanel.vue'
+import RerankTestPanel from './components/workbench/RerankTestPanel.vue'
 
 const modelType = shallowRef<string | undefined>()
 const availableOnly = shallowRef<boolean | undefined>(true)
@@ -57,7 +65,7 @@ const {
 })
 
 const selectedModelName = useRouteQuery<string | undefined>('model')
-const testMode = shallowRef<'chat' | 'embedding'>('chat')
+const testMode = shallowRef<'chat' | 'embedding' | 'rerank' | 'rag'>('chat')
 
 const messages = ref<WorkbenchMessage[]>([])
 const input = shallowRef('')
@@ -109,9 +117,50 @@ const embeddingResult = shallowRef<TestEmbeddingResponse | undefined>()
 const embeddingError = shallowRef('')
 const isEmbeddingTesting = shallowRef(false)
 
+const rerankQuery = shallowRef('Halo AI Foundation 如何支持 RAG?')
+const rerankDocuments = shallowRef(
+  'AI Foundation 提供统一的语言模型、嵌入和 UI Message 能力\nHalo 是一个开源建站工具\nRAG 通常需要检索、上下文注入和来源展示',
+)
+const rerankProviderOptionsText = shallowRef('{}')
+const rerankProviderOptionsError = shallowRef('')
+const rerankResult = shallowRef<TestRerankResponse | undefined>()
+const rerankError = shallowRef('')
+const isRerankTesting = shallowRef(false)
+
+const ragQuery = shallowRef('AI Foundation 如何支持 RAG?')
+const ragSources = ref<TestRagSource[]>([
+  {
+    id: 'source-1',
+    title: 'AI Foundation',
+    content: 'AI Foundation 提供统一的语言模型、嵌入、Rerank 和 UI Message 能力。',
+    score: 0.86,
+    visible: true,
+    usedForContext: true,
+  },
+  {
+    id: 'source-2',
+    title: 'RAG Runtime',
+    content: 'RAG 流程通常包含检索、可选重排、上下文注入、来源展示和诊断事件。',
+    score: 0.78,
+    visible: true,
+    usedForContext: true,
+  },
+])
+const ragRerankModelName = shallowRef<string | undefined>()
+const ragTopN = shallowRef<number | undefined>(4)
+const ragProviderOptionsText = shallowRef('{}')
+const ragProviderOptionsError = shallowRef('')
+const ragRerankProviderOptionsText = shallowRef('{}')
+const ragRerankProviderOptionsError = shallowRef('')
+const ragMessages = ref<WorkbenchMessage[]>([])
+const ragError = shallowRef('')
+const isRagTesting = shallowRef(false)
+
 let activeUiMessageModelName: string | undefined
 let activeUiMessageWorkbenchId: string | undefined
 let activeUiMessageParameters: ReturnType<typeof buildChatParameters> | undefined
+let activeRagModelName: string | undefined
+let activeRagWorkbenchId: string | undefined
 
 const uiChat = useChat<Record<string, unknown>>({
   id: 'model-test-workbench-ui-message',
@@ -180,6 +229,35 @@ const uiChat = useChat<Record<string, unknown>>({
   },
 })
 
+const ragUiChat = useChat<Record<string, unknown>>({
+  id: 'model-test-workbench-rag-ui-message',
+  transport: new DefaultChatTransport({
+    api: '',
+    prepareSendMessagesRequest: ({ body }) => {
+      if (!activeRagModelName) {
+        throw new Error('未选择模型')
+      }
+      const ragBody = { ...(body || {}) }
+      delete ragBody.id
+      delete ragBody.messages
+      delete ragBody.trigger
+      delete ragBody.messageId
+      return {
+        api: testRagUiMessageStreamUrl(activeRagModelName),
+        body: ragBody,
+      }
+    },
+  }),
+  generateId: () => activeRagWorkbenchId || utils.id.uuid(),
+  messageMetadataSchema: workbenchMessageMetadataSchema,
+  dataPartSchemas: workbenchDataPartSchemas,
+  onFinish: ({ terminal }) => {
+    if (activeRagWorkbenchId && terminal.errorText) {
+      appendRagAssistantError(activeRagWorkbenchId, terminal.errorText)
+    }
+  },
+})
+
 const chatModels = computed(() => {
   return (modelOptions.value || []).filter((model) => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Language
@@ -190,12 +268,23 @@ const embeddingModels = computed(() => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Embedding
   })
 })
+const rerankModels = computed(() => {
+  return (modelOptions.value || []).filter((model) => {
+    return model.name && model.modelType === ModelOptionModelTypeEnum.Rerank
+  })
+})
 const activeModels = computed(() =>
-  testMode.value === 'embedding' ? embeddingModels.value : chatModels.value,
+  testMode.value === 'embedding'
+    ? embeddingModels.value
+    : testMode.value === 'rerank'
+      ? rerankModels.value
+      : chatModels.value,
 )
 const activeModelType = computed(() =>
   testMode.value === 'embedding'
     ? ModelOptionModelTypeEnum.Embedding
+    : testMode.value === 'rerank'
+      ? ModelOptionModelTypeEnum.Rerank
     : ModelOptionModelTypeEnum.Language,
 )
 
@@ -228,8 +317,12 @@ watch(
     const selected = models.find((item) => item.name === selectedModelName.value)
     if (selected?.modelType === ModelOptionModelTypeEnum.Embedding) {
       testMode.value = 'embedding'
+    } else if (selected?.modelType === ModelOptionModelTypeEnum.Rerank) {
+      testMode.value = 'rerank'
     } else if (selected?.modelType === ModelOptionModelTypeEnum.Language) {
-      testMode.value = 'chat'
+      if (testMode.value !== 'rag') {
+        testMode.value = 'chat'
+      }
     }
     const candidates = activeModels.value
     if (!candidates.length) {
@@ -261,6 +354,14 @@ watch(
   uiChat.messages,
   (uiMessages) => {
     syncActiveUiMessageSnapshot(uiMessages ?? [])
+  },
+  { deep: true },
+)
+
+watch(
+  ragUiChat.messages,
+  (uiMessages) => {
+    syncActiveRagUiMessageSnapshot(uiMessages ?? [])
   },
   { deep: true },
 )
@@ -565,7 +666,7 @@ function currentWorkbenchPageContext(): Record<string, unknown> {
     page: {
       name: 'AI Foundation 模型测试工作台',
       mode: testMode.value,
-      capabilities: ['model-selection', 'chat-stream-test', 'agent-tool-continuation-test'],
+      capabilities: ['model-selection', 'chat-stream-test', 'rag-stream-test'],
     },
     model: selected
       ? {
@@ -699,6 +800,24 @@ function syncActiveUiMessageSnapshot(uiMessages: readonly unknown[]) {
     return
   }
   applyWorkbenchUIMessageSnapshot(target, haloMessageToWorkbench(assistant), 'streaming')
+}
+
+function syncActiveRagUiMessageSnapshot(uiMessages: readonly unknown[]) {
+  if (!activeRagWorkbenchId) {
+    return
+  }
+  const index = ragMessages.value.findIndex((item) => item.id === activeRagWorkbenchId)
+  const assistant = [...uiMessages]
+    .reverse()
+    .find((item): item is HaloUIMessage<Record<string, unknown>> => {
+      return (item as HaloUIMessage<Record<string, unknown>> | undefined)?.role === 'assistant'
+    })
+  if (index < 0 || !assistant) {
+    return
+  }
+  const message = cloneWorkbenchMessage(ragMessages.value[index])
+  applyWorkbenchUIMessageSnapshot(message, haloMessageToWorkbench(assistant), 'streaming')
+  ragMessages.value.splice(index, 1, message)
 }
 
 function syncWorkbenchMessageFromUiChat(message: WorkbenchMessage) {
@@ -880,8 +999,65 @@ function finishAssistantMessage(messageId: string, state: WorkbenchMessage['stat
   }
 }
 
+function finishRagAssistantMessage(messageId: string, state: WorkbenchMessage['state']) {
+  updateRagAssistantMessage(messageId, (message) => {
+    if (message.state === 'streaming') {
+      message.state = state
+      if (message.reasoningState === 'streaming') {
+        message.reasoningState = 'done'
+      }
+    }
+  })
+}
+
+function appendRagAssistantError(messageId: string, content: string) {
+  updateRagAssistantMessage(messageId, (message) => {
+    const normalizedContent = content.trim()
+    if (message.state === 'error' && message.content.includes(normalizedContent)) {
+      return
+    }
+    message.content = message.content.trim()
+      ? `${message.content.trim()}\n\n${normalizedContent}`
+      : normalizedContent
+    message.state = 'error'
+    if (message.reasoningState === 'streaming') {
+      message.reasoningState = 'done'
+    }
+  })
+}
+
+function updateRagAssistantMessage(
+  messageId: string,
+  updater: (message: WorkbenchMessage) => void,
+) {
+  const index = ragMessages.value.findIndex((item) => item.id === messageId)
+  if (index < 0) {
+    return
+  }
+  const message = cloneWorkbenchMessage(ragMessages.value[index])
+  updater(message)
+  ragMessages.value.splice(index, 1, message)
+}
+
+function cloneWorkbenchMessage(message: WorkbenchMessage): WorkbenchMessage {
+  return {
+    ...message,
+    uiMessage: message.uiMessage
+      ? {
+          ...message.uiMessage,
+          metadata: message.uiMessage.metadata ? { ...message.uiMessage.metadata } : undefined,
+          parts: message.uiMessage.parts.map((part) => ({ ...part })),
+        }
+      : undefined,
+    toolEvents: message.toolEvents?.map((event) => ({ ...event })),
+    warnings: message.warnings?.map((warning) => ({ ...warning })),
+    transientData: message.transientData ? { ...message.transientData } : undefined,
+  }
+}
+
 function stopGeneration() {
   uiChat.stop()
+  ragUiChat.stop()
   const streamingMessage = [...messages.value].reverse().find((item) => item.state === 'streaming')
   if (streamingMessage) {
     streamingMessage.state = 'stopped'
@@ -893,6 +1069,8 @@ function stopGeneration() {
   activeUiMessageModelName = undefined
   activeUiMessageWorkbenchId = undefined
   activeUiMessageParameters = undefined
+  activeRagModelName = undefined
+  activeRagWorkbenchId = undefined
 }
 
 function clearMessages() {
@@ -902,6 +1080,14 @@ function clearMessages() {
   messages.value = []
   uiChat.setMessages([])
   shouldAutoScroll.value = true
+}
+
+function clearRagMessages() {
+  if (isRagTesting.value) {
+    ragUiChat.stop()
+  }
+  ragMessages.value = []
+  ragError.value = ''
 }
 
 watch(testToolApprovalEnabled, (enabled) => {
@@ -1024,8 +1210,150 @@ async function runEmbeddingTest() {
   }
 }
 
+async function runRerankTest() {
+  const model = selectedModel.value
+  if (!model?.name || isRerankTesting.value) {
+    return
+  }
+  const documents = rerankDocuments.value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  if (!rerankQuery.value.trim()) {
+    rerankError.value = '请输入 Query'
+    return
+  }
+  if (!documents.length) {
+    rerankError.value = '请至少输入一个候选文档'
+    return
+  }
+  const providerOptions = parseProviderOptionsJson(rerankProviderOptionsText.value)
+  if (providerOptions.error) {
+    rerankProviderOptionsError.value = providerOptions.error
+    return
+  }
+  rerankProviderOptionsError.value = ''
+  rerankError.value = ''
+  rerankResult.value = undefined
+  isRerankTesting.value = true
+  try {
+    const { data } = await aiConsoleApiClient.model.testModelRerank({
+      name: model.name,
+      testRerankRequest: {
+        query: rerankQuery.value,
+        documents,
+        providerOptions: providerOptions.value as
+          | { [key: string]: { [key: string]: object } }
+          | undefined,
+      },
+    })
+    rerankResult.value = data
+  } catch (e) {
+    rerankError.value = `请求失败: ${(e as Error).message}`
+  } finally {
+    isRerankTesting.value = false
+  }
+}
+
+async function runRagTest() {
+  const model = selectedModel.value
+  if (!model?.name || isRagTesting.value) {
+    return
+  }
+  const sources = ragSources.value
+    .map((source, index) => ({
+      ...source,
+      id: source.id?.trim() || `source-${index + 1}`,
+      title: source.title?.trim() || undefined,
+      url: source.url?.trim() || undefined,
+      content: source.content?.trim(),
+    }))
+    .filter((source) => !!source.content)
+  if (!ragQuery.value.trim()) {
+    ragError.value = '请输入 Query'
+    return
+  }
+  if (!sources.length) {
+    ragError.value = '请至少填写一个来源内容'
+    return
+  }
+  const providerOptions = parseProviderOptionsJson(ragProviderOptionsText.value)
+  if (providerOptions.error) {
+    ragProviderOptionsError.value = providerOptions.error
+    return
+  }
+  ragProviderOptionsError.value = ''
+  const rerankProviderOptions = parseProviderOptionsJson(ragRerankProviderOptionsText.value)
+  if (rerankProviderOptions.error) {
+    ragRerankProviderOptionsError.value = rerankProviderOptions.error
+    return
+  }
+  ragRerankProviderOptionsError.value = ''
+  ragError.value = ''
+  ragMessages.value = [
+    {
+      id: utils.id.uuid(),
+      role: 'user',
+      content: ragQuery.value.trim(),
+      uiMessage: createUserUIMessage(utils.id.uuid(), ragQuery.value.trim()),
+    },
+  ]
+  const assistantMessage: WorkbenchMessage = createAssistantMessage(model)
+  assistantMessage.uiMessage = createAssistantUIMessage(assistantMessage.id)
+  ragMessages.value.push(assistantMessage)
+  const assistantMessageId = assistantMessage.id
+  const requestBody = {
+    query: ragQuery.value.trim(),
+    system: systemPrompt.value.trim() || undefined,
+    sources,
+    rerankModelName: ragRerankModelName.value,
+    topN: numberOrUndefined(ragTopN.value),
+    temperature: numberOrUndefined(temperature.value),
+    topP: numberOrUndefined(topP.value),
+    maxOutputTokens: numberOrUndefined(maxTokens.value),
+    seed: numberOrUndefined(seed.value),
+    maxRetries: numberOrUndefined(maxRetries.value),
+    reasoning: buildReasoningOptions({
+      mode: reasoningMode.value,
+      effort: reasoningEffort.value,
+    }),
+    providerOptions: providerOptions.value as { [key: string]: { [key: string]: object } } | undefined,
+    rerankProviderOptions: rerankProviderOptions.value as
+      | { [key: string]: { [key: string]: object } }
+      | undefined,
+    ragOptions: {
+      emptyContextPolicy: 'CONTINUE_WITHOUT_CONTEXT',
+      rerankFailurePolicy: 'USE_RETRIEVED_ORDER',
+    },
+  }
+  isRagTesting.value = true
+  activeRagModelName = model.name
+  activeRagWorkbenchId = assistantMessageId
+  ragUiChat.setMessages(workbenchMessagesToHalo(ragMessages.value.filter((item) => item.id !== assistantMessageId)))
+  try {
+    await ragUiChat.sendMessage(undefined, { body: requestBody })
+    if (ragUiChat.error.value) {
+      appendRagAssistantError(assistantMessageId, ragUiChat.error.value.message)
+      return
+    }
+    finishRagAssistantMessage(assistantMessageId, 'done')
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') {
+      finishRagAssistantMessage(assistantMessageId, 'stopped')
+      return
+    }
+    ragError.value = `请求失败: ${(e as Error).message}`
+    appendRagAssistantError(assistantMessageId, ragError.value)
+  } finally {
+    isRagTesting.value = false
+    activeRagModelName = undefined
+    activeRagWorkbenchId = undefined
+  }
+}
+
 onBeforeUnmount(() => {
   uiChat.stop()
+  ragUiChat.stop()
 })
 </script>
 
@@ -1034,9 +1362,9 @@ onBeforeUnmount(() => {
     <VLoading v-if="isLoading" />
 
     <VEmpty
-      v-else-if="!chatModels.length && !embeddingModels.length"
+      v-else-if="!chatModels.length && !embeddingModels.length && !rerankModels.length"
       title="暂无可测试的模型"
-      message="你可以在配置选项卡中添加或启用支持对话或嵌入能力的模型"
+      message="你可以在配置选项卡中添加或启用支持对话、嵌入或 Rerank 能力的模型"
     >
       <template #actions>
         <VButton :loading="isFetching" @click="refetch()">刷新</VButton>
@@ -1070,7 +1398,15 @@ onBeforeUnmount(() => {
                   <span
                     class=":uno: hidden border border-emerald-200 rounded bg-emerald-50 text-[10px] text-emerald-700 font-medium sm:inline-flex !px-1.5 !py-0.5"
                   >
-                    {{ testMode === 'chat' ? 'Language' : 'Embedding' }}
+                    {{
+                      testMode === 'chat'
+                        ? 'Language'
+                        : testMode === 'embedding'
+                          ? 'Embedding'
+                          : testMode === 'rerank'
+                            ? 'Rerank'
+                            : 'RAG'
+                    }}
                   </span>
                 </div>
                 <div class=":uno: mt-0.5 truncate text-xs text-slate-500">
@@ -1091,7 +1427,12 @@ onBeforeUnmount(() => {
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="isStreaming || isEmbeddingTesting || !chatModels.length"
+                  :disabled="
+                    isStreaming ||
+                    isEmbeddingTesting ||
+                    isRerankTesting ||
+                    isRagTesting
+                  "
                   @click="testMode = 'chat'"
                 >
                   <RiMessage3Line class=":uno: size-3.5" />
@@ -1105,11 +1446,54 @@ onBeforeUnmount(() => {
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="isStreaming || isEmbeddingTesting || !embeddingModels.length"
+                  :disabled="
+                    isStreaming ||
+                    isEmbeddingTesting ||
+                    isRerankTesting ||
+                    isRagTesting
+                  "
                   @click="testMode = 'embedding'"
                 >
                   <RiStackLine class=":uno: size-3.5" />
                   嵌入
+                </button>
+                <button
+                  type="button"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
+                  :class="
+                    testMode === 'rerank'
+                      ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
+                      : ':uno: text-slate-500 hover:text-slate-800'
+                  "
+                  :disabled="
+                    isStreaming ||
+                    isEmbeddingTesting ||
+                    isRerankTesting ||
+                    isRagTesting
+                  "
+                  @click="testMode = 'rerank'"
+                >
+                  <RiStackLine class=":uno: size-3.5" />
+                  Rerank
+                </button>
+                <button
+                  type="button"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
+                  :class="
+                    testMode === 'rag'
+                      ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
+                      : ':uno: text-slate-500 hover:text-slate-800'
+                  "
+                  :disabled="
+                    isStreaming ||
+                    isEmbeddingTesting ||
+                    isRerankTesting ||
+                    isRagTesting
+                  "
+                  @click="testMode = 'rag'"
+                >
+                  <RiStackLine class=":uno: size-3.5" />
+                  RAG
                 </button>
               </div>
 
@@ -1118,7 +1502,7 @@ onBeforeUnmount(() => {
                 name="model"
                 :model-type="activeModelType"
                 :available="availableOnly"
-                :disabled="isStreaming || isEmbeddingTesting"
+                :disabled="isStreaming || isEmbeddingTesting || isRerankTesting || isRagTesting"
                 placeholder="选择测试模型"
                 search-placeholder="搜索模型..."
                 full-width
@@ -1182,7 +1566,7 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <template v-else>
+        <template v-else-if="testMode === 'embedding'">
           <EmbeddingTestPanel
             :inputs="embeddingInputs"
             :result="embeddingResult"
@@ -1224,10 +1608,53 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </template>
+
+        <template v-else-if="testMode === 'rerank'">
+          <RerankTestPanel
+            :query="rerankQuery"
+            :documents="rerankDocuments"
+            :provider-options-text="rerankProviderOptionsText"
+            :provider-options-error="rerankProviderOptionsError"
+            :result="rerankResult"
+            :error="rerankError"
+            :is-loading="isRerankTesting"
+            :disabled="!selectedModel"
+            @update:query="rerankQuery = $event"
+            @update:documents="rerankDocuments = $event"
+            @update:provider-options-text="rerankProviderOptionsText = $event"
+            @run="runRerankTest"
+          />
+        </template>
+
+        <template v-else>
+          <RagTestPanel
+            :query="ragQuery"
+            :sources="ragSources"
+            :rerank-model-name="ragRerankModelName"
+            :rerank-models="rerankModels"
+            :top-n="ragTopN"
+            :provider-options-text="ragProviderOptionsText"
+            :provider-options-error="ragProviderOptionsError"
+            :rerank-provider-options-text="ragRerankProviderOptionsText"
+            :rerank-provider-options-error="ragRerankProviderOptionsError"
+            :messages="ragMessages"
+            :error="ragError"
+            :is-loading="isRagTesting"
+            :disabled="!selectedModel"
+            @update:query="ragQuery = $event"
+            @update:sources="ragSources = $event"
+            @update:rerank-model-name="ragRerankModelName = $event"
+            @update:top-n="ragTopN = $event"
+            @update:provider-options-text="ragProviderOptionsText = $event"
+            @update:rerank-provider-options-text="ragRerankProviderOptionsText = $event"
+            @run="runRagTest"
+            @clear="clearRagMessages"
+          />
+        </template>
       </section>
 
       <ParameterSidebar
-        :mode="testMode"
+        :mode="testMode === 'rag' ? 'chat' : testMode"
         :system-prompt="systemPrompt"
         :temperature="temperature"
         :top-p="topP"

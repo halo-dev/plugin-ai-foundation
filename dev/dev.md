@@ -75,6 +75,8 @@ public class ArticleAiService {
 | `languageModel(String modelName)` | 获取指定语言模型；空值使用默认语言模型 |
 | `embeddingModel()` | 获取默认嵌入模型 |
 | `embeddingModel(String modelName)` | 获取指定嵌入模型；空值使用默认嵌入模型 |
+| `rerankingModel()` | 获取默认 Rerank 模型 |
+| `rerankingModel(String modelName)` | 获取指定 Rerank 模型；空值使用默认 Rerank 模型 |
 
 `modelName` 是 `AiModel.metadata.name`，不是供应方原始模型 ID。
 
@@ -376,6 +378,18 @@ return aiModelService()
     .flatMap(model -> model.embedQuery("Halo 插件开发"));
 ```
 
+普通文本值向量：
+
+```java
+return embeddingModel.embedValue("Halo 插件开发");
+```
+
+批量普通文本值：
+
+```java
+return embeddingModel.embedValues(List.of("Halo", "插件", "模型能力"));
+```
+
 批量嵌入：
 
 ```java
@@ -431,7 +445,176 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 `providerOptions` 必须按供应方命名空间分组。不支持的命名空间或选项会通过异常或 warning 暴露，
 调用方不要假设会被静默忽略。
 
-## 13. 错误和告警
+## 13. Rerank 模型
+
+Rerank 通过 `AiModelService.rerankingModel(...)` 获取，调用形态与语言模型、嵌入模型保持一致：
+
+```java
+return aiModelService()
+    .flatMap(service -> service.rerankingModel(rerankModelName))
+    .flatMap(model -> model.rerank(RerankRequest.builder()
+        .query("Halo AI Foundation 如何支持 RAG?")
+        .documents(
+            "AI Foundation 提供统一 AI 能力。",
+            "RAG 通常需要检索、重排和上下文注入。")
+        .topN(2)
+        .build()));
+```
+
+当前内置 provider-backed Rerank 适配覆盖智谱 AI、DashScope、SiliconFlow、文心一言、豆包、OpenRouter、Gitee 模力方舟和 AIHubMix。AI Foundation 不在代码或文档中维护推荐模型清单；管理员应根据供应商控制台和实际可用模型，手动创建 `modelType=rerank` 的模型，或使用远程发现结果导入。
+
+远程发现的边界是：
+
+- 只有供应商返回显式的 rerank 类型、能力字段，或供应商官方 typed endpoint 明确返回 reranker 分组时，发现结果才会标记为 `rerank`。
+- 如果远程接口只返回模型 ID，AI Foundation 不会因为模型名包含 `rerank`、`reranker` 等字符串就推断为 Rerank。
+- 发现不到 Rerank 模型不代表供应商不可用；手动创建模型仍然是兜底方式。
+
+Provider options 仍按供应商命名空间传递：
+
+```java
+RerankRequest request = RerankRequest.builder()
+    .query(query)
+    .documents(documents)
+    .providerOptions(Map.of(
+        "zhipuai", Map.of("return_raw_scores", true)))
+    .build();
+```
+
+## 14. RAG 组合
+
+在插件中实现 RAG 时，先用自己的业务检索得到 `RetrievedSource`，再把 retriever 交给
+`RagLanguageModelMiddleware`。生成结果中的 `getSources()` 可直接用于前端引用展示：
+
+```java
+RagRetriever retriever = request -> Mono.just(RetrievedContext.builder()
+    .query(request.getQuery())
+    .sources(mySearch(request.getQuery()))
+    .build());
+
+return aiModelService()
+    .flatMap(service -> Mono.zip(
+        service.languageModel(languageModelName),
+        service.rerankingModel(rerankModelName)))
+    .flatMap(tuple -> {
+        var languageModel = tuple.getT1();
+        var reranker = new RerankingModelRagSourceReranker(tuple.getT2());
+        var request = GenerateTextRequest.builder()
+            .prompt("请基于资料回答用户问题：" + userQuestion)
+            .middleware(new RagLanguageModelMiddleware(RagMiddlewareOptions.builder()
+                .retriever(retriever)
+                .reranker(reranker)
+                .maxResults(6)
+                .build()))
+            .build();
+        return languageModel.generateText(request);
+    })
+    .map(result -> Map.of(
+        "answer", result.getText(),
+        "sources", result.getSources()));
+```
+
+## 15. Middleware、来源和 RAG
+
+语言模型 middleware 可以按模型或单次请求附加，用于请求变换、非流式包装和流式包装：
+
+```java
+LanguageModel modelWithMiddleware = LanguageModelMiddlewares.wrap(languageModel, middleware);
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("介绍 Halo")
+    .middleware(middleware)
+    .build();
+```
+
+调用方插件可以用自己的文章、页面、文件或外部检索结果构造 `RetrievedSource`。`content`
+用于模型上下文，`title`、`url`、`score` 和 `metadata` 用于展示与诊断：
+
+```java
+RagRetriever retriever = request -> search(request.getQuery())
+    .map(results -> RetrievedContext.builder()
+        .query(request.getQuery())
+        .sources(results.stream()
+            .map(item -> RetrievedSource.builder()
+                .id(item.id())
+                .sourceType("post")
+                .title(item.title())
+                .url(item.url())
+                .content(item.content())
+                .score(item.score())
+                .build())
+            .toList())
+        .build());
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("这篇文章讲了什么？")
+    .middleware(RagMiddlewares.rag(retriever))
+    .build();
+```
+
+默认行为：
+
+| 场景 | 默认行为 |
+| --- | --- |
+| 有检索结果 | 将上下文注入最后一条用户消息 |
+| 空上下文 | 不调用语言模型，返回可配置空上下文文本 |
+| 检索失败 | 请求失败 |
+| 配置 reranker 且 rerank 失败 | 请求失败 |
+| 流式输出 | source 事件出现在回答文本前 |
+
+`GenerateTextResult.getSources()`、`GenerationStep.getSources()` 和 `StreamTextResult.sources()`
+会返回可展示的 `SourceReference`。`RetrievedSource.content` 默认只用于 prompt，不会暴露给 UI。
+
+当结果需要以 UI Message 流返回给前端时，可以组合模型流、source part 和调用方自定义
+`data-*`。source 有 URL 时会映射为 `source-url`；没有 URL 时会映射为 `source-document`。
+`data-*` 的名称和 payload 由调用方定义：
+
+```java
+return aiModelService()
+    .flatMap(AiModelService::languageModel)
+    .map(model -> UIMessageStreams.createWithOptions(options -> options
+        .messageId(messageId)
+        .execute(writer -> {
+            writer.writeTransientData("rag-status", Map.of("stage", "retrieving"));
+
+            var request = GenerateTextRequest.builder()
+                .prompt(userQuestion)
+                .middleware(RagMiddlewares.rag(retriever))
+                .build();
+            var stream = model.streamText(request);
+
+            writer.writeTransientData("rag-status", Map.of("stage", "generating"));
+            writer.merge(stream.toUIMessageStream());
+        })))
+    .map(stream -> new UIMessageStreamResponse(stream,
+        chunk -> objectMapper.writeValueAsString(chunk)));
+```
+
+如果要手动写入来源，也可以直接使用 `SourceReferences`：
+
+```java
+SourceReference source = SourceReference.builder()
+    .id("post-hello")
+    .sourceType("post")
+    .title("Hello Halo")
+    .metadata(Map.of("mediaType", "text/markdown", "filename", "hello.md"))
+    .build();
+
+writer.write(SourceReferences.toUIMessageChunk(source));
+```
+
+可选 reranker：
+
+```java
+RagSourceReranker reranker = new RerankingModelRagSourceReranker(rerankingModel);
+
+LanguageModelMiddleware rag = RagMiddlewares.rag(RagMiddlewareOptions.defaults(retriever)
+    .toBuilder()
+    .reranker(reranker)
+    .rerankFailurePolicy(RagFailurePolicy.USE_RETRIEVED_ORDER)
+    .build());
+```
+
+## 16. 错误和告警
 
 常见异常：
 
@@ -443,10 +626,12 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 | `StructuredOutputValidationException` | 结构化输出校验失败 |
 | `EmbeddingTimeoutException` | 嵌入调用超时 |
 | `EmbeddingCancelledException` | 嵌入调用被取消 |
+| `RerankTimeoutException` | Rerank 调用超时 |
+| `RerankCancelledException` | Rerank 调用被取消 |
 
 `warnings` 表示请求已经完成，但存在能力差异或可恢复问题。建议记录 warning，并在需要时提示用户。
 
-## 14. 核心类型字段速查
+## 17. 核心类型字段速查
 
 前面的章节按使用流程介绍；如果需要确认某个类型有哪些可用字段，可以查下面的表。
 更细的行为约束以 API 包 JavaDoc 为准。
@@ -557,6 +742,20 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 | `EmbeddingResponse` | `warnings` | 可恢复告警 |
 | `EmbeddingResponse` | `providerMetadata` | 供应方元数据 |
 
+### `RerankRequest` / `RerankResponse`
+
+| 类型 | 字段 | 说明 |
+| --- | --- | --- |
+| `RerankRequest` | `query` | 排序查询 |
+| `RerankRequest` | `documents` | 候选文档，结果 index 指向该顺序 |
+| `RerankRequest` | `topN` | 返回结果上限 |
+| `RerankRequest` | `providerOptions` | 供应方原生选项 |
+| `RerankRequest` | `metadata` / `context` | 调用方数据 |
+| `RerankRequest` | `cancellationToken` / `timeouts` | 取消和超时 |
+| `RerankResponse` | `results` | 排序结果 |
+| `RerankResponse` | `usage` / `response` | usage 和响应元数据 |
+| `RerankResponse` | `warnings` / `providerMetadata` | 告警和供应方元数据 |
+
 ### `UIMessage` 相关类型
 
 | 类型 | 字段 / 方法 | 说明 |
@@ -582,6 +781,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 | `ReasoningPart` | `id`, `text`, `providerMetadata` | 推理内容 |
 | `DataPart` | `name`, `data` | 自定义数据 |
 | `SourceUrlPart` | `sourceId`, `url`, `title` | URL 来源 |
+| `SourceDocumentPart` | `sourceId`, `mediaType`, `title`, `filename` | 文档来源 |
 | `FilePart` | `fileId`, `url`, `mediaType`, `data` | 文件 |
 | `ToolCallPart` | `toolCallId`, `toolName`, `input` | 工具调用 |
 | `ToolResultPart` | `toolCallId`, `toolName`, `result` | 工具结果 |
@@ -591,7 +791,7 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 
 完整聚合、校验和转换规则见 [UI Message Stream](./ui-message-stream.md)。
 
-## 15. 可选 FormKit 输入：`aiModelSelector`
+## 18. 可选 FormKit 输入：`aiModelSelector`
 
 `aiModelSelector` 是本插件提供的 FormKit 输入类型，可在调用方插件设置页中让用户选择模型。
 保存值是 `AiModel.metadata.name`，可直接传给 `languageModel(modelName)` 或 `embeddingModel(modelName)`。
@@ -617,7 +817,7 @@ formSchema:
 
 | Prop | 说明 |
 | --- | --- |
-| `modelType` | 筛选 `language` 或 `embedding` |
+| `modelType` | 筛选 `language`、`embedding`、`rerank` 或 `image-generation` |
 | `providerName` | 筛选指定 `AiProvider.metadata.name` |
 | `providerType` | 筛选指定供应方类型 |
 | `available` | 只显示可用模型，默认 `true` |

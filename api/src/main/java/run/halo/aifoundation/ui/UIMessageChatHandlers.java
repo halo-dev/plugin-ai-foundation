@@ -7,6 +7,9 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.chat.StreamTextResult;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
 
 /**
  * Framework-neutral helpers for streaming chat responses from persisted UI messages.
@@ -57,8 +60,10 @@ public final class UIMessageChatHandlers {
             throw new IllegalArgumentException("UI messages produced no model messages");
         }
 
-        var request = finalRequest(baseRequest(options), conversion, options);
-        var modelResult = options.model().streamText(request);
+        var modelResult = LanguageModelMiddlewares.defer(finalRequest(baseRequest(options),
+            conversion, options, validation)
+            .map(options.model()::streamText)
+            .cache());
         var finishSink = Sinks.<UIMessageStreamFinish<M>>one();
         var finish = finishSink.asMono().cache();
         var stream = UIMessageStreams.<M>createWithOptions(streamOptions -> {
@@ -203,9 +208,10 @@ public final class UIMessageChatHandlers {
         return capabilities != null && capabilities.reasoningHistorySupported();
     }
 
-    private static <M> GenerateTextRequest finalRequest(GenerateTextRequest source,
-        UIMessageConversionResult conversion, UIMessageChatOptions<M> options) {
-        return GenerateTextRequest.builder()
+    private static <M> Mono<GenerateTextRequest> finalRequest(GenerateTextRequest source,
+        UIMessageConversionResult conversion, UIMessageChatOptions<M> options,
+        List<UIMessage<M>> messages) {
+        var builder = GenerateTextRequest.builder()
             .system(source.getSystem())
             .messages(conversion.messages())
             .maxOutputTokens(source.getMaxOutputTokens())
@@ -230,7 +236,28 @@ public final class UIMessageChatHandlers {
             .lifecycle(source.getLifecycle())
             .toolCallRepair(source.getToolCallRepair())
             .cancellationToken(options.cancellationToken())
-            .timeouts(source.getTimeouts())
+            .timeouts(source.getTimeouts());
+        var middleware = combinedMiddleware(source, options);
+        if (!middleware.isEmpty()) {
+            builder.middleware(middleware.toArray(LanguageModelMiddleware[]::new));
+        }
+        var context = UIMessageChatPrepareContext.<M>builder()
+            .chatRequest(options.chatRequest())
+            .messages(messages)
+            .conversion(conversion)
+            .requestBuilder(builder)
             .build();
+        return options.prepareHandler().prepare(context)
+            .then(Mono.fromSupplier(builder::build));
+    }
+
+    private static <M> List<LanguageModelMiddleware> combinedMiddleware(GenerateTextRequest source,
+        UIMessageChatOptions<M> options) {
+        var middleware = new java.util.ArrayList<LanguageModelMiddleware>();
+        if (source.getMiddleware() != null) {
+            middleware.addAll(source.getMiddleware());
+        }
+        middleware.addAll(options.middleware());
+        return List.copyOf(middleware);
     }
 }

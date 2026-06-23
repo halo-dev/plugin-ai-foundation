@@ -17,7 +17,7 @@ public enum AdapterType {
     ANTHROPIC_MESSAGES("anthropic-messages", ModelType.LANGUAGE),
     GEMINI_GENERATE_CONTENT("gemini-generate-content", ModelType.LANGUAGE),
     GEMINI_EMBED_CONTENT("gemini-embed-content", ModelType.EMBEDDING),
-    COHERE_RERANK("cohere-rerank", ModelType.RERANK),
+    RERANK("rerank", ModelType.RERANK),
     OLLAMA_CHAT("ollama-chat", ModelType.LANGUAGE),
     OLLAMA_EMBEDDING("ollama-embedding", ModelType.EMBEDDING);
 

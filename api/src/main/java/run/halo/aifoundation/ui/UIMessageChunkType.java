@@ -31,6 +31,8 @@ public final class UIMessageChunkType {
     public static final String MESSAGE_METADATA = "message-metadata";
     /** Source URL chunk or persisted part type. */
     public static final String SOURCE_URL = "source-url";
+    /** Document source chunk or persisted part type. */
+    public static final String SOURCE_DOCUMENT = "source-document";
     /** File chunk or persisted part type. */
     public static final String FILE = "file";
     /** Opens streamed tool input. */

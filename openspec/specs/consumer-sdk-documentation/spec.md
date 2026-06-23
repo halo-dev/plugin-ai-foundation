@@ -690,3 +690,64 @@ Consumer documentation SHALL explain how callers can read existing UIMessage str
 #### Scenario: Reader limitations are documented
 - **WHEN** the documentation describes reader scope
 - **THEN** it SHALL state that the helper does not implement resume, reconnect, replay, text streams, object streams, or automatic tool continuation
+
+### Requirement: Documentation covers RAG runtime composition
+Consumer SDK documentation SHALL explain how plugin authors compose middleware, retrievers, source references, reranking, UI message streaming, and embeddings for retrieval-augmented workflows.
+
+#### Scenario: RAG without built-in storage
+- **WHEN** a plugin author reads the RAG documentation
+- **THEN** it explains that AI Foundation provides runtime composition contracts but not a vector store, document store, indexer, chunker, or knowledge-base product
+
+#### Scenario: Caller-owned retriever example
+- **WHEN** a plugin author needs to integrate their own search backend
+- **THEN** the documentation shows a caller-provided retriever feeding RAG middleware without exposing Spring AI types
+
+### Requirement: Documentation covers reranking
+Consumer SDK documentation SHALL explain reranking model resolution, rerank request/response semantics, and optional RAG middleware integration.
+
+#### Scenario: Reranking standalone usage
+- **WHEN** a plugin author only needs to rerank arbitrary candidate text
+- **THEN** the documentation shows using the reranking model directly without RAG middleware
+
+### Requirement: Documentation covers provider-backed reranking
+Consumer and developer documentation SHALL explain how provider-backed reranking models are configured and called through the public SDK.
+
+#### Scenario: Reranking usage is documented
+- **WHEN** a plugin author reads the AI Foundation SDK guide
+- **THEN** the guide SHALL show resolving a reranking model through `AiModelService`
+- **AND** it SHALL show submitting query and document candidates through the provider-neutral reranking API
+
+#### Scenario: Provider support boundary is documented
+- **WHEN** a plugin author reads reranking documentation
+- **THEN** the guide SHALL identify provider-backed rerank support as provider-specific
+- **AND** it SHALL explain that model names are configured or discovered from providers rather than hardcoded by AI Foundation
+
+### Requirement: RAG documentation teaches SDK composition
+Consumer documentation SHALL teach plugin authors how to compose RAG with SDK primitives in caller-focused terms.
+
+#### Scenario: Minimal RAG example is documented
+- **WHEN** a plugin author reads the RAG documentation
+- **THEN** the guide SHALL show a minimal `RagRetriever`, `RagLanguageModelMiddleware`, and `generateText` example
+- **AND** it SHALL show reading display sources from `GenerateTextResult.getSources()`
+
+#### Scenario: UI Message RAG streaming is documented
+- **WHEN** a plugin author reads the RAG documentation
+- **THEN** the guide SHALL show a UI Message streaming example using `streamText` and `toUIMessageStreamResponse`
+- **AND** it SHALL explain that sources are emitted as `source-url` or `source-document` parts
+
+### Requirement: RAG documentation demonstrates caller-defined data parts
+Consumer documentation SHALL demonstrate custom `data-*` usage for RAG status without defining framework-standard RAG data names.
+
+#### Scenario: Custom RAG status data is shown
+- **WHEN** a plugin author wants to stream retrieval or rerank status to a frontend
+- **THEN** the guide SHALL show using a caller-defined `data-*` part name and payload
+- **AND** the guide SHALL NOT describe the example data part name as built in or required
+
+### Requirement: RAG documentation is organized for callers
+Consumer documentation SHALL keep RAG content in a clear sequence and avoid duplicated or out-of-order sections.
+
+#### Scenario: RAG sections are readable
+- **WHEN** a plugin author scans the developer guide
+- **THEN** RAG-related sections SHALL be ordered consistently
+- **AND** examples SHALL describe how to use the SDK rather than internal implementation state
+

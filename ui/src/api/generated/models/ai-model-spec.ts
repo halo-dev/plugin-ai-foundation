@@ -83,7 +83,7 @@ export const AiModelSpecAdapterTypeEnum = {
     AnthropicMessages: 'anthropic-messages',
     GeminiGenerateContent: 'gemini-generate-content',
     GeminiEmbedContent: 'gemini-embed-content',
-    CohereRerank: 'cohere-rerank',
+    Rerank: 'rerank',
     OllamaChat: 'ollama-chat',
     OllamaEmbedding: 'ollama-embedding'
 } as const;

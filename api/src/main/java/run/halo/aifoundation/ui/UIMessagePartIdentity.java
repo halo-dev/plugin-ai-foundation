@@ -27,6 +27,8 @@ public record UIMessagePartIdentity(String type, String id) {
             case ReasoningPart value -> new UIMessagePartIdentity(value.type(), value.id());
             case DataPart value -> new UIMessagePartIdentity(value.type(), value.id());
             case SourceUrlPart value -> new UIMessagePartIdentity(value.type(), value.sourceId());
+            case SourceDocumentPart value -> new UIMessagePartIdentity(value.type(),
+                value.sourceId());
             case FilePart value -> new UIMessagePartIdentity(value.type(), value.fileId());
             case ToolPart value -> new UIMessagePartIdentity(value.type(), value.toolCallId());
         };

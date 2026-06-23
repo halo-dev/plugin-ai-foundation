@@ -10,6 +10,8 @@ import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.source.SourceReference;
+import run.halo.aifoundation.source.SourceReferences;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
@@ -49,6 +51,11 @@ public class GenerateTextResult {
      * Normalized generation content parts.
      */
     private List<GenerationContentPart> content;
+    /**
+     * Display-safe source references used or returned during generation. When unset, this is derived
+     * from source content parts.
+     */
+    private List<SourceReference> sources;
     /**
      * Last-step reasoning parts, including provider metadata needed for continuation.
      */
@@ -110,4 +117,8 @@ public class GenerateTextResult {
      * Sanitized provider metadata.
      */
     private Map<String, Object> providerMetadata;
+
+    public List<SourceReference> getSources() {
+        return sources != null ? sources : SourceReferences.fromContent(content);
+    }
 }

@@ -239,7 +239,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
                     return List.<DiscoveredModel>of();
                 }
                 var models = discoveredModelsFromNodes(dataList, "id",
-                    node -> inferModelProfile(stringValue(node, "id")));
+                    node -> modelProfile(node, stringValue(node, "id")));
                 log.info("Discovered {} models for provider {}", models.size(), providerName);
                 return models;
             });
@@ -251,6 +251,46 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         return discoveredModel(modelId, modelType, features,
             recommendAdapterType(modelType).orElse(null), DiscoverySource.RULE,
             DiscoveryConfidence.LOW);
+    }
+
+    protected DiscoveredModel modelProfile(Map<?, ?> node, String modelId) {
+        var explicitType = explicitModelType(node);
+        if (explicitType == null) {
+            return inferModelProfile(modelId);
+        }
+        return remoteDiscoveredModel(modelId, explicitType, inferFeatures(explicitType, modelId),
+            recommendAdapterType(explicitType).orElse(null));
+    }
+
+    protected ModelType explicitModelType(Map<?, ?> node) {
+        if (node == null) {
+            return null;
+        }
+        if (containsAnyToken(node.get("type"), "rerank", "reranker")
+            || containsAnyToken(node.get("model_type"), "rerank", "reranker")
+            || containsAnyToken(node.get("modelType"), "rerank", "reranker")
+            || containsAnyToken(node.get("capabilities"), "rerank", "reranker")
+            || containsAnyToken(node.get("features"), "rerank", "reranker")
+            || containsAnyToken(node.get("supported_endpoint_types"), "rerank", "reranker")) {
+            return ModelType.RERANK;
+        }
+        if (containsAnyToken(node.get("type"), "embedding")
+            || containsAnyToken(node.get("model_type"), "embedding")
+            || containsAnyToken(node.get("modelType"), "embedding")
+            || containsAnyToken(node.get("capabilities"), "embedding")
+            || containsAnyToken(node.get("features"), "embedding")
+            || containsAnyToken(node.get("supported_endpoint_types"), "embedding")) {
+            return ModelType.EMBEDDING;
+        }
+        if (containsAnyToken(node.get("type"), "chat", "language")
+            || containsAnyToken(node.get("model_type"), "chat", "language")
+            || containsAnyToken(node.get("modelType"), "chat", "language")
+            || containsAnyToken(node.get("capabilities"), "chat", "language")
+            || containsAnyToken(node.get("features"), "chat", "language")
+            || containsAnyToken(node.get("supported_endpoint_types"), "chat", "language")) {
+            return ModelType.LANGUAGE;
+        }
+        return null;
     }
 
     protected DiscoveredModel discoveredModel(String modelId, ModelType modelType,
@@ -359,5 +399,17 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         var normalized = value.toString().toLowerCase(Locale.ROOT);
         return normalized.equals(normalizedExpected)
             || normalized.contains(normalizedExpected);
+    }
+
+    private boolean containsAnyToken(Object value, String... expected) {
+        if (expected == null) {
+            return false;
+        }
+        for (var token : expected) {
+            if (containsToken(value, token)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

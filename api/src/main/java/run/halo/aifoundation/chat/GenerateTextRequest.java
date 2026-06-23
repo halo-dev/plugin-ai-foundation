@@ -1,6 +1,7 @@
 package run.halo.aifoundation.chat;
 
 import java.beans.Transient;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -8,6 +9,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import run.halo.aifoundation.control.CancellationToken;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
 import run.halo.aifoundation.lifecycle.GenerationLifecycle;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.options.ProviderOptions;
@@ -155,6 +157,11 @@ public class GenerateTextRequest {
      * Request-scoped timeout controls for total generation, provider steps, and tools.
      */
     private transient GenerationTimeouts timeouts;
+    /**
+     * Request-scoped language model middleware. These middleware entries run inside any model-level
+     * middleware and preserve caller-provided list order.
+     */
+    private transient List<LanguageModelMiddleware> middleware;
 
     @Transient
     public StopCondition getStopWhen() {
@@ -186,6 +193,11 @@ public class GenerateTextRequest {
         return timeouts;
     }
 
+    @Transient
+    public List<LanguageModelMiddleware> getMiddleware() {
+        return middleware;
+    }
+
     public static class GenerateTextRequestBuilder {
         public GenerateTextRequestBuilder providerOptions(
             Map<String, Map<String, Object>> providerOptions) {
@@ -195,6 +207,11 @@ public class GenerateTextRequest {
 
         public GenerateTextRequestBuilder providerOptions(ProviderOptions.NamespaceOptions... options) {
             this.providerOptions = ProviderOptions.of(options);
+            return this;
+        }
+
+        public GenerateTextRequestBuilder middleware(LanguageModelMiddleware... middleware) {
+            this.middleware = middleware != null ? Arrays.asList(middleware) : null;
             return this;
         }
     }

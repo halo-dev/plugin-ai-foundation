@@ -265,3 +265,61 @@ The console model test workbench SHALL lightly exercise UI runtime schema hooks 
 - **WHEN** a schema validation failure occurs in the workbench chat runtime
 - **THEN** the existing chat error display path SHALL show the runtime error
 - **AND** the workbench SHALL NOT add a separate schema-specific error panel
+
+### Requirement: Workbench tests reranking models
+The model test workbench SHALL provide a reranking test mode.
+
+#### Scenario: Run reranking test
+- **WHEN** an administrator selects a reranking model and enters a query with candidate documents
+- **THEN** the workbench calls the generated reranking test endpoint and displays ranked results with scores and original indexes
+
+#### Scenario: Reranking provider options
+- **WHEN** an administrator provides reranking provider options in the workbench
+- **THEN** the request sends those options through the generated API client and reports warnings or errors returned by the backend
+
+### Requirement: Workbench tests single-query RAG flows
+The model test workbench SHALL provide a RAG test mode for single-query RAG validation with manual source candidates and optional reranking.
+
+#### Scenario: Run RAG test without reranking
+- **WHEN** an administrator selects a chat model, enters a query, and provides manual source candidates
+- **THEN** the workbench SHALL call the console RAG test endpoint
+- **AND** the endpoint SHALL generate an answer using the provided sources through the RAG middleware
+
+#### Scenario: Run RAG test with provider-backed reranking
+- **WHEN** an administrator selects a chat model, a reranking model, a query, and manual source candidates
+- **THEN** the workbench SHALL call the console RAG test endpoint with the selected reranking model name
+- **AND** the endpoint SHALL rerank the provided sources before context injection
+
+### Requirement: Workbench visualizes RAG source diagnostics
+The RAG test mode SHALL display source and rerank diagnostics without requiring inline sentence-level citation rendering.
+
+#### Scenario: Display source ordering
+- **WHEN** a RAG test returns retrieved or reranked source diagnostics
+- **THEN** the workbench SHALL display source title, URL, score, rerank score or final order, metadata, and the final sources used for generation when available
+
+#### Scenario: Display RAG warnings and errors
+- **WHEN** retrieval, reranking, source packing, or generation emits warnings or errors
+- **THEN** the workbench SHALL display those diagnostics near the RAG test result
+- **AND** answer text SHALL remain separate from diagnostics
+
+### Requirement: Workbench keeps RAG mode scoped to manual sources
+The first RAG workbench mode SHALL use manually supplied sources and SHALL NOT require a knowledge base, vector store, document store, or crawler.
+
+#### Scenario: Manual sources are submitted
+- **WHEN** an administrator submits a RAG test
+- **THEN** each source candidate SHALL come from the workbench request body
+- **AND** no external knowledge base configuration SHALL be required
+
+### Requirement: Workbench displays document source parts
+The model test workbench SHALL display `source-document` parts in assistant messages alongside URL sources.
+
+#### Scenario: Assistant message includes document source
+- **WHEN** a streamed UI Message contains a `source-document` part
+- **THEN** the workbench SHALL render it as a source reference
+- **AND** it SHALL show the title and any available filename or media type
+
+#### Scenario: RAG source has no URL
+- **WHEN** a RAG test source has no URL and is emitted as a document source
+- **THEN** the workbench SHALL display the source without requiring a link
+- **AND** existing RAG diagnostic data parts SHALL continue to render unchanged
+

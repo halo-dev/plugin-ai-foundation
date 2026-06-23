@@ -19,6 +19,8 @@ class UIMessageTransportCodecTest {
             UIMessageParts.reasoning("reasoning-1", "thinking", Map.of("opaque", "state")),
             UIMessageParts.data("notice", Map.of("level", "info")),
             UIMessageParts.sourceUrl("source-1", "https://halo.run", "Halo", Map.of()),
+            UIMessageParts.sourceDocument("source-2", "text/markdown", "Halo Docs",
+                "halo.md", Map.of("postName", "halo-docs")),
             UIMessageParts.file("file-1", "https://example.com/a.txt", "a.txt", "text/plain",
                 null, Map.of("provider", "meta")),
             UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
@@ -89,7 +91,9 @@ class UIMessageTransportCodecTest {
             UIMessageChunks.toolApprovalRequest("approval-1", "call-3", "payment",
                 Map.of("amount", 100), Map.of()),
             UIMessageChunks.toolApprovalResponse("approval-1", "call-3", "payment", false,
-                "not allowed", Map.of("provider", "test"))
+                "not allowed", Map.of("provider", "test")),
+            UIMessageChunks.sourceDocument("source-2", "text/plain", "Post", null,
+                Map.of("sourceType", "post"))
         );
 
         for (var chunk : chunks) {

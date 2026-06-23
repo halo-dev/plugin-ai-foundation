@@ -14,9 +14,12 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiThinkingOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.rerank.SiliconFlowRerankingClient;
 
 @Component
 public class SiliconFlowProvider extends AbstractAiProviderType {
@@ -72,7 +75,7 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
     }
 
     @Override
@@ -91,16 +94,29 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
+        String modelId) {
+        return new SiliconFlowRerankingClient(trimTrailingSlash(resolveBaseUrl(provider)), modelId,
+            apiKey, webClientBuilder(provider));
+    }
+
+    @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         return Mono.zip(
             discoverModelsBySubType(provider, apiKey, "chat", ModelType.LANGUAGE,
                 AdapterType.OPENAI_CHAT, Set.of(ModelFeature.STREAMING)),
             discoverModelsBySubType(provider, apiKey, "embedding", ModelType.EMBEDDING,
                 AdapterType.OPENAI_EMBEDDING, Set.of()),
-            (chatModels, embeddingModels) -> {
+            discoverModelsBySubType(provider, apiKey, "reranker", ModelType.RERANK,
+                AdapterType.RERANK, Set.of())
+        ).map(tuple -> {
+                var chatModels = tuple.getT1();
+                var embeddingModels = tuple.getT2();
+                var rerankModels = tuple.getT3();
                 var models = new LinkedHashMap<String, DiscoveredModel>();
                 chatModels.forEach(model -> models.putIfAbsent(model.modelId(), model));
                 embeddingModels.forEach(model -> models.put(model.modelId(), model));
+                rerankModels.forEach(model -> models.put(model.modelId(), model));
                 return List.copyOf(models.values());
             }
         );
@@ -117,6 +133,14 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
         return openAiCompatibleLanguageModelProviderOptions(reasoningControlOptions,
             OpenAiThinkingOptions::applyEnableThinking);
     }
+
+    @Override
+    public RerankingModelProviderOptions rerankingModelProviderOptions() {
+        return RerankingModelProviderOptions.builder()
+            .providerOptionsSupported(true)
+            .build();
+    }
+
     private Mono<List<DiscoveredModel>> discoverModelsBySubType(AiProvider provider, String apiKey,
         String subType, ModelType modelType, AdapterType adapterType, Set<ModelFeature> features) {
         return getDiscoveryJson(provider, apiKey,
@@ -133,5 +157,12 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
                 node -> remoteDiscoveredModel(stringValue(node, "id"), modelType, features,
                     adapterType));
         });
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (value == null || value.isBlank() || !value.endsWith("/")) {
+            return value;
+        }
+        return value.substring(0, value.length() - 1);
     }
 }

@@ -14,6 +14,8 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 
 public interface AiProviderType {
 
@@ -98,6 +100,16 @@ public interface AiProviderType {
 
     @Nullable
     default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
+        return null;
+    }
+
+    default RerankingModelProviderOptions rerankingModelProviderOptions() {
+        return RerankingModelProviderOptions.defaults();
+    }
+
+    @Nullable
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
+        String modelId) {
         return null;
     }
 

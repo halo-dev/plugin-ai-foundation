@@ -118,3 +118,15 @@ Streaming text final projections SHALL expose the same provider-neutral response
 - **WHEN** a caller consumes `StreamTextResult.textStream()`
 - **THEN** response messages SHALL remain available only through final result projections
 - **AND** response messages SHALL NOT be emitted as answer text deltas
+
+### Requirement: Stream result exposes sources
+`StreamTextResult` SHALL expose source projections derived from the full stream and final result.
+
+#### Scenario: Read source references
+- **WHEN** a stream emits source parts
+- **THEN** callers can read source references without manually filtering raw stream parts
+
+#### Scenario: Source projection shares execution
+- **WHEN** callers consume text and sources from the same `StreamTextResult`
+- **THEN** the underlying provider stream is not executed more than once
+
