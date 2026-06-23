@@ -9,6 +9,8 @@ jobs:
   cd:
     if: github.event.release.tag_name != 'nightly'
     uses: halo-sigs/reusable-workflows/.github/workflows/plugin-cd.yaml@v4
+    secrets:
+      halo-pat: ${{ secrets.HALO_PAT }}
     permissions:
       contents: write
     with:
