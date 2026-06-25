@@ -109,7 +109,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         var images = new ArrayList<GeneratedFile>();
         var warnings = new ArrayList<ImageGenerationWarning>(invocation.warnings());
         var responses = new ArrayList<GenerationResponseMetadata>();
-        var providerMetadata = new ArrayList<Map<String, Object>>();
+        var batchProviderMetadata = new ArrayList<Map<String, Object>>();
         ImageUsage usage = null;
         for (var result : results) {
             if (result == null) {
@@ -125,7 +125,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
                 responses.addAll(result.getResponses());
             }
             if (result.getProviderMetadata() != null && !result.getProviderMetadata().isEmpty()) {
-                providerMetadata.add(result.getProviderMetadata());
+                batchProviderMetadata.add(result.getProviderMetadata());
             }
             usage = addUsage(usage, result.getUsage());
         }
@@ -138,7 +138,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .usage(usage != null ? usage : ImageUsage.builder().imageCount(images.size()).build())
             .warnings(List.copyOf(warnings))
             .responses(List.copyOf(responses))
-            .providerMetadata(providerMetadata(providerMetadata))
+            .providerMetadata(providerMetadata(batchProviderMetadata))
             .build();
     }
 
@@ -159,6 +159,10 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             throw new IllegalArgumentException(
                 "Image generation maxParallelCalls must be positive");
         }
+        if (request.getMask() != null && !hasInputImages(request)) {
+            throw new IllegalArgumentException(
+                "Image generation mask requires at least one input image");
+        }
     }
 
     private void validateMedia(GenerateImageRequest request) {
@@ -173,11 +177,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             validateImageMedia(request.getMask(), "mask");
             media.add(request.getMask());
         }
-        try {
-            mediaResourcePolicy.validate(media);
-        } catch (InvalidMediaContentException | MediaContentTooLargeException e) {
-            throw e;
-        }
+        mediaResourcePolicy.validate(media);
     }
 
     private void validateImageMedia(DataContent media, String name) {

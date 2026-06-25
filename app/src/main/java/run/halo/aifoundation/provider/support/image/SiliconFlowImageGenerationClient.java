@@ -7,6 +7,7 @@ import java.util.Map;
 import org.springframework.web.reactive.function.client.WebClient;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
+import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
 
 public class SiliconFlowImageGenerationClient extends AbstractJsonImageGenerationClient {
@@ -53,7 +54,7 @@ public class SiliconFlowImageGenerationClient extends AbstractJsonImageGeneratio
             }
         }
         return result(data, root, List.copyOf(images),
-            run.halo.aifoundation.image.ImageUsage.builder()
+            ImageUsage.builder()
                 .imageCount(images.size())
                 .raw(OBJECT_MAPPER.convertValue(root.path("timings"), Object.class))
                 .build(),

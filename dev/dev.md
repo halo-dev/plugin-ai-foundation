@@ -476,6 +476,9 @@ GenerateImageRequest request = GenerateImageRequest.builder()
     .build();
 ```
 
+如果使用 `mask`，请求必须同时提供至少一张 `images` 参考图；是否支持蒙版编辑由模型的
+`imageGeneration.maskInput` 能力决定。
+
 如果供应方返回 URL，`GeneratedFile.getUrl()` 有值；如果返回 base64，`GeneratedFile.getBase64()` 有值。
 AI Foundation 不会自动保存生成文件，调用方插件自行决定是否保存为附件、缓存或业务资源。
 
@@ -497,7 +500,7 @@ return imageModel.generateImage(request)
 | --- | --- |
 | `prompt` | 文生图或编辑提示词 |
 | `images` | 图生图或编辑参考图 |
-| `mask` | 蒙版图，是否支持取决于模型能力 |
+| `mask` | 蒙版图，必须与 `images` 一起使用，是否支持取决于模型能力 |
 | `n` | 请求图片数量 |
 | `size` / `aspectRatio` | 图片尺寸或宽高比；`size(1024)` 等价于 `1024x1024`，`size(1024, 768)` 等价于 `1024x768` |
 | `seed` | 确定性种子，是否生效取决于供应方 |

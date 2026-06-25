@@ -15,6 +15,7 @@ import reactor.test.StepVerifier;
 import run.halo.aifoundation.capability.ImageGenerationCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.exception.ImageGenerationException;
+import run.halo.aifoundation.exception.InvalidMediaContentException;
 import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
@@ -90,6 +91,41 @@ class ImageGenerationModelImplTest {
                 .images(List.of(DataContent.data(new byte[] {1}, "application/pdf")))
                 .build()))
             .expectErrorMessage("image mediaType must match image/*")
+            .verify();
+    }
+
+    @Test
+    void generateImage_rejectsMaskWithoutInputImage() {
+        var client = mock(ProviderImageGenerationClient.class);
+        var model = imageModel(client, ImageGenerationCapability.builder()
+            .textToImage(true)
+            .maskInput(true)
+            .maxImagesPerCall(1)
+            .build());
+
+        StepVerifier.create(model.generateImage(GenerateImageRequest.builder()
+                .prompt("Edit")
+                .mask(DataContent.data(new byte[] {2}, "image/png"))
+                .build()))
+            .expectErrorMessage("Image generation mask requires at least one input image")
+            .verify();
+    }
+
+    @Test
+    void generateImage_rejectsNullInputImage() {
+        var client = mock(ProviderImageGenerationClient.class);
+        var model = imageModel(client, ImageGenerationCapability.builder()
+            .imageToImage(true)
+            .maxImagesPerCall(1)
+            .build());
+        var images = new ArrayList<DataContent>();
+        images.add(null);
+
+        StepVerifier.create(model.generateImage(GenerateImageRequest.builder()
+                .prompt("Edit")
+                .images(images)
+                .build()))
+            .expectError(InvalidMediaContentException.class)
             .verify();
     }
 

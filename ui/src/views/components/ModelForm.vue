@@ -432,7 +432,7 @@ function sameJson(a: unknown, b: unknown) {
           <button
             type="button"
             :aria-expanded="languageAdvancedOpen"
-            class=":uno: flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
+            class=":uno: min-h-10 w-full flex items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
             @click="languageAdvancedOpen = !languageAdvancedOpen"
           >
             <span class=":uno: flex items-center gap-2 font-medium">
@@ -446,7 +446,7 @@ function sameJson(a: unknown, b: unknown) {
           </button>
           <div
             v-show="languageAdvancedOpen"
-            class=":uno: mt-4 space-y-4 border-l border-gray-100 pl-3"
+            class=":uno: mt-4 border-l border-gray-100 pl-3 space-y-4"
           >
             <div class=":uno: space-y-3">
               <FormKit
@@ -502,7 +502,7 @@ function sameJson(a: unknown, b: unknown) {
           <button
             type="button"
             :aria-expanded="imageGenerationAdvancedOpen"
-            class=":uno: flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
+            class=":uno: min-h-10 w-full flex items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
             @click="imageGenerationAdvancedOpen = !imageGenerationAdvancedOpen"
           >
             <span class=":uno: flex items-center gap-2 font-medium">
@@ -516,7 +516,7 @@ function sameJson(a: unknown, b: unknown) {
           </button>
           <div
             v-show="imageGenerationAdvancedOpen"
-            class=":uno: mt-4 space-y-4 border-l border-gray-100 pl-3"
+            class=":uno: mt-4 border-l border-gray-100 pl-3 space-y-4"
           >
             <FormKit
               type="select"

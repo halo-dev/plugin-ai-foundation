@@ -8,6 +8,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageResponseFormat;
+import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
 
 public class MiniMaxImageGenerationClient extends AbstractJsonImageGenerationClient {
@@ -73,8 +74,11 @@ public class MiniMaxImageGenerationClient extends AbstractJsonImageGenerationCli
                 }
             }
         }
-        return result(data, root, List.copyOf(images), ImageUsageBuilder.imageCount(images.size(),
-            OBJECT_MAPPER.convertValue(root.path("metadata"), Object.class)), List.of(),
+        var usage = ImageUsage.builder()
+            .imageCount(images.size())
+            .raw(OBJECT_MAPPER.convertValue(root.path("metadata"), Object.class))
+            .build();
+        return result(data, root, List.copyOf(images), usage, List.of(),
             textOrNull(root.path("id")), options.model());
     }
 
@@ -96,14 +100,5 @@ public class MiniMaxImageGenerationClient extends AbstractJsonImageGenerationCli
     }
 
     private record Dimensions(int width, int height) {
-    }
-
-    private static final class ImageUsageBuilder {
-        private static run.halo.aifoundation.image.ImageUsage imageCount(int count, Object raw) {
-            return run.halo.aifoundation.image.ImageUsage.builder()
-                .imageCount(count)
-                .raw(raw)
-                .build();
-        }
     }
 }
