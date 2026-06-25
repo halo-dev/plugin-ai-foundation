@@ -9,12 +9,15 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageOptions;
 import run.halo.app.extension.Metadata;
 
 class OllamaProviderTest {
@@ -24,9 +27,22 @@ class OllamaProviderTest {
     @Test
     void metadata_includesEmbeddingAdapter() {
         assertThat(providerType.getSupportedAdapterTypes())
-            .containsExactly(AdapterType.OLLAMA_CHAT, AdapterType.OLLAMA_EMBEDDING);
+            .containsExactly(AdapterType.OLLAMA_CHAT, AdapterType.OLLAMA_EMBEDDING,
+                AdapterType.OPENAI_IMAGE);
         assertThat(providerType.getSupportedModelTypes())
-            .containsExactly(ModelType.LANGUAGE, ModelType.EMBEDDING);
+            .containsExactly(ModelType.LANGUAGE, ModelType.EMBEDDING,
+                ModelType.IMAGE_GENERATION);
+    }
+
+    @Test
+    void buildImageGenerationClient_usesOpenAiCompatibleV1BaseUrl() {
+        var client = providerType.buildImageGenerationClient(
+            provider("http://127.0.0.1:11434"), "ollama", "x/z-image-turbo");
+
+        assertThat(client).isInstanceOf(OpenAiCompatibleImageGenerationClient.class);
+        var options = (OpenAiCompatibleImageOptions) ReflectionTestUtils.getField(client,
+            "options");
+        assertThat(options.baseUrl()).isEqualTo("http://127.0.0.1:11434/v1");
     }
 
     @Test

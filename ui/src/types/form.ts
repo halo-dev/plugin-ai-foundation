@@ -1,4 +1,5 @@
 import type {
+  AiModel,
   AiModelSpecAdapterTypeEnum,
   AiModelSpecFeaturesEnum,
   AiModelSpecModelTypeEnum,
@@ -21,4 +22,6 @@ export interface ModelFormState {
   modelType: AiModelSpecModelTypeEnum
   features?: AiModelSpecFeaturesEnum[]
   adapterType?: AiModelSpecAdapterTypeEnum
+  capabilities?: AiModel['spec']['capabilities']
+  capabilitySources?: AiModel['spec']['capabilitySources']
 }

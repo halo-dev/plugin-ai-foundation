@@ -18,6 +18,7 @@ import run.halo.aifoundation.exception.DefaultModelNotConfiguredException;
 import run.halo.aifoundation.exception.IncompatibleModelTypeException;
 import run.halo.aifoundation.exception.ModelNotFoundException;
 import run.halo.aifoundation.exception.ProviderDisabledException;
+import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -33,6 +34,7 @@ import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.CallerPluginObservationRegistry;
 import run.halo.aifoundation.service.audit.CallerPluginResolver;
+import run.halo.aifoundation.service.image.DefaultImageGenerationModelFactory;
 import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
@@ -86,6 +88,7 @@ class AiModelServiceImplTest {
             new DefaultEmbeddingModelFactory(providerClientCache, new EmbeddingModelRuntimeFactory()),
             new DefaultRerankingModelFactory(providerClientCache,
                 new RerankingModelRuntimeFactory()),
+            new DefaultImageGenerationModelFactory(),
             callerPluginAuditRecorder
         );
     }
@@ -322,6 +325,50 @@ class AiModelServiceImplTest {
             .verify();
     }
 
+    @Test
+    void imageGenerationModel_withoutName_resolvesConfiguredModel() {
+        var slots = defaultSlots(null, null, null, "openai-prod-image");
+        var model = aiModel("openai-prod-image", "openai-prod",
+            "gpt-image-1", "Image", true, ModelType.IMAGE_GENERATION);
+        var provider = aiProvider("openai-prod", "openai", true);
+        var providerType = mock(AiProviderType.class);
+
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
+        when(client.fetch(AiModel.class, "openai-prod-image")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
+
+        StepVerifier.create(service.imageGenerationModel())
+            .assertNext(imageGenerationModel -> {
+                assertThat(imageGenerationModel).isNotNull();
+                StepVerifier.create(imageGenerationModel.generateImage("halo"))
+                    .expectError(UnsupportedModelCapabilityException.class)
+                    .verify();
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void imageGenerationModel_wrongModelType_emitsIncompatibleModelTypeException() {
+        var model = aiModel("language", "openai-prod", "gpt-4", "GPT-4", true,
+            ModelType.LANGUAGE);
+        when(client.fetch(AiModel.class, "language")).thenReturn(Mono.just(model));
+
+        StepVerifier.create(service.imageGenerationModel("language"))
+            .expectError(IncompatibleModelTypeException.class)
+            .verify();
+    }
+
+    @Test
+    void imageGenerationModel_blankNameAndMissingSlot_emitsDefaultModelNotConfiguredException() {
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(new DefaultModelSlots()));
+
+        StepVerifier.create(service.imageGenerationModel(""))
+            .expectError(DefaultModelNotConfiguredException.class)
+            .verify();
+    }
+
     // ---- helpers ----
 
     private AiModel aiModel(String name, String providerName, String modelId,
@@ -364,10 +411,16 @@ class AiModelServiceImplTest {
 
     private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName,
         String rerankModelName) {
+        return defaultSlots(languageModelName, embeddingModelName, rerankModelName, null);
+    }
+
+    private DefaultModelSlots defaultSlots(String languageModelName, String embeddingModelName,
+        String rerankModelName, String imageGenerationModelName) {
         var slots = new DefaultModelSlots();
         slots.setLanguageModelName(languageModelName);
         slots.setEmbeddingModelName(embeddingModelName);
         slots.setRerankModelName(rerankModelName);
+        slots.setImageGenerationModelName(imageGenerationModelName);
         return slots;
     }
 

@@ -11,7 +11,8 @@ import lombok.RequiredArgsConstructor;
 public enum ModelOptionUnavailableReason {
     MODEL_DISABLED("model-disabled"),
     PROVIDER_MISSING("provider-missing"),
-    PROVIDER_DISABLED("provider-disabled");
+    PROVIDER_DISABLED("provider-disabled"),
+    CAPABILITY_UNSUPPORTED("capability-unsupported");
 
     private final String value;
 

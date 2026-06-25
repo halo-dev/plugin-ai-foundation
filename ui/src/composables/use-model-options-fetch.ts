@@ -1,5 +1,7 @@
 import { aiConsoleApiClient } from '@/api'
 import type { ModelOption } from '@/api/generated'
+import type { RequiredModelCapabilitiesValue } from '@/utils/capabilities'
+import { normalizeRequiredCapabilities } from '@/utils/capabilities'
 import { useQuery } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
 
@@ -12,6 +14,7 @@ export interface ModelOptionsFetchParams {
   enabled?: Ref<boolean | undefined>
   available?: Ref<boolean | null | undefined>
   requiredFeatures?: Ref<string[] | undefined>
+  requiredCapabilities?: Ref<RequiredModelCapabilitiesValue>
   keyword?: Ref<string | undefined>
 }
 
@@ -25,6 +28,7 @@ export function useModelOptionsFetch(params: ModelOptionsFetchParams = {}) {
       params.enabled,
       params.available,
       params.requiredFeatures,
+      params.requiredCapabilities,
       params.keyword,
     ],
     queryFn: async () => {
@@ -35,6 +39,7 @@ export function useModelOptionsFetch(params: ModelOptionsFetchParams = {}) {
         enabled: params.enabled?.value,
         available: params.available?.value ?? undefined,
         requiredFeatures: params.requiredFeatures?.value?.join(','),
+        requiredCapabilities: normalizeRequiredCapabilities(params.requiredCapabilities?.value),
         keyword: params.keyword?.value,
       })
       return data

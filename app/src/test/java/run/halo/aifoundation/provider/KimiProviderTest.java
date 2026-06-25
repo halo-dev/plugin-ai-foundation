@@ -10,6 +10,8 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
+import run.halo.aifoundation.capability.CapabilitySource;
+import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
@@ -47,10 +49,18 @@ class KimiProviderTest {
                     );
                     assertThat(vision.source()).isEqualTo(DiscoverySource.REMOTE);
                     assertThat(vision.confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+                    assertThat(vision.capabilities().getLanguage().getImageInput()).isTrue();
+                    assertThat(vision.capabilities().getLanguage().getInputMediaTypes())
+                        .containsExactly("image/*");
+                    assertThat(vision.capabilities().getLanguage().getInputSources())
+                        .containsExactly(InputSource.DATA);
+                    assertThat(vision.capabilitySources().getLanguage())
+                        .isEqualTo(CapabilitySource.REMOTE);
 
                     var text = models.get(1);
                     assertThat(text.modelId()).isEqualTo("kimi-text");
                     assertThat(text.features()).containsExactly(ModelFeature.STREAMING);
+                    assertThat(text.capabilities()).isNull();
                 })
                 .verifyComplete();
 

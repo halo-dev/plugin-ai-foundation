@@ -2,7 +2,10 @@
 import { aiConsoleApiClient } from '@/api'
 import {
   ModelOptionModelTypeEnum,
+  TestImageGenerationRequestResponseFormatEnum,
   type TestEmbeddingResponse,
+  type TestImageGenerationResponse,
+  type TestMediaContent,
   type TestRagSource,
   type TestRerankResponse,
 } from '@/api/generated'
@@ -24,6 +27,7 @@ import {
   type ReasoningEffort,
   type ReasoningMode,
   type UIMessagePart,
+  type WorkbenchFileReference,
   type WorkbenchMessage,
   type WorkbenchWarning,
 } from '@/utils/model-test-workbench'
@@ -31,6 +35,7 @@ import {
   DefaultChatTransport,
   lastAssistantMessageHasCompletedToolContinuations,
   useChat,
+  type FilePart as HaloFilePart,
   type UIMessage as HaloUIMessage,
   type UIMessagePart as HaloUIMessagePart,
   type ToolPart,
@@ -40,6 +45,7 @@ import { utils } from '@halo-dev/ui-shared'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
+import RiImageLine from '~icons/ri/image-line'
 import RiMessage3Line from '~icons/ri/message-3-line'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 import RiSparkling2Line from '~icons/ri/sparkling-2-line'
@@ -48,6 +54,7 @@ import ChatInputArea from './components/workbench/ChatInputArea.vue'
 import ChatMessageItem from './components/workbench/ChatMessageItem.vue'
 import EmbeddingTestPanel from './components/workbench/EmbeddingTestPanel.vue'
 import ExamplePrompts from './components/workbench/ExamplePrompts.vue'
+import ImageGenerationTestPanel from './components/workbench/ImageGenerationTestPanel.vue'
 import ParameterSidebar from './components/workbench/ParameterSidebar.vue'
 import RagTestPanel from './components/workbench/RagTestPanel.vue'
 import RerankTestPanel from './components/workbench/RerankTestPanel.vue'
@@ -65,10 +72,11 @@ const {
 })
 
 const selectedModelName = useRouteQuery<string | undefined>('model')
-const testMode = shallowRef<'chat' | 'embedding' | 'rerank' | 'rag'>('chat')
+const testMode = shallowRef<'chat' | 'embedding' | 'rerank' | 'image' | 'rag'>('chat')
 
 const messages = ref<WorkbenchMessage[]>([])
 const input = shallowRef('')
+const chatFiles = shallowRef<HaloFilePart[]>([])
 const systemPrompt = shallowRef('')
 const temperature = shallowRef(0.7)
 const topP = shallowRef(1)
@@ -126,6 +134,31 @@ const rerankProviderOptionsError = shallowRef('')
 const rerankResult = shallowRef<TestRerankResponse | undefined>()
 const rerankError = shallowRef('')
 const isRerankTesting = shallowRef(false)
+
+const imagePrompt = shallowRef('一张简洁清晰的 Halo 控制台界面截图风格插图，浅色背景，细节真实')
+const imageInputUrl = shallowRef('')
+const imageInputData = shallowRef('')
+const imageInputMediaType = shallowRef('image/png')
+const imageMaskUrl = shallowRef('')
+const imageMaskData = shallowRef('')
+const imageMaskMediaType = shallowRef('image/png')
+const imageN = shallowRef<number | undefined>(1)
+const imageWidth = shallowRef<number | undefined>(1024)
+const imageHeight = shallowRef<number | undefined>(1024)
+const imageAspectRatio = shallowRef('')
+const imageSeed = shallowRef<number | undefined>()
+const imageResponseFormat = shallowRef<'DEFAULT' | TestImageGenerationRequestResponseFormatEnum>(
+  'DEFAULT',
+)
+const imageMaxRetries = shallowRef<number | undefined>(1)
+const imageMaxParallelCalls = shallowRef<number | undefined>(1)
+const imageProviderOptionsText = shallowRef('{}')
+const imageProviderOptionsError = shallowRef('')
+const imageHeadersText = shallowRef('{}')
+const imageHeadersError = shallowRef('')
+const imageResult = shallowRef<TestImageGenerationResponse | undefined>()
+const imageError = shallowRef('')
+const isImageTesting = shallowRef(false)
 
 const ragQuery = shallowRef('AI Foundation 如何支持 RAG?')
 const ragSources = ref<TestRagSource[]>([
@@ -237,7 +270,7 @@ const ragUiChat = useChat<Record<string, unknown>>({
       if (!activeRagModelName) {
         throw new Error('未选择模型')
       }
-      const ragBody = { ...(body || {}) }
+      const ragBody = { ...body }
       delete ragBody.id
       delete ragBody.messages
       delete ragBody.trigger
@@ -273,19 +306,36 @@ const rerankModels = computed(() => {
     return model.name && model.modelType === ModelOptionModelTypeEnum.Rerank
   })
 })
+const imageModels = computed(() => {
+  return (modelOptions.value || []).filter((model) => {
+    return model.name && model.modelType === ModelOptionModelTypeEnum.ImageGeneration
+  })
+})
 const activeModels = computed(() =>
   testMode.value === 'embedding'
     ? embeddingModels.value
     : testMode.value === 'rerank'
       ? rerankModels.value
-      : chatModels.value,
+      : testMode.value === 'image'
+        ? imageModels.value
+        : chatModels.value,
 )
 const activeModelType = computed(() =>
   testMode.value === 'embedding'
     ? ModelOptionModelTypeEnum.Embedding
     : testMode.value === 'rerank'
       ? ModelOptionModelTypeEnum.Rerank
-    : ModelOptionModelTypeEnum.Language,
+      : testMode.value === 'image'
+        ? ModelOptionModelTypeEnum.ImageGeneration
+        : ModelOptionModelTypeEnum.Language,
+)
+const isAnyTesting = computed(
+  () =>
+    isStreaming.value ||
+    isEmbeddingTesting.value ||
+    isRerankTesting.value ||
+    isImageTesting.value ||
+    isRagTesting.value,
 )
 
 const selectedModel = computed(() => {
@@ -319,6 +369,8 @@ watch(
       testMode.value = 'embedding'
     } else if (selected?.modelType === ModelOptionModelTypeEnum.Rerank) {
       testMode.value = 'rerank'
+    } else if (selected?.modelType === ModelOptionModelTypeEnum.ImageGeneration) {
+      testMode.value = 'image'
     } else if (selected?.modelType === ModelOptionModelTypeEnum.Language) {
       if (testMode.value !== 'rag') {
         testMode.value = 'chat'
@@ -368,8 +420,9 @@ watch(
 
 async function sendMessage(content?: string) {
   const text = (content ?? input.value).trim()
+  const files = [...chatFiles.value]
   const model = selectedModel.value
-  if (!text || !model?.name || isStreaming.value) {
+  if ((!text && !files.length) || !model?.name || isStreaming.value) {
     return
   }
 
@@ -396,14 +449,17 @@ async function sendMessage(content?: string) {
   }
   outputError.value = ''
 
+  const uiMessageId = utils.id.uuid()
   const userMessage: WorkbenchMessage = {
     id: utils.id.uuid(),
     role: 'user',
     content: text,
-    uiMessage: createUserUIMessage(utils.id.uuid(), text),
+    files: workbenchFilesFromParts(files),
+    uiMessage: createUserUIMessage(uiMessageId, text, files as UIMessagePart[]),
   }
   messages.value.push(userMessage)
   input.value = ''
+  chatFiles.value = []
   shouldAutoScroll.value = true
 
   const parameters = buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
@@ -666,7 +722,12 @@ function currentWorkbenchPageContext(): Record<string, unknown> {
     page: {
       name: 'AI Foundation 模型测试工作台',
       mode: testMode.value,
-      capabilities: ['model-selection', 'chat-stream-test', 'rag-stream-test'],
+      capabilities: [
+        'model-selection',
+        'chat-stream-test',
+        'rag-stream-test',
+        'image-generation-test',
+      ],
     },
     model: selected
       ? {
@@ -867,7 +928,8 @@ function workbenchMessageToHalo(
 
 function workbenchPartToHalo(part: UIMessagePart): HaloUIMessagePart {
   if (part.type === 'file') {
-    return { ...part, id: String(part.id || part.fileId || utils.id.uuid()) } as HaloUIMessagePart
+    const id = String(part.id || part.fileId || utils.id.uuid())
+    return { ...part, id, fileId: String(part.fileId || id) } as HaloUIMessagePart
   }
   return { ...part } as HaloUIMessagePart
 }
@@ -885,9 +947,21 @@ function haloMessageToWorkbench(
 
 function haloPartToWorkbench(part: HaloUIMessagePart): UIMessagePart {
   if (part.type === 'file') {
-    return { ...part, fileId: part.id } as UIMessagePart
+    return { ...part, fileId: part.fileId || part.id } as UIMessagePart
   }
   return { ...part } as UIMessagePart
+}
+
+function workbenchFilesFromParts(files: HaloFilePart[]): WorkbenchFileReference[] {
+  return files.map((file) => ({
+    id: file.id,
+    fileId: file.fileId || file.id,
+    title: file.title,
+    url: file.url,
+    mediaType: file.mediaType,
+    data: file.data,
+    providerMetadata: file.providerMetadata,
+  }))
 }
 
 function uiMessageRequestBody(parameters: ReturnType<typeof buildChatParameters>) {
@@ -1051,6 +1125,7 @@ function cloneWorkbenchMessage(message: WorkbenchMessage): WorkbenchMessage {
       : undefined,
     toolEvents: message.toolEvents?.map((event) => ({ ...event })),
     warnings: message.warnings?.map((warning) => ({ ...warning })),
+    files: message.files?.map((file) => ({ ...file })),
     transientData: message.transientData ? { ...message.transientData } : undefined,
   }
 }
@@ -1078,6 +1153,7 @@ function clearMessages() {
     stopGeneration()
   }
   messages.value = []
+  chatFiles.value = []
   uiChat.setMessages([])
   shouldAutoScroll.value = true
 }
@@ -1163,6 +1239,100 @@ function parseStringMapJson(input: string): {
     return { value: result }
   } catch {
     return { error: 'Headers 不是有效的 JSON' }
+  }
+}
+
+function buildTestMediaContent(options: {
+  url: string
+  data: string
+  mediaType: string
+  label: string
+}): { value?: TestMediaContent; error?: string } {
+  const url = options.url.trim()
+  const data = options.data.trim()
+  if (url && data) {
+    return { error: `${options.label} 只能填写 URL 或 base64 其中一种` }
+  }
+  if (url) {
+    return { value: { url, mediaType: options.mediaType.trim() || undefined } }
+  }
+  if (data) {
+    return { value: { data, mediaType: options.mediaType.trim() || 'image/png' } }
+  }
+  return {}
+}
+
+async function runImageGenerationTest() {
+  const model = selectedModel.value
+  if (!model?.name || isImageTesting.value) {
+    return
+  }
+  if (!imagePrompt.value.trim()) {
+    imageError.value = '请输入 Prompt'
+    return
+  }
+  const image = buildTestMediaContent({
+    url: imageInputUrl.value,
+    data: imageInputData.value,
+    mediaType: imageInputMediaType.value,
+    label: '参考图',
+  })
+  if (image.error) {
+    imageError.value = image.error
+    return
+  }
+  const mask = buildTestMediaContent({
+    url: imageMaskUrl.value,
+    data: imageMaskData.value,
+    mediaType: imageMaskMediaType.value,
+    label: 'Mask',
+  })
+  if (mask.error) {
+    imageError.value = mask.error
+    return
+  }
+  const providerOptions = parseProviderOptionsJson(imageProviderOptionsText.value)
+  if (providerOptions.error) {
+    imageProviderOptionsError.value = providerOptions.error
+    return
+  }
+  imageProviderOptionsError.value = ''
+  const headers = parseStringMapJson(imageHeadersText.value)
+  if (headers.error) {
+    imageHeadersError.value = headers.error
+    return
+  }
+  imageHeadersError.value = ''
+  imageError.value = ''
+  imageResult.value = undefined
+  isImageTesting.value = true
+  try {
+    const { data } = await aiConsoleApiClient.model.testModelImageGeneration({
+      name: model.name,
+      testImageGenerationRequest: {
+        prompt: imagePrompt.value.trim(),
+        images: image.value ? [image.value] : undefined,
+        mask: mask.value,
+        n: numberOrUndefined(imageN.value),
+        width: numberOrUndefined(imageWidth.value),
+        height: numberOrUndefined(imageHeight.value),
+        aspectRatio: imageAspectRatio.value.trim() || undefined,
+        seed: numberOrUndefined(imageSeed.value),
+        responseFormat:
+          imageResponseFormat.value === 'DEFAULT' ? undefined : imageResponseFormat.value,
+        maxRetries: numberOrUndefined(imageMaxRetries.value),
+        maxParallelCalls: numberOrUndefined(imageMaxParallelCalls.value),
+        providerOptions: providerOptions.value as
+          | { [key: string]: { [key: string]: object } }
+          | undefined,
+        headers: headers.value,
+      },
+    })
+    imageResult.value = data
+  } catch (e) {
+    imageError.value = `请求失败: ${(e as Error).message}`
+  } finally {
+    isImageTesting.value = false
   }
 }
 
@@ -1362,9 +1532,11 @@ onBeforeUnmount(() => {
     <VLoading v-if="isLoading" />
 
     <VEmpty
-      v-else-if="!chatModels.length && !embeddingModels.length && !rerankModels.length"
+      v-else-if="
+        !chatModels.length && !embeddingModels.length && !rerankModels.length && !imageModels.length
+      "
       title="暂无可测试的模型"
-      message="你可以在配置选项卡中添加或启用支持对话、嵌入或 Rerank 能力的模型"
+      message="你可以在配置选项卡中添加或启用支持对话、嵌入、Rerank 或图片生成能力的模型"
     >
       <template #actions>
         <VButton :loading="isFetching" @click="refetch()">刷新</VButton>
@@ -1405,7 +1577,9 @@ onBeforeUnmount(() => {
                           ? 'Embedding'
                           : testMode === 'rerank'
                             ? 'Rerank'
-                            : 'RAG'
+                            : testMode === 'image'
+                              ? 'Image'
+                              : 'RAG'
                     }}
                   </span>
                 </div>
@@ -1427,12 +1601,7 @@ onBeforeUnmount(() => {
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="
-                    isStreaming ||
-                    isEmbeddingTesting ||
-                    isRerankTesting ||
-                    isRagTesting
-                  "
+                  :disabled="isAnyTesting"
                   @click="testMode = 'chat'"
                 >
                   <RiMessage3Line class=":uno: size-3.5" />
@@ -1446,12 +1615,7 @@ onBeforeUnmount(() => {
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="
-                    isStreaming ||
-                    isEmbeddingTesting ||
-                    isRerankTesting ||
-                    isRagTesting
-                  "
+                  :disabled="isAnyTesting"
                   @click="testMode = 'embedding'"
                 >
                   <RiStackLine class=":uno: size-3.5" />
@@ -1465,12 +1629,7 @@ onBeforeUnmount(() => {
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="
-                    isStreaming ||
-                    isEmbeddingTesting ||
-                    isRerankTesting ||
-                    isRagTesting
-                  "
+                  :disabled="isAnyTesting"
                   @click="testMode = 'rerank'"
                 >
                   <RiStackLine class=":uno: size-3.5" />
@@ -1480,16 +1639,25 @@ onBeforeUnmount(() => {
                   type="button"
                   class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
                   :class="
+                    testMode === 'image'
+                      ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
+                      : ':uno: text-slate-500 hover:text-slate-800'
+                  "
+                  :disabled="isAnyTesting"
+                  @click="testMode = 'image'"
+                >
+                  <RiImageLine class=":uno: size-3.5" />
+                  图片
+                </button>
+                <button
+                  type="button"
+                  class=":uno: h-7 inline-flex items-center gap-1.5 rounded-md text-xs font-medium transition-all !px-3"
+                  :class="
                     testMode === 'rag'
                       ? ':uno: bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
                       : ':uno: text-slate-500 hover:text-slate-800'
                   "
-                  :disabled="
-                    isStreaming ||
-                    isEmbeddingTesting ||
-                    isRerankTesting ||
-                    isRagTesting
-                  "
+                  :disabled="isAnyTesting"
                   @click="testMode = 'rag'"
                 >
                   <RiStackLine class=":uno: size-3.5" />
@@ -1502,7 +1670,7 @@ onBeforeUnmount(() => {
                 name="model"
                 :model-type="activeModelType"
                 :available="availableOnly"
-                :disabled="isStreaming || isEmbeddingTesting || isRerankTesting || isRagTesting"
+                :disabled="isAnyTesting"
                 placeholder="选择测试模型"
                 search-placeholder="搜索模型..."
                 full-width
@@ -1559,6 +1727,7 @@ onBeforeUnmount(() => {
           <ChatInputArea
             ref="chatInputRef"
             v-model="input"
+            v-model:files="chatFiles"
             :is-streaming="isStreaming"
             :disabled="!selectedModel"
             @send="sendMessage()"
@@ -1626,7 +1795,31 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <template v-else>
+        <template v-else-if="testMode === 'image'">
+          <ImageGenerationTestPanel
+            :prompt="imagePrompt"
+            :input-url="imageInputUrl"
+            :input-data="imageInputData"
+            :input-media-type="imageInputMediaType"
+            :mask-url="imageMaskUrl"
+            :mask-data="imageMaskData"
+            :mask-media-type="imageMaskMediaType"
+            :result="imageResult"
+            :error="imageError"
+            :is-loading="isImageTesting"
+            :disabled="!selectedModel"
+            @update:prompt="imagePrompt = $event"
+            @update:input-url="imageInputUrl = $event"
+            @update:input-data="imageInputData = $event"
+            @update:input-media-type="imageInputMediaType = $event"
+            @update:mask-url="imageMaskUrl = $event"
+            @update:mask-data="imageMaskData = $event"
+            @update:mask-media-type="imageMaskMediaType = $event"
+            @run="runImageGenerationTest"
+          />
+        </template>
+
+        <template v-else-if="testMode === 'rag'">
           <RagTestPanel
             :query="ragQuery"
             :sources="ragSources"
@@ -1682,6 +1875,18 @@ onBeforeUnmount(() => {
         :embedding-max-retries="embeddingMaxRetries"
         :embedding-provider-options-text="embeddingProviderOptionsText"
         :embedding-provider-options-error="embeddingProviderOptionsError"
+        :image-n="imageN"
+        :image-width="imageWidth"
+        :image-height="imageHeight"
+        :image-aspect-ratio="imageAspectRatio"
+        :image-seed="imageSeed"
+        :image-response-format="imageResponseFormat"
+        :image-max-retries="imageMaxRetries"
+        :image-max-parallel-calls="imageMaxParallelCalls"
+        :image-provider-options-text="imageProviderOptionsText"
+        :image-provider-options-error="imageProviderOptionsError"
+        :image-headers-text="imageHeadersText"
+        :image-headers-error="imageHeadersError"
         @update:system-prompt="systemPrompt = $event"
         @update:temperature="temperature = $event"
         @update:top-p="topP = $event"
@@ -1705,6 +1910,16 @@ onBeforeUnmount(() => {
         @update:embedding-max-parallel-calls="embeddingMaxParallelCalls = $event"
         @update:embedding-max-retries="embeddingMaxRetries = $event"
         @update:embedding-provider-options-text="embeddingProviderOptionsText = $event"
+        @update:image-n="imageN = $event"
+        @update:image-width="imageWidth = $event"
+        @update:image-height="imageHeight = $event"
+        @update:image-aspect-ratio="imageAspectRatio = $event"
+        @update:image-seed="imageSeed = $event"
+        @update:image-response-format="imageResponseFormat = $event"
+        @update:image-max-retries="imageMaxRetries = $event"
+        @update:image-max-parallel-calls="imageMaxParallelCalls = $event"
+        @update:image-provider-options-text="imageProviderOptionsText = $event"
+        @update:image-headers-text="imageHeadersText = $event"
       />
     </div>
   </div>

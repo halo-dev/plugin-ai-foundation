@@ -10,13 +10,22 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.capability.CapabilitySource;
+import run.halo.aifoundation.capability.ImageGenerationCapability;
+import run.halo.aifoundation.capability.InputSource;
+import run.halo.aifoundation.capability.LanguageCapability;
+import run.halo.aifoundation.capability.ModelCapabilities;
+import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiReasoningOptions;
@@ -80,7 +89,8 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK,
+            AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -100,6 +110,13 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         String modelId) {
         return new StandardRerankingClient(getProviderType(), trimTrailingSlash(resolveBaseUrl(provider)),
             "/rerank", modelId, apiKey, webClientBuilder(provider), Map.of("APP-Code", APP_CODE));
+    }
+
+    @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return buildOpenAiCompatibleImageGenerationClient(provider, apiKey, modelId,
+            Map.of("APP-Code", APP_CODE));
     }
 
     @Override
@@ -184,12 +201,64 @@ public class AiHubMixProvider extends AbstractAiProviderType {
             return remoteDiscoveredModel(modelId, ModelType.RERANK, Set.of(), AdapterType.RERANK);
         }
 
+        if (containsToken(node.get("types"), "t2i")
+            || containsToken(node.get("type"), "t2i")
+            || containsToken(node.get("types"), "image_generation")
+            || containsToken(node.get("type"), "image_generation")
+            || containsToken(node.get("types"), "image-generation")
+            || containsToken(node.get("type"), "image-generation")) {
+            return remoteImageGenerationModel(modelId);
+        }
+
         if (containsLanguageType(node)) {
-            return remoteDiscoveredModel(modelId, ModelType.LANGUAGE, languageFeatures(node),
-                AdapterType.OPENAI_CHAT);
+            return remoteLanguageModel(modelId, node);
         }
 
         return null;
+    }
+
+    private DiscoveredModel remoteLanguageModel(String modelId, Map<?, ?> node) {
+        var imageInput = containsToken(node.get("input_modalities"), "image");
+        return new DiscoveredModel(
+            modelId,
+            modelId,
+            ModelType.LANGUAGE,
+            languageFeatures(node),
+            AdapterType.OPENAI_CHAT,
+            DiscoverySource.REMOTE,
+            DiscoveryConfidence.HIGH,
+            imageInput ? ModelCapabilities.builder()
+                .language(LanguageCapability.builder()
+                    .imageInput(true)
+                    .inputMediaTypes(List.of("image/*"))
+                    .inputSources(List.of(InputSource.DATA))
+                    .build())
+                .build() : null,
+            imageInput ? ModelCapabilitySources.builder()
+                .language(CapabilitySource.REMOTE)
+                .build() : ModelCapabilitySources.unknown()
+        );
+    }
+
+    private DiscoveredModel remoteImageGenerationModel(String modelId) {
+        return new DiscoveredModel(
+            modelId,
+            modelId,
+            ModelType.IMAGE_GENERATION,
+            Set.of(),
+            AdapterType.OPENAI_IMAGE,
+            DiscoverySource.REMOTE,
+            DiscoveryConfidence.HIGH,
+            ModelCapabilities.builder()
+                .imageGeneration(ImageGenerationCapability.builder()
+                    .textToImage(true)
+                    .maxImagesPerCall(1)
+                    .build())
+                .build(),
+            ModelCapabilitySources.builder()
+                .imageGeneration(CapabilitySource.REMOTE)
+                .build()
+        );
     }
 
     private boolean containsLanguageType(Map<?, ?> node) {

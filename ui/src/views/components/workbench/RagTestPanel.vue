@@ -73,7 +73,7 @@ function addSource(sources: TestRagSource[]) {
           />
         </div>
 
-        <div class=":uno: border border-slate-200 rounded-lg bg-white shadow-sm !p-4 space-y-3">
+        <div class=":uno: border border-slate-200 rounded-lg bg-white shadow-sm space-y-3 !p-4">
           <label class=":uno: text-xs text-slate-600 font-medium">Rerank</label>
           <select
             :value="rerankModelName || ''"
@@ -203,7 +203,7 @@ function addSource(sources: TestRagSource[]) {
         <summary class=":uno: cursor-pointer select-none text-sm text-slate-800 font-semibold">
           Provider Options
         </summary>
-        <div class=":uno: mt-3 grid gap-3 lg:grid-cols-2">
+        <div class=":uno: grid mt-3 gap-3 lg:grid-cols-2">
           <div>
             <label class=":uno: text-xs text-slate-500">Language Provider Options</label>
             <textarea

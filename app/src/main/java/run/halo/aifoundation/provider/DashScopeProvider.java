@@ -8,10 +8,13 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
-import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.image.DashScopeImageGenerationClient;
+import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.rerank.DashScopeRerankingClient;
 
 @Component
@@ -68,7 +71,8 @@ public class DashScopeProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK,
+            AdapterType.DASHSCOPE_IMAGE);
     }
 
     @Override
@@ -85,6 +89,14 @@ public class DashScopeProvider extends AbstractAiProviderType {
     public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
         String modelId) {
         return new DashScopeRerankingClient(rerankEndpointRoot(provider), modelId, apiKey,
+            webClientBuilder(provider));
+    }
+
+    @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return new DashScopeImageGenerationClient(new ImageGenerationClientOptions(
+            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
             webClientBuilder(provider));
     }
 

@@ -13,6 +13,10 @@ public final class PartType {
      */
     public static final String TEXT = "text";
     /**
+     * Image input or output part. Relevant field: {@code media}.
+     */
+    public static final String IMAGE = "image";
+    /**
      * Tool call part. Relevant fields: {@code toolCallId}, {@code toolName}, {@code input}.
      */
     public static final String TOOL_CALL = "tool-call";
@@ -45,7 +49,7 @@ public final class PartType {
      */
     public static final String SOURCE = "source";
     /**
-     * Generated file content or stream part.
+     * File input, generated file content, or stream part.
      */
     public static final String FILE = "file";
     /**
@@ -117,42 +121,112 @@ public final class PartType {
     private PartType() {
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #TEXT}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code text}
+     */
     public static boolean isText(String type) {
         return TEXT.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #IMAGE}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code image}
+     */
+    public static boolean isImage(String type) {
+        return IMAGE.equals(type);
+    }
+
+    /**
+     * Checks whether a serialized part type is {@link #TOOL_CALL}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code tool-call}
+     */
     public static boolean isToolCall(String type) {
         return TOOL_CALL.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #TOOL_RESULT}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code tool-result}
+     */
     public static boolean isToolResult(String type) {
         return TOOL_RESULT.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #TOOL_ERROR}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code tool-error}
+     */
     public static boolean isToolError(String type) {
         return TOOL_ERROR.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #TOOL_APPROVAL_REQUEST}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code tool-approval-request}
+     */
     public static boolean isToolApprovalRequest(String type) {
         return TOOL_APPROVAL_REQUEST.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #TOOL_APPROVAL_RESPONSE}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code tool-approval-response}
+     */
     public static boolean isToolApprovalResponse(String type) {
         return TOOL_APPROVAL_RESPONSE.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #REASONING}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code reasoning}
+     */
     public static boolean isReasoning(String type) {
         return REASONING.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #SOURCE}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code source}
+     */
     public static boolean isSource(String type) {
         return SOURCE.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is {@link #FILE}.
+     *
+     * @param type serialized part type
+     * @return {@code true} when the type is {@code file}
+     */
     public static boolean isFile(String type) {
         return FILE.equals(type);
     }
 
+    /**
+     * Checks whether a serialized part type is a tool response sent back to the model.
+     *
+     * @param type serialized part type
+     * @return {@code true} for {@link #TOOL_RESULT} or {@link #TOOL_ERROR}
+     */
     public static boolean isToolResponse(String type) {
         return isToolResult(type) || isToolError(type);
     }

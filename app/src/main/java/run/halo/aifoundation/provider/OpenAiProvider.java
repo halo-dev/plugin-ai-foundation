@@ -8,6 +8,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiReasoningOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
@@ -66,7 +67,8 @@ public class OpenAiProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
+            AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -77,6 +79,12 @@ public class OpenAiProvider extends AbstractAiProviderType {
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         return buildOpenAiCompatibleEmbeddingModel(provider, apiKey, modelId);
+    }
+
+    @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return buildOpenAiCompatibleImageGenerationClient(provider, apiKey, modelId);
     }
 
     @Override

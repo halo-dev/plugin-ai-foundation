@@ -6,7 +6,10 @@ import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
+import run.halo.aifoundation.provider.support.image.MiniMaxImageGenerationClient;
 
 @Component
 public class MiniMaxProvider extends AbstractAiProviderType {
@@ -62,7 +65,7 @@ public class MiniMaxProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.MINIMAX_IMAGE);
     }
 
     @Override
@@ -78,6 +81,14 @@ public class MiniMaxProvider extends AbstractAiProviderType {
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
         return buildOpenAiCompatibleChatModel(provider, apiKey, modelId);
+    }
+
+    @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return new MiniMaxImageGenerationClient(new ImageGenerationClientOptions(
+            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+            webClientBuilder(provider));
     }
 
     @Override

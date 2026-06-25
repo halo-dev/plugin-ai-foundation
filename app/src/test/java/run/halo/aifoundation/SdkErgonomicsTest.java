@@ -10,6 +10,14 @@ import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.GenerationStep;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
+import run.halo.aifoundation.capability.InputSource;
+import run.halo.aifoundation.capability.ModelCapabilityRequirement;
+import run.halo.aifoundation.exception.InvalidMediaContentException;
+import run.halo.aifoundation.image.GenerateImageRequest;
+import run.halo.aifoundation.image.GenerateImageResult;
+import run.halo.aifoundation.image.ImageResponseFormat;
+import run.halo.aifoundation.media.DataContent;
+import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.options.ProviderOptions;
@@ -27,6 +35,9 @@ import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairContext;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolExecutionContext;
+import run.halo.aifoundation.ui.FilePart;
+import run.halo.aifoundation.ui.UIMessageStreamReader;
+import run.halo.aifoundation.ui.UIMessageStreams;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -182,6 +193,109 @@ class SdkErgonomicsTest {
             .build())
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("text message part has invalid fields");
+    }
+
+    @Test
+    void dataContent_normalizesDataUrlsAndKeepsUrlSourceDistinct() {
+        var content = DataContent.dataUrl("data:image/png;base64,aGVsbG8=", "image.png");
+        var urlContent = DataContent.url("https://example.com/image.png");
+
+        assertThat(content.getData()).isEqualTo("aGVsbG8=");
+        assertThat(content.getMediaType()).isEqualTo("image/png");
+        assertThat(content.source()).isEqualTo(InputSource.DATA);
+        assertThat(content.getUrl()).isNull();
+        assertThat(urlContent.source()).isEqualTo(InputSource.URL);
+        assertThat(urlContent.getMediaType()).isNull();
+    }
+
+    @Test
+    void dataContent_rejectsInvalidBase64AndConflictingSources() {
+        assertThatThrownBy(() -> DataContent.data("not base64", "image/png"))
+            .isInstanceOf(InvalidMediaContentException.class);
+        assertThatThrownBy(() -> DataContent.builder()
+            .url("https://example.com/image.png")
+            .data("aGVsbG8=")
+            .mediaType("image/png")
+            .build())
+            .isInstanceOf(InvalidMediaContentException.class)
+            .hasMessage("media content must set exactly one of url or data");
+    }
+
+    @Test
+    void modelMessagePart_acceptsImageAndFileMedia() {
+        var image = ModelMessagePart.image(DataContent.data("aGVsbG8=", "image/png"));
+        var file = ModelMessagePart.file(DataContent.url("https://example.com/manual.pdf",
+            "application/pdf"));
+
+        assertThat(image.getType()).isEqualTo(PartType.IMAGE);
+        assertThat(image.getMedia().getMediaType()).isEqualTo("image/png");
+        assertThat(file.getType()).isEqualTo(PartType.FILE);
+        assertThat(file.getMedia().source()).isEqualTo(InputSource.URL);
+    }
+
+    @Test
+    void generatedFile_reusesFileContentAndImageResultConvenience() {
+        var file = GeneratedFile.url("https://example.com/generated.png", "image/png",
+            "generated.png");
+        var content = GenerationContentPart.file(file);
+        var result = GenerateImageResult.builder()
+            .images(List.of(file))
+            .build();
+
+        assertThat(content.getType()).isEqualTo(PartType.FILE);
+        assertThat(content.getUrl()).isEqualTo(file.getUrl());
+        assertThat(result.getImage()).isSameAs(file);
+    }
+
+    @Test
+    void generateImageRequest_acceptsProviderOptionsAndCapabilityRequirements() {
+        var request = GenerateImageRequest.builder()
+            .prompt("Halo mascot")
+            .n(2)
+            .size(1024)
+            .responseFormat(ImageResponseFormat.URL)
+            .providerOptions(ProviderOptions.namespace("openai")
+                .option("quality", "high")
+                .build())
+            .build();
+        var wideRequest = GenerateImageRequest.builder()
+            .prompt("Halo banner")
+            .size(1024, 768)
+            .build();
+        var requirement = ModelCapabilityRequirement.languageImageInput("image/*",
+            InputSource.DATA);
+
+        assertThat(request.getSize()).isEqualTo("1024x1024");
+        assertThat(wideRequest.getSize()).isEqualTo("1024x768");
+        assertThat(request.getProviderOptions()).containsOnlyKeys("openai");
+        assertThat(request.getProviderOptions().get("openai")).containsEntry("quality", "high");
+        assertThat(requirement.getLanguage().getImageInput()).isTrue();
+        assertThat(requirement.getLanguage().getInputMediaTypes()).containsExactly("image/*");
+        assertThatThrownBy(() -> GenerateImageRequest.builder().size(0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("edge must be positive");
+        assertThatThrownBy(() -> GenerateImageRequest.builder().size(1024, -1))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("height must be positive");
+    }
+
+    @Test
+    void uiMessageStreamWriter_acceptsGeneratedFiles() {
+        var file = GeneratedFile.base64("abc123", "image/png", "generated.png");
+        var stream = UIMessageStreams.create("assistant-1", writer ->
+            writer.writeFile("image-1", file));
+        var message = UIMessageStreamReader.read(options -> options.stream(stream))
+            .responseMessage()
+            .block();
+
+        assertThat(message.parts())
+            .singleElement()
+            .isInstanceOfSatisfying(FilePart.class, part -> {
+                assertThat(part.fileId()).isEqualTo("image-1");
+                assertThat(part.mediaType()).isEqualTo("image/png");
+                assertThat(part.data()).isEqualTo("abc123");
+                assertThat(part.title()).isEqualTo("generated.png");
+            });
     }
 
     @Test

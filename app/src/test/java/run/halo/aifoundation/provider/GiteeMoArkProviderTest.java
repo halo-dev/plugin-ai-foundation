@@ -9,12 +9,15 @@ import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageOptions;
 import run.halo.app.extension.Metadata;
 
 class GiteeMoArkProviderTest {
@@ -39,7 +42,10 @@ class GiteeMoArkProviderTest {
     @Test
     void supportsOpenAiChatAndRerankAdapters() {
         assertThat(providerType.getSupportedAdapterTypes())
-            .containsExactly(AdapterType.OPENAI_CHAT, AdapterType.RERANK);
+            .containsExactly(AdapterType.OPENAI_CHAT, AdapterType.RERANK,
+                AdapterType.OPENAI_IMAGE);
+        assertThat(providerType.getSupportedModelTypes())
+            .containsExactly(ModelType.LANGUAGE, ModelType.RERANK, ModelType.IMAGE_GENERATION);
         assertThat(providerType.maxEmbeddingsPerCall()).isZero();
         assertThat(providerType.supportsParallelCalls()).isFalse();
         assertThat(providerType.buildEmbeddingModel(provider(null), "sk-test",
@@ -57,6 +63,16 @@ class GiteeMoArkProviderTest {
             "Qwen2.5-72B-Instruct");
 
         assertThat(chatModel).isInstanceOf(OpenAiCompatibleChatModel.class);
+    }
+
+    @Test
+    void buildImageGenerationClient_addsFailoverHeader() {
+        var client = providerType.buildImageGenerationClient(provider(null), "sk-test", "Kolors");
+
+        assertThat(client).isInstanceOf(OpenAiCompatibleImageGenerationClient.class);
+        var options = (OpenAiCompatibleImageOptions) ReflectionTestUtils.getField(client,
+            "options");
+        assertThat(options.customHeaders()).containsEntry("X-Failover-Enabled", "true");
     }
 
     @Test

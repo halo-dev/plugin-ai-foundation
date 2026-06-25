@@ -71,6 +71,11 @@ public class DefaultAiModelResolver implements AiModelResolver {
         return defaultSlotName("rerank", DefaultModelSlots::getRerankModelName);
     }
 
+    @Override
+    public Mono<String> defaultImageGenerationModelName() {
+        return defaultSlotName("image-generation", DefaultModelSlots::getImageGenerationModelName);
+    }
+
     private Mono<AiModel> fetchAiModel(String modelName) {
         return client.fetch(AiModel.class, modelName)
             .switchIfEmpty(Mono.error(new ModelNotFoundException(modelName)));

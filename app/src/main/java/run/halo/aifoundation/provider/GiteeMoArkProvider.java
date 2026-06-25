@@ -1,10 +1,12 @@
 package run.halo.aifoundation.provider;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.rerank.StandardRerankingClient;
@@ -28,7 +30,7 @@ public class GiteeMoArkProvider extends AbstractAiProviderType {
 
     @Override
     public String getDescription() {
-        return "Gitee 模力方舟提供兼容 OpenAI 风格的 Serverless API，支持文本生成和对话模型调用。";
+        return "Gitee 模力方舟提供兼容 OpenAI 风格的 Serverless API，支持文本、对话、重排和图像生成模型调用。";
     }
 
     @Override
@@ -63,7 +65,7 @@ public class GiteeMoArkProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.RERANK);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.RERANK, AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -86,7 +88,14 @@ public class GiteeMoArkProvider extends AbstractAiProviderType {
         String modelId) {
         return new StandardRerankingClient(getProviderType(), trimTrailingSlash(resolveBaseUrl(provider)),
             "/rerank", modelId, apiKey, webClientBuilder(provider),
-            java.util.Map.of("X-Failover-Enabled", "true"));
+            failoverHeaders());
+    }
+
+    @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return buildOpenAiCompatibleImageGenerationClient(provider, apiKey, modelId,
+            failoverHeaders());
     }
 
     @Override
@@ -94,6 +103,10 @@ public class GiteeMoArkProvider extends AbstractAiProviderType {
         return RerankingModelProviderOptions.builder()
             .providerOptionsSupported(true)
             .build();
+    }
+
+    private Map<String, String> failoverHeaders() {
+        return Map.of("X-Failover-Enabled", "true");
     }
 
     private String trimTrailingSlash(String value) {

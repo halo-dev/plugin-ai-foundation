@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { FormKitFrameworkContext } from '@formkit/core'
 import { computed } from 'vue'
+import type { RequiredModelCapabilitiesValue } from '@/utils/capabilities'
 import AiModelSelector from './AiModelSelector.vue'
 
 const props = defineProps<{
@@ -23,6 +24,9 @@ const placeholder = computed(() => stringProp('placeholder'))
 const searchPlaceholder = computed(() => stringProp('searchPlaceholder'))
 const requiredFeatures = computed(
   () => props.context.requiredFeatures as string | string[] | undefined,
+)
+const requiredCapabilities = computed(
+  () => props.context.requiredCapabilities as RequiredModelCapabilitiesValue,
 )
 const enabled = computed(() => booleanProp('enabled'))
 const available = computed(() => nullableBooleanProp('available', true))
@@ -55,6 +59,7 @@ function nullableBooleanProp(name: string, defaultValue?: boolean | null) {
     :enabled="enabled"
     :available="available"
     :required-features="requiredFeatures"
+    :required-capabilities="requiredCapabilities"
     :placeholder="placeholder"
     :search-placeholder="searchPlaceholder"
     :clearable="clearable"

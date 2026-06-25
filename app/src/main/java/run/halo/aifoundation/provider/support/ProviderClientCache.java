@@ -18,6 +18,8 @@ public class ProviderClientCache {
     private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
     private final Map<String, ProviderRerankingClient> rerankingClientCache =
         new ConcurrentHashMap<>();
+    private final Map<String, ProviderImageGenerationClient> imageGenerationClientCache =
+        new ConcurrentHashMap<>();
     private final ApplicationContext applicationContext;
 
     private volatile Map<String, AiProviderType> providerTypeMap;
@@ -97,11 +99,29 @@ public class ProviderClientCache {
         return prev != null ? prev : client;
     }
 
+    public ProviderImageGenerationClient getOrCreateImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        var name = provider.getMetadata().getName();
+        var key = name + "/" + modelId;
+        var existing = imageGenerationClientCache.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var client = type.buildImageGenerationClient(provider, apiKey, modelId);
+        if (client == null) {
+            return null;
+        }
+        var prev = imageGenerationClientCache.putIfAbsent(key, client);
+        return prev != null ? prev : client;
+    }
+
     public void invalidate(String providerName) {
         var prefix = providerName + "/";
         chatModelCache.keySet().removeIf(key -> key.startsWith(prefix));
         embeddingModelCache.keySet().removeIf(key -> key.startsWith(prefix));
         rerankingClientCache.keySet().removeIf(key -> key.startsWith(prefix));
+        imageGenerationClientCache.keySet().removeIf(key -> key.startsWith(prefix));
         log.debug("Invalidated cached models for provider: {}", providerName);
     }
 
@@ -109,6 +129,7 @@ public class ProviderClientCache {
         chatModelCache.clear();
         embeddingModelCache.clear();
         rerankingClientCache.clear();
+        imageGenerationClientCache.clear();
         log.debug("Invalidated all cached provider models");
     }
 }

@@ -37,7 +37,7 @@ class SiliconFlowProviderTest {
 
             StepVerifier.create(providerType.discoverModels(provider(baseUrl), "sk-test"))
                 .assertNext(models -> {
-                    assertThat(models).hasSize(3);
+                    assertThat(models).hasSize(5);
                     assertThat(models.get(0).modelId()).isEqualTo("Qwen/Qwen2.5-7B-Instruct");
                     assertThat(models.get(0).modelType()).isEqualTo(ModelType.LANGUAGE);
                     assertThat(models.get(0).features()).containsExactly(ModelFeature.STREAMING);
@@ -58,6 +58,20 @@ class SiliconFlowProviderTest {
                     assertThat(models.get(2).adapterType()).isEqualTo(AdapterType.RERANK);
                     assertThat(models.get(2).source()).isEqualTo(DiscoverySource.REMOTE);
                     assertThat(models.get(2).confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+
+                    assertThat(models.get(3).modelId()).isEqualTo("black-forest-labs/FLUX.1");
+                    assertThat(models.get(3).modelType()).isEqualTo(ModelType.IMAGE_GENERATION);
+                    assertThat(models.get(3).adapterType())
+                        .isEqualTo(AdapterType.SILICONFLOW_IMAGE);
+                    assertThat(models.get(3).capabilities().getImageGeneration().getTextToImage())
+                        .isTrue();
+
+                    assertThat(models.get(4).modelId()).isEqualTo("Kwai-Kolors/Kolors-Edit");
+                    assertThat(models.get(4).modelType()).isEqualTo(ModelType.IMAGE_GENERATION);
+                    assertThat(models.get(4).adapterType())
+                        .isEqualTo(AdapterType.SILICONFLOW_IMAGE);
+                    assertThat(models.get(4).capabilities().getImageGeneration().getImageToImage())
+                        .isTrue();
                 })
                 .verifyComplete();
 
@@ -65,7 +79,9 @@ class SiliconFlowProviderTest {
                 .containsExactlyInAnyOrder(
                     new RequestCapture("sub_type=chat", "Bearer sk-test"),
                     new RequestCapture("sub_type=embedding", "Bearer sk-test"),
-                    new RequestCapture("sub_type=reranker", "Bearer sk-test")
+                    new RequestCapture("sub_type=reranker", "Bearer sk-test"),
+                    new RequestCapture("sub_type=text-to-image", "Bearer sk-test"),
+                    new RequestCapture("sub_type=image-to-image", "Bearer sk-test")
                 );
         } finally {
             server.stop(0);
@@ -83,6 +99,8 @@ class SiliconFlowProviderTest {
                 case "sub_type=chat" -> "{\"data\":[{\"id\":\"Qwen/Qwen2.5-7B-Instruct\"}]}";
                 case "sub_type=embedding" -> "{\"data\":[{\"id\":\"BAAI/bge-m3\"}]}";
                 case "sub_type=reranker" -> "{\"data\":[{\"id\":\"BAAI/bge-reranker-v2-m3\"}]}";
+                case "sub_type=text-to-image" -> "{\"data\":[{\"id\":\"black-forest-labs/FLUX.1\"}]}";
+                case "sub_type=image-to-image" -> "{\"data\":[{\"id\":\"Kwai-Kolors/Kolors-Edit\"}]}";
                 default -> "{\"data\":[]}";
             };
             var bytes = body.getBytes(StandardCharsets.UTF_8);

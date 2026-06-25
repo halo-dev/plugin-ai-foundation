@@ -1,6 +1,7 @@
 package run.halo.aifoundation.provider;
 
 import java.util.List;
+import java.util.Locale;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Component;
@@ -8,6 +9,8 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiThinkingOptions;
@@ -69,7 +72,8 @@ public class ZhiPuProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK,
+            AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -87,6 +91,21 @@ public class ZhiPuProvider extends AbstractAiProviderType {
         String modelId) {
         return new ZhiPuRerankingClient(trimTrailingSlash(resolveBaseUrl(provider)), modelId, apiKey,
             webClientBuilder(provider));
+    }
+
+    @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return buildOpenAiCompatibleImageGenerationClient(provider, apiKey, modelId);
+    }
+
+    @Override
+    protected ModelType inferModelType(String modelId) {
+        var normalized = modelId == null ? "" : modelId.toLowerCase(Locale.ROOT);
+        if (normalized.contains("glm-image") || normalized.contains("cogview")) {
+            return ModelType.IMAGE_GENERATION;
+        }
+        return super.inferModelType(modelId);
     }
 
     @Override

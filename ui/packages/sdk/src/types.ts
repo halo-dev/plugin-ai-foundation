@@ -78,6 +78,7 @@ export interface SourceDocumentPart {
 export interface FilePart {
   type: 'file'
   id: string
+  fileId?: string
   url?: string
   title?: string
   mediaType?: string
@@ -248,7 +249,8 @@ export interface SourceDocumentChunk {
 
 export interface FileChunk {
   type: 'file'
-  id: string
+  id?: string
+  fileId?: string
   url?: string
   title?: string
   mediaType?: string

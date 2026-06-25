@@ -174,16 +174,18 @@ export function createModelFromDiscovered(
   model: DiscoveredModel,
   override?: DiscoveredModelProfileOverride,
 ): AiModel {
+  const modelType = override?.modelType || model.modelType || AiModelSpecModelTypeEnum.Language
   const spec = {
     providerName,
     modelId: model.modelId,
     displayName: model.displayName || model.modelId,
     enabled: true,
-    modelType: override?.modelType || model.modelType || AiModelSpecModelTypeEnum.Language,
+    modelType,
     features: override?.features || model.features || [],
     discoverySource: model.source || AiModelSpecDiscoverySourceEnum.Rule,
     discoveryConfidence: model.confidence || AiModelSpecDiscoveryConfidenceEnum.Low,
     ...(model.adapterType ? { adapterType: model.adapterType } : {}),
+    ...discoveredCapabilityFields(model, modelType, override),
   } as AiModel['spec']
 
   return {
@@ -194,4 +196,50 @@ export function createModelFromDiscovered(
     },
     spec,
   }
+}
+
+function discoveredCapabilityFields(
+  model: DiscoveredModel,
+  modelType: AiModel['spec']['modelType'],
+  override?: DiscoveredModelProfileOverride,
+): Partial<AiModel['spec']> {
+  if (!model.capabilities && !model.capabilitySources) {
+    return {}
+  }
+  if (!override?.modelType || override.modelType === model.modelType) {
+    return {
+      capabilities: model.capabilities,
+      capabilitySources: model.capabilitySources,
+    }
+  }
+  if (modelType === AiModelSpecModelTypeEnum.Language && model.capabilities?.language) {
+    return {
+      capabilities: {
+        language: model.capabilities.language,
+        sources: model.capabilities.sources?.language
+          ? { language: model.capabilities.sources.language }
+          : undefined,
+      },
+      capabilitySources: model.capabilitySources?.language
+        ? { language: model.capabilitySources.language }
+        : undefined,
+    }
+  }
+  if (
+    modelType === AiModelSpecModelTypeEnum.ImageGeneration &&
+    model.capabilities?.imageGeneration
+  ) {
+    return {
+      capabilities: {
+        imageGeneration: model.capabilities.imageGeneration,
+        sources: model.capabilities.sources?.imageGeneration
+          ? { imageGeneration: model.capabilities.sources.imageGeneration }
+          : undefined,
+      },
+      capabilitySources: model.capabilitySources?.imageGeneration
+        ? { imageGeneration: model.capabilitySources.imageGeneration }
+        : undefined,
+    }
+  }
+  return {}
 }

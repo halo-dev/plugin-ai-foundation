@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.25.0"
+    "version" : "2.25.3"
   },
   "servers" : [ {
-    "url" : "http://localhost:42694",
+    "url" : "http://localhost:49390",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -528,6 +528,13 @@
             "type" : "string"
           }
         }, {
+          "description" : "JSON all-of fine-grained capability filter",
+          "in" : "query",
+          "name" : "requiredCapabilities",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
           "description" : "Case-insensitive keyword filter",
           "in" : "query",
           "name" : "keyword",
@@ -821,6 +828,44 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/TestEmbeddingResponse"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-image-generation" : {
+      "post" : {
+        "description" : "Test image generation with prompt, optional input images, and diagnostics.",
+        "operationId" : "TestModelImageGeneration",
+        "parameters" : [ {
+          "description" : "Image generation model name (AiModel.metadata.name)",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestImageGenerationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TestImageGenerationResponse"
                 }
               }
             },
@@ -1273,7 +1318,13 @@
           "adapterType" : {
             "type" : "string",
             "description" : "Internal invocation adapter",
-            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+          },
+          "capabilities" : {
+            "$ref" : "#/components/schemas/ModelCapabilities"
+          },
+          "capabilitySources" : {
+            "$ref" : "#/components/schemas/ModelCapabilitySources"
           },
           "discoveryConfidence" : {
             "type" : "string",
@@ -1299,7 +1350,7 @@
             "items" : {
               "type" : "string",
               "description" : "Optional model features",
-              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+              "enum" : [ "streaming", "vision", "audio-input", "tool-call", "structured-output", "reasoning" ]
             }
           },
           "modelId" : {
@@ -1501,6 +1552,23 @@
           }
         }
       },
+      "DataContent" : {
+        "type" : "object",
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          },
+          "filename" : {
+            "type" : "string"
+          },
+          "mediaType" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        }
+      },
       "DefaultModelSlots" : {
         "type" : "object",
         "properties" : {
@@ -1523,7 +1591,13 @@
         "properties" : {
           "adapterType" : {
             "type" : "string",
-            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+          },
+          "capabilities" : {
+            "$ref" : "#/components/schemas/ModelCapabilities"
+          },
+          "capabilitySources" : {
+            "$ref" : "#/components/schemas/ModelCapabilitySources"
           },
           "confidence" : {
             "type" : "string",
@@ -1536,7 +1610,7 @@
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+              "enum" : [ "streaming", "vision", "audio-input", "tool-call", "structured-output", "reasoning" ]
             }
           },
           "modelId" : {
@@ -1637,6 +1711,122 @@
           }
         }
       },
+      "GenerationResponseMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "body" : {
+            "type" : "object"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessage"
+            }
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ImageGenerationCapability" : {
+        "type" : "object",
+        "properties" : {
+          "aspectRatios" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "imageToImage" : {
+            "type" : "boolean"
+          },
+          "maskInput" : {
+            "type" : "boolean"
+          },
+          "maxImagesPerCall" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "outputMediaTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "sizes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "textToImage" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ImageGenerationWarning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          }
+        }
+      },
+      "ImageUsage" : {
+        "type" : "object",
+        "properties" : {
+          "imageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "raw" : {
+            "type" : "object"
+          },
+          "totalTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "JsonPatch" : {
         "minItems" : 1,
         "uniqueItems" : true,
@@ -1656,6 +1846,33 @@
           }, {
             "$ref" : "#/components/schemas/CopyOperation"
           } ]
+        }
+      },
+      "LanguageCapability" : {
+        "type" : "object",
+        "properties" : {
+          "fileInput" : {
+            "type" : "boolean"
+          },
+          "imageInput" : {
+            "type" : "boolean"
+          },
+          "inputMediaTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "inputSources" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "data", "url" ]
+            }
+          },
+          "reasoningHistory" : {
+            "type" : "boolean"
+          }
         }
       },
       "Metadata" : {
@@ -1714,12 +1931,114 @@
         },
         "description" : "Metadata of Extension."
       },
+      "ModelCapabilities" : {
+        "type" : "object",
+        "properties" : {
+          "imageGeneration" : {
+            "$ref" : "#/components/schemas/ImageGenerationCapability"
+          },
+          "language" : {
+            "$ref" : "#/components/schemas/LanguageCapability"
+          },
+          "sources" : {
+            "$ref" : "#/components/schemas/ModelCapabilitySources"
+          }
+        }
+      },
+      "ModelCapabilitySources" : {
+        "type" : "object",
+        "properties" : {
+          "imageGeneration" : {
+            "type" : "string",
+            "enum" : [ "remote", "built-in", "manual", "unknown" ]
+          },
+          "language" : {
+            "type" : "string",
+            "enum" : [ "remote", "built-in", "manual", "unknown" ]
+          }
+        }
+      },
+      "ModelMessage" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelMessagePart"
+            }
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "SYSTEM", "USER", "ASSISTANT", "TOOL" ]
+          }
+        }
+      },
+      "ModelMessagePart" : {
+        "type" : "object",
+        "properties" : {
+          "approvalId" : {
+            "type" : "string"
+          },
+          "approved" : {
+            "type" : "boolean"
+          },
+          "errorText" : {
+            "type" : "string"
+          },
+          "input" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/DataContent"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "result" : {
+            "type" : "object"
+          },
+          "signature" : {
+            "type" : "string"
+          },
+          "stepIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "toolCallId" : {
+            "type" : "string"
+          },
+          "toolName" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
       "ModelOption" : {
         "type" : "object",
         "properties" : {
           "available" : {
             "type" : "boolean",
             "description" : "Whether this option is selectable based on local configuration state"
+          },
+          "capabilities" : {
+            "$ref" : "#/components/schemas/ModelCapabilities"
+          },
+          "capabilitySources" : {
+            "$ref" : "#/components/schemas/ModelCapabilitySources"
           },
           "displayName" : {
             "type" : "string",
@@ -1735,7 +2054,7 @@
             "items" : {
               "type" : "string",
               "description" : "Optional model features",
-              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+              "enum" : [ "streaming", "vision", "audio-input", "tool-call", "structured-output", "reasoning" ]
             }
           },
           "modelId" : {
@@ -1754,10 +2073,17 @@
           "provider" : {
             "$ref" : "#/components/schemas/ModelOptionProvider"
           },
+          "unavailableDetails" : {
+            "type" : "array",
+            "description" : "Structured details for unavailable options",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelOptionUnavailableDetail"
+            }
+          },
           "unavailableReason" : {
             "type" : "string",
             "description" : "Reason the option is not selectable",
-            "enum" : [ "model-disabled", "provider-missing", "provider-disabled" ]
+            "enum" : [ "model-disabled", "provider-missing", "provider-disabled", "capability-unsupported" ]
           }
         }
       },
@@ -1798,6 +2124,24 @@
           }
         },
         "description" : "Provider display summary"
+      },
+      "ModelOptionUnavailableDetail" : {
+        "type" : "object",
+        "properties" : {
+          "actual" : {
+            "type" : "object",
+            "description" : "Actual safe value"
+          },
+          "expected" : {
+            "type" : "object",
+            "description" : "Expected safe value"
+          },
+          "path" : {
+            "type" : "string",
+            "description" : "Capability path that did not match"
+          }
+        },
+        "description" : "Structured details for unavailable options"
       },
       "MoveOperation" : {
         "required" : [ "op", "from", "path" ],
@@ -1914,14 +2258,14 @@
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
             }
           },
           "supportedFeatures" : {
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "streaming", "vision", "tool-call", "structured-output", "reasoning" ]
+              "enum" : [ "streaming", "vision", "audio-input", "tool-call", "structured-output", "reasoning" ]
             }
           },
           "supportedModelTypes" : {
@@ -2208,6 +2552,158 @@
             "items" : {
               "$ref" : "#/components/schemas/EmbeddingWarning"
             }
+          }
+        }
+      },
+      "TestGeneratedFile" : {
+        "type" : "object",
+        "properties" : {
+          "base64" : {
+            "type" : "string"
+          },
+          "filename" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "mediaType" : {
+            "type" : "string"
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TestImageGenerationRequest" : {
+        "type" : "object",
+        "properties" : {
+          "aspectRatio" : {
+            "type" : "string"
+          },
+          "headers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "height" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "images" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TestMediaContent"
+            }
+          },
+          "mask" : {
+            "$ref" : "#/components/schemas/TestMediaContent"
+          },
+          "maxParallelCalls" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxRetries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "n" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "prompt" : {
+            "type" : "string"
+          },
+          "providerOptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "responseFormat" : {
+            "type" : "string",
+            "enum" : [ "URL", "BASE64" ]
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "string"
+          },
+          "width" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "TestImageGenerationResponse" : {
+        "type" : "object",
+        "properties" : {
+          "images" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TestGeneratedFile"
+            }
+          },
+          "imagesCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "providerMetadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "responses" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GenerationResponseMetadata"
+            }
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/ImageUsage"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ImageGenerationWarning"
+            }
+          }
+        }
+      },
+      "TestMediaContent" : {
+        "type" : "object",
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          },
+          "filename" : {
+            "type" : "string"
+          },
+          "mediaType" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
           }
         }
       },

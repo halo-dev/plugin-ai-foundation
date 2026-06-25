@@ -91,6 +91,7 @@ public class LanguageModelImpl implements LanguageModel {
     private final ChatModel chatModel;
     private final String providerType;
     private final LanguageModelProviderOptions providerOptions;
+    private final run.halo.aifoundation.capability.ModelCapabilities modelCapabilities;
     private final LanguageModelRequestValidator requestValidator;
     private final LanguageModelMessageMapper messageMapper;
     private final GenerationMessageHistoryAssembler messageHistoryAssembler;
@@ -118,6 +119,7 @@ public class LanguageModelImpl implements LanguageModel {
         this.chatModel = chatModel;
         this.providerType = composition.providerType();
         this.providerOptions = composition.providerOptions();
+        this.modelCapabilities = composition.modelCapabilities();
         this.requestValidator = composition.requestValidator();
         this.messageMapper = composition.messageMapper();
         this.messageHistoryAssembler = composition.messageHistoryAssembler();
@@ -178,7 +180,8 @@ public class LanguageModelImpl implements LanguageModel {
 
     @Override
     public LanguageModelCapabilities capabilities() {
-        return new LanguageModelCapabilities(providerOptions.reasoningHistorySupported());
+        return LanguageModelCapabilities.of(providerOptions.reasoningHistorySupported(),
+            modelCapabilities);
     }
 
     private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request,
@@ -972,6 +975,8 @@ public class LanguageModelImpl implements LanguageModel {
         if (message.getRole() == ModelMessageRole.ASSISTANT) {
             var parts = message.getContent().stream()
                 .filter(part -> PartType.isText(part.getType())
+                    || PartType.isImage(part.getType())
+                    || PartType.isFile(part.getType())
                     || PartType.isReasoning(part.getType())
                     || (PartType.isToolCall(part.getType())
                     && !suppressedToolCallIds.contains(part.getToolCallId())))
@@ -995,6 +1000,8 @@ public class LanguageModelImpl implements LanguageModel {
             case TOOL -> messageMapper.hasProviderToolResponse(message);
             case ASSISTANT -> message.getContent().stream()
                 .anyMatch(part -> PartType.isText(part.getType())
+                    || PartType.isImage(part.getType())
+                    || PartType.isFile(part.getType())
                     || PartType.isReasoning(part.getType())
                     || (PartType.isToolCall(part.getType())
                     && !suppressedToolCallIds.contains(part.getToolCallId())));

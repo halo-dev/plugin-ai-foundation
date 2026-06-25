@@ -24,6 +24,11 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
+import run.halo.aifoundation.image.GenerateImageRequest;
+import run.halo.aifoundation.image.GenerateImageResult;
+import run.halo.aifoundation.image.ImageGenerationModel;
+import run.halo.aifoundation.image.ImageUsage;
+import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.part.TextStreamPart;
@@ -59,7 +64,8 @@ class ModelConsoleEndpointTest {
                 ModelType.IMAGE_GENERATION));
         when(mockType.getSupportedFeatures())
             .thenReturn(List.of(ModelFeature.STREAMING, ModelFeature.VISION,
-                ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING));
+                ModelFeature.AUDIO_INPUT, ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
+                ModelFeature.REASONING));
         when(mockType.getSupportedAdapterTypes())
             .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
                 AdapterType.RERANK, AdapterType.OPENAI_IMAGE));
@@ -1066,6 +1072,60 @@ class ModelConsoleEndpointTest {
             .containsExactly("generic cms", "Halo AI Foundation");
         assertThat(request.getTopN()).isEqualTo(1);
         assertThat(request.getProviderOptions()).containsKey("cohere");
+    }
+
+    @Test
+    void testImageGeneration_mapsRequestToImageGenerationModel() {
+        var imageModel = mock(ImageGenerationModel.class);
+        when(aiModelService.imageGenerationModel("image-model")).thenReturn(Mono.just(imageModel));
+        when(imageModel.generateImage(any(GenerateImageRequest.class))).thenReturn(Mono.just(
+            GenerateImageResult.builder()
+                .images(List.of(GeneratedFile.base64("iVBORw0KGgo=", "image/png", "result.png")))
+                .usage(ImageUsage.builder().imageCount(1).build())
+                .providerMetadata(Map.of("providerType", "openai"))
+                .build()
+        ));
+
+        webTestClient.post().uri("/models/image-model/test-image-generation")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.ofEntries(
+                Map.entry("prompt", "A Halo console"),
+                Map.entry("images", List.of(Map.of(
+                    "url", "https://example.test/input.png",
+                    "mediaType", "image/png",
+                    "filename", "input.png"
+                ))),
+                Map.entry("n", 1),
+                Map.entry("width", 1024),
+                Map.entry("height", 768),
+                Map.entry("seed", 42),
+                Map.entry("maxRetries", 1),
+                Map.entry("maxParallelCalls", 2),
+                Map.entry("responseFormat", "BASE64"),
+                Map.entry("providerOptions", Map.of("openai", Map.of("quality", "hd"))),
+                Map.entry("headers", Map.of("X-Test", "true"))
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.imagesCount").isEqualTo(1)
+            .jsonPath("$.images[0].base64").isEqualTo("iVBORw0KGgo=")
+            .jsonPath("$.images[0].mediaType").isEqualTo("image/png")
+            .jsonPath("$.usage.imageCount").isEqualTo(1)
+            .jsonPath("$.providerMetadata.providerType").isEqualTo("openai");
+
+        var captor = ArgumentCaptor.forClass(GenerateImageRequest.class);
+        verify(imageModel).generateImage(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getPrompt()).isEqualTo("A Halo console");
+        assertThat(request.getImages()).hasSize(1);
+        assertThat(request.getImages().getFirst().getUrl())
+            .isEqualTo("https://example.test/input.png");
+        assertThat(request.getSize()).isEqualTo("1024x768");
+        assertThat(request.getSeed()).isEqualTo(42);
+        assertThat(request.getMaxParallelCalls()).isEqualTo(2);
+        assertThat(request.getProviderOptions()).containsKey("openai");
+        assertThat(request.getHeaders()).containsEntry("X-Test", "true");
     }
 
     @Test

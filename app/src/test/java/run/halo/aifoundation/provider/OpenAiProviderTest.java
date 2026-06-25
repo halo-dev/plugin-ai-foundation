@@ -7,8 +7,10 @@ import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingModel;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
 import run.halo.app.extension.Metadata;
 
 class OpenAiProviderTest {
@@ -48,6 +50,10 @@ class OpenAiProviderTest {
         assertThat(embeddingOptions.getBaseUrl()).isEqualTo("http://127.0.0.1:8080/v1");
         assertThat(embeddingOptions.getApiKey()).isEqualTo("sk-test");
         assertThat(embeddingOptions.getModel()).isEqualTo("text-embedding-test");
+
+        assertThat(providerType.getSupportedAdapterTypes()).contains(AdapterType.OPENAI_IMAGE);
+        assertThat(providerType.buildImageGenerationClient(provider, "sk-test", "gpt-image-1"))
+            .isInstanceOf(OpenAiCompatibleImageGenerationClient.class);
     }
 
     private AiProvider provider(String baseUrl) {

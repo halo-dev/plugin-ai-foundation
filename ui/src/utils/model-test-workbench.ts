@@ -24,6 +24,7 @@ export interface WorkbenchMessage {
   state?: 'streaming' | 'done' | 'error' | 'stopped'
   warnings?: WorkbenchWarning[]
   sourceReferences?: WorkbenchSourceReference[]
+  files?: WorkbenchFileReference[]
   ragInput?: RagInputDiagnostics
   ragDiagnostics?: RagRunDiagnostics
 }
@@ -40,6 +41,16 @@ export interface WorkbenchSourceReference {
   url?: string
   mediaType?: string
   filename?: string
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface WorkbenchFileReference {
+  id?: string
+  fileId?: string
+  title?: string
+  url?: string
+  mediaType?: string
+  data?: unknown
   providerMetadata?: Record<string, unknown>
 }
 
@@ -467,11 +478,16 @@ export function buildTestUiMessageChatRequest(
   }
 }
 
-export function createUserUIMessage(id: string, text: string): UIMessage {
+export function createUserUIMessage(id: string, text: string, files: UIMessagePart[] = []): UIMessage {
+  const parts: UIMessagePart[] = []
+  if (text) {
+    parts.push({ type: 'text', id: `${id}-text`, text })
+  }
+  parts.push(...files.map(normalizeFilePart))
   return {
     id,
     role: 'USER',
-    parts: [{ type: 'text', id: `${id}-text`, text }],
+    parts,
   }
 }
 
@@ -647,9 +663,11 @@ export function applyWorkbenchUIMessageChunk(message: WorkbenchMessage, chunk: U
     projectUIMessage(message)
     return
   }
-  if (chunk.type === 'file' && chunk.fileId) {
-    upsertUIMessagePart(uiMessage, 'file', chunk.fileId, {
-      fileId: chunk.fileId,
+  if (chunk.type === 'file' && (chunk.fileId || chunk.id)) {
+    const fileId = String(chunk.fileId || chunk.id)
+    upsertUIMessagePart(uiMessage, 'file', fileId, {
+      id: fileId,
+      fileId,
       url: chunk.url,
       title: chunk.title,
       mediaType: chunk.mediaType,
@@ -731,6 +749,16 @@ function ensureAssistantUIMessage(message: WorkbenchMessage): UIMessage<Record<s
   return message.uiMessage
 }
 
+function normalizeFilePart(part: UIMessagePart): UIMessagePart {
+  const fileId = String(part.fileId || part.id || utils.id.uuid())
+  return {
+    ...part,
+    type: 'file',
+    id: fileId,
+    fileId,
+  }
+}
+
 function upsertUIMessagePart(
   message: UIMessage,
   type: string,
@@ -803,6 +831,8 @@ function projectUIMessage(message: WorkbenchMessage) {
   message.toolEvents = toolEvents.length ? toolEvents : undefined
   const sourceReferences = uiMessagePartsToSourceReferences(uiMessage.parts)
   message.sourceReferences = sourceReferences.length ? sourceReferences : undefined
+  const files = uiMessagePartsToFileReferences(uiMessage.parts)
+  message.files = files.length ? files : undefined
   message.ragInput = normalizeRagInputDiagnostics(
     findDataPart(uiMessage, 'rag-input')?.data ?? message.ragInput,
   )
@@ -821,6 +851,20 @@ function uiMessagePartsToSourceReferences(parts: UIMessagePart[]): WorkbenchSour
       url: part.url,
       mediaType: part.mediaType,
       filename: stringValue(part.filename),
+      providerMetadata: part.providerMetadata,
+    }))
+}
+
+function uiMessagePartsToFileReferences(parts: UIMessagePart[]): WorkbenchFileReference[] {
+  return parts
+    .filter((part) => part.type === 'file')
+    .map((part) => ({
+      id: part.id,
+      fileId: part.fileId || part.id,
+      title: part.title,
+      url: part.url,
+      mediaType: part.mediaType,
+      data: part.data,
       providerMetadata: part.providerMetadata,
     }))
 }

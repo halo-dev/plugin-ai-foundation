@@ -1,6 +1,11 @@
 <script lang="ts" setup>
 import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
+import {
+  capabilitySummaryLabels,
+  capabilityUnavailableDetailsLabel,
+  type RequiredModelCapabilitiesValue,
+} from '@/utils/capabilities'
 import { groupModelOptionsByProvider } from '@/utils/model-options'
 
 import { VLoading } from '@halo-dev/components'
@@ -35,6 +40,7 @@ const props = withDefaults(
     enabled?: boolean
     available?: boolean | null
     requiredFeatures?: string | string[]
+    requiredCapabilities?: RequiredModelCapabilitiesValue
     modelValue?: string
     placeholder?: string
     searchPlaceholder?: string
@@ -52,6 +58,7 @@ const props = withDefaults(
     enabled: undefined,
     available: true,
     requiredFeatures: undefined,
+    requiredCapabilities: undefined,
     modelValue: undefined,
     placeholder: '请选择模型',
     searchPlaceholder: '搜索...',
@@ -89,6 +96,7 @@ const providerType = computed(() => props.providerType)
 const enabled = computed(() => props.enabled)
 const available = computed(() => (props.available === null ? undefined : props.available))
 const requiredFeatures = computed(() => normalizeRequiredFeatures(props.requiredFeatures))
+const requiredCapabilities = computed(() => props.requiredCapabilities)
 
 const { data: modelOptions, isLoading } = useModelOptionsFetch({
   modelType,
@@ -97,6 +105,7 @@ const { data: modelOptions, isLoading } = useModelOptionsFetch({
   enabled,
   available,
   requiredFeatures,
+  requiredCapabilities,
 })
 
 const { results: fuseResults } = useFuse(
@@ -126,6 +135,15 @@ const selectableModels = computed(() => {
 })
 
 const hasModels = computed(() => groups.value.some((group) => group.models.length > 0))
+const emptyText = computed(() => {
+  if (keyword.value) {
+    return '未找到匹配模型'
+  }
+  if (requiredFeatures.value?.length || requiredCapabilities.value) {
+    return '没有满足能力要求的模型'
+  }
+  return '暂无匹配模型'
+})
 const selectedDisplayName = computed(() => {
   return selectedModelDisplayName(
     selectedModel.value,
@@ -453,7 +471,7 @@ onBeforeUnmount(() => {
           <VLoading v-if="isLoading" />
 
           <div v-else-if="!hasModels" class=":uno: px-3 py-5 text-center text-[13px] text-gray-500">
-            暂无匹配模型
+            {{ emptyText }}
           </div>
 
           <div v-else class=":uno: max-h-60 overflow-y-auto pb-1" role="listbox">
@@ -527,10 +545,20 @@ onBeforeUnmount(() => {
                       {{ modelFeatureLabel(feature) }}
                     </span>
                     <span
+                      v-for="capability in capabilitySummaryLabels(model.capabilities)"
+                      :key="capability"
+                      class=":uno: h-4 inline-flex items-center rounded bg-emerald-50 px-1 text-[10px] text-emerald-700 leading-4"
+                    >
+                      {{ capability }}
+                    </span>
+                    <span
                       v-if="!isModelOptionSelectable(model)"
                       class=":uno: text-[11px] text-red-600 leading-4"
                     >
-                      {{ modelOptionUnavailableReasonLabel(model.unavailableReason) }}
+                      {{
+                        capabilityUnavailableDetailsLabel(model) ||
+                        modelOptionUnavailableReasonLabel(model.unavailableReason)
+                      }}
                     </span>
                   </span>
                 </span>

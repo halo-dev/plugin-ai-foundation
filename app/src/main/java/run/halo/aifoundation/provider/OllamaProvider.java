@@ -21,7 +21,10 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageOptions;
 
 @Slf4j
 @Component
@@ -82,7 +85,8 @@ public class OllamaProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OLLAMA_CHAT, AdapterType.OLLAMA_EMBEDDING);
+        return List.of(AdapterType.OLLAMA_CHAT, AdapterType.OLLAMA_EMBEDDING,
+            AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -128,6 +132,15 @@ public class OllamaProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return new OpenAiCompatibleImageGenerationClient(
+            new OpenAiCompatibleImageOptions(getProviderType(), openAiCompatibleBaseUrl(provider),
+                apiKey, modelId, null),
+            webClientBuilder(provider));
+    }
+
+    @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         var baseUrl = resolveBaseUrl(provider);
         var providerName = provider.getMetadata().getName();
@@ -165,6 +178,18 @@ public class OllamaProvider extends AbstractAiProviderType {
             .webClientBuilder(webClientBuilder(provider))
             .restClientBuilder(restClientBuilder(provider))
             .build();
+    }
+
+    private String openAiCompatibleBaseUrl(AiProvider provider) {
+        var baseUrl = trimTrailingSlash(resolveBaseUrl(provider));
+        return baseUrl.endsWith("/v1") ? baseUrl : baseUrl + "/v1";
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (value == null || value.isBlank() || !value.endsWith("/")) {
+            return value;
+        }
+        return value.substring(0, value.length() - 1);
     }
 
     private OllamaChatOptions buildChatOptions(GenerateTextRequest request) {

@@ -2,6 +2,7 @@ import type { ModelOption } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
   modelOptionDisplayName,
+  modelOptionUnavailableReasonLabel,
   nextActiveModelName,
   selectedModelDisplayName,
   shouldShowModelDetails,
@@ -38,7 +39,19 @@ describe('ai model selector helpers', () => {
     ).toBe(true)
     expect(shouldShowModelId(model({ name: 'same', modelId: 'same' }))).toBe(false)
     expect(shouldShowModelDetails(model({ name: 'disabled', available: false }))).toBe(true)
+    expect(
+      shouldShowModelDetails(
+        model({
+          name: 'visual',
+          capabilities: { language: { imageInput: true } },
+        }),
+      ),
+    ).toBe(true)
     expect(shouldShowModelDetails(model({ name: 'plain' }))).toBe(false)
+  })
+
+  it('labels capability mismatch as unavailable reason', () => {
+    expect(modelOptionUnavailableReasonLabel('capability-unsupported')).toBe('能力不满足')
   })
 })
 
