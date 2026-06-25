@@ -22,10 +22,15 @@ import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationModel;
+import run.halo.aifoundation.image.ImageGenerationRequests;
+import run.halo.aifoundation.image.ImageGenerationResults;
 import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.image.ImageUsage;
+import run.halo.aifoundation.image.middleware.ImageGenerationMiddlewares;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.media.GeneratedFile;
+import run.halo.aifoundation.model.ModelInfo;
+import run.halo.aifoundation.model.ProviderInfo;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
@@ -61,6 +66,14 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
 
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
+        if (request != null && request.getMiddleware() != null
+            && !request.getMiddleware().isEmpty()) {
+            return ImageGenerationMiddlewares.applyRequestMiddleware(this, request);
+        }
+        return generateImageDirect(request);
+    }
+
+    private Mono<GenerateImageResult> generateImageDirect(GenerateImageRequest request) {
         return Mono.defer(() -> {
                 validateRequest(request);
                 checkCancellation(request);
@@ -76,6 +89,24 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     @Override
     public ModelCapabilities capabilities() {
         return modelCapabilities;
+    }
+
+    @Override
+    public ModelInfo modelInfo() {
+        return ModelInfo.builder()
+            .name(modelName)
+            .providerName(providerName)
+            .enabled(true)
+            .build();
+    }
+
+    @Override
+    public ProviderInfo providerInfo() {
+        return ProviderInfo.builder()
+            .name(providerName)
+            .providerType(providerType)
+            .enabled(true)
+            .build();
     }
 
     private ImageInvocation prepareInvocation(GenerateImageRequest request) {
@@ -115,54 +146,36 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             if (result == null) {
                 continue;
             }
-            if (result.getImages() != null) {
-                images.addAll(result.getImages());
+            var validResult = ImageGenerationResults.requireImages(result, modelName, providerName,
+                providerType);
+            if (validResult.getImages() != null) {
+                images.addAll(validResult.getImages());
             }
-            if (result.getWarnings() != null) {
-                warnings.addAll(result.getWarnings());
+            if (validResult.getWarnings() != null) {
+                warnings.addAll(validResult.getWarnings());
             }
-            if (result.getResponses() != null) {
-                responses.addAll(result.getResponses());
+            if (validResult.getResponses() != null) {
+                responses.addAll(validResult.getResponses());
             }
-            if (result.getProviderMetadata() != null && !result.getProviderMetadata().isEmpty()) {
-                batchProviderMetadata.add(result.getProviderMetadata());
+            if (validResult.getProviderMetadata() != null
+                && !validResult.getProviderMetadata().isEmpty()) {
+                batchProviderMetadata.add(validResult.getProviderMetadata());
             }
-            usage = addUsage(usage, result.getUsage());
+            usage = addUsage(usage, validResult.getUsage());
         }
-        if (images.isEmpty()) {
-            throw new ImageGenerationException("Image generation returned no images", modelName,
-                providerName, providerType);
-        }
-        return GenerateImageResult.builder()
+        var aggregated = GenerateImageResult.builder()
             .images(List.copyOf(images))
             .usage(usage != null ? usage : ImageUsage.builder().imageCount(images.size()).build())
             .warnings(List.copyOf(warnings))
             .responses(List.copyOf(responses))
             .providerMetadata(providerMetadata(batchProviderMetadata))
             .build();
+        return ImageGenerationResults.requireImages(aggregated, modelName, providerName,
+            providerType);
     }
 
     private void validateRequest(GenerateImageRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("Generate image request is required");
-        }
-        if (!hasText(request.getPrompt())) {
-            throw new IllegalArgumentException("Image generation prompt is required");
-        }
-        if (request.getN() != null && request.getN() <= 0) {
-            throw new IllegalArgumentException("Image generation n must be positive");
-        }
-        if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
-            throw new IllegalArgumentException("Image generation maxRetries must not be negative");
-        }
-        if (request.getMaxParallelCalls() != null && request.getMaxParallelCalls() <= 0) {
-            throw new IllegalArgumentException(
-                "Image generation maxParallelCalls must be positive");
-        }
-        if (request.getMask() != null && !hasInputImages(request)) {
-            throw new IllegalArgumentException(
-                "Image generation mask requires at least one input image");
-        }
+        ImageGenerationRequests.requireValidShape(request);
     }
 
     private void validateMedia(GenerateImageRequest request) {

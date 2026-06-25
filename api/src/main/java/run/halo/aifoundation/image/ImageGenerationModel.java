@@ -2,6 +2,8 @@ package run.halo.aifoundation.image;
 
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.capability.ModelCapabilities;
+import run.halo.aifoundation.model.ModelInfo;
+import run.halo.aifoundation.model.ProviderInfo;
 
 /**
  * Provider-neutral Java SDK for non-streaming image generation.
@@ -39,6 +41,30 @@ public interface ImageGenerationModel {
      */
     default ModelCapabilities capabilities() {
         return ModelCapabilities.empty();
+    }
+
+    /**
+     * Returns stable model identity for diagnostics and middleware context.
+     *
+     * <p>Models not resolved by AI Foundation may return {@code null}. Managed models use
+     * {@code AiModel.metadata.name} as the model name, not the provider-side raw model id.
+     *
+     * @return model information, or {@code null} when unavailable
+     */
+    default ModelInfo modelInfo() {
+        return null;
+    }
+
+    /**
+     * Returns stable provider identity for diagnostics and middleware context.
+     *
+     * <p>The provider resource name and provider type are separate values. Credentials and provider
+     * implementation objects are never exposed through this metadata.
+     *
+     * @return provider information, or {@code null} when unavailable
+     */
+    default ProviderInfo providerInfo() {
+        return null;
     }
 
     /**

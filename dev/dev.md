@@ -509,6 +509,64 @@ return imageModel.generateImage(request)
 | `headers` | 请求级 HTTP header |
 | `maxParallelCalls` | 拆分调用时的最大并行数 |
 
+### 图像生成 Middleware
+
+如果调用方需要给图片生成统一补默认值、改写请求、处理结果、接入缓存或做业务策略，可以使用图像生成
+middleware。模型级 middleware 适合长期复用：
+
+```java
+ImageGenerationModel imageModel = ImageGenerationMiddlewares.wrap(
+    rawImageModel,
+    ImageGenerationMiddlewares.defaultSettings(GenerateImageRequest.builder()
+        .size(1024)
+        .responseFormat(ImageResponseFormat.BASE64)
+        .build()),
+    ImageGenerationMiddlewares.mapResult(result ->
+        ImageGenerationResults.withWarnings(result, ImageGenerationWarning.builder()
+            .code("served-by-plugin-policy")
+            .message("Image result passed through plugin policy middleware.")
+            .build()))
+);
+
+return imageModel.generateImage("一张 Halo CMS 插件市场插画");
+```
+
+单次请求也可以挂 middleware，适合临时追加策略：
+
+```java
+GenerateImageRequest request = GenerateImageRequest.builder()
+    .prompt("生成一张活动封面")
+    .middleware(ImageGenerationMiddlewares.mapRequest(source ->
+        ImageGenerationRequests.builderFrom(source)
+            .prompt(source.getPrompt() + "，画面保持简洁")
+            .build()))
+    .build();
+
+return imageModel.generateImage(request);
+```
+
+middleware 可以继续调用供应方，也可以直接返回结果或错误。直接返回成功结果时，结果仍然必须包含至少一个合法
+`GeneratedFile`：
+
+```java
+ImageGenerationMiddleware cacheMiddleware = new ImageGenerationMiddleware() {
+    @Override
+    public Mono<GenerateImageResult> wrapGenerate(
+        ImageGenerationContext context,
+        GenerateImageNext next
+    ) {
+        return findCachedImage(context.request())
+            .map(file -> GenerateImageResult.builder()
+                .images(List.of(file))
+                .build())
+            .switchIfEmpty(next.generate(context.request()));
+    }
+};
+```
+
+内置 helper 只处理低业务判断的组合逻辑，例如默认设置、请求映射、结果映射和 warning 追加。缓存存储、安全过滤、
+配额、水印、生成文件生命周期等业务策略由调用方插件自行实现。
+
 ## 13. Provider Options
 
 公开字段能表达的能力，优先使用公开字段：

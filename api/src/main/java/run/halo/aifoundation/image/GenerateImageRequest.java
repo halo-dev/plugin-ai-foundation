@@ -1,6 +1,7 @@
 package run.halo.aifoundation.image;
 
 import java.beans.Transient;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -9,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.control.CancellationToken;
+import run.halo.aifoundation.image.middleware.ImageGenerationMiddleware;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.options.ProviderOptions;
 
@@ -133,6 +135,12 @@ public class GenerateImageRequest {
     private transient GenerationTimeouts timeouts;
 
     /**
+     * Request-scoped image generation middleware. These entries run inside any model-level
+     * middleware and preserve caller-provided list order.
+     */
+    private transient List<ImageGenerationMiddleware> middleware;
+
+    /**
      * Returns the request-scoped cancellation signal.
      *
      * @return cancellation token, or {@code null} when no request-specific token was supplied
@@ -150,6 +158,16 @@ public class GenerateImageRequest {
     @Transient
     public GenerationTimeouts getTimeouts() {
         return timeouts;
+    }
+
+    /**
+     * Returns request-scoped image generation middleware.
+     *
+     * @return middleware list, or {@code null} when none was supplied
+     */
+    @Transient
+    public List<ImageGenerationMiddleware> getMiddleware() {
+        return middleware;
     }
 
     /**
@@ -230,6 +248,30 @@ public class GenerateImageRequest {
         public GenerateImageRequestBuilder providerOptions(
             ProviderOptions.NamespaceOptions... options) {
             this.providerOptions = ProviderOptions.of(options);
+            return this;
+        }
+
+        /**
+         * Sets request-scoped image generation middleware from a list.
+         *
+         * @param middleware middleware list
+         * @return this builder
+         */
+        public GenerateImageRequestBuilder middleware(
+            List<ImageGenerationMiddleware> middleware) {
+            this.middleware = middleware != null ? List.copyOf(middleware) : null;
+            return this;
+        }
+
+        /**
+         * Sets request-scoped image generation middleware.
+         *
+         * @param middleware middleware entries
+         * @return this builder
+         */
+        public GenerateImageRequestBuilder middleware(
+            ImageGenerationMiddleware... middleware) {
+            this.middleware = middleware != null ? Arrays.asList(middleware) : null;
             return this;
         }
     }
