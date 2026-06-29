@@ -8,6 +8,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiThinkingOptions;
@@ -69,7 +70,8 @@ public class ErnieProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK,
+            AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -87,6 +89,12 @@ public class ErnieProvider extends AbstractAiProviderType {
         String modelId) {
         return new StandardRerankingClient(getProviderType(), trimTrailingSlash(resolveBaseUrl(provider)),
             "/rerank", modelId, apiKey, webClientBuilder(provider));
+    }
+
+    @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return buildOpenAiCompatibleImageGenerationClient(provider, apiKey, modelId);
     }
 
     @Override

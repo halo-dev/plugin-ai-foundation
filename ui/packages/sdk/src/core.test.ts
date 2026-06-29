@@ -918,6 +918,7 @@ describe('Chat', () => {
       {
         type: 'file',
         id: 'file-1',
+        fileId: 'file-1',
         url: 'https://example.com/report.pdf',
         mediaType: 'application/pdf',
         title: 'Report',
@@ -1367,8 +1368,7 @@ describe('Chat', () => {
       [{ type: 'tool-input-available', toolCallId: 'call-2', toolName: 'read' }],
       [{ type: 'text-delta', id: 'text-1', delta: 'Done' }],
     ])
-    let chat: Chat
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',
@@ -1421,8 +1421,7 @@ describe('Chat', () => {
       ],
       [{ type: 'text-delta', id: 'text-2', delta: 'Done' }],
     ])
-    let chat: Chat
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',
@@ -1457,7 +1456,6 @@ describe('Chat', () => {
   it('auto submits when asynchronous onToolCall output resolves before the stream finishes', async () => {
     const toolOutputAdded = deferred<void>()
     const calls: SendMessagesOptions[] = []
-    let chat: Chat
     const transport: ChatTransport = {
       async sendMessages(options) {
         calls.push(options)
@@ -1467,7 +1465,7 @@ describe('Chat', () => {
         return chunksToAsyncIterable([{ type: 'text-delta', id: 'text-2', delta: 'Done' }])
       },
     }
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',
@@ -1516,8 +1514,7 @@ describe('Chat', () => {
       ],
       [{ type: 'text-delta', id: 'text-3', delta: 'Unexpected' }],
     ])
-    let chat: Chat
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',
@@ -1551,9 +1548,8 @@ describe('Chat', () => {
       [{ type: 'text-delta', id: 'text-1', delta: 'Done' }],
       [{ type: 'text-delta', id: 'text-2', delta: 'Unexpected' }],
     ])
-    let chat: Chat
     let allowAutomaticContinuation = true
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',
@@ -1604,8 +1600,7 @@ describe('Chat', () => {
       [{ type: 'text-delta', id: 'text-1', delta: 'Done' }],
       [{ type: 'text-delta', id: 'text-2', delta: 'Unexpected' }],
     ])
-    let chat: Chat
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',
@@ -1698,8 +1693,7 @@ describe('Chat', () => {
       [{ type: 'tool-input-available', toolCallId: 'call-2', toolName: 'read' }],
       [{ type: 'text-delta', id: 'text-1', delta: 'Unexpected' }],
     ])
-    let chat: Chat
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',
@@ -1728,8 +1722,7 @@ describe('Chat', () => {
   })
 
   it('lets onToolCall synchronously add output after message state is committed', async () => {
-    let chat: Chat
-    chat = new Chat({
+    const chat = new Chat({
       messages: [
         {
           id: 'assistant-1',
@@ -1835,7 +1828,6 @@ describe('Chat', () => {
 
   it('does not auto submit pending tool continuations after abort', async () => {
     const calls: SendMessagesOptions[] = []
-    let chat: Chat
     const transport: ChatTransport = {
       sendMessages: async (options) => {
         calls.push(options)
@@ -1845,7 +1837,7 @@ describe('Chat', () => {
         return chunksToAsyncIterable([{ type: 'text-delta', id: 'text-2', delta: 'Unexpected' }])
       },
     }
-    chat = new Chat({
+    const chat = new Chat({
       id: 'chat-1',
       transport,
       generateId: () => 'assistant-1',

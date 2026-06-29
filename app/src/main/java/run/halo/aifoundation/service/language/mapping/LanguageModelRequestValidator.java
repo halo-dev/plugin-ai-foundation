@@ -1,25 +1,56 @@
 package run.halo.aifoundation.service.language.mapping;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import run.halo.aifoundation.capability.LanguageCapability;
+import run.halo.aifoundation.capability.ModelCapabilities;
+import run.halo.aifoundation.capability.ModelCapabilityRequirement;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.exception.InvalidMediaContentException;
+import run.halo.aifoundation.exception.MediaContentTooLargeException;
+import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
+import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
+import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
+import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.tool.ToolChoice;
 
 public final class LanguageModelRequestValidator {
 
     private final String providerType;
     private final boolean reasoningHistorySupported;
+    private final ModelCapabilities modelCapabilities;
+    private final String modelName;
+    private final String providerName;
+    private final MediaResourcePolicy mediaResourcePolicy;
+    private final ModelCapabilityMatcher capabilityMatcher;
 
     public LanguageModelRequestValidator(String providerType, boolean reasoningHistorySupported) {
+        this(providerType, reasoningHistorySupported, ModelCapabilities.empty(), null, null,
+            new MediaResourcePolicy(), new ModelCapabilityMatcher());
+    }
+
+    public LanguageModelRequestValidator(String providerType, boolean reasoningHistorySupported,
+        ModelCapabilities modelCapabilities, String modelName, String providerName,
+        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
         this.providerType = providerType;
         this.reasoningHistorySupported = reasoningHistorySupported;
+        this.modelCapabilities = modelCapabilities != null ? modelCapabilities
+            : ModelCapabilities.empty();
+        this.modelName = modelName;
+        this.providerName = providerName;
+        this.mediaResourcePolicy = mediaResourcePolicy != null ? mediaResourcePolicy
+            : new MediaResourcePolicy();
+        this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher
+            : new ModelCapabilityMatcher();
     }
 
     public void validate(GenerateTextRequest request) {
@@ -38,10 +69,11 @@ public final class LanguageModelRequestValidator {
             throw new IllegalArgumentException("prompt must not be blank");
         }
         if (hasMessages) {
-            for (var message : request.getMessages()) {
-                validateMessage(message);
+            for (var index = 0; index < request.getMessages().size(); index++) {
+                validateMessage(request.getMessages().get(index), index);
             }
             validateToolResponseHistory(request.getMessages());
+            validateMediaInputs(request.getMessages());
         }
         if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
             throw new IllegalArgumentException("maxRetries must not be negative");
@@ -86,7 +118,7 @@ public final class LanguageModelRequestValidator {
         }
     }
 
-    private void validateMessage(ModelMessage message) {
+    private void validateMessage(ModelMessage message, int messageIndex) {
         if (message == null) {
             throw new IllegalArgumentException("messages must not contain null items");
         }
@@ -96,12 +128,14 @@ public final class LanguageModelRequestValidator {
         if (message.getContent() == null || message.getContent().isEmpty()) {
             throw new IllegalArgumentException("message content must not be empty");
         }
-        for (var part : message.getContent()) {
-            validatePart(message.getRole(), part);
+        for (var partIndex = 0; partIndex < message.getContent().size(); partIndex++) {
+            validatePart(message.getRole(), message.getContent().get(partIndex), messageIndex,
+                partIndex);
         }
     }
 
-    private void validatePart(ModelMessageRole role, ModelMessagePart part) {
+    private void validatePart(ModelMessageRole role, ModelMessagePart part, int messageIndex,
+        int partIndex) {
         if (part == null) {
             throw new IllegalArgumentException("message content must not contain null parts");
         }
@@ -111,6 +145,10 @@ public final class LanguageModelRequestValidator {
         }
         if (PartType.isReasoning(part.getType())) {
             validateReasoningPart(role, part);
+            return;
+        }
+        if (PartType.isImage(part.getType()) || PartType.isFile(part.getType())) {
+            validateMediaPart(role, part, messageIndex, partIndex);
             return;
         }
         if (role == ModelMessageRole.ASSISTANT && PartType.isToolCall(part.getType())) {
@@ -132,6 +170,139 @@ public final class LanguageModelRequestValidator {
             return;
         }
         throw new IllegalArgumentException("unsupported content part type: " + part.getType());
+    }
+
+    private void validateMediaPart(ModelMessageRole role, ModelMessagePart part, int messageIndex,
+        int partIndex) {
+        if (role != ModelMessageRole.USER && role != ModelMessageRole.ASSISTANT) {
+            throw new IllegalArgumentException(
+                "media content part is only supported for user or assistant messages");
+        }
+        if (part.getMedia() == null) {
+            throw new InvalidMediaContentException("media content must not be null", null, null,
+                messageIndex, partIndex);
+        }
+    }
+
+    private void validateMediaInputs(List<ModelMessage> messages) {
+        var contexts = mediaPartContexts(messages);
+        if (contexts.isEmpty()) {
+            return;
+        }
+        contexts.forEach(this::validateMediaShape);
+        validateMediaResourceLimits(contexts);
+        contexts.forEach(this::validateMediaCapability);
+    }
+
+    private List<MediaPartContext> mediaPartContexts(List<ModelMessage> messages) {
+        var contexts = new ArrayList<MediaPartContext>();
+        for (var messageIndex = 0; messageIndex < messages.size(); messageIndex++) {
+            var message = messages.get(messageIndex);
+            for (var partIndex = 0; partIndex < message.getContent().size(); partIndex++) {
+                var part = message.getContent().get(partIndex);
+                if (part != null
+                    && (PartType.isImage(part.getType()) || PartType.isFile(part.getType()))) {
+                    contexts.add(new MediaPartContext(messageIndex, partIndex, part));
+                }
+            }
+        }
+        return contexts;
+    }
+
+    private void validateMediaShape(MediaPartContext context) {
+        var media = context.media();
+        if (media == null) {
+            throw invalidMedia("media content must not be null", null, context, null);
+        }
+        if (media.isUrl() == media.isData()) {
+            throw invalidMedia("media content must set exactly one of url or data", media,
+                context, null);
+        }
+        if (!hasText(media.getMediaType())) {
+            throw invalidMedia("media type is required for language media input", media, context,
+                null);
+        }
+        if (PartType.isImage(context.part().getType()) && !isImageMediaType(media.getMediaType())) {
+            throw invalidMedia("image media part requires an image/* media type", media, context,
+                null);
+        }
+    }
+
+    private void validateMediaResourceLimits(List<MediaPartContext> contexts) {
+        try {
+            mediaResourcePolicy.validate(contexts.stream().map(MediaPartContext::media).toList());
+        } catch (InvalidMediaContentException e) {
+            var context = resourceContext(contexts, e.getPartIndex());
+            throw new InvalidMediaContentException(e.getMessage(), e.getMediaType(),
+                e.getFilename(), context == null ? e.getMessageIndex() : context.messageIndex(),
+                context == null ? e.getPartIndex() : context.partIndex(), e);
+        } catch (MediaContentTooLargeException e) {
+            var context = resourceContext(contexts, e.getPartIndex());
+            throw new MediaContentTooLargeException(e.getScope(), e.getMaxBytes(),
+                e.getActualBytes(), e.getMediaType(), e.getFilename(),
+                context == null ? e.getMessageIndex() : context.messageIndex(),
+                context == null ? e.getPartIndex() : context.partIndex());
+        }
+    }
+
+    private void validateMediaCapability(MediaPartContext context) {
+        var media = context.media();
+        var language = LanguageCapability.builder()
+            .imageInput(PartType.isImage(context.part().getType()) ? Boolean.TRUE : null)
+            .fileInput(PartType.isFile(context.part().getType()) ? Boolean.TRUE : null)
+            .inputMediaTypes(List.of(media.getMediaType()))
+            .inputSources(List.of(media.source()))
+            .build();
+        var requirement = ModelCapabilityRequirement.builder()
+            .language(language)
+            .build();
+        var result = capabilityMatcher.match(modelCapabilities, requirement);
+        if (result.matched()) {
+            return;
+        }
+        var issue = result.issues().isEmpty()
+            ? new CapabilityMatchIssue("language", requirement, modelCapabilities)
+            : result.issues().getFirst();
+        throw unsupportedCapability(issue, context);
+    }
+
+    private UnsupportedModelCapabilityException unsupportedCapability(CapabilityMatchIssue issue,
+        MediaPartContext context) {
+        return new UnsupportedModelCapabilityException(resolvedModelName(), resolvedProviderName(),
+            providerType, issue.path(), issue.expected(), issue.actual(), context.messageIndex(),
+            context.partIndex());
+    }
+
+    private InvalidMediaContentException invalidMedia(String message, DataContent media,
+        MediaPartContext context, Throwable cause) {
+        if (cause == null) {
+            return new InvalidMediaContentException(message,
+                media == null ? null : media.getMediaType(),
+                media == null ? null : media.getFilename(), context.messageIndex(),
+                context.partIndex());
+        }
+        return new InvalidMediaContentException(message, media == null ? null : media.getMediaType(),
+            media == null ? null : media.getFilename(), context.messageIndex(), context.partIndex(),
+            cause);
+    }
+
+    private MediaPartContext resourceContext(List<MediaPartContext> contexts, Integer partIndex) {
+        if (partIndex == null || partIndex < 0 || partIndex >= contexts.size()) {
+            return null;
+        }
+        return contexts.get(partIndex);
+    }
+
+    private String resolvedModelName() {
+        return hasText(modelName) ? modelName : "unknown";
+    }
+
+    private String resolvedProviderName() {
+        return hasText(providerName) ? providerName : "unknown";
+    }
+
+    private boolean isImageMediaType(String mediaType) {
+        return mediaType != null && mediaType.toLowerCase().startsWith("image/");
     }
 
     private void validateTextPart(ModelMessagePart part) {
@@ -252,5 +423,12 @@ public final class LanguageModelRequestValidator {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private record MediaPartContext(int messageIndex, int partIndex, ModelMessagePart part) {
+
+        DataContent media() {
+            return part.getMedia();
+        }
     }
 }

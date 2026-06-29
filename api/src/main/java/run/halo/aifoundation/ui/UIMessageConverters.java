@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
+import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
@@ -205,6 +206,9 @@ public final class UIMessageConverters {
             if (part instanceof DataPart data) {
                 return convertData(data, context);
             }
+            if (part instanceof FilePart file) {
+                return convertFile(file, context);
+            }
             return convertCustomOrUnsupported(part, context);
         }
 
@@ -324,6 +328,64 @@ public final class UIMessageConverters {
                 return convertedOrEmpty(converter.convert(part, context), context);
             }
             return convertCustomOrUnsupported(part, context);
+        }
+
+        private List<ModelMessagePart> convertFile(FilePart part,
+            UIMessageConversionContext<M> context) {
+            if (context.message().role() == UIMessageRole.SYSTEM) {
+                unsupported(context.message(), part, part.fileId(), "file.system-unsupported",
+                    "UI file parts are only supported for user or assistant messages.");
+                return List.of();
+            }
+            try {
+                var content = fileContent(part);
+                return List.of(isImageMediaType(content.getMediaType())
+                    ? ModelMessagePart.image(content)
+                    : ModelMessagePart.file(content));
+            } catch (RuntimeException e) {
+                unsupported(context.message(), part, part.fileId(), "file.invalid",
+                    e.getMessage());
+                return List.of();
+            }
+        }
+
+        private DataContent fileContent(FilePart part) {
+            var hasUrl = hasText(part.url());
+            var hasData = hasFileData(part.data());
+            if (hasUrl == hasData) {
+                throw new IllegalArgumentException(
+                    "UI file part must include exactly one of url or data.");
+            }
+            if (hasData) {
+                return fileDataContent(part);
+            }
+            if (!hasText(part.mediaType())) {
+                throw new IllegalArgumentException(
+                    "UI file part mediaType is required for URL-backed files.");
+            }
+            return DataContent.url(part.url(), part.mediaType(), part.title());
+        }
+
+        private DataContent fileDataContent(FilePart part) {
+            if (part.data() instanceof String text) {
+                if (isDataUrl(text)) {
+                    return DataContent.dataUrl(text, part.title());
+                }
+                if (!hasText(part.mediaType())) {
+                    throw new IllegalArgumentException(
+                        "UI file part mediaType is required for data-backed files.");
+                }
+                return DataContent.data(text, part.mediaType(), part.title());
+            }
+            if (part.data() instanceof byte[] bytes) {
+                if (!hasText(part.mediaType())) {
+                    throw new IllegalArgumentException(
+                        "UI file part mediaType is required for data-backed files.");
+                }
+                return DataContent.data(bytes, part.mediaType(), part.title());
+            }
+            throw new IllegalArgumentException(
+                "UI file part data must be base64, data URL, or byte array.");
         }
 
         private List<ModelMessagePart> convertCustomOrUnsupported(UIMessagePart part,
@@ -446,6 +508,24 @@ public final class UIMessageConverters {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static boolean hasFileData(Object data) {
+        if (data instanceof String text) {
+            return hasText(text);
+        }
+        if (data instanceof byte[] bytes) {
+            return bytes.length > 0;
+        }
+        return data != null;
+    }
+
+    private static boolean isDataUrl(String value) {
+        return value != null && value.regionMatches(true, 0, "data:", 0, "data:".length());
+    }
+
+    private static boolean isImageMediaType(String mediaType) {
+        return mediaType != null && mediaType.toLowerCase().startsWith("image/");
     }
 
     @SuppressWarnings("unchecked")

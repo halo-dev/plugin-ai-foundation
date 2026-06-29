@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.DefaultUsage;
@@ -25,13 +26,18 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.content.Media;
 import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
+import run.halo.aifoundation.capability.InputSource;
+import run.halo.aifoundation.capability.LanguageCapability;
+import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
 import run.halo.aifoundation.control.CancellationSource;
 import run.halo.aifoundation.chat.FinishReason;
 import run.halo.aifoundation.lifecycle.GenerationLifecycle;
@@ -63,6 +69,9 @@ import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.media.DataContent;
+import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
+import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
 
 class LanguageModelImplTest {
@@ -142,6 +151,196 @@ class LanguageModelImplTest {
         assertThat(prompt.getOptions().getPresencePenalty()).isEqualTo(0.1);
         assertThat(prompt.getOptions().getFrequencyPenalty()).isEqualTo(0.3);
         assertThat(prompt.getOptions().getStopSequences()).containsExactly("END");
+    }
+
+    @Test
+    void generateText_mapsUserImageDataToSpringMedia() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 3, 5));
+        var model = languageModelWithCapabilities(chatModel, LanguageCapability.builder()
+            .imageInput(true)
+            .inputMediaTypes(List.of("image/*"))
+            .inputSources(List.of(InputSource.DATA))
+            .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+                    ModelMessagePart.text("Describe this"),
+                    ModelMessagePart.image(DataContent.data(new byte[] {1, 2, 3}, "image/png",
+                        "diagram.png"))
+                ))))
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var userMessage = (UserMessage) captor.getValue().getInstructions().getFirst();
+        assertThat(userMessage.getText()).isEqualTo("Describe this");
+        assertThat(userMessage.getMedia())
+            .singleElement()
+            .satisfies(media -> {
+                assertThat(media.getMimeType().toString()).isEqualTo("image/png");
+                assertThat(media.getName()).isEqualTo("diagram.png");
+                assertThat((byte[]) media.getData()).containsExactly(1, 2, 3);
+            });
+        assertThat(model.capabilities().modelCapabilities().getLanguage().getImageInput()).isTrue();
+    }
+
+    @Test
+    void generateText_mapsUserFileDataToSpringMedia() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 3, 5));
+        var model = languageModelWithCapabilities(chatModel, LanguageCapability.builder()
+            .fileInput(true)
+            .inputMediaTypes(List.of("application/pdf"))
+            .inputSources(List.of(InputSource.DATA))
+            .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+                    ModelMessagePart.text("Summarize this"),
+                    ModelMessagePart.file(DataContent.data(new byte[] {4, 5}, "application/pdf",
+                        "brief.pdf"))
+                ))))
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var userMessage = (UserMessage) captor.getValue().getInstructions().getFirst();
+        assertThat(userMessage.getMedia())
+            .singleElement()
+            .satisfies(media -> {
+                assertThat(media.getMimeType().toString()).isEqualTo("application/pdf");
+                assertThat(media.getName()).isEqualTo("brief.pdf");
+                assertThat((byte[]) media.getData()).containsExactly(4, 5);
+            });
+    }
+
+    @Test
+    void generateText_preservesAssistantUrlMediaHistory() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 3, 5));
+        var model = languageModelWithCapabilities(chatModel, LanguageCapability.builder()
+            .imageInput(true)
+            .inputMediaTypes(List.of("image/*"))
+            .inputSources(List.of(InputSource.URL))
+            .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(
+                    ModelMessage.assistant(List.of(
+                        ModelMessagePart.text("Generated this image earlier."),
+                        ModelMessagePart.image(DataContent.url("https://example.com/image.png",
+                            "image/png", "image.png"))
+                    )),
+                    ModelMessage.user("Use that image as context.")
+                ))
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var assistantMessage = captor.getValue().getInstructions().stream()
+            .filter(AssistantMessage.class::isInstance)
+            .map(AssistantMessage.class::cast)
+            .findFirst()
+            .orElseThrow();
+        assertThat(assistantMessage.getText()).isEqualTo("Generated this image earlier.");
+        assertThat(assistantMessage.getMedia())
+            .singleElement()
+            .extracting(Media::getData)
+            .isEqualTo("https://example.com/image.png");
+    }
+
+    @Test
+    void generateText_rejectsSystemMediaBeforeProviderCall() {
+        var chatModel = mock(ChatModel.class);
+        var model = languageModelWithCapabilities(chatModel, LanguageCapability.builder()
+            .imageInput(true)
+            .inputMediaTypes(List.of("image/*"))
+            .inputSources(List.of(InputSource.DATA))
+            .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.SYSTEM, List.of(
+                    ModelMessagePart.image(DataContent.data(new byte[] {1}, "image/png"))
+                ))))
+                .build()))
+            .expectErrorMessage("media content part is only supported for user or assistant messages")
+            .verify();
+
+        verify(chatModel, times(0)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_rejectsSourcePartBeforeProviderCall() {
+        var chatModel = mock(ChatModel.class);
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var sourcePart = new ModelMessagePart();
+        sourcePart.setType(PartType.SOURCE);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(sourcePart))))
+                .build()))
+            .expectErrorMessage("unsupported content part type: source")
+            .verify();
+
+        verify(chatModel, times(0)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_rejectsUnknownImageCapabilityBeforeProviderCall() {
+        var chatModel = mock(ChatModel.class);
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+                    ModelMessagePart.image(DataContent.data(new byte[] {1}, "image/png"))
+                ))))
+                .build()))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(UnsupportedModelCapabilityException.class);
+                var capabilityError = (UnsupportedModelCapabilityException) error;
+                assertThat(capabilityError.getCapabilityPath()).isEqualTo("language.imageInput");
+                assertThat(capabilityError.getExpectedValue()).isEqualTo(Boolean.TRUE);
+                assertThat(capabilityError.getActualValue()).isNull();
+                assertThat(capabilityError.getMessageIndex()).isZero();
+                assertThat(capabilityError.getPartIndex()).isZero();
+            })
+            .verify();
+
+        verify(chatModel, times(0)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_rejectsUnsupportedUrlInputSourceBeforeProviderCall() {
+        var chatModel = mock(ChatModel.class);
+        var model = languageModelWithCapabilities(chatModel, LanguageCapability.builder()
+            .imageInput(true)
+            .inputMediaTypes(List.of("image/*"))
+            .inputSources(List.of(InputSource.DATA))
+            .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+                    ModelMessagePart.image(DataContent.url("https://example.com/image.png",
+                        "image/png"))
+                ))))
+                .build()))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(UnsupportedModelCapabilityException.class);
+                var capabilityError = (UnsupportedModelCapabilityException) error;
+                assertThat(capabilityError.getCapabilityPath()).isEqualTo("language.inputSources");
+                assertThat(capabilityError.getExpectedValue()).isEqualTo(List.of(InputSource.URL));
+                assertThat(capabilityError.getActualValue()).isEqualTo(List.of(InputSource.DATA));
+            })
+            .verify();
+
+        verify(chatModel, times(0)).call(any(Prompt.class));
     }
 
     @Test
@@ -280,9 +479,9 @@ class LanguageModelImplTest {
 
     @Test
     void generateText_rejectsUnsupportedContentPart() {
-        assertThatThrownBy(() -> ModelMessagePart.builder().type("image").build())
+        assertThatThrownBy(() -> ModelMessagePart.builder().type("unsupported").build())
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("unsupported message part type: image");
+            .hasMessage("unsupported message part type: unsupported");
     }
 
     @Test
@@ -3026,6 +3225,14 @@ class LanguageModelImplTest {
     private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
         Integer completionTokens) {
         return chatResponse(text, finishReason, promptTokens, completionTokens, Map.of());
+    }
+
+    private LanguageModelImpl languageModelWithCapabilities(ChatModel chatModel,
+        LanguageCapability languageCapability) {
+        return new LanguageModelImpl(chatModel, LanguageModelRuntimeComposition.create("openai",
+            "gpt-4o", LanguageModelProviderOptions.defaults(), new LanguageModelRuntimeSupport(),
+            new MediaResourcePolicy(), new ModelCapabilityMatcher(),
+            ModelCapabilities.language(languageCapability), "vision-model", "openai-provider"));
     }
 
     private ToolDefinition repairableWeatherTool(ToolExecutor executor) {

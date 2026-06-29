@@ -9,6 +9,7 @@ import {
 import { QK_MODEL_OPTIONS, useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import AiModelSelector from '@/formkit/AiModelSelector.vue'
 import { modelTypeLabel } from '@/types'
+import type { RequiredModelCapabilities } from '@/utils/capabilities'
 import { Toast, VButton, VCard, VLoading, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useLocalStorage } from '@vueuse/core'
@@ -21,6 +22,7 @@ const slotDefinitions: Array<{
   key: SlotKey
   label: string
   modelType: SlotModelType
+  requiredCapabilities?: RequiredModelCapabilities
 }> = [
   {
     key: 'languageModelName',
@@ -41,6 +43,11 @@ const slotDefinitions: Array<{
     key: 'imageGenerationModelName',
     label: '默认图像生成模型',
     modelType: ModelOptionModelTypeEnum.ImageGeneration,
+    requiredCapabilities: {
+      imageGeneration: {
+        textToImage: true,
+      },
+    },
   },
 ]
 
@@ -136,6 +143,7 @@ const updateMutation = useMutation({
               v-model="formState[slot.key]"
               :model-type="slot.modelType"
               :available="availableFilter"
+              :required-capabilities="slot.requiredCapabilities"
               placeholder="不配置"
               search-placeholder="搜索模型..."
               full-width

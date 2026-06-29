@@ -319,16 +319,16 @@ public class OpenAiCompatibleChatModel implements ChatModel {
     private Map<String, Object> userMessageBody(UserMessage message) {
         var body = new LinkedHashMap<String, Object>();
         body.put(Fields.ROLE, MessageType.USER.getValue());
-        body.put(Fields.CONTENT, contentParts(message));
+        body.put(Fields.CONTENT, contentParts(message.getText(), message.getMedia()));
         return body;
     }
 
-    private List<Map<String, Object>> contentParts(UserMessage message) {
+    private List<Map<String, Object>> contentParts(String text, List<Media> mediaItems) {
         var parts = new ArrayList<Map<String, Object>>();
-        if (hasText(message.getText())) {
-            parts.add(Map.of(Fields.TYPE, Values.TEXT, Fields.TEXT, message.getText()));
+        if (hasText(text)) {
+            parts.add(Map.of(Fields.TYPE, Values.TEXT, Fields.TEXT, text));
         }
-        for (var media : message.getMedia()) {
+        for (var media : mediaItems) {
             parts.add(contentPart(media));
         }
         return parts;
@@ -391,7 +391,9 @@ public class OpenAiCompatibleChatModel implements ChatModel {
     private Map<String, Object> assistantMessageBody(AssistantMessage message) {
         var body = new LinkedHashMap<String, Object>();
         body.put(Fields.ROLE, MessageType.ASSISTANT.getValue());
-        body.put(Fields.CONTENT, message.getText() != null ? message.getText() : "");
+        body.put(Fields.CONTENT, !CollectionUtils.isEmpty(message.getMedia())
+            ? contentParts(message.getText(), message.getMedia())
+            : message.getText() != null ? message.getText() : "");
         if (!CollectionUtils.isEmpty(message.getToolCalls())) {
             body.put(Fields.TOOL_CALLS, message.getToolCalls().stream()
                 .<Map<String, Object>>map(toolCall -> {

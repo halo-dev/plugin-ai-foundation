@@ -20,6 +20,11 @@ import {
   type DiscoveredModelProfiles,
 } from '@/utils/model'
 import {
+  capabilityDomainSource,
+  capabilitySourceLabel,
+  capabilitySummaryLabels,
+} from '@/utils/capabilities'
+import {
   Toast,
   VButton,
   VEmpty,
@@ -150,6 +155,22 @@ function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum)
       features,
     },
   }
+}
+
+function capabilitySourceLabels(model: DiscoveredModel) {
+  return [
+    ['language', '语言能力'],
+    ['imageGeneration', '图像能力'],
+  ]
+    .map(([domain, label]) => {
+      const source = capabilityDomainSource(
+        model.capabilities,
+        model.capabilitySources,
+        domain as 'language' | 'imageGeneration',
+      )
+      return source ? `${label}: ${capabilitySourceLabel(source)}` : ''
+    })
+    .filter(Boolean)
 }
 
 function toggleSelection(model: DiscoveredModel) {
@@ -371,6 +392,27 @@ onMounted(() => {
                         />
                         {{ item.label }}
                       </button>
+                    </div>
+                    <div
+                      v-if="
+                        capabilitySummaryLabels(model.capabilities).length ||
+                        capabilitySourceLabels(model).length
+                      "
+                      class=":uno: flex flex-wrap justify-end gap-1.5"
+                    >
+                      <VTag
+                        v-for="capability in capabilitySummaryLabels(model.capabilities)"
+                        :key="capability"
+                      >
+                        {{ capability }}
+                      </VTag>
+                      <span
+                        v-for="source in capabilitySourceLabels(model)"
+                        :key="source"
+                        class=":uno: h-6 inline-flex items-center rounded bg-gray-50 px-2 text-xs text-gray-500 leading-6"
+                      >
+                        {{ source }}
+                      </span>
                     </div>
                   </div>
                 </template>

@@ -7,6 +7,10 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.capability.CapabilitySource;
+import run.halo.aifoundation.capability.ImageGenerationCapability;
+import run.halo.aifoundation.capability.ModelCapabilities;
+import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
@@ -14,11 +18,14 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiThinkingOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
+import run.halo.aifoundation.provider.support.image.SiliconFlowImageGenerationClient;
 import run.halo.aifoundation.provider.support.rerank.SiliconFlowRerankingClient;
 
 @Component
@@ -75,7 +82,8 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK,
+            AdapterType.SILICONFLOW_IMAGE);
     }
 
     @Override
@@ -101,6 +109,14 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return new SiliconFlowImageGenerationClient(new ImageGenerationClientOptions(
+            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+            webClientBuilder(provider));
+    }
+
+    @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         return Mono.zip(
             discoverModelsBySubType(provider, apiKey, "chat", ModelType.LANGUAGE,
@@ -108,15 +124,21 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
             discoverModelsBySubType(provider, apiKey, "embedding", ModelType.EMBEDDING,
                 AdapterType.OPENAI_EMBEDDING, Set.of()),
             discoverModelsBySubType(provider, apiKey, "reranker", ModelType.RERANK,
-                AdapterType.RERANK, Set.of())
+                AdapterType.RERANK, Set.of()),
+            discoverImageModelsBySubType(provider, apiKey, "text-to-image", false),
+            discoverImageModelsBySubType(provider, apiKey, "image-to-image", true)
         ).map(tuple -> {
                 var chatModels = tuple.getT1();
                 var embeddingModels = tuple.getT2();
                 var rerankModels = tuple.getT3();
+                var textToImageModels = tuple.getT4();
+                var imageToImageModels = tuple.getT5();
                 var models = new LinkedHashMap<String, DiscoveredModel>();
                 chatModels.forEach(model -> models.putIfAbsent(model.modelId(), model));
                 embeddingModels.forEach(model -> models.put(model.modelId(), model));
                 rerankModels.forEach(model -> models.put(model.modelId(), model));
+                textToImageModels.forEach(model -> models.put(model.modelId(), model));
+                imageToImageModels.forEach(model -> models.put(model.modelId(), model));
                 return List.copyOf(models.values());
             }
         );
@@ -157,6 +179,45 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
                 node -> remoteDiscoveredModel(stringValue(node, "id"), modelType, features,
                     adapterType));
         });
+    }
+
+    private Mono<List<DiscoveredModel>> discoverImageModelsBySubType(AiProvider provider,
+        String apiKey, String subType, boolean imageToImage) {
+        return getDiscoveryJson(provider, apiKey,
+            uriBuilder -> uriBuilder.path("/models")
+                .queryParam("sub_type", subType)
+                .build(),
+            this::customizeDiscoveryRequest
+        ).map(json -> {
+            var data = listValue(json, "data");
+            if (data == null) {
+                return List.<DiscoveredModel>of();
+            }
+            return discoveredModelsFromNodes(data, "id",
+                node -> remoteImageGenerationModel(stringValue(node, "id"), imageToImage));
+        });
+    }
+
+    private DiscoveredModel remoteImageGenerationModel(String modelId, boolean imageToImage) {
+        return new DiscoveredModel(
+            modelId,
+            modelId,
+            ModelType.IMAGE_GENERATION,
+            Set.of(),
+            AdapterType.SILICONFLOW_IMAGE,
+            run.halo.aifoundation.provider.support.DiscoverySource.REMOTE,
+            run.halo.aifoundation.provider.support.DiscoveryConfidence.HIGH,
+            ModelCapabilities.builder()
+                .imageGeneration(ImageGenerationCapability.builder()
+                    .textToImage(imageToImage ? null : true)
+                    .imageToImage(imageToImage ? true : null)
+                    .maxImagesPerCall(1)
+                    .build())
+                .build(),
+            ModelCapabilitySources.builder()
+                .imageGeneration(CapabilitySource.REMOTE)
+                .build()
+        );
     }
 
     private String trimTrailingSlash(String value) {

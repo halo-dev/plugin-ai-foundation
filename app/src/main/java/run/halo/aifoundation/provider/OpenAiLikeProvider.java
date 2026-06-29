@@ -9,6 +9,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiReasoningOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
@@ -31,9 +32,9 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
 
     @Override
     public String getDescription() {
-        return "用于配置 OpenAI 兼容的 AI 提供商，支持对话和嵌入功能。";
+        return "用于配置 OpenAI 兼容的 AI 提供商，支持对话、嵌入和图像生成能力。";
     }
-    
+
     @Override
     public String getIconUrl() {
         return "/plugins/ai-foundation/assets/static/brands/openai.png";
@@ -57,7 +58,8 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING);
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
+            AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -71,6 +73,12 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
+        return buildOpenAiCompatibleImageGenerationClient(provider, apiKey, modelId);
+    }
+
+    @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoningControlOptions =
             ReasoningControlOptions.openAiCompatibleEffort(OpenAiReasoningOptions::applyEffort);
@@ -80,4 +88,5 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
         return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
-    }}
+    }
+}

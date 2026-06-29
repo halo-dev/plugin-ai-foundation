@@ -14,6 +14,7 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 
@@ -80,6 +81,7 @@ public interface AiProviderType {
         return List.of(
             ModelFeature.STREAMING,
             ModelFeature.VISION,
+            ModelFeature.AUDIO_INPUT,
             ModelFeature.TOOL_CALL,
             ModelFeature.STRUCTURED_OUTPUT,
             ModelFeature.REASONING
@@ -110,6 +112,12 @@ public interface AiProviderType {
     @Nullable
     default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
         String modelId) {
+        return null;
+    }
+
+    @Nullable
+    default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, String modelId) {
         return null;
     }
 

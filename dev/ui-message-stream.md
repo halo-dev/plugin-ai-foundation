@@ -199,6 +199,103 @@ X-Halo-AI-UI-Message-Stream: v1
 `addToolApprovalResponse` 和 `rejectToolCall` 会从已有 assistant 消息片段
 中补齐工具名称、`toolCallId` 等上下文，通常应优先从 `useChat` 返回值调用。
 
+### 发送图文消息
+
+如果用户选择的是本地文件，调用方可以使用 SDK 提供的 helper 把浏览器 `File` /
+`FileList` 转成 UI Message 的 `FilePart`，再通过 `sendMessage({ text, files })`
+发送给后端：
+
+```ts
+import {
+    DefaultChatTransport,
+    filePartsFromFiles,
+    useChat,
+    type FilePart,
+} from "@halo-dev/ai-foundation-sdk";
+import { ref } from "vue";
+
+const input = ref("");
+const files = ref<FilePart[]>([]);
+
+const chat = useChat({
+    id: "conversation-1",
+    transport: new DefaultChatTransport({
+        api: "/apis/example.halo.run/v1alpha1/chat/stream",
+    }),
+});
+
+async function onFileChange(event: Event) {
+    const fileList = (event.target as HTMLInputElement).files;
+    if (!fileList?.length) {
+        return;
+    }
+    files.value = await filePartsFromFiles(fileList);
+}
+
+async function send() {
+    await chat.sendMessage({
+        text: input.value,
+        files: files.value,
+    });
+    input.value = "";
+    files.value = [];
+}
+```
+
+对应的 Vue 模板可以很简单：
+
+```vue
+<template>
+    <input v-model="input" placeholder="请看看图片中有什么" />
+    <input type="file" accept="image/*" multiple @change="onFileChange" />
+    <button :disabled="chat.isLoading.value" @click="send">发送</button>
+</template>
+```
+
+`filePartsFromFiles(fileList)` 会读取文件内容并生成 base64 `data`，同时尽量保留文件名和
+MIME 类型：
+
+```ts
+await chat.sendMessage({
+    text: "请看看图片中有什么",
+    files: [
+        {
+            id: "file-1",
+            fileId: "file-1",
+            title: "photo.png",
+            mediaType: "image/png",
+            data: "base64...",
+        },
+    ],
+});
+```
+
+如果文件已经有可访问的 URL，也可以不读取本地文件，直接构造 file part：
+
+```ts
+await chat.sendMessage({
+    text: "请看看图片中有什么",
+    files: [
+        {
+            id: "image-1",
+            fileId: "image-1",
+            title: "photo.png",
+            mediaType: "image/png",
+            url: "https://example.com/photo.png",
+        },
+    ],
+});
+```
+
+前端发送的 `files` 会进入用户消息的 `parts`，后端通过
+`UIMessageChatHandlers.streamText(...)` 调用语言模型时会把这些文件片段一并转换为模型输入。
+调用方仍应根据自己的业务场景限制文件类型、数量、大小和来源；如果当前模型不支持图片识别，
+后端应返回能力不支持的错误，而不是静默丢弃文件。
+
+音频识别也使用同一套 `files` 入口。调用方可以在模型选择器上使用
+`requiredFeatures: ["audio-input"]` 筛选音频识别模型，上传控件再按业务需要限制
+`accept="audio/*"`。
+
 前端可以为流式接收阶段配置运行时 schema 钩子：
 
 ```ts
@@ -474,7 +571,48 @@ UIMessageStream stream = UIMessageStreams.createWithOptions(options -> options
 | `writeTransientData(name, data)` | 写入只给本轮界面使用的数据            |
 | `writeMessageMetadata(metadata)` | 更新消息级 metadata                   |
 | `writeText(text)`                | 写入完整文本块                        |
+| `writeFile(fileId, file)`        | 写入会保存为 `FilePart` 的生成文件    |
 | `merge(stream)`                  | 合并另一个 `UIMessageStream`          |
+
+## 图像生成结果
+
+独立的图像生成模型不是语言模型的 token 流，所以调用 `ImageGenerationModel.generateImage(...)`
+不会自动进入 `UIMessageChatHandlers.streamText(...)` 的聊天流。如果你的聊天界面需要展示生成图，
+后端应在完成图像生成后，把返回的 `GeneratedFile` 写成 UI Message 的 `file` 数据块。
+
+```java
+return aiModelService()
+    .flatMap(service -> service.imageGenerationModel(imageModelName))
+    .flatMap(model -> model.generateImage(GenerateImageRequest.builder()
+        .prompt("一张 Halo 插件市场封面图")
+        .size(1024)
+        .build()))
+    .map(result -> UIMessageStreams.create("assistant-image-1", writer -> {
+        for (int i = 0; i < result.getImages().size(); i++) {
+            writer.writeFile("generated-image-" + i, result.getImages().get(i));
+        }
+    }));
+```
+
+`writer.writeFile(fileId, file)` 会把 `GeneratedFile.getUrl()` 或
+`GeneratedFile.getBase64()` 映射到 `FilePart`。`fileId` 由调用方提供，并作为聚合时的稳定替换键。
+AI Foundation 不会把生成图保存为附件，也不会下载供应方返回的 URL；是否落盘、缓存、转存或清理，
+仍由调用方插件负责。
+
+也可以手动写 `UIMessageChunks.file(...)`：
+
+```java
+writer.write(UIMessageChunks.file(
+    "generated-image-1",
+    file.getUrl(),
+    file.getTitle(),
+    file.getMediaType(),
+    file.getBase64(),
+    file.getMetadata()));
+```
+
+聚合后的 assistant `UIMessage.parts` 中会出现 `FilePart`。前端可以按 `url` 或 `data`
+展示图片；持久化时保存的是 UI Message 协议数据，不是附件资源本身。
 
 RAG source 默认使用标准 source chunk，最终会持久化为 `SourceUrlPart`。AI Foundation
 约定的 RAG 自定义 data 名称为：

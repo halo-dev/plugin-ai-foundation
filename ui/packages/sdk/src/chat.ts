@@ -319,9 +319,11 @@ export class Chat<METADATA = unknown> {
       parts.push({ type: 'text', id: generateId('text'), text: message.text })
     }
     for (const file of message.files ?? []) {
+      const id = file.id ?? file.fileId ?? generateId('file')
       parts.push({
         type: 'file',
-        id: file.id ?? generateId('file'),
+        id,
+        fileId: file.fileId ?? id,
         url: file.url,
         title: file.title,
         mediaType: file.mediaType,

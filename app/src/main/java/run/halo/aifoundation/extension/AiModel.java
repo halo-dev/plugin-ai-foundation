@@ -6,6 +6,8 @@ import java.util.List;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import io.swagger.v3.oas.annotations.media.Schema;
+import run.halo.aifoundation.capability.ModelCapabilities;
+import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
@@ -43,5 +45,9 @@ public class AiModel extends AbstractExtension {
         private DiscoverySource discoverySource = DiscoverySource.MANUAL;
         @Schema(description = "How reliable the discovered model profile is")
         private DiscoveryConfidence discoveryConfidence = DiscoveryConfidence.HIGH;
+        @Schema(description = "Fine-grained model capabilities")
+        private ModelCapabilities capabilities;
+        @Schema(description = "Source of fine-grained model capabilities by domain")
+        private ModelCapabilitySources capabilitySources = ModelCapabilitySources.unknown();
     }
 }

@@ -1,5 +1,6 @@
 package run.halo.aifoundation.service.language.mapping;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -8,7 +9,12 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.content.Media;
 import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
+import org.springframework.util.MimeType;
+import org.springframework.util.MimeTypeUtils;
+import run.halo.aifoundation.exception.InvalidMediaContentException;
+import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.part.PartType;
@@ -33,7 +39,10 @@ public final class LanguageModelMessageMapper {
         return switch (message.getRole()) {
             case SYSTEM -> new SystemMessage(textContent(message));
             case ASSISTANT -> assistantMessage(message);
-            case USER -> new UserMessage(textContent(message));
+            case USER -> UserMessage.builder()
+                .text(textContent(message))
+                .media(mediaContent(message))
+                .build();
             case TOOL -> toolResponseMessage(message);
         };
     }
@@ -89,13 +98,61 @@ public final class LanguageModelMessageMapper {
                 .reasoningContent(reasoningContent(message.getContent()))
                 .properties(assistantProperties(message))
                 .toolCalls(toolCalls)
+                .media(mediaContent(message))
                 .build();
         }
         return AssistantMessage.builder()
             .content(textContent(message))
             .properties(assistantProperties(message))
             .toolCalls(toolCalls)
+            .media(mediaContent(message))
             .build();
+    }
+
+    private List<Media> mediaContent(ModelMessage message) {
+        return message.getContent().stream()
+            .filter(part -> PartType.isImage(part.getType()) || PartType.isFile(part.getType()))
+            .map(this::mediaContent)
+            .toList();
+    }
+
+    private Media mediaContent(ModelMessagePart part) {
+        var content = part.getMedia();
+        if (content == null) {
+            throw new InvalidMediaContentException("media content must not be null");
+        }
+        var builder = Media.builder()
+            .mimeType(mediaType(content));
+        if (hasText(content.getFilename())) {
+            builder.name(content.getFilename());
+        }
+        if (content.isData()) {
+            builder.data(content.decodedData());
+        } else if (content.isUrl()) {
+            builder.data(mediaUri(content));
+        } else {
+            throw new InvalidMediaContentException("media content must set exactly one of url or data",
+                content.getMediaType(), content.getFilename(), null, null);
+        }
+        return builder.build();
+    }
+
+    private MimeType mediaType(DataContent content) {
+        try {
+            return MimeTypeUtils.parseMimeType(content.getMediaType());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidMediaContentException("media type must be a valid MIME type",
+                content.getMediaType(), content.getFilename(), null, null, e);
+        }
+    }
+
+    private URI mediaUri(DataContent content) {
+        try {
+            return URI.create(content.getUrl());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidMediaContentException("media URL must be a valid URI",
+                content.getMediaType(), content.getFilename(), null, null, e);
+        }
     }
 
     private Map<String, Object> assistantProperties(ModelMessage message) {

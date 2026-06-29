@@ -38,6 +38,14 @@ import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.embedding.EmbeddingUtils;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerationResponseMetadata;
+import run.halo.aifoundation.image.GenerateImageRequest;
+import run.halo.aifoundation.image.GenerateImageResult;
+import run.halo.aifoundation.image.ImageGenerationWarning;
+import run.halo.aifoundation.image.ImageResponseFormat;
+import run.halo.aifoundation.image.ImageUsage;
+import run.halo.aifoundation.media.DataContent;
+import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.rag.RagEmptyContextPolicy;
 import run.halo.aifoundation.rag.RagFailurePolicy;
@@ -277,6 +285,21 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .implementation(TestRerankRequest.class))
                     .response(responseBuilder().implementation(TestRerankResponse.class))
             )
+            .POST("models/{name}/test-image-generation", this::testImageGeneration,
+                builder -> builder.operationId("TestModelImageGeneration")
+                    .description("Test image generation with prompt, optional input images, and diagnostics.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .description("Image generation model name (AiModel.metadata.name)")
+                        .implementation(String.class)
+                        .required(true))
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .implementation(TestImageGenerationRequest.class))
+                    .response(responseBuilder().implementation(TestImageGenerationResponse.class))
+            )
             .POST("models/{name}/test-rag/ui-message/stream", this::testRagUiMessageStream,
                 builder -> builder.operationId("TestModelRagUiMessageStream")
                     .description("Test single-query RAG with manual sources and Halo UI Message "
@@ -479,6 +502,17 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .metadata(Map.of("source", "console-test"))
                         .build())
                     .map(TestRerankResponse::from)))
+            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+    }
+
+    private Mono<ServerResponse> testImageGeneration(ServerRequest request) {
+        var modelName = request.pathVariable("name");
+        log.info("testImageGeneration: modelName={}", modelName);
+        return request.bodyToMono(TestImageGenerationRequest.class)
+            .flatMap(body -> validateTestImageGenerationRequest(body)
+                .then(aiModelService.imageGenerationModel(modelName))
+                .flatMap(model -> model.generateImage(toGenerateImageRequest(body)))
+                .map(TestImageGenerationResponse::from))
             .flatMap(response -> ServerResponse.ok().bodyValue(response));
     }
 
@@ -1002,6 +1036,54 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return Mono.empty();
     }
 
+    private Mono<Void> validateTestImageGenerationRequest(TestImageGenerationRequest request) {
+        if (request == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "request body is required"));
+        }
+        if (request.getPrompt() == null || request.getPrompt().isBlank()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "prompt must not be blank"));
+        }
+        if (request.getN() != null && request.getN() <= 0) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "n must be positive"));
+        }
+        if (request.getWidth() != null && request.getWidth() <= 0) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "width must be positive"));
+        }
+        if (request.getHeight() != null && request.getHeight() <= 0) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "height must be positive"));
+        }
+        if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "maxRetries must not be negative"));
+        }
+        if (request.getMaxParallelCalls() != null && request.getMaxParallelCalls() <= 0) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "maxParallelCalls must be positive"));
+        }
+        if (request.getImages() != null && request.getImages().size() > 8) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "At most 8 input images can be tested at once"));
+        }
+        if (request.getImages() != null) {
+            for (var image : request.getImages()) {
+                if (!hasMediaPayload(image)) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "input images must set exactly one of url or data"));
+                }
+            }
+        }
+        if (request.getMask() != null && !hasMediaPayload(request.getMask())) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "mask must set exactly one of url or data"));
+        }
+        return Mono.empty();
+    }
+
     private static List<RerankDocument> toRerankDocuments(List<String> documents) {
         var result = new ArrayList<RerankDocument>();
         for (int i = 0; i < documents.size(); i++) {
@@ -1054,8 +1136,16 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 && part.getApproved() != null);
     }
 
-    private boolean hasText(String value) {
+    private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static String emptyToNull(String value) {
+        return value != null && !value.isBlank() ? value.trim() : null;
+    }
+
+    private static boolean hasMediaPayload(TestMediaContent media) {
+        return media != null && hasText(media.getUrl()) != hasText(media.getData());
     }
 
     private GenerateTextRequest.GenerateTextRequestBuilder completionRequest(
@@ -1084,6 +1174,70 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return completionRequest(request)
             .prompt(request.getInput())
             .output(objectOutput(request));
+    }
+
+    private GenerateImageRequest toGenerateImageRequest(TestImageGenerationRequest request) {
+        var builder = GenerateImageRequest.builder()
+            .prompt(request.getPrompt())
+            .images(toDataContents(request.getImages()))
+            .mask(toDataContent(request.getMask()))
+            .n(request.getN())
+            .aspectRatio(request.getAspectRatio())
+            .seed(request.getSeed())
+            .responseFormat(request.getResponseFormat())
+            .providerOptions(request.getProviderOptions())
+            .headers(request.getHeaders())
+            .maxRetries(request.getMaxRetries())
+            .maxParallelCalls(request.getMaxParallelCalls())
+            .metadata(Map.of("source", "console-image-generation-test"));
+        applyImageSize(builder, request);
+        return builder.build();
+    }
+
+    private static void applyImageSize(GenerateImageRequest.GenerateImageRequestBuilder builder,
+        TestImageGenerationRequest request) {
+        if (hasText(request.getSize())) {
+            var size = request.getSize().trim();
+            if (size.matches("\\d+")) {
+                builder.size(Integer.parseInt(size));
+            } else {
+                builder.size(size);
+            }
+            return;
+        }
+        if (request.getWidth() != null && request.getHeight() != null) {
+            builder.size(request.getWidth(), request.getHeight());
+        } else if (request.getWidth() != null) {
+            builder.size(request.getWidth());
+        }
+    }
+
+    private static List<DataContent> toDataContents(List<TestMediaContent> media) {
+        if (media == null || media.isEmpty()) {
+            return null;
+        }
+        return media.stream()
+            .map(ModelConsoleEndpoint::toDataContent)
+            .toList();
+    }
+
+    private static DataContent toDataContent(TestMediaContent media) {
+        if (media == null) {
+            return null;
+        }
+        if (hasText(media.getUrl())) {
+            return DataContent.url(media.getUrl().trim(), emptyToNull(media.getMediaType()),
+                emptyToNull(media.getFilename()));
+        }
+        if (hasText(media.getData())) {
+            var data = media.getData().trim();
+            if (data.regionMatches(true, 0, "data:", 0, "data:".length())) {
+                return DataContent.dataUrl(data, emptyToNull(media.getFilename()));
+            }
+            return DataContent.data(data, emptyToNull(media.getMediaType()),
+                emptyToNull(media.getFilename()));
+        }
+        return null;
     }
 
     private run.halo.aifoundation.schema.OutputSpec objectOutput(
@@ -1329,6 +1483,38 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class TestImageGenerationRequest {
+        private String prompt;
+        private List<TestMediaContent> images;
+        private TestMediaContent mask;
+        private Integer n;
+        private String size;
+        private Integer width;
+        private Integer height;
+        private String aspectRatio;
+        private Integer seed;
+        private ImageResponseFormat responseFormat;
+        private Integer maxRetries;
+        private Integer maxParallelCalls;
+        private Map<String, Map<String, Object>> providerOptions;
+        private Map<String, String> headers;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestMediaContent {
+        private String url;
+        private String data;
+        private String mediaType;
+        private String filename;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class TestRagRequest {
         private String query;
         private String system;
@@ -1561,6 +1747,65 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 .response(response.getResponse())
                 .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
                 .providerMetadata(response.getProviderMetadata())
+                .build();
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestImageGenerationResponse {
+        private int imagesCount;
+        private List<TestGeneratedFile> images;
+        private ImageUsage usage;
+        private List<ImageGenerationWarning> warnings;
+        private List<GenerationResponseMetadata> responses;
+        private Map<String, Object> providerMetadata;
+
+        static TestImageGenerationResponse from(GenerateImageResult result) {
+            var images = result.getImages() != null
+                ? result.getImages()
+                : List.<GeneratedFile>of();
+            var previews = new ArrayList<TestGeneratedFile>();
+            for (int i = 0; i < images.size(); i++) {
+                previews.add(TestGeneratedFile.from(i, images.get(i)));
+            }
+            return TestImageGenerationResponse.builder()
+                .imagesCount(images.size())
+                .images(List.copyOf(previews))
+                .usage(result.getUsage())
+                .warnings(result.getWarnings() != null ? result.getWarnings() : List.of())
+                .responses(result.getResponses() != null ? result.getResponses() : List.of())
+                .providerMetadata(result.getProviderMetadata())
+                .build();
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestGeneratedFile {
+        private int index;
+        private String id;
+        private String url;
+        private String base64;
+        private String mediaType;
+        private String filename;
+        private String title;
+        private Map<String, Object> metadata;
+
+        static TestGeneratedFile from(int index, GeneratedFile file) {
+            return TestGeneratedFile.builder()
+                .index(index)
+                .id(file.getId())
+                .url(file.getUrl())
+                .base64(file.getBase64())
+                .mediaType(file.getMediaType())
+                .filename(file.getFilename())
+                .title(file.getTitle())
+                .metadata(file.getMetadata())
                 .build();
         }
     }

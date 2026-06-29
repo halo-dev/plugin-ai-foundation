@@ -8,6 +8,8 @@ export {
 export type { ChatInit, ChatStateAdapter, SendMessageInput } from './chat'
 export { AIUIError, AIUIProtocolError, AIUISchemaValidationError, isProtocolError } from './errors'
 export type { AIUISchemaValidationErrorOptions, AIUISchemaValidationTarget } from './errors'
+export { filePartFromFile, filePartsFromFiles } from './files'
+export type { BrowserFileInput, FilePartFromFileOptions, FilePartsFromFilesOptions } from './files'
 export { generateId } from './id'
 export { applyUIMessageChunk, createUIMessageReducer, messageText } from './message-reducer'
 export type { CreateReducerOptions, UIMessageReducerState } from './message-reducer'

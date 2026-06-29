@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.lang.Nullable;
+import run.halo.aifoundation.capability.ModelCapabilities;
+import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 
@@ -31,6 +33,12 @@ public class ModelOption {
     @Schema(description = "Optional model features")
     private List<ModelFeature> features;
 
+    @Schema(description = "Effective fine-grained model capabilities")
+    private ModelCapabilities capabilities;
+
+    @Schema(description = "Capability source information by domain")
+    private ModelCapabilitySources capabilitySources;
+
     @Schema(description = "Whether the AiModel is enabled")
     private boolean enabled;
 
@@ -40,6 +48,9 @@ public class ModelOption {
     @Nullable
     @Schema(description = "Reason the option is not selectable")
     private ModelOptionUnavailableReason unavailableReason;
+
+    @Schema(description = "Structured details for unavailable options")
+    private List<ModelOptionUnavailableDetail> unavailableDetails;
 
     @Schema(description = "Provider display summary")
     private ModelOptionProvider provider;

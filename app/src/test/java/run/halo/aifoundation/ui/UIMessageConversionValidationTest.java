@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
 import run.halo.aifoundation.part.PartType;
@@ -159,9 +161,99 @@ class UIMessageConversionValidationTest {
             .contains(
                 "data.converter-missing",
                 "source.skipped",
-                "file.skipped",
+                "file.invalid",
                 "message.empty-after-conversion"
             );
+    }
+
+    @Test
+    void convertsFilePartsToModelMediaParts() {
+        var imageDataUrl = "data:image/png;base64,"
+            + Base64.getEncoder().encodeToString(new byte[] {1, 2, 3});
+        var result = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("user", UIMessageRole.USER, List.of(
+                UIMessageParts.text("text", "look"),
+                UIMessageParts.file("image-1", null, "diagram.png", null, imageDataUrl,
+                    Map.of())
+            ), new Metadata("chat")),
+            new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
+                UIMessageParts.file("file-1", "https://example.com/brief.pdf", "brief.pdf",
+                    "application/pdf", null, Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.warnings()).isEmpty();
+        assertThat(result.messages()).hasSize(2);
+        assertThat(result.messages().get(0).getContent())
+            .extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TEXT, PartType.IMAGE);
+        var image = result.messages().get(0).getContent().get(1).getMedia();
+        assertThat(image.getMediaType()).isEqualTo("image/png");
+        assertThat(image.getFilename()).isEqualTo("diagram.png");
+        assertThat(image.source()).isEqualTo(InputSource.DATA);
+
+        assertThat(result.messages().get(1).getContent())
+            .extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.FILE);
+        var file = result.messages().get(1).getContent().getFirst().getMedia();
+        assertThat(file.getUrl()).isEqualTo("https://example.com/brief.pdf");
+        assertThat(file.getMediaType()).isEqualTo("application/pdf");
+        assertThat(file.source()).isEqualTo(InputSource.URL);
+    }
+
+    @Test
+    void keepsSourcePartsAsReferencesDuringModelConversion() {
+        var result = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("user", UIMessageRole.USER, List.of(
+                UIMessageParts.sourceUrl("source-url", "https://halo.run", "Halo", Map.of()),
+                UIMessageParts.sourceDocument("source-doc", "application/pdf", "Manual",
+                    "manual.pdf", Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.messages()).isEmpty();
+        assertThat(result.warnings()).extracting(UIMessageConversionWarning::code)
+            .contains("source.skipped", "message.empty-after-conversion");
+    }
+
+    @Test
+    void doesNotInferMediaTypeFromRegularFileUrl() {
+        var result = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("user", UIMessageRole.USER, List.of(
+                UIMessageParts.file("image-url", "https://example.com/image.png", "image.png",
+                    null, null, Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.messages()).isEmpty();
+        assertThat(result.warnings()).extracting(UIMessageConversionWarning::code)
+            .contains("file.invalid", "message.empty-after-conversion");
+        assertThat(result.warnings()).extracting(UIMessageConversionWarning::message)
+            .contains("UI file part mediaType is required for URL-backed files.");
+    }
+
+    @Test
+    void handlesSystemAndMalformedFilePartsByUnsupportedPolicy() {
+        var base64 = Base64.getEncoder().encodeToString(new byte[] {1});
+        var systemResult = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("system", UIMessageRole.SYSTEM, List.of(
+                UIMessageParts.file("image-1", null, "image.png", "image/png", base64,
+                    Map.of())
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(systemResult.messages()).isEmpty();
+        assertThat(systemResult.warnings()).extracting(UIMessageConversionWarning::code)
+            .contains("file.system-unsupported", "message.empty-after-conversion");
+
+        assertThatThrownBy(() -> UIMessageConverters.toModelMessages(List.of(
+            new UIMessage<>("user", UIMessageRole.USER, List.of(
+                UIMessageParts.file("bad-file", null, "image.png", "image/png", "not-base64",
+                    Map.of())
+            ), new Metadata("chat"))
+        ), options -> options.unsupportedPartPolicy(UnsupportedUIMessagePartPolicy.FAIL)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("media data must be valid base64");
     }
 
     @Test

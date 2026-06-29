@@ -3,14 +3,21 @@ package run.halo.aifoundation.endpoint;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.server.ResponseStatusException;
+import run.halo.aifoundation.capability.ImageGenerationCapability;
+import run.halo.aifoundation.capability.InputSource;
+import run.halo.aifoundation.capability.LanguageCapability;
+import run.halo.aifoundation.capability.ModelCapabilityRequirement;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.index.query.Queries;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 record ModelOptionQuery(
     ModelType modelType,
@@ -19,8 +26,11 @@ record ModelOptionQuery(
     Boolean enabled,
     Boolean available,
     List<ModelFeature> requiredFeatures,
+    ModelCapabilityRequirement requiredCapabilities,
     String keyword
 ) {
+
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     static ModelOptionQuery from(ServerRequest request) {
         var modelType = parseModelType(single(request, "modelType", false));
@@ -29,9 +39,11 @@ record ModelOptionQuery(
         var enabled = parseBoolean(single(request, "enabled", false), "enabled");
         var available = parseBoolean(single(request, "available", false), "available");
         var requiredFeatures = parseFeatures(request);
+        var requiredCapabilities = parseRequiredCapabilities(
+            single(request, "requiredCapabilities", false));
         var keyword = single(request, "keyword", true);
         return new ModelOptionQuery(modelType, providerName, providerType, enabled,
-            available, requiredFeatures, keyword);
+            available, requiredFeatures, requiredCapabilities, keyword);
     }
 
     ListOptions modelListOptions() {
@@ -72,7 +84,13 @@ record ModelOptionQuery(
     }
 
     private boolean matchesAvailable(ModelOption option) {
-        return available == null || available == option.isAvailable();
+        if (available != null) {
+            return available == option.isAvailable();
+        }
+        if (requiredCapabilities != null) {
+            return option.isAvailable();
+        }
+        return true;
     }
 
     private boolean matchesRequiredFeatures(ModelOption option) {
@@ -155,6 +173,156 @@ record ModelOptionQuery(
             }
         }
         return List.copyOf(features);
+    }
+
+    private static ModelCapabilityRequirement parseRequiredCapabilities(String value) {
+        if (value == null) {
+            return null;
+        }
+        Map<?, ?> root;
+        try {
+            root = JSON_MAPPER.readValue(value, Map.class);
+        } catch (JacksonException e) {
+            throw badRequest("requiredCapabilities must be valid JSON");
+        }
+        rejectUnknownKeys(root, "requiredCapabilities", List.of("language", "imageGeneration"));
+        return ModelCapabilityRequirement.builder()
+            .language(parseLanguageCapability(asMap(root.get("language"), "language")))
+            .imageGeneration(parseImageGenerationCapability(
+                asMap(root.get("imageGeneration"), "imageGeneration")))
+            .build();
+    }
+
+    private static LanguageCapability parseLanguageCapability(Map<?, ?> value) {
+        if (value == null) {
+            return null;
+        }
+        rejectUnknownKeys(value, "language", List.of("imageInput", "fileInput",
+            "reasoningHistory", "inputMediaTypes", "inputSources"));
+        return LanguageCapability.builder()
+            .imageInput(booleanValue(value.get("imageInput"), "language.imageInput"))
+            .fileInput(booleanValue(value.get("fileInput"), "language.fileInput"))
+            .reasoningHistory(booleanValue(value.get("reasoningHistory"),
+                "language.reasoningHistory"))
+            .inputMediaTypes(mediaTypes(value.get("inputMediaTypes"),
+                "language.inputMediaTypes"))
+            .inputSources(inputSources(value.get("inputSources"), "language.inputSources"))
+            .build();
+    }
+
+    private static ImageGenerationCapability parseImageGenerationCapability(Map<?, ?> value) {
+        if (value == null) {
+            return null;
+        }
+        rejectUnknownKeys(value, "imageGeneration", List.of("textToImage", "imageToImage",
+            "maskInput", "maxImagesPerCall", "sizes", "aspectRatios", "outputMediaTypes"));
+        return ImageGenerationCapability.builder()
+            .textToImage(booleanValue(value.get("textToImage"),
+                "imageGeneration.textToImage"))
+            .imageToImage(booleanValue(value.get("imageToImage"),
+                "imageGeneration.imageToImage"))
+            .maskInput(booleanValue(value.get("maskInput"), "imageGeneration.maskInput"))
+            .maxImagesPerCall(integerValue(value.get("maxImagesPerCall"),
+                "imageGeneration.maxImagesPerCall"))
+            .sizes(stringList(value.get("sizes"), "imageGeneration.sizes"))
+            .aspectRatios(stringList(value.get("aspectRatios"),
+                "imageGeneration.aspectRatios"))
+            .outputMediaTypes(mediaTypes(value.get("outputMediaTypes"),
+                "imageGeneration.outputMediaTypes"))
+            .build();
+    }
+
+    private static Map<?, ?> asMap(Object value, String path) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            return map;
+        }
+        throw badRequest(path + " must be an object");
+    }
+
+    private static Boolean booleanValue(Object value, String path) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        throw badRequest(path + " must be a boolean");
+    }
+
+    private static Integer integerValue(Object value, String path) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            var intValue = number.intValue();
+            if (intValue < 1) {
+                throw badRequest(path + " must be positive");
+            }
+            return intValue;
+        }
+        throw badRequest(path + " must be a number");
+    }
+
+    private static List<InputSource> inputSources(Object value, String path) {
+        var values = stringList(value, path);
+        if (values == null) {
+            return null;
+        }
+        return values.stream()
+            .map(source -> InputSource.find(source)
+                .orElseThrow(() -> badRequest("Unsupported input source: " + source)))
+            .toList();
+    }
+
+    private static List<String> mediaTypes(Object value, String path) {
+        var values = stringList(value, path);
+        if (values == null) {
+            return null;
+        }
+        values.forEach(mediaType -> validateMediaTypePattern(mediaType, path));
+        return values;
+    }
+
+    private static List<String> stringList(Object value, String path) {
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof List<?> list)) {
+            throw badRequest(path + " must be an array");
+        }
+        var values = new ArrayList<String>();
+        for (var item : list) {
+            if (!(item instanceof String text) || !StringUtils.hasText(text)) {
+                throw badRequest(path + " must contain non-blank strings");
+            }
+            values.add(text.trim());
+        }
+        return List.copyOf(values);
+    }
+
+    private static void validateMediaTypePattern(String mediaType, String path) {
+        var parts = mediaType.split("/", -1);
+        if (parts.length != 2 || !StringUtils.hasText(parts[0])
+            || !StringUtils.hasText(parts[1])) {
+            throw badRequest(path + " contains invalid media type pattern: " + mediaType);
+        }
+        if (parts[0].contains("*") && !"*".equals(parts[0])) {
+            throw badRequest(path + " contains invalid media type pattern: " + mediaType);
+        }
+        if (parts[1].contains("*") && !"*".equals(parts[1])) {
+            throw badRequest(path + " contains invalid media type pattern: " + mediaType);
+        }
+    }
+
+    private static void rejectUnknownKeys(Map<?, ?> value, String path, List<String> allowed) {
+        for (var key : value.keySet()) {
+            if (!(key instanceof String text) || !allowed.contains(text)) {
+                throw badRequest(path + " contains unsupported key: " + key);
+            }
+        }
     }
 
     private static ResponseStatusException badRequest(String message) {

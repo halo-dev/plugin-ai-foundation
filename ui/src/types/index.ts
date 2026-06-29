@@ -14,7 +14,8 @@ export const MODEL_TYPE_OPTIONS = [
 
 export const MODEL_FEATURE_OPTIONS = [
   { label: '流式输出', value: AiModelSpecFeaturesEnum.Streaming },
-  { label: '视觉', value: AiModelSpecFeaturesEnum.Vision },
+  { label: '图片识别', value: AiModelSpecFeaturesEnum.Vision },
+  { label: '音频识别', value: AiModelSpecFeaturesEnum.AudioInput },
   { label: '工具调用', value: AiModelSpecFeaturesEnum.ToolCall },
   { label: '结构化输出', value: AiModelSpecFeaturesEnum.StructuredOutput },
   { label: '推理', value: AiModelSpecFeaturesEnum.Reasoning },

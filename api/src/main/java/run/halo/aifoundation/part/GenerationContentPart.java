@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.GenerationStep;
+import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolError;
@@ -95,6 +96,9 @@ public class GenerationContentPart {
 
     /**
      * Creates a generated text content part.
+     *
+     * @param text generated assistant text
+     * @return a generated text part
      */
     public static GenerationContentPart text(String text) {
         return GenerationContentPart.builder()
@@ -105,6 +109,9 @@ public class GenerationContentPart {
 
     /**
      * Creates a reasoning content part from visible reasoning text.
+     *
+     * @param text visible reasoning text
+     * @return a reasoning part
      */
     public static GenerationContentPart reasoning(String text) {
         return reasoning(ReasoningPart.builder().text(text).build());
@@ -112,6 +119,9 @@ public class GenerationContentPart {
 
     /**
      * Creates a reasoning content part preserving provider metadata needed for continuation.
+     *
+     * @param reasoning reasoning text and provider metadata
+     * @return a reasoning part
      */
     public static GenerationContentPart reasoning(ReasoningPart reasoning) {
         return GenerationContentPart.builder()
@@ -124,6 +134,9 @@ public class GenerationContentPart {
 
     /**
      * Creates a content part for a model-requested tool call.
+     *
+     * @param toolCall model-requested tool call
+     * @return a tool-call content part
      */
     public static GenerationContentPart toolCall(ToolCall toolCall) {
         return GenerationContentPart.builder()
@@ -137,6 +150,9 @@ public class GenerationContentPart {
 
     /**
      * Creates a content part for a pending tool approval request.
+     *
+     * @param request pending approval request
+     * @return a tool approval request content part
      */
     public static GenerationContentPart toolApprovalRequest(ToolApprovalRequest request) {
         return GenerationContentPart.builder()
@@ -152,6 +168,9 @@ public class GenerationContentPart {
 
     /**
      * Creates a content part for a successful server-side tool execution.
+     *
+     * @param toolResult tool execution result
+     * @return a tool result content part
      */
     public static GenerationContentPart toolResult(ToolResult toolResult) {
         return GenerationContentPart.builder()
@@ -165,6 +184,9 @@ public class GenerationContentPart {
 
     /**
      * Creates a content part for a failed server-side tool execution.
+     *
+     * @param toolError tool execution error
+     * @return a tool error content part
      */
     public static GenerationContentPart toolError(ToolError toolError) {
         return GenerationContentPart.builder()
@@ -178,6 +200,15 @@ public class GenerationContentPart {
 
     /**
      * Creates a source reference content part.
+     *
+     * <p>Source parts are references or citations. They are not treated as caller-provided media
+     * input when messages are reused.
+     *
+     * @param id source identifier
+     * @param url source URL
+     * @param title source title
+     * @param metadata sanitized source metadata
+     * @return a source reference content part
      */
     public static GenerationContentPart source(String id, String url, String title,
         Map<String, Object> metadata) {
@@ -192,16 +223,72 @@ public class GenerationContentPart {
 
     /**
      * Creates a generated file content part.
+     *
+     * <p>When {@code data} is a string and exactly one of URL or data is present, this method maps
+     * through {@link GeneratedFile} validation. Otherwise it preserves the supplied raw file fields
+     * so callers can represent provider-specific file payloads.
+     *
+     * @param id file identifier
+     * @param url file URL, when available
+     * @param title display title
+     * @param mediaType file media type
+     * @param data file payload, commonly a base64 string
+     * @param metadata sanitized file metadata
+     * @return a generated file content part
      */
     public static GenerationContentPart file(String id, String url, String title, String mediaType,
         Object data, Map<String, Object> metadata) {
-        return GenerationContentPart.builder()
-            .type(PartType.FILE)
+        var base64 = data instanceof String text ? text : null;
+        if ((!hasText(base64) && !hasText(url)) || (hasText(base64) && hasText(url))) {
+            return GenerationContentPart.builder()
+                .type(PartType.FILE)
+                .id(id)
+                .url(url)
+                .title(title)
+                .mediaType(mediaType)
+                .data(data)
+                .metadata(metadata)
+                .build();
+        }
+        return file(GeneratedFile.builder()
             .id(id)
             .url(url)
+            .base64(base64)
             .title(title)
             .mediaType(mediaType)
-            .data(data)
+            .metadata(metadata)
+            .build(), metadata);
+    }
+
+    /**
+     * Creates a generated file content part from a shared generated file value.
+     *
+     * @param file generated file value
+     * @return a generated file content part
+     */
+    public static GenerationContentPart file(GeneratedFile file) {
+        return file(file, file != null ? file.getMetadata() : null);
+    }
+
+    /**
+     * Creates a generated file content part from a shared generated file value with extra metadata.
+     *
+     * @param file generated file value
+     * @param metadata metadata to attach to the output part
+     * @return a generated file content part
+     */
+    public static GenerationContentPart file(GeneratedFile file, Map<String, Object> metadata) {
+        if (file == null) {
+            throw new IllegalArgumentException("generated file must not be null");
+        }
+        var title = file.getTitle() != null ? file.getTitle() : file.getFilename();
+        return GenerationContentPart.builder()
+            .type(PartType.FILE)
+            .id(file.getId())
+            .url(file.getUrl())
+            .title(title)
+            .mediaType(file.getMediaType())
+            .data(file.getBase64())
             .metadata(metadata)
             .build();
     }
@@ -267,6 +354,10 @@ public class GenerationContentPart {
         }
     }
 
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
     private static void rejectFields(String partName, Object... disallowed) {
         for (var value : disallowed) {
             if (value != null) {
@@ -275,7 +366,17 @@ public class GenerationContentPart {
         }
     }
 
+    /**
+     * Validating builder for {@link GenerationContentPart}.
+     */
     public static class GenerationContentPartBuilder {
+        /**
+         * Builds and validates a generation content part.
+         *
+         * @return validated content part
+         * @throws IllegalArgumentException when the selected part type has missing or incompatible
+         *                                  fields
+         */
         public GenerationContentPart build() {
             return uncheckedBuild().validate();
         }

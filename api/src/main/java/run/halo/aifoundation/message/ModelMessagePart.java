@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.tool.ToolCall;
@@ -20,6 +21,8 @@ import run.halo.aifoundation.tool.ToolResult;
  * <p>Only a subset of fields is meaningful for each {@link #type}:
  * <ul>
  *   <li>{@link PartType#TEXT}: {@link #text}</li>
+ *   <li>{@link PartType#IMAGE}: {@link #media}</li>
+ *   <li>{@link PartType#FILE}: {@link #media}</li>
  *   <li>{@link PartType#REASONING}: {@link #text}, {@link #signature},
  *   {@link #providerOptions}</li>
  *   <li>{@link PartType#TOOL_CALL}: {@link #toolCallId}, {@link #toolName}, {@link #input}</li>
@@ -47,6 +50,10 @@ public class ModelMessagePart {
      * Text content for {@link PartType#TEXT}.
      */
     private String text;
+    /**
+     * Caller-provided image or file content for {@link PartType#IMAGE} and {@link PartType#FILE}.
+     */
+    private DataContent media;
     /**
      * Optional provider signature for {@link PartType#REASONING}.
      */
@@ -106,10 +113,69 @@ public class ModelMessagePart {
     }
 
     /**
+     * Creates an image input message part.
+     *
+     * <p>Image parts are valid for user messages and assistant history. The runtime validates the
+     * selected model's image input capability before provider invocation.
+     *
+     * @param media caller-provided image content
+     * @return an image input part
+     */
+    public static ModelMessagePart image(DataContent media) {
+        return ModelMessagePart.builder()
+            .type(PartType.IMAGE)
+            .media(media)
+            .build();
+    }
+
+    /**
+     * Creates an image input message part from a provider-native URL.
+     *
+     * <p>The URL is not downloaded by AI Foundation. The target model must support native URL
+     * input.
+     *
+     * @param url provider-native image URL
+     * @return an image input part
+     */
+    public static ModelMessagePart imageUrl(String url) {
+        return image(DataContent.url(url));
+    }
+
+    /**
+     * Creates an image input message part from base64 data.
+     *
+     * @param base64Data base64 encoded image bytes without a data URL prefix
+     * @param mediaType image media type such as {@code image/png}
+     * @return an image input part
+     */
+    public static ModelMessagePart imageData(String base64Data, String mediaType) {
+        return image(DataContent.data(base64Data, mediaType));
+    }
+
+    /**
+     * Creates a generic file input message part.
+     *
+     * <p>Use this for non-image media such as PDFs or text files. Image media should normally use
+     * {@link #image(DataContent)} so providers receive the most specific input semantics.
+     *
+     * @param media caller-provided file content
+     * @return a file input part
+     */
+    public static ModelMessagePart file(DataContent media) {
+        return ModelMessagePart.builder()
+            .type(PartType.FILE)
+            .media(media)
+            .build();
+    }
+
+    /**
      * Creates a persisted assistant reasoning part from visible reasoning text.
      *
      * <p>Reasoning parts are valid only in assistant messages and should be kept separate from
      * answer text. Provider-specific continuation fields belong in {@link #providerOptions}.
+     *
+     * @param text visible reasoning text
+     * @return an assistant reasoning part
      */
     public static ModelMessagePart reasoning(String text) {
         return reasoning(ReasoningPart.builder().text(text).build());
@@ -117,6 +183,9 @@ public class ModelMessagePart {
 
     /**
      * Creates a persisted assistant reasoning part with provider metadata.
+     *
+     * @param reasoning reasoning text and provider metadata
+     * @return an assistant reasoning part
      */
     public static ModelMessagePart reasoning(ReasoningPart reasoning) {
         return ModelMessagePart.builder()
@@ -132,6 +201,9 @@ public class ModelMessagePart {
      *
      * <p>This is useful when a caller stores a conversation and later sends the assistant tool
      * call back together with a corresponding {@code TOOL} message.
+     *
+     * @param toolCall model-produced tool call
+     * @return an assistant tool-call part
      */
     public static ModelMessagePart toolCall(ToolCall toolCall) {
         return ModelMessagePart.builder()
@@ -144,6 +216,9 @@ public class ModelMessagePart {
 
     /**
      * Creates a persisted assistant approval request part from a pending tool approval.
+     *
+     * @param request pending tool approval request
+     * @return an assistant tool approval request part
      */
     public static ModelMessagePart toolApprovalRequest(ToolApprovalRequest request) {
         return ModelMessagePart.builder()
@@ -159,6 +234,9 @@ public class ModelMessagePart {
 
     /**
      * Creates a tool message part that answers a prior approval request.
+     *
+     * @param response caller approval or denial response
+     * @return a tool approval response part
      */
     public static ModelMessagePart toolApprovalResponse(ToolApprovalResponse response) {
         return ModelMessagePart.builder()
@@ -180,6 +258,9 @@ public class ModelMessagePart {
      *     ModelMessagePart.toolResult(toolResult)
      * ));
      * }</pre>
+     *
+     * @param toolResult tool execution result
+     * @return a tool result part
      */
     public static ModelMessagePart toolResult(ToolResult toolResult) {
         return ModelMessagePart.builder()
@@ -192,6 +273,9 @@ public class ModelMessagePart {
 
     /**
      * Creates a tool error part for a {@link ModelMessageRole#TOOL} message.
+     *
+     * @param toolError tool execution error
+     * @return a tool error part
      */
     public static ModelMessagePart toolError(ToolError toolError) {
         return ModelMessagePart.builder()
@@ -208,7 +292,18 @@ public class ModelMessagePart {
         }
         switch (type) {
             case PartType.TEXT -> rejectFields("text", signature, approvalId, toolCallId,
-                toolName, stepIndex, input, result, errorText, approved, reason, providerOptions);
+                toolName, stepIndex, input, result, errorText, approved, reason, providerOptions,
+                media);
+            case PartType.IMAGE -> {
+                requirePresent(media, "image message part media");
+                rejectFields("image", text, signature, approvalId, toolCallId, toolName, stepIndex,
+                    input, result, errorText, approved, reason, providerOptions);
+            }
+            case PartType.FILE -> {
+                requirePresent(media, "file message part media");
+                rejectFields("file", text, signature, approvalId, toolCallId, toolName, stepIndex,
+                    input, result, errorText, approved, reason, providerOptions);
+            }
             case PartType.REASONING -> {
                 if ((text == null || text.isBlank())
                     && (providerOptions == null || providerOptions.isEmpty())) {
@@ -216,26 +311,26 @@ public class ModelMessagePart {
                         "reasoning message part must include text or provider options");
                 }
                 rejectFields("reasoning", approvalId, toolCallId, toolName, stepIndex, input,
-                    result, errorText, approved, reason);
+                    result, errorText, approved, reason, media);
             }
             case PartType.TOOL_CALL -> {
                 requireText(toolCallId, "tool-call message part toolCallId");
                 requireText(toolName, "tool-call message part toolName");
                 rejectFields("tool-call", text, signature, approvalId, stepIndex, result, errorText,
-                    approved, reason, providerOptions);
+                    approved, reason, providerOptions, media);
             }
             case PartType.TOOL_RESULT -> {
                 requireText(toolCallId, "tool-result message part toolCallId");
                 requireText(toolName, "tool-result message part toolName");
                 rejectFields("tool-result", text, signature, approvalId, stepIndex, input, errorText,
-                    approved, reason, providerOptions);
+                    approved, reason, providerOptions, media);
             }
             case PartType.TOOL_ERROR -> {
                 requireText(toolCallId, "tool-error message part toolCallId");
                 requireText(toolName, "tool-error message part toolName");
                 requireText(errorText, "tool-error message part errorText");
                 rejectFields("tool-error", text, signature, approvalId, stepIndex, input, result,
-                    approved, reason, providerOptions);
+                    approved, reason, providerOptions, media);
             }
             case PartType.TOOL_APPROVAL_REQUEST -> {
                 requireText(approvalId, "tool-approval-request message part approvalId");
@@ -243,13 +338,13 @@ public class ModelMessagePart {
                 requireText(toolName, "tool-approval-request message part toolName");
                 requireNonNegative(stepIndex, "tool-approval-request message part stepIndex");
                 rejectFields("tool-approval-request", text, signature, result, errorText,
-                    approved, reason);
+                    approved, reason, media);
             }
             case PartType.TOOL_APPROVAL_RESPONSE -> {
                 requireText(approvalId, "tool-approval-response message part approvalId");
                 requirePresent(approved, "tool-approval-response message part approved");
                 rejectFields("tool-approval-response", text, signature, stepIndex, input, result,
-                    errorText);
+                    errorText, media);
             }
             default -> throw new IllegalArgumentException("unsupported message part type: " + type);
         }
@@ -282,7 +377,17 @@ public class ModelMessagePart {
         }
     }
 
+    /**
+     * Validating builder for {@link ModelMessagePart}.
+     */
     public static class ModelMessagePartBuilder {
+        /**
+         * Builds and validates a message part.
+         *
+         * @return validated message part
+         * @throws IllegalArgumentException when the selected part type has missing or incompatible
+         *                                  fields
+         */
         public ModelMessagePart build() {
             return uncheckedBuild().validate();
         }

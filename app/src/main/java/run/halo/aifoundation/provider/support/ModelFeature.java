@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 public enum ModelFeature {
     STREAMING("streaming"),
     VISION("vision"),
+    AUDIO_INPUT("audio-input"),
     TOOL_CALL("tool-call"),
     STRUCTURED_OUTPUT("structured-output"),
     REASONING("reasoning");

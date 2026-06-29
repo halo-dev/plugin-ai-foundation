@@ -122,10 +122,15 @@ export function applyUIMessageChunk<METADATA>(
         providerMetadata: chunk.providerMetadata,
       })
       break
-    case 'file':
+    case 'file': {
+      const fileId = chunk.id ?? chunk.fileId
+      if (!fileId) {
+        throw new AIUIProtocolError('File chunk id is required.')
+      }
       upsertPart(state, {
         type: 'file',
-        id: chunk.id,
+        id: fileId,
+        fileId,
         url: chunk.url,
         title: chunk.title,
         mediaType: chunk.mediaType,
@@ -133,6 +138,7 @@ export function applyUIMessageChunk<METADATA>(
         providerMetadata: chunk.providerMetadata,
       })
       break
+    }
     case 'start-step':
       break
     case 'finish-step':
@@ -218,6 +224,9 @@ export function validateUIMessageChunk(chunk: UIMessageChunk): void {
     if (!chunk.title) {
       throw new AIUIProtocolError('Document source chunk title is required.')
     }
+  }
+  if (chunk.type === 'file' && !(chunk.id ?? chunk.fileId)) {
+    throw new AIUIProtocolError('File chunk id is required.')
   }
 }
 

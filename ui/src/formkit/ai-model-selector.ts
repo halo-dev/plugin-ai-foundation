@@ -4,6 +4,7 @@ import {
   ModelOptionUnavailableReasonEnum,
   type ModelOption,
 } from '@/api/generated'
+import { capabilitySummaryLabels } from '@/utils/capabilities'
 
 export function normalizeRequiredFeatures(value?: string | string[]) {
   if (Array.isArray(value)) {
@@ -52,7 +53,12 @@ export function shouldShowModelId(model: ModelOption) {
 }
 
 export function shouldShowModelDetails(model: ModelOption) {
-  return Boolean(model.modelType || model.features?.length || !isModelOptionSelectable(model))
+  return Boolean(
+    model.modelType ||
+    model.features?.length ||
+    capabilitySummaryLabels(model.capabilities).length ||
+    !isModelOptionSelectable(model),
+  )
 }
 
 export function modelFeatureLabel(feature: string): string {
@@ -60,7 +66,9 @@ export function modelFeatureLabel(feature: string): string {
     case ModelOptionFeaturesEnum.Streaming:
       return '流式'
     case ModelOptionFeaturesEnum.Vision:
-      return '视觉'
+      return '图片识别'
+    case ModelOptionFeaturesEnum.AudioInput:
+      return '音频识别'
     case ModelOptionFeaturesEnum.ToolCall:
       return '工具调用'
     case ModelOptionFeaturesEnum.StructuredOutput:
@@ -95,6 +103,8 @@ export function modelOptionUnavailableReasonLabel(reason?: string) {
       return '供应商不存在'
     case ModelOptionUnavailableReasonEnum.ProviderDisabled:
       return '供应商已禁用'
+    case ModelOptionUnavailableReasonEnum.CapabilityUnsupported:
+      return '能力不满足'
     default:
       return '暂不可用'
   }

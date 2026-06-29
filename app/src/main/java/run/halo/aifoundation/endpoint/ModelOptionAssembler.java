@@ -9,33 +9,51 @@ import org.springframework.util.StringUtils;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.service.capability.CapabilityMatchResult;
+import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
+import run.halo.aifoundation.service.capability.ModelCapabilityService;
 
 @Component
 final class ModelOptionAssembler {
+
+    private final ModelCapabilityService capabilityService;
+    private final ModelCapabilityMatcher capabilityMatcher;
+
+    ModelOptionAssembler(ModelCapabilityService capabilityService,
+        ModelCapabilityMatcher capabilityMatcher) {
+        this.capabilityService = capabilityService;
+        this.capabilityMatcher = capabilityMatcher;
+    }
 
     List<ModelOption> toOptions(List<AiModel> models, Map<String, AiProvider> providers,
         Map<String, AiProviderType> providerTypes, ModelOptionQuery query) {
         return models.stream()
             .map(model -> toOption(model, providers.get(model.getSpec().getProviderName()),
-                providerTypes))
+                providerTypes, query))
             .filter(query::matches)
             .sorted(optionComparator())
             .toList();
     }
 
     private ModelOption toOption(AiModel model, AiProvider provider,
-        Map<String, AiProviderType> providerTypes) {
+        Map<String, AiProviderType> providerTypes, ModelOptionQuery query) {
         var spec = model.getSpec();
-        var unavailableReason = unavailableReason(model, provider);
+        var providerType = providerType(provider, providerTypes);
+        var capabilities = capabilityService.effectiveCapabilities(model, providerType);
+        var capabilityMatch = capabilityMatcher.match(capabilities, query.requiredCapabilities());
+        var unavailableReason = unavailableReason(model, provider, capabilityMatch);
         return ModelOption.builder()
             .name(model.getMetadata().getName())
             .modelId(spec.getModelId())
             .displayName(displayName(spec.getDisplayName(), spec.getModelId()))
             .modelType(spec.getModelType())
             .features(spec.getFeatures() == null ? List.of() : spec.getFeatures())
+            .capabilities(capabilities)
+            .capabilitySources(capabilities.getSources())
             .enabled(spec.isEnabled())
             .available(unavailableReason == null)
             .unavailableReason(unavailableReason)
+            .unavailableDetails(unavailableDetails(capabilityMatch))
             .provider(toProviderSummary(spec.getProviderName(), provider, providerTypes))
             .build();
     }
@@ -67,6 +85,11 @@ final class ModelOptionAssembler {
     }
 
     private ModelOptionUnavailableReason unavailableReason(AiModel model, AiProvider provider) {
+        return unavailableReason(model, provider, CapabilityMatchResult.success());
+    }
+
+    private ModelOptionUnavailableReason unavailableReason(AiModel model, AiProvider provider,
+        CapabilityMatchResult capabilityMatch) {
         if (!model.getSpec().isEnabled()) {
             return ModelOptionUnavailableReason.MODEL_DISABLED;
         }
@@ -76,7 +99,28 @@ final class ModelOptionAssembler {
         if (!provider.getSpec().isEnabled()) {
             return ModelOptionUnavailableReason.PROVIDER_DISABLED;
         }
+        if (capabilityMatch != null && !capabilityMatch.matched()) {
+            return ModelOptionUnavailableReason.CAPABILITY_UNSUPPORTED;
+        }
         return null;
+    }
+
+    private List<ModelOptionUnavailableDetail> unavailableDetails(
+        CapabilityMatchResult capabilityMatch) {
+        if (capabilityMatch == null || capabilityMatch.matched()) {
+            return List.of();
+        }
+        return capabilityMatch.issues().stream()
+            .map(issue -> new ModelOptionUnavailableDetail(issue.path(), issue.expected(),
+                issue.actual()))
+            .toList();
+    }
+
+    private AiProviderType providerType(AiProvider provider, Map<String, AiProviderType> types) {
+        if (provider == null || provider.getSpec() == null || types == null) {
+            return null;
+        }
+        return types.get(provider.getSpec().getProviderType());
     }
 
     private String displayName(String displayName, String fallback) {

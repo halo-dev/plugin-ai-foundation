@@ -7,13 +7,16 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.embedding.EmbeddingModel;
+import run.halo.aifoundation.image.ImageGenerationModel;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.rerank.RerankingModel;
 import run.halo.aifoundation.service.audit.AuditedEmbeddingModel;
+import run.halo.aifoundation.service.audit.AuditedImageGenerationModel;
 import run.halo.aifoundation.service.audit.AuditedLanguageModel;
 import run.halo.aifoundation.service.audit.AuditedRerankingModel;
 import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
 import run.halo.aifoundation.service.audit.ModelCallContext;
+import run.halo.aifoundation.service.image.ImageGenerationModelFactory;
 import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.aifoundation.service.rerank.RerankingModelFactory;
 
@@ -25,6 +28,7 @@ public class AiModelServiceImpl implements AiModelService {
     private final LanguageModelFactory languageModelFactory;
     private final EmbeddingModelFactory embeddingModelFactory;
     private final RerankingModelFactory rerankingModelFactory;
+    private final ImageGenerationModelFactory imageGenerationModelFactory;
     private final CallerPluginAuditRecorder callerPluginAuditRecorder;
 
     @Override
@@ -72,6 +76,21 @@ public class AiModelServiceImpl implements AiModelService {
             .map(this::createRerankingModel);
     }
 
+    @Override
+    public Mono<ImageGenerationModel> imageGenerationModel() {
+        return imageGenerationModel(null);
+    }
+
+    @Override
+    public Mono<ImageGenerationModel> imageGenerationModel(String modelName) {
+        var resolvedModelName = StringUtils.hasText(modelName)
+            ? Mono.just(modelName)
+            : modelResolver.defaultImageGenerationModelName();
+        return resolvedModelName
+            .flatMap(name -> modelResolver.resolve(name, ModelType.IMAGE_GENERATION))
+            .map(this::createImageGenerationModel);
+    }
+
     private LanguageModel createLanguageModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.LANGUAGE);
         callerPluginAuditRecorder.recordModelResolution(context);
@@ -91,6 +110,13 @@ public class AiModelServiceImpl implements AiModelService {
         callerPluginAuditRecorder.recordModelResolution(context);
         return new AuditedRerankingModel(rerankingModelFactory.create(resolution), context,
             callerPluginAuditRecorder);
+    }
+
+    private ImageGenerationModel createImageGenerationModel(ModelResolution resolution) {
+        var context = ModelCallContext.from(resolution, ModelType.IMAGE_GENERATION);
+        callerPluginAuditRecorder.recordModelResolution(context);
+        return new AuditedImageGenerationModel(imageGenerationModelFactory.create(resolution),
+            context, callerPluginAuditRecorder);
     }
 
 }

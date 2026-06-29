@@ -259,6 +259,33 @@ Consumer documentation SHALL record chat-handler-adjacent work that remains inte
 - **WHEN** a plugin author reads the UI message stream guide
 - **THEN** the guide states that request body parsing and frontend transport schema will be designed with the future npm helper
 
+### Requirement: Documentation Covers Image Generation Middleware
+Consumer documentation SHALL explain how plugin authors use image generation middleware.
+
+#### Scenario: Model-level middleware usage is documented
+- **WHEN** a plugin author reads the image generation section of `dev/dev.md`
+- **THEN** the guide SHALL show how to wrap an `ImageGenerationModel` with image generation middleware
+- **AND** it SHALL explain that the wrapped value is still used through `generateImage`
+
+#### Scenario: Request-level middleware usage is documented
+- **WHEN** a plugin author reads the image generation section of `dev/dev.md`
+- **THEN** the guide SHALL show how to attach middleware to a single `GenerateImageRequest`
+- **AND** it SHALL explain that request-level middleware is useful for one-off behavior
+
+#### Scenario: Middleware short-circuit behavior is documented
+- **WHEN** a plugin author reads the image generation middleware documentation
+- **THEN** the guide SHALL explain that middleware can continue to the provider, return a generated result directly, or return an error
+- **AND** it SHALL explain that successful short-circuit results still need valid generated image data
+
+#### Scenario: Helper middleware is documented
+- **WHEN** a plugin author reads the image generation middleware documentation
+- **THEN** the guide SHALL show examples for default settings, request mapping, result mapping, and warning append helpers
+
+#### Scenario: Middleware boundaries are documented
+- **WHEN** a plugin author reads the image generation middleware documentation
+- **THEN** the guide SHALL state that built-in middleware does not provide cache storage, safety filtering, quota enforcement, watermarking, or image file lifecycle management
+- **AND** it SHALL direct plugin authors to implement those policies in their own middleware when needed
+
 #### Scenario: Transport cancellation mapping is deferred
 - **WHEN** a plugin author reads the UI message stream guide
 - **THEN** the guide states that HTTP disconnect, frontend stop, abort chunks, and cancellation-source mapping are future work
@@ -751,3 +778,48 @@ Consumer documentation SHALL keep RAG content in a clear sequence and avoid dupl
 - **THEN** RAG-related sections SHALL be ordered consistently
 - **AND** examples SHALL describe how to use the SDK rather than internal implementation state
 
+### Requirement: Documentation covers multimodal language input
+Consumer SDK documentation SHALL explain how plugin authors send image and file inputs to language models.
+
+#### Scenario: Media input examples
+- **WHEN** a plugin author reads `dev/dev.md`
+- **THEN** the guide SHALL show typed Java examples for `ModelMessagePart.image(...)`, `ModelMessagePart.file(...)`, and `DataContent`
+- **AND** it SHALL explain URL input without implying AI Foundation downloads URLs
+
+#### Scenario: Media validation errors
+- **WHEN** a plugin author reads the error-handling documentation
+- **THEN** the guide SHALL explain `InvalidMediaContentException`, `MediaContentTooLargeException`, and `UnsupportedModelCapabilityException`
+- **AND** it SHALL show callers how to surface a recoverable prompt to select another model or fix media input
+
+### Requirement: Documentation extends aiModelSelector capability filtering
+Consumer SDK documentation SHALL describe capability filtering inside the existing `aiModelSelector` section.
+
+#### Scenario: Structured requiredCapabilities example
+- **WHEN** a plugin author reads the `aiModelSelector` section
+- **THEN** the guide SHALL show structured `requiredCapabilities` examples for visual language models and image generation models
+- **AND** it SHALL keep `requiredFeatures` documented as the coarse feature filter
+
+#### Scenario: Selector empty state explanation
+- **WHEN** a plugin author reads the `aiModelSelector` section
+- **THEN** the guide SHALL explain that no matching models can result from missing provider configuration, disabled models, or unsatisfied capabilities
+
+### Requirement: Documentation covers image generation
+Consumer SDK documentation SHALL explain the image generation model workflow.
+
+#### Scenario: Image generation SDK example
+- **WHEN** a plugin author reads `dev/dev.md`
+- **THEN** the guide SHALL show how to resolve `imageGenerationModel()` or `imageGenerationModel(modelName)`
+- **AND** it SHALL show how to call `generateImage` with prompt, images, mask, and result handling
+
+#### Scenario: Generated file handling
+- **WHEN** a plugin author reads the image generation section
+- **THEN** the guide SHALL explain that generated files may contain URL or base64 data
+- **AND** it SHALL state that consumer plugins decide whether and how to save generated files
+
+### Requirement: Documentation excludes third-party SDK comparison language
+Consumer documentation SHALL describe Halo AI Foundation contracts without third-party compatibility or comparison framing.
+
+#### Scenario: Consumer guide wording
+- **WHEN** consumer-facing docs are updated for multimodal or image generation features
+- **THEN** the docs SHALL use Halo AI Foundation type names and behavior
+- **AND** they SHALL NOT describe the API as matching, emulating, or being compatible with a third-party SDK

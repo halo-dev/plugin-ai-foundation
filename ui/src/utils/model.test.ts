@@ -8,6 +8,8 @@ import {
   DiscoveredModelItemAdapterTypeEnum,
   DiscoveredModelItemConfidenceEnum,
   DiscoveredModelItemSourceEnum,
+  LanguageCapabilityInputSourcesEnum,
+  ModelCapabilitySourcesLanguageEnum,
   ProviderTypeInfoSupportedFeaturesEnum,
   ProviderTypeInfoSupportedModelTypesEnum,
 } from '@/api/generated'
@@ -83,6 +85,79 @@ describe('createModelFromDiscovered', () => {
       modelType: AiModelSpecModelTypeEnum.ImageGeneration,
       features: [],
     })
+  })
+
+  it('persists discovered capabilities when importing a model', () => {
+    expect(
+      createModelFromDiscovered(
+        'openai-prod',
+        discoveredModel(
+          'vision-model',
+          AiModelSpecModelTypeEnum.Language,
+          [AiModelSpecFeaturesEnum.Vision],
+          DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+          {
+            capabilities: {
+              language: {
+                imageInput: true,
+                inputMediaTypes: ['image/*'],
+                inputSources: [LanguageCapabilityInputSourcesEnum.Data],
+              },
+              sources: {
+                language: ModelCapabilitySourcesLanguageEnum.Remote,
+              },
+            },
+            capabilitySources: {
+              language: ModelCapabilitySourcesLanguageEnum.Remote,
+            },
+          },
+        ),
+      ).spec,
+    ).toMatchObject({
+      capabilities: {
+        language: {
+          imageInput: true,
+          inputMediaTypes: ['image/*'],
+          inputSources: [LanguageCapabilityInputSourcesEnum.Data],
+        },
+        sources: {
+          language: ModelCapabilitySourcesLanguageEnum.Remote,
+        },
+      },
+      capabilitySources: {
+        language: ModelCapabilitySourcesLanguageEnum.Remote,
+      },
+    })
+  })
+
+  it('drops stale discovered capability domains when admin changes model type before import', () => {
+    expect(
+      createModelFromDiscovered(
+        'openai-prod',
+        discoveredModel(
+          'vision-model',
+          AiModelSpecModelTypeEnum.Language,
+          [AiModelSpecFeaturesEnum.Vision],
+          DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+          {
+            capabilities: {
+              language: {
+                imageInput: true,
+                inputMediaTypes: ['image/*'],
+                inputSources: [LanguageCapabilityInputSourcesEnum.Data],
+              },
+            },
+            capabilitySources: {
+              language: ModelCapabilitySourcesLanguageEnum.Remote,
+            },
+          },
+        ),
+        {
+          modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+          features: [],
+        },
+      ).spec,
+    ).not.toHaveProperty('capabilities')
   })
 })
 
@@ -260,6 +335,8 @@ function discoveredModel(
   evidence: {
     source?: DiscoveredModelItemSourceEnum
     confidence?: DiscoveredModelItemConfidenceEnum
+    capabilities?: AiModel['spec']['capabilities']
+    capabilitySources?: AiModel['spec']['capabilitySources']
   } = {},
 ) {
   return {
@@ -271,5 +348,7 @@ function discoveredModel(
     adapterType,
     source: evidence.source || DiscoveredModelItemSourceEnum.Rule,
     confidence: evidence.confidence || DiscoveredModelItemConfidenceEnum.Low,
+    capabilities: evidence.capabilities,
+    capabilitySources: evidence.capabilitySources,
   }
 }

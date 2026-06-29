@@ -27,6 +27,7 @@ export const aiModelSelectorInput = createInput<unknown>(
       'enabled',
       'available',
       'requiredFeatures',
+      'requiredCapabilities',
       'placeholder',
       'searchPlaceholder',
       'clearable',

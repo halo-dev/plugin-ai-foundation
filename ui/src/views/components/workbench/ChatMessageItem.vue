@@ -1,12 +1,18 @@
 <script lang="ts" setup>
 import { renderMarkdown } from '@/utils/markdown'
-import type { WorkbenchMessage, WorkbenchSourceReference } from '@/utils/model-test-workbench'
+import type {
+  WorkbenchFileReference,
+  WorkbenchMessage,
+  WorkbenchSourceReference,
+} from '@/utils/model-test-workbench'
 import { copyToClipboard } from '@/utils/model-test-workbench'
 import { VTag } from '@halo-dev/components'
 import { computed, ref } from 'vue'
 import RiCheckLine from '~icons/ri/check-line'
 import RiCpuLine from '~icons/ri/cpu-line'
+import RiFileLine from '~icons/ri/file-line'
 import RiFileCopyLine from '~icons/ri/file-copy-line'
+import RiImageLine from '~icons/ri/image-line'
 import RiRestartLine from '~icons/ri/restart-line'
 import RiUserLine from '~icons/ri/user-line'
 
@@ -44,6 +50,7 @@ const urlSourceReferences = computed(() => sourceReferences.value.filter((source
 const documentSourceReferences = computed(() =>
   sourceReferences.value.filter((source) => !source.url),
 )
+const fileReferences = computed(() => props.message.files || [])
 
 async function handleCopy() {
   const ok = await copyToClipboard(props.message.content)
@@ -108,6 +115,27 @@ function sourceSubtitle(source: WorkbenchSourceReference) {
     return source.url || 'URL'
   }
   return [source.filename, source.mediaType].filter(Boolean).join(' · ') || 'Document'
+}
+
+function fileTitle(file: WorkbenchFileReference) {
+  return file.title || file.fileId || file.id || 'File'
+}
+
+function fileSubtitle(file: WorkbenchFileReference) {
+  return file.mediaType || (file.url ? 'URL' : 'File')
+}
+
+function filePreviewUrl(file: WorkbenchFileReference) {
+  if (!file.mediaType?.startsWith('image/')) {
+    return undefined
+  }
+  if (file.url) {
+    return file.url
+  }
+  if (typeof file.data === 'string' && file.data) {
+    return `data:${file.mediaType};base64,${file.data}`
+  }
+  return undefined
 }
 </script>
 
@@ -334,7 +362,7 @@ function sourceSubtitle(source: WorkbenchSourceReference) {
           </ul>
         </div>
 
-        <div v-if="message.role === 'user'" class=":uno: whitespace-pre-wrap">
+        <div v-if="message.role === 'user' && message.content" class=":uno: whitespace-pre-wrap">
           {{ message.content }}
         </div>
         <div
@@ -345,6 +373,51 @@ function sourceSubtitle(source: WorkbenchSourceReference) {
             renderMarkdown(message.content || (message.state === 'streaming' ? '思考中...' : ''))
           "
         />
+
+        <div
+          v-if="fileReferences.length"
+          class=":uno: grid gap-2"
+          :class="message.content ? ':uno: mt-3' : ''"
+        >
+          <div
+            v-for="file in fileReferences"
+            :key="file.fileId || file.id || fileTitle(file)"
+            class=":uno: overflow-hidden border rounded-md bg-white/70 text-left"
+            :class="{
+              ':uno: border-slate-700/60 bg-white/10': message.role === 'user',
+              ':uno: border-slate-200': message.role === 'assistant',
+            }"
+          >
+            <img
+              v-if="filePreviewUrl(file)"
+              :src="filePreviewUrl(file)"
+              :alt="fileTitle(file)"
+              class=":uno: max-h-64 w-full bg-slate-950/5 object-contain"
+            />
+            <div class=":uno: flex items-center gap-2 px-3 py-2">
+              <span
+                class=":uno: size-7 flex flex-none items-center justify-center rounded-md"
+                :class="
+                  message.role === 'user'
+                    ? ':uno: bg-white/10 text-slate-100'
+                    : ':uno: bg-slate-100 text-slate-600'
+                "
+              >
+                <RiImageLine v-if="file.mediaType?.startsWith('image/')" class=":uno: size-3.5" />
+                <RiFileLine v-else class=":uno: size-3.5" />
+              </span>
+              <div class=":uno: min-w-0">
+                <div class=":uno: truncate text-xs font-medium">{{ fileTitle(file) }}</div>
+                <div
+                  class=":uno: truncate text-[11px]"
+                  :class="message.role === 'user' ? ':uno: text-slate-300' : ':uno: text-slate-500'"
+                >
+                  {{ fileSubtitle(file) }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div
           v-if="message.role === 'assistant' && sourceReferences.length"

@@ -280,7 +280,9 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                     dm.confidence(),
                     dm.adapterType() != null
                         ? dm.adapterType()
-                        : providerType.recommendAdapterType(dm).orElse(null)
+                        : providerType.recommendAdapterType(dm).orElse(null),
+                    dm.capabilities(),
+                    dm.capabilitySources()
                 ))
                 .toList()
             )

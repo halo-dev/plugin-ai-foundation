@@ -67,7 +67,7 @@ public final class UIMessageTransportCodec {
                 stringValue(map.get("sourceId")), stringValue(map.get("mediaType")),
                 stringValue(map.get("title")), stringValue(map.get("filename")),
                 objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.FILE -> UIMessageChunks.file(stringValue(map.get("fileId")),
+            case UIMessageChunkType.FILE -> UIMessageChunks.file(fileIdValue(map),
                 stringValue(map.get("url")), stringValue(map.get("title")),
                 stringValue(map.get("mediaType")), map.get("data"),
                 objectMap(map.get("providerMetadata")));
@@ -300,7 +300,7 @@ public final class UIMessageTransportCodec {
                 stringValue(map.get("sourceId")), stringValue(map.get("mediaType")),
                 stringValue(map.get("title")), stringValue(map.get("filename")),
                 objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.FILE -> UIMessageParts.file(stringValue(map.get("fileId")),
+            case UIMessageChunkType.FILE -> UIMessageParts.file(fileIdValue(map),
                 stringValue(map.get("url")), stringValue(map.get("title")),
                 stringValue(map.get("mediaType")), map.get("data"),
                 objectMap(map.get("providerMetadata")));
@@ -544,6 +544,11 @@ public final class UIMessageTransportCodec {
 
     private static String stringValue(Object value) {
         return value != null ? String.valueOf(value) : null;
+    }
+
+    private static String fileIdValue(Map<String, Object> map) {
+        var fileId = stringValue(map.get("fileId"));
+        return fileId != null ? fileId : stringValue(map.get("id"));
     }
 
     private static Integer integerValue(Object value) {

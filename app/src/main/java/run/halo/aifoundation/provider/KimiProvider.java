@@ -6,8 +6,15 @@ import java.util.Set;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.capability.CapabilitySource;
+import run.halo.aifoundation.capability.InputSource;
+import run.halo.aifoundation.capability.LanguageCapability;
+import run.halo.aifoundation.capability.ModelCapabilities;
+import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
@@ -98,8 +105,7 @@ public class KimiProvider extends AbstractAiProviderType {
                 return List.<DiscoveredModel>of();
             }
             return discoveredModelsFromNodes(data, "id",
-                node -> remoteDiscoveredModel(stringValue(node, "id"), ModelType.LANGUAGE,
-                    languageFeatures(node), AdapterType.OPENAI_CHAT));
+                this::remoteLanguageModel);
         });
     }
 
@@ -120,5 +126,29 @@ public class KimiProvider extends AbstractAiProviderType {
             features.add(ModelFeature.REASONING);
         }
         return Set.copyOf(features);
+    }
+
+    private DiscoveredModel remoteLanguageModel(java.util.Map<?, ?> node) {
+        var modelId = stringValue(node, "id");
+        var supportsImage = booleanValue(node, "supports_image_in");
+        return new DiscoveredModel(
+            modelId,
+            modelId,
+            ModelType.LANGUAGE,
+            languageFeatures(node),
+            AdapterType.OPENAI_CHAT,
+            DiscoverySource.REMOTE,
+            DiscoveryConfidence.HIGH,
+            supportsImage ? ModelCapabilities.builder()
+                .language(LanguageCapability.builder()
+                    .imageInput(true)
+                    .inputMediaTypes(List.of("image/*"))
+                    .inputSources(List.of(InputSource.DATA))
+                    .build())
+                .build() : null,
+            supportsImage ? ModelCapabilitySources.builder()
+                .language(CapabilitySource.REMOTE)
+                .build() : ModelCapabilitySources.unknown()
+        );
     }
 }

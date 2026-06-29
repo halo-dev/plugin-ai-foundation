@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +22,8 @@ import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
+import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -36,7 +41,7 @@ class ModelOptionConsoleEndpointTest {
             .thenReturn(Map.of("openai", openAiType, "ollama", ollamaType));
 
         var endpoint = new ModelOptionConsoleEndpoint(client, providerClientCache,
-            new ModelOptionAssembler());
+            new ModelOptionAssembler(new ModelCapabilityService(), new ModelCapabilityMatcher()));
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();
@@ -239,6 +244,64 @@ class ModelOptionConsoleEndpointTest {
         webTestClient.get().uri("/model-options?requiredFeatures=")
             .exchange()
             .expectStatus().isBadRequest();
+
+        webTestClient.get().uri(capabilitiesUri("{"))
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"language":{"unknown":true}}
+            """))
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"language":{"inputSources":["path"]}}
+            """))
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"language":{"inputMediaTypes":["image"]}}
+            """))
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void listModelOptions_filtersByStructuredCapabilitiesAndExposesUnavailableDetails() {
+        var vision = model("vision", "openai-prod", "gpt-4o", "Vision",
+            ModelType.LANGUAGE, true, List.of(ModelFeature.STREAMING, ModelFeature.VISION));
+        mockData(
+            List.of(
+                vision,
+                model("text", "openai-prod", "gpt-4", "Text",
+                    ModelType.LANGUAGE, true, List.of(ModelFeature.STREAMING))
+            ),
+            List.of(provider("openai-prod", "OpenAI", "openai", true,
+                AiProvider.AiProviderStatus.Phase.OK))
+        );
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"language":{"imageInput":true,"inputMediaTypes":["image/png"],"inputSources":["data"]}}
+            """))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$[0].name").isEqualTo("vision")
+            .jsonPath("$[0].capabilities.language.imageInput").isEqualTo(true)
+            .jsonPath("$[0].capabilities.language.inputMediaTypes[0]").isEqualTo("image/*")
+            .jsonPath("$[0].capabilities.language.inputSources[0]").isEqualTo("data");
+
+        webTestClient.get().uri(capabilitiesUri("available=false", """
+            {"language":{"imageInput":true,"inputMediaTypes":["image/png"],"inputSources":["data"]}}
+            """))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$[0].name").isEqualTo("text")
+            .jsonPath("$[0].unavailableReason").isEqualTo("capability-unsupported")
+            .jsonPath("$[0].unavailableDetails[0].path").isEqualTo("language.imageInput");
     }
 
     private void mockData(List<AiModel> models, List<AiProvider> providers) {
@@ -246,6 +309,19 @@ class ModelOptionConsoleEndpointTest {
             .thenReturn(Flux.fromIterable(models));
         when(client.listAll(eq(AiProvider.class), any(), any()))
             .thenReturn(Flux.fromIterable(providers));
+    }
+
+    private URI capabilitiesUri(String requiredCapabilities) {
+        return capabilitiesUri(null, requiredCapabilities);
+    }
+
+    private URI capabilitiesUri(String prefixQuery, String requiredCapabilities) {
+        var encoded = URLEncoder.encode(requiredCapabilities, StandardCharsets.UTF_8);
+        var query = "requiredCapabilities=" + encoded;
+        if (prefixQuery != null && !prefixQuery.isBlank()) {
+            query = prefixQuery + "&" + query;
+        }
+        return URI.create("/model-options?" + query);
     }
 
     private ModelOption option(List<ModelOption> options, String name) {

@@ -10,6 +10,8 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
+import run.halo.aifoundation.capability.CapabilitySource;
+import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
@@ -35,7 +37,7 @@ class AiHubMixProviderTest {
 
             StepVerifier.create(providerType.discoverModels(provider(baseUrl), "sk-test"))
                 .assertNext(models -> {
-                    assertThat(models).hasSize(2);
+                    assertThat(models).hasSize(3);
                     var chat = models.get(0);
                     assertThat(chat.modelId()).isEqualTo("gpt-4o");
                     assertThat(chat.modelType()).isEqualTo(ModelType.LANGUAGE);
@@ -48,6 +50,13 @@ class AiHubMixProviderTest {
                     );
                     assertThat(chat.source()).isEqualTo(DiscoverySource.REMOTE);
                     assertThat(chat.confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+                    assertThat(chat.capabilities().getLanguage().getImageInput()).isTrue();
+                    assertThat(chat.capabilities().getLanguage().getInputMediaTypes())
+                        .containsExactly("image/*");
+                    assertThat(chat.capabilities().getLanguage().getInputSources())
+                        .containsExactly(InputSource.DATA);
+                    assertThat(chat.capabilitySources().getLanguage())
+                        .isEqualTo(CapabilitySource.REMOTE);
 
                     var embedding = models.get(1);
                     assertThat(embedding.modelId()).isEqualTo("text-embedding-3-small");
@@ -56,6 +65,15 @@ class AiHubMixProviderTest {
                     assertThat(embedding.features()).isEmpty();
                     assertThat(embedding.source()).isEqualTo(DiscoverySource.REMOTE);
                     assertThat(embedding.confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+
+                    var image = models.get(2);
+                    assertThat(image.modelId()).isEqualTo("image-generator");
+                    assertThat(image.modelType()).isEqualTo(ModelType.IMAGE_GENERATION);
+                    assertThat(image.adapterType()).isEqualTo(AdapterType.OPENAI_IMAGE);
+                    assertThat(image.capabilities().getImageGeneration().getTextToImage())
+                        .isTrue();
+                    assertThat(image.capabilitySources().getImageGeneration())
+                        .isEqualTo(CapabilitySource.REMOTE);
                 })
                 .verifyComplete();
 
@@ -116,6 +134,10 @@ class AiHubMixProviderTest {
                       "model_id": "text-embedding-3-small",
                       "types": ["embedding"],
                       "features": []
+                    },
+                    {
+                      "model_id": "image-generator",
+                      "types": ["t2i"]
                     },
                     {
                       "model_id": "image-only",

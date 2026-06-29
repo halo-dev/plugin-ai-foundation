@@ -18,6 +18,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageOptions;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.ReactorClientHttpRequestFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -37,6 +39,7 @@ import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingModel;
@@ -112,6 +115,18 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             modelId, customHeaders), webClientBuilder(provider));
     }
 
+    protected ProviderImageGenerationClient buildOpenAiCompatibleImageGenerationClient(
+        AiProvider provider, String apiKey, String modelId) {
+        return buildOpenAiCompatibleImageGenerationClient(provider, apiKey, modelId, Map.of());
+    }
+
+    protected ProviderImageGenerationClient buildOpenAiCompatibleImageGenerationClient(
+        AiProvider provider, String apiKey, String modelId, Map<String, String> customHeaders) {
+        return new OpenAiCompatibleImageGenerationClient(
+            openAiImageOptions(provider, apiKey, modelId, customHeaders),
+            webClientBuilder(provider));
+    }
+
     protected LanguageModelProviderOptions openAiCompatibleLanguageModelProviderOptions(
         ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
@@ -156,6 +171,12 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             .model(modelId);
         applyOpenAiClientOptions(builder, provider, customHeaders);
         return builder.build();
+    }
+
+    protected OpenAiCompatibleImageOptions openAiImageOptions(AiProvider provider, String apiKey,
+        String modelId, Map<String, String> customHeaders) {
+        return new OpenAiCompatibleImageOptions(getProviderType(), resolveBaseUrl(provider),
+            apiKey, modelId, customHeaders);
     }
 
     private void applyOpenAiClientOptions(OpenAiCompatibleChatOptions.Builder builder, AiProvider provider,
