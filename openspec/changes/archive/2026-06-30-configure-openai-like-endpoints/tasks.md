@@ -26,4 +26,4 @@
 - [x] 4.1 Run `./gradlew compileJava`.
 - [x] 4.2 Run focused backend tests covering provider validation and OpenAI-compatible endpoint resolution.
 - [x] 4.3 Run `cd ui && pnpm type-check`.
-- [ ] 4.4 Inspect the provider form in the UI to confirm field ordering and preview behavior.
+- [x] 4.4 Inspect the provider form in the UI to confirm field ordering and preview behavior.
