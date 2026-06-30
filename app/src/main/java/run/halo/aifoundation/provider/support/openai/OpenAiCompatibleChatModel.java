@@ -702,7 +702,14 @@ public class OpenAiCompatibleChatModel implements ChatModel {
         while (baseUrl.endsWith("/")) {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
-        return baseUrl + CHAT_COMPLETIONS_PATH;
+        return baseUrl + endpointPath(options.getEndpointPath(), CHAT_COMPLETIONS_PATH);
+    }
+
+    private String endpointPath(String configuredPath, String defaultPath) {
+        if (configuredPath == null || configuredPath.isBlank()) {
+            return defaultPath;
+        }
+        return configuredPath.startsWith("/") ? configuredPath : "/" + configuredPath;
     }
 
     private void putIfPresent(Map<String, Object> target, String key, Object value) {

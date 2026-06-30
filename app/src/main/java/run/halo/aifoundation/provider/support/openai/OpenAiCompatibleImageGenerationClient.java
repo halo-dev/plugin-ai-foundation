@@ -183,7 +183,15 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
     }
 
     private String imagesGenerationsUrl() {
-        return trimTrailingSlash(options.baseUrl()) + IMAGES_GENERATIONS_PATH;
+        return trimTrailingSlash(options.baseUrl())
+            + endpointPath(options.endpointPath(), IMAGES_GENERATIONS_PATH);
+    }
+
+    private String endpointPath(String configuredPath, String defaultPath) {
+        if (configuredPath == null || configuredPath.isBlank()) {
+            return defaultPath;
+        }
+        return configuredPath.startsWith("/") ? configuredPath : "/" + configuredPath;
     }
 
     private String responseFormat(ImageResponseFormat responseFormat) {

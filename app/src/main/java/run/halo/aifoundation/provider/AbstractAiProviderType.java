@@ -49,7 +49,10 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 public abstract class AbstractAiProviderType implements AiProviderType {
 
     private static final int DISCOVERY_MAX_IN_MEMORY_SIZE = 8 * 1024 * 1024;
-    private static final String COMPLETIONS_PATH = "/chat/completions";
+    protected static final String COMPLETIONS_PATH = "/chat/completions";
+    protected static final String EMBEDDINGS_PATH = "/embeddings";
+    protected static final String RERANK_PATH = "/rerank";
+    protected static final String IMAGES_GENERATIONS_PATH = "/images/generations";
 
     @Override
     public String getCompletionsPath() {
@@ -157,6 +160,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         String modelId, Map<String, String> customHeaders) {
         var builder = OpenAiCompatibleChatOptions.builder();
         builder.baseUrl(resolveBaseUrl(provider))
+            .endpointPath(openAiCompatibleChatEndpointPath(provider))
             .apiKey(apiKey)
             .model(modelId);
         applyOpenAiClientOptions(builder, provider, customHeaders);
@@ -167,6 +171,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         String modelId, Map<String, String> customHeaders) {
         var builder = OpenAiCompatibleEmbeddingOptions.builder();
         builder.baseUrl(resolveBaseUrl(provider))
+            .endpointPath(openAiCompatibleEmbeddingEndpointPath(provider))
             .apiKey(apiKey)
             .model(modelId);
         applyOpenAiClientOptions(builder, provider, customHeaders);
@@ -176,7 +181,43 @@ public abstract class AbstractAiProviderType implements AiProviderType {
     protected OpenAiCompatibleImageOptions openAiImageOptions(AiProvider provider, String apiKey,
         String modelId, Map<String, String> customHeaders) {
         return new OpenAiCompatibleImageOptions(getProviderType(), resolveBaseUrl(provider),
-            apiKey, modelId, customHeaders);
+            openAiCompatibleImageEndpointPath(provider), apiKey, modelId, customHeaders);
+    }
+
+    protected String openAiCompatibleChatEndpointPath(AiProvider provider) {
+        return openAiCompatibleEndpointPath(provider, provider.getSpec().getChatEndpointPath(),
+            getChatEndpointPath(), COMPLETIONS_PATH);
+    }
+
+    protected String openAiCompatibleEmbeddingEndpointPath(AiProvider provider) {
+        return openAiCompatibleEndpointPath(provider, provider.getSpec().getEmbeddingEndpointPath(),
+            getEmbeddingEndpointPath(), EMBEDDINGS_PATH);
+    }
+
+    protected String openAiCompatibleRerankEndpointPath(AiProvider provider) {
+        return openAiCompatibleEndpointPath(provider, provider.getSpec().getRerankEndpointPath(),
+            getRerankEndpointPath(), RERANK_PATH);
+    }
+
+    protected String openAiCompatibleImageEndpointPath(AiProvider provider) {
+        return openAiCompatibleEndpointPath(provider, provider.getSpec().getImageEndpointPath(),
+            getImageEndpointPath(), IMAGES_GENERATIONS_PATH);
+    }
+
+    protected boolean supportsEndpointOverrides() {
+        return false;
+    }
+
+    private String openAiCompatibleEndpointPath(AiProvider provider, String configuredPath,
+        String providerDefaultPath, String fallbackPath) {
+        var path = supportsEndpointOverrides() ? configuredPath : null;
+        if (path == null || path.isBlank()) {
+            path = providerDefaultPath;
+        }
+        if (path == null || path.isBlank()) {
+            path = fallbackPath;
+        }
+        return path.startsWith("/") ? path : "/" + path;
     }
 
     private void applyOpenAiClientOptions(OpenAiCompatibleChatOptions.Builder builder, AiProvider provider,

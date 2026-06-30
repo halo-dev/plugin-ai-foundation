@@ -10,6 +10,10 @@ export interface ProviderFormState {
   displayName: string
   enabled: boolean
   baseUrl?: string
+  chatEndpointPath?: string
+  embeddingEndpointPath?: string
+  rerankEndpointPath?: string
+  imageEndpointPath?: string
   apiKeySecretName?: string
   proxyHost?: string
   proxyPort?: number

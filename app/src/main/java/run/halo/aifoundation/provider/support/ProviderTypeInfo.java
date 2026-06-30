@@ -25,6 +25,14 @@ public class ProviderTypeInfo {
     private String defaultBaseUrl;
     @Nullable
     private String completionsPath;
+    @Nullable
+    private String chatEndpointPath;
+    @Nullable
+    private String embeddingEndpointPath;
+    @Nullable
+    private String rerankEndpointPath;
+    @Nullable
+    private String imageEndpointPath;
     private List<ModelType> supportedModelTypes;
     private List<ModelFeature> supportedFeatures;
     private List<AdapterType> supportedAdapterTypes;

@@ -14,8 +14,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.test.StepVerifier;
+import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.OpenAiLikeProvider;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
+import run.halo.app.extension.Metadata;
 
 class ProviderRerankingClientTest {
 
@@ -224,6 +227,42 @@ class ProviderRerankingClientTest {
     }
 
     @Test
+    void openAiLikeProvider_usesConfiguredRerankEndpoint() throws Exception {
+        var capture = new AtomicReference<RequestCapture>();
+        var server = server(exchange -> {
+            capture.set(capture(exchange));
+            respond(exchange, 200, """
+                {"id":"openailike-1","results":[{"index":0,"relevance_score":0.81}]}
+                """);
+        });
+
+        try {
+            var providerType = new OpenAiLikeProvider();
+            var provider = provider(baseUrl(server), "compatible/rerank");
+            var client = providerType.buildRerankingClient(provider, "sk-test", "rerank-model");
+
+            StepVerifier.create(client.rerank(request("openailike")))
+                .assertNext(response -> assertThat(response.getResponse().getId())
+                    .isEqualTo("openailike-1"))
+                .verifyComplete();
+
+            assertThat(providerType.getSupportedAdapterTypes())
+                .contains(run.halo.aifoundation.provider.support.AdapterType.RERANK);
+            assertThat(capture.get().path()).isEqualTo("/compatible/rerank");
+            assertThat(capture.get().authorization()).isEqualTo("Bearer sk-test");
+            assertThat(capture.get().body())
+                .contains("\"model\":\"rerank-model\"")
+                .contains("\"query\":\"query\"")
+                .contains("\"documents\":[\"first\",\"second\"]")
+                .contains("\"top_n\":2")
+                .contains("\"return_documents\":true")
+                .contains("\"return_raw_scores\":true");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void clientReportsProviderHttpErrors() throws Exception {
         var server = server(exchange -> respond(exchange, 429, "{\"error\":\"too many\"}"));
 
@@ -265,6 +304,19 @@ class ProviderRerankingClientTest {
 
     private String baseUrl(HttpServer server) {
         return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    private AiProvider provider(String baseUrl, String rerankEndpointPath) {
+        var provider = new AiProvider();
+        var metadata = new Metadata();
+        metadata.setName("openailike");
+        provider.setMetadata(metadata);
+        var spec = new AiProvider.AiProviderSpec();
+        spec.setProviderType("openailike");
+        spec.setBaseUrl(baseUrl);
+        spec.setRerankEndpointPath(rerankEndpointPath);
+        provider.setSpec(spec);
+        return provider;
     }
 
     private RequestCapture capture(HttpExchange exchange) throws IOException {

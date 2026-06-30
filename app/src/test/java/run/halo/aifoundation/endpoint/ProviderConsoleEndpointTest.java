@@ -79,7 +79,8 @@ class ProviderConsoleEndpointTest {
     @Test
     void create_validProvider_returns200() {
         var p = provider("new-provider", "openai");
-        when(client.create(any(AiProvider.class))).thenReturn(Mono.just(p));
+        when(client.create(any(AiProvider.class)))
+            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         webTestClient.post().uri("/providers")
             .contentType(MediaType.APPLICATION_JSON)
@@ -97,7 +98,8 @@ class ProviderConsoleEndpointTest {
         var p = provider("new-provider", "openai");
         p.getSpec().setProxyHost("127.0.0.1");
         p.getSpec().setProxyPort(7890);
-        when(client.create(any(AiProvider.class))).thenReturn(Mono.just(p));
+        when(client.create(any(AiProvider.class)))
+            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         webTestClient.post().uri("/providers")
             .contentType(MediaType.APPLICATION_JSON)
@@ -110,6 +112,43 @@ class ProviderConsoleEndpointTest {
                 assertThat(spec.getProxyHost()).isEqualTo("127.0.0.1");
                 assertThat(spec.getProxyPort()).isEqualTo(7890);
             });
+    }
+
+    @Test
+    void create_endpointPaths_normalizesRelativePaths() {
+        var p = provider("new-provider", "openai");
+        p.getSpec().setChatEndpointPath("compatible/chat");
+        p.getSpec().setEmbeddingEndpointPath("/compatible/embeddings");
+        p.getSpec().setRerankEndpointPath("compatible/rerank");
+        p.getSpec().setImageEndpointPath(" ");
+        when(client.create(any(AiProvider.class)))
+            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(AiProvider.class)
+            .consumeWith(response -> {
+                var spec = response.getResponseBody().getSpec();
+                assertThat(spec.getChatEndpointPath()).isEqualTo("/compatible/chat");
+                assertThat(spec.getEmbeddingEndpointPath()).isEqualTo("/compatible/embeddings");
+                assertThat(spec.getRerankEndpointPath()).isEqualTo("/compatible/rerank");
+                assertThat(spec.getImageEndpointPath()).isNull();
+            });
+    }
+
+    @Test
+    void create_absoluteEndpointPath_returns400() {
+        var p = provider("bad-provider", "openai");
+        p.getSpec().setRerankEndpointPath("https://example.com/rerank");
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
