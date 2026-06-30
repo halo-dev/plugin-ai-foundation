@@ -9,14 +9,11 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
-import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 import run.halo.aifoundation.provider.support.image.ModelArkImageGenerationClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiThinkingOptions;
-import run.halo.aifoundation.provider.support.rerank.StandardRerankingClient;
 
 @Component
 public class DouBaoProvider extends AbstractAiProviderType {
@@ -72,7 +69,7 @@ public class DouBaoProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK,
+        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
             AdapterType.DOUBAO_IMAGE);
     }
 
@@ -84,13 +81,6 @@ public class DouBaoProvider extends AbstractAiProviderType {
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         return buildOpenAiCompatibleEmbeddingModel(provider, apiKey, modelId);
-    }
-
-    @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
-        return new StandardRerankingClient(getProviderType(), trimTrailingSlash(resolveBaseUrl(provider)),
-            "/rerank", modelId, apiKey, webClientBuilder(provider));
     }
 
     @Override
@@ -113,17 +103,4 @@ public class DouBaoProvider extends AbstractAiProviderType {
             OpenAiThinkingOptions::applyThinkingType);
     }
 
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder()
-            .providerOptionsSupported(true)
-            .build();
-    }
-
-    private String trimTrailingSlash(String value) {
-        if (value == null || value.isBlank() || !value.endsWith("/")) {
-            return value;
-        }
-        return value.substring(0, value.length() - 1);
-    }
 }

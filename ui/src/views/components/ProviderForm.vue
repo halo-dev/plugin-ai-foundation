@@ -35,6 +35,10 @@ const providerTypeOptions = computed(() => {
 const providerType = shallowRef(props.formState?.providerType)
 const displayName = shallowRef(props.formState?.displayName)
 const baseUrl = shallowRef(props.formState?.baseUrl)
+const chatEndpointPath = shallowRef(props.formState?.chatEndpointPath)
+const embeddingEndpointPath = shallowRef(props.formState?.embeddingEndpointPath)
+const rerankEndpointPath = shallowRef(props.formState?.rerankEndpointPath)
+const imageEndpointPath = shallowRef(props.formState?.imageEndpointPath)
 
 const selectedProviderType = computed(() => {
   return providerTypes.value?.find((t) => t.providerType === providerType.value)
@@ -53,6 +57,8 @@ const requiresBaseUrl = computed(() => {
   return selectedProviderType.value?.requiresBaseUrl ?? false
 })
 
+const isOpenAiLike = computed(() => providerType.value === 'openailike')
+
 const baseUrlPlaceholder = computed(() => {
   return selectedProviderType.value?.defaultBaseUrl || 'https://api.example.com/v1'
 })
@@ -63,17 +69,52 @@ const resolvedBaseUrl = computed(() => {
   return (baseUrl.value || selectedProviderType.value?.defaultBaseUrl || '').trim()
 })
 
+const previewBaseUrl = computed(() => {
+  return (resolvedBaseUrl.value || baseUrlPlaceholder.value || '').trim()
+})
+
 const completionsUrlPreview = computed(() => {
-  const completionsPath = selectedProviderType.value?.completionsPath
-  if (!resolvedBaseUrl.value || !completionsPath) {
+  const completionsPath =
+    selectedProviderType.value?.chatEndpointPath || selectedProviderType.value?.completionsPath
+  if (!previewBaseUrl.value || !completionsPath) {
     return ''
   }
-  return joinUrl(resolvedBaseUrl.value, completionsPath)
+  return joinUrl(previewBaseUrl.value, completionsPath)
 })
 
 const baseUrlHelp = computed(() => {
   return `留空使用默认地址，自定义时可以填平台文档里的基础地址，当前接口预览：${completionsUrlPreview.value}`
 })
+
+const chatEndpointPlaceholder = computed(() => {
+  return selectedProviderType.value?.chatEndpointPath || '/chat/completions'
+})
+
+const embeddingEndpointPlaceholder = computed(() => {
+  return selectedProviderType.value?.embeddingEndpointPath || '/embeddings'
+})
+
+const rerankEndpointPlaceholder = computed(() => {
+  return selectedProviderType.value?.rerankEndpointPath || '/rerank'
+})
+
+const imageEndpointPlaceholder = computed(() => {
+  return selectedProviderType.value?.imageEndpointPath || '/images/generations'
+})
+
+const chatEndpointHelp = computed(() => endpointHelp(chatEndpointPath.value, chatEndpointPlaceholder.value))
+
+const embeddingEndpointHelp = computed(() =>
+  endpointHelp(embeddingEndpointPath.value, embeddingEndpointPlaceholder.value),
+)
+
+const rerankEndpointHelp = computed(() =>
+  endpointHelp(rerankEndpointPath.value, rerankEndpointPlaceholder.value),
+)
+
+const imageEndpointHelp = computed(() =>
+  endpointHelp(imageEndpointPath.value, imageEndpointPlaceholder.value),
+)
 
 function onSubmit(data: ProviderFormState) {
   emit('submit', data)
@@ -81,6 +122,12 @@ function onSubmit(data: ProviderFormState) {
 
 function joinUrl(base: string, path: string) {
   return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+}
+
+function endpointHelp(value: string | undefined, fallbackPath: string) {
+  const path = (value || fallbackPath || '').trim()
+  const preview = previewBaseUrl.value && path ? joinUrl(previewBaseUrl.value, path) : ''
+  return `留空使用默认路径，当前接口预览：${preview}`
 }
 
 defineExpose({
@@ -154,6 +201,48 @@ defineExpose({
       :descriptionPreset="`${selectedProviderType?.displayName} API Key`"
       help="新建一个密钥，并将平台的 API key 填入该密钥的 Value 字段"
     />
+
+    <template v-if="isOpenAiLike">
+      <FormKit
+        type="text"
+        name="chatEndpointPath"
+        label="聊天 Endpoint"
+        v-model="chatEndpointPath"
+        :placeholder="chatEndpointPlaceholder"
+        :value="formState?.chatEndpointPath"
+        :help="chatEndpointHelp"
+      />
+
+      <FormKit
+        type="text"
+        name="embeddingEndpointPath"
+        label="嵌入 Endpoint"
+        v-model="embeddingEndpointPath"
+        :placeholder="embeddingEndpointPlaceholder"
+        :value="formState?.embeddingEndpointPath"
+        :help="embeddingEndpointHelp"
+      />
+
+      <FormKit
+        type="text"
+        name="rerankEndpointPath"
+        label="重排 Endpoint"
+        v-model="rerankEndpointPath"
+        :placeholder="rerankEndpointPlaceholder"
+        :value="formState?.rerankEndpointPath"
+        :help="rerankEndpointHelp"
+      />
+
+      <FormKit
+        type="text"
+        name="imageEndpointPath"
+        label="图像 Endpoint"
+        v-model="imageEndpointPath"
+        :placeholder="imageEndpointPlaceholder"
+        :value="formState?.imageEndpointPath"
+        :help="imageEndpointHelp"
+      />
+    </template>
 
     <FormKit
       type="text"

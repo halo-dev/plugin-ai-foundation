@@ -184,6 +184,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
         }
         try {
             validateProxyConfig(provider.getSpec());
+            normalizeEndpointPaths(provider.getSpec());
         } catch (IllegalArgumentException e) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
         }
@@ -225,6 +226,29 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
         if (proxyPort < 1 || proxyPort > 65535) {
             throw new IllegalArgumentException("proxyPort must be between 1 and 65535");
         }
+    }
+
+    private void normalizeEndpointPaths(AiProvider.AiProviderSpec spec) {
+        spec.setChatEndpointPath(normalizeEndpointPath("chatEndpointPath",
+            spec.getChatEndpointPath()));
+        spec.setEmbeddingEndpointPath(normalizeEndpointPath("embeddingEndpointPath",
+            spec.getEmbeddingEndpointPath()));
+        spec.setRerankEndpointPath(normalizeEndpointPath("rerankEndpointPath",
+            spec.getRerankEndpointPath()));
+        spec.setImageEndpointPath(normalizeEndpointPath("imageEndpointPath",
+            spec.getImageEndpointPath()));
+    }
+
+    private String normalizeEndpointPath(String fieldName, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        var trimmed = value.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")
+            || trimmed.startsWith("//")) {
+            throw new IllegalArgumentException(fieldName + " must be a relative path");
+        }
+        return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
     }
 
     private Mono<ServerResponse> deleteProvider(ServerRequest request) {

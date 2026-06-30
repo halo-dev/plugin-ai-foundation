@@ -62,6 +62,26 @@ public interface AiProviderType {
         return null;
     }
 
+    @Nullable
+    default String getChatEndpointPath() {
+        return getCompletionsPath();
+    }
+
+    @Nullable
+    default String getEmbeddingEndpointPath() {
+        return null;
+    }
+
+    @Nullable
+    default String getRerankEndpointPath() {
+        return null;
+    }
+
+    @Nullable
+    default String getImageEndpointPath() {
+        return null;
+    }
+
     List<AdapterType> getSupportedAdapterTypes();
 
     default List<ModelType> getSupportedModelTypes() {

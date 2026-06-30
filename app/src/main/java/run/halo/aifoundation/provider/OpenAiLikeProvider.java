@@ -10,9 +10,12 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.openai.OpenAiReasoningOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.rerank.StandardRerankingClient;
 
 @Component
 public class OpenAiLikeProvider extends AbstractAiProviderType {
@@ -59,7 +62,27 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
         return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
-            AdapterType.OPENAI_IMAGE);
+            AdapterType.RERANK, AdapterType.OPENAI_IMAGE);
+    }
+
+    @Override
+    public String getChatEndpointPath() {
+        return COMPLETIONS_PATH;
+    }
+
+    @Override
+    public String getEmbeddingEndpointPath() {
+        return EMBEDDINGS_PATH;
+    }
+
+    @Override
+    public String getRerankEndpointPath() {
+        return RERANK_PATH;
+    }
+
+    @Override
+    public String getImageEndpointPath() {
+        return IMAGES_GENERATIONS_PATH;
     }
 
     @Override
@@ -79,6 +102,13 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
+        String modelId) {
+        return new StandardRerankingClient(getProviderType(), trimTrailingSlash(resolveBaseUrl(provider)),
+            openAiCompatibleRerankEndpointPath(provider), modelId, apiKey, webClientBuilder(provider));
+    }
+
+    @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoningControlOptions =
             ReasoningControlOptions.openAiCompatibleEffort(OpenAiReasoningOptions::applyEffort);
@@ -88,5 +118,24 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
         return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
+    }
+
+    @Override
+    public RerankingModelProviderOptions rerankingModelProviderOptions() {
+        return RerankingModelProviderOptions.builder()
+            .providerOptionsSupported(true)
+            .build();
+    }
+
+    @Override
+    protected boolean supportsEndpointOverrides() {
+        return true;
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (value == null || value.isBlank() || !value.endsWith("/")) {
+            return value;
+        }
+        return value.substring(0, value.length() - 1);
     }
 }

@@ -13,6 +13,7 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
     public static final int DEFAULT_MAX_RETRIES = 3;
 
     private final @Nullable String baseUrl;
+    private final @Nullable String endpointPath;
     private final @Nullable String apiKey;
     private final @Nullable String model;
     private final @Nullable String deploymentName;
@@ -26,6 +27,7 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
 
     private OpenAiCompatibleEmbeddingOptions(Builder builder) {
         this.baseUrl = builder.baseUrl;
+        this.endpointPath = builder.endpointPath;
         this.apiKey = builder.apiKey;
         this.model = builder.model;
         this.deploymentName = builder.deploymentName;
@@ -44,6 +46,10 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
 
     public @Nullable String getBaseUrl() {
         return baseUrl;
+    }
+
+    public @Nullable String getEndpointPath() {
+        return endpointPath;
     }
 
     public @Nullable String getApiKey() {
@@ -105,6 +111,7 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
     public static final class Builder {
 
         private @Nullable String baseUrl;
+        private @Nullable String endpointPath;
         private @Nullable String apiKey;
         private @Nullable String model;
         private @Nullable String deploymentName;
@@ -118,6 +125,11 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
 
         public Builder baseUrl(@Nullable String baseUrl) {
             this.baseUrl = baseUrl;
+            return this;
+        }
+
+        public Builder endpointPath(@Nullable String endpointPath) {
+            this.endpointPath = endpointPath;
             return this;
         }
 

@@ -12,6 +12,7 @@ import run.halo.aifoundation.provider.DouBaoProvider;
 import run.halo.aifoundation.provider.ErnieProvider;
 import run.halo.aifoundation.provider.GiteeMoArkProvider;
 import run.halo.aifoundation.provider.OllamaProvider;
+import run.halo.aifoundation.provider.OpenAiLikeProvider;
 import run.halo.aifoundation.provider.OpenRouterProvider;
 import run.halo.aifoundation.provider.SiliconFlowProvider;
 import run.halo.aifoundation.provider.XiaomiMiMoProvider;
@@ -99,7 +100,8 @@ class ProviderTypeConsoleEndpointTest {
                 "openrouter", new OpenRouterProvider(),
                 "gitee-moark", new GiteeMoArkProvider(),
                 "aihubmix", new AiHubMixProvider(),
-                "doubao", new DouBaoProvider()
+                "doubao", new DouBaoProvider(),
+                "openailike", new OpenAiLikeProvider()
             ));
 
         webTestClient.get().uri("/provider-types")
@@ -128,8 +130,11 @@ class ProviderTypeConsoleEndpointTest {
             .isEqualTo("openai-image")
             .jsonPath("$[?(@.providerType == 'aihubmix')].supportedAdapterTypes[2]")
             .isEqualTo("rerank")
-            .jsonPath("$[?(@.providerType == 'doubao')].supportedAdapterTypes[2]")
+            .jsonPath("$[?(@.providerType == 'openailike')].supportedAdapterTypes[2]")
             .isEqualTo("rerank")
+            .jsonPath("$[?(@.providerType == 'doubao')].supportedAdapterTypes")
+            .value(types -> org.assertj.core.api.Assertions.assertThat(types.toString())
+                .doesNotContain("rerank"))
             .jsonPath("$[?(@.providerType == 'zhipuai')].supportedModelTypes[2]")
             .isEqualTo("rerank")
             .jsonPath("$[?(@.providerType == 'zhipuai')].supportedModelTypes[3]")
@@ -150,7 +155,7 @@ class ProviderTypeConsoleEndpointTest {
             .isEqualTo("image-generation")
             .jsonPath("$[?(@.providerType == 'aihubmix')].supportedModelTypes[2]")
             .isEqualTo("rerank")
-            .jsonPath("$[?(@.providerType == 'doubao')].supportedModelTypes[2]")
+            .jsonPath("$[?(@.providerType == 'openailike')].supportedModelTypes[2]")
             .isEqualTo("rerank");
     }
 }

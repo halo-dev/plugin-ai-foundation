@@ -29,6 +29,14 @@ public class AiProvider extends AbstractExtension {
         private boolean enabled = true;
         @Schema(description = "Provider-documented API base URL. Leave blank to use the provider default.")
         private String baseUrl;
+        @Schema(description = "Chat endpoint path relative to baseUrl. OpenAI-compatible providers only.")
+        private String chatEndpointPath;
+        @Schema(description = "Embedding endpoint path relative to baseUrl. OpenAI-compatible providers only.")
+        private String embeddingEndpointPath;
+        @Schema(description = "Rerank endpoint path relative to baseUrl. OpenAI-compatible providers only.")
+        private String rerankEndpointPath;
+        @Schema(description = "Image generation endpoint path relative to baseUrl. OpenAI-compatible providers only.")
+        private String imageEndpointPath;
         @Schema(description = "Name of the Halo Secret containing the API key")
         private String apiKeySecretName;
         @Schema(description = "Proxy host for this provider (optional)")

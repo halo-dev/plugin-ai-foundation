@@ -140,6 +140,18 @@ class OpenAiCompatibleModelsTest {
     }
 
     @Test
+    void chatUrl_usesConfiguredEndpointPath() {
+        var model = new OpenAiCompatibleChatModel(chatOptions().mutate()
+            .endpointPath("compatible/chat")
+            .build(), WebClient.builder());
+
+        var url = (String) ReflectionTestUtils.invokeMethod(model, "chatCompletionsUrl",
+            model.getOptions());
+
+        assertThat(url).isEqualTo("http://localhost/v1/compatible/chat");
+    }
+
+    @Test
     void imageRequestBody_mapsOpenAiCompatibleImageOptions() {
         var model = new OpenAiCompatibleImageGenerationClient(imageOptions(), WebClient.builder());
         var request = GenerateImageRequest.builder()
@@ -238,6 +250,33 @@ class OpenAiCompatibleModelsTest {
             .containsEntry("user", "user-1");
     }
 
+    @Test
+    void embeddingUrl_usesConfiguredEndpointPath() {
+        var options = OpenAiCompatibleEmbeddingOptions.builder()
+            .baseUrl("http://localhost/v1")
+            .apiKey("sk-test")
+            .model("text-embedding-test")
+            .endpointPath("/compatible/embeddings")
+            .build();
+        var model = new OpenAiCompatibleEmbeddingModel(options, WebClient.builder());
+
+        var url = (String) ReflectionTestUtils.invokeMethod(model, "embeddingsUrl", options);
+
+        assertThat(url).isEqualTo("http://localhost/v1/compatible/embeddings");
+    }
+
+    @Test
+    void imageUrl_usesConfiguredEndpointPath() {
+        var model = new OpenAiCompatibleImageGenerationClient(
+            new OpenAiCompatibleImageOptions("openai", "http://localhost/v1",
+                "compatible/images", "sk-test", "gpt-image-test", Map.of()),
+            WebClient.builder());
+
+        var url = (String) ReflectionTestUtils.invokeMethod(model, "imagesGenerationsUrl");
+
+        assertThat(url).isEqualTo("http://localhost/v1/compatible/images");
+    }
+
     private OpenAiCompatibleChatOptions chatOptions() {
         return OpenAiCompatibleChatOptions.builder()
             .baseUrl("http://localhost/v1")
@@ -255,7 +294,7 @@ class OpenAiCompatibleModelsTest {
     }
 
     private OpenAiCompatibleImageOptions imageOptions() {
-        return new OpenAiCompatibleImageOptions("openai", "http://localhost/v1", "sk-test",
+        return new OpenAiCompatibleImageOptions("openai", "http://localhost/v1", null, "sk-test",
             "gpt-image-test", Map.of());
     }
 }

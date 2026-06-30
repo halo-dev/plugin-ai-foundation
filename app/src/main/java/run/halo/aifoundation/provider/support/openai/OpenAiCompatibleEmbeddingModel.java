@@ -97,6 +97,7 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
         Map<String, String> headers) {
         var builder = OpenAiCompatibleEmbeddingOptions.builder()
             .baseUrl(defaultOptions.getBaseUrl())
+            .endpointPath(defaultOptions.getEndpointPath())
             .apiKey(defaultOptions.getApiKey())
             .model(defaultOptions.getModel())
             .deploymentName(defaultOptions.getDeploymentName())
@@ -125,6 +126,9 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
         if (options instanceof OpenAiCompatibleEmbeddingOptions openAiOptions) {
             if (openAiOptions.getBaseUrl() != null) {
                 builder.baseUrl(openAiOptions.getBaseUrl());
+            }
+            if (openAiOptions.getEndpointPath() != null) {
+                builder.endpointPath(openAiOptions.getEndpointPath());
             }
             if (openAiOptions.getApiKey() != null) {
                 builder.apiKey(openAiOptions.getApiKey());
@@ -252,7 +256,14 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
         while (baseUrl.endsWith("/")) {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
-        return baseUrl + EMBEDDINGS_PATH;
+        return baseUrl + endpointPath(options.getEndpointPath(), EMBEDDINGS_PATH);
+    }
+
+    private String endpointPath(String configuredPath, String defaultPath) {
+        if (configuredPath == null || configuredPath.isBlank()) {
+            return defaultPath;
+        }
+        return configuredPath.startsWith("/") ? configuredPath : "/" + configuredPath;
     }
 
     private void putIfPresent(Map<String, Object> target, String key, Object value) {

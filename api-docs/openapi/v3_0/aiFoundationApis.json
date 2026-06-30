@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.25.3"
+    "version" : "2.25.4"
   },
   "servers" : [ {
-    "url" : "http://localhost:49390",
+    "url" : "http://localhost:64918",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1450,13 +1450,25 @@
             "type" : "string",
             "description" : "Provider-documented API base URL. Leave blank to use the provider default."
           },
+          "chatEndpointPath" : {
+            "type" : "string",
+            "description" : "Chat endpoint path relative to baseUrl. OpenAI-compatible providers only."
+          },
           "displayName" : {
             "type" : "string",
             "description" : "Display name of the provider"
           },
+          "embeddingEndpointPath" : {
+            "type" : "string",
+            "description" : "Embedding endpoint path relative to baseUrl. OpenAI-compatible providers only."
+          },
           "enabled" : {
             "type" : "boolean",
             "description" : "Whether the provider is enabled"
+          },
+          "imageEndpointPath" : {
+            "type" : "string",
+            "description" : "Image generation endpoint path relative to baseUrl. OpenAI-compatible providers only."
           },
           "providerType" : {
             "type" : "string",
@@ -1470,6 +1482,10 @@
             "type" : "integer",
             "description" : "Proxy port for this provider (optional)",
             "format" : "int32"
+          },
+          "rerankEndpointPath" : {
+            "type" : "string",
+            "description" : "Rerank endpoint path relative to baseUrl. OpenAI-compatible providers only."
           }
         }
       },
@@ -2230,6 +2246,9 @@
           "builtIn" : {
             "type" : "boolean"
           },
+          "chatEndpointPath" : {
+            "type" : "string"
+          },
           "completionsPath" : {
             "type" : "string"
           },
@@ -2245,7 +2264,13 @@
           "documentationUrl" : {
             "type" : "string"
           },
+          "embeddingEndpointPath" : {
+            "type" : "string"
+          },
           "iconUrl" : {
+            "type" : "string"
+          },
+          "imageEndpointPath" : {
             "type" : "string"
           },
           "providerType" : {
@@ -2253,6 +2278,9 @@
           },
           "requiresBaseUrl" : {
             "type" : "boolean"
+          },
+          "rerankEndpointPath" : {
+            "type" : "string"
           },
           "supportedAdapterTypes" : {
             "type" : "array",
