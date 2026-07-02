@@ -24,6 +24,7 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 - [Live2d 看板娘](https://www.halo.run/store/apps/app-oPNFQ)
 - [智阅全能AI助手](https://www.halo.run/store/apps/app-OWBzA)
 - [评论组件 Next](https://www.halo.run/store/apps/app-p8xona4f)
+- [轻言](https://www.halo.run/store/apps/app-cmisffbv)
 
 ## 界面预览
 
