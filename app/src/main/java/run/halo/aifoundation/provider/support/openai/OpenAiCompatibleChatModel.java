@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
@@ -50,6 +51,7 @@ public class OpenAiCompatibleChatModel implements ChatModel {
     private static final String CHAT_COMPLETIONS_PATH = "/chat/completions";
     private static final String SSE_DATA_PREFIX = "data:";
     private static final String SSE_DONE = "[DONE]";
+    private static final String TOOL_CALL_ID_PREFIX = "call_";
 
     private final OpenAiCompatibleChatOptions defaultOptions;
     private final WebClient webClient;
@@ -133,34 +135,58 @@ public class OpenAiCompatibleChatModel implements ChatModel {
             if (!node.isArray() || node.isEmpty()) {
                 return List.of();
             }
+            var batchSize = node.size();
+            var ordinal = 0;
             for (var item : node) {
-                var index = item.path(Fields.INDEX).asInt(toolCalls.size());
-                var current = toolCalls.computeIfAbsent(index, ignored -> new MutableToolCall());
+                var index = toolCallIndex(item, ordinal, batchSize);
+                var current = toolCalls.computeIfAbsent(index,
+                    ignored -> new MutableToolCall(fallbackToolCallId(index)));
                 current.append(item);
+                ordinal++;
             }
             return toolCalls.values().stream()
                 .map(MutableToolCall::toToolCall)
                 .toList();
         }
+
+        private int toolCallIndex(JsonNode item, int ordinal, int batchSize) {
+            if (item.path(Fields.INDEX).isNumber()) {
+                return item.path(Fields.INDEX).asInt();
+            }
+            if (batchSize > 1) {
+                return ordinal;
+            }
+            if (toolCalls.size() == 1) {
+                return toolCalls.keySet().iterator().next();
+            }
+            return toolCalls.isEmpty() ? 0 : toolCalls.size();
+        }
     }
 
     private final class MutableToolCall {
 
-        private String id = "";
+        private String id;
         private String type = "function";
         private String name = "";
         private final StringBuilder arguments = new StringBuilder();
 
+        MutableToolCall(String fallbackId) {
+            this.id = fallbackId;
+        }
+
         void append(JsonNode node) {
-            if (node.path(Fields.ID).isTextual()) {
-                id = node.path(Fields.ID).asText();
+            var nextId = textOrNull(node.path(Fields.ID));
+            if (hasText(nextId)) {
+                id = nextId;
             }
-            if (node.path(Fields.TYPE).isTextual()) {
-                type = node.path(Fields.TYPE).asText();
+            var nextType = textOrNull(node.path(Fields.TYPE));
+            if (hasText(nextType)) {
+                type = nextType;
             }
             var function = node.path(Fields.FUNCTION);
-            if (function.path(Fields.NAME).isTextual()) {
-                name = function.path(Fields.NAME).asText();
+            var nextName = textOrNull(function.path(Fields.NAME));
+            if (hasText(nextName)) {
+                name = nextName;
             }
             if (function.path(Fields.ARGUMENTS).isTextual()) {
                 arguments.append(function.path(Fields.ARGUMENTS).asText());
@@ -639,16 +665,26 @@ public class OpenAiCompatibleChatModel implements ChatModel {
             return toolCallState.update(node);
         }
         var toolCalls = new ArrayList<AssistantMessage.ToolCall>();
+        var ordinal = 0;
         for (var item : node) {
             var function = item.path(Fields.FUNCTION);
+            var index = item.path(Fields.INDEX).isNumber()
+                ? item.path(Fields.INDEX).asInt()
+                : ordinal;
             toolCalls.add(new AssistantMessage.ToolCall(
-                textOrEmpty(item.path(Fields.ID)),
-                textOrEmpty(item.path(Fields.TYPE)),
+                textOrFallback(item.path(Fields.ID), fallbackToolCallId(index)),
+                textOrFallback(item.path(Fields.TYPE), Values.FUNCTION),
                 textOrEmpty(function.path(Fields.NAME)),
                 textOrEmpty(function.path(Fields.ARGUMENTS))
             ));
+            ordinal++;
         }
         return toolCalls;
+    }
+
+    private String fallbackToolCallId(int index) {
+        return TOOL_CALL_ID_PREFIX + UUID.randomUUID().toString().replace("-", "")
+            + "_" + Math.max(index, 0);
     }
 
     private ChatResponseMetadata metadata(String id, String model, Usage usage, JsonNode root) {
@@ -731,6 +767,11 @@ public class OpenAiCompatibleChatModel implements ChatModel {
     private String textOrEmpty(JsonNode node) {
         var text = textOrNull(node);
         return text != null ? text : "";
+    }
+
+    private String textOrFallback(JsonNode node, String fallback) {
+        var text = textOrNull(node);
+        return hasText(text) ? text : fallback;
     }
 
     private String textOrEmpty(String value) {
