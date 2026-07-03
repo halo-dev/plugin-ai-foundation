@@ -27,6 +27,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions.ResponseFormat;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.io.ByteArrayResource;
@@ -199,11 +200,14 @@ public class OpenAiCompatibleChatModel implements ChatModel {
     }
 
     private Prompt requestPrompt(Prompt prompt) {
-        var requestPrompt = ChatModel.super.buildRequestPrompt(prompt);
-        if (!(requestPrompt.getOptions() instanceof OpenAiCompatibleChatOptions)) {
-            throw new IllegalArgumentException("OpenAI-compatible model requires OpenAiCompatibleChatOptions");
+        var optionsBuilder = getOptions().mutate();
+        var promptOptions = prompt.getOptions();
+        if (promptOptions != null) {
+            optionsBuilder.combineWith(promptOptions.mutate());
         }
-        return requestPrompt;
+        var options = optionsBuilder.build();
+        ToolCallingChatOptions.validateToolCallbacks(options.getToolCallbacks());
+        return new Prompt(prompt.getInstructions(), options);
     }
 
     private OpenAiCompatibleChatOptions requestOptions(Prompt prompt) {
