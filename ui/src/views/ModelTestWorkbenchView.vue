@@ -48,7 +48,6 @@ import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
 import RiImageLine from '~icons/ri/image-line'
 import RiMessage3Line from '~icons/ri/message-3-line'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
-import RiSparkling2Line from '~icons/ri/sparkling-2-line'
 import RiStackLine from '~icons/ri/stack-line'
 import ChatInputArea from './components/workbench/ChatInputArea.vue'
 import ChatMessageItem from './components/workbench/ChatMessageItem.vue'
@@ -340,24 +339,6 @@ const isAnyTesting = computed(
 
 const selectedModel = computed(() => {
   return activeModels.value.find((model) => model.name === selectedModelName.value)
-})
-const selectedModelLabel = computed(() => {
-  const model = selectedModel.value
-  return model?.displayName || model?.modelId || model?.name || '未选择模型'
-})
-const selectedProviderLabel = computed(() => {
-  const model = selectedModel.value
-  return model?.provider?.displayName || model?.provider?.name || 'Provider'
-})
-const selectedProviderIconUrl = computed(() => {
-  return selectedModel.value?.provider?.iconUrl
-})
-const selectedProviderModelCount = computed(() => {
-  const providerName = selectedModel.value?.provider?.name
-  if (!providerName) {
-    return activeModels.value.length
-  }
-  return activeModels.value.filter((model) => model.provider?.name === providerName).length
 })
 
 watch(
@@ -1550,46 +1531,7 @@ onBeforeUnmount(() => {
       <section class=":uno: min-h-0 min-w-0 flex flex-col bg-[#f8fafc]">
         <header class=":uno: border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur">
           <div class=":uno: flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div class=":uno: min-w-0 flex flex-1 items-center gap-3">
-              <div
-                class=":uno: size-9 flex flex-none items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-700 shadow-sm"
-              >
-                <img
-                  v-if="selectedProviderIconUrl"
-                  :src="selectedProviderIconUrl"
-                  :alt="selectedProviderLabel"
-                  class=":uno: size-5 object-contain"
-                />
-                <RiSparkling2Line v-else class=":uno: h-4.5 w-4.5" />
-              </div>
-              <div class=":uno: min-w-0">
-                <div class=":uno: min-w-0 flex items-center gap-2">
-                  <div class=":uno: truncate text-sm text-slate-950 font-semibold">
-                    {{ selectedModelLabel }}
-                  </div>
-                  <span
-                    class=":uno: hidden border border-emerald-200 rounded bg-emerald-50 text-[10px] text-emerald-700 font-medium sm:inline-flex !px-1.5 !py-0.5"
-                  >
-                    {{
-                      testMode === 'chat'
-                        ? 'Language'
-                        : testMode === 'embedding'
-                          ? 'Embedding'
-                          : testMode === 'rerank'
-                            ? 'Rerank'
-                            : testMode === 'image'
-                              ? 'Image'
-                              : 'RAG'
-                    }}
-                  </span>
-                </div>
-                <div class=":uno: mt-0.5 truncate text-xs text-slate-500">
-                  {{ selectedProviderLabel }} · {{ selectedProviderModelCount }} 个可用模型
-                </div>
-              </div>
-            </div>
-
-            <div class=":uno: min-w-0 flex flex-col gap-2 xl:w-[42rem] sm:flex-row sm:items-center">
+            <div class=":uno: min-w-0 w-full flex flex-col gap-2 sm:flex-row sm:items-center">
               <div
                 class=":uno: h-9 inline-flex flex-none items-center border border-slate-200 rounded-lg bg-slate-100/80 !p-0.5"
               >
