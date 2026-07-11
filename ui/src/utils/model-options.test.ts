@@ -14,6 +14,14 @@ describe('model option labels', () => {
     expect(
       modelOptionProviderLabel(modelOption('gpt-4o', 'prod-openai', 'Production OpenAI')),
     ).toBe('Production OpenAI (OpenAI)')
+    expect(
+      modelOptionProviderLabel(
+        modelOption('deepseek-chat', 'deepseek', 'DeepSeek', '深度求索 DeepSeek'),
+      ),
+    ).toBe('DeepSeek (深度求索 DeepSeek)')
+    expect(modelOptionProviderLabel(modelOption('gpt-4o', 'gateway', 'My Gateway', 'OpenAI'))).toBe(
+      'My Gateway (OpenAI)',
+    )
   })
 })
 

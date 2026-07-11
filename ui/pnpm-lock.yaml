@@ -52,6 +52,9 @@ importers:
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@5.8.3)(vue@3.5.34(typescript@5.8.3))
+      reka-ui:
+        specifier: ^2.10.1
+        version: 2.10.1(vue@3.5.34(typescript@5.8.3))
       vue:
         specifier: ^3.5.34
         version: 3.5.34(typescript@5.8.3)
@@ -306,10 +309,22 @@ packages:
         integrity: sha512-TpIO93+DIujg3g7SykEAGZMDtbJRrmnYRCNYSjJlvIbGhBjRSNTLVbNeDQBrzy9qDgUbiWdc7KA0uZHZ2tJmiw==,
       }
 
+  '@floating-ui/dom@1.7.6':
+    resolution:
+      {
+        integrity: sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ==,
+      }
+
   '@floating-ui/utils@0.2.11':
     resolution:
       {
         integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==,
+      }
+
+  '@floating-ui/vue@1.1.11':
+    resolution:
+      {
+        integrity: sha512-HzHKCNVxnGS35r9fCHBc3+uCnjw9IWIlCPL683cGgM9Kgj2BiAl8x1mS7vtvP6F9S/e/q4O6MApwSHj8hNLGfw==,
       }
 
   '@formkit/core@2.1.0':
@@ -469,6 +484,18 @@ packages:
     resolution:
       {
         integrity: sha512-LPKOXPn/zV+zis1oOfGWogaXVpqUybF3ZS6SCZIsz8vg0ivVp9+fVqyYB7xq0aiST/VhUQYGO1qo6uoYSiEJqw==,
+      }
+
+  '@internationalized/date@3.12.2':
+    resolution:
+      {
+        integrity: sha512-FY1Y+H64NDs+HAF6omlnWxm3mEpfgaCSWtL5l551ZZfImA+kGjPFgrnJrGjH6lfmLL0g8Z/mBu1R3kufeCp6Jw==,
+      }
+
+  '@internationalized/number@3.6.7':
+    resolution:
+      {
+        integrity: sha512-3ji1fcrT+FPAK86UqEhB/psHixYo6niWPJtt7+qRaYFynt/BaJG8GhAPimtWUpEiVSTq8ZM8L5psMxGquiB/Vg==,
       }
 
   '@isaacs/cliui@8.0.2':
@@ -1306,6 +1333,12 @@ packages:
         integrity: sha512-swSgb7OiPRR3UuIL7NuDrZNSMGmQD+wdtHxPD7j60SvBEnxbXurl5XOirtGEX2gm2hbK6mC8kMV1I+uO3l0UOw==,
       }
 
+  '@tanstack/virtual-core@3.17.3':
+    resolution:
+      {
+        integrity: sha512-8Np/TFELpI0ySuJoVmjvOrQYXH/8sTX0Biv9szhFhY39xOdAAY+smrMxjxOum/ux3eM8MUJQsEJ0/R0UpvC8dw==,
+      }
+
   '@tanstack/vue-query@4.44.0':
     resolution:
       {
@@ -1317,6 +1350,14 @@ packages:
     peerDependenciesMeta:
       '@vue/composition-api':
         optional: true
+
+  '@tanstack/vue-virtual@3.13.31':
+    resolution:
+      {
+        integrity: sha512-wZMEoSf852jQqaf3Ika1J7PiBae6341LNy/2CxmIyn0XKDQXMuK41wVX+xp6G0yx8jyR95Ef+Tdr13DK7mbJtQ==,
+      }
+    peerDependencies:
+      vue: ^2.7.0 || ^3.0.0
 
   '@tiptap/core@3.23.1':
     resolution:
@@ -2152,6 +2193,13 @@ packages:
       {
         integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==,
       }
+
+  aria-hidden@1.2.6:
+    resolution:
+      {
+        integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==,
+      }
+    engines: { node: '>=10' }
 
   assertion-error@2.0.1:
     resolution:
@@ -3667,6 +3715,12 @@ packages:
         integrity: sha512-2W4oUZlVaqAPAil6FUg/difl6YhqhUR7x2eZY4bQCko22UXg3hptq9KLQdqFClV+Wu85UX7hNtdGTngi/1BxcA==,
       }
 
+  ohash@2.0.11:
+    resolution:
+      {
+        integrity: sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ==,
+      }
+
   optionator@0.9.4:
     resolution:
       {
@@ -4046,6 +4100,14 @@ packages:
         integrity: sha512-iETxpjK6YoRWJG5o6hXLwvjYAoW+FEZn9os0PD/b6AP6xQwsa/Y7lCVgIixBbUPMfhu+i2LtdeAqVTgGlQarfA==,
       }
     hasBin: true
+
+  reka-ui@2.10.1:
+    resolution:
+      {
+        integrity: sha512-drcOQ4rQtDYAcGCsyQBqQg8QQ+H3B+zDaMJU0h8KPEPMa7g9BHu3zcOi4OB39XJSWizceFoNO0Z9tctSGLOXqg==,
+      }
+    peerDependencies:
+      vue: '>= 3.4.0'
 
   remove-accents@0.5.0:
     resolution:
@@ -5098,7 +5160,21 @@ snapshots:
     dependencies:
       '@floating-ui/core': 1.7.5
 
+  '@floating-ui/dom@1.7.6':
+    dependencies:
+      '@floating-ui/core': 1.7.5
+      '@floating-ui/utils': 0.2.11
+
   '@floating-ui/utils@0.2.11': {}
+
+  '@floating-ui/vue@1.1.11(vue@3.5.34(typescript@5.8.3))':
+    dependencies:
+      '@floating-ui/dom': 1.7.6
+      '@floating-ui/utils': 0.2.11
+      vue-demi: 0.13.11(vue@3.5.34(typescript@5.8.3))
+    transitivePeerDependencies:
+      - '@vue/composition-api'
+      - vue
 
   '@formkit/core@2.1.0':
     dependencies:
@@ -5223,6 +5299,14 @@ snapshots:
       '@antfu/install-pkg': 1.1.0
       '@iconify/types': 2.0.0
       import-meta-resolve: 4.2.0
+
+  '@internationalized/date@3.12.2':
+    dependencies:
+      '@swc/helpers': 0.5.21
+
+  '@internationalized/number@3.6.7':
+    dependencies:
+      '@swc/helpers': 0.5.21
 
   '@isaacs/cliui@8.0.2':
     dependencies:
@@ -5600,6 +5684,8 @@ snapshots:
 
   '@tanstack/query-core@4.44.0': {}
 
+  '@tanstack/virtual-core@3.17.3': {}
+
   '@tanstack/vue-query@4.44.0(vue@3.5.34(typescript@5.8.3))':
     dependencies:
       '@tanstack/match-sorter-utils': 8.19.4
@@ -5607,6 +5693,11 @@ snapshots:
       '@vue/devtools-api': 6.6.4
       vue: 3.5.34(typescript@5.8.3)
       vue-demi: 0.13.11(vue@3.5.34(typescript@5.8.3))
+
+  '@tanstack/vue-virtual@3.13.31(vue@3.5.34(typescript@5.8.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.17.3
+      vue: 3.5.34(typescript@5.8.3)
 
   '@tiptap/core@3.23.1(@tiptap/pm@3.23.1)':
     dependencies:
@@ -6260,6 +6351,10 @@ snapshots:
   ansi-styles@6.2.3: {}
 
   argparse@2.0.1: {}
+
+  aria-hidden@1.2.6:
+    dependencies:
+      tslib: 2.8.1
 
   assertion-error@2.0.1: {}
 
@@ -7061,6 +7156,8 @@ snapshots:
       node-fetch-native: 1.6.7
       ufo: 1.6.4
 
+  ohash@2.0.11: {}
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -7307,6 +7404,22 @@ snapshots:
   reduce-configs@1.1.2: {}
 
   regexp-tree@0.1.27: {}
+
+  reka-ui@2.10.1(vue@3.5.34(typescript@5.8.3)):
+    dependencies:
+      '@floating-ui/dom': 1.7.6
+      '@floating-ui/vue': 1.1.11(vue@3.5.34(typescript@5.8.3))
+      '@internationalized/date': 3.12.2
+      '@internationalized/number': 3.6.7
+      '@tanstack/vue-virtual': 3.13.31(vue@3.5.34(typescript@5.8.3))
+      '@vueuse/core': 14.3.0(vue@3.5.34(typescript@5.8.3))
+      '@vueuse/shared': 14.3.0(vue@3.5.34(typescript@5.8.3))
+      aria-hidden: 1.2.6
+      defu: 6.1.7
+      ohash: 2.0.11
+      vue: 3.5.34(typescript@5.8.3)
+    transitivePeerDependencies:
+      - '@vue/composition-api'
 
   remove-accents@0.5.0: {}
 

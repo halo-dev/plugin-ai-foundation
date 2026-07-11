@@ -1,34 +1,35 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
-import {
-  capabilitySummaryLabels,
-  capabilityUnavailableDetailsLabel,
-  type RequiredModelCapabilitiesValue,
-} from '@/utils/capabilities'
+import type { RequiredModelCapabilitiesValue } from '@/utils/capabilities'
 import { groupModelOptionsByProvider } from '@/utils/model-options'
-
 import { VLoading } from '@halo-dev/components'
-import { onClickOutside } from '@vueuse/core'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
-import MingcuteCheckLine from '~icons/mingcute/check-line'
+import {
+  SelectContent,
+  SelectGroup,
+  SelectIcon,
+  SelectLabel,
+  SelectPortal,
+  SelectRoot,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
+  SelectTrigger,
+  SelectValue,
+  SelectViewport,
+} from 'reka-ui'
+import { computed, nextTick, shallowRef, useId, useTemplateRef, watch } from 'vue'
 import MingcuteCloseLine from '~icons/mingcute/close-line'
 import MingcuteDownLine from '~icons/mingcute/down-line'
 import MingcuteSearchLine from '~icons/mingcute/search-line'
 import RiBrainLine from '~icons/ri/brain-line'
 import {
   isModelOptionSelectable,
-  modelFeatureLabel,
-  modelOptionDisplayName,
-  modelOptionUnavailableReasonLabel,
-  modelTypeLabel,
-  nextActiveModelName,
   normalizeRequiredFeatures,
   selectedModelDisplayName,
-  shouldShowModelDetails,
-  shouldShowModelId,
 } from './ai-model-selector'
+import AiModelSelectOption from './AiModelSelectOption.vue'
+
 const props = withDefaults(
   defineProps<{
     name?: string
@@ -72,23 +73,12 @@ const emit = defineEmits<{
   (event: 'update:modelValue', value: string | undefined): void
 }>()
 
-const keyword = ref('')
-const selectedValue = ref('')
-const rootRef = ref<HTMLElement>()
-const triggerRef = ref<HTMLElement>()
-const dropdownRef = ref<HTMLElement>()
-const searchInputRef = ref<HTMLInputElement>()
-const isOpen = ref(false)
-const activeModelName = ref<string>()
-const selectedModelSnapshot = ref<ModelOption>()
-const dropdownStyle = ref<CSSProperties>({})
-
-const effectiveLabel = computed(() => props.label)
-const effectiveHelp = computed(() => props.help)
-const effectiveDisabled = computed(() => props.disabled ?? false)
-const effectivePlaceholder = computed(() => props.placeholder)
-const effectiveSearchPlaceholder = computed(() => props.searchPlaceholder)
-const effectiveClearable = computed(() => props.clearable)
+const triggerId = useId()
+const helpId = `${triggerId}-help`
+const searchInputRef = useTemplateRef<HTMLInputElement>('searchInput')
+const keyword = shallowRef('')
+const isOpen = shallowRef(false)
+const selectedModelSnapshot = shallowRef<ModelOption>()
 
 const modelType = computed(() => props.modelType)
 const providerName = computed(() => props.providerName)
@@ -122,18 +112,25 @@ const { results: fuseResults } = useFuse(
 )
 
 const groups = computed(() => {
-  return groupModelOptionsByProvider(fuseResults.value.map((r) => r.item))
+  return groupModelOptionsByProvider(fuseResults.value.map((result) => result.item))
 })
-
+const selectedValue = computed(() => props.modelValue || undefined)
 const selectedModel = computed(() => {
   return modelOptions.value?.find((model) => model.name === selectedValue.value)
+})
+const selectedModelDetails = computed(() => selectedModel.value || selectedModelSnapshot.value)
+const selectedDisplayName = computed(() => {
+  return selectedModelDisplayName(
+    selectedModel.value,
+    selectedModelSnapshot.value,
+    selectedValue.value || '',
+  )
 })
 const selectableModels = computed(() => {
   return groups.value.flatMap((group) => {
     return group.models.filter((model) => model.name && isModelOptionSelectable(model))
   })
 })
-
 const hasModels = computed(() => groups.value.some((group) => group.models.length > 0))
 const emptyText = computed(() => {
   if (keyword.value) {
@@ -143,46 +140,6 @@ const emptyText = computed(() => {
     return '没有满足能力要求的模型'
   }
   return '暂无匹配模型'
-})
-const selectedDisplayName = computed(() => {
-  return selectedModelDisplayName(
-    selectedModel.value,
-    selectedModelSnapshot.value,
-    selectedValue.value,
-  )
-})
-
-onClickOutside(
-  rootRef,
-  () => {
-    isOpen.value = false
-  },
-  {
-    ignore: [dropdownRef],
-  },
-)
-
-onMounted(async () => {
-  await nextTick()
-  if (typeof props.modelValue === 'string') {
-    selectedValue.value = props.modelValue
-  }
-})
-
-watch(
-  () => props.modelValue,
-  (value) => {
-    if ((value || '') !== selectedValue.value) {
-      selectedValue.value = value || ''
-    }
-  },
-)
-
-watch(selectedValue, (value) => {
-  emit('update:modelValue', value || undefined)
-  if (!value) {
-    selectedModelSnapshot.value = undefined
-  }
 })
 
 watch(
@@ -195,15 +152,20 @@ watch(
   { immediate: true },
 )
 
-watch([selectableModels, isOpen], () => {
-  if (!isOpen.value) {
-    return
+watch(selectedValue, (value) => {
+  if (!value) {
+    selectedModelSnapshot.value = undefined
   }
-  refreshActiveModel()
+})
+
+watch(isOpen, (open) => {
+  if (!open) {
+    keyword.value = ''
+  }
 })
 
 watch(
-  () => effectiveDisabled.value,
+  () => props.disabled,
   (disabled) => {
     if (disabled) {
       isOpen.value = false
@@ -211,235 +173,190 @@ watch(
   },
 )
 
-watch(isOpen, async (open) => {
-  if (open) {
-    updateDropdownPosition()
-    window.addEventListener('resize', updateDropdownPosition)
-    window.addEventListener('scroll', updateDropdownPosition, true)
-    await nextTick()
-    updateDropdownPosition()
+function handleOpenChange(open: boolean) {
+  isOpen.value = open
+  if (!open) {
     return
   }
 
-  window.removeEventListener('resize', updateDropdownPosition)
-  window.removeEventListener('scroll', updateDropdownPosition, true)
-})
-
-async function toggleOpen() {
-  if (effectiveDisabled.value) {
-    return
-  }
-
-  if (isOpen.value) {
-    isOpen.value = false
-    return
-  }
-
-  await openDropdown()
+  nextTick(() => {
+    window.requestAnimationFrame(() => {
+      if (isOpen.value) {
+        searchInputRef.value?.focus({ preventScroll: true })
+      }
+    })
+  })
 }
 
-function selectModel(model: ModelOption) {
-  if (effectiveDisabled.value || !model.name || !isModelOptionSelectable(model)) {
+function handleValueChange(value: unknown) {
+  if (typeof value === 'string') {
+    emit('update:modelValue', value || undefined)
+  }
+}
+
+function rememberSelection(model: ModelOption) {
+  if (!model.name || !isModelOptionSelectable(model)) {
     return
   }
-  selectedValue.value = model.name
+
   selectedModelSnapshot.value = model
   keyword.value = ''
-  isOpen.value = false
 }
 
 function clearSelection() {
-  if (effectiveDisabled.value) {
+  if (props.disabled) {
     return
   }
-  selectedValue.value = ''
+
+  selectedModelSnapshot.value = undefined
+  emit('update:modelValue', undefined)
 }
 
-async function openDropdown() {
-  isOpen.value = true
-  refreshActiveModel()
+async function focusModelFromSearch(delta: -1 | 1) {
+  const models = selectableModels.value
+  if (!models.length) {
+    return
+  }
+
+  const selectedIndex = models.findIndex((model) => model.name === selectedValue.value)
+  const nextIndex =
+    selectedIndex < 0
+      ? delta === 1
+        ? 0
+        : models.length - 1
+      : (selectedIndex + delta + models.length) % models.length
+
   await nextTick()
-  updateDropdownPosition()
-  searchInputRef.value?.focus()
+  const optionElements = searchInputRef.value
+    ?.closest('[role="listbox"]')
+    ?.querySelectorAll<HTMLElement>('[data-ai-model-selectable]')
+  optionElements?.[nextIndex]?.focus({ preventScroll: true })
 }
 
-function refreshActiveModel() {
-  activeModelName.value = nextActiveModelName(
-    selectableModels.value,
-    selectedValue.value,
-    activeModelName.value,
-  )
-}
-
-async function moveActive(delta: number) {
-  if (effectiveDisabled.value) {
-    return
-  }
-  if (!isOpen.value) {
-    await openDropdown()
+function selectCurrentSearchResult() {
+  const model =
+    selectableModels.value.find((item) => item.name === selectedValue.value) ||
+    selectableModels.value[0]
+  if (!model?.name) {
     return
   }
 
-  const items = selectableModels.value
-  if (!items.length) {
-    return
-  }
-
-  const currentIndex = items.findIndex((model) => model.name === activeModelName.value)
-  const nextIndex = currentIndex < 0 ? 0 : (currentIndex + delta + items.length) % items.length
-  activeModelName.value = items[nextIndex]?.name
-  await scrollActiveOptionIntoView()
-}
-
-async function confirmActive() {
-  if (effectiveDisabled.value) {
-    return
-  }
-  if (!isOpen.value) {
-    await openDropdown()
-    return
-  }
-
-  const model = selectableModels.value.find((item) => item.name === activeModelName.value)
-  if (model) {
-    selectModel(model)
-  }
-}
-
-function closeDropdown() {
+  rememberSelection(model)
+  emit('update:modelValue', model.name)
   isOpen.value = false
 }
 
-async function scrollActiveOptionIntoView() {
-  await nextTick()
-  dropdownRef.value
-    ?.querySelector('[data-ai-model-selector-active="true"]')
-    ?.scrollIntoView({ block: 'nearest' })
-}
-
-function updateDropdownPosition() {
-  const trigger = triggerRef.value
-  if (!trigger) {
-    return
-  }
-
-  const rect = trigger.getBoundingClientRect()
-  const gap = 4
-  const maxDropdownHeight = 240
-  const viewportHeight = window.innerHeight
-  const bottomSpace = viewportHeight - rect.bottom - gap
-  const topSpace = rect.top - gap
-  const shouldOpenUp = bottomSpace < Math.min(maxDropdownHeight, topSpace)
-
-  dropdownStyle.value = {
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
-    top: shouldOpenUp ? undefined : `${rect.bottom + gap}px`,
-    bottom: shouldOpenUp ? `${viewportHeight - rect.top + gap}px` : undefined,
-  }
-}
-
-function handleKeyboard(event: KeyboardEvent) {
+function handleSearchKeydown(event: KeyboardEvent) {
   switch (event.key) {
     case 'ArrowDown':
       event.preventDefault()
-      moveActive(1)
+      event.stopPropagation()
+      focusModelFromSearch(1)
       break
     case 'ArrowUp':
       event.preventDefault()
-      moveActive(-1)
+      event.stopPropagation()
+      focusModelFromSearch(-1)
       break
     case 'Enter':
       event.preventDefault()
-      confirmActive()
-      break
-    case ' ':
-      if (event.target !== searchInputRef.value) {
-        event.preventDefault()
-        confirmActive()
-      }
+      event.stopPropagation()
+      selectCurrentSearchResult()
       break
     case 'Escape':
       event.preventDefault()
-      closeDropdown()
+      event.stopPropagation()
+      isOpen.value = false
       break
+    case 'Tab':
+      break
+    default:
+      event.stopPropagation()
   }
 }
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', updateDropdownPosition)
-  window.removeEventListener('scroll', updateDropdownPosition, true)
-})
 </script>
 
 <template>
   <div
-    ref="rootRef"
     class=":uno: py-4 text-sm transition-all formkit-disabled:pointer-events-none formkit-disabled:cursor-not-allowed first:pt-0 last:pb-0 formkit-disabled:opacity-70"
-    :data-disabled="effectiveDisabled || undefined"
+    :data-disabled="props.disabled || undefined"
   >
-    <label v-if="effectiveLabel" class=":uno: mb-1.5 block text-sm text-gray-700 font-medium">
-      {{ effectiveLabel }}
+    <label
+      v-if="props.label"
+      :for="triggerId"
+      class=":uno: mb-1.5 block text-sm text-gray-700 font-medium"
+    >
+      {{ props.label }}
     </label>
 
-    <div
-      ref="triggerRef"
-      class=":uno: relative"
-      :class="props.fullWidth ? ':uno: w-full' : ':uno: sm:max-w-lg'"
+    <SelectRoot
+      :model-value="selectedValue"
+      :open="isOpen"
+      :name="props.name"
+      :disabled="props.disabled"
+      @update:model-value="handleValueChange"
+      @update:open="handleOpenChange"
     >
-      <button
-        type="button"
-        class=":uno: group relative h-9 w-full flex cursor-pointer items-center border border-gray-200 rounded-md bg-white px-3 text-left text-[14px] transition-colors hover:border-gray-400 focus:outline-none"
-        :class="{
-          ':uno: border-gray-200 bg-gray-50': effectiveDisabled,
-        }"
-        :disabled="effectiveDisabled"
-        :aria-expanded="isOpen"
-        aria-haspopup="listbox"
-        @click="toggleOpen"
-        @keydown="handleKeyboard"
-      >
-        <img
-          v-if="selectedValue && (selectedModel || selectedModelSnapshot)?.provider?.iconUrl"
-          :src="(selectedModel || selectedModelSnapshot)!.provider!.iconUrl!"
-          class=":uno: mr-1.5 size-4 flex-none rounded-sm object-contain"
-          alt=""
-        />
-        <RiBrainLine
-          v-else-if="selectedValue"
-          class=":uno: mr-1.5 size-4 flex-none text-gray-400"
-          aria-hidden="true"
-        />
-        <span
-          class=":uno: min-w-0 flex-1 truncate"
-          :class="selectedValue ? ':uno: text-gray-900' : ':uno: text-gray-500'"
+      <div class=":uno: relative" :class="props.fullWidth ? ':uno: w-full' : ':uno: sm:max-w-lg'">
+        <SelectTrigger
+          :id="triggerId"
+          :aria-describedby="props.help ? helpId : undefined"
+          class=":uno: group h-9 w-full flex cursor-pointer items-center border border-gray-200 rounded-md bg-white px-3 text-left text-[14px] transition-colors disabled:cursor-not-allowed focus:border-gray-400 hover:border-gray-400 disabled:bg-gray-50 focus:outline-none"
+          :class="props.clearable && selectedValue && !props.disabled ? ':uno: pr-8' : ':uno: pr-3'"
         >
-          {{ selectedValue ? selectedDisplayName : effectivePlaceholder }}
-        </span>
+          <SelectValue class=":uno: min-w-0 flex flex-1 items-center">
+            <img
+              v-if="selectedValue && selectedModelDetails?.provider?.iconUrl"
+              :src="selectedModelDetails.provider.iconUrl"
+              class=":uno: mr-1.5 size-4 flex-none rounded-sm object-contain"
+              alt=""
+            />
+            <RiBrainLine
+              v-else-if="selectedValue"
+              class=":uno: mr-1.5 size-4 flex-none text-gray-400"
+              aria-hidden="true"
+            />
+            <span
+              class=":uno: min-w-0 flex-1 truncate"
+              :class="selectedValue ? ':uno: text-gray-900' : ':uno: text-gray-500'"
+            >
+              {{ selectedValue ? selectedDisplayName : props.placeholder }}
+            </span>
+          </SelectValue>
 
-        <span
-          v-if="effectiveClearable && selectedValue && !effectiveDisabled"
-          role="button"
+          <SelectIcon class=":uno: ml-1 flex-none">
+            <MingcuteDownLine
+              class=":uno: size-4 text-gray-500 transition-transform duration-200 group-data-[state=open]:rotate-180"
+              aria-hidden="true"
+            />
+          </SelectIcon>
+        </SelectTrigger>
+
+        <button
+          v-if="props.clearable && selectedValue && !props.disabled"
+          type="button"
           aria-label="清除"
-          class=":uno: ml-1 size-5 flex flex-none items-center justify-center rounded text-gray-500 -mr-1 hover:bg-gray-100 hover:text-gray-700"
+          class=":uno: absolute right-2 top-1/2 z-10 size-5 flex items-center justify-center rounded text-gray-500 -translate-y-1/2 hover:bg-gray-100 hover:text-gray-700"
+          @pointerdown.stop.prevent
           @click.stop="clearSelection"
         >
           <MingcuteCloseLine class=":uno: size-3.5" />
-        </span>
+        </button>
+      </div>
 
-        <MingcuteDownLine
-          class=":uno: ml-1 size-4 flex-none text-gray-500 transition-transform duration-200"
-          :class="{ ':uno: rotate-180': isOpen }"
-          aria-hidden="true"
-        />
-      </button>
-
-      <Teleport to="body">
-        <div
-          v-if="isOpen"
-          ref="dropdownRef"
-          class=":uno: fixed z-[9999] overflow-hidden border border-gray-200 rounded-md bg-white shadow-md"
-          :style="dropdownStyle"
+      <SelectPortal>
+        <SelectContent
+          position="popper"
+          align="start"
+          :side-offset="4"
+          :collision-padding="8"
+          :body-lock="false"
+          :disable-outside-pointer-events="false"
+          class=":uno: z-[9999] overflow-hidden border border-gray-200 rounded-md bg-white shadow-md"
+          :style="{
+            width: 'min(var(--reka-select-trigger-width), 32rem)',
+            maxHeight: 'min(26rem, var(--reka-select-content-available-height))',
+          }"
         >
           <div class=":uno: border-b border-gray-100 p-1">
             <div
@@ -447,14 +364,14 @@ onBeforeUnmount(() => {
             >
               <MingcuteSearchLine class=":uno: size-4 flex-none text-gray-500" aria-hidden="true" />
               <input
-                ref="searchInputRef"
+                ref="searchInput"
                 v-model="keyword"
                 type="text"
                 autocomplete="off"
-                :placeholder="effectiveSearchPlaceholder"
-                :disabled="effectiveDisabled"
-                class=":uno: h-full min-w-0 flex-1 border-none bg-transparent text-base text-gray-800 outline-none !p-0 placeholder:text-sm placeholder:text-gray-500"
-                @keydown="handleKeyboard"
+                :placeholder="props.searchPlaceholder"
+                :disabled="props.disabled"
+                class=":uno: h-full min-w-0 flex-1 border-none text-base text-gray-800 outline-none !bg-transparent !p-0 placeholder:text-sm placeholder:text-gray-500"
+                @keydown="handleSearchKeydown"
               />
               <button
                 v-if="keyword"
@@ -474,107 +391,56 @@ onBeforeUnmount(() => {
             {{ emptyText }}
           </div>
 
-          <div v-else class=":uno: max-h-60 overflow-y-auto pb-1" role="listbox">
-            <div v-for="group in groups" :key="group.key" class=":uno: mt-1.5 first:mt-0">
-              <div
-                class=":uno: sticky top-0 z-10 flex select-none items-center gap-2 bg-gray-50 px-3 py-1.5"
-              >
-                <img
-                  v-if="group.models[0]?.provider?.iconUrl"
-                  :src="group.models[0].provider?.iconUrl"
-                  class=":uno: size-4 flex-none rounded-sm object-contain"
-                  alt=""
-                />
-                <RiBrainLine
-                  v-else
-                  class=":uno: size-4 flex-none text-gray-400"
-                  aria-hidden="true"
-                />
-                <span class=":uno: text-[11px] text-gray-500 font-semibold tracking-wide uppercase">
-                  {{ group.label }}
-                </span>
-              </div>
+          <template v-else>
+            <SelectScrollUpButton
+              class=":uno: h-5 flex cursor-default items-center justify-center border-b border-gray-100 bg-gray-50/80 text-gray-500"
+            >
+              <MingcuteDownLine class=":uno: size-4 rotate-180" aria-hidden="true" />
+            </SelectScrollUpButton>
 
-              <div
-                v-for="model in group.models"
-                :key="model.name"
-                role="option"
-                :aria-selected="model.name === selectedValue"
-                :data-ai-model-selector-active="model.name === activeModelName ? 'true' : undefined"
-                class=":uno: relative mx-1.5 flex cursor-pointer select-none items-center gap-1.5 rounded-lg py-2 pl-3 pr-2 text-[13px] leading-5 transition-colors"
-                :class="[
-                  model.name === selectedValue
-                    ? ':uno: bg-blue-50 font-medium text-blue-700'
-                    : model.name === activeModelName
-                      ? ':uno: bg-gray-100 text-gray-900'
-                      : ':uno: text-gray-800 hover:bg-gray-100 hover:text-gray-900',
-                  effectiveDisabled || !isModelOptionSelectable(model)
-                    ? ':uno: cursor-not-allowed opacity-50'
-                    : '',
-                ]"
-                @mouseenter="activeModelName = model.name"
-                @click="selectModel(model)"
-              >
-                <span class=":uno: min-w-0 flex-1">
-                  <span class=":uno: flex items-center gap-1.5">
-                    <span class=":uno: min-w-0 truncate leading-5">
-                      {{ modelOptionDisplayName(model) }}
-                    </span>
-                    <span
-                      v-if="shouldShowModelId(model)"
-                      class=":uno: flex-none text-[11px] leading-4 opacity-50"
-                    >
-                      {{ model.modelId }}
-                    </span>
+            <SelectViewport class=":uno: max-h-80 pb-1">
+              <SelectGroup v-for="group in groups" :key="group.key" class=":uno: mt-1.5 first:mt-0">
+                <SelectLabel
+                  class=":uno: sticky top-0 z-10 flex select-none items-center gap-2 border-b border-gray-100 bg-gray-50/95 px-3 py-2"
+                >
+                  <img
+                    v-if="group.models[0]?.provider?.iconUrl"
+                    :src="group.models[0].provider.iconUrl"
+                    class=":uno: size-4 flex-none rounded-sm object-contain"
+                    alt=""
+                  />
+                  <RiBrainLine
+                    v-else
+                    class=":uno: size-4 flex-none text-gray-400"
+                    aria-hidden="true"
+                  />
+                  <span class=":uno: text-xs text-gray-700 font-medium">
+                    {{ group.label }}
                   </span>
-                  <span
-                    v-if="shouldShowModelDetails(model)"
-                    class=":uno: mt-1 flex flex-wrap items-center gap-1"
-                  >
-                    <span
-                      v-if="modelTypeLabel(model.modelType)"
-                      class=":uno: h-4 inline-flex items-center rounded bg-gray-100 px-1 text-[10px] text-gray-600 leading-4"
-                    >
-                      {{ modelTypeLabel(model.modelType) }}
-                    </span>
-                    <span
-                      v-for="feature in model.features"
-                      :key="feature"
-                      class=":uno: h-4 inline-flex items-center rounded bg-gray-100 px-1 text-[10px] text-gray-600 leading-4"
-                    >
-                      {{ modelFeatureLabel(feature) }}
-                    </span>
-                    <span
-                      v-for="capability in capabilitySummaryLabels(model.capabilities)"
-                      :key="capability"
-                      class=":uno: h-4 inline-flex items-center rounded bg-emerald-50 px-1 text-[10px] text-emerald-700 leading-4"
-                    >
-                      {{ capability }}
-                    </span>
-                    <span
-                      v-if="!isModelOptionSelectable(model)"
-                      class=":uno: text-[11px] text-red-600 leading-4"
-                    >
-                      {{
-                        capabilityUnavailableDetailsLabel(model) ||
-                        modelOptionUnavailableReasonLabel(model.unavailableReason)
-                      }}
-                    </span>
-                  </span>
-                </span>
+                </SelectLabel>
 
-                <MingcuteCheckLine
-                  v-if="model.name === selectedValue"
-                  class=":uno: size-3.5 flex-none text-blue-600"
-                  aria-hidden="true"
+                <AiModelSelectOption
+                  v-for="model in group.models"
+                  :key="model.name"
+                  :model="model"
+                  :selected="model.name === selectedValue"
+                  @select="rememberSelection"
                 />
-              </div>
-            </div>
-          </div>
-        </div>
-      </Teleport>
-    </div>
+              </SelectGroup>
+            </SelectViewport>
 
-    <p v-if="effectiveHelp" class=":uno: mt-2 text-xs text-gray-500">{{ effectiveHelp }}</p>
+            <SelectScrollDownButton
+              class=":uno: h-5 flex cursor-default items-center justify-center border-t border-gray-100 bg-gray-50/80 text-gray-500"
+            >
+              <MingcuteDownLine class=":uno: size-4" aria-hidden="true" />
+            </SelectScrollDownButton>
+          </template>
+        </SelectContent>
+      </SelectPortal>
+    </SelectRoot>
+
+    <p v-if="props.help" :id="helpId" class=":uno: mt-2 text-xs text-gray-500">
+      {{ props.help }}
+    </p>
   </div>
 </template>

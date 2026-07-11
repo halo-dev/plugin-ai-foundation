@@ -34,16 +34,21 @@ export function selectedModelDisplayName(
   return model ? modelOptionDisplayName(model) : selectedValue
 }
 
-export function nextActiveModelName(
-  models: ModelOption[],
-  selectedValue: string,
-  currentActiveName?: string,
-) {
-  if (currentActiveName && models.some((model) => model.name === currentActiveName)) {
-    return currentActiveName
-  }
+export function modelCapabilityLabels(model: ModelOption) {
+  const featureLabels = new Set((model.features ?? []).map(modelFeatureLabel))
+  return capabilitySummaryLabels(model.capabilities).filter((label) => !featureLabels.has(label))
+}
 
-  return models.find((model) => model.name === selectedValue)?.name || models[0]?.name
+export function modelDetailLabels(model: ModelOption) {
+  return Array.from(
+    new Set(
+      [
+        modelTypeLabel(model.modelType),
+        ...(model.features ?? []).map(modelFeatureLabel),
+        ...modelCapabilityLabels(model),
+      ].filter(Boolean),
+    ),
+  )
 }
 
 export function shouldShowModelId(model: ModelOption) {
@@ -53,12 +58,7 @@ export function shouldShowModelId(model: ModelOption) {
 }
 
 export function shouldShowModelDetails(model: ModelOption) {
-  return Boolean(
-    model.modelType ||
-    model.features?.length ||
-    capabilitySummaryLabels(model.capabilities).length ||
-    !isModelOptionSelectable(model),
-  )
+  return modelDetailLabels(model).length > 0 || !isModelOptionSelectable(model)
 }
 
 export function modelFeatureLabel(feature: string): string {

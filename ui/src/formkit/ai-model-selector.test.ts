@@ -1,9 +1,10 @@
-import type { ModelOption } from '@/api/generated'
+import { ModelOptionFeaturesEnum, type ModelOption } from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
+  modelCapabilityLabels,
+  modelDetailLabels,
   modelOptionDisplayName,
   modelOptionUnavailableReasonLabel,
-  nextActiveModelName,
   selectedModelDisplayName,
   shouldShowModelDetails,
   shouldShowModelId,
@@ -17,18 +18,6 @@ describe('ai model selector helpers', () => {
     expect(modelOptionDisplayName(current)).toBe('Current model')
     expect(selectedModelDisplayName(undefined, snapshot, 'missing')).toBe('snapshot-id')
     expect(selectedModelDisplayName(undefined, undefined, 'raw-value')).toBe('raw-value')
-  })
-
-  it('keeps a valid active option or falls back to the selected/first selectable model', () => {
-    const models = [
-      model({ name: 'first' }),
-      model({ name: 'selected' }),
-      model({ name: 'active' }),
-    ]
-
-    expect(nextActiveModelName(models, 'selected', 'active')).toBe('active')
-    expect(nextActiveModelName(models, 'selected', 'missing')).toBe('selected')
-    expect(nextActiveModelName(models, 'missing', undefined)).toBe('first')
   })
 
   it('keeps model id and detail visibility rules outside the Vue template', () => {
@@ -48,6 +37,33 @@ describe('ai model selector helpers', () => {
       ),
     ).toBe(true)
     expect(shouldShowModelDetails(model({ name: 'plain' }))).toBe(false)
+  })
+
+  it('does not repeat capability labels already shown as feature labels', () => {
+    const capabilities = { language: { imageInput: true } }
+
+    expect(
+      modelCapabilityLabels(
+        model({
+          name: 'vision',
+          features: [ModelOptionFeaturesEnum.Vision],
+          capabilities,
+        }),
+      ),
+    ).not.toContain('图片识别')
+    expect(modelCapabilityLabels(model({ name: 'capability-only', capabilities }))).toContain(
+      '图片识别',
+    )
+    expect(
+      modelDetailLabels(
+        model({
+          name: 'vision',
+          modelType: 'language',
+          features: [ModelOptionFeaturesEnum.Vision],
+          capabilities,
+        }),
+      ),
+    ).toEqual(['语言', '图片识别'])
   })
 
   it('labels capability mismatch as unavailable reason', () => {
