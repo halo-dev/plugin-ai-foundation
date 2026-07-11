@@ -12,16 +12,17 @@ import {
   VSpace,
 } from '@halo-dev/components'
 import { useFuse } from '@vueuse/integrations'
-import { computed, shallowRef } from 'vue'
+import { useRouteQuery } from '@vueuse/router'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import AllModelListItem from './components/AllModelListItem.vue'
 
 const { data, isLoading, isFetching, refetch } = useModelsFetch({})
 const router = useRouter()
 
-const keyword = shallowRef('')
-const modelTypeFilter = shallowRef('')
-const featureFilter = shallowRef('')
+const keyword = useRouteQuery<string>('keyword', '')
+const modelTypeFilter = useRouteQuery<string | undefined>('modelType')
+const featureFilter = useRouteQuery<string | undefined>('feature')
 
 const allModels = computed(() => data.value || [])
 
@@ -54,13 +55,18 @@ const filteredModels = computed(() => {
   })
 })
 
-const hasFilters = computed(() => !!(keyword.value || modelTypeFilter.value || featureFilter.value))
+const hasFilters = computed(() => !!(modelTypeFilter.value || featureFilter.value))
 
 const resultText = computed(() => {
-  return hasFilters.value
+  return keyword.value || hasFilters.value
     ? `找到 ${filteredModels.value.length} 个模型`
     : `共 ${allModels.value.length} 个模型`
 })
+
+function handleClearFilters() {
+  modelTypeFilter.value = undefined
+  featureFilter.value = undefined
+}
 
 function openProviderConfig() {
   void router.push({
@@ -81,40 +87,39 @@ function openProviderConfig() {
             <div class=":uno: w-full flex flex-1 items-center gap-2 lg:w-auto">
               <SearchInput sync v-model="keyword" />
             </div>
-            <div class=":uno: grid grid-cols-1 w-full gap-2 sm:grid-cols-2 lg:w-auto">
-              <select
+            <VSpace>
+              <FilterCleanButton v-if="hasFilters" @click="handleClearFilters" />
+              <FilterDropdown
                 v-model="modelTypeFilter"
-                class=":uno: h-9 min-w-36 rounded-md bg-white text-sm text-gray-700 outline-none !border !border-gray-200 !border-solid !px-3 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
-              >
-                <option value="">全部类型</option>
-                <option v-for="item in MODEL_TYPE_OPTIONS" :key="item.value" :value="item.value">
-                  {{ item.label }}
-                </option>
-              </select>
-              <select
+                label="类型"
+                :items="[
+                  {
+                    label: '全部',
+                  },
+                  ...MODEL_TYPE_OPTIONS,
+                ]"
+              />
+              <FilterDropdown
                 v-model="featureFilter"
-                class=":uno: h-9 min-w-36 rounded-md bg-white text-sm text-gray-700 outline-none !border !border-gray-200 !border-solid !px-3 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
+                label="特性"
+                :items="[
+                  {
+                    label: '全部',
+                  },
+                  ...MODEL_FEATURE_OPTIONS,
+                ]"
+              />
+              <button
+                type="button"
+                class=":uno: group cursor-pointer rounded p-1 hover:bg-gray-200"
+                @click="refetch()"
+                v-tooltip="`刷新`"
               >
-                <option value="">全部特性</option>
-                <option v-for="item in MODEL_FEATURE_OPTIONS" :key="item.value" :value="item.value">
-                  {{ item.label }}
-                </option>
-              </select>
-            </div>
-            <VSpace spacing="lg" class=":uno: flex-wrap lg:ml-auto">
-              <div class=":uno: flex flex-row gap-2">
-                <button
-                  type="button"
-                  class=":uno: group size-9 inline-flex cursor-pointer items-center justify-center border border-gray-200 rounded-md bg-white hover:bg-gray-50"
-                  @click="refetch()"
-                  v-tooltip="`刷新`"
-                >
-                  <IconRefreshLine
-                    :class="{ ':uno: animate-spin text-gray-900': isFetching }"
-                    class=":uno: size-4 text-gray-600 group-hover:text-gray-900"
-                  />
-                </button>
-              </div>
+                <IconRefreshLine
+                  :class="{ ':uno: animate-spin text-gray-900': isFetching }"
+                  class=":uno: h-4 w-4 text-gray-600 group-hover:text-gray-900"
+                />
+              </button>
             </VSpace>
           </div>
         </div>
