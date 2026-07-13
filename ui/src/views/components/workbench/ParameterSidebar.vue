@@ -1,14 +1,13 @@
 <script lang="ts" setup>
 import type { OutputMode, ReasoningEffort, ReasoningMode } from '@/utils/model-test-workbench'
-import { VSwitch } from '@halo-dev/components'
-import { computed } from 'vue'
-import RiArrowRightSLine from '~icons/ri/arrow-right-s-line'
-import RiFlaskLine from '~icons/ri/flask-line'
 import RiSettings3Line from '~icons/ri/settings-3-line'
+import ChatParameterPanel from './ChatParameterPanel.vue'
+import EmbeddingParameterPanel from './EmbeddingParameterPanel.vue'
+import ImageParameterPanel from './ImageParameterPanel.vue'
 
 type ImageResponseFormat = 'DEFAULT' | 'URL' | 'BASE64'
 
-const props = defineProps<{
+defineProps<{
   mode: 'chat' | 'embedding' | 'rerank' | 'image'
   systemPrompt?: string
   temperature?: number
@@ -23,8 +22,8 @@ const props = defineProps<{
   topLogprobs?: number
   parallelToolCalls?: boolean
   maxTokens?: number
-  seed?: number | undefined
-  maxRetries?: number | undefined
+  seed?: number
+  maxRetries?: number
   reasoningMode?: ReasoningMode
   reasoningEffort?: ReasoningEffort
   testToolEnabled?: boolean
@@ -38,170 +37,63 @@ const props = defineProps<{
   chatHeadersText?: string
   chatHeadersError?: string
   outputError?: string
-  embeddingDimensions?: number | undefined
-  embeddingMaxBatchSize?: number | undefined
-  embeddingMaxParallelCalls?: number | undefined
-  embeddingMaxRetries?: number | undefined
-  imageN?: number | undefined
-  imageWidth?: number | undefined
-  imageHeight?: number | undefined
+  embeddingDimensions?: number
+  embeddingMaxBatchSize?: number
+  embeddingMaxParallelCalls?: number
+  embeddingMaxRetries?: number
+  imageN?: number
+  imageWidth?: number
+  imageHeight?: number
   imageAspectRatio?: string
-  imageSeed?: number | undefined
+  imageSeed?: number
   imageResponseFormat?: ImageResponseFormat
-  imageMaxRetries?: number | undefined
-  imageMaxParallelCalls?: number | undefined
+  imageMaxRetries?: number
+  imageMaxParallelCalls?: number
   imageHeadersText?: string
   imageHeadersError?: string
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:systemPrompt', value: string): void
-  (e: 'update:temperature', value: number): void
-  (e: 'update:topP', value: number): void
-  (e: 'update:topK', value: number | undefined): void
-  (e: 'update:minP', value: number | undefined): void
-  (e: 'update:presencePenalty', value: number | undefined): void
-  (e: 'update:frequencyPenalty', value: number | undefined): void
-  (e: 'update:repetitionPenalty', value: number | undefined): void
-  (e: 'update:stopSequencesText', value: string): void
-  (e: 'update:logprobs', value: boolean | undefined): void
-  (e: 'update:topLogprobs', value: number | undefined): void
-  (e: 'update:parallelToolCalls', value: boolean | undefined): void
-  (e: 'update:maxTokens', value: number): void
-  (e: 'update:seed', value: number | undefined): void
-  (e: 'update:maxRetries', value: number | undefined): void
-  (e: 'update:reasoningMode', value: ReasoningMode): void
-  (e: 'update:reasoningEffort', value: ReasoningEffort): void
-  (e: 'update:testToolEnabled', value: boolean): void
-  (e: 'update:testToolApprovalEnabled', value: boolean): void
-  (e: 'update:externalTestToolEnabled', value: boolean): void
-  (e: 'update:agentTestToolsEnabled', value: boolean): void
-  (e: 'update:toolCallRepairEnabled', value: boolean): void
-  (e: 'update:outputMode', value: OutputMode): void
-  (e: 'update:outputSchemaText', value: string): void
-  (e: 'update:outputChoicesText', value: string): void
-  (e: 'update:chatHeadersText', value: string): void
-  (e: 'update:embeddingDimensions', value: number | undefined): void
-  (e: 'update:embeddingMaxBatchSize', value: number | undefined): void
-  (e: 'update:embeddingMaxParallelCalls', value: number | undefined): void
-  (e: 'update:embeddingMaxRetries', value: number | undefined): void
-  (e: 'update:imageN', value: number | undefined): void
-  (e: 'update:imageWidth', value: number | undefined): void
-  (e: 'update:imageHeight', value: number | undefined): void
-  (e: 'update:imageAspectRatio', value: string): void
-  (e: 'update:imageSeed', value: number | undefined): void
-  (e: 'update:imageResponseFormat', value: ImageResponseFormat): void
-  (e: 'update:imageMaxRetries', value: number | undefined): void
-  (e: 'update:imageMaxParallelCalls', value: number | undefined): void
-  (e: 'update:imageHeadersText', value: string): void
+  'update:systemPrompt': [value: string]
+  'update:temperature': [value: number]
+  'update:topP': [value: number]
+  'update:topK': [value: number | undefined]
+  'update:minP': [value: number | undefined]
+  'update:presencePenalty': [value: number | undefined]
+  'update:frequencyPenalty': [value: number | undefined]
+  'update:repetitionPenalty': [value: number | undefined]
+  'update:stopSequencesText': [value: string]
+  'update:logprobs': [value: boolean | undefined]
+  'update:topLogprobs': [value: number | undefined]
+  'update:parallelToolCalls': [value: boolean | undefined]
+  'update:maxTokens': [value: number]
+  'update:seed': [value: number | undefined]
+  'update:maxRetries': [value: number | undefined]
+  'update:reasoningMode': [value: ReasoningMode]
+  'update:reasoningEffort': [value: ReasoningEffort]
+  'update:testToolEnabled': [value: boolean]
+  'update:testToolApprovalEnabled': [value: boolean]
+  'update:externalTestToolEnabled': [value: boolean]
+  'update:agentTestToolsEnabled': [value: boolean]
+  'update:toolCallRepairEnabled': [value: boolean]
+  'update:outputMode': [value: OutputMode]
+  'update:outputSchemaText': [value: string]
+  'update:outputChoicesText': [value: string]
+  'update:chatHeadersText': [value: string]
+  'update:embeddingDimensions': [value: number | undefined]
+  'update:embeddingMaxBatchSize': [value: number | undefined]
+  'update:embeddingMaxParallelCalls': [value: number | undefined]
+  'update:embeddingMaxRetries': [value: number | undefined]
+  'update:imageN': [value: number | undefined]
+  'update:imageWidth': [value: number | undefined]
+  'update:imageHeight': [value: number | undefined]
+  'update:imageAspectRatio': [value: string]
+  'update:imageSeed': [value: number | undefined]
+  'update:imageResponseFormat': [value: ImageResponseFormat]
+  'update:imageMaxRetries': [value: number | undefined]
+  'update:imageMaxParallelCalls': [value: number | undefined]
+  'update:imageHeadersText': [value: string]
 }>()
-
-const outputSchemaHelp = computed(() => {
-  return (
-    props.outputError ||
-    (props.outputMode === 'ARRAY' ? '用于校验每个数组元素' : '用于约束最终 JSON 对象')
-  )
-})
-
-const outputChoicesHelp = computed(() => {
-  return props.outputError || '每行一个可选值'
-})
-
-const imageHeadersHelp = computed(() => {
-  return props.imageHeadersError || '请求级 headers，当前 provider 不支持时会返回 warning 或错误'
-})
-
-type NumberFieldKey =
-  | 'temperature'
-  | 'topP'
-  | 'topK'
-  | 'minP'
-  | 'presencePenalty'
-  | 'frequencyPenalty'
-  | 'repetitionPenalty'
-  | 'topLogprobs'
-  | 'maxTokens'
-  | 'seed'
-  | 'maxRetries'
-  | 'embeddingDimensions'
-  | 'embeddingMaxBatchSize'
-  | 'embeddingMaxParallelCalls'
-  | 'embeddingMaxRetries'
-  | 'imageN'
-  | 'imageWidth'
-  | 'imageHeight'
-  | 'imageSeed'
-  | 'imageMaxRetries'
-  | 'imageMaxParallelCalls'
-
-function updateNumberField(key: NumberFieldKey, value: string) {
-  const num = value === '' ? undefined : Number(value)
-  switch (key) {
-    case 'temperature':
-      emit('update:temperature', num as number)
-      break
-    case 'topP':
-      emit('update:topP', num as number)
-      break
-    case 'topK':
-      emit('update:topK', num)
-      break
-    case 'minP':
-      emit('update:minP', num)
-      break
-    case 'presencePenalty':
-      emit('update:presencePenalty', num)
-      break
-    case 'frequencyPenalty':
-      emit('update:frequencyPenalty', num)
-      break
-    case 'repetitionPenalty':
-      emit('update:repetitionPenalty', num)
-      break
-    case 'topLogprobs':
-      emit('update:topLogprobs', num)
-      break
-    case 'maxTokens':
-      emit('update:maxTokens', num as number)
-      break
-    case 'seed':
-      emit('update:seed', num)
-      break
-    case 'maxRetries':
-      emit('update:maxRetries', num)
-      break
-    case 'embeddingDimensions':
-      emit('update:embeddingDimensions', num)
-      break
-    case 'embeddingMaxBatchSize':
-      emit('update:embeddingMaxBatchSize', num)
-      break
-    case 'embeddingMaxParallelCalls':
-      emit('update:embeddingMaxParallelCalls', num)
-      break
-    case 'embeddingMaxRetries':
-      emit('update:embeddingMaxRetries', num)
-      break
-    case 'imageN':
-      emit('update:imageN', num)
-      break
-    case 'imageWidth':
-      emit('update:imageWidth', num)
-      break
-    case 'imageHeight':
-      emit('update:imageHeight', num)
-      break
-    case 'imageSeed':
-      emit('update:imageSeed', num)
-      break
-    case 'imageMaxRetries':
-      emit('update:imageMaxRetries', num)
-      break
-    case 'imageMaxParallelCalls':
-      emit('update:imageMaxParallelCalls', num)
-      break
-  }
-}
 </script>
 
 <template>
@@ -210,9 +102,7 @@ function updateNumberField(key: NumberFieldKey, value: string) {
   >
     <div class=":uno: border-b border-slate-200 bg-slate-50/70 px-4 py-3">
       <div class=":uno: flex items-center gap-2">
-        <span
-          class=":uno: h-7 w-7 flex items-center justify-center rounded-lg text-slate-600"
-        >
+        <span class=":uno: h-7 w-7 flex items-center justify-center rounded-lg text-slate-600">
           <RiSettings3Line class=":uno: size-4" />
         </span>
         <span class=":uno: text-sm text-slate-950 font-semibold">参数设置</span>
@@ -221,642 +111,98 @@ function updateNumberField(key: NumberFieldKey, value: string) {
     </div>
 
     <div class=":uno: flex-1 overflow-y-auto px-4 py-3">
-      <template v-if="mode === 'chat'">
-        <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            系统提示词
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <textarea
-              :value="systemPrompt"
-              rows="4"
-              placeholder="可选：设置 AI 的角色和行为规则..."
-              class=":uno: w-full text-slate-700 leading-relaxed outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-              @input="emit('update:systemPrompt', ($event.target as HTMLTextAreaElement).value)"
-            />
-          </div>
-        </details>
+      <ChatParameterPanel
+        v-if="mode === 'chat'"
+        :system-prompt="systemPrompt"
+        :temperature="temperature"
+        :top-p="topP"
+        :top-k="topK"
+        :min-p="minP"
+        :presence-penalty="presencePenalty"
+        :frequency-penalty="frequencyPenalty"
+        :repetition-penalty="repetitionPenalty"
+        :stop-sequences-text="stopSequencesText"
+        :logprobs="logprobs"
+        :top-logprobs="topLogprobs"
+        :parallel-tool-calls="parallelToolCalls"
+        :max-tokens="maxTokens"
+        :seed="seed"
+        :max-retries="maxRetries"
+        :reasoning-mode="reasoningMode"
+        :reasoning-effort="reasoningEffort"
+        :test-tool-enabled="testToolEnabled"
+        :test-tool-approval-enabled="testToolApprovalEnabled"
+        :external-test-tool-enabled="externalTestToolEnabled"
+        :agent-test-tools-enabled="agentTestToolsEnabled"
+        :tool-call-repair-enabled="toolCallRepairEnabled"
+        :output-mode="outputMode"
+        :output-schema-text="outputSchemaText"
+        :output-choices-text="outputChoicesText"
+        :chat-headers-text="chatHeadersText"
+        :chat-headers-error="chatHeadersError"
+        :output-error="outputError"
+        @update:system-prompt="emit('update:systemPrompt', $event)"
+        @update:temperature="emit('update:temperature', $event)"
+        @update:top-p="emit('update:topP', $event)"
+        @update:top-k="emit('update:topK', $event)"
+        @update:min-p="emit('update:minP', $event)"
+        @update:presence-penalty="emit('update:presencePenalty', $event)"
+        @update:frequency-penalty="emit('update:frequencyPenalty', $event)"
+        @update:repetition-penalty="emit('update:repetitionPenalty', $event)"
+        @update:stop-sequences-text="emit('update:stopSequencesText', $event)"
+        @update:logprobs="emit('update:logprobs', $event)"
+        @update:top-logprobs="emit('update:topLogprobs', $event)"
+        @update:parallel-tool-calls="emit('update:parallelToolCalls', $event)"
+        @update:max-tokens="emit('update:maxTokens', $event)"
+        @update:seed="emit('update:seed', $event)"
+        @update:max-retries="emit('update:maxRetries', $event)"
+        @update:reasoning-mode="emit('update:reasoningMode', $event)"
+        @update:reasoning-effort="emit('update:reasoningEffort', $event)"
+        @update:test-tool-enabled="emit('update:testToolEnabled', $event)"
+        @update:test-tool-approval-enabled="emit('update:testToolApprovalEnabled', $event)"
+        @update:external-test-tool-enabled="emit('update:externalTestToolEnabled', $event)"
+        @update:agent-test-tools-enabled="emit('update:agentTestToolsEnabled', $event)"
+        @update:tool-call-repair-enabled="emit('update:toolCallRepairEnabled', $event)"
+        @update:output-mode="emit('update:outputMode', $event)"
+        @update:output-schema-text="emit('update:outputSchemaText', $event)"
+        @update:output-choices-text="emit('update:outputChoicesText', $event)"
+        @update:chat-headers-text="emit('update:chatHeadersText', $event)"
+      />
 
-        <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            <RiFlaskLine class=":uno: size-3.5" />
-            采样参数
-          </summary>
-          <div class=":uno: pb-3 pl-5 space-y-3">
-            <div class=":uno: space-y-1">
-              <div class=":uno: flex items-center justify-between">
-                <label class=":uno: text-xs text-slate-600 font-medium">Temperature</label>
-                <span
-                  class=":uno: border border-slate-200 rounded-md bg-white text-xs text-slate-700 !px-1.5 !py-0.5"
-                >
-                  {{ temperature }}
-                </span>
-              </div>
-              <input
-                type="range"
-                :value="temperature"
-                min="0"
-                max="2"
-                step="0.1"
-                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
-                @input="updateNumberField('temperature', ($event.target as HTMLInputElement).value)"
-              />
-              <div class=":uno: flex justify-between text-[10px] text-slate-400">
-                <span>精确</span>
-                <span>平衡</span>
-                <span>创意</span>
-              </div>
-            </div>
+      <EmbeddingParameterPanel
+        v-else-if="mode === 'embedding'"
+        :embedding-dimensions="embeddingDimensions"
+        :embedding-max-batch-size="embeddingMaxBatchSize"
+        :embedding-max-parallel-calls="embeddingMaxParallelCalls"
+        :embedding-max-retries="embeddingMaxRetries"
+        @update:embedding-dimensions="emit('update:embeddingDimensions', $event)"
+        @update:embedding-max-batch-size="emit('update:embeddingMaxBatchSize', $event)"
+        @update:embedding-max-parallel-calls="emit('update:embeddingMaxParallelCalls', $event)"
+        @update:embedding-max-retries="emit('update:embeddingMaxRetries', $event)"
+      />
 
-            <div class=":uno: space-y-1">
-              <div class=":uno: flex items-center justify-between">
-                <label class=":uno: text-xs text-slate-600 font-medium">Top P</label>
-                <span
-                  class=":uno: border border-slate-200 rounded-md bg-white text-xs text-slate-700 !px-1.5 !py-0.5"
-                >
-                  {{ topP }}
-                </span>
-              </div>
-              <input
-                type="range"
-                :value="topP"
-                min="0"
-                max="1"
-                step="0.05"
-                class=":uno: h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-600 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:border-2 [&::-webkit-slider-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:rounded-full [&::-webkit-slider-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-700 [&::-webkit-slider-thumb]:bg-teal-700 [&::-moz-range-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)] [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(15,23,42,0.24)]"
-                @input="updateNumberField('topP', ($event.target as HTMLInputElement).value)"
-              />
-            </div>
-
-            <div class=":uno: space-y-1">
-              <div class=":uno: flex items-center justify-between">
-                <label class=":uno: text-xs text-slate-600 font-medium">Max Tokens</label>
-                <input
-                  type="number"
-                  :value="maxTokens"
-                  min="1"
-                  step="1"
-                  class=":uno: w-20 text-right text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="updateNumberField('maxTokens', ($event.target as HTMLInputElement).value)"
-                />
-              </div>
-            </div>
-
-            <div class=":uno: grid grid-cols-2 gap-2">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Seed</label>
-                <input
-                  type="number"
-                  :value="seed"
-                  step="1"
-                  placeholder="随机"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="updateNumberField('seed', ($event.target as HTMLInputElement).value)"
-                />
-              </div>
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Max Retries</label>
-                <input
-                  type="number"
-                  :value="maxRetries"
-                  min="0"
-                  step="1"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField('maxRetries', ($event.target as HTMLInputElement).value)
-                  "
-                />
-              </div>
-            </div>
-            <div
-              v-if="maxRetries !== undefined"
-              class=":uno: rounded-md bg-slate-50 text-[10px] text-slate-500 !px-2 !py-1.5"
-            >
-              仅作用于可重试的非流式 provider 调用，0 表示不重试
-            </div>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            完整生成参数
-          </summary>
-          <div class=":uno: grid grid-cols-2 gap-2 pb-3 pl-5">
-            <label
-              v-for="field in [
-                { key: 'topK', label: 'Top K', value: topK, step: 1, min: 0 },
-                { key: 'minP', label: 'Min P', value: minP, step: 0.01, min: 0 },
-                { key: 'presencePenalty', label: '存在惩罚', value: presencePenalty, step: 0.1 },
-                { key: 'frequencyPenalty', label: '频率惩罚', value: frequencyPenalty, step: 0.1 },
-                { key: 'repetitionPenalty', label: '重复惩罚', value: repetitionPenalty, step: 0.1, min: 0 },
-                { key: 'topLogprobs', label: 'Top Logprobs', value: topLogprobs, step: 1, min: 0 },
-              ]"
-              :key="field.key"
-              class=":uno: text-xs text-slate-600"
-            >
-              {{ field.label }}
-              <input
-                type="number"
-                :value="field.value"
-                :step="field.step"
-                :min="field.min"
-                placeholder="默认"
-                class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                @input="updateNumberField(field.key as NumberFieldKey, ($event.target as HTMLInputElement).value)"
-              />
-            </label>
-
-            <label class=":uno: col-span-2 text-xs text-slate-600">
-              停止序列（每行一个）
-              <textarea
-                :value="stopSequencesText"
-                rows="3"
-                class=":uno: mt-1 w-full resize-none text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                @input="emit('update:stopSequencesText', ($event.target as HTMLTextAreaElement).value)"
-              />
-            </label>
-
-            <label class=":uno: text-xs text-slate-600">
-              Token 概率
-              <select
-                :value="logprobs === undefined ? '' : String(logprobs)"
-                class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs"
-                @change="emit('update:logprobs', ($event.target as HTMLSelectElement).value === '' ? undefined : ($event.target as HTMLSelectElement).value === 'true')"
-              >
-                <option value="">默认</option>
-                <option value="true">启用</option>
-                <option value="false">禁用</option>
-              </select>
-            </label>
-
-            <label class=":uno: text-xs text-slate-600">
-              并行工具调用
-              <select
-                :value="parallelToolCalls === undefined ? '' : String(parallelToolCalls)"
-                class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs"
-                @change="emit('update:parallelToolCalls', ($event.target as HTMLSelectElement).value === '' ? undefined : ($event.target as HTMLSelectElement).value === 'true')"
-              >
-                <option value="">默认</option>
-                <option value="true">启用</option>
-                <option value="false">禁用</option>
-              </select>
-            </label>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            推理控制
-          </summary>
-          <div class=":uno: pb-3 pl-5 space-y-3">
-            <div class=":uno: space-y-1">
-              <label class=":uno: text-xs text-slate-600 font-medium">模式</label>
-              <select
-                :value="reasoningMode"
-                class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                @change="
-                  emit(
-                    'update:reasoningMode',
-                    ($event.target as HTMLSelectElement).value as ReasoningMode,
-                  )
-                "
-              >
-                <option value="DEFAULT">默认（不传递推理参数）</option>
-                <option value="ENABLED">启用推理</option>
-                <option value="DISABLED">禁用推理</option>
-                <option value="EFFORT">按 Effort 控制</option>
-              </select>
-              <div class=":uno: text-[10px] text-slate-400">
-                默认表示不传 provider 原生推理参数；启用、禁用和 effort 需要当前 provider 支持
-              </div>
-            </div>
-
-            <div v-if="reasoningMode === 'EFFORT'" class=":uno: space-y-1">
-              <label class=":uno: text-xs text-slate-600 font-medium">Effort</label>
-              <select
-                :value="reasoningEffort"
-                class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                @change="
-                  emit(
-                    'update:reasoningEffort',
-                    ($event.target as HTMLSelectElement).value as ReasoningEffort,
-                  )
-                "
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-              </select>
-            </div>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            结构化输出
-          </summary>
-          <div class=":uno: pb-3 pl-5 space-y-3">
-            <div class=":uno: space-y-1">
-              <label class=":uno: text-xs text-slate-600 font-medium">输出格式</label>
-              <select
-                :value="outputMode"
-                class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                @change="
-                  emit(
-                    'update:outputMode',
-                    ($event.target as HTMLSelectElement).value as OutputMode,
-                  )
-                "
-              >
-                <option value="TEXT">文本</option>
-                <option value="OBJECT">JSON 对象</option>
-                <option value="ARRAY">JSON 数组</option>
-                <option value="CHOICE">枚举选择</option>
-                <option value="JSON">任意 JSON</option>
-              </select>
-            </div>
-
-            <template v-if="outputMode === 'OBJECT' || outputMode === 'ARRAY'">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">{{
-                  outputMode === 'ARRAY' ? '元素 JSON Schema' : 'JSON Schema'
-                }}</label>
-                <textarea
-                  :value="outputSchemaText"
-                  rows="6"
-                  :class="{ ':uno: !border-rose-300': outputError }"
-                  class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    emit('update:outputSchemaText', ($event.target as HTMLTextAreaElement).value)
-                  "
-                />
-                <div
-                  class=":uno: text-[10px]"
-                  :class="outputError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-                >
-                  {{ outputSchemaHelp }}
-                </div>
-              </div>
-            </template>
-
-            <template v-if="outputMode === 'CHOICE'">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">枚举选项</label>
-                <textarea
-                  :value="outputChoicesText"
-                  rows="4"
-                  :class="{ ':uno: !border-rose-300': outputError }"
-                  class=":uno: w-full text-slate-700 leading-relaxed outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    emit('update:outputChoicesText', ($event.target as HTMLTextAreaElement).value)
-                  "
-                />
-                <div
-                  class=":uno: text-[10px]"
-                  :class="outputError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-                >
-                  {{ outputChoicesHelp }}
-                </div>
-              </div>
-            </template>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            工具测试
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <div class=":uno: flex items-center gap-2">
-              <VSwitch
-                :model-value="testToolEnabled"
-                @update:model-value="emit('update:testToolEnabled', $event)"
-              />
-              <span class=":uno: text-xs text-slate-700">启用测试工具</span>
-            </div>
-            <div class=":uno: mt-2 flex items-center gap-2">
-              <VSwitch
-                :model-value="testToolApprovalEnabled"
-                :disabled="!testToolEnabled"
-                @update:model-value="emit('update:testToolApprovalEnabled', $event)"
-              />
-              <span
-                class=":uno: text-xs"
-                :class="testToolEnabled ? ':uno: text-slate-700' : ':uno: text-slate-400'"
-              >
-                工具执行需要审批
-              </span>
-            </div>
-            <div class=":uno: mt-2 flex items-center gap-2">
-              <VSwitch
-                :model-value="externalTestToolEnabled"
-                @update:model-value="emit('update:externalTestToolEnabled', $event)"
-              />
-              <span class=":uno: text-xs text-slate-700">启用外部测试工具</span>
-            </div>
-            <div class=":uno: mt-2 flex items-center gap-2">
-              <VSwitch
-                :model-value="agentTestToolsEnabled"
-                @update:model-value="emit('update:agentTestToolsEnabled', $event)"
-              />
-              <span class=":uno: text-xs text-slate-700">启用 Agent 工具测试</span>
-            </div>
-            <div class=":uno: mt-2 flex items-center gap-2">
-              <VSwitch
-                :model-value="toolCallRepairEnabled"
-                @update:model-value="emit('update:toolCallRepairEnabled', $event)"
-              />
-              <span class=":uno: text-xs text-slate-700">启用工具调用修复</span>
-            </div>
-            <div class=":uno: mt-1 text-[10px] text-slate-400">
-              halo_test_info 可用于服务端工具测试；外部工具会注入
-              halo_external_test_info；修复测试会注入 halo_repair_test_info；前端自动工具会注入
-              get_current_page_context 和 halo_agent_test_action，并由工作台前端自动回填工具结果。
-            </div>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            Headers
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <textarea
-              :value="chatHeadersText"
-              rows="4"
-              :class="{ ':uno: !border-rose-300': chatHeadersError }"
-              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-              @input="emit('update:chatHeadersText', ($event.target as HTMLTextAreaElement).value)"
-            />
-            <div
-              class=":uno: mt-1 text-[10px]"
-              :class="chatHeadersError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-            >
-              {{
-                chatHeadersError || '请求级 headers，当前 provider 不支持时会返回 warning 或错误'
-              }}
-            </div>
-          </div>
-        </details>
-      </template>
-
-      <template v-else-if="mode === 'embedding'">
-        <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            嵌入参数
-          </summary>
-          <div class=":uno: pb-3 pl-5 space-y-3">
-            <div class=":uno: grid grid-cols-2 gap-2">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Dimensions</label>
-                <input
-                  type="number"
-                  :value="embeddingDimensions"
-                  min="1"
-                  step="1"
-                  placeholder="默认"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField(
-                      'embeddingDimensions',
-                      ($event.target as HTMLInputElement).value,
-                    )
-                  "
-                />
-              </div>
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Max Batch Size</label>
-                <input
-                  type="number"
-                  :value="embeddingMaxBatchSize"
-                  min="1"
-                  step="1"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField(
-                      'embeddingMaxBatchSize',
-                      ($event.target as HTMLInputElement).value,
-                    )
-                  "
-                />
-              </div>
-            </div>
-
-            <div class=":uno: grid grid-cols-2 gap-2">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Max Parallel Calls</label>
-                <input
-                  type="number"
-                  :value="embeddingMaxParallelCalls"
-                  min="1"
-                  step="1"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField(
-                      'embeddingMaxParallelCalls',
-                      ($event.target as HTMLInputElement).value,
-                    )
-                  "
-                />
-              </div>
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Max Retries</label>
-                <input
-                  type="number"
-                  :value="embeddingMaxRetries"
-                  min="0"
-                  step="1"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField(
-                      'embeddingMaxRetries',
-                      ($event.target as HTMLInputElement).value,
-                    )
-                  "
-                />
-              </div>
-            </div>
-          </div>
-        </details>
-
-      </template>
-
-      <template v-else-if="mode === 'image'">
-        <details class=":uno: group border-b border-slate-200 last:border-b-0" open>
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            图片参数
-          </summary>
-          <div class=":uno: pb-3 pl-5 space-y-3">
-            <div class=":uno: grid grid-cols-2 gap-2">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">数量</label>
-                <input
-                  type="number"
-                  :value="imageN"
-                  min="1"
-                  step="1"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="updateNumberField('imageN', ($event.target as HTMLInputElement).value)"
-                />
-              </div>
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">响应格式</label>
-                <select
-                  :value="imageResponseFormat || 'DEFAULT'"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                  @change="
-                    emit(
-                      'update:imageResponseFormat',
-                      ($event.target as HTMLSelectElement).value as ImageResponseFormat,
-                    )
-                  "
-                >
-                  <option value="DEFAULT">默认</option>
-                  <option value="URL">URL</option>
-                  <option value="BASE64">Base64</option>
-                </select>
-              </div>
-            </div>
-
-            <div class=":uno: grid grid-cols-2 gap-2">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Width</label>
-                <input
-                  type="number"
-                  :value="imageWidth"
-                  min="1"
-                  step="1"
-                  placeholder="默认"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField('imageWidth', ($event.target as HTMLInputElement).value)
-                  "
-                />
-              </div>
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Height</label>
-                <input
-                  type="number"
-                  :value="imageHeight"
-                  min="1"
-                  step="1"
-                  placeholder="默认"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField('imageHeight', ($event.target as HTMLInputElement).value)
-                  "
-                />
-              </div>
-            </div>
-
-            <div class=":uno: space-y-1">
-              <label class=":uno: text-xs text-slate-600 font-medium">Aspect Ratio</label>
-              <input
-                :value="imageAspectRatio"
-                placeholder="例如 16:9"
-                class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                @input="emit('update:imageAspectRatio', ($event.target as HTMLInputElement).value)"
-              />
-            </div>
-
-            <div class=":uno: grid grid-cols-3 gap-2">
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Seed</label>
-                <input
-                  type="number"
-                  :value="imageSeed"
-                  step="1"
-                  placeholder="随机"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField('imageSeed', ($event.target as HTMLInputElement).value)
-                  "
-                />
-              </div>
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Retries</label>
-                <input
-                  type="number"
-                  :value="imageMaxRetries"
-                  min="0"
-                  step="1"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField('imageMaxRetries', ($event.target as HTMLInputElement).value)
-                  "
-                />
-              </div>
-              <div class=":uno: space-y-1">
-                <label class=":uno: text-xs text-slate-600 font-medium">Parallel</label>
-                <input
-                  type="number"
-                  :value="imageMaxParallelCalls"
-                  min="1"
-                  step="1"
-                  class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-                  @input="
-                    updateNumberField(
-                      'imageMaxParallelCalls',
-                      ($event.target as HTMLInputElement).value,
-                    )
-                  "
-                />
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            Headers
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <textarea
-              :value="imageHeadersText"
-              rows="4"
-              :class="{ ':uno: !border-rose-300': imageHeadersError }"
-              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-              @input="emit('update:imageHeadersText', ($event.target as HTMLTextAreaElement).value)"
-            />
-            <div
-              class=":uno: mt-1 text-[10px]"
-              :class="imageHeadersError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-            >
-              {{ imageHeadersHelp }}
-            </div>
-          </div>
-        </details>
-      </template>
+      <ImageParameterPanel
+        v-else-if="mode === 'image'"
+        :image-n="imageN"
+        :image-width="imageWidth"
+        :image-height="imageHeight"
+        :image-aspect-ratio="imageAspectRatio"
+        :image-seed="imageSeed"
+        :image-response-format="imageResponseFormat"
+        :image-max-retries="imageMaxRetries"
+        :image-max-parallel-calls="imageMaxParallelCalls"
+        :image-headers-text="imageHeadersText"
+        :image-headers-error="imageHeadersError"
+        @update:image-n="emit('update:imageN', $event)"
+        @update:image-width="emit('update:imageWidth', $event)"
+        @update:image-height="emit('update:imageHeight', $event)"
+        @update:image-aspect-ratio="emit('update:imageAspectRatio', $event)"
+        @update:image-seed="emit('update:imageSeed', $event)"
+        @update:image-response-format="emit('update:imageResponseFormat', $event)"
+        @update:image-max-retries="emit('update:imageMaxRetries', $event)"
+        @update:image-max-parallel-calls="emit('update:imageMaxParallelCalls', $event)"
+        @update:image-headers-text="emit('update:imageHeadersText', $event)"
+      />
     </div>
   </div>
 </template>

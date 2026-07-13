@@ -26,7 +26,7 @@ defineEmits<{
   <div
     class=":uno: min-h-0 flex-1 overflow-y-auto bg-[#f8fafc] px-4 py-5"
   >
-    <div class=":uno: mx-auto max-w-4xl space-y-3">
+    <div class=":uno: mx-auto max-w-5xl space-y-3">
       <div class=":uno: grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div class=":uno: border border-slate-200 rounded-lg bg-white shadow-sm !p-4">
           <label class=":uno: text-xs text-slate-600 font-medium">Query</label>

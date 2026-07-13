@@ -399,7 +399,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             </SelectScrollUpButton>
 
             <SelectViewport class=":uno: max-h-80 pb-1">
-              <SelectGroup v-for="group in groups" :key="group.key" class=":uno: mt-1.5 first:mt-0">
+              <SelectGroup v-for="group in groups" :key="group.key">
                 <SelectLabel
                   class=":uno: sticky top-0 z-10 flex select-none items-center gap-2 border-b border-gray-100 bg-gray-50/95 px-3 py-2"
                 >
@@ -419,13 +419,15 @@ function handleSearchKeydown(event: KeyboardEvent) {
                   </span>
                 </SelectLabel>
 
-                <AiModelSelectOption
-                  v-for="model in group.models"
-                  :key="model.name"
-                  :model="model"
-                  :selected="model.name === selectedValue"
-                  @select="rememberSelection"
-                />
+                <div class=":uno: py-1.5">
+                  <AiModelSelectOption
+                    v-for="model in group.models"
+                    :key="model.name"
+                    :model="model"
+                    :selected="model.name === selectedValue"
+                    @select="rememberSelection"
+                  />
+                </div>
               </SelectGroup>
             </SelectViewport>
 

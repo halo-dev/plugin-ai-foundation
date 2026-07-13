@@ -21,7 +21,7 @@ defineProps<{
   <div
     class=":uno: min-h-0 flex-1 overflow-y-auto bg-[#f8fafc] px-4 py-5"
   >
-    <div class=":uno: mx-auto max-w-4xl space-y-3">
+    <div class=":uno: mx-auto max-w-5xl space-y-3">
       <div
         v-if="error"
         class=":uno: border border-rose-200 rounded-lg bg-rose-50 text-sm text-rose-700 shadow-sm !px-4 !py-3"

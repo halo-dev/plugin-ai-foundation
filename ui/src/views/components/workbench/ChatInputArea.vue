@@ -1,9 +1,6 @@
 <script lang="ts" setup>
+import { filePartsFromFiles, type FilePart } from '@halo-dev/ai-foundation-sdk'
 import { VButton } from '@halo-dev/components'
-import {
-  filePartsFromFiles,
-  type FilePart,
-} from '@halo-dev/ai-foundation-sdk'
 import { computed, nextTick, ref, watch } from 'vue'
 import RiAttachment2 from '~icons/ri/attachment-2'
 import RiCloseLine from '~icons/ri/close-line'
@@ -104,7 +101,7 @@ defineExpose({ focus })
 
 <template>
   <div class=":uno: border-t border-slate-200 bg-white px-4 py-3">
-    <div class=":uno: mx-auto max-w-4xl">
+    <div class=":uno: mx-auto max-w-5xl">
       <div
         class=":uno: relative flex-1 border border-slate-200 rounded-lg bg-slate-50 shadow-inner transition-colors focus-within:border-teal-400 focus-within:bg-white focus-within:ring-3 focus-within:ring-teal-500/10"
       >
@@ -116,7 +113,10 @@ defineExpose({ focus })
           :disabled="disabled || isStreaming"
           @change="handleFileChange"
         />
-        <div v-if="selectedFiles.length" class=":uno: flex flex-wrap gap-1.5 border-b border-slate-200 px-3 py-2">
+        <div
+          v-if="selectedFiles.length"
+          class=":uno: flex flex-wrap gap-1.5 border-b border-slate-200 px-3 py-2"
+        >
           <span
             v-for="(file, index) in selectedFiles"
             :key="file.fileId || file.id"
@@ -151,28 +151,29 @@ defineExpose({ focus })
         >
           <RiAttachment2 class=":uno: size-4" />
         </VButton>
-        <div
-          class=":uno: pointer-events-none absolute bottom-3 right-14 text-[11px] text-slate-400"
-        >
-          {{ modelValue.length }}
+        <div class=":uno: absolute bottom-2 right-2 flex items-end gap-3">
+          <div class=":uno: pointer-events-none text-[11px] text-slate-400">
+            {{ modelValue.length }}
+          </div>
+          <VButton v-if="isStreaming" type="secondary" size="sm" @click="emit('stop')">
+            <template #icon>
+              <RiStopCircleLine />
+            </template>
+            停止
+          </VButton>
+          <VButton
+            v-else
+            type="primary"
+            :disabled="!canSend || disabled"
+            @click="emit('send')"
+            size="sm"
+          >
+            <template #icon>
+              <RiSendPlaneLine />
+            </template>
+            发送
+          </VButton>
         </div>
-        <VButton
-          v-if="isStreaming"
-          type="secondary"
-          class=":uno: absolute bottom-2 right-2 h-8 w-8 shadow-sm !rounded-md !p-0"
-          @click="emit('stop')"
-        >
-          <RiStopCircleLine class=":uno: size-4" />
-        </VButton>
-        <VButton
-          v-else
-          type="primary"
-          class=":uno: absolute bottom-2 right-2 h-8 w-8 shadow-sm !rounded-md !p-0"
-          :disabled="!canSend || disabled"
-          @click="emit('send')"
-        >
-          <RiSendPlaneLine class=":uno: size-4" />
-        </VButton>
       </div>
       <div v-if="fileError" class=":uno: mt-1 text-xs text-rose-600">{{ fileError }}</div>
     </div>
