@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -56,6 +57,7 @@ import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.chat.PreparedStep;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.chat.StepContext;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.provider.DeepSeekProvider;
@@ -512,6 +514,41 @@ class LanguageModelImplTest {
         assertThat(seenRequest.get().getLogprobs()).isTrue();
         assertThat(seenRequest.get().getTopLogprobs()).isEqualTo(4);
         assertThat(seenRequest.get().getParallelToolCalls()).isFalse();
+    }
+
+    @Test
+    void stopConditionsReceivePreparedTypedSettingsForStreamingAndNonStreaming() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather", "{}", 1, 1)));
+        var providerOptions = LanguageModelProviderOptions.builder()
+            .seedSupported(true)
+            .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder().build())
+            .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) ->
+                OpenAiCompatibleChatOptions.builder()
+                    .toolCallbacks(toolCallbacks)
+                    .build())
+            .build();
+        var model = new LanguageModelImpl(chatModel, "openai", providerOptions);
+        var nonStreamingContext = new AtomicReference<StepContext>();
+        var streamingContext = new AtomicReference<StepContext>();
+
+        StepVerifier.create(model.generateText(requestWithPreparedSettings(context -> {
+                nonStreamingContext.set(context);
+                return false;
+            })))
+            .expectNextCount(1)
+            .verifyComplete();
+        StepVerifier.create(model.streamText(requestWithPreparedSettings(context -> {
+                streamingContext.set(context);
+                return false;
+            })).result())
+            .expectNextCount(1)
+            .verifyComplete();
+
+        assertPreparedSettings(nonStreamingContext.get());
+        assertPreparedSettings(streamingContext.get());
     }
 
     @Test
@@ -3539,6 +3576,51 @@ class LanguageModelImplTest {
     private ChatResponse chatResponse(String text, String finishReason, Integer promptTokens,
         Integer completionTokens) {
         return chatResponse(text, finishReason, promptTokens, completionTokens, Map.of());
+    }
+
+    private GenerateTextRequest requestWithPreparedSettings(StopCondition stopWhen) {
+        return GenerateTextRequest.builder()
+            .prompt("Hello")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .executor(context -> Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .stopWhen(stopWhen)
+            .prepareStep(context -> PreparedStep.builder()
+                .maxOutputTokens(256)
+                .temperature(0.4)
+                .topP(0.8)
+                .topK(20)
+                .minP(0.05)
+                .presencePenalty(0.1)
+                .frequencyPenalty(0.2)
+                .repetitionPenalty(1.1)
+                .logprobs(true)
+                .topLogprobs(2)
+                .parallelToolCalls(false)
+                .stopSequences(List.of("END"))
+                .seed(7)
+                .maxRetries(0)
+                .build())
+            .build();
+    }
+
+    private void assertPreparedSettings(StepContext context) {
+        assertThat(context).isNotNull();
+        assertThat(context.getMaxOutputTokens()).isEqualTo(256);
+        assertThat(context.getTemperature()).isEqualTo(0.4);
+        assertThat(context.getTopP()).isEqualTo(0.8);
+        assertThat(context.getTopK()).isEqualTo(20);
+        assertThat(context.getMinP()).isEqualTo(0.05);
+        assertThat(context.getPresencePenalty()).isEqualTo(0.1);
+        assertThat(context.getFrequencyPenalty()).isEqualTo(0.2);
+        assertThat(context.getRepetitionPenalty()).isEqualTo(1.1);
+        assertThat(context.getLogprobs()).isTrue();
+        assertThat(context.getTopLogprobs()).isEqualTo(2);
+        assertThat(context.getParallelToolCalls()).isFalse();
+        assertThat(context.getStopSequences()).containsExactly("END");
+        assertThat(context.getSeed()).isEqualTo(7);
+        assertThat(context.getMaxRetries()).isZero();
     }
 
     private LanguageModelImpl languageModelWithCapabilities(ChatModel chatModel,

@@ -34,6 +34,16 @@ const reasoningTemplate: ParameterMappingTemplateInfo = {
   },
 }
 
+const dashScopeImageCountTemplate: ParameterMappingTemplateInfo = {
+  id: 'image.parameters.n',
+  displayName: 'parameters.n',
+  defaultField: 'parameters.n',
+  parameter: 'IMAGE_COUNT',
+  modelType: 'image-generation',
+  adapterTypes: ['dashscope-image'],
+  configurationType: 'NONE',
+}
+
 const languageDefaults = Object.fromEntries(
   [
     'MAX_OUTPUT_TOKENS',
@@ -99,6 +109,24 @@ describe('ParameterMappingFields', () => {
           mode: 'TEMPLATE',
           template: 'chat.temperature',
           field: 'request.temperature',
+        },
+      },
+    })
+  })
+
+  it('initializes scoped custom fields relative to the template placement', async () => {
+    const wrapper = mountScopedHost()
+
+    await wrapper.get('select').setValue('__custom_field__')
+    await settleFormKit()
+
+    expect(wrapper.get('input[type="text"]').attributes('value')).toBe('n')
+    expect((wrapper.vm as { mappings?: ModelParameterMappings }).mappings).toMatchObject({
+      imageGeneration: {
+        n: {
+          mode: 'TEMPLATE',
+          template: 'image.parameters.n',
+          field: 'n',
         },
       },
     })
@@ -222,6 +250,32 @@ function mountReasoningHost() {
           adapter-type="openai-chat"
           :templates="[reasoningTemplate]"
           :defaults="defaults"
+        />
+      `,
+    }),
+    {
+      global: {
+        plugins: [[FormKitPlugin, defaultConfig()]],
+      },
+    },
+  )
+}
+
+function mountScopedHost() {
+  return mount(
+    defineComponent({
+      components: { ParameterMappingFields },
+      setup() {
+        const mappings = ref<ModelParameterMappings>()
+        return { dashScopeImageCountTemplate, mappings }
+      },
+      template: `
+        <ParameterMappingFields
+          v-model="mappings"
+          context="provider"
+          model-type="image-generation"
+          adapter-type="dashscope-image"
+          :templates="[dashScopeImageCountTemplate]"
         />
       `,
     }),

@@ -15,7 +15,7 @@ import {
   haloMessageToWorkbench,
   workbenchMessagesToHalo,
 } from '@/utils/model-test-workbench-messages'
-import { numberOrUndefined } from '@/utils/model-test-workbench-request'
+import { numberOrUndefined, parseStringMapJson } from '@/utils/model-test-workbench-request'
 import {
   DefaultChatTransport,
   useChat,
@@ -107,6 +107,9 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
       return
     }
     ragError.value = ''
+    const headers = parseStringMapJson(settings.chatHeadersText.value)
+    settings.chatHeadersError.value = headers.error || ''
+    if (headers.error) return
     ragMessages.value = [
       {
         id: utils.id.uuid(),
@@ -143,6 +146,7 @@ export function useRagTest({ selectedModel, settings }: UseRagTestOptions) {
       maxOutputTokens: numberOrUndefined(settings.maxTokens.value),
       seed: numberOrUndefined(settings.seed.value),
       maxRetries: numberOrUndefined(settings.maxRetries.value),
+      headers: headers.value,
       reasoning: buildReasoningOptions({
         mode: settings.reasoningMode.value,
         effort: settings.reasoningEffort.value,

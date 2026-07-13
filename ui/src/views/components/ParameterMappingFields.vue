@@ -158,7 +158,7 @@ function updateMappingChoice(definition: ParameterDefinition, value: unknown) {
     const descriptor = templateDescriptor(definition, template)
     mappings.value = writeSelection(mappings.value, definition, {
       ...templateSelection(definition, template),
-      field: current?.field ?? effective?.field ?? descriptor?.defaultField ?? '',
+      field: current?.field ?? effective?.field ?? defaultCustomField(descriptor),
     })
     return
   }
@@ -288,6 +288,11 @@ function selectedTemplate(definition: ParameterDefinition) {
   return templateDescriptor(definition, selection(definition)?.template)
 }
 
+function defaultCustomField(descriptor?: ParameterMappingTemplateInfo) {
+  const field = descriptor?.defaultField || ''
+  return field.startsWith('parameters.') ? field.slice('parameters.'.length) : field
+}
+
 function effectiveLabel(definition: ParameterDefinition) {
   const effective = effectiveSelection(
     props.context,
@@ -343,7 +348,7 @@ function effectiveLabel(definition: ParameterDefinition) {
         help="沿用当前映射的放置位置和值转换规则；支持最多四段的点分路径。"
         validation="required"
         :delay="0"
-        :placeholder="selectedTemplate(definition)?.defaultField || '例如 parameters.temperature'"
+        :placeholder="defaultCustomField(selectedTemplate(definition)) || '例如 temperature'"
         :model-value="selection(definition)?.field"
         @input="updateField(definition, $event)"
       />

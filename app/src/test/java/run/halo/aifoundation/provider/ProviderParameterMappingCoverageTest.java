@@ -59,6 +59,22 @@ class ProviderParameterMappingCoverageTest {
             .get(ModelParameter.REASONING).mode()).isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
     }
 
+    @Test
+    void providerSpecificDefaultsFollowProviderWireProtocols() {
+        assertThat(new DashScopeProvider().getDefaultParameterMappings().get(ModelParameter.TOP_N))
+            .satisfies(mapping -> {
+                assertThat(mapping.mode()).isEqualTo(ModelParameterMappings.Mode.TEMPLATE);
+                assertThat(mapping.template()).isEqualTo("rerank.parameters.top-n");
+            });
+        assertThat(new OpenAiProvider().getDefaultParameterMappings())
+            .satisfies(defaults -> {
+                assertThat(defaults.get(ModelParameter.MIN_P).mode())
+                    .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+                assertThat(defaults.get(ModelParameter.REPETITION_PENALTY).mode())
+                    .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+            });
+    }
+
     private void assertReasoningTemplate(AiProviderType providerType, String template) {
         assertThat(providerType.getDefaultParameterMappings().get(ModelParameter.REASONING))
             .satisfies(mapping -> {

@@ -53,6 +53,7 @@ watch(
   () => providerType.value,
   (value) => {
     if (value && !isEditing.value) {
+      parameterMappings.value = undefined
       displayName.value = selectedProviderType.value?.displayName
     }
   },

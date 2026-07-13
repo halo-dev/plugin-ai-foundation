@@ -101,12 +101,14 @@ describe('useChatWorkbench', () => {
 
 describe('useRagTest', () => {
   it('completes a RAG response and maps query, sources, and generation settings', async () => {
-    const { result: rag } = withSetup(() =>
-      useRagTest({
+    const { result: rag } = withSetup(() => {
+      const settings = useLanguageGenerationSettings()
+      settings.chatHeadersText.value = '{"X-Trace":"trace-1"}'
+      return useRagTest({
         selectedModel: computed(() => languageModel),
-        settings: useLanguageGenerationSettings(),
-      }),
-    )
+        settings,
+      })
+    })
 
     await rag.runRagTest()
 
@@ -123,6 +125,7 @@ describe('useRagTest', () => {
         topN: 4,
         temperature: 0.7,
         maxOutputTokens: 1024,
+        headers: { 'X-Trace': 'trace-1' },
         sources: expect.arrayContaining([
           expect.objectContaining({ id: 'source-1', title: 'AI Foundation' }),
         ]),
