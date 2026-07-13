@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
@@ -20,6 +21,7 @@ class ModelConsoleModelValidator {
 
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
+    private final ParameterMappingValidator parameterMappingValidator;
 
     Mono<Void> validate(AiModel model) {
         if (model.getSpec() == null) {
@@ -67,7 +69,19 @@ class ModelConsoleModelValidator {
                 + "'. Supported features: " + type.getSupportedFeatures());
         }
         applyDefaultAdapterType(model, type);
-        return validateAdapterType(model, providerType, type);
+        return validateAdapterType(model, providerType, type)
+            .then(validateParameterMappings(model));
+    }
+
+    private Mono<Void> validateParameterMappings(AiModel model) {
+        try {
+            var spec = model.getSpec();
+            parameterMappingValidator.validateModel(spec.getParameterMappings(),
+                spec.getModelType(), spec.getAdapterType());
+            return Mono.empty();
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
+        }
     }
 
     private Mono<Void> validateAdapterType(AiModel model, String providerType,

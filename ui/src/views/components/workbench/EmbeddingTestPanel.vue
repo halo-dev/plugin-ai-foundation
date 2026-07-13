@@ -8,9 +8,7 @@ defineProps<{
   maxBatchSize?: number
   maxParallelCalls?: number
   maxRetries?: number
-  providerOptionsText?: string
   headersText?: string
-  providerOptionsError?: string
   headersError?: string
   result?: TestEmbeddingResponse
   error?: string

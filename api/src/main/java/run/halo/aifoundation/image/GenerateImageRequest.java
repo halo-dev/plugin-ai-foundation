@@ -12,7 +12,6 @@ import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.image.middleware.ImageGenerationMiddleware;
 import run.halo.aifoundation.media.DataContent;
-import run.halo.aifoundation.options.ProviderOptions;
 
 /**
  * Provider-neutral request for image generation.
@@ -72,6 +71,11 @@ public class GenerateImageRequest {
     private String aspectRatio;
 
     /**
+     * Optional negative prompt describing content that should be avoided in generated images.
+     */
+    private String negativePrompt;
+
+    /**
      * Optional deterministic seed.
      *
      * <p>Providers that do not support seed control may return a warning instead of failing the
@@ -87,13 +91,6 @@ public class GenerateImageRequest {
      */
     private ImageResponseFormat responseFormat;
 
-    /**
-     * Provider-specific options grouped by provider namespace.
-     *
-     * <p>Use this for advanced provider controls that are intentionally not part of the neutral
-     * SDK surface.
-     */
-    private Map<String, Map<String, Object>> providerOptions;
 
     /**
      * Request-scoped HTTP headers sent to providers when supported.
@@ -170,9 +167,7 @@ public class GenerateImageRequest {
         return middleware;
     }
 
-    /**
-     * Builder extensions for request-specific provider options.
-     */
+    /** Builder extensions for provider-neutral image settings. */
     public static class GenerateImageRequestBuilder {
         /**
          * Sets a provider-neutral or provider-specific size string.
@@ -224,30 +219,6 @@ public class GenerateImageRequest {
             requirePositiveDimension(width, "width");
             requirePositiveDimension(height, "height");
             this.size = width + "x" + height;
-            return this;
-        }
-
-        /**
-         * Sets provider-specific options grouped by provider namespace.
-         *
-         * @param providerOptions namespace to option map
-         * @return this builder
-         */
-        public GenerateImageRequestBuilder providerOptions(
-            Map<String, Map<String, Object>> providerOptions) {
-            this.providerOptions = providerOptions;
-            return this;
-        }
-
-        /**
-         * Sets provider-specific options using typed namespace helpers.
-         *
-         * @param options provider option namespaces
-         * @return this builder
-         */
-        public GenerateImageRequestBuilder providerOptions(
-            ProviderOptions.NamespaceOptions... options) {
-            this.providerOptions = ProviderOptions.of(options);
             return this;
         }
 

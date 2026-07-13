@@ -24,6 +24,7 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
     private final @Nullable String user;
     private final @Nullable EncodingFormat encodingFormat;
     private final @Nullable Integer dimensions;
+    private final @Nullable Map<String, Object> extraBody;
 
     private OpenAiCompatibleEmbeddingOptions(Builder builder) {
         this.baseUrl = builder.baseUrl;
@@ -38,6 +39,7 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
         this.user = builder.user;
         this.encodingFormat = builder.encodingFormat;
         this.dimensions = builder.dimensions;
+        this.extraBody = builder.extraBody != null ? Map.copyOf(builder.extraBody) : null;
     }
 
     public static Builder builder() {
@@ -94,6 +96,27 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
         return dimensions;
     }
 
+    public @Nullable Map<String, Object> getExtraBody() {
+        return extraBody;
+    }
+
+    public Builder mutate() {
+        return builder()
+            .baseUrl(baseUrl)
+            .endpointPath(endpointPath)
+            .apiKey(apiKey)
+            .model(model)
+            .deploymentName(deploymentName)
+            .timeout(timeout)
+            .maxRetries(maxRetries)
+            .proxy(proxy)
+            .customHeaders(customHeaders)
+            .user(user)
+            .encodingFormat(encodingFormat)
+            .dimensions(dimensions)
+            .extraBody(extraBody);
+    }
+
     public enum EncodingFormat {
         FLOAT("float"), BASE64("base64");
 
@@ -122,6 +145,7 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
         private @Nullable String user;
         private @Nullable EncodingFormat encodingFormat;
         private @Nullable Integer dimensions;
+        private @Nullable Map<String, Object> extraBody;
 
         public Builder baseUrl(@Nullable String baseUrl) {
             this.baseUrl = baseUrl;
@@ -180,6 +204,11 @@ public class OpenAiCompatibleEmbeddingOptions implements EmbeddingOptions {
 
         public Builder dimensions(@Nullable Integer dimensions) {
             this.dimensions = dimensions;
+            return this;
+        }
+
+        public Builder extraBody(@Nullable Map<String, Object> extraBody) {
+            this.extraBody = extraBody != null ? new HashMap<>(extraBody) : null;
             return this;
         }
 

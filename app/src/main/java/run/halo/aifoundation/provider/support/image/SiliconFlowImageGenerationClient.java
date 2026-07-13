@@ -36,7 +36,6 @@ public class SiliconFlowImageGenerationClient extends AbstractJsonImageGeneratio
                 body.put("image2", imageSource(request.getImages().get(1)));
             }
         }
-        putProviderOptions(body, request);
         return body;
     }
 

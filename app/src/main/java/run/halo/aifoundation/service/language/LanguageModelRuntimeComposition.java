@@ -34,52 +34,49 @@ public record LanguageModelRuntimeComposition(
 ) {
     public static LanguageModelRuntimeComposition create(String providerType,
         LanguageModelProviderOptions providerOptions, LanguageModelRuntimeSupport runtimeSupport) {
-        return create(providerType, null, providerOptions, runtimeSupport, new MediaResourcePolicy(),
-            new ModelCapabilityMatcher(), ModelCapabilities.empty(), null, null);
+        return create(configuration(providerType, null, providerOptions), runtimeSupport,
+            new MediaResourcePolicy(), new ModelCapabilityMatcher());
     }
 
     public static LanguageModelRuntimeComposition create(String providerType,
         LanguageModelProviderOptions providerOptions, LanguageModelRuntimeSupport runtimeSupport,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
-        return create(providerType, null, providerOptions, runtimeSupport, mediaResourcePolicy,
-            capabilityMatcher, ModelCapabilities.empty(), null, null);
+        return create(configuration(providerType, null, providerOptions), runtimeSupport,
+            mediaResourcePolicy, capabilityMatcher);
     }
 
     public static LanguageModelRuntimeComposition create(String providerType, String modelId,
         LanguageModelProviderOptions providerOptions, LanguageModelRuntimeSupport runtimeSupport) {
-        return create(providerType, modelId, providerOptions, runtimeSupport,
-            new MediaResourcePolicy(), new ModelCapabilityMatcher(), ModelCapabilities.empty(), null,
-            null);
+        return create(configuration(providerType, modelId, providerOptions), runtimeSupport,
+            new MediaResourcePolicy(), new ModelCapabilityMatcher());
     }
 
     public static LanguageModelRuntimeComposition create(String providerType, String modelId,
         LanguageModelProviderOptions providerOptions, LanguageModelRuntimeSupport runtimeSupport,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
-        return create(providerType, modelId, providerOptions, runtimeSupport, mediaResourcePolicy,
-            capabilityMatcher, ModelCapabilities.empty(), null, null);
+        return create(configuration(providerType, modelId, providerOptions), runtimeSupport,
+            mediaResourcePolicy, capabilityMatcher);
     }
 
-    public static LanguageModelRuntimeComposition create(String providerType, String modelId,
-        LanguageModelProviderOptions providerOptions, LanguageModelRuntimeSupport runtimeSupport,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
-        ModelCapabilities modelCapabilities, String modelName, String providerName) {
-        var resolvedOptions = providerOptions != null
-            ? providerOptions
-            : LanguageModelProviderOptions.defaults();
-        var resolvedCapabilities = modelCapabilities != null
-            ? modelCapabilities
-            : ModelCapabilities.empty();
-        var requestValidator = new LanguageModelRequestValidator(providerType,
-            resolvedOptions.reasoningHistorySupported(), resolvedCapabilities, modelName,
-            providerName, mediaResourcePolicy, capabilityMatcher);
-        var messageMapper = new LanguageModelMessageMapper(providerType);
-        var messageHistoryAssembler = new GenerationMessageHistoryAssembler(providerType,
+    public static LanguageModelRuntimeComposition create(
+        LanguageModelRuntimeConfiguration configuration,
+        LanguageModelRuntimeSupport runtimeSupport, MediaResourcePolicy mediaResourcePolicy,
+        ModelCapabilityMatcher capabilityMatcher) {
+        var context = configuration.context();
+        var resolvedOptions = configuration.providerOptions();
+        var resolvedCapabilities = configuration.modelCapabilities();
+        var requestValidator = new LanguageModelRequestValidator(context.providerType(),
+            resolvedOptions.reasoningHistorySupported(), resolvedCapabilities, context.modelName(),
+            context.providerName(), mediaResourcePolicy, capabilityMatcher);
+        var messageMapper = new LanguageModelMessageMapper(context.providerType());
+        var messageHistoryAssembler = new GenerationMessageHistoryAssembler(context.providerType(),
             resolvedOptions.reasoningHistorySupported(), messageMapper);
-        var chatOptionsBuilder = new LanguageModelChatOptionsBuilder(providerType, modelId,
+        var chatOptionsBuilder = new LanguageModelChatOptionsBuilder(context.providerType(),
+            context.modelId(),
             resolvedOptions, runtimeSupport::writeJson);
-        var responseMapper = new LanguageModelResponseMapper(providerType, messageMapper);
+        var responseMapper = new LanguageModelResponseMapper(context.providerType(), messageMapper);
         var reasoningExtractor =
-            new ReasoningContentExtractor(providerType, responseMapper::sanitizeValue);
+            new ReasoningContentExtractor(context.providerType(), responseMapper::sanitizeValue);
         var toolCallMapper = new LanguageModelToolCallMapper();
         var structuredOutputHandler =
             new LanguageModelStructuredOutputHandler(responseMapper, runtimeSupport::writeJson);
@@ -88,10 +85,19 @@ public record LanguageModelRuntimeComposition(
             runtimeSupport::checkCancellation,
             runtimeSupport::withToolTimeout);
         var toolStepCoordinator = new ToolStepCoordinator(toolExecutor);
-        return new LanguageModelRuntimeComposition(providerType, resolvedOptions,
+        return new LanguageModelRuntimeComposition(context.providerType(), resolvedOptions,
             resolvedCapabilities, requestValidator, messageMapper, messageHistoryAssembler,
             chatOptionsBuilder, responseMapper, reasoningExtractor, toolCallMapper,
             structuredOutputHandler, toolExecutor, toolStepCoordinator, new ToolApprovalResolver(),
             runtimeSupport);
+    }
+
+    private static LanguageModelRuntimeConfiguration configuration(String providerType,
+        String modelId, LanguageModelProviderOptions providerOptions) {
+        var context = run.halo.aifoundation.service.model.ModelRuntimeContext.unresolved(
+            providerType, modelId, null, null,
+            run.halo.aifoundation.provider.mapping.RuntimeParameterMappings.empty());
+        return new LanguageModelRuntimeConfiguration(context, providerOptions,
+            ModelCapabilities.empty());
     }
 }

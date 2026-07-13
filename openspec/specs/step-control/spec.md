@@ -21,23 +21,28 @@ The system SHALL allow text-generation callers to declare provider-neutral step 
 - **THEN** the system MUST perform at most one model step
 
 ### Requirement: Requests prepare each step before model invocation
-The system SHALL allow callers to provide a provider-neutral step preparation callback that can override settings for the next model invocation.
+The system SHALL allow callers to provide a provider-neutral step preparation callback that can override typed settings for the next model invocation.
 
 #### Scenario: Prepare step changes tool choice
-- **WHEN** `prepareStep` returns a tool-choice override for a step
-- **THEN** the system MUST use the returned tool choice for that step only
+- **WHEN** `prepareStep` returns a tool-choice override
+- **THEN** the system MUST use it for that step only
 
 #### Scenario: Prepare step limits active tools
-- **WHEN** `prepareStep` returns a set of active tool names
-- **THEN** the system MUST expose only those request tools to the model for that step
+- **WHEN** `prepareStep` returns active tool names
+- **THEN** the system MUST expose only those request tools for that step
 
 #### Scenario: Prepare step changes messages
 - **WHEN** `prepareStep` returns replacement messages
-- **THEN** the system MUST send the replacement messages to the model for that step without mutating previously recorded steps
+- **THEN** the system MUST send them for that step without mutating recorded steps
 
-#### Scenario: Prepare step changes provider options
-- **WHEN** `prepareStep` returns provider options
-- **THEN** the system MUST merge those options into the model invocation for that step using provider-neutral request semantics
+#### Scenario: Prepare step changes typed parameters
+- **WHEN** `prepareStep` returns typed generation parameter overrides
+- **THEN** the system MUST apply them for that step
+- **AND** mapped parameters SHALL still use the resolved administrator mapping
+
+#### Scenario: Prepare step cannot set provider-native options
+- **WHEN** a consumer inspects `PreparedStep`
+- **THEN** no caller-writable provider option map SHALL be present
 
 ### Requirement: Step context exposes prior execution state
 The system SHALL pass step preparation callbacks an immutable context containing the step index, prior steps, current messages, tools, stop rule, and request metadata needed to make per-step decisions.
@@ -58,15 +63,15 @@ The system SHALL expose step control types without Spring AI, OpenAI, DeepSeek, 
 - **THEN** it MUST be able to use step control types without depending on Spring AI or provider implementation packages
 
 ### Requirement: Step control participates in lifecycle events
-The system SHALL expose resolved step-control state to lifecycle callbacks without allowing callbacks to mutate recorded steps.
+The system SHALL expose resolved typed step-control state to lifecycle callbacks without allowing callbacks to mutate recorded steps.
 
 #### Scenario: Step start includes resolved controls
 - **WHEN** a step-start lifecycle callback is invoked
-- **THEN** the event MUST include the resolved stop condition, prepared messages, active tools, tool choice, and provider options for that step
+- **THEN** the event MUST include the resolved stop condition, prepared messages, active tools, tool choice, and typed generation settings
 
 #### Scenario: Step finish precedes stop evaluation for next step
 - **WHEN** a step completes
-- **THEN** the system MUST invoke step-finish callbacks with the completed step before deciding whether to start another step
+- **THEN** the system MUST invoke step-finish callbacks before deciding whether to start another step
 
 #### Scenario: Cancellation stops before prepare step
 - **WHEN** cancellation is requested before preparing a step
@@ -83,3 +88,4 @@ The system SHALL apply configured step timeout to each provider model invocation
 #### Scenario: Step timeout does not include previous tools
 - **WHEN** a tool executor runs before a continuation step
 - **THEN** that tool execution MUST be governed by tool timeout rather than the next step timeout
+

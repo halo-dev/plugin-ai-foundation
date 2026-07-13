@@ -13,6 +13,9 @@
  */
 
 
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelParameterMappings } from './model-parameter-mappings';
 
 /**
  * 
@@ -62,6 +65,12 @@ export interface AiProviderSpec {
      * @memberof AiProviderSpec
      */
     'imageEndpointPath'?: string;
+    /**
+     * 
+     * @type {ModelParameterMappings}
+     * @memberof AiProviderSpec
+     */
+    'parameterMappings'?: ModelParameterMappings;
     /**
      * Provider type: aihubmix, openai, deepseek, siliconflow, doubao, ernie, zhipuai, ollama, openailike, dashscope
      * @type {string}

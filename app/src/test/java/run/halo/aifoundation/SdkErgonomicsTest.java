@@ -3,6 +3,8 @@ package run.halo.aifoundation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -20,7 +22,6 @@ import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
-import run.halo.aifoundation.options.ProviderOptions;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.TextStreamPart;
@@ -42,6 +43,44 @@ import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
 
 class SdkErgonomicsTest {
+
+    @Test
+    void publicRequestSurfaceDoesNotExposeProviderOptions() {
+        var publicTypes = List.<Class<?>>of(
+            run.halo.aifoundation.chat.GenerateTextRequest.class,
+            run.halo.aifoundation.chat.PreparedStep.class,
+            run.halo.aifoundation.chat.StepContext.class,
+            run.halo.aifoundation.embedding.EmbeddingRequest.class,
+            run.halo.aifoundation.rerank.RerankRequest.class,
+            run.halo.aifoundation.image.GenerateImageRequest.class,
+            run.halo.aifoundation.schema.OutputSpec.class,
+            run.halo.aifoundation.lifecycle.GenerationStepStartEvent.class
+        );
+
+        publicTypes.forEach(type -> {
+            assertThat(type.getDeclaredFields()).noneMatch(field ->
+                field.getName().equalsIgnoreCase("providerOptions"));
+            assertThat(type.getMethods()).noneMatch(method ->
+                method.getName().equalsIgnoreCase("getProviderOptions")
+                    || method.getName().equalsIgnoreCase("setProviderOptions")
+                    || method.getName().equalsIgnoreCase("providerOptions"));
+        });
+        assertThatThrownBy(() -> Class.forName("run.halo.aifoundation.options.ProviderOptions"))
+            .isInstanceOf(ClassNotFoundException.class);
+        assertThat(ModelMessagePart.class.getDeclaredFields())
+            .anyMatch(field -> field.getName().equals("providerMetadata"))
+            .noneMatch(field -> field.getName().equals("providerOptions"));
+    }
+
+    @Test
+    void developerGuideUsesTypedMappedParametersOnly() throws Exception {
+        var guide = Files.readString(Path.of("..", "dev", "dev.md"));
+        assertThat(guide)
+            .doesNotContain("providerOptions", "ProviderOptions")
+            .contains("类型化参数与管理员映射")
+            .contains("mapped-parameter-unsupported")
+            .contains("providerMetadata");
+    }
 
     @Test
     void jsonSchema_buildsDiscoverableObjectSchema() {
@@ -131,23 +170,6 @@ class SdkErgonomicsTest {
         assertThat(objectOutput.getSchema()).containsEntry("type", "object");
         assertThat(arrayOutput.getType()).isEqualTo(OutputType.ARRAY);
         assertThat(arrayOutput.getElementSchema()).containsEntry("type", "string");
-    }
-
-    @Test
-    void providerOptions_buildsNamespacedOptions() {
-        var options = ProviderOptions.of(
-            ProviderOptions.namespace("openai")
-                .option("seed", 42)
-                .option("dimensions", 512)
-                .option("encodingFormat", "float")
-                .build()
-        );
-
-        assertThat(options).containsOnlyKeys("openai");
-        assertThat(options.get("openai"))
-            .containsEntry("seed", 42)
-            .containsEntry("dimensions", 512)
-            .containsEntry("encodingFormat", "float");
     }
 
     @Test
@@ -248,15 +270,13 @@ class SdkErgonomicsTest {
     }
 
     @Test
-    void generateImageRequest_acceptsProviderOptionsAndCapabilityRequirements() {
+    void generateImageRequest_acceptsTypedControlsAndCapabilityRequirements() {
         var request = GenerateImageRequest.builder()
             .prompt("Halo mascot")
             .n(2)
             .size(1024)
             .responseFormat(ImageResponseFormat.URL)
-            .providerOptions(ProviderOptions.namespace("openai")
-                .option("quality", "high")
-                .build())
+            .negativePrompt("blurry")
             .build();
         var wideRequest = GenerateImageRequest.builder()
             .prompt("Halo banner")
@@ -267,8 +287,7 @@ class SdkErgonomicsTest {
 
         assertThat(request.getSize()).isEqualTo("1024x1024");
         assertThat(wideRequest.getSize()).isEqualTo("1024x768");
-        assertThat(request.getProviderOptions()).containsOnlyKeys("openai");
-        assertThat(request.getProviderOptions().get("openai")).containsEntry("quality", "high");
+        assertThat(request.getNegativePrompt()).isEqualTo("blurry");
         assertThat(requirement.getLanguage().getImageInput()).isTrue();
         assertThat(requirement.getLanguage().getInputMediaTypes()).containsExactly("image/*");
         assertThatThrownBy(() -> GenerateImageRequest.builder().size(0))

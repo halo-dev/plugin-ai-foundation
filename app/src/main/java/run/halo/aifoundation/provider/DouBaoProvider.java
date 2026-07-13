@@ -18,6 +18,11 @@ import run.halo.aifoundation.provider.support.openai.OpenAiThinkingOptions;
 @Component
 public class DouBaoProvider extends AbstractAiProviderType {
 
+    @Override
+    protected String defaultReasoningMappingTemplate() {
+        return "reasoning.thinking-type";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
     private static final String CHAT_PATH = "/chat/completions";
     private static final String EMBEDDING_PATH = "/embeddings";

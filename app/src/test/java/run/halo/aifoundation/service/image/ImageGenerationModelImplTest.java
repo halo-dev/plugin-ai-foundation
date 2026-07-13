@@ -132,8 +132,10 @@ class ImageGenerationModelImplTest {
     @Test
     void generateImage_splitsByMaxImagesPerCallAndAggregatesInOrder() {
         var requestedCounts = new ArrayList<Integer>();
+        var negativePrompts = new ArrayList<String>();
         ProviderImageGenerationClient client = request -> {
             requestedCounts.add(request.getN());
+            negativePrompts.add(request.getNegativePrompt());
             var images = new ArrayList<GeneratedFile>();
             for (int index = 0; index < request.getN(); index++) {
                 images.add(GeneratedFile.base64("batch-" + requestedCounts.size() + "-" + index,
@@ -152,11 +154,13 @@ class ImageGenerationModelImplTest {
 
         StepVerifier.create(model.generateImage(GenerateImageRequest.builder()
                 .prompt("Draw five")
+                .negativePrompt("blurry")
                 .n(5)
                 .maxParallelCalls(2)
                 .build()))
             .assertNext(result -> {
                 assertThat(requestedCounts).containsExactly(2, 2, 1);
+                assertThat(negativePrompts).containsExactly("blurry", "blurry", "blurry");
                 assertThat(result.getImages()).extracting(GeneratedFile::getBase64)
                     .containsExactly("batch-1-0", "batch-1-1", "batch-2-0", "batch-2-1",
                         "batch-3-0");
@@ -192,6 +196,45 @@ class ImageGenerationModelImplTest {
     }
 
     @Test
+    void generateImage_omitsAdministratorMappedUnsupportedFieldsAcrossBatches() {
+        var seenRequests = new ArrayList<GenerateImageRequest>();
+        ProviderImageGenerationClient client = request -> {
+            seenRequests.add(request);
+            return Mono.just(result("img-" + seenRequests.size()));
+        };
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(Map.of(
+            run.halo.aifoundation.provider.mapping.ModelParameter.IMAGE_COUNT,
+            effective(run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                "image.n"),
+            run.halo.aifoundation.provider.mapping.ModelParameter.NEGATIVE_PROMPT,
+            effective(run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED,
+                null)));
+        var model = new ImageGenerationModelImpl(client,
+            ModelCapabilities.imageGeneration(ImageGenerationCapability.builder()
+                .textToImage(true).maxImagesPerCall(2).build()),
+            "image-model", "provider-a", "openai", new MediaResourcePolicy(),
+            new ModelCapabilityMatcher(), mappings);
+
+        StepVerifier.create(model.generateImage(GenerateImageRequest.builder()
+                .prompt("Draw")
+                .n(3)
+                .negativePrompt("blurry")
+                .build()))
+            .assertNext(response -> {
+                assertThat(seenRequests).extracting(GenerateImageRequest::getN)
+                    .containsExactly(2, 1);
+                assertThat(seenRequests).extracting(GenerateImageRequest::getNegativePrompt)
+                    .containsOnlyNulls();
+                assertThat(response.getWarnings()).singleElement()
+                    .satisfies(warning -> assertThat(warning.getProviderMetadata())
+                        .containsEntry("parameter", "NEGATIVE_PROMPT")
+                        .containsEntry("modelName", "image-model")
+                        .containsEntry("providerName", "provider-a"));
+            })
+            .verifyComplete();
+    }
+
+    @Test
     void generateImage_failsWhenProviderReturnsNoImages() {
         var client = mock(ProviderImageGenerationClient.class);
         when(client.generateImage(any())).thenReturn(Mono.just(GenerateImageResult.builder()
@@ -220,5 +263,12 @@ class ImageGenerationModelImplTest {
             .usage(ImageUsage.builder().imageCount(1).build())
             .providerMetadata(Map.of("requestId", base64))
             .build();
+    }
+
+    private run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping effective(
+        run.halo.aifoundation.extension.ModelParameterMappings.Mode mode, String template) {
+        return new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+            mode, template, null,
+            run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL);
     }
 }

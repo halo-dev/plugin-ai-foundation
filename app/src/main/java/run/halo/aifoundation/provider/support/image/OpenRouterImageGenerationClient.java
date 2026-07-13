@@ -38,7 +38,6 @@ public class OpenRouterImageGenerationClient extends AbstractJsonImageGeneration
                 ))
                 .toList());
         }
-        putProviderOptions(body, request);
         return body;
     }
 
@@ -47,10 +46,6 @@ public class OpenRouterImageGenerationClient extends AbstractJsonImageGeneration
         var root = readTree(data, "OpenRouter");
         var images = new ArrayList<GeneratedFile>();
         var outputFormat = textOrNull(root.path("output_format"));
-        var providerOutputFormat = providerOptions(request).get("output_format");
-        if (providerOutputFormat != null) {
-            outputFormat = providerOutputFormat.toString();
-        }
         var mediaType = outputMediaType(outputFormat);
         var dataNode = root.path("data");
         if (dataNode.isArray()) {

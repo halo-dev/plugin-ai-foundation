@@ -106,7 +106,8 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
             .proxy(defaultOptions.getProxy())
             .user(defaultOptions.getUser())
             .encodingFormat(defaultOptions.getEncodingFormat())
-            .dimensions(defaultOptions.getDimensions());
+            .dimensions(defaultOptions.getDimensions())
+            .extraBody(defaultOptions.getExtraBody());
         if (options != null) {
             if (options.getModel() != null) {
                 builder.model(options.getModel());
@@ -149,6 +150,9 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
             if (openAiOptions.getEncodingFormat() != null) {
                 builder.encodingFormat(openAiOptions.getEncodingFormat());
             }
+            if (openAiOptions.getExtraBody() != null) {
+                builder.extraBody(openAiOptions.getExtraBody());
+            }
         }
         if (headers != null) {
             headers.forEach((name, value) -> {
@@ -174,6 +178,9 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
             body.put(Fields.ENCODING_FORMAT, options.getEncodingFormat().getValue());
         }
         putIfPresent(body, Fields.DIMENSIONS, options.getDimensions());
+        if (options.getExtraBody() != null) {
+            body.putAll(options.getExtraBody());
+        }
         return body;
     }
 

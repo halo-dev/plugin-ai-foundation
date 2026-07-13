@@ -42,6 +42,20 @@ describe('model group removal', () => {
     expect(wrapper.find('input[name="group"]').exists()).toBe(false)
   })
 
+  it('keeps parameter mappings and model capabilities in sibling panels', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/components/ModelForm.vue'),
+      'utf8',
+    )
+    expect(source.match(/<AdvancedSettingsCollapsible/g)).toHaveLength(2)
+    const mappingStart = source.indexOf('title="参数映射"')
+    const mappingEnd = source.indexOf('</AdvancedSettingsCollapsible>', mappingStart)
+    const capabilityStart = source.indexOf('title="模型能力"')
+    expect(mappingStart).toBeGreaterThan(-1)
+    expect(mappingEnd).toBeGreaterThan(mappingStart)
+    expect(capabilityStart).toBeGreaterThan(mappingEnd)
+  })
+
   it('keeps provider model list source free of group sections', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/views/components/ProviderModelList.vue'),

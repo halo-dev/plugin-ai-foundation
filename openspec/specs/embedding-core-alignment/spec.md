@@ -3,16 +3,15 @@
 Define provider-neutral AI API-aligned embedding controls, diagnostics, batching behavior, similarity utility, and console verification workflow.
 ## Requirements
 ### Requirement: provider-neutral embedding controls
-The system SHALL provide provider-neutral embedding settings comparable to provider-neutral AI API embeddings, including namespaced provider options, parallel call limit, retry budget, timeout/cancellation, and request headers.
+The system SHALL provide provider-neutral embedding settings including dimensions, batching, parallel call limit, retry budget, timeout/cancellation, request headers, metadata, and context, without caller-native option maps.
 
 #### Scenario: Advanced request carries embedding settings
-- **WHEN** a Java caller builds an `EmbeddingRequest` with inputs, provider options, headers, max retries, max parallel calls, timeouts, and a cancellation token
+- **WHEN** a Java caller builds an `EmbeddingRequest` with inputs and optional typed controls
 - **THEN** the public request type SHALL represent those controls without exposing Spring AI or provider-native request classes
 
-#### Scenario: provider-neutral settings are represented
-- **WHEN** a caller needs the provider-neutral embedding settings for provider options, parallel requests, retries, abort or timeout, and custom headers
-- **THEN** `EmbeddingRequest` SHALL provide equivalent Java fields or controls for each setting
-- **AND** timeout and abort behavior SHALL be represented by Halo's timeout and cancellation token types
+#### Scenario: Dimensions use effective mapping
+- **WHEN** a caller supplies embedding dimensions
+- **THEN** the runtime SHALL translate dimensions through the effective Provider/Model mapping
 
 #### Scenario: Invalid parallel limit rejected
 - **WHEN** a Java caller sends an `EmbeddingRequest` with `maxParallelCalls` less than 1
@@ -23,7 +22,7 @@ The system SHALL provide provider-neutral embedding settings comparable to provi
 - **THEN** the embedding layer SHALL attempt each provider batch call at most once
 
 #### Scenario: Cancellation remains request-scoped
-- **WHEN** a Java caller cancels the request through the cancellation token before a batch provider call starts
+- **WHEN** a Java caller cancels the request before a batch provider call starts
 - **THEN** the embedding call SHALL stop before invoking that batch
 - **AND** the error SHALL be reported through the embedding lifecycle error callback when configured
 
@@ -71,7 +70,7 @@ The public API SHALL provide a utility for calculating cosine similarity between
 - **THEN** the utility SHALL reject the input with an argument error
 
 ### Requirement: Console embedding test workflow
-The console SHALL provide an embedding test workflow for enabled embedding models so administrators can manually verify embedding settings and provider diagnostics.
+The console SHALL provide an embedding test workflow for enabled embedding models using typed settings and provider diagnostics.
 
 #### Scenario: Embedding model can be tested
 - **WHEN** an enabled embedding model appears in a model list
@@ -79,36 +78,42 @@ The console SHALL provide an embedding test workflow for enabled embedding model
 
 #### Scenario: Embedding settings can be submitted
 - **WHEN** an administrator opens the test workbench in embedding mode
-- **THEN** the console SHALL allow editing inputs, dimensions, max batch size, max parallel calls, max retries, provider options, and headers
+- **THEN** the console SHALL allow editing inputs, dimensions, max batch size, max parallel calls, max retries, and headers
+- **AND** it SHALL NOT expose a provider-options JSON editor
 
 #### Scenario: Embedding diagnostics displayed
 - **WHEN** an embedding test request succeeds
 - **THEN** the console SHALL display vector count, vector dimensions, vector previews, first-pair cosine similarity when available, usage, warnings, and response diagnostics
 
 ### Requirement: Embedding Settings Are Discoverable And Documented
-Embedding request settings SHALL be documented and discoverable through typed APIs where practical, including dimensions, max batch size, provider options, and request-level metadata.
+Embedding request settings SHALL be documented and discoverable through typed APIs, including dimensions, max batch size, parallelism, retries, headers, lifecycle, timeout, cancellation, metadata, and context.
 
 #### Scenario: Caller configures dimensions
 - **WHEN** a plugin author configures embedding dimensions
-- **THEN** JavaDoc and examples explain provider support behavior and validation outcomes
+- **THEN** JavaDoc and examples SHALL explain administrator mapping, provider support, and warning behavior
 
-#### Scenario: Caller configures provider options
-- **WHEN** a plugin author needs provider-specific embedding options
-- **THEN** the SDK exposes a documented typed helper where available or a clearly labeled escape hatch
+#### Scenario: Caller needs a provider-native embedding setting
+- **WHEN** a provider feature has no provider-neutral typed embedding semantic
+- **THEN** the public request SHALL NOT expose a raw escape hatch
+- **AND** adding a typed field and mapping template SHALL require a reviewed SDK change
 
 ### Requirement: Embedding Fields Are Fully Supported Or Removed
-Embedding public request fields SHALL either have implemented provider mapping and tests or be removed from the SDK.
+Embedding public provider parameters SHALL have typed mapping behavior and tests or SHALL be absent from the SDK.
 
-#### Scenario: Header-like field is unsupported
-- **WHEN** an embedding request field cannot be honored by the current provider integration
-- **THEN** the field is removed instead of remaining as a warning-only or no-op property
+#### Scenario: Mapped field is supported
+- **WHEN** an embedding parameter remains public
+- **THEN** tests SHALL verify its effective template reaches the provider request
 
-#### Scenario: Provider option is supported
-- **WHEN** an embedding provider option remains public
-- **THEN** tests verify it reaches the provider request or produces documented validation behavior
+#### Scenario: Effective mapping is unsupported
+- **WHEN** a caller supplies dimensions and the effective mapping is unsupported
+- **THEN** the runtime SHALL omit dimensions and include a stable warning
+
+#### Scenario: Raw option helper is inspected
+- **WHEN** a consumer inspects the embedding request builder
+- **THEN** no provider-option field or helper SHALL be present
 
 ### Requirement: Embedding documentation covers simple and advanced workflows
-Consumer documentation SHALL explain simple embedding calls, advanced embedding requests, batching behavior, settings, warnings, and similarity helpers.
+Consumer documentation SHALL explain simple embedding calls, advanced typed requests, batching, mappings, warnings, and similarity helpers.
 
 #### Scenario: Single and batch embeddings are documented
 - **WHEN** a plugin author reads the embeddings section
@@ -116,46 +121,45 @@ Consumer documentation SHALL explain simple embedding calls, advanced embedding 
 
 #### Scenario: Advanced embedding settings are documented
 - **WHEN** a plugin author reads the embeddings settings section
-- **THEN** the guide SHALL cover dimensions, max batch size, max retries, max parallel calls, headers, provider options, lifecycle, timeouts, and cancellation
+- **THEN** the guide SHALL cover dimensions, max batch size, retries, parallelism, headers, lifecycle, timeouts, cancellation, metadata, and context
+- **AND** it SHALL explain that administrators configure native dimensions translation
 
 #### Scenario: Similarity helper is documented
 - **WHEN** a plugin author needs vector similarity
 - **THEN** the guide SHALL show the public cosine similarity helper and its validation behavior
 
 ### Requirement: Embedding controls survive Spring AI RC1 migration
-The embedding runtime SHALL preserve provider-neutral advanced embedding controls and diagnostics after migrating OpenAI-compatible and Ollama embeddings to Spring AI 2.0.0-RC1.
+The embedding runtime SHALL preserve provider-neutral typed controls and diagnostics while applying administrator mappings over current provider clients.
 
-#### Scenario: OpenAI-compatible dimensions are applied
-- **WHEN** an OpenAI-compatible embedding request includes `dimensions`
-- **THEN** the RC1 provider adapter SHALL pass the dimensions override to the provider when supported
-- **AND** unsupported dimensions behavior SHALL remain warning or validation based according to the provider contract
+#### Scenario: Mapped dimensions are applied
+- **WHEN** an embedding request includes dimensions with a supported effective template
+- **THEN** the adapter SHALL pass the translated dimensions to the provider
 
-#### Scenario: OpenAI-compatible provider options are applied
-- **WHEN** an embedding request includes supported namespaced `providerOptions` for the OpenAI-compatible namespace
-- **THEN** the RC1 provider adapter SHALL apply supported options such as dimensions, user, and encoding format to the provider request
-- **AND** unsupported provider options SHALL still produce stable warnings
+#### Scenario: Unsupported dimensions are reported
+- **WHEN** the effective dimensions mapping is unsupported
+- **THEN** the adapter SHALL omit dimensions and return a stable warning
 
 #### Scenario: Request-scoped embedding headers are applied
 - **WHEN** an embedding request includes request-scoped headers
-- **THEN** a provider adapter that supports request-scoped headers SHALL include those headers in the provider request
-- **AND** a provider adapter that cannot support request-scoped headers SHALL report a stable warning rather than silently ignoring the headers
+- **THEN** a provider adapter that supports request-scoped headers SHALL include those headers
+- **AND** an adapter that cannot support them SHALL report a stable warning
 
 #### Scenario: Embedding usage and diagnostics remain provider-neutral
-- **WHEN** an RC1 embedding provider response includes usage or response metadata
-- **THEN** `EmbeddingResponse` SHALL expose usage, response metadata, warnings, and provider metadata through public SDK DTOs without exposing Spring AI RC1 response classes
+- **WHEN** a provider response includes usage or response metadata
+- **THEN** `EmbeddingResponse` SHALL expose usage, response metadata, warnings, and provider metadata without exposing Spring AI response classes
 
 ### Requirement: Embedding convenience methods
-The embedding API SHALL provide AI SDK-style convenience methods for single values and many values while preserving advanced request support.
+The embedding API SHALL provide convenience methods for single values and many values while preserving typed advanced request support.
 
 #### Scenario: Embed single value
 - **WHEN** a caller embeds a single text value
-- **THEN** the embedding model returns the vector for that value without requiring the caller to build a one-item list
+- **THEN** the embedding model SHALL return its vector without requiring a one-item list
 
 #### Scenario: Embed many values
 - **WHEN** a caller embeds many text values
-- **THEN** the embedding model returns embeddings in the same order as the input values
+- **THEN** the embedding model SHALL return embeddings in input order
 
 #### Scenario: Advanced request remains available
-- **WHEN** a caller needs dimensions, batching, retries, provider options, headers, cancellation, lifecycle, or timeouts
-- **THEN** they can continue to use the advanced embedding request API
+- **WHEN** a caller needs dimensions, batching, retries, headers, cancellation, lifecycle, timeout, metadata, or context
+- **THEN** the caller SHALL be able to use `EmbeddingRequest` without provider-native options
 

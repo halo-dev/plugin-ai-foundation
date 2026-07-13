@@ -19,6 +19,9 @@ import type { ModelCapabilities } from './model-capabilities';
 // May contain unused imports in some cases
 // @ts-ignore
 import type { ModelCapabilitySources } from './model-capability-sources';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelParameterMappings } from './model-parameter-mappings';
 
 /**
  * 
@@ -86,6 +89,12 @@ export interface AiModelSpec {
      * @memberof AiModelSpec
      */
     'modelType': AiModelSpecModelTypeEnum;
+    /**
+     * 
+     * @type {ModelParameterMappings}
+     * @memberof AiModelSpec
+     */
+    'parameterMappings'?: ModelParameterMappings;
     /**
      * References AiProvider.metadata.name (provider instance resource name)
      * @type {string}

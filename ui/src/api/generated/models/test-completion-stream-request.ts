@@ -43,6 +43,12 @@ export interface TestCompletionStreamRequest {
     'headers'?: { [key: string]: string; };
     /**
      * 
+     * @type {boolean}
+     * @memberof TestCompletionStreamRequest
+     */
+    'logprobs'?: boolean;
+    /**
+     * 
      * @type {number}
      * @memberof TestCompletionStreamRequest
      */
@@ -64,6 +70,18 @@ export interface TestCompletionStreamRequest {
      * @type {number}
      * @memberof TestCompletionStreamRequest
      */
+    'minP'?: number;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof TestCompletionStreamRequest
+     */
+    'parallelToolCalls'?: boolean;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestCompletionStreamRequest
+     */
     'presencePenalty'?: number;
     /**
      * 
@@ -73,16 +91,16 @@ export interface TestCompletionStreamRequest {
     'prompt'?: string;
     /**
      * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
-     * @memberof TestCompletionStreamRequest
-     */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
-    /**
-     * 
      * @type {ReasoningOptions}
      * @memberof TestCompletionStreamRequest
      */
     'reasoning'?: ReasoningOptions;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestCompletionStreamRequest
+     */
+    'repetitionPenalty'?: number;
     /**
      * 
      * @type {number}
@@ -113,6 +131,12 @@ export interface TestCompletionStreamRequest {
      * @memberof TestCompletionStreamRequest
      */
     'topK'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestCompletionStreamRequest
+     */
+    'topLogprobs'?: number;
     /**
      * 
      * @type {number}

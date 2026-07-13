@@ -21,11 +21,12 @@ The system SHALL allow Java SDK callers to attach provider-neutral lifecycle cal
 - **THEN** the system MUST invoke the error callback with a safe typed error and caller metadata
 
 ### Requirement: Step lifecycle callbacks observe every model step
-The system SHALL emit lifecycle callbacks around each provider model step in both streaming and non-streaming generation.
+The system SHALL emit lifecycle callbacks around each provider model step in streaming and non-streaming generation using typed resolved controls.
 
 #### Scenario: Step start callback
 - **WHEN** a generation step is about to invoke the provider
-- **THEN** the system MUST invoke the step-start callback with step index, messages, tools, active tools, tool choice, provider options, timeout settings, and previous steps
+- **THEN** the system MUST invoke the step-start callback with step index, messages, tools, active tools, tool choice, typed generation settings, timeout settings, and previous steps
+- **AND** the event SHALL NOT expose caller-native provider option maps
 
 #### Scenario: Step finish callback
 - **WHEN** a provider step completes
@@ -34,7 +35,7 @@ The system SHALL emit lifecycle callbacks around each provider model step in bot
 
 #### Scenario: Step callback order
 - **WHEN** generation executes multiple steps
-- **THEN** the callback order MUST be start, step-start, step-finish for each step, and finish
+- **THEN** callback order MUST be start, step-start, step-finish for each step, and finish
 
 ### Requirement: Tool lifecycle callbacks observe server-side tool execution
 The system SHALL emit lifecycle callbacks around server-side tool executor calls.
@@ -140,3 +141,4 @@ Approval-related lifecycle callbacks SHALL NOT change whether a tool is approved
 - **WHEN** an approval-related lifecycle callback throws an exception
 - **THEN** generation SHALL continue when possible
 - **AND** the failure SHALL be surfaced as a provider-neutral warning with a safe message
+

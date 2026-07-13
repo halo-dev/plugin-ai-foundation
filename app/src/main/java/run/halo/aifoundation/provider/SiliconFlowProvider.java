@@ -31,6 +31,11 @@ import run.halo.aifoundation.provider.support.rerank.SiliconFlowRerankingClient;
 @Component
 public class SiliconFlowProvider extends AbstractAiProviderType {
 
+    @Override
+    protected String defaultReasoningMappingTemplate() {
+        return "reasoning.enable-thinking";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://api.siliconflow.cn/v1";
     private static final String COMPLETIONS_PATH = "/chat/completions";
     private static final String EMBEDDINGS_PATH = "/embeddings";

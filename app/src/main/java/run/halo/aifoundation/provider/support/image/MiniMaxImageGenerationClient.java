@@ -48,7 +48,6 @@ public class MiniMaxImageGenerationClient extends AbstractJsonImageGenerationCli
                 ))
                 .toList());
         }
-        putProviderOptions(body, request);
         return body;
     }
 

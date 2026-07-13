@@ -7,7 +7,7 @@ import reactor.core.publisher.Mono;
  * Provider-neutral Java SDK for embeddings.
  *
  * <p>Use simple methods for common query/document embedding, or {@link EmbeddingRequest} when
- * dimensions, batching, retries, provider options, lifecycle callbacks, cancellation, or timeout
+ * dimensions, batching, retries, lifecycle callbacks, cancellation, or timeout
  * controls are needed.
  */
 public interface EmbeddingModel {

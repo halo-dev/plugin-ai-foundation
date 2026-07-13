@@ -44,6 +44,9 @@ import run.halo.aifoundation.provider.support.openai.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingModel;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 
 @Slf4j
 public abstract class AbstractAiProviderType implements AiProviderType {
@@ -57,6 +60,23 @@ public abstract class AbstractAiProviderType implements AiProviderType {
     @Override
     public String getCompletionsPath() {
         return COMPLETIONS_PATH;
+    }
+
+    @Override
+    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
+        var defaults =
+            new java.util.EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
+        defaults.putAll(ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes()));
+        var reasoningTemplate = defaultReasoningMappingTemplate();
+        if (reasoningTemplate != null && !reasoningTemplate.isBlank()) {
+            defaults.put(ModelParameter.REASONING,
+                DefaultParameterMapping.template(reasoningTemplate));
+        }
+        return Map.copyOf(defaults);
+    }
+
+    protected String defaultReasoningMappingTemplate() {
+        return null;
     }
 
     protected String resolveBaseUrl(AiProvider provider) {

@@ -10,25 +10,51 @@ import run.halo.aifoundation.exception.RerankCancelledException;
 import run.halo.aifoundation.exception.RerankTimeoutException;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankWarning;
 import run.halo.aifoundation.rerank.RerankingModel;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 public class RerankingModelImpl implements RerankingModel {
 
     private final ProviderRerankingClient client;
     private final String providerType;
     private final RerankingModelProviderOptions providerOptions;
+    private final RuntimeParameterMappings parameterMappings;
 
     RerankingModelImpl(ProviderRerankingClient client, String providerType,
         RerankingModelProviderOptions providerOptions) {
+        this(client, providerType, providerOptions, EffectiveParameterMappings.empty());
+    }
+
+    RerankingModelImpl(ProviderRerankingClient client, String providerType,
+        RerankingModelProviderOptions providerOptions,
+        EffectiveParameterMappings parameterMappings) {
+        this(client, providerType, providerOptions, parameterMappings, null, null);
+    }
+
+    RerankingModelImpl(ProviderRerankingClient client, String providerType,
+        RerankingModelProviderOptions providerOptions,
+        EffectiveParameterMappings parameterMappings, String modelName, String providerName) {
+        this(client, providerOptions,
+            ModelRuntimeContext.unresolved(providerType, modelName, providerName,
+                new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
+    }
+
+    RerankingModelImpl(ProviderRerankingClient client,
+        RerankingModelProviderOptions providerOptions, ModelRuntimeContext context) {
         this.client = client;
-        this.providerType = providerType;
+        this.providerType = context.providerType();
         this.providerOptions = providerOptions != null
             ? providerOptions
             : RerankingModelProviderOptions.defaults();
+        this.parameterMappings = context.parameterMappings();
     }
 
     @Override
@@ -40,7 +66,8 @@ public class RerankingModelImpl implements RerankingModel {
                     return Mono.just(emptyResponse(request));
                 }
                 var warnings = requestWarnings(request);
-                return client.rerank(request)
+                var target = mappedTopN(request, warnings);
+                return client.rerank(request, target)
                     .map(response -> withRuntimeWarnings(response, warnings))
                     .doOnNext(response -> checkResultIndexes(request, response));
             })
@@ -84,16 +111,25 @@ public class RerankingModelImpl implements RerankingModel {
     }
 
     private List<RerankWarning> requestWarnings(RerankRequest request) {
-        var warnings = new ArrayList<RerankWarning>();
-        if (request.getProviderOptions() != null && !request.getProviderOptions().isEmpty()
-            && !providerOptions.isProviderOptionsSupported()) {
-            warnings.add(RerankWarning.builder()
-                .code("provider-options-not-supported")
-                .message("Provider options were supplied but this reranking provider does not declare provider option support.")
-                .providerMetadata(Map.of("providerType", providerType))
-                .build());
+        return new ArrayList<>();
+    }
+
+    private ParameterMappingTarget mappedTopN(RerankRequest request,
+        List<RerankWarning> warnings) {
+        if (request.getTopN() == null) {
+            return null;
         }
-        return warnings;
+        if (parameterMappings.get(ModelParameter.TOP_N) == null) {
+            return null;
+        }
+        var target = new ParameterMappingTarget();
+        if (parameterMappings.isUnsupported(ModelParameter.TOP_N)) {
+            warnings.add(parameterMappings.unsupportedDiagnostic(ModelParameter.TOP_N)
+                .rerankWarning());
+            return target;
+        }
+        parameterMappings.apply(ModelParameter.TOP_N, request.getTopN(), target);
+        return target;
     }
 
     private RerankResponse withRuntimeWarnings(RerankResponse response,

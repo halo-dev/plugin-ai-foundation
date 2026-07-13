@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import type { ProviderFormState } from '@/types/form'
+import { validateReasoningMappings } from '@/utils/parameter-mappings'
 import type { FormKitTypeDefinition } from '@formkit/core'
 import { submitForm } from '@formkit/core'
-import { computed, shallowRef, watch } from 'vue'
+import { Toast } from '@halo-dev/components'
+import { computed, ref, shallowRef, watch } from 'vue'
+import AdvancedSettingsCollapsible from './AdvancedSettingsCollapsible.vue'
+import ParameterMappingFields from './ParameterMappingFields.vue'
 
 const props = defineProps<{
   formState?: ProviderFormState
@@ -39,6 +43,7 @@ const chatEndpointPath = shallowRef(props.formState?.chatEndpointPath)
 const embeddingEndpointPath = shallowRef(props.formState?.embeddingEndpointPath)
 const rerankEndpointPath = shallowRef(props.formState?.rerankEndpointPath)
 const imageEndpointPath = shallowRef(props.formState?.imageEndpointPath)
+const parameterMappings = ref(props.formState?.parameterMappings)
 
 const selectedProviderType = computed(() => {
   return providerTypes.value?.find((t) => t.providerType === providerType.value)
@@ -117,7 +122,12 @@ const imageEndpointHelp = computed(() =>
 )
 
 function onSubmit(data: ProviderFormState) {
-  emit('submit', data)
+  const errors = validateReasoningMappings(parameterMappings.value)
+  if (errors.length) {
+    Toast.error(errors[0])
+    return
+  }
+  emit('submit', { ...data, parameterMappings: parameterMappings.value })
 }
 
 function joinUrl(base: string, path: string) {
@@ -260,6 +270,22 @@ defineExpose({
       placeholder="可选"
       :value="formState?.proxyPort"
     />
+
+    <AdvancedSettingsCollapsible
+      v-if="selectedProviderType?.parameterMappingTemplates?.length"
+      title="参数映射"
+      source-label="管理员配置"
+    >
+      <p class=":uno: mb-3 text-xs text-gray-500">
+        将 AI Foundation 的统一参数映射到当前供应商实际接受的字段。未修改的项目使用供应商类型内置默认值。
+      </p>
+      <ParameterMappingFields
+        v-model="parameterMappings"
+        context="provider"
+        :templates="selectedProviderType.parameterMappingTemplates"
+        :defaults="selectedProviderType.defaultParameterMappings"
+      />
+    </AdvancedSettingsCollapsible>
 
     <FormKit
       :type="'switch' as unknown as FormKitTypeDefinition<boolean>"

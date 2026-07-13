@@ -34,7 +34,10 @@ import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
+import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -80,7 +83,8 @@ class ModelConsoleEndpointTest {
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
         when(providerClientCache.getProviderType("openai")).thenReturn(mockType);
 
-        var modelValidator = new ModelConsoleModelValidator(client, providerClientCache);
+        var modelValidator = new ModelConsoleModelValidator(client, providerClientCache,
+            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
         var endpoint = new ModelConsoleEndpoint(client, aiModelService, modelValidator);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
@@ -137,6 +141,60 @@ class ModelConsoleEndpointTest {
             .expectBody()
             .jsonPath("$.metadata.name").isEqualTo(generatedName)
             .jsonPath("$.spec.group").doesNotExist();
+    }
+
+    @Test
+    void create_validModelParameterOverride_returns200() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        var mappings = new ModelParameterMappings();
+        var language = new ModelParameterMappings.LanguageMappings();
+        language.setMaxOutputTokens(template("openai.max-completion-tokens"));
+        mappings.setLanguage(language);
+        m.getSpec().setParameterMappings(mappings);
+        stubCreate(m);
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.spec.parameterMappings.language.maxOutputTokens.template")
+            .isEqualTo("openai.max-completion-tokens");
+    }
+
+    @Test
+    void create_irrelevantModelParameterDomain_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        var mappings = new ModelParameterMappings();
+        mappings.setEmbedding(new ModelParameterMappings.EmbeddingMappings());
+        m.getSpec().setParameterMappings(mappings);
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_incompatibleModelParameterTemplate_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        var mappings = new ModelParameterMappings();
+        var language = new ModelParameterMappings.LanguageMappings();
+        language.setMaxOutputTokens(template("chat.temperature"));
+        mappings.setLanguage(language);
+        m.getSpec().setParameterMappings(mappings);
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
@@ -1052,8 +1110,7 @@ class ModelConsoleEndpointTest {
             .bodyValue(Map.of(
                 "query", "Halo RAG",
                 "documents", List.of("generic cms", "Halo AI Foundation"),
-                "topN", 1,
-                "providerOptions", Map.of("cohere", Map.of("truncate", "END"))
+                "topN", 1
             ))
             .exchange()
             .expectStatus().isOk()
@@ -1071,7 +1128,6 @@ class ModelConsoleEndpointTest {
             .extracting(RerankDocument::getText)
             .containsExactly("generic cms", "Halo AI Foundation");
         assertThat(request.getTopN()).isEqualTo(1);
-        assertThat(request.getProviderOptions()).containsKey("cohere");
     }
 
     @Test
@@ -1102,7 +1158,7 @@ class ModelConsoleEndpointTest {
                 Map.entry("maxRetries", 1),
                 Map.entry("maxParallelCalls", 2),
                 Map.entry("responseFormat", "BASE64"),
-                Map.entry("providerOptions", Map.of("openai", Map.of("quality", "hd"))),
+                Map.entry("negativePrompt", "blurry"),
                 Map.entry("headers", Map.of("X-Test", "true"))
             ))
             .exchange()
@@ -1124,7 +1180,7 @@ class ModelConsoleEndpointTest {
         assertThat(request.getSize()).isEqualTo("1024x768");
         assertThat(request.getSeed()).isEqualTo(42);
         assertThat(request.getMaxParallelCalls()).isEqualTo(2);
-        assertThat(request.getProviderOptions()).containsKey("openai");
+        assertThat(request.getNegativePrompt()).isEqualTo("blurry");
         assertThat(request.getHeaders()).containsEntry("X-Test", "true");
     }
 
@@ -1199,8 +1255,7 @@ class ModelConsoleEndpointTest {
                     Map.of("id", "source-2", "content", "AI Foundation RAG content")
                 ),
                 "rerankModelName", "rerank-model",
-                "topN", 1,
-                "rerankProviderOptions", Map.of("zhipuai", Map.of("return_raw_scores", true))
+                "topN", 1
             ))
             .exchange()
             .expectStatus().isOk()
@@ -1212,7 +1267,6 @@ class ModelConsoleEndpointTest {
 
         var captor = ArgumentCaptor.forClass(RerankRequest.class);
         verify(rerankingModel).rerank(captor.capture());
-        assertThat(captor.getValue().getProviderOptions()).containsKey("zhipuai");
         assertThat(captor.getValue().getDocuments())
             .extracting(RerankDocument::getText)
             .containsExactly("Generic CMS content", "AI Foundation RAG content");
@@ -1383,5 +1437,24 @@ class ModelConsoleEndpointTest {
         spec.setAdapterType(AdapterType.OPENAI_CHAT);
         m.setSpec(spec);
         return m;
+    }
+
+    private void stubCreate(AiModel model) {
+        var providerName = model.getSpec().getProviderName();
+        var generatedName = AiModelNameGenerator.generate(providerName,
+            model.getSpec().getModelId());
+        when(client.fetch(AiProvider.class, providerName))
+            .thenReturn(Mono.just(provider(providerName, "openai")));
+        when(client.listAll(eq(AiModel.class), any(), any())).thenReturn(Flux.empty());
+        when(client.fetch(AiModel.class, generatedName)).thenReturn(Mono.empty());
+        when(client.create(any(AiModel.class)))
+            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+    }
+
+    private ModelParameterMappings.Selection template(String id) {
+        var selection = new ModelParameterMappings.Selection();
+        selection.setMode(ModelParameterMappings.Mode.TEMPLATE);
+        selection.setTemplate(id);
+        return selection;
     }
 }

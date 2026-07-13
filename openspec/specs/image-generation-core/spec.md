@@ -23,7 +23,7 @@ The SDK SHALL expose image generation as a first-class model interface independe
 - **AND** the consumer SHALL NOT need Spring AI provider-native image classes
 
 ### Requirement: Image generation request
-The SDK SHALL support structured image generation requests.
+The SDK SHALL support structured image generation requests with typed provider-neutral parameters and administrator-owned native mappings.
 
 #### Scenario: Text to image request
 - **WHEN** a consumer sends `GenerateImageRequest` with a prompt and no input images
@@ -40,9 +40,13 @@ The SDK SHALL support structured image generation requests.
 - **THEN** the runtime SHALL validate `imageGeneration.maskInput` before provider invocation
 
 #### Scenario: Request controls
-- **WHEN** a consumer sends request fields such as `n`, `size`, `aspectRatio`, `seed`, `responseFormat`, `providerOptions`, `headers`, retry settings, timeout settings, or cancellation
-- **THEN** the runtime SHALL apply supported fields to the provider request
-- **AND** it SHALL report unsupported optional settings as warnings when the core image generation semantics can still succeed
+- **WHEN** a consumer sends `n`, `size`, `aspectRatio`, `seed`, `responseFormat`, `negativePrompt`, headers, retries, timeout, cancellation, metadata, or context
+- **THEN** the runtime SHALL apply runtime controls and translate provider parameters through the effective mapping
+- **AND** it SHALL report unsupported optional parameters as warnings when core generation can continue
+
+#### Scenario: Image request has no native escape hatch
+- **WHEN** a consumer inspects `GenerateImageRequest`
+- **THEN** no caller-writable provider-native option map SHALL be present
 
 ### Requirement: Image generation result
 The SDK SHALL return complete image generation results.
@@ -87,4 +91,15 @@ The runtime SHALL use provider-specific image adapters according to provider cap
 #### Scenario: Unsupported provider
 - **WHEN** a provider does not support image generation according to docs, remote metadata, or manual configuration
 - **THEN** image generation models for that provider SHALL remain unavailable or fail with a capability error before invocation
+
+### Requirement: Negative prompt is a typed image control
+The public image request SHALL expose `negativePrompt` as an optional provider-neutral string.
+
+#### Scenario: Supported negative prompt mapping
+- **WHEN** a caller supplies a negative prompt and the effective template supports it
+- **THEN** the adapter SHALL send it through the template-defined native field
+
+#### Scenario: Unsupported negative prompt mapping
+- **WHEN** a caller supplies a negative prompt and the effective template is unsupported
+- **THEN** the adapter SHALL omit it and return an image-generation warning
 

@@ -416,16 +416,23 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void generateText_rejectsHeadersWhenDeepSeekDedicatedProviderCannotMapThem() {
-        var model = new LanguageModelImpl(mock(ChatModel.class), "deepseek",
+    void generateText_mapsHeadersWithDeepSeekOpenAiCompatibleAdapter() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var model = new LanguageModelImpl(chatModel, "deepseek",
             new DeepSeekProvider().languageModelProviderOptions());
 
         StepVerifier.create(model.generateText(GenerateTextRequest.builder()
                 .prompt("Hello")
                 .headers(Map.of("X-Trace-Id", "trace-1"))
                 .build()))
-            .expectErrorMessage("Request headers are not supported by provider type: deepseek")
-            .verify();
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        assertThat(((OpenAiCompatibleChatOptions) captor.getValue().getOptions())
+            .getCustomHeaders()).containsEntry("X-Trace-Id", "trace-1");
     }
 
     @Test
@@ -462,6 +469,307 @@ class LanguageModelImplTest {
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
         assertThat(((OpenAiCompatibleChatOptions) captor.getValue().getOptions()).getSeed()).isEqualTo(42);
+    }
+
+    @Test
+    void generateText_prepareStepExposesAndOverridesExpandedTypedSettings() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var seenRequest = new java.util.concurrent.atomic.AtomicReference<GenerateTextRequest>();
+        var providerOptions = LanguageModelProviderOptions.builder()
+            .chatOptionsFactory(request -> {
+                seenRequest.set(request);
+                return OpenAiCompatibleChatOptions.builder().build();
+            })
+            .build();
+        var model = new LanguageModelImpl(chatModel, "openai", providerOptions);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .minP(0.1)
+                .repetitionPenalty(1.1)
+                .topLogprobs(2)
+                .parallelToolCalls(true)
+                .prepareStep(context -> {
+                    assertThat(context.getMinP()).isEqualTo(0.1);
+                    assertThat(context.getRepetitionPenalty()).isEqualTo(1.1);
+                    assertThat(context.getLogprobs()).isTrue();
+                    assertThat(context.getTopLogprobs()).isEqualTo(2);
+                    assertThat(context.getParallelToolCalls()).isTrue();
+                    return PreparedStep.builder()
+                        .minP(0.2)
+                        .repetitionPenalty(1.3)
+                        .topLogprobs(4)
+                        .parallelToolCalls(false)
+                        .build();
+                })
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        assertThat(seenRequest.get().getMinP()).isEqualTo(0.2);
+        assertThat(seenRequest.get().getRepetitionPenalty()).isEqualTo(1.3);
+        assertThat(seenRequest.get().getLogprobs()).isTrue();
+        assertThat(seenRequest.get().getTopLogprobs()).isEqualTo(4);
+        assertThat(seenRequest.get().getParallelToolCalls()).isFalse();
+    }
+
+    @Test
+    void generateText_validatesTopLogprobsBeforeProviderInvocation() {
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .topLogprobs(-1)
+                .build()))
+            .expectErrorMessage("topLogprobs must not be negative")
+            .verify();
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .logprobs(false)
+                .topLogprobs(1)
+                .build()))
+            .expectErrorMessage("topLogprobs cannot be set when logprobs is false")
+            .verify();
+    }
+
+    @Test
+    void generateText_appliesEffectiveOpenAiMaxCompletionTokenMapping() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.MAX_OUTPUT_TOKENS,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "openai.max-completion-tokens", null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = LanguageModelRuntimeComposition.create("openai", "gpt-5",
+            LanguageModelProviderOptions.builder()
+                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
+                    .maxTokens(request.getMaxOutputTokens())
+                    .build())
+                .build(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxOutputTokens(256)
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        assertThat(options.getMaxTokens()).isNull();
+        assertThat(options.getMaxCompletionTokens()).isEqualTo(256);
+    }
+
+    @Test
+    void generateText_serializesAdministratorCustomScalarFieldWithoutLegacyField() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.MAX_OUTPUT_TOKENS,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "openai.max-tokens", "output_limit", null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = LanguageModelRuntimeComposition.create("openai", "custom-model",
+            LanguageModelProviderOptions.builder()
+                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
+                    .maxTokens(request.getMaxOutputTokens())
+                    .build())
+                .build(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxOutputTokens(256)
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        assertThat(options.getMaxTokens()).isNull();
+        assertThat(options.getMaxCompletionTokens()).isNull();
+        assertThat(options.getExtraBody()).containsEntry("output_limit", 256);
+    }
+
+    @Test
+    void generateText_mapsDeepSeekDisabledReasoningToThinkingType() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.REASONING,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "reasoning.deepseek", null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.BUILT_IN)));
+        var composition = LanguageModelRuntimeComposition.create("deepseek", "deepseek-v4-flash",
+            new DeepSeekProvider().languageModelProviderOptions(),
+            new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Answer directly")
+                .reasoning(ReasoningOptions.disabled())
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        assertThat(options.getExtraBody()).containsKey("thinking");
+        assertThat((Map<String, Object>) options.getExtraBody().get("thinking"))
+            .containsEntry("type", "disabled");
+    }
+
+    @Test
+    void generateText_preservesAdministratorOllamaOptionThroughOptionMerge() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.MAX_OUTPUT_TOKENS,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "ollama.num-predict", "output_limit", null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = LanguageModelRuntimeComposition.create("ollama", "local-model",
+            new run.halo.aifoundation.provider.OllamaProvider().languageModelProviderOptions(),
+            new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxOutputTokens(128)
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (org.springframework.ai.ollama.api.OllamaChatOptions)
+            captor.getValue().getOptions();
+        assertThat(options.toMap()).containsEntry("output_limit", 128)
+            .doesNotContainKey("num_predict");
+        assertThat(options.mutate().build().toMap()).containsEntry("output_limit", 128);
+    }
+
+    @Test
+    void generateText_omitsUnsupportedMappedParameterAndPropagatesWarning() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(chatResponse("Done", "stop", 1, 1)));
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.TEMPERATURE,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED,
+                    null, null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = LanguageModelRuntimeComposition.create("openai", "gpt-4o",
+            LanguageModelProviderOptions.builder()
+                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
+                    .temperature(request.getTemperature()).build())
+                .build(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings,
+            "language-model", "openai-provider");
+        var request = GenerateTextRequest.builder().prompt("Hello").temperature(0.7).build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertMappedTemperatureWarning(result.getWarnings()))
+            .verifyComplete();
+        StepVerifier.create(model.streamText(request).result())
+            .assertNext(result -> assertMappedTemperatureWarning(result.getWarnings()))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        assertThat(((OpenAiCompatibleChatOptions) captor.getValue().getOptions()).getTemperature())
+            .isNull();
+    }
+
+    @Test
+    void generateText_appliesAdministratorReasoningIntentValueMapping() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var medium = new run.halo.aifoundation.extension.ModelParameterMappings.ReasoningValueMapping();
+        medium.setField("thinking_budget");
+        medium.setValueType(
+            run.halo.aifoundation.extension.ModelParameterMappings.ValueType.INTEGER);
+        medium.setValue("512");
+        var reasoning = new run.halo.aifoundation.extension.ModelParameterMappings.ReasoningMapping();
+        reasoning.setMedium(medium);
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.REASONING,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "reasoning.thinking-budget", reasoning,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = LanguageModelRuntimeComposition.create("openai", "reasoning-model",
+            LanguageModelProviderOptions.builder()
+                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder().build())
+                .build(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings,
+            "reasoning-model", "provider-a");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Think")
+                .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.MEDIUM))
+                .build()))
+            .assertNext(result -> assertThat(result.getWarnings())
+                .noneMatch(warning -> "mapped-parameter-unsupported".equals(warning.getCode())))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        assertThat(options.getExtraBody()).containsEntry("thinking_budget", 512);
+    }
+
+    @Test
+    void generateText_warnsWhenReasoningTemplateCannotExpressIntent() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.REASONING,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "reasoning.enable-thinking", null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = LanguageModelRuntimeComposition.create("openai", "reasoning-model",
+            LanguageModelProviderOptions.builder()
+                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder().build())
+                .build(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings,
+            "reasoning-model", "provider-a");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Think")
+                .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
+                .build()))
+            .assertNext(result -> assertThat(result.getWarnings()).anySatisfy(warning -> {
+                assertThat(warning.getCode()).isEqualTo("mapped-parameter-unsupported");
+                assertThat(warning.getProviderMetadata())
+                    .containsEntry("parameter", "REASONING");
+            }))
+            .verifyComplete();
+    }
+
+    private void assertMappedTemperatureWarning(
+        List<run.halo.aifoundation.chat.GenerationWarning> warnings) {
+        assertThat(warnings).anySatisfy(warning -> {
+            assertThat(warning.getCode()).isEqualTo("mapped-parameter-unsupported");
+            assertThat(warning.getProviderMetadata())
+                .containsEntry("parameter", "TEMPERATURE")
+                .containsEntry("modelName", "language-model")
+                .containsEntry("providerName", "openai-provider");
+        });
     }
 
     @Test
@@ -640,32 +948,6 @@ class LanguageModelImplTest {
 
         StepVerifier.create(model.generateText(request))
             .expectErrorMessage("disabled reasoning is not supported by provider type: ollama")
-            .verify();
-    }
-
-    @Test
-    void generateText_rejectsReasoningProviderOptionConflict() {
-        var model = new LanguageModelImpl(mock(ChatModel.class), "thinking-provider",
-            LanguageModelProviderOptions.builder()
-                .reasoningHistorySupported(true)
-                .streamToolCallsForReasoning(true)
-                .requestHeadersSupported(true)
-                .seedSupported(true)
-                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
-                }))
-                .build());
-        var request = GenerateTextRequest.builder()
-            .prompt("Fast")
-            .reasoning(ReasoningOptions.disabled())
-            .providerOptions(Map.of("thinking-provider", Map.of(
-                "thinking", Map.of("type", "enabled")
-            )))
-            .build();
-
-        StepVerifier.create(model.generateText(request))
-            .expectErrorMessage("reasoning setting conflicts with "
-                + "providerOptions.thinking-provider.thinking; use either typed reasoning or raw "
-                + "provider options, not both")
             .verify();
     }
 
@@ -3261,10 +3543,14 @@ class LanguageModelImplTest {
 
     private LanguageModelImpl languageModelWithCapabilities(ChatModel chatModel,
         LanguageCapability languageCapability) {
-        return new LanguageModelImpl(chatModel, LanguageModelRuntimeComposition.create("openai",
-            "gpt-4o", LanguageModelProviderOptions.defaults(), new LanguageModelRuntimeSupport(),
-            new MediaResourcePolicy(), new ModelCapabilityMatcher(),
-            ModelCapabilities.language(languageCapability), "vision-model", "openai-provider"));
+        var context = run.halo.aifoundation.service.model.ModelRuntimeContext.unresolved("openai",
+            "gpt-4o", "vision-model", "openai-provider",
+            run.halo.aifoundation.provider.mapping.RuntimeParameterMappings.empty());
+        var configuration = new LanguageModelRuntimeConfiguration(context,
+            LanguageModelProviderOptions.defaults(), ModelCapabilities.language(languageCapability));
+        return new LanguageModelImpl(chatModel, LanguageModelRuntimeComposition.create(configuration,
+            new LanguageModelRuntimeSupport(), new MediaResourcePolicy(),
+            new ModelCapabilityMatcher()));
     }
 
     private ToolDefinition repairableWeatherTool(ToolExecutor executor) {
@@ -3486,12 +3772,6 @@ class LanguageModelImplTest {
                     .frequencyPenalty(request.getFrequencyPenalty())
                     .stop(request.getStopSequences())
                     .toolCallbacks(toolCallbacks);
-                var providerOptions = request.getProviderOptions() != null
-                    ? request.getProviderOptions().get("deepseek")
-                    : null;
-                if (providerOptions != null && !providerOptions.isEmpty()) {
-                    builder.extraBody(Map.copyOf(providerOptions));
-                }
                 return builder.build();
             })
             .build();

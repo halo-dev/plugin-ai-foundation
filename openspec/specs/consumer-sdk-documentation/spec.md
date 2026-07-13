@@ -4,20 +4,20 @@
 TBD - created by archiving change finalize-core-alignment-and-consumer-docs. Update Purpose after archive.
 ## Requirements
 ### Requirement: Consumer guide is organized by SDK workflows
-The project SHALL provide a consumer-facing SDK guide that is organized around plugin author workflows rather than internal implementation structure.
+The project SHALL provide a consumer-facing SDK guide organized around plugin author workflows and typed APIs.
 
 #### Scenario: Caller starts from quick start
 - **WHEN** a plugin author opens `dev/dev.md`
-- **THEN** the document SHALL first explain dependency setup, plugin runtime dependency, and how to obtain `AiModelService`
-- **AND** the document SHALL use `AiModel.metadata.name` as the model lookup identity
+- **THEN** the document SHALL first explain setup, runtime dependency, `AiModelService`, and `AiModel.metadata.name` lookup
 
 #### Scenario: Caller finds feature workflows
-- **WHEN** a plugin author scans `dev/dev.md`
-- **THEN** the document SHALL expose top-level sections for text generation, streaming text, structured output, tools, settings, embeddings, errors, testing, and advanced provider options
+- **WHEN** a plugin author scans the guide
+- **THEN** it SHALL expose text, streaming, structured output, tools, typed settings, embeddings, reranking, images, errors, and testing
+- **AND** it SHALL NOT include an advanced provider-options workflow
 
-#### Scenario: Caller sees typed examples first
-- **WHEN** a section includes a normal SDK usage example
-- **THEN** the example SHALL use public typed SDK APIs before raw maps or provider-native keys
+#### Scenario: Caller sees typed examples
+- **WHEN** a section includes normal SDK usage
+- **THEN** the example SHALL use public typed APIs without raw provider-native keys
 
 ### Requirement: Consumer guide excludes implementation-only content
 The consumer guide SHALL NOT require plugin authors to understand internal provider adapters, backend package architecture, console endpoint implementation, or stream normalizer internals.
@@ -480,17 +480,16 @@ Consumer documentation SHALL reduce long prose and make integration steps easier
 - **THEN** the examples use actual public Java APIs and match the current backend contract
 
 ### Requirement: Main SDK Guide Is Caller-First
-The main consumer SDK guide SHALL be organized around the order in which a plugin author adopts and uses the SDK.
+The main consumer guide SHALL follow the order in which a plugin author adopts and uses the typed SDK.
 
 #### Scenario: Setup comes before feature details
 - **WHEN** a plugin author opens `dev/dev.md`
-- **THEN** the guide first explains dependency setup, runtime plugin dependency, `AiModelService` resolution, and model selection
-- **AND** it avoids starting with advanced or implementation-oriented details
+- **THEN** setup, service resolution, and model selection SHALL precede feature details
 
 #### Scenario: Common workflows define the document order
-- **WHEN** a plugin author scans `dev/dev.md`
-- **THEN** the guide presents common workflows before advanced options
-- **AND** those workflows include text generation, streaming, tools, structured output, reasoning and metadata, cancellation and timeouts, embeddings, provider options, errors, and testing
+- **WHEN** a plugin author scans the guide
+- **THEN** workflows SHALL include text, streaming, tools, structured output, reasoning and metadata, cancellation and timeouts, embeddings, reranking, images, warnings, errors, and testing
+- **AND** provider-native request options SHALL not appear as a caller workflow
 
 ### Requirement: Main SDK Guide Is Concise And Scannable
 The main consumer SDK guide SHALL reduce long prose and make common workflows easy to scan.
@@ -619,24 +618,24 @@ Consumer documentation SHALL keep deferred UI Message runtime and frontend helpe
 - **AND** current Java backend examples do not imply that an npm helper already exists
 
 ### Requirement: Documentation reflects Spring AI RC1 caller-visible behavior
-Consumer documentation SHALL remain focused on public SDK workflows while describing any caller-visible behavior changes or caveats introduced by the Spring AI 2.0.0-RC1 migration.
+Consumer documentation SHALL describe caller-visible typed settings and warnings without requiring Spring AI or adapter implementation knowledge.
 
 #### Scenario: No Spring AI migration internals in consumer guide
-- **WHEN** a plugin author reads `dev/dev.md`
-- **THEN** the guide SHALL NOT require understanding Spring AI RC1 model builders, `OpenAIClient`, provider adapter internals, or removed Spring AI M2 APIs
+- **WHEN** a plugin author reads the guide
+- **THEN** it SHALL NOT require understanding Spring AI builders, provider clients, or removed APIs
 
 #### Scenario: Tool strict caveat is documented when needed
-- **WHEN** the RC1 migration cannot preserve provider-native strict tool schema behavior for every provider that previously claimed support
-- **THEN** the consumer guide SHALL describe the affected provider behavior in caller-visible terms
-- **AND** the guide SHALL state that local input validation still runs
+- **WHEN** provider strict tool behavior differs
+- **THEN** the guide SHALL describe the caller-visible behavior and local validation
 
-#### Scenario: Provider option caveats are documented
-- **WHEN** the RC1 migration changes whether a provider can apply request-scoped headers, structured output native mode, tool choice modes, or embedding provider options
-- **THEN** the consumer guide SHALL document the caller-visible supported behavior and warning semantics
+#### Scenario: Mapping caveats are documented
+- **WHEN** a typed parameter depends on administrator mapping or adapter support
+- **THEN** the guide SHALL explain omission and warning behavior
+- **AND** it SHALL NOT recommend provider-native options
 
 #### Scenario: Documentation validation covers changed examples
-- **WHEN** documentation validation runs after the migration
-- **THEN** it SHALL fail on stale public SDK examples, missing required sections, or references that imply consumers must use Spring AI classes
+- **WHEN** documentation validation runs
+- **THEN** it SHALL fail on stale `providerOptions`, stale imports, missing typed fields, or examples that require Spring AI classes
 
 ### Requirement: Documentation Covers Stabilized UI Message Runtime
 Consumer documentation SHALL explain the stabilized UI message runtime in `dev/ui-message-stream.md`.
@@ -823,3 +822,20 @@ Consumer documentation SHALL describe Halo AI Foundation contracts without third
 - **WHEN** consumer-facing docs are updated for multimodal or image generation features
 - **THEN** the docs SHALL use Halo AI Foundation type names and behavior
 - **AND** they SHALL NOT describe the API as matching, emulating, or being compatible with a third-party SDK
+
+### Requirement: Consumer guide distinguishes administrator mappings from caller settings
+The guide SHALL explain that plugin developers express intent through typed fields while super administrators configure Provider and Model translation.
+
+#### Scenario: Developer reads parameter guidance
+- **WHEN** a plugin author reads the settings section
+- **THEN** the guide SHALL state that the caller does not need to know the selected Provider or Model wire format
+- **AND** unsupported mapped parameters can produce warnings
+
+### Requirement: Consumer guide documents provider metadata migration
+The guide SHALL use `providerMetadata` for opaque response and continuation state.
+
+#### Scenario: Existing providerOptions terminology is searched
+- **WHEN** documentation validation scans public caller guidance
+- **THEN** request `providerOptions` SHALL be absent
+- **AND** provider-owned continuation examples SHALL use `providerMetadata`
+

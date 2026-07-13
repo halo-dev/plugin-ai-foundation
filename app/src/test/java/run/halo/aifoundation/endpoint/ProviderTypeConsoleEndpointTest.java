@@ -18,12 +18,14 @@ import run.halo.aifoundation.provider.SiliconFlowProvider;
 import run.halo.aifoundation.provider.XiaomiMiMoProvider;
 import run.halo.aifoundation.provider.ZhiPuProvider;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 
 class ProviderTypeConsoleEndpointTest {
 
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
     private final WebTestClient webTestClient = WebTestClient
-        .bindToRouterFunction(new ProviderTypeConsoleEndpoint(providerClientCache).endpoint())
+        .bindToRouterFunction(new ProviderTypeConsoleEndpoint(providerClientCache,
+            new ParameterMappingTemplateRegistry()).endpoint())
         .configureClient()
         .build();
 
@@ -48,7 +50,21 @@ class ProviderTypeConsoleEndpointTest {
             .jsonPath("$[0].requiresBaseUrl").isEqualTo(false)
             .jsonPath("$[0].defaultBaseUrl").isEqualTo("https://api.xiaomimimo.com/v1")
             .jsonPath("$[0].completionsPath").isEqualTo("/chat/completions")
-            .jsonPath("$[0].supportedAdapterTypes[0]").isEqualTo("openai-chat");
+            .jsonPath("$[0].supportedAdapterTypes[0]").isEqualTo("openai-chat")
+            .jsonPath("$[0].defaultParameterMappings.MAX_OUTPUT_TOKENS.template")
+            .isEqualTo("openai.max-tokens")
+            .jsonPath("$[0].defaultParameterMappings.REASONING.template")
+            .isEqualTo("reasoning.thinking-type")
+            .jsonPath("$[0].parameterMappingTemplates[?(@.id == 'openai.max-tokens')].defaultField")
+            .isEqualTo("max_tokens")
+            .jsonPath("$[0].parameterMappingTemplates[?(@.id == 'reasoning.thinking-budget')]")
+            .isArray()
+            .jsonPath("$[0].parameterMappingTemplates[?(@.id == 'reasoning.thinking-type')]"
+                + ".defaultReasoningMapping.enabled.field")
+            .isEqualTo("thinking.type")
+            .jsonPath("$[0].parameterMappingTemplates[?(@.id == 'reasoning.thinking-type')]"
+                + ".defaultReasoningMapping.enabled.value")
+            .isEqualTo("enabled");
     }
 
     @Test

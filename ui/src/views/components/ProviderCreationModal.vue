@@ -41,6 +41,7 @@ const { mutate, isPending } = useMutation({
           imageEndpointPath: formState.imageEndpointPath,
           proxyHost: formState.proxyHost,
           proxyPort: formState.proxyPort,
+          parameterMappings: formState.parameterMappings,
         },
       },
     })

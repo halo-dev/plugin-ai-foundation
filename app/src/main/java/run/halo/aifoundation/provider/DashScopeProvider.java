@@ -20,6 +20,11 @@ import run.halo.aifoundation.provider.support.rerank.DashScopeRerankingClient;
 @Component
 public class DashScopeProvider extends AbstractAiProviderType {
 
+    @Override
+    protected String defaultReasoningMappingTemplate() {
+        return "reasoning.enable-thinking";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
     private static final String COMPLETIONS_PATH = "/chat/completions";
     private static final String EMBEDDINGS_PATH = "/embeddings";

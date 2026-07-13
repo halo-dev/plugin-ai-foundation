@@ -27,7 +27,6 @@ class ProviderSpecificImageGenerationClientsTest {
             .size("1024x1024")
             .aspectRatio("1:1")
             .seed(42)
-            .providerOptions(Map.of("openrouter", Map.of("quality", "high")))
             .build();
 
         var body = client.requestBody(request);
@@ -38,8 +37,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .containsEntry("n", 2)
             .containsEntry("size", "1024x1024")
             .containsEntry("aspect_ratio", "1:1")
-            .containsEntry("seed", 42)
-            .containsEntry("quality", "high");
+            .containsEntry("seed", 42);
         var references = listOfMaps(body.get("input_references"));
         assertThat(references).hasSize(2);
         assertThat(map(references.get(0).get("image_url")))
@@ -101,10 +99,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .n(1)
             .size("1024x1024")
             .seed(7)
-            .providerOptions(Map.of("dashscope", Map.of(
-                "negative_prompt", "low quality",
-                "watermark", false
-            )))
+            .negativePrompt("low quality")
             .build();
 
         var body = client.requestBody(request);
@@ -122,8 +117,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .containsEntry("n", 1)
             .containsEntry("size", "1024*1024")
             .containsEntry("seed", 7)
-            .containsEntry("negative_prompt", "low quality")
-            .containsEntry("watermark", false);
+            .containsEntry("negative_prompt", "low quality");
     }
 
     @Test
@@ -173,7 +167,6 @@ class ProviderSpecificImageGenerationClientsTest {
             .responseFormat(ImageResponseFormat.BASE64)
             .seed(99)
             .n(2)
-            .providerOptions(Map.of("minimax", Map.of("prompt_optimizer", true)))
             .build();
 
         var body = client.requestBody(request);
@@ -185,8 +178,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .containsEntry("height", 768)
             .containsEntry("response_format", "base64")
             .containsEntry("seed", 99)
-            .containsEntry("n", 2)
-            .containsEntry("prompt_optimizer", true);
+            .containsEntry("n", 2);
         var references = listOfMaps(body.get("subject_reference"));
         assertThat(references).singleElement()
             .satisfies(reference -> assertThat(reference)
@@ -235,10 +227,6 @@ class ProviderSpecificImageGenerationClientsTest {
             .size("1024x1024")
             .seed(12)
             .responseFormat(ImageResponseFormat.BASE64)
-            .providerOptions(Map.of("doubao", Map.of(
-                "output_format", "jpeg",
-                "watermark", false
-            )))
             .build();
 
         var body = client.requestBody(request);
@@ -249,9 +237,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .containsEntry("size", "1024x1024")
             .containsEntry("seed", 12)
             .containsEntry("response_format", "b64_json")
-            .containsEntry("stream", false)
-            .containsEntry("output_format", "jpeg")
-            .containsEntry("watermark", false);
+            .containsEntry("stream", false);
         assertThat((List<?>) body.get("image")).hasSize(2);
         assertThat((String) ((List<?>) body.get("image")).get(1))
             .startsWith("data:image/png;base64,");
@@ -263,7 +249,6 @@ class ProviderSpecificImageGenerationClientsTest {
             WebClient.builder());
         var request = GenerateImageRequest.builder()
             .prompt("Draw")
-            .providerOptions(Map.of("doubao", Map.of("output_format", "jpeg")))
             .build();
         var json = """
             {
@@ -285,7 +270,7 @@ class ProviderSpecificImageGenerationClientsTest {
 
         assertThat(result.getImages()).hasSize(2);
         assertThat(result.getImages().get(0).getUrl()).isEqualTo("https://example.com/ark.jpg");
-        assertThat(result.getImages().get(0).getMediaType()).isEqualTo("image/jpeg");
+        assertThat(result.getImages().get(0).getMediaType()).isEqualTo("image/png");
         assertThat(result.getImages().get(0).getMetadata()).containsEntry("size", "1024x1024");
         assertThat(result.getImages().get(1).getBase64()).isEqualTo("abc123");
         assertThat(result.getUsage().getOutputTokens()).isEqualTo(4);
@@ -308,7 +293,6 @@ class ProviderSpecificImageGenerationClientsTest {
             .n(2)
             .size("1024x1024")
             .seed(13)
-            .providerOptions(Map.of("siliconflow", Map.of("guidance_scale", 7.5)))
             .build();
 
         var body = client.requestBody(request);
@@ -319,8 +303,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .containsEntry("image", "https://example.com/base.png")
             .containsEntry("image_size", "1024x1024")
             .containsEntry("batch_size", 2)
-            .containsEntry("seed", 13)
-            .containsEntry("guidance_scale", 7.5);
+            .containsEntry("seed", 13);
         assertThat((String) body.get("image2")).startsWith("data:image/png;base64,");
     }
 

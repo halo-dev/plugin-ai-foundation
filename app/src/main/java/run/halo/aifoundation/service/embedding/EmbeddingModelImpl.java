@@ -22,7 +22,13 @@ import run.halo.aifoundation.embedding.EmbeddingStartEvent;
 import run.halo.aifoundation.exception.EmbeddingTimeoutException;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
 
 @Slf4j
 public class EmbeddingModelImpl implements EmbeddingModel {
@@ -34,6 +40,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     private final EmbeddingModelProviderOptions providerOptions;
     private final EmbeddingBatchPlanner batchPlanner;
     private final EmbeddingResponseAggregator responseAggregator;
+    private final RuntimeParameterMappings parameterMappings;
 
     EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
@@ -57,6 +64,27 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
         EmbeddingModelRuntimeComposition composition) {
+        this(springEmbeddingModel, composition, EffectiveParameterMappings.empty());
+    }
+
+    EmbeddingModelImpl(
+        org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
+        EmbeddingModelRuntimeComposition composition, EffectiveParameterMappings parameterMappings) {
+        this(springEmbeddingModel, composition, parameterMappings, null, null);
+    }
+
+    EmbeddingModelImpl(
+        org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
+        EmbeddingModelRuntimeComposition composition, EffectiveParameterMappings parameterMappings,
+        String modelName, String providerName) {
+        this(springEmbeddingModel, composition,
+            ModelRuntimeContext.unresolved(composition.providerType(), modelName, providerName,
+                new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
+    }
+
+    EmbeddingModelImpl(
+        org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
+        EmbeddingModelRuntimeComposition composition, ModelRuntimeContext context) {
         this.springEmbeddingModel = springEmbeddingModel;
         this.providerType = composition.providerType();
         this.maxEmbeddingsPerCall = composition.maxEmbeddingsPerCall();
@@ -64,6 +92,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         this.providerOptions = composition.providerOptions();
         this.batchPlanner = composition.batchPlanner();
         this.responseAggregator = composition.responseAggregator();
+        this.parameterMappings = context.parameterMappings();
     }
 
     @Override
@@ -129,8 +158,62 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     private EmbeddingInvocation prepareInvocation(EmbeddingRequest request) {
         var warnings = new ArrayList<EmbeddingWarning>();
         warnings.addAll(requestWarnings(request));
-        return new EmbeddingInvocation(request, providerOptions.buildOptions(request, warnings),
+        var mappedRequest = mappedDimensionsRequest(request, warnings);
+        var options = providerOptions.buildOptions(mappedRequest, warnings);
+        options = applyMappedDimensions(options, request);
+        return new EmbeddingInvocation(request, options,
             warnings, batchPlanner.indexedBatches(request), batchPlanner.concurrency(request));
+    }
+
+    private EmbeddingRequest mappedDimensionsRequest(EmbeddingRequest request,
+        List<EmbeddingWarning> warnings) {
+        if (request == null || request.getDimensions() == null) {
+            return request;
+        }
+        var mapping = parameterMappings.get(ModelParameter.DIMENSIONS);
+        if (mapping == null) {
+            return request;
+        }
+        if (parameterMappings.isUnsupported(ModelParameter.DIMENSIONS)) {
+            warnings.add(parameterMappings.unsupportedDiagnostic(ModelParameter.DIMENSIONS)
+                .embeddingWarning());
+        }
+        return EmbeddingRequest.builder()
+            .inputs(request.getInputs())
+            .maxBatchSize(request.getMaxBatchSize())
+            .headers(request.getHeaders())
+            .maxRetries(request.getMaxRetries())
+            .maxParallelCalls(request.getMaxParallelCalls())
+            .metadata(request.getMetadata())
+            .context(request.getContext())
+            .lifecycle(request.getLifecycle())
+            .cancellationToken(request.getCancellationToken())
+            .timeouts(request.getTimeouts())
+            .build();
+    }
+
+    private EmbeddingOptions applyMappedDimensions(EmbeddingOptions options,
+        EmbeddingRequest request) {
+        if (request == null || request.getDimensions() == null
+            || parameterMappings.isUnsupported(ModelParameter.DIMENSIONS)) {
+            return options;
+        }
+        var target = new ParameterMappingTarget();
+        if (!parameterMappings.apply(ModelParameter.DIMENSIONS, request.getDimensions(), target)
+            || !"openai".equals(providerOptions.providerOptionsNamespace())) {
+            return options;
+        }
+        var openAiOptions = options instanceof OpenAiCompatibleEmbeddingOptions value
+            ? value : OpenAiCompatibleEmbeddingOptions.builder().build();
+        var extraBody = new java.util.LinkedHashMap<String, Object>();
+        if (openAiOptions.getExtraBody() != null) {
+            extraBody.putAll(openAiOptions.getExtraBody());
+        }
+        extraBody.putAll(target.root());
+        return openAiOptions.mutate()
+            .dimensions(null)
+            .extraBody(extraBody)
+            .build();
     }
 
     private Flux<EmbeddingBatchResult> executeBatches(EmbeddingInvocation invocation) {

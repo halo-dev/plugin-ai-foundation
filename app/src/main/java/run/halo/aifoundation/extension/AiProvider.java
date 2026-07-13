@@ -43,6 +43,8 @@ public class AiProvider extends AbstractExtension {
         private String proxyHost;
         @Schema(description = "Proxy port for this provider (optional)")
         private Integer proxyPort;
+        @Schema(description = "Administrator overrides for provider-neutral parameter mappings")
+        private ModelParameterMappings parameterMappings;
     }
 
     @Data

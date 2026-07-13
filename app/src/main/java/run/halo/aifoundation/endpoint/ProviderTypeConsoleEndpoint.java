@@ -4,6 +4,7 @@ import static org.springdoc.core.fn.builders.apiresponse.Builder.responseBuilder
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import java.util.Comparator;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,9 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderTypeInfo;
+import run.halo.aifoundation.provider.support.ParameterMappingTemplateInfo;
+import run.halo.aifoundation.provider.support.DefaultParameterMappingInfo;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 
@@ -22,6 +26,7 @@ import run.halo.app.extension.GroupVersion;
 public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
 
     private final ProviderClientCache providerClientCache;
+    private final ParameterMappingTemplateRegistry parameterMappingTemplateRegistry;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -62,6 +67,28 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                 .supportedModelTypes(type.getSupportedModelTypes())
                 .supportedFeatures(type.getSupportedFeatures())
                 .supportedAdapterTypes(type.getSupportedAdapterTypes())
+                .parameterMappingTemplates(parameterMappingTemplateRegistry.list().stream()
+                    .filter(template -> template.adapterTypes().stream()
+                        .anyMatch(type.getSupportedAdapterTypes()::contains))
+                    .map(template -> ParameterMappingTemplateInfo.builder()
+                        .id(template.id())
+                        .displayName(template.displayName())
+                        .description(template.description())
+                        .defaultField(template.defaultField())
+                        .parameter(template.parameter().name())
+                        .modelType(template.parameter().getModelType())
+                        .adapterTypes(List.copyOf(template.adapterTypes()))
+                        .configurationType(template.configurationType().name())
+                        .defaultReasoningMapping(template.defaultReasoningMapping())
+                        .build())
+                    .toList())
+                .defaultParameterMappings(type.getDefaultParameterMappings().entrySet()
+                    .stream().collect(java.util.stream.Collectors.toMap(
+                        entry -> entry.getKey().name(), entry ->
+                            DefaultParameterMappingInfo.builder()
+                                .mode(entry.getValue().mode().name())
+                                .template(entry.getValue().template())
+                                .build())))
                 .build())
             .sorted(Comparator
                 .comparing((ProviderTypeInfo t) -> !t.isBuiltIn())

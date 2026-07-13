@@ -76,13 +76,13 @@ export interface TestImageGenerationRequest {
      * @type {string}
      * @memberof TestImageGenerationRequest
      */
-    'prompt'?: string;
+    'negativePrompt'?: string;
     /**
      * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
+     * @type {string}
      * @memberof TestImageGenerationRequest
      */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
+    'prompt'?: string;
     /**
      * 
      * @type {string}

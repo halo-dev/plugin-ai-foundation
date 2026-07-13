@@ -9,7 +9,6 @@ import {
   buildTestUiMessageChatRequest,
   createUserUIMessage,
   filterEnabledChatModels,
-  parseProviderOptionsJson,
   readTestUiMessageChatStream,
   testRagUiMessageStreamUrl,
   testUiMessageChatStreamUrl,
@@ -27,20 +26,6 @@ describe('filterEnabledChatModels', () => {
         model('embedding', true, AiModelSpecModelTypeEnum.Embedding),
       ]).map((item) => item.metadata.name),
     ).toEqual(['chat-enabled'])
-  })
-})
-
-describe('parseProviderOptionsJson', () => {
-  it('parses JSON objects', () => {
-    expect(parseProviderOptionsJson('{ "openai": { "seed": 42 } }').value).toEqual({
-      openai: { seed: 42 },
-    })
-  })
-
-  it('rejects invalid or non-object values', () => {
-    expect(parseProviderOptionsJson('{').error).toBeTruthy()
-    expect(parseProviderOptionsJson('[]').error).toBeTruthy()
-    expect(parseProviderOptionsJson('{ "seed": 42 }').error).toBeTruthy()
   })
 })
 
@@ -103,18 +88,34 @@ describe('buildTestUiMessageChatRequest', () => {
       buildTestUiMessageChatRequest([userMessage, assistantMessage], {
         systemPrompt: 'You are concise.',
         temperature: 0.2,
+        topK: 40,
+        minP: 0.05,
+        presencePenalty: 0.1,
+        frequencyPenalty: 0.2,
+        repetitionPenalty: 1.1,
+        stopSequences: ['END'],
+        logprobs: true,
+        topLogprobs: 3,
+        parallelToolCalls: false,
         maxOutputTokens: 128,
         reasoning: buildReasoningOptions({ mode: 'ENABLED' }),
-        providerOptions: { openai: { seed: 42 } },
         output: { type: 'JSON' } as OutputSpec,
       }),
     ).toMatchObject({
       trigger: 'submit-message',
       system: 'You are concise.',
       temperature: 0.2,
+      topK: 40,
+      minP: 0.05,
+      presencePenalty: 0.1,
+      frequencyPenalty: 0.2,
+      repetitionPenalty: 1.1,
+      stopSequences: ['END'],
+      logprobs: true,
+      topLogprobs: 3,
+      parallelToolCalls: false,
       maxOutputTokens: 128,
       reasoning: { mode: 'ENABLED' },
-      providerOptions: { openai: { seed: 42 } },
       output: { type: 'JSON' },
       messages: [
         {

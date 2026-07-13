@@ -78,6 +78,13 @@ public final class LanguageModelRequestValidator {
         if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
             throw new IllegalArgumentException("maxRetries must not be negative");
         }
+        if (request.getTopLogprobs() != null && request.getTopLogprobs() < 0) {
+            throw new IllegalArgumentException("topLogprobs must not be negative");
+        }
+        if (request.getTopLogprobs() != null && Boolean.FALSE.equals(request.getLogprobs())) {
+            throw new IllegalArgumentException(
+                "topLogprobs cannot be set when logprobs is false");
+        }
         validateOutput(request.getOutput());
         validateTools(request);
     }
@@ -320,8 +327,8 @@ public final class LanguageModelRequestValidator {
             throw new IllegalArgumentException("reasoning content is not supported by provider type: "
                 + providerType);
         }
-        if (!hasText(part.getText()) && (part.getProviderOptions() == null
-            || part.getProviderOptions().isEmpty())) {
+        if (!hasText(part.getText()) && (part.getProviderMetadata() == null
+            || part.getProviderMetadata().isEmpty())) {
             throw new IllegalArgumentException(
                 "reasoning content part must include text or provider metadata");
         }

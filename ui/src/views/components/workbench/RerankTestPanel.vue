@@ -6,8 +6,7 @@ import RiSendPlaneLine from '~icons/ri/send-plane-line'
 defineProps<{
   query: string
   documents: string
-  providerOptionsText: string
-  providerOptionsError?: string
+  topN?: number
   result?: TestRerankResponse
   error?: string
   isLoading: boolean
@@ -17,11 +16,10 @@ defineProps<{
 defineEmits<{
   (e: 'update:query', value: string): void
   (e: 'update:documents', value: string): void
-  (e: 'update:providerOptionsText', value: string): void
+  (e: 'update:topN', value: number | undefined): void
   (e: 'run'): void
 }>()
 
-const providerOptionsHint = '例如 {"cohere":{"truncate":"END"}}'
 </script>
 
 <template>
@@ -55,25 +53,19 @@ const providerOptionsHint = '例如 {"cohere":{"truncate":"END"}}'
         </div>
       </div>
 
-      <details class=":uno: border border-slate-200 rounded-lg bg-white shadow-sm !p-4">
-        <summary class=":uno: cursor-pointer select-none text-sm text-slate-800 font-semibold">
-          Provider Options
-        </summary>
-        <textarea
-          :value="providerOptionsText"
-          rows="5"
-          class=":uno: mt-3 w-full text-slate-700 leading-relaxed font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-          :class="{ ':uno: !border-rose-300': providerOptionsError }"
+      <div class=":uno: border border-slate-200 rounded-lg bg-white shadow-sm !p-4">
+        <label class=":uno: text-xs text-slate-600 font-medium">返回结果数（Top N）</label>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          :value="topN"
+          placeholder="返回全部结果"
+          class=":uno: mt-2 w-full text-sm text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
           :disabled="disabled || isLoading"
-          @input="$emit('update:providerOptionsText', ($event.target as HTMLTextAreaElement).value)"
+          @input="$emit('update:topN', ($event.target as HTMLInputElement).value === '' ? undefined : Number(($event.target as HTMLInputElement).value))"
         />
-        <div
-          class=":uno: mt-1 text-[10px]"
-          :class="providerOptionsError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-        >
-          {{ providerOptionsError || providerOptionsHint }}
-        </div>
-      </details>
+      </div>
 
       <div class=":uno: flex justify-end">
         <VButton

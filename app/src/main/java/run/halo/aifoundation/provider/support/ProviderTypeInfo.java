@@ -1,6 +1,7 @@
 package run.halo.aifoundation.provider.support;
 
 import java.util.List;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 import org.springframework.lang.Nullable;
@@ -36,4 +37,6 @@ public class ProviderTypeInfo {
     private List<ModelType> supportedModelTypes;
     private List<ModelFeature> supportedFeatures;
     private List<AdapterType> supportedAdapterTypes;
+    private List<ParameterMappingTemplateInfo> parameterMappingTemplates;
+    private Map<String, DefaultParameterMappingInfo> defaultParameterMappings;
 }

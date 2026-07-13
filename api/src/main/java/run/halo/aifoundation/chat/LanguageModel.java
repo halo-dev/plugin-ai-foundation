@@ -8,7 +8,7 @@ import run.halo.aifoundation.AiModelService;
  *
  * <p>Implementations are resolved from {@link AiModelService} and hide the underlying Spring AI
  * provider details. Use {@link GenerateTextRequest} for tools, structured output, streaming,
- * lifecycle callbacks, cancellation, timeouts, and provider options.
+ * lifecycle callbacks, cancellation, timeouts, and administrator-mapped typed parameters.
  */
 public interface LanguageModel {
 

@@ -10,8 +10,8 @@ import lombok.NoArgsConstructor;
  * Non-fatal warning produced while generating text.
  *
  * <p>Warnings describe behavior that completed but may need caller attention, such as unsupported
- * provider options, tool execution limits, lifecycle callback failures, or structured-output
- * guidance that had to be applied locally.
+ * administrator-mapped unsupported parameters, tool execution limits, lifecycle callback failures,
+ * or structured-output guidance that had to be applied locally.
  */
 @Data
 @Builder

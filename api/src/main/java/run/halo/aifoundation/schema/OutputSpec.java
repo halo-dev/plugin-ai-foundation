@@ -59,10 +59,6 @@ public class OutputSpec {
      */
     private Boolean strict;
     /**
-     * Provider-specific output options grouped by provider namespace.
-     */
-    private Map<String, Map<String, Object>> providerOptions;
-    /**
      * Transient Java target class used only by in-process Java callers.
      */
     private transient Class<?> outputClass;

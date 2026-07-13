@@ -444,8 +444,8 @@ return embeddingModel.embed(request)
 | `maxParallelCalls` | 最大并行批次数 |
 | `maxRetries` | 可重试调用的重试次数 |
 | `headers` | 请求级 header |
-| `providerOptions` | 供应方原生选项 |
 
+`dimensions` 是统一字段。管理员在 Provider 或 Model 的参数映射中决定它对应供应方的哪个字段；
 `EmbeddingUtils.cosineSimilarity(a, b)` 可计算余弦相似度。
 
 ## 12. 图像生成
@@ -505,7 +505,7 @@ return imageModel.generateImage(request)
 | `size` / `aspectRatio` | 图片尺寸或宽高比；`size(1024)` 等价于 `1024x1024`，`size(1024, 768)` 等价于 `1024x768` |
 | `seed` | 确定性种子，是否生效取决于供应方 |
 | `responseFormat` | 期望 URL 或 base64 |
-| `providerOptions` | 按供应方命名空间分组的原生选项 |
+| `negativePrompt` | 不希望出现在图片中的内容 |
 | `headers` | 请求级 HTTP header |
 | `maxParallelCalls` | 拆分调用时的最大并行数 |
 
@@ -567,32 +567,34 @@ ImageGenerationMiddleware cacheMiddleware = new ImageGenerationMiddleware() {
 内置 helper 只处理低业务判断的组合逻辑，例如默认设置、请求映射、结果映射和 warning 追加。缓存存储、安全过滤、
 配额、水印、生成文件生命周期等业务策略由调用方插件自行实现。
 
-## 13. Provider Options
+## 13. 类型化参数与管理员映射
 
-公开字段能表达的能力，优先使用公开字段：
+调用方只使用 AI Foundation 定义的统一字段：
 
 | 能力 | 推荐字段 |
 | --- | --- |
 | 推理控制 | `reasoning` |
 | 确定性采样 | `seed` |
+| 输出长度 | `maxOutputTokens` |
+| Token 概率 | `logprobs` / `topLogprobs` |
+| Embedding 维度 | `dimensions` |
+| Rerank 数量 | `topN` |
+| 图片反向提示词 | `negativePrompt` |
 | 请求 header | `headers` |
 | 输出结构 | `output` |
 
-只有公开字段无法表达供应方原生能力时，才使用 `providerOptions`：
+插件开发者不需要、也不能指定供应方原生字段。
 
-```java
-GenerateTextRequest request = GenerateTextRequest.builder()
-    .prompt("生成摘要")
-    .providerOptions(ProviderOptions.of(
-        ProviderOptions.namespace("openai")
-            .option("response_format", Map.of("type", "json_object"))
-            .build()
-    ))
-    .build();
-```
+Halo 管理员在 AI Foundation 后台维护 Provider 与
+Model 时，为统一参数选择固定的映射模板，或者明确标记为“不支持”。
 
-`providerOptions` 必须按供应方命名空间分组。不支持的命名空间或选项会通过异常或 warning 暴露，
-调用方不要假设会被静默忽略。
+如果调用方设置了一个被管理员标记为不支持的可选字段，AI Foundation 会省略该字段，并返回稳定代码
+`mapped-parameter-unsupported`。warning 的 `providerMetadata` 包含 `parameter`、`modelName` 和
+`providerName`，调用方可以记录诊断信息或提示管理员检查映射。必填请求内容与请求形状仍会在调用供应方前
+直接校验失败。
+
+`providerMetadata` 与请求参数不同：它是模型响应、推理历史、工具状态等返回的供应方不透明延续数据。
+保存多轮消息时应原样保留，但不要把它当作可写的供应方配置。
 
 ## 14. Rerank 模型
 
@@ -618,16 +620,8 @@ return aiModelService()
 - 如果远程接口只返回模型 ID，AI Foundation 不会因为模型名包含 `rerank`、`reranker` 等字符串就推断为 Rerank。
 - 发现不到 Rerank 模型不代表供应商不可用；手动创建模型仍然是兜底方式。
 
-Provider options 仍按供应商命名空间传递：
-
-```java
-RerankRequest request = RerankRequest.builder()
-    .query(query)
-    .documents(documents)
-    .providerOptions(Map.of(
-        "zhipuai", Map.of("return_raw_scores", true)))
-    .build();
-```
+`topN` 会根据管理员配置映射到供应商的根字段或嵌套参数；标记为不支持时会在
+`RerankResponse.warnings` 中返回诊断，而不会发送错误字段。
 
 ## 15. RAG 组合
 
@@ -809,11 +803,13 @@ return model.generateText(request)
 | `maxOutputTokens` | 最大输出 token 数 |
 | `temperature` | 采样温度 |
 | `topP` / `topK` | 采样范围 |
-| `presencePenalty` / `frequencyPenalty` | 重复惩罚，是否生效取决于供应方 |
+| `minP` | 最小相对概率阈值 |
+| `presencePenalty` / `frequencyPenalty` / `repetitionPenalty` | 重复惩罚，是否生效取决于管理员映射 |
 | `stopSequences` | 停止序列 |
 | `seed` | 确定性采样种子，复现程度取决于模型和供应方 |
+| `logprobs` / `topLogprobs` | 输出 Token 概率及候选数量 |
+| `parallelToolCalls` | 是否允许并行工具调用 |
 | `maxRetries` | 可重试非流式调用的重试次数，`0` 表示不重试 |
-| `providerOptions` | 按供应方命名空间分组的原生选项 |
 | `reasoning` | 推理能力控制 |
 | `headers` | 请求级 HTTP header |
 | `metadata` | 调用方元数据，只暴露给 lifecycle，不进入模型输入 |
@@ -893,7 +889,6 @@ return model.generateText(request)
 | `EmbeddingRequest` | `maxBatchSize` | 调用方批大小上限 |
 | `EmbeddingRequest` | `maxParallelCalls` | 最大并行批次数 |
 | `EmbeddingRequest` | `maxRetries` | 可重试调用次数 |
-| `EmbeddingRequest` | `providerOptions` | 供应方原生选项 |
 | `EmbeddingRequest` | `headers` | 请求级 HTTP header |
 | `EmbeddingRequest` | `metadata` / `context` | 调用方 lifecycle 数据 |
 | `EmbeddingRequest` | `lifecycle` | 嵌入生命周期回调 |
@@ -916,7 +911,8 @@ return model.generateText(request)
 | `GenerateImageRequest` | `size` / `aspectRatio` | 尺寸或宽高比；builder 支持 `size(1024)`、`size(1024, 768)` 和 `size("1024x1024")` |
 | `GenerateImageRequest` | `seed` | 确定性种子 |
 | `GenerateImageRequest` | `responseFormat` | URL 或 base64 偏好 |
-| `GenerateImageRequest` | `providerOptions` / `headers` | 供应方选项和请求 header |
+| `GenerateImageRequest` | `negativePrompt` | 不希望出现在图片中的内容 |
+| `GenerateImageRequest` | `headers` | 请求级 HTTP header |
 | `GenerateImageRequest` | `metadata` / `context` | 调用方数据 |
 | `GenerateImageRequest` | `cancellationToken` / `timeouts` | 取消和超时 |
 | `GenerateImageResult` | `image` | 第一张生成图快捷读取 |
@@ -931,7 +927,6 @@ return model.generateText(request)
 | `RerankRequest` | `query` | 排序查询 |
 | `RerankRequest` | `documents` | 候选文档，结果 index 指向该顺序 |
 | `RerankRequest` | `topN` | 返回结果上限 |
-| `RerankRequest` | `providerOptions` | 供应方原生选项 |
 | `RerankRequest` | `metadata` / `context` | 调用方数据 |
 | `RerankRequest` | `cancellationToken` / `timeouts` | 取消和超时 |
 | `RerankResponse` | `results` | 排序结果 |

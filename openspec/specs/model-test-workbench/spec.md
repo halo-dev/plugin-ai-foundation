@@ -69,21 +69,16 @@ The model test workbench SHALL consume reasoning stream parts without mixing rea
 - **AND** the partial assistant message remains visible in the conversation
 
 ### Requirement: Workbench exposes common chat parameters
-The system SHALL provide a parameter configuration area for common text generation options and advanced provider options.
+The workbench SHALL expose the complete typed text-generation parameter surface without a provider-native JSON editor.
 
 #### Scenario: User configures common parameters
-- **WHEN** the administrator sets system prompt, temperature, topP, or max output tokens
-- **THEN** the next test request includes those values in the request body
-- **AND** the system prompt is represented as top-level `system`
+- **WHEN** an administrator configures system, sampling, token, reasoning, log probability, or tool parallelism controls
+- **THEN** the next test request SHALL include the corresponding typed values
+- **AND** the system prompt SHALL remain top-level `system`
 
-#### Scenario: User configures providerOptions
-- **WHEN** the administrator enters valid providerOptions JSON
-- **THEN** the next test request includes the parsed object as namespaced `providerOptions`
-
-#### Scenario: User enters invalid providerOptions JSON
-- **WHEN** the administrator enters invalid providerOptions JSON and attempts to send a message
-- **THEN** the workbench prevents the request
-- **AND** the workbench displays a validation error near the providerOptions input
+#### Scenario: Provider options editor is absent
+- **WHEN** an administrator opens chat parameters
+- **THEN** no `providerOptions` JSON field or JSON validation state SHALL be displayed
 
 ### Requirement: Workbench renders streamed Markdown responses
 The system SHALL render assistant response content as Markdown while it is streaming.
@@ -267,15 +262,16 @@ The console model test workbench SHALL lightly exercise UI runtime schema hooks 
 - **AND** the workbench SHALL NOT add a separate schema-specific error panel
 
 ### Requirement: Workbench tests reranking models
-The model test workbench SHALL provide a reranking test mode.
+The model test workbench SHALL provide reranking tests through the generated typed client.
 
 #### Scenario: Run reranking test
 - **WHEN** an administrator selects a reranking model and enters a query with candidate documents
-- **THEN** the workbench calls the generated reranking test endpoint and displays ranked results with scores and original indexes
+- **THEN** the workbench SHALL call the generated endpoint and display ranked results with scores and original indexes
 
-#### Scenario: Reranking provider options
-- **WHEN** an administrator provides reranking provider options in the workbench
-- **THEN** the request sends those options through the generated API client and reports warnings or errors returned by the backend
+#### Scenario: Reranking parameters are typed
+- **WHEN** an administrator configures reranking test settings
+- **THEN** the workbench SHALL expose `topN` and runtime controls supported by the Console endpoint
+- **AND** it SHALL NOT expose provider-options JSON
 
 ### Requirement: Workbench tests single-query RAG flows
 The model test workbench SHALL provide a RAG test mode for single-query RAG validation with manual source candidates and optional reranking.
@@ -322,4 +318,15 @@ The model test workbench SHALL display `source-document` parts in assistant mess
 - **WHEN** a RAG test source has no URL and is emitted as a document source
 - **THEN** the workbench SHALL display the source without requiring a link
 - **AND** existing RAG diagnostic data parts SHALL continue to render unchanged
+
+### Requirement: Workbench exposes typed parameters for every model domain
+The workbench SHALL replace raw provider option inputs in language, embedding, reranking, image, and RAG test modes with their available typed fields.
+
+#### Scenario: Image negative prompt is tested
+- **WHEN** an administrator tests an image model
+- **THEN** the workbench SHALL allow an optional negative prompt and display returned warnings
+
+#### Scenario: Unsupported mapped field is tested
+- **WHEN** a Console test uses a typed field marked unsupported by the effective mapping
+- **THEN** the workbench SHALL show the backend warning without failing the request solely for that optional field
 

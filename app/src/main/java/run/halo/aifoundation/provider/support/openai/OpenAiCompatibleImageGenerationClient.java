@@ -23,6 +23,7 @@ import run.halo.aifoundation.image.ImageResponseFormat;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 
 public class OpenAiCompatibleImageGenerationClient implements ProviderImageGenerationClient {
 
@@ -40,11 +41,24 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
 
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
+        return generateImage(request, null);
+    }
+
+    @Override
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
+        ParameterMappingTarget target) {
         if (hasInputImages(request)) {
             return Mono.error(new IllegalArgumentException(
                 "OpenAI-compatible image adapter currently supports text-to-image requests only"));
         }
         var body = requestBody(request);
+        if (target != null) {
+            for (var field : List.of("n", "size", "aspect_ratio", "seed", "response_format",
+                "negative_prompt")) {
+                body.remove(field);
+            }
+            body.putAll(target.root());
+        }
         return webClient.method(HttpMethod.POST)
             .uri(URI.create(imagesGenerationsUrl()))
             .headers(headers -> {
@@ -81,11 +95,6 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
         }
         if (request.getResponseFormat() != null) {
             body.put("response_format", responseFormat(request.getResponseFormat()));
-        }
-        var providerOptions = request.getProviderOptions() == null ? null
-            : request.getProviderOptions().get(options.providerType());
-        if (providerOptions != null && !providerOptions.isEmpty()) {
-            body.putAll(providerOptions);
         }
         return body;
     }

@@ -121,12 +121,10 @@ The system SHALL expose typed structured output validation failures with safe de
 
 ### Requirement: EmbeddingModel interface definition
 
-The system SHALL define an `EmbeddingModel` interface providing text embedding capabilities.
+The system SHALL define an `EmbeddingModel` interface providing text embedding capabilities through provider-neutral typed requests.
 
 #### Scenario: Interface contract
-- **WHEN** a consumer calls `aiModelService.embeddingModel("openai-official-text-embedding-3-small-b2c4d")` where the argument is `AiModel.metadata.name`
-- **AND** the corresponding `AiModel` exists
-- **AND** the corresponding `AiModel` is enabled
+- **WHEN** a consumer calls `aiModelService.embeddingModel(modelName)` with an enabled embedding `AiModel.metadata.name`
 - **AND** the corresponding `AiProvider` is configured and enabled
 - **THEN** the system SHALL return a `Mono<EmbeddingModel>` that emits the `EmbeddingModel` instance on success
 
@@ -143,29 +141,23 @@ The system SHALL define an `EmbeddingModel` interface providing text embedding c
 
 #### Scenario: Advanced embedding request
 - **WHEN** a consumer calls `embeddingModel.embed(request)`
-- **AND** `request` contains `inputs`, optional `dimensions`, optional `maxBatchSize`, optional namespaced `providerOptions`, optional `headers`, optional `maxRetries`, optional `maxParallelCalls`, optional lifecycle callbacks, optional timeout settings, and optional cancellation token
-- **THEN** the system SHALL apply supported advanced options to the underlying provider request
-- **AND** the API SHALL remain independent of Spring AI `EmbeddingOptions`
+- **AND** `request` contains inputs and optional dimensions, max batch size, headers, retries, parallelism, lifecycle, timeout, cancellation, metadata, or context controls
+- **THEN** the system SHALL apply supported typed controls to the runtime and effective parameter mapping
+- **AND** the public request SHALL NOT expose Spring AI options or caller-writable provider-native option maps
 
 #### Scenario: Embedding batch limits exposed
 - **WHEN** a consumer accesses `embeddingModel.maxEmbeddingsPerCall()`
-- **THEN** the system SHALL return the provider-specific batch limit (e.g., 96 for OpenAI)
+- **THEN** the system SHALL return the provider-specific batch limit
 - **AND** `embeddingModel.supportsParallelCalls()` SHALL indicate whether parallel batch execution is supported
 
 #### Scenario: Dimensions override for RAG-style indexing
 - **WHEN** a consumer sends an `EmbeddingRequest` with `dimensions = 1024`
-- **THEN** the system SHALL pass the dimensions override to providers that support it
-- **AND** providers that do not support dimensions override SHALL report a stable warning or reject the request before invocation according to provider behavior
+- **THEN** the system SHALL translate the value through the effective dimensions mapping
+- **AND** an unsupported effective mapping SHALL omit dimensions and produce a stable warning
 
 #### Scenario: Caller batch size override
 - **WHEN** a consumer sends an `EmbeddingRequest` with `maxBatchSize = 36`
 - **THEN** the system SHALL use that value as a caller-side batching limit in addition to any provider-imposed maximum
-
-#### Scenario: Namespaced provider options
-- **WHEN** a consumer sends `EmbeddingRequest.providerOptions = {"openai": {"dimensions": 512}}`
-- **THEN** OpenAI-compatible embedding provider implementations MAY parse and apply the `openai` namespace
-- **AND** other provider implementations SHALL ignore unrelated namespaces unless explicitly documented otherwise
-- **AND** ignored namespaces or options SHALL be reported as warnings when the request otherwise succeeds
 
 #### Scenario: Request headers
 - **WHEN** a consumer sends `EmbeddingRequest.headers = {"X-Custom-Header": "custom-value"}`
@@ -189,7 +181,7 @@ The system SHALL define an `EmbeddingModel` interface providing text embedding c
 
 ### Requirement: Text generation request
 
-The system SHALL support structured text generation requests via `GenerateTextRequest`.
+The system SHALL support structured, provider-neutral text generation requests via `GenerateTextRequest`.
 
 #### Scenario: Prompt request
 - **WHEN** a consumer sends `GenerateTextRequest` with `prompt = "Hello"`
@@ -209,24 +201,28 @@ The system SHALL support structured text generation requests via `GenerateTextRe
 - **THEN** the request SHALL be rejected before invoking the provider
 
 #### Scenario: Text generation options
-- **WHEN** a consumer sends `maxOutputTokens`, `temperature`, `topP`, `topK`, `presencePenalty`, `frequencyPenalty`, or `stopSequences`
-- **THEN** the system SHALL pass supported options to the underlying provider client through the model implementation
+- **WHEN** a consumer sends max output tokens, temperature, topP, topK, minP, presence penalty, frequency penalty, repetition penalty, stop sequences, seed, logprobs, top logprobs, or parallel tool-call settings
+- **THEN** the system SHALL translate supplied provider parameters through the effective administrator mapping
+- **AND** it SHALL keep retry, header, timeout, cancellation, metadata, and context controls in their existing runtime layers
+
+#### Scenario: Top log probabilities imply log probabilities
+- **WHEN** a consumer sets `topLogprobs` without setting `logprobs`
+- **THEN** the system SHALL apply `logprobs = true`
+
+#### Scenario: Conflicting log probability settings
+- **WHEN** a consumer sets `topLogprobs` and explicitly sets `logprobs = false`
+- **THEN** the system SHALL reject the request before provider invocation
 
 #### Scenario: Tool generation options
-- **WHEN** a consumer sends `tools`, `toolChoice`, or `stopWhen`
+- **WHEN** a consumer sends tools, tool choice, parallel tool calls, or a stop condition
 - **THEN** the system SHALL validate provider-serializable tool fields before invoking the provider
-- **AND** the system SHALL perform at most one provider call when `stopWhen` is omitted
-
-#### Scenario: Namespaced provider options
-- **WHEN** a consumer sends `providerOptions = {"openai": {"logitBias": {"50256": -100}}}`
-- **THEN** OpenAI-compatible provider adapters MAY parse and apply the `openai` namespace
-- **AND** non-OpenAI provider adapters SHALL ignore the `openai` namespace unless explicitly documented otherwise
+- **AND** the system SHALL perform at most one provider call when the stop condition is omitted
 
 #### Scenario: Structured output request
 - **WHEN** a consumer sends `GenerateTextRequest.output` with a structured output specification
 - **THEN** the system SHALL represent the request with provider-neutral API DTOs
-- **AND** the provider invocation SHALL receive a provider-neutral instruction or provider-specific response-format mapping when supported
-- **AND** callers SHALL NOT need Spring AI, OpenAI, or provider-native schema classes
+- **AND** the provider invocation SHALL receive an adapter-owned response-format mapping when supported
+- **AND** callers SHALL NOT need Spring AI, OpenAI, provider-native schema classes, or provider-native option maps
 
 #### Scenario: Java caller sets stop condition
 - **WHEN** a Java caller builds a text generation request with a stop condition
@@ -713,56 +709,53 @@ The language generation implementation SHALL be split into cohesive collaborator
 - **THEN** tests can target that behavior without depending on the full provider invocation path
 
 ### Requirement: Text generation reasoning control
-The system SHALL allow callers to express request-scoped reasoning behavior through a provider-neutral `GenerateTextRequest` setting.
+The system SHALL allow callers to express request-scoped reasoning behavior through provider-neutral default, enabled, disabled, low, medium, and high settings.
 
 #### Scenario: Caller uses provider default reasoning behavior
-- **WHEN** a consumer sends `GenerateTextRequest` without reasoning settings
-- **THEN** the provider invocation SHALL use the provider and model default reasoning behavior
-- **AND** no provider-native reasoning control SHALL be added solely by the generic language model implementation
+- **WHEN** a consumer sends `GenerateTextRequest` without explicit reasoning settings
+- **THEN** the provider invocation SHALL use provider and model default reasoning behavior
+- **AND** no native reasoning control SHALL be added solely by the generic runtime
 
 #### Scenario: Caller disables reasoning
-- **WHEN** a consumer sends `GenerateTextRequest.reasoning` with explicit disabled mode
-- **THEN** providers that support disabling reasoning SHALL map the request to the provider-native non-reasoning parameter before invocation
-- **AND** providers that do not support disabling reasoning SHALL reject the request before invocation with a stable error message
+- **WHEN** a consumer sends explicit disabled reasoning
+- **THEN** the runtime SHALL apply the effective reasoning template when it supports disabled mode
+- **AND** an unsupported effective mapping SHALL omit the control and return a stable warning
 
 #### Scenario: Caller enables reasoning
-- **WHEN** a consumer sends `GenerateTextRequest.reasoning` with explicit enabled mode
-- **THEN** providers that support enabling reasoning SHALL map the request to the provider-native reasoning parameter before invocation
-- **AND** providers that do not support enabling reasoning SHALL reject the request before invocation with a stable error message
+- **WHEN** a consumer sends explicit enabled reasoning
+- **THEN** the runtime SHALL apply the effective reasoning template when it supports enabled mode
+- **AND** an unsupported effective mapping SHALL omit the control and return a stable warning
 
 #### Scenario: Caller requests reasoning effort
-- **WHEN** a consumer sends `GenerateTextRequest.reasoning` with an effort level
-- **THEN** providers that support the requested effort SHALL map it to the provider-native reasoning effort parameter
-- **AND** providers that do not support that effort SHALL reject the request before invocation with a stable error message
-
-#### Scenario: Reasoning control conflict with raw provider options
-- **WHEN** a consumer sends explicit `GenerateTextRequest.reasoning`
-- **AND** the selected provider namespace in `providerOptions` includes a known provider-native reasoning control key
-- **THEN** the request SHALL be rejected before invocation
-- **AND** the error message SHALL tell the caller to use either the typed reasoning setting or raw provider options, not both
+- **WHEN** a consumer requests low, medium, or high reasoning effort
+- **THEN** the runtime SHALL apply the administrator-configured field and typed value for that level
+- **AND** an unsupported effort SHALL be omitted with a stable warning
 
 ### Requirement: Provider-specific reasoning mapping
-Provider implementations SHALL own the mapping from provider-neutral reasoning settings to provider-native request parameters.
+The effective administrator mapping and selected adapter SHALL jointly own translation from provider-neutral reasoning settings to provider-native parameters.
 
-#### Scenario: DeepSeek thinking mode mapping
-- **WHEN** the selected provider type is DeepSeek
-- **AND** the caller disables reasoning
-- **THEN** the provider invocation SHALL include DeepSeek thinking mode disabled in the provider-native request body
+#### Scenario: Boolean thinking mapping
+- **WHEN** the effective template uses a boolean thinking switch
+- **AND** the caller enables or disables reasoning
+- **THEN** the provider request SHALL include the corresponding boolean value
 
-#### Scenario: DeepSeek reasoning enabled mapping
-- **WHEN** the selected provider type is DeepSeek
-- **AND** the caller enables reasoning
-- **THEN** the provider invocation SHALL include DeepSeek thinking mode enabled in the provider-native request body
+#### Scenario: Object thinking mapping
+- **WHEN** the effective template uses an enabled or disabled thinking object
+- **THEN** the provider request SHALL contain the template-owned object shape
 
-#### Scenario: OpenAI-compatible effort mapping
-- **WHEN** the selected provider adapter supports OpenAI-compatible reasoning effort
-- **AND** the caller requests a supported effort level
-- **THEN** the provider invocation SHALL include the matching provider-native reasoning effort value
+#### Scenario: Effort mapping
+- **WHEN** the effective template supports effort levels
+- **AND** the caller requests a supported level
+- **THEN** the provider request SHALL include the matching native effort value
+
+#### Scenario: Per-intent field and value mapping
+- **WHEN** the effective mapping configures different native fields or scalar values for enabled, disabled, low, medium, or high
+- **THEN** the selected caller intent SHALL emit only its corresponding native field and typed value
 
 #### Scenario: Unsupported provider reasoning control
-- **WHEN** a provider adapter has no reasoning control mapping
-- **AND** the caller sends an explicit reasoning setting
-- **THEN** the system SHALL reject the request before invoking the provider
+- **WHEN** the effective reasoning mapping cannot represent an explicit caller setting
+- **THEN** the system SHALL omit the native reasoning control
+- **AND** it SHALL report a stable unsupported-parameter warning
 
 ### Requirement: Text generation documentation covers the public result model
 Consumer documentation SHALL explain the public text generation and streaming APIs in terms of stable SDK types and caller-visible result fields.
@@ -778,15 +771,16 @@ Consumer documentation SHALL explain the public text generation and streaming AP
 - **AND** it SHALL explain when to use `textStream()`, `fullStream()`, `result()`, `output()`, `partialOutputStream()`, and `elementStream()`
 
 ### Requirement: Settings documentation covers supported request fields
-Consumer documentation SHALL explain supported language-model request settings and their provider-support behavior.
+Consumer documentation SHALL explain the typed language-model request settings, administrator mapping boundary, and provider-support behavior.
 
 #### Scenario: Common settings are documented
 - **WHEN** a plugin author reads the settings section
-- **THEN** the guide SHALL cover max output tokens, temperature, topP, topK, presence penalty, frequency penalty, stop sequences, seed, max retries, headers, provider options, timeout, cancellation, and reasoning options
+- **THEN** the guide SHALL cover max output tokens, temperature, topP, topK, minP, presence penalty, frequency penalty, repetition penalty, stop sequences, seed, logprobs, top logprobs, parallel tool calls, retries, headers, timeout, cancellation, and reasoning options
 
-#### Scenario: Settings are partially supported
-- **WHEN** a setting depends on provider support
-- **THEN** the guide SHALL explain whether the SDK maps it, warns, rejects, or requires provider options
+#### Scenario: Settings depend on mapping support
+- **WHEN** a setting's effective mapping is unsupported
+- **THEN** the guide SHALL explain that the runtime omits the parameter and returns a warning
+- **AND** the guide SHALL NOT direct callers to provider-native option maps
 
 ### Requirement: Text generation seed setting
 The public text generation request SHALL expose deterministic sampling seed as a first-class SDK setting.
@@ -991,4 +985,19 @@ The public SDK SHALL provide optional-to-use model selection criteria for caller
 - **THEN** the service SHALL resolve the configured default slot for that model type
 - **AND** it SHALL fail if the default model does not satisfy the criteria
 - **AND** it SHALL NOT auto-select another model
+
+### Requirement: Public request APIs exclude caller-native option maps
+Public model request, output, prepared-step, and lifecycle types SHALL NOT expose caller-writable `providerOptions`.
+
+#### Scenario: Consumer compiles against request APIs
+- **WHEN** a consumer inspects text, embedding, reranking, image, output, or step request builders
+- **THEN** no `providerOptions` field or builder method SHALL be present
+
+### Requirement: Provider-owned message state uses metadata terminology
+Opaque provider state required for reasoning and tool continuation SHALL be represented as `providerMetadata`, not request `providerOptions`.
+
+#### Scenario: Reasoning continuation state is retained
+- **WHEN** a provider returns opaque reasoning state required by a later request
+- **THEN** the model message part SHALL retain that state under `providerMetadata`
+- **AND** normalized reasoning text SHALL remain available through typed reasoning fields
 

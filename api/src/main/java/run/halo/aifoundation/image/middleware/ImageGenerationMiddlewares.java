@@ -163,13 +163,13 @@ public final class ImageGenerationMiddlewares {
             .aspectRatio(request.getAspectRatio() != null
                 ? request.getAspectRatio()
                 : defaults.getAspectRatio())
+            .negativePrompt(request.getNegativePrompt() != null
+                ? request.getNegativePrompt()
+                : defaults.getNegativePrompt())
             .seed(request.getSeed() != null ? request.getSeed() : defaults.getSeed())
             .responseFormat(request.getResponseFormat() != null
                 ? request.getResponseFormat()
                 : defaults.getResponseFormat())
-            .providerOptions(request.getProviderOptions() != null
-                ? request.getProviderOptions()
-                : defaults.getProviderOptions())
             .headers(request.getHeaders() != null ? request.getHeaders() : defaults.getHeaders())
             .maxRetries(request.getMaxRetries() != null
                 ? request.getMaxRetries()

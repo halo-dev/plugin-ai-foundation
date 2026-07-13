@@ -28,12 +28,6 @@ export interface TestRerankRequest {
     'documents'?: Array<string>;
     /**
      * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
-     * @memberof TestRerankRequest
-     */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
-    /**
-     * 
      * @type {string}
      * @memberof TestRerankRequest
      */

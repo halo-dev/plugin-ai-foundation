@@ -1,7 +1,6 @@
 package run.halo.aifoundation.chat;
 
 import java.util.List;
-import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,10 +32,6 @@ public class PreparedStep {
      */
     private List<String> activeTools;
     /**
-     * Provider-specific options for the current step.
-     */
-    private Map<String, Map<String, Object>> providerOptions;
-    /**
      * Maximum output tokens for the current step.
      */
     private Integer maxOutputTokens;
@@ -53,6 +48,10 @@ public class PreparedStep {
      */
     private Integer topK;
     /**
+     * Minimum probability threshold for the current step.
+     */
+    private Double minP;
+    /**
      * Presence penalty for the current step.
      */
     private Double presencePenalty;
@@ -60,6 +59,22 @@ public class PreparedStep {
      * Frequency penalty for the current step.
      */
     private Double frequencyPenalty;
+    /**
+     * Repetition penalty for the current step.
+     */
+    private Double repetitionPenalty;
+    /**
+     * Whether token log probabilities should be returned for the current step.
+     */
+    private Boolean logprobs;
+    /**
+     * Number of top token log probabilities returned for the current step.
+     */
+    private Integer topLogprobs;
+    /**
+     * Whether parallel tool calls are enabled for the current step.
+     */
+    private Boolean parallelToolCalls;
     /**
      * Stop sequences for the current step.
      */

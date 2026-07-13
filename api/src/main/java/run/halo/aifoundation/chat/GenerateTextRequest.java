@@ -12,7 +12,6 @@ import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
 import run.halo.aifoundation.lifecycle.GenerationLifecycle;
 import run.halo.aifoundation.message.ModelMessage;
-import run.halo.aifoundation.options.ProviderOptions;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolChoice;
 import run.halo.aifoundation.tool.ToolCallRepairCallback;
@@ -70,6 +69,10 @@ public class GenerateTextRequest {
      */
     private Integer topK;
     /**
+     * Minimum probability threshold used by providers that support min-p sampling.
+     */
+    private Double minP;
+    /**
      * Presence penalty when supported by the provider.
      */
     private Double presencePenalty;
@@ -77,6 +80,23 @@ public class GenerateTextRequest {
      * Frequency penalty when supported by the provider.
      */
     private Double frequencyPenalty;
+    /**
+     * Repetition penalty when supported by the selected model mapping.
+     */
+    private Double repetitionPenalty;
+    /**
+     * Whether token log probabilities should be returned.
+     */
+    private Boolean logprobs;
+    /**
+     * Number of most likely tokens whose log probabilities should be returned for each position.
+     * Must not be negative. Setting this while omitting {@link #logprobs} enables log probabilities.
+     */
+    private Integer topLogprobs;
+    /**
+     * Whether the provider may execute multiple tool calls in parallel.
+     */
+    private Boolean parallelToolCalls;
     /**
      * Stop sequences. Generation should stop when any sequence is produced.
      */
@@ -91,15 +111,6 @@ public class GenerateTextRequest {
      * disable retries for this request.
      */
     private Integer maxRetries;
-    /**
-     * Provider-specific options grouped by provider namespace, for example
-     * {@code Map.of("openai", Map.of("response_format", "..."))}.
-     *
-     * <p>For reasoning behavior, prefer {@link #reasoning} unless a provider-native option is
-     * intentionally needed. Explicit typed reasoning settings must not be combined with known
-     * provider-native reasoning keys in this map.
-     */
-    private Map<String, Map<String, Object>> providerOptions;
     /**
      * Optional request-scoped reasoning behavior. When unset or set to
      * {@link ReasoningOptions#providerDefault()}, generation uses the selected provider and model
@@ -199,17 +210,6 @@ public class GenerateTextRequest {
     }
 
     public static class GenerateTextRequestBuilder {
-        public GenerateTextRequestBuilder providerOptions(
-            Map<String, Map<String, Object>> providerOptions) {
-            this.providerOptions = providerOptions;
-            return this;
-        }
-
-        public GenerateTextRequestBuilder providerOptions(ProviderOptions.NamespaceOptions... options) {
-            this.providerOptions = ProviderOptions.of(options);
-            return this;
-        }
-
         public GenerateTextRequestBuilder middleware(LanguageModelMiddleware... middleware) {
             this.middleware = middleware != null ? Arrays.asList(middleware) : null;
             return this;

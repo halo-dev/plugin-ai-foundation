@@ -20,7 +20,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
+import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
@@ -47,11 +50,15 @@ class ProviderConsoleEndpointTest {
         openAiType = mock(AiProviderType.class);
         when(openAiType.getProviderType()).thenReturn("openai");
         when(openAiType.requiresBaseUrl()).thenReturn(false);
+        when(openAiType.getSupportedAdapterTypes())
+            .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
+                AdapterType.RERANK, AdapterType.OPENAI_IMAGE));
         when(providerClientCache.getProviderTypeMap())
             .thenReturn(Map.of("openai", openAiType));
         when(providerClientCache.getProviderType("openai")).thenReturn(openAiType);
 
-        var endpoint = new ProviderConsoleEndpoint(client, providerClientCache, secretResolver);
+        var endpoint = new ProviderConsoleEndpoint(client, providerClientCache, secretResolver,
+            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();
@@ -112,6 +119,67 @@ class ProviderConsoleEndpointTest {
                 assertThat(spec.getProxyHost()).isEqualTo("127.0.0.1");
                 assertThat(spec.getProxyPort()).isEqualTo(7890);
             });
+    }
+
+    @Test
+    void create_validParameterMapping_returns200() {
+        var p = provider("new-provider", "openai");
+        var mappings = new ModelParameterMappings();
+        var language = new ModelParameterMappings.LanguageMappings();
+        language.setMaxOutputTokens(template("openai.max-completion-tokens"));
+        mappings.setLanguage(language);
+        p.getSpec().setParameterMappings(mappings);
+        when(client.create(any(AiProvider.class)))
+            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.spec.parameterMappings.language.maxOutputTokens.template")
+            .isEqualTo("openai.max-completion-tokens");
+    }
+
+    @Test
+    void create_unknownParameterMappingTemplate_returns400() {
+        var p = provider("bad-provider", "openai");
+        var mappings = new ModelParameterMappings();
+        var language = new ModelParameterMappings.LanguageMappings();
+        language.setMaxOutputTokens(template("unknown-template"));
+        mappings.setLanguage(language);
+        p.getSpec().setParameterMappings(mappings);
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_invalidReasoningValue_returns400() {
+        var p = provider("bad-provider", "openai");
+        var selection = template("reasoning.thinking-budget");
+        var value = new ModelParameterMappings.ReasoningValueMapping();
+        value.setField("thinking_budget");
+        value.setValueType(ModelParameterMappings.ValueType.INTEGER);
+        value.setValue("not-an-integer");
+        var reasoning = new ModelParameterMappings.ReasoningMapping();
+        reasoning.setLow(value);
+        selection.setReasoningMapping(reasoning);
+        var mappings = new ModelParameterMappings();
+        var language = new ModelParameterMappings.LanguageMappings();
+        language.setReasoning(selection);
+        mappings.setLanguage(language);
+        p.getSpec().setParameterMappings(mappings);
+
+        webTestClient.post().uri("/providers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(p)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
@@ -334,6 +402,13 @@ class ProviderConsoleEndpointTest {
         spec.setEnabled(true);
         p.setSpec(spec);
         return p;
+    }
+
+    private ModelParameterMappings.Selection template(String id) {
+        var selection = new ModelParameterMappings.Selection();
+        selection.setMode(ModelParameterMappings.Mode.TEMPLATE);
+        selection.setTemplate(id);
+        return selection;
     }
 
     private AiModel model(String providerName, String modelId) {

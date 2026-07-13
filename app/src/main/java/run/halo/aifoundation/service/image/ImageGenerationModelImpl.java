@@ -32,9 +32,14 @@ import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.model.ModelInfo;
 import run.halo.aifoundation.model.ProviderInfo;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 public class ImageGenerationModelImpl implements ImageGenerationModel {
 
@@ -48,20 +53,38 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     private final String providerType;
     private final MediaResourcePolicy mediaResourcePolicy;
     private final ModelCapabilityMatcher capabilityMatcher;
+    private final RuntimeParameterMappings parameterMappings;
 
     ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
         String modelName, String providerName, String providerType,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
+        this(client, modelCapabilities, modelName, providerName, providerType, mediaResourcePolicy,
+            capabilityMatcher, EffectiveParameterMappings.empty());
+    }
+
+    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+        String modelName, String providerName, String providerType,
+        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
+        EffectiveParameterMappings parameterMappings) {
+        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher,
+            ModelRuntimeContext.unresolved(providerType, modelName, providerName,
+                new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
+    }
+
+    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
+        ModelRuntimeContext context) {
         this.client = client;
         this.modelCapabilities = modelCapabilities != null ? modelCapabilities
             : ModelCapabilities.empty();
-        this.modelName = hasText(modelName) ? modelName : "unknown";
-        this.providerName = hasText(providerName) ? providerName : "unknown";
-        this.providerType = providerType;
+        this.modelName = hasText(context.modelName()) ? context.modelName() : "unknown";
+        this.providerName = hasText(context.providerName()) ? context.providerName() : "unknown";
+        this.providerType = context.providerType();
         this.mediaResourcePolicy = mediaResourcePolicy != null ? mediaResourcePolicy
             : new MediaResourcePolicy();
         this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher
             : new ModelCapabilityMatcher();
+        this.parameterMappings = context.parameterMappings();
     }
 
     @Override
@@ -114,7 +137,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         validateCapabilities(request);
         var warnings = new ArrayList<ImageGenerationWarning>();
         var adjusted = adjustedRequest(request, warnings);
-        return new ImageInvocation(adjusted, warnings, batches(requestedImageCount(request)),
+        return new ImageInvocation(adjusted, warnings, batches(requestedImageCount(adjusted)),
             concurrency(request));
     }
 
@@ -125,7 +148,9 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     }
 
     private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request) {
-        var call = client.generateImage(request)
+        var call = (parameterMappings.isEmpty()
+            ? client.generateImage(request)
+            : client.generateImage(request, mappingTarget(request)))
             .doOnSubscribe(ignored -> checkCancellation(request))
             .doOnNext(ignored -> checkCancellation(request));
         var maxRetries = maxRetries(request);
@@ -133,6 +158,22 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             return call;
         }
         return call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+    }
+
+    private ParameterMappingTarget mappingTarget(GenerateImageRequest request) {
+        var target = new ParameterMappingTarget();
+        applyMapping(ModelParameter.IMAGE_COUNT, request.getN(), target);
+        applyMapping(ModelParameter.IMAGE_SIZE, request.getSize(), target);
+        applyMapping(ModelParameter.ASPECT_RATIO, request.getAspectRatio(), target);
+        applyMapping(ModelParameter.IMAGE_SEED, request.getSeed(), target);
+        applyMapping(ModelParameter.RESPONSE_FORMAT, request.getResponseFormat(), target);
+        applyMapping(ModelParameter.NEGATIVE_PROMPT, request.getNegativePrompt(), target);
+        return target;
+    }
+
+    private void applyMapping(ModelParameter parameter, Object value,
+        ParameterMappingTarget target) {
+        parameterMappings.apply(parameter, value, target);
     }
 
     private GenerateImageResult aggregate(ImageInvocation invocation,
@@ -238,12 +279,15 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .prompt(request.getPrompt())
             .images(request.getImages())
             .mask(request.getMask())
-            .n(request.getN())
-            .size(supportedSize(request, warnings))
-            .aspectRatio(supportedAspectRatio(request, warnings))
-            .seed(request.getSeed())
-            .responseFormat(request.getResponseFormat())
-            .providerOptions(request.getProviderOptions())
+            .n(mapped(ModelParameter.IMAGE_COUNT, request.getN(), warnings))
+            .size(mapped(ModelParameter.IMAGE_SIZE, supportedSize(request, warnings), warnings))
+            .aspectRatio(mapped(ModelParameter.ASPECT_RATIO,
+                supportedAspectRatio(request, warnings), warnings))
+            .negativePrompt(mapped(ModelParameter.NEGATIVE_PROMPT,
+                request.getNegativePrompt(), warnings))
+            .seed(mapped(ModelParameter.IMAGE_SEED, request.getSeed(), warnings))
+            .responseFormat(mapped(ModelParameter.RESPONSE_FORMAT,
+                request.getResponseFormat(), warnings))
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())
@@ -252,6 +296,19 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .cancellationToken(request.getCancellationToken())
             .timeouts(request.getTimeouts())
             .build();
+    }
+
+    private <T> T mapped(ModelParameter parameter, T value,
+        List<ImageGenerationWarning> warnings) {
+        if (value == null) {
+            return null;
+        }
+        if (!parameterMappings.isUnsupported(parameter)) {
+            return value;
+        }
+        warnings.add(parameterMappings.unsupportedDiagnostic(parameter)
+            .imageWarning());
+        return null;
     }
 
     private String supportedSize(GenerateImageRequest request,
@@ -299,12 +356,12 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .prompt(request.getPrompt())
             .images(request.getImages())
             .mask(request.getMask())
-            .n(n)
+            .n(request.getN() != null ? n : null)
             .size(request.getSize())
             .aspectRatio(request.getAspectRatio())
+            .negativePrompt(request.getNegativePrompt())
             .seed(request.getSeed())
             .responseFormat(request.getResponseFormat())
-            .providerOptions(request.getProviderOptions())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())

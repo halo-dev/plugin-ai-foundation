@@ -5,6 +5,7 @@ import type {
   ImageGenerationCapability,
   LanguageCapability,
   ModelCapabilitySources,
+  ModelParameterMappings,
 } from '@/api/generated'
 import {
   AiModelSpecModelTypeEnum,
@@ -25,15 +26,23 @@ import {
   modelFeatureOptionsForProviderType,
   modelTypeOptionsForProviderType,
 } from '@/utils/model'
+import {
+  mappingsForModelType,
+  validateReasoningMappings,
+  type MappingModelType,
+} from '@/utils/parameter-mappings'
 import type { FormKitTypeDefinition } from '@formkit/core'
 import { submitForm } from '@formkit/core'
+import { Toast } from '@halo-dev/components'
 import { computed, ref, watch } from 'vue'
 import AdvancedSettingsCollapsible from './AdvancedSettingsCollapsible.vue'
+import ParameterMappingFields from './ParameterMappingFields.vue'
 
 const props = defineProps<{
   formState?: ModelFormState
   providerType: string
   modelName?: string
+  inheritedMappings?: ModelParameterMappings
 }>()
 
 const emit = defineEmits<{
@@ -69,6 +78,7 @@ const defaultModelType = computed(() => {
 const selectedModelType = ref<AiModelSpecModelTypeEnum>(
   props.formState?.modelType || defaultModelType.value,
 )
+const parameterMappings = ref(props.formState?.parameterMappings)
 
 const booleanCapabilityOptions = [
   { label: '未知', value: '' },
@@ -151,6 +161,9 @@ const imageGenerationSourceLabel = computed(() =>
     ),
   ),
 )
+const visibleCapabilitySourceLabel = computed(() =>
+  isLanguageCapabilityVisible.value ? languageSourceLabel.value : imageGenerationSourceLabel.value,
+)
 
 watch(
   defaultModelType,
@@ -184,6 +197,15 @@ watch(
 )
 
 function onSubmit(data: ModelFormRawState) {
+  const normalizedMappings = mappingsForModelType(
+    parameterMappings.value,
+    data.modelType as MappingModelType,
+  )
+  const mappingErrors = validateReasoningMappings(normalizedMappings)
+  if (mappingErrors.length) {
+    Toast.error(mappingErrors[0])
+    return
+  }
   const capabilities = buildCapabilities(data)
   const capabilitySources = buildCapabilitySources(capabilities)
   if (capabilities && capabilitySources) {
@@ -198,6 +220,7 @@ function onSubmit(data: ModelFormRawState) {
     adapterType: data.adapterType,
     capabilities,
     capabilitySources,
+    parameterMappings: normalizedMappings,
   })
 }
 
@@ -413,9 +436,25 @@ function sameJson(a: unknown, b: unknown) {
       :value="formState?.enabled ?? true"
     />
 
-    <div
+    <AdvancedSettingsCollapsible title="参数映射" source-label="模型覆盖">
+      <p class=":uno: mb-3 text-xs text-gray-500">
+        仅在这个模型需要例外处理时覆盖。未配置的参数继续继承 Provider 设置。
+      </p>
+      <ParameterMappingFields
+        v-model="parameterMappings"
+        context="model"
+        :model-type="selectedModelType as MappingModelType"
+        :adapter-type="formState?.adapterType"
+        :templates="selectedProviderType?.parameterMappingTemplates"
+        :defaults="selectedProviderType?.defaultParameterMappings"
+        :inherited-mappings="inheritedMappings"
+      />
+    </AdvancedSettingsCollapsible>
+
+    <AdvancedSettingsCollapsible
       v-if="isLanguageCapabilityVisible || isImageGenerationCapabilityVisible"
-      class=":uno: mt-4 border-t border-gray-100 pt-4"
+      title="模型能力"
+      :source-label="visibleCapabilitySourceLabel"
     >
       <template v-if="isLanguageCapabilityVisible">
         <FormKit
@@ -426,37 +465,33 @@ function sameJson(a: unknown, b: unknown) {
           :value="selectedFeatures"
           @input="onFeaturesInput"
         />
-        <AdvancedSettingsCollapsible :source-label="languageSourceLabel">
-            <div class=":uno: space-y-3">
-              <FormKit
-                type="select"
-                name="languageFileInput"
-                label="支持文件/音频识别"
-                :options="booleanCapabilityOptions"
-                :value="languageFileInputValue"
-                @input="onLanguageFileInput"
-              />
-            </div>
-            <FormKit
-              v-if="shouldShowLanguageMediaDetails"
-              type="checkbox"
-              name="languageInputSources"
-              label="支持输入来源"
-              help="Data 表示 base64 或 data URL；URL 表示供应方原生支持远程文件地址。"
-              :options="inputSourceOptions"
-              :value="formState?.capabilities?.language?.inputSources"
-              :classes="checkboxGroupClasses"
-            />
-            <FormKit
-              v-if="shouldShowLanguageMediaDetails"
-              type="textarea"
-              name="languageInputMediaTypes"
-              label="支持媒体类型"
-              :placeholder="languageInputMediaTypesPlaceholder"
-              help="每行或用逗号填写一个 MIME 类型，例如 image/*、audio/*、application/pdf。"
-              :value="listFormValue(formState?.capabilities?.language?.inputMediaTypes)"
-            />
-        </AdvancedSettingsCollapsible>
+        <FormKit
+          type="select"
+          name="languageFileInput"
+          label="支持文件/音频识别"
+          :options="booleanCapabilityOptions"
+          :value="languageFileInputValue"
+          @input="onLanguageFileInput"
+        />
+        <FormKit
+          v-if="shouldShowLanguageMediaDetails"
+          type="checkbox"
+          name="languageInputSources"
+          label="支持输入来源"
+          help="Data 表示 base64 或 data URL；URL 表示供应方原生支持远程文件地址。"
+          :options="inputSourceOptions"
+          :value="formState?.capabilities?.language?.inputSources"
+          :classes="checkboxGroupClasses"
+        />
+        <FormKit
+          v-if="shouldShowLanguageMediaDetails"
+          type="textarea"
+          name="languageInputMediaTypes"
+          label="支持媒体类型"
+          :placeholder="languageInputMediaTypesPlaceholder"
+          help="每行或用逗号填写一个 MIME 类型，例如 image/*、audio/*、application/pdf。"
+          :value="listFormValue(formState?.capabilities?.language?.inputMediaTypes)"
+        />
       </template>
 
       <template v-if="isImageGenerationCapabilityVisible">
@@ -476,44 +511,42 @@ function sameJson(a: unknown, b: unknown) {
             :value="booleanFormValue(formState?.capabilities?.imageGeneration?.imageToImage)"
           />
         </div>
-        <AdvancedSettingsCollapsible :source-label="imageGenerationSourceLabel">
-            <FormKit
-              type="select"
-              name="imageGenerationMaskInput"
-              label="蒙版输入"
-              :options="booleanCapabilityOptions"
-              :value="booleanFormValue(formState?.capabilities?.imageGeneration?.maskInput)"
-            />
-            <FormKit
-              type="number"
-              name="imageGenerationMaxImagesPerCall"
-              label="单次最大图片数"
-              min="1"
-              :value="formState?.capabilities?.imageGeneration?.maxImagesPerCall"
-            />
-            <FormKit
-              type="textarea"
-              name="imageGenerationSizes"
-              label="支持尺寸"
-              placeholder="1024x1024"
-              :value="listFormValue(formState?.capabilities?.imageGeneration?.sizes)"
-            />
-            <FormKit
-              type="textarea"
-              name="imageGenerationAspectRatios"
-              label="支持宽高比"
-              placeholder="1:1"
-              :value="listFormValue(formState?.capabilities?.imageGeneration?.aspectRatios)"
-            />
-            <FormKit
-              type="textarea"
-              name="imageGenerationOutputMediaTypes"
-              label="支持输出媒体类型"
-              placeholder="image/png"
-              :value="listFormValue(formState?.capabilities?.imageGeneration?.outputMediaTypes)"
-            />
-        </AdvancedSettingsCollapsible>
+        <FormKit
+          type="select"
+          name="imageGenerationMaskInput"
+          label="蒙版输入"
+          :options="booleanCapabilityOptions"
+          :value="booleanFormValue(formState?.capabilities?.imageGeneration?.maskInput)"
+        />
+        <FormKit
+          type="number"
+          name="imageGenerationMaxImagesPerCall"
+          label="单次最大图片数"
+          min="1"
+          :value="formState?.capabilities?.imageGeneration?.maxImagesPerCall"
+        />
+        <FormKit
+          type="textarea"
+          name="imageGenerationSizes"
+          label="支持尺寸"
+          placeholder="1024x1024"
+          :value="listFormValue(formState?.capabilities?.imageGeneration?.sizes)"
+        />
+        <FormKit
+          type="textarea"
+          name="imageGenerationAspectRatios"
+          label="支持宽高比"
+          placeholder="1:1"
+          :value="listFormValue(formState?.capabilities?.imageGeneration?.aspectRatios)"
+        />
+        <FormKit
+          type="textarea"
+          name="imageGenerationOutputMediaTypes"
+          label="支持输出媒体类型"
+          placeholder="image/png"
+          :value="listFormValue(formState?.capabilities?.imageGeneration?.outputMediaTypes)"
+        />
       </template>
-    </div>
+    </AdvancedSettingsCollapsible>
   </FormKit>
 </template>

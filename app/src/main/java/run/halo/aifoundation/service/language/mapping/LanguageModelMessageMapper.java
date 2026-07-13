@@ -178,7 +178,7 @@ public final class LanguageModelMessageMapper {
         return parts.stream()
             .filter(part -> PartType.isReasoning(part.getType()))
             .map(part -> {
-                var metadataReasoning = reasoningContent(part.getProviderOptions());
+                var metadataReasoning = reasoningContent(part.getProviderMetadata());
                 return hasContent(metadataReasoning) ? metadataReasoning : part.getText();
             })
             .filter(LanguageModelMessageMapper::hasContent)

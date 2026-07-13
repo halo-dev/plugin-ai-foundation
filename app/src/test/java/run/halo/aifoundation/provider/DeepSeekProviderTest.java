@@ -6,11 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.deepseek.DeepSeekChatOptions;
-import org.springframework.ai.deepseek.api.DeepSeekApi;
-import org.springframework.ai.deepseek.api.ResponseFormat;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolChoice;
 import run.halo.aifoundation.tool.ToolDefinition;
@@ -30,12 +28,13 @@ class DeepSeekProviderTest {
             )))
             .build();
 
-        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .structuredOutputChatOptionsFactory()
             .build(request);
 
         assertThat(options.getResponseFormat()).isNotNull();
-        assertThat(options.getResponseFormat().getType()).isEqualTo(ResponseFormat.Type.JSON_OBJECT);
+        assertThat(options.getResponseFormat().getType())
+            .isEqualTo(OpenAiCompatibleChatOptions.ResponseFormat.Type.JSON_OBJECT);
     }
 
     @Test
@@ -53,12 +52,13 @@ class DeepSeekProviderTest {
             )))
             .build();
 
-        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
         assertThat(options.getResponseFormat()).isNotNull();
-        assertThat(options.getResponseFormat().getType()).isEqualTo(ResponseFormat.Type.JSON_OBJECT);
+        assertThat(options.getResponseFormat().getType())
+            .isEqualTo(OpenAiCompatibleChatOptions.ResponseFormat.Type.JSON_OBJECT);
     }
 
     @Test
@@ -72,7 +72,7 @@ class DeepSeekProviderTest {
             .toolChoice(ToolChoice.required())
             .build();
 
-        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
@@ -96,12 +96,11 @@ class DeepSeekProviderTest {
                 .build()))
             .build();
 
-        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
-        assertThat(options.getTools()).singleElement()
-            .satisfies(tool -> assertThat(tool.getFunction().getStrict()).isTrue());
+        assertThat(options.getToolCallbacks()).isEmpty();
     }
 
     @Test
@@ -116,26 +115,19 @@ class DeepSeekProviderTest {
                 .build()))
             .build();
 
-        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
-        assertThat(options.getTools()).singleElement()
-            .satisfies(tool -> {
-                assertThat(tool.getFunction().getName()).isEqualTo("halo_test_info");
-                assertThat(tool.getFunction().getParameters()).containsEntry("type", "object");
-                assertThat(tool.getFunction().getParameters()).doesNotContainKey("examples");
-            });
+        assertThat(options.getToolCallbacks()).isEmpty();
     }
 
     @Test
-    void options_applyDeepSeekLogprobProviderOptions() {
+    void options_applyTypedDeepSeekLogprobs() {
         var request = GenerateTextRequest.builder()
             .prompt("Generate JSON")
-            .providerOptions(Map.of("deepseek", Map.of(
-                "logprobs", true,
-                "topLogprobs", 3
-            )))
+            .logprobs(true)
+            .topLogprobs(3)
             .output(OutputSpec.object(Map.of(
                 "type", "object",
                 "properties", Map.of("answer", Map.of("type", "string")),
@@ -143,7 +135,7 @@ class DeepSeekProviderTest {
             )))
             .build();
 
-        var options = (DeepSeekChatOptions) providerType.languageModelProviderOptions()
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .structuredOutputChatOptionsFactory()
             .build(request);
 

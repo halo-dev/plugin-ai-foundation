@@ -13,6 +13,15 @@ const props = defineProps<{
   systemPrompt?: string
   temperature?: number
   topP?: number
+  topK?: number
+  minP?: number
+  presencePenalty?: number
+  frequencyPenalty?: number
+  repetitionPenalty?: number
+  stopSequencesText?: string
+  logprobs?: boolean
+  topLogprobs?: number
+  parallelToolCalls?: boolean
   maxTokens?: number
   seed?: number | undefined
   maxRetries?: number | undefined
@@ -26,17 +35,13 @@ const props = defineProps<{
   outputMode?: OutputMode
   outputSchemaText?: string
   outputChoicesText?: string
-  providerOptionsText?: string
   chatHeadersText?: string
   chatHeadersError?: string
-  providerOptionsError?: string
   outputError?: string
   embeddingDimensions?: number | undefined
   embeddingMaxBatchSize?: number | undefined
   embeddingMaxParallelCalls?: number | undefined
   embeddingMaxRetries?: number | undefined
-  embeddingProviderOptionsText?: string
-  embeddingProviderOptionsError?: string
   imageN?: number | undefined
   imageWidth?: number | undefined
   imageHeight?: number | undefined
@@ -45,8 +50,6 @@ const props = defineProps<{
   imageResponseFormat?: ImageResponseFormat
   imageMaxRetries?: number | undefined
   imageMaxParallelCalls?: number | undefined
-  imageProviderOptionsText?: string
-  imageProviderOptionsError?: string
   imageHeadersText?: string
   imageHeadersError?: string
 }>()
@@ -55,6 +58,15 @@ const emit = defineEmits<{
   (e: 'update:systemPrompt', value: string): void
   (e: 'update:temperature', value: number): void
   (e: 'update:topP', value: number): void
+  (e: 'update:topK', value: number | undefined): void
+  (e: 'update:minP', value: number | undefined): void
+  (e: 'update:presencePenalty', value: number | undefined): void
+  (e: 'update:frequencyPenalty', value: number | undefined): void
+  (e: 'update:repetitionPenalty', value: number | undefined): void
+  (e: 'update:stopSequencesText', value: string): void
+  (e: 'update:logprobs', value: boolean | undefined): void
+  (e: 'update:topLogprobs', value: number | undefined): void
+  (e: 'update:parallelToolCalls', value: boolean | undefined): void
   (e: 'update:maxTokens', value: number): void
   (e: 'update:seed', value: number | undefined): void
   (e: 'update:maxRetries', value: number | undefined): void
@@ -68,13 +80,11 @@ const emit = defineEmits<{
   (e: 'update:outputMode', value: OutputMode): void
   (e: 'update:outputSchemaText', value: string): void
   (e: 'update:outputChoicesText', value: string): void
-  (e: 'update:providerOptionsText', value: string): void
   (e: 'update:chatHeadersText', value: string): void
   (e: 'update:embeddingDimensions', value: number | undefined): void
   (e: 'update:embeddingMaxBatchSize', value: number | undefined): void
   (e: 'update:embeddingMaxParallelCalls', value: number | undefined): void
   (e: 'update:embeddingMaxRetries', value: number | undefined): void
-  (e: 'update:embeddingProviderOptionsText', value: string): void
   (e: 'update:imageN', value: number | undefined): void
   (e: 'update:imageWidth', value: number | undefined): void
   (e: 'update:imageHeight', value: number | undefined): void
@@ -83,7 +93,6 @@ const emit = defineEmits<{
   (e: 'update:imageResponseFormat', value: ImageResponseFormat): void
   (e: 'update:imageMaxRetries', value: number | undefined): void
   (e: 'update:imageMaxParallelCalls', value: number | undefined): void
-  (e: 'update:imageProviderOptionsText', value: string): void
   (e: 'update:imageHeadersText', value: string): void
 }>()
 
@@ -98,16 +107,6 @@ const outputChoicesHelp = computed(() => {
   return props.outputError || '每行一个可选值'
 })
 
-const providerOptionsHelp = computed(() => {
-  return (
-    props.providerOptionsError || '请输入按服务商分组的 JSON 对象，例如 {"openai": {"seed": 42}}'
-  )
-})
-
-const imageProviderOptionsHelp = computed(() => {
-  return props.imageProviderOptionsError || '按服务商命名空间传递图片生成扩展参数'
-})
-
 const imageHeadersHelp = computed(() => {
   return props.imageHeadersError || '请求级 headers，当前 provider 不支持时会返回 warning 或错误'
 })
@@ -115,6 +114,12 @@ const imageHeadersHelp = computed(() => {
 type NumberFieldKey =
   | 'temperature'
   | 'topP'
+  | 'topK'
+  | 'minP'
+  | 'presencePenalty'
+  | 'frequencyPenalty'
+  | 'repetitionPenalty'
+  | 'topLogprobs'
   | 'maxTokens'
   | 'seed'
   | 'maxRetries'
@@ -137,6 +142,24 @@ function updateNumberField(key: NumberFieldKey, value: string) {
       break
     case 'topP':
       emit('update:topP', num as number)
+      break
+    case 'topK':
+      emit('update:topK', num)
+      break
+    case 'minP':
+      emit('update:minP', num)
+      break
+    case 'presencePenalty':
+      emit('update:presencePenalty', num)
+      break
+    case 'frequencyPenalty':
+      emit('update:frequencyPenalty', num)
+      break
+    case 'repetitionPenalty':
+      emit('update:repetitionPenalty', num)
+      break
+    case 'topLogprobs':
+      emit('update:topLogprobs', num)
       break
     case 'maxTokens':
       emit('update:maxTokens', num as number)
@@ -317,6 +340,76 @@ function updateNumberField(key: NumberFieldKey, value: string) {
             >
               仅作用于可重试的非流式 provider 调用，0 表示不重试
             </div>
+          </div>
+        </details>
+
+        <details class=":uno: group border-b border-slate-200 last:border-b-0">
+          <summary
+            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
+          >
+            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
+            完整生成参数
+          </summary>
+          <div class=":uno: grid grid-cols-2 gap-2 pb-3 pl-5">
+            <label
+              v-for="field in [
+                { key: 'topK', label: 'Top K', value: topK, step: 1, min: 0 },
+                { key: 'minP', label: 'Min P', value: minP, step: 0.01, min: 0 },
+                { key: 'presencePenalty', label: '存在惩罚', value: presencePenalty, step: 0.1 },
+                { key: 'frequencyPenalty', label: '频率惩罚', value: frequencyPenalty, step: 0.1 },
+                { key: 'repetitionPenalty', label: '重复惩罚', value: repetitionPenalty, step: 0.1, min: 0 },
+                { key: 'topLogprobs', label: 'Top Logprobs', value: topLogprobs, step: 1, min: 0 },
+              ]"
+              :key="field.key"
+              class=":uno: text-xs text-slate-600"
+            >
+              {{ field.label }}
+              <input
+                type="number"
+                :value="field.value"
+                :step="field.step"
+                :min="field.min"
+                placeholder="默认"
+                class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                @input="updateNumberField(field.key as NumberFieldKey, ($event.target as HTMLInputElement).value)"
+              />
+            </label>
+
+            <label class=":uno: col-span-2 text-xs text-slate-600">
+              停止序列（每行一个）
+              <textarea
+                :value="stopSequencesText"
+                rows="3"
+                class=":uno: mt-1 w-full resize-none text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+                @input="emit('update:stopSequencesText', ($event.target as HTMLTextAreaElement).value)"
+              />
+            </label>
+
+            <label class=":uno: text-xs text-slate-600">
+              Token 概率
+              <select
+                :value="logprobs === undefined ? '' : String(logprobs)"
+                class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs"
+                @change="emit('update:logprobs', ($event.target as HTMLSelectElement).value === '' ? undefined : ($event.target as HTMLSelectElement).value === 'true')"
+              >
+                <option value="">默认</option>
+                <option value="true">启用</option>
+                <option value="false">禁用</option>
+              </select>
+            </label>
+
+            <label class=":uno: text-xs text-slate-600">
+              并行工具调用
+              <select
+                :value="parallelToolCalls === undefined ? '' : String(parallelToolCalls)"
+                class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs"
+                @change="emit('update:parallelToolCalls', ($event.target as HTMLSelectElement).value === '' ? undefined : ($event.target as HTMLSelectElement).value === 'true')"
+              >
+                <option value="">默认</option>
+                <option value="true">启用</option>
+                <option value="false">禁用</option>
+              </select>
+            </label>
           </div>
         </details>
 
@@ -506,32 +599,6 @@ function updateNumberField(key: NumberFieldKey, value: string) {
             class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
           >
             <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            Provider Options
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <textarea
-              :value="providerOptionsText"
-              rows="6"
-              :class="{ ':uno: !border-rose-300': providerOptionsError }"
-              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-              @input="
-                emit('update:providerOptionsText', ($event.target as HTMLTextAreaElement).value)
-              "
-            />
-            <div
-              class=":uno: mt-1 text-[10px]"
-              :class="providerOptionsError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-            >
-              {{ providerOptionsHelp }}
-            </div>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
             Headers
           </summary>
           <div class=":uno: pb-3 pl-5">
@@ -636,36 +703,6 @@ function updateNumberField(key: NumberFieldKey, value: string) {
           </div>
         </details>
 
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            Provider Options
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <textarea
-              :value="embeddingProviderOptionsText"
-              rows="6"
-              :class="{ ':uno: !border-rose-300': embeddingProviderOptionsError }"
-              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 placeholder:!text-xs focus:!ring-3 focus:!ring-teal-500/10"
-              @input="
-                emit(
-                  'update:embeddingProviderOptionsText',
-                  ($event.target as HTMLTextAreaElement).value,
-                )
-              "
-            />
-            <div
-              class=":uno: mt-1 text-[10px]"
-              :class="
-                embeddingProviderOptionsError ? ':uno: text-rose-500' : ':uno: text-slate-400'
-              "
-            >
-              {{ embeddingProviderOptionsError || '例如 openai.dimensions = 512' }}
-            </div>
-          </div>
-        </details>
       </template>
 
       <template v-else-if="mode === 'image'">
@@ -792,35 +829,6 @@ function updateNumberField(key: NumberFieldKey, value: string) {
                   "
                 />
               </div>
-            </div>
-          </div>
-        </details>
-
-        <details class=":uno: group border-b border-slate-200 last:border-b-0">
-          <summary
-            class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
-          >
-            <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
-            Provider Options
-          </summary>
-          <div class=":uno: pb-3 pl-5">
-            <textarea
-              :value="imageProviderOptionsText"
-              rows="6"
-              :class="{ ':uno: !border-rose-300': imageProviderOptionsError }"
-              class=":uno: w-full text-slate-700 leading-relaxed font-mono outline-none transition-colors !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
-              @input="
-                emit(
-                  'update:imageProviderOptionsText',
-                  ($event.target as HTMLTextAreaElement).value,
-                )
-              "
-            />
-            <div
-              class=":uno: mt-1 text-[10px]"
-              :class="imageProviderOptionsError ? ':uno: text-rose-500' : ':uno: text-slate-400'"
-            >
-              {{ imageProviderOptionsHelp }}
             </div>
           </div>
         </details>

@@ -275,7 +275,7 @@ public final class UIMessageConverters {
                 .toolCallId(part.toolCallId())
                 .toolName(part.toolName())
                 .input(inputMap(part.input()))
-                .providerOptions(part.providerMetadata())
+                .providerMetadata(part.providerMetadata())
                 .build();
         }
 

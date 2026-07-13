@@ -63,7 +63,7 @@ class EmbeddingModelImplTest {
     }
 
     @Test
-    void embed_mapsOpenAiProviderOptionsToSpringOptions() {
+    void embed_mapsTypedDimensionsToSpringOptions() {
         var springModel = mock(EmbeddingModel.class);
         when(springModel.call(any(EmbeddingRequest.class)))
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
@@ -72,10 +72,7 @@ class EmbeddingModelImplTest {
             new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
         var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
-            .providerOptions(Map.of("openai", Map.of(
-                "dimensions", 512,
-                "user", "tester"
-            )))
+            .dimensions(512)
             .build();
 
         StepVerifier.create(model.embed(request))
@@ -87,7 +84,71 @@ class EmbeddingModelImplTest {
         assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiCompatibleEmbeddingOptions.class);
         var options = (OpenAiCompatibleEmbeddingOptions) captor.getValue().getOptions();
         assertThat(options.getDimensions()).isEqualTo(512);
-        assertThat(options.getUser()).isEqualTo("tester");
+    }
+
+    @Test
+    void embed_omitsUnsupportedDimensionsAndReturnsMappedWarning() {
+        var springModel = mock(EmbeddingModel.class);
+        when(springModel.call(any(EmbeddingRequest.class)))
+            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
+        var mapping = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.DIMENSIONS,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED,
+                    null, null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
+            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+        var model = new EmbeddingModelImpl(springModel, composition, mapping,
+            "embedding-model", "openai-provider");
+
+        StepVerifier.create(model.embed(run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+                .inputs(List.of("first"))
+                .dimensions(512)
+                .build()))
+            .assertNext(response -> assertThat(response.getWarnings()).singleElement()
+                .satisfies(warning -> {
+                    assertThat(warning.getCode()).isEqualTo("mapped-parameter-unsupported");
+                    assertThat(warning.getProviderMetadata())
+                        .containsEntry("parameter", "DIMENSIONS")
+                        .containsEntry("modelName", "embedding-model")
+                        .containsEntry("providerName", "openai-provider");
+                }))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(EmbeddingRequest.class);
+        verify(springModel).call(captor.capture());
+        assertThat(captor.getValue().getOptions()).isNull();
+    }
+
+    @Test
+    void embed_appliesAdministratorDimensionsFieldToOpenAiRequestBodyOptions() {
+        var springModel = mock(EmbeddingModel.class);
+        when(springModel.call(any(EmbeddingRequest.class)))
+            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
+        var mapping = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.DIMENSIONS,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "embedding.dimensions", "output_dimension", null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
+        var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
+            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+        var model = new EmbeddingModelImpl(springModel, composition, mapping,
+            "embedding-model", "openai-provider");
+
+        StepVerifier.create(model.embed(run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+                .inputs(List.of("first"))
+                .dimensions(384)
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(EmbeddingRequest.class);
+        verify(springModel).call(captor.capture());
+        var options = (OpenAiCompatibleEmbeddingOptions) captor.getValue().getOptions();
+        assertThat(options.getDimensions()).isNull();
+        assertThat(options.getExtraBody()).containsEntry("output_dimension", 384);
     }
 
     @Test
@@ -111,32 +172,6 @@ class EmbeddingModelImplTest {
         verify(springModel).call(any(EmbeddingRequest.class), headersCaptor.capture());
         assertThat(headersCaptor.getValue().get("X-Trace-Id")).isEqualTo("trace-1");
         verify(springModel, org.mockito.Mockito.never()).call(any(EmbeddingRequest.class));
-    }
-
-    @Test
-    void embed_warnsForUnknownProviderOptions() {
-        var springModel = mock(EmbeddingModel.class);
-        when(springModel.call(any(EmbeddingRequest.class)))
-            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
-
-        var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
-        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
-            .inputs(List.of("first"))
-            .providerOptions(Map.of(
-                "openai", Map.of("unknown", true),
-                "google", Map.of("taskType", "CLASSIFICATION")
-            ))
-            .build();
-
-        StepVerifier.create(model.embed(request))
-            .assertNext(response -> assertThat(response.getWarnings())
-                .extracting(run.halo.aifoundation.embedding.EmbeddingWarning::getCode)
-                .contains(
-                    "unsupported-provider-option",
-                    "ignored-provider-option-namespace"
-                ))
-            .verifyComplete();
     }
 
     @Test

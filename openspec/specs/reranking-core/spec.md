@@ -4,15 +4,20 @@
 TBD - created by archiving change add-rag-runtime-capabilities. Update Purpose after archive.
 ## Requirements
 ### Requirement: Reranking model API
-The system SHALL provide a provider-neutral reranking model API.
+The system SHALL provide a provider-neutral reranking model API with typed controls and administrator-owned native mappings.
 
 #### Scenario: Rerank documents
 - **WHEN** a caller submits a query and ordered documents to a reranking model
-- **THEN** the system returns reranked results with scores and original input indexes
+- **THEN** the system SHALL return reranked results with scores and original input indexes
 
 #### Scenario: Rerank advanced request
-- **WHEN** a caller uses a rerank request with top count, provider options, metadata, context, cancellation, or timeout controls
-- **THEN** the system passes supported controls to the provider-neutral reranking runtime and reports unsupported provider options as warnings or validation errors
+- **WHEN** a caller uses a rerank request with top count, metadata, context, cancellation, or timeout controls
+- **THEN** the system SHALL pass supported typed controls to the runtime
+- **AND** `topN` SHALL be translated through the effective Provider/Model mapping
+
+#### Scenario: Rerank request has no native escape hatch
+- **WHEN** a consumer inspects `RerankRequest`
+- **THEN** no caller-writable provider-native option map SHALL be present
 
 ### Requirement: Reranking is independent of RAG storage
 Reranking SHALL be a core model capability and SHALL NOT require a VectorStore, DocumentStore, or RAG retriever.
@@ -52,14 +57,19 @@ Provider-backed reranking clients SHALL normalize provider-specific rerank respo
 - **THEN** the reranking runtime SHALL fail the request instead of producing mismatched source ordering
 
 ### Requirement: Provider-backed reranking clients wrap provider failures
-Provider-backed reranking clients SHALL translate HTTP, network, authentication, rate limit, and protocol failures into stable AI Foundation errors while preserving provider diagnostics for troubleshooting.
+Provider-backed reranking clients SHALL translate provider failures into stable AI Foundation errors and report non-fatal mapped limitations as warnings.
 
 #### Scenario: Provider request fails
 - **WHEN** a supported provider rerank HTTP request fails
-- **THEN** the caller receives a stable AI Foundation rerank failure
-- **AND** the diagnostic message or metadata includes provider status or error information when available
+- **THEN** the caller SHALL receive a stable AI Foundation rerank failure
+- **AND** available provider status or error diagnostics SHALL be preserved safely
 
-#### Scenario: Non-fatal provider limitation is detected
-- **WHEN** a provider ignores unsupported provider options or omits optional usage metadata
-- **THEN** the response MAY include warnings
-- **AND** the rerank operation SHALL continue when ranked results can still be normalized
+#### Scenario: Top count mapping is unsupported
+- **WHEN** the effective `topN` mapping is unsupported and the caller supplies `topN`
+- **THEN** the client SHALL omit the native top-count field
+- **AND** the response SHALL include a stable warning when ranking can continue
+
+#### Scenario: Optional usage metadata is absent
+- **WHEN** a provider omits optional usage metadata
+- **THEN** reranking SHALL continue when ranked results can still be normalized
+

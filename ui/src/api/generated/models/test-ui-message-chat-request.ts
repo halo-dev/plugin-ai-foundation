@@ -58,6 +58,12 @@ export interface TestUiMessageChatRequest {
     'id'?: string;
     /**
      * 
+     * @type {boolean}
+     * @memberof TestUiMessageChatRequest
+     */
+    'logprobs'?: boolean;
+    /**
+     * 
      * @type {number}
      * @memberof TestUiMessageChatRequest
      */
@@ -88,10 +94,22 @@ export interface TestUiMessageChatRequest {
     'metadata'?: { [key: string]: object; };
     /**
      * 
+     * @type {number}
+     * @memberof TestUiMessageChatRequest
+     */
+    'minP'?: number;
+    /**
+     * 
      * @type {OutputSpec}
      * @memberof TestUiMessageChatRequest
      */
     'output'?: OutputSpec;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof TestUiMessageChatRequest
+     */
+    'parallelToolCalls'?: boolean;
     /**
      * 
      * @type {number}
@@ -100,16 +118,16 @@ export interface TestUiMessageChatRequest {
     'presencePenalty'?: number;
     /**
      * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
-     * @memberof TestUiMessageChatRequest
-     */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
-    /**
-     * 
      * @type {ReasoningOptions}
      * @memberof TestUiMessageChatRequest
      */
     'reasoning'?: ReasoningOptions;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestUiMessageChatRequest
+     */
+    'repetitionPenalty'?: number;
     /**
      * 
      * @type {number}
@@ -146,6 +164,12 @@ export interface TestUiMessageChatRequest {
      * @memberof TestUiMessageChatRequest
      */
     'topK'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestUiMessageChatRequest
+     */
+    'topLogprobs'?: number;
     /**
      * 
      * @type {number}

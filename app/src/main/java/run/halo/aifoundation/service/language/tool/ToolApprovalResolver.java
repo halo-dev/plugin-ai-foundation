@@ -151,7 +151,7 @@ public final class ToolApprovalResolver {
     ) {
         PendingApproval(ModelMessagePart part) {
             this(part.getApprovalId(), part.getToolCallId(), part.getToolName(),
-                part.getInput(), part.getStepIndex(), part.getProviderOptions());
+                part.getInput(), part.getStepIndex(), part.getProviderMetadata());
         }
 
         ToolApprovalRequest toRequest() {
@@ -177,7 +177,7 @@ public final class ToolApprovalResolver {
     ) {
         ResponseEntry(ModelMessagePart part, int messageIndex) {
             this(part.getApprovalId(), part.getToolCallId(), part.getToolName(),
-                part.getApproved(), part.getReason(), part.getProviderOptions(), messageIndex);
+                part.getApproved(), part.getReason(), part.getProviderMetadata(), messageIndex);
         }
 
         ToolApprovalResponse toResponse() {

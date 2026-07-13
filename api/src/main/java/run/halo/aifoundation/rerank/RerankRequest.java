@@ -10,7 +10,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.control.CancellationToken;
-import run.halo.aifoundation.options.ProviderOptions;
 
 /**
  * Advanced request object for reranking candidate documents.
@@ -36,10 +35,6 @@ public class RerankRequest {
      */
     private Integer topN;
 
-    /**
-     * Provider-specific reranking settings grouped by provider namespace.
-     */
-    private Map<String, Map<String, Object>> providerOptions;
 
     /**
      * Caller metadata exposed to lifecycle callbacks. This data is not sent to providers.
@@ -84,15 +79,5 @@ public class RerankRequest {
             return this;
         }
 
-        public RerankRequestBuilder providerOptions(
-            Map<String, Map<String, Object>> providerOptions) {
-            this.providerOptions = providerOptions;
-            return this;
-        }
-
-        public RerankRequestBuilder providerOptions(ProviderOptions.NamespaceOptions... options) {
-            this.providerOptions = ProviderOptions.of(options);
-            return this;
-        }
     }
 }

@@ -19,6 +19,11 @@ import run.halo.aifoundation.provider.support.rerank.StandardRerankingClient;
 @Component
 public class ErnieProvider extends AbstractAiProviderType {
 
+    @Override
+    protected String defaultReasoningMappingTemplate() {
+        return "reasoning.enable-thinking";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://qianfan.baidubce.com/v2";
     private static final String CHAT_PATH = "/chat/completions";
     private static final String EMBEDDING_PATH = "/embeddings";

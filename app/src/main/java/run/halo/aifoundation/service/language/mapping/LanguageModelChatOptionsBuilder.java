@@ -36,7 +36,6 @@ public final class LanguageModelChatOptionsBuilder {
 
     public void assertRequestSupported(GenerateTextRequest request, boolean supportsToolCalling,
         String toolCallingUnsupportedMessage) {
-        providerOptions.reasoningControlOptions().validate(providerType, request);
         if (hasTools(request) && !supportsToolCalling) {
             throw new IllegalArgumentException(toolCallingUnsupportedMessage);
         }
@@ -55,6 +54,7 @@ public final class LanguageModelChatOptionsBuilder {
     }
 
     public ChatOptions build(GenerateTextRequest request) {
+        providerOptions.reasoningControlOptions().validate(providerType, request);
         if (request.getSeed() != null && !canMapSeed(request)) {
             throw new IllegalArgumentException("seed is not supported by provider type: "
                 + providerType);

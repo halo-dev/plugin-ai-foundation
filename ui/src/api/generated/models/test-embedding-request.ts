@@ -50,11 +50,5 @@ export interface TestEmbeddingRequest {
      * @memberof TestEmbeddingRequest
      */
     'maxRetries'?: number;
-    /**
-     * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
-     * @memberof TestEmbeddingRequest
-     */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
 }
 

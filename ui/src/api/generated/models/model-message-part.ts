@@ -58,7 +58,7 @@ export interface ModelMessagePart {
      * @type {{ [key: string]: object; }}
      * @memberof ModelMessagePart
      */
-    'providerOptions'?: { [key: string]: object; };
+    'providerMetadata'?: { [key: string]: object; };
     /**
      * 
      * @type {string}

@@ -16,7 +16,7 @@ import run.halo.aifoundation.tool.ToolDefinition;
  * Lifecycle event emitted immediately before a provider generation step starts.
  *
  * <p>The event exposes the effective messages, tools, tool choice, stop condition, timeouts, and
- * provider options for that step. It is intended for observability and debugging, not mutation.
+ * typed settings for that step. It is intended for observability and debugging, not mutation.
  */
 @Value
 @Builder
@@ -49,10 +49,6 @@ public class GenerationStepStartEvent {
      * Effective stop condition for the generation loop.
      */
     StopCondition stopWhen;
-    /**
-     * Provider-specific options grouped by provider namespace.
-     */
-    Map<String, Map<String, Object>> providerOptions;
     /**
      * Effective timeout settings.
      */

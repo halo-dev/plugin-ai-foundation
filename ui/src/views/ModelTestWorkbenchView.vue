@@ -19,7 +19,6 @@ import {
   buildReasoningOptions,
   createAssistantUIMessage,
   createUserUIMessage,
-  parseProviderOptionsJson,
   testRagUiMessageStreamUrl,
   testUiMessageChatStreamUrl,
   workbenchDataPartSchemas,
@@ -90,6 +89,15 @@ const chatFiles = shallowRef<HaloFilePart[]>([])
 const systemPrompt = shallowRef('')
 const temperature = shallowRef(0.7)
 const topP = shallowRef(1)
+const topK = shallowRef<number | undefined>()
+const minP = shallowRef<number | undefined>()
+const presencePenalty = shallowRef<number | undefined>()
+const frequencyPenalty = shallowRef<number | undefined>()
+const repetitionPenalty = shallowRef<number | undefined>()
+const stopSequencesText = shallowRef('')
+const logprobs = shallowRef<boolean | undefined>()
+const topLogprobs = shallowRef<number | undefined>()
+const parallelToolCalls = shallowRef<boolean | undefined>()
 const maxTokens = shallowRef(1024)
 const seed = shallowRef<number | undefined>()
 const maxRetries = shallowRef<number | undefined>(2)
@@ -115,8 +123,6 @@ const outputSchemaText = shallowRef(`{
 }`)
 const outputChoicesText = shallowRef('yes\nno')
 const outputError = shallowRef('')
-const providerOptionsText = shallowRef('{}')
-const providerOptionsError = shallowRef('')
 const chatHeadersText = shallowRef('{}')
 const chatHeadersError = shallowRef('')
 const isStreaming = shallowRef(false)
@@ -129,8 +135,6 @@ const embeddingDimensions = shallowRef<number | undefined>()
 const embeddingMaxBatchSize = shallowRef<number | undefined>(1)
 const embeddingMaxParallelCalls = shallowRef<number | undefined>(2)
 const embeddingMaxRetries = shallowRef<number | undefined>(1)
-const embeddingProviderOptionsText = shallowRef('{}')
-const embeddingProviderOptionsError = shallowRef('')
 const embeddingResult = shallowRef<TestEmbeddingResponse | undefined>()
 const embeddingError = shallowRef('')
 const isEmbeddingTesting = shallowRef(false)
@@ -139,13 +143,13 @@ const rerankQuery = shallowRef('Halo AI Foundation 如何支持 RAG?')
 const rerankDocuments = shallowRef(
   'AI Foundation 提供统一的语言模型、嵌入和 UI Message 能力\nHalo 是一个开源建站工具\nRAG 通常需要检索、上下文注入和来源展示',
 )
-const rerankProviderOptionsText = shallowRef('{}')
-const rerankProviderOptionsError = shallowRef('')
+const rerankTopN = shallowRef<number | undefined>()
 const rerankResult = shallowRef<TestRerankResponse | undefined>()
 const rerankError = shallowRef('')
 const isRerankTesting = shallowRef(false)
 
 const imagePrompt = shallowRef('一张简洁清晰的 Halo 控制台界面截图风格插图，浅色背景，细节真实')
+const imageNegativePrompt = shallowRef('')
 const imageInputUrl = shallowRef('')
 const imageInputData = shallowRef('')
 const imageInputMediaType = shallowRef('image/png')
@@ -162,8 +166,6 @@ const imageResponseFormat = shallowRef<'DEFAULT' | TestImageGenerationRequestRes
 )
 const imageMaxRetries = shallowRef<number | undefined>(1)
 const imageMaxParallelCalls = shallowRef<number | undefined>(1)
-const imageProviderOptionsText = shallowRef('{}')
-const imageProviderOptionsError = shallowRef('')
 const imageHeadersText = shallowRef('{}')
 const imageHeadersError = shallowRef('')
 const imageResult = shallowRef<TestImageGenerationResponse | undefined>()
@@ -191,10 +193,6 @@ const ragSources = ref<TestRagSource[]>([
 ])
 const ragRerankModelName = shallowRef<string | undefined>()
 const ragTopN = shallowRef<number | undefined>(4)
-const ragProviderOptionsText = shallowRef('{}')
-const ragProviderOptionsError = shallowRef('')
-const ragRerankProviderOptionsText = shallowRef('{}')
-const ragRerankProviderOptionsError = shallowRef('')
 const ragMessages = ref<WorkbenchMessage[]>([])
 const ragError = shallowRef('')
 const isRagTesting = shallowRef(false)
@@ -418,12 +416,6 @@ async function sendMessage(content?: string) {
     return
   }
 
-  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
-  if (providerOptions.error) {
-    providerOptionsError.value = providerOptions.error
-    return
-  }
-  providerOptionsError.value = ''
   const headers = parseStringMapJson(chatHeadersText.value)
   if (headers.error) {
     chatHeadersError.value = headers.error
@@ -454,7 +446,7 @@ async function sendMessage(content?: string) {
   chatFiles.value = []
   shouldAutoScroll.value = true
 
-  const parameters = buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
+  const parameters = buildChatParameters(headers.value, outputSpec.value)
   await streamUiMessageChatResponse(model.name, parameters)
 }
 
@@ -583,12 +575,6 @@ async function handleRegenerate(messageIndex: number) {
   const model = selectedModel.value
   if (!model?.name) return
 
-  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
-  if (providerOptions.error) {
-    providerOptionsError.value = providerOptions.error
-    return
-  }
-  providerOptionsError.value = ''
   const headers = parseStringMapJson(chatHeadersText.value)
   if (headers.error) {
     chatHeadersError.value = headers.error
@@ -606,7 +592,7 @@ async function handleRegenerate(messageIndex: number) {
   }
   outputError.value = ''
 
-  const parameters = buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
+  const parameters = buildChatParameters(headers.value, outputSpec.value)
 
   const targetMessage = messages.value[messageIndex]
   const messageId = targetMessage?.uiMessage?.id
@@ -961,23 +947,25 @@ function uiMessageRequestBody(parameters: ReturnType<typeof buildChatParameters>
     system: parameters.systemPrompt?.trim() || undefined,
     temperature: parameters.temperature,
     topP: parameters.topP,
+    topK: parameters.topK,
+    minP: parameters.minP,
+    presencePenalty: parameters.presencePenalty,
+    frequencyPenalty: parameters.frequencyPenalty,
+    repetitionPenalty: parameters.repetitionPenalty,
+    stopSequences: parameters.stopSequences,
+    logprobs: parameters.logprobs,
+    topLogprobs: parameters.topLogprobs,
+    parallelToolCalls: parameters.parallelToolCalls,
     maxOutputTokens: parameters.maxOutputTokens,
     seed: parameters.seed,
     maxRetries: parameters.maxRetries,
     reasoning: parameters.reasoning,
-    providerOptions: parameters.providerOptions,
     headers: parameters.headers,
     output: parameters.output,
   }
 }
 
 function buildValidatedChatParameters(): ReturnType<typeof buildChatParameters> | undefined {
-  const providerOptions = parseProviderOptionsJson(providerOptionsText.value)
-  if (providerOptions.error) {
-    providerOptionsError.value = providerOptions.error
-    return undefined
-  }
-  providerOptionsError.value = ''
   const headers = parseStringMapJson(chatHeadersText.value)
   if (headers.error) {
     chatHeadersError.value = headers.error
@@ -994,7 +982,7 @@ function buildValidatedChatParameters(): ReturnType<typeof buildChatParameters> 
     return undefined
   }
   outputError.value = ''
-  return buildChatParameters(providerOptions.value, headers.value, outputSpec.value)
+  return buildChatParameters(headers.value, outputSpec.value)
 }
 
 function parseExternalToolResult(input: string): { value?: unknown; error?: string } {
@@ -1010,14 +998,26 @@ function parseExternalToolResult(input: string): { value?: unknown; error?: stri
 }
 
 function buildChatParameters(
-  providerOptions: Record<string, Record<string, unknown>> | undefined,
   headers: Record<string, string> | undefined,
   output: ReturnType<typeof buildOutputSpec>['value'],
 ) {
+  const stopSequences = stopSequencesText.value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
   return {
     systemPrompt: systemPrompt.value,
     temperature: numberOrUndefined(temperature.value),
     topP: numberOrUndefined(topP.value),
+    topK: numberOrUndefined(topK.value),
+    minP: numberOrUndefined(minP.value),
+    presencePenalty: numberOrUndefined(presencePenalty.value),
+    frequencyPenalty: numberOrUndefined(frequencyPenalty.value),
+    repetitionPenalty: numberOrUndefined(repetitionPenalty.value),
+    stopSequences: stopSequences.length ? stopSequences : undefined,
+    logprobs: logprobs.value,
+    topLogprobs: numberOrUndefined(topLogprobs.value),
+    parallelToolCalls: parallelToolCalls.value,
     maxOutputTokens: numberOrUndefined(maxTokens.value),
     seed: numberOrUndefined(seed.value),
     maxRetries: numberOrUndefined(maxRetries.value),
@@ -1025,7 +1025,6 @@ function buildChatParameters(
       mode: reasoningMode.value,
       effort: reasoningEffort.value,
     }),
-    providerOptions,
     headers,
     output,
   }
@@ -1283,12 +1282,6 @@ async function runImageGenerationTest() {
     imageError.value = mask.error
     return
   }
-  const providerOptions = parseProviderOptionsJson(imageProviderOptionsText.value)
-  if (providerOptions.error) {
-    imageProviderOptionsError.value = providerOptions.error
-    return
-  }
-  imageProviderOptionsError.value = ''
   const headers = parseStringMapJson(imageHeadersText.value)
   if (headers.error) {
     imageHeadersError.value = headers.error
@@ -1303,6 +1296,7 @@ async function runImageGenerationTest() {
       name: model.name,
       testImageGenerationRequest: {
         prompt: imagePrompt.value.trim(),
+        negativePrompt: imageNegativePrompt.value.trim() || undefined,
         images: image.value ? [image.value] : undefined,
         mask: mask.value,
         n: numberOrUndefined(imageN.value),
@@ -1314,9 +1308,6 @@ async function runImageGenerationTest() {
           imageResponseFormat.value === 'DEFAULT' ? undefined : imageResponseFormat.value,
         maxRetries: numberOrUndefined(imageMaxRetries.value),
         maxParallelCalls: numberOrUndefined(imageMaxParallelCalls.value),
-        providerOptions: providerOptions.value as
-          | { [key: string]: { [key: string]: object } }
-          | undefined,
         headers: headers.value,
       },
     })
@@ -1341,12 +1332,6 @@ async function runEmbeddingTest() {
     embeddingError.value = '请至少输入一行文本'
     return
   }
-  const providerOptions = parseProviderOptionsJson(embeddingProviderOptionsText.value)
-  if (providerOptions.error) {
-    embeddingProviderOptionsError.value = providerOptions.error
-    return
-  }
-  embeddingProviderOptionsError.value = ''
   embeddingError.value = ''
   embeddingResult.value = undefined
   isEmbeddingTesting.value = true
@@ -1359,9 +1344,6 @@ async function runEmbeddingTest() {
         maxBatchSize: numberOrUndefined(embeddingMaxBatchSize.value),
         maxParallelCalls: numberOrUndefined(embeddingMaxParallelCalls.value),
         maxRetries: numberOrUndefined(embeddingMaxRetries.value),
-        providerOptions: providerOptions.value as
-          | { [key: string]: { [key: string]: object } }
-          | undefined,
       },
     })
     embeddingResult.value = data
@@ -1389,12 +1371,6 @@ async function runRerankTest() {
     rerankError.value = '请至少输入一个候选文档'
     return
   }
-  const providerOptions = parseProviderOptionsJson(rerankProviderOptionsText.value)
-  if (providerOptions.error) {
-    rerankProviderOptionsError.value = providerOptions.error
-    return
-  }
-  rerankProviderOptionsError.value = ''
   rerankError.value = ''
   rerankResult.value = undefined
   isRerankTesting.value = true
@@ -1404,9 +1380,7 @@ async function runRerankTest() {
       testRerankRequest: {
         query: rerankQuery.value,
         documents,
-        providerOptions: providerOptions.value as
-          | { [key: string]: { [key: string]: object } }
-          | undefined,
+        topN: numberOrUndefined(rerankTopN.value),
       },
     })
     rerankResult.value = data
@@ -1439,18 +1413,6 @@ async function runRagTest() {
     ragError.value = '请至少填写一个来源内容'
     return
   }
-  const providerOptions = parseProviderOptionsJson(ragProviderOptionsText.value)
-  if (providerOptions.error) {
-    ragProviderOptionsError.value = providerOptions.error
-    return
-  }
-  ragProviderOptionsError.value = ''
-  const rerankProviderOptions = parseProviderOptionsJson(ragRerankProviderOptionsText.value)
-  if (rerankProviderOptions.error) {
-    ragRerankProviderOptionsError.value = rerankProviderOptions.error
-    return
-  }
-  ragRerankProviderOptionsError.value = ''
   ragError.value = ''
   ragMessages.value = [
     {
@@ -1472,6 +1434,18 @@ async function runRagTest() {
     topN: numberOrUndefined(ragTopN.value),
     temperature: numberOrUndefined(temperature.value),
     topP: numberOrUndefined(topP.value),
+    topK: numberOrUndefined(topK.value),
+    minP: numberOrUndefined(minP.value),
+    presencePenalty: numberOrUndefined(presencePenalty.value),
+    frequencyPenalty: numberOrUndefined(frequencyPenalty.value),
+    repetitionPenalty: numberOrUndefined(repetitionPenalty.value),
+    stopSequences: stopSequencesText.value
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean),
+    logprobs: logprobs.value,
+    topLogprobs: numberOrUndefined(topLogprobs.value),
+    parallelToolCalls: parallelToolCalls.value,
     maxOutputTokens: numberOrUndefined(maxTokens.value),
     seed: numberOrUndefined(seed.value),
     maxRetries: numberOrUndefined(maxRetries.value),
@@ -1479,10 +1453,6 @@ async function runRagTest() {
       mode: reasoningMode.value,
       effort: reasoningEffort.value,
     }),
-    providerOptions: providerOptions.value as { [key: string]: { [key: string]: object } } | undefined,
-    rerankProviderOptions: rerankProviderOptions.value as
-      | { [key: string]: { [key: string]: object } }
-      | undefined,
     ragOptions: {
       emptyContextPolicy: 'CONTINUE_WITHOUT_CONTEXT',
       rerankFailurePolicy: 'USE_RETRIEVED_ORDER',
@@ -1671,15 +1641,14 @@ onBeforeUnmount(() => {
           <RerankTestPanel
             :query="rerankQuery"
             :documents="rerankDocuments"
-            :provider-options-text="rerankProviderOptionsText"
-            :provider-options-error="rerankProviderOptionsError"
+            :top-n="rerankTopN"
             :result="rerankResult"
             :error="rerankError"
             :is-loading="isRerankTesting"
             :disabled="!selectedModel"
             @update:query="rerankQuery = $event"
             @update:documents="rerankDocuments = $event"
-            @update:provider-options-text="rerankProviderOptionsText = $event"
+            @update:top-n="rerankTopN = $event"
             @run="runRerankTest"
           />
         </template>
@@ -1687,6 +1656,7 @@ onBeforeUnmount(() => {
         <template v-else-if="testMode === 'image'">
           <ImageGenerationTestPanel
             :prompt="imagePrompt"
+            :negative-prompt="imageNegativePrompt"
             :input-url="imageInputUrl"
             :input-data="imageInputData"
             :input-media-type="imageInputMediaType"
@@ -1698,6 +1668,7 @@ onBeforeUnmount(() => {
             :is-loading="isImageTesting"
             :disabled="!selectedModel"
             @update:prompt="imagePrompt = $event"
+            @update:negative-prompt="imageNegativePrompt = $event"
             @update:input-url="imageInputUrl = $event"
             @update:input-data="imageInputData = $event"
             @update:input-media-type="imageInputMediaType = $event"
@@ -1715,10 +1686,6 @@ onBeforeUnmount(() => {
             :rerank-model-name="ragRerankModelName"
             :rerank-models="rerankModels"
             :top-n="ragTopN"
-            :provider-options-text="ragProviderOptionsText"
-            :provider-options-error="ragProviderOptionsError"
-            :rerank-provider-options-text="ragRerankProviderOptionsText"
-            :rerank-provider-options-error="ragRerankProviderOptionsError"
             :messages="ragMessages"
             :error="ragError"
             :is-loading="isRagTesting"
@@ -1727,8 +1694,6 @@ onBeforeUnmount(() => {
             @update:sources="ragSources = $event"
             @update:rerank-model-name="ragRerankModelName = $event"
             @update:top-n="ragTopN = $event"
-            @update:provider-options-text="ragProviderOptionsText = $event"
-            @update:rerank-provider-options-text="ragRerankProviderOptionsText = $event"
             @run="runRagTest"
             @clear="clearRagMessages"
           />
@@ -1740,6 +1705,15 @@ onBeforeUnmount(() => {
         :system-prompt="systemPrompt"
         :temperature="temperature"
         :top-p="topP"
+        :top-k="topK"
+        :min-p="minP"
+        :presence-penalty="presencePenalty"
+        :frequency-penalty="frequencyPenalty"
+        :repetition-penalty="repetitionPenalty"
+        :stop-sequences-text="stopSequencesText"
+        :logprobs="logprobs"
+        :top-logprobs="topLogprobs"
+        :parallel-tool-calls="parallelToolCalls"
         :max-tokens="maxTokens"
         :seed="seed"
         :max-retries="maxRetries"
@@ -1753,8 +1727,6 @@ onBeforeUnmount(() => {
         :output-mode="outputMode"
         :output-schema-text="outputSchemaText"
         :output-choices-text="outputChoicesText"
-        :provider-options-text="providerOptionsText"
-        :provider-options-error="providerOptionsError"
         :chat-headers-text="chatHeadersText"
         :chat-headers-error="chatHeadersError"
         :output-error="outputError"
@@ -1762,8 +1734,6 @@ onBeforeUnmount(() => {
         :embedding-max-batch-size="embeddingMaxBatchSize"
         :embedding-max-parallel-calls="embeddingMaxParallelCalls"
         :embedding-max-retries="embeddingMaxRetries"
-        :embedding-provider-options-text="embeddingProviderOptionsText"
-        :embedding-provider-options-error="embeddingProviderOptionsError"
         :image-n="imageN"
         :image-width="imageWidth"
         :image-height="imageHeight"
@@ -1772,13 +1742,20 @@ onBeforeUnmount(() => {
         :image-response-format="imageResponseFormat"
         :image-max-retries="imageMaxRetries"
         :image-max-parallel-calls="imageMaxParallelCalls"
-        :image-provider-options-text="imageProviderOptionsText"
-        :image-provider-options-error="imageProviderOptionsError"
         :image-headers-text="imageHeadersText"
         :image-headers-error="imageHeadersError"
         @update:system-prompt="systemPrompt = $event"
         @update:temperature="temperature = $event"
         @update:top-p="topP = $event"
+        @update:top-k="topK = $event"
+        @update:min-p="minP = $event"
+        @update:presence-penalty="presencePenalty = $event"
+        @update:frequency-penalty="frequencyPenalty = $event"
+        @update:repetition-penalty="repetitionPenalty = $event"
+        @update:stop-sequences-text="stopSequencesText = $event"
+        @update:logprobs="logprobs = $event"
+        @update:top-logprobs="topLogprobs = $event"
+        @update:parallel-tool-calls="parallelToolCalls = $event"
         @update:max-tokens="maxTokens = $event"
         @update:seed="seed = $event"
         @update:max-retries="maxRetries = $event"
@@ -1792,13 +1769,11 @@ onBeforeUnmount(() => {
         @update:output-mode="outputMode = $event"
         @update:output-schema-text="outputSchemaText = $event"
         @update:output-choices-text="outputChoicesText = $event"
-        @update:provider-options-text="providerOptionsText = $event"
         @update:chat-headers-text="chatHeadersText = $event"
         @update:embedding-dimensions="embeddingDimensions = $event"
         @update:embedding-max-batch-size="embeddingMaxBatchSize = $event"
         @update:embedding-max-parallel-calls="embeddingMaxParallelCalls = $event"
         @update:embedding-max-retries="embeddingMaxRetries = $event"
-        @update:embedding-provider-options-text="embeddingProviderOptionsText = $event"
         @update:image-n="imageN = $event"
         @update:image-width="imageWidth = $event"
         @update:image-height="imageHeight = $event"
@@ -1807,7 +1782,6 @@ onBeforeUnmount(() => {
         @update:image-response-format="imageResponseFormat = $event"
         @update:image-max-retries="imageMaxRetries = $event"
         @update:image-max-parallel-calls="imageMaxParallelCalls = $event"
-        @update:image-provider-options-text="imageProviderOptionsText = $event"
         @update:image-headers-text="imageHeadersText = $event"
       />
     </div>

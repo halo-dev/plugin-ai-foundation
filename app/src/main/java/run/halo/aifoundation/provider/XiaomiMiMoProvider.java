@@ -13,6 +13,11 @@ import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 @Component
 public class XiaomiMiMoProvider extends AbstractAiProviderType {
 
+    @Override
+    protected String defaultReasoningMappingTemplate() {
+        return "reasoning.thinking-type";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://api.xiaomimimo.com/v1";
     private static final String COMPLETIONS_PATH = "/chat/completions";
     private static final String EMBEDDINGS_PATH = "/embeddings";

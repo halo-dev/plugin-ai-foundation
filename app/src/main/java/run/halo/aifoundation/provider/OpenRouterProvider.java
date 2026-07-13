@@ -32,6 +32,11 @@ import run.halo.aifoundation.provider.support.rerank.StandardRerankingClient;
 @Component
 public class OpenRouterProvider extends AbstractAiProviderType {
 
+    @Override
+    protected String defaultReasoningMappingTemplate() {
+        return "reasoning.openrouter";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
     private static final String COMPLETIONS_PATH = "/chat/completions";
     private static final String EMBEDDINGS_PATH = "/embeddings";

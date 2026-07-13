@@ -14,6 +14,7 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
 
@@ -25,7 +26,8 @@ class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
 
-        var model = factory.create(chatModel, "openai", LanguageModelProviderOptions.defaults());
+        var model = factory.create(chatModel, configuration("openai",
+            LanguageModelProviderOptions.defaults()));
 
         StepVerifier.create(model.generateText("Hello"))
             .assertNext(result -> assertThat(result.getRequest().getMetadata())
@@ -37,7 +39,8 @@ class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
     void create_appliesProviderOptionsAtCompositionBoundary() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
-        var model = factory.create(chatModel, "deepseek", reasoningHistoryProviderOptions());
+        var model = factory.create(chatModel, configuration("deepseek",
+            reasoningHistoryProviderOptions()));
 
         var request = GenerateTextRequest.builder()
             .messages(List.of(ModelMessage.assistant(List.of(
@@ -48,5 +51,11 @@ class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
             .verifyComplete();
+    }
+
+    private LanguageModelRuntimeConfiguration configuration(String providerType,
+        LanguageModelProviderOptions providerOptions) {
+        return new LanguageModelRuntimeConfiguration(
+            ModelRuntimeContext.unresolved(providerType), providerOptions, null);
     }
 }

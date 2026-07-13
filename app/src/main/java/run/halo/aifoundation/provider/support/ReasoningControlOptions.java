@@ -70,7 +70,6 @@ public record ReasoningControlOptions(
         if (!isExplicit(reasoning)) {
             return;
         }
-        rejectRawConflicts(providerType, request);
         if (reasoning.getMode() == ReasoningOptions.Mode.ENABLED && !enabledSupported
             && reasoning.getEffort() == null) {
             throw unsupported(providerType, "enabled reasoning");
@@ -98,29 +97,6 @@ public record ReasoningControlOptions(
         if (chatOptionsApplier != null) {
             chatOptionsApplier.apply(builder, request);
         }
-    }
-
-    private void rejectRawConflicts(String providerType, GenerateTextRequest request) {
-        if (providerOptionConflictKeys.isEmpty()
-            || request.getProviderOptions() == null
-            || request.getProviderOptions().isEmpty()) {
-            return;
-        }
-        var options = request.getProviderOptions().get(providerType);
-        if (options == null || options.isEmpty()) {
-            return;
-        }
-        for (var key : providerOptionConflictKeys) {
-            if (containsKey(options, key)) {
-                throw new IllegalArgumentException(
-                    "reasoning setting conflicts with providerOptions." + providerType + "."
-                        + key + "; use either typed reasoning or raw provider options, not both");
-            }
-        }
-    }
-
-    private boolean containsKey(Map<String, Object> options, String key) {
-        return options.keySet().stream().anyMatch(candidate -> candidate.equalsIgnoreCase(key));
     }
 
     private boolean hasAssistantReasoningHistory(GenerateTextRequest request) {

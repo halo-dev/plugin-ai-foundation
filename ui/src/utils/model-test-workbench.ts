@@ -178,11 +178,19 @@ export interface ChatParameters {
   systemPrompt?: string
   temperature?: number
   topP?: number
+  topK?: number
+  minP?: number
+  presencePenalty?: number
+  frequencyPenalty?: number
+  repetitionPenalty?: number
+  stopSequences?: string[]
+  logprobs?: boolean
+  topLogprobs?: number
+  parallelToolCalls?: boolean
   maxOutputTokens?: number
   seed?: number
   maxRetries?: number
   reasoning?: ReasoningOptions
-  providerOptions?: Record<string, Record<string, unknown>>
   headers?: Record<string, string>
   output?: OutputSpec
 }
@@ -349,31 +357,6 @@ export function filterEnabledChatModels(models: AiModel[] | undefined) {
   return (models || []).filter(isEnabledChatModel)
 }
 
-export function parseProviderOptionsJson(input: string): {
-  value?: Record<string, Record<string, unknown>>
-  error?: string
-} {
-  const content = input.trim()
-  if (!content) {
-    return {}
-  }
-
-  try {
-    const parsed = JSON.parse(content)
-    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-      return { error: 'Provider Options 必须是 JSON 对象' }
-    }
-    for (const value of Object.values(parsed as Record<string, unknown>)) {
-      if (!value || Array.isArray(value) || typeof value !== 'object') {
-        return { error: 'Provider Options 必须按服务商命名空间分组' }
-      }
-    }
-    return { value: parsed as Record<string, Record<string, unknown>> }
-  } catch {
-    return { error: 'Provider Options 不是有效的 JSON' }
-  }
-}
-
 export function parseJsonSchema(
   input: string,
   label = 'JSON Schema',
@@ -468,11 +451,19 @@ export function buildTestUiMessageChatRequest(
     system: normalizedSystemPrompt(parameters),
     temperature: parameters.temperature,
     topP: parameters.topP,
+    topK: parameters.topK,
+    minP: parameters.minP,
+    presencePenalty: parameters.presencePenalty,
+    frequencyPenalty: parameters.frequencyPenalty,
+    repetitionPenalty: parameters.repetitionPenalty,
+    stopSequences: parameters.stopSequences,
+    logprobs: parameters.logprobs,
+    topLogprobs: parameters.topLogprobs,
+    parallelToolCalls: parameters.parallelToolCalls,
     maxOutputTokens: parameters.maxOutputTokens,
     seed: parameters.seed,
     maxRetries: parameters.maxRetries,
     reasoning: parameters.reasoning,
-    providerOptions: parameters.providerOptions as TestUiMessageChatRequest['providerOptions'],
     headers: parameters.headers,
     output: parameters.output,
   }

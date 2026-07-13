@@ -13,6 +13,12 @@
  */
 
 
+// May contain unused imports in some cases
+// @ts-ignore
+import type { DefaultParameterMappingInfo } from './default-parameter-mapping-info';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ParameterMappingTemplateInfo } from './parameter-mapping-template-info';
 
 /**
  * 
@@ -21,103 +27,115 @@
  */
 export interface ProviderTypeInfo {
     /**
-     *
+     * 
      * @type {boolean}
      * @memberof ProviderTypeInfo
      */
     'builtIn'?: boolean;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'chatEndpointPath'?: string;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'completionsPath'?: string;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'defaultBaseUrl'?: string;
     /**
-     *
+     * 
+     * @type {{ [key: string]: DefaultParameterMappingInfo; }}
+     * @memberof ProviderTypeInfo
+     */
+    'defaultParameterMappings'?: { [key: string]: DefaultParameterMappingInfo; };
+    /**
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'description'?: string;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'displayName'?: string;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'documentationUrl'?: string;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'embeddingEndpointPath'?: string;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'iconUrl'?: string;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'imageEndpointPath'?: string;
     /**
-     *
+     * 
+     * @type {Array<ParameterMappingTemplateInfo>}
+     * @memberof ProviderTypeInfo
+     */
+    'parameterMappingTemplates'?: Array<ParameterMappingTemplateInfo>;
+    /**
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'providerType'?: string;
     /**
-     *
+     * 
      * @type {boolean}
      * @memberof ProviderTypeInfo
      */
     'requiresBaseUrl'?: boolean;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */
     'rerankEndpointPath'?: string;
     /**
-     *
+     * 
      * @type {Array<string>}
      * @memberof ProviderTypeInfo
      */
     'supportedAdapterTypes'?: Array<ProviderTypeInfoSupportedAdapterTypesEnum>;
     /**
-     *
+     * 
      * @type {Array<string>}
      * @memberof ProviderTypeInfo
      */
     'supportedFeatures'?: Array<ProviderTypeInfoSupportedFeaturesEnum>;
     /**
-     *
+     * 
      * @type {Array<string>}
      * @memberof ProviderTypeInfo
      */
     'supportedModelTypes'?: Array<ProviderTypeInfoSupportedModelTypesEnum>;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ProviderTypeInfo
      */

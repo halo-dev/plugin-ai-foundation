@@ -9,13 +9,12 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.control.CancellationToken;
-import run.halo.aifoundation.options.ProviderOptions;
 
 /**
  * Advanced request object for embedding one or more text values.
  *
  * <p>For the common case, prefer {@link EmbeddingModel#embedQuery(String)}. Use this request when
- * you need batching controls, dimensions, provider options, request headers, lifecycle callbacks,
+ * you need batching controls, dimensions, request headers, lifecycle callbacks,
  * timeout control, or cancellation:
  *
  * <pre>{@code
@@ -23,11 +22,6 @@ import run.halo.aifoundation.options.ProviderOptions;
  *     .inputs(List.of("Halo CMS", "AI Foundation"))
  *     .dimensions(512)
  *     .maxBatchSize(16)
- *     .providerOptions(ProviderOptions.of(
- *         ProviderOptions.namespace("openai")
- *             .option("encodingFormat", "float")
- *             .build()
- *     ))
  *     .build();
  * }</pre>
  */
@@ -53,20 +47,6 @@ public class EmbeddingRequest {
      */
     private Integer maxBatchSize;
 
-    /**
-     * Provider-specific embedding settings grouped by provider namespace, using the same provider namespace grouping as text generation
-     * `providerOptions` shape.
-     *
-     * <pre>{@code
-     * EmbeddingRequest request = EmbeddingRequest.builder()
-     *     .inputs(List.of("Halo AI Foundation"))
-     *     .providerOptions(Map.of(
-     *         "openai", Map.of("dimensions", 512)
-     *     ))
-     *     .build();
-     * }</pre>
-     */
-    private Map<String, Map<String, Object>> providerOptions;
 
     /**
      * Request-scoped HTTP headers sent to providers when the selected provider adapter supports
@@ -124,16 +104,4 @@ public class EmbeddingRequest {
         return timeouts;
     }
 
-    public static class EmbeddingRequestBuilder {
-        public EmbeddingRequestBuilder providerOptions(
-            Map<String, Map<String, Object>> providerOptions) {
-            this.providerOptions = providerOptions;
-            return this;
-        }
-
-        public EmbeddingRequestBuilder providerOptions(ProviderOptions.NamespaceOptions... options) {
-            this.providerOptions = ProviderOptions.of(options);
-            return this;
-        }
-    }
 }

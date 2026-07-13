@@ -6,7 +6,7 @@ import java.util.function.BiConsumer;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 
 /**
- * Merges raw provider options with typed adapter-owned extra body values.
+ * Applies adapter-owned extra body values.
  */
 public final class OpenAiExtraBodyOptions {
 
@@ -16,12 +16,6 @@ public final class OpenAiExtraBodyOptions {
     public static void apply(OpenAiCompatibleChatOptions.Builder builder, GenerateTextRequest request,
         String providerType, BiConsumer<Map<String, Object>, GenerateTextRequest> customizer) {
         var extraBody = new LinkedHashMap<String, Object>();
-        var options = request.getProviderOptions() != null
-            ? request.getProviderOptions().get(providerType)
-            : null;
-        if (options != null && !options.isEmpty()) {
-            extraBody.putAll(options);
-        }
         if (customizer != null) {
             customizer.accept(extraBody, request);
         }

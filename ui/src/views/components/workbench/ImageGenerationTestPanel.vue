@@ -8,6 +8,7 @@ import RiSendPlaneLine from '~icons/ri/send-plane-line'
 
 const props = defineProps<{
   prompt: string
+  negativePrompt: string
   inputUrl: string
   inputData: string
   inputMediaType: string
@@ -22,6 +23,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:prompt', value: string): void
+  (e: 'update:negativePrompt', value: string): void
   (e: 'update:inputUrl', value: string): void
   (e: 'update:inputData', value: string): void
   (e: 'update:inputMediaType', value: string): void
@@ -101,6 +103,15 @@ async function handleFileChange(e: Event, target: 'input' | 'mask') {
             class=":uno: mt-2 w-full resize-none text-sm text-slate-900 leading-relaxed outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
             :disabled="disabled || isLoading"
             @input="$emit('update:prompt', ($event.target as HTMLTextAreaElement).value)"
+          />
+          <label class=":uno: mt-3 block text-xs text-slate-600 font-medium">反向提示词</label>
+          <textarea
+            :value="negativePrompt"
+            rows="3"
+            placeholder="可选：描述不希望出现在图片中的内容..."
+            class=":uno: mt-2 w-full resize-none text-sm text-slate-900 leading-relaxed outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+            :disabled="disabled || isLoading"
+            @input="$emit('update:negativePrompt', ($event.target as HTMLTextAreaElement).value)"
           />
           <div class=":uno: mt-3 flex justify-end">
             <VButton

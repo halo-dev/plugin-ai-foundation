@@ -49,6 +49,12 @@ export interface TestObjectStreamRequest {
     'input'?: string;
     /**
      * 
+     * @type {boolean}
+     * @memberof TestObjectStreamRequest
+     */
+    'logprobs'?: boolean;
+    /**
+     * 
      * @type {number}
      * @memberof TestObjectStreamRequest
      */
@@ -67,10 +73,22 @@ export interface TestObjectStreamRequest {
     'metadata'?: { [key: string]: object; };
     /**
      * 
+     * @type {number}
+     * @memberof TestObjectStreamRequest
+     */
+    'minP'?: number;
+    /**
+     * 
      * @type {{ [key: string]: object; }}
      * @memberof TestObjectStreamRequest
      */
     'output'?: { [key: string]: object; };
+    /**
+     * 
+     * @type {boolean}
+     * @memberof TestObjectStreamRequest
+     */
+    'parallelToolCalls'?: boolean;
     /**
      * 
      * @type {number}
@@ -85,16 +103,16 @@ export interface TestObjectStreamRequest {
     'prompt'?: string;
     /**
      * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
-     * @memberof TestObjectStreamRequest
-     */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
-    /**
-     * 
      * @type {ReasoningOptions}
      * @memberof TestObjectStreamRequest
      */
     'reasoning'?: ReasoningOptions;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestObjectStreamRequest
+     */
+    'repetitionPenalty'?: number;
     /**
      * 
      * @type {{ [key: string]: object; }}
@@ -131,6 +149,12 @@ export interface TestObjectStreamRequest {
      * @memberof TestObjectStreamRequest
      */
     'topK'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestObjectStreamRequest
+     */
+    'topLogprobs'?: number;
     /**
      * 
      * @type {number}

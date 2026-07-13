@@ -60,7 +60,7 @@ public class DashScopeImageGenerationClient extends AbstractJsonImageGenerationC
         putIfNotNull(parameters, "n", request.getN());
         putIfHasText(parameters, "size", dashScopeSize(request.getSize()));
         putIfNotNull(parameters, "seed", request.getSeed());
-        parameters.putAll(providerOptions(request));
+        putIfHasText(parameters, "negative_prompt", request.getNegativePrompt());
         if (!parameters.isEmpty()) {
             body.put("parameters", parameters);
         }

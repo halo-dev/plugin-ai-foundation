@@ -9,7 +9,6 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.tool.ToolDefinition;
@@ -48,13 +47,13 @@ class ProviderNativeToolStrictTest {
     }
 
     @Test
-    void deepSeekDedicatedProviderAppliesNativeStrictToolSchema() {
-        var options = (DeepSeekChatOptions) new DeepSeekProvider().languageModelProviderOptions()
+    void deepSeekUsesOpenAiCompatibleToolCallbackContract() {
+        var options = (OpenAiCompatibleChatOptions) new DeepSeekProvider()
+            .languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(strictRequest(), List.of(), Set.of());
 
-        assertThat(options.getTools()).singleElement()
-            .satisfies(tool -> assertThat(tool.getFunction().getStrict()).isTrue());
+        assertThat(options.getToolCallbacks()).isEmpty();
     }
 
     static Stream<AiProviderType> nativeStrictProviders() {

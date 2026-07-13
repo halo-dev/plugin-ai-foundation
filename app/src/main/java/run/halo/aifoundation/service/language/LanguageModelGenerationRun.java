@@ -78,7 +78,6 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
             .tools(nullSafe(stepRequest != null ? stepRequest.getTools() : null))
             .toolChoice(stepRequest != null ? stepRequest.getToolChoice() : null)
             .stopWhen(stopWhen)
-            .providerOptions(stepRequest != null ? stepRequest.getProviderOptions() : null)
             .timeouts(stepRequest != null ? stepRequest.getTimeouts() : null)
             .metadata(metadata(stepRequest))
             .context(context(stepRequest))

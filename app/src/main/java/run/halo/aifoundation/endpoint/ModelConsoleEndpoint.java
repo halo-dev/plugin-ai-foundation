@@ -481,7 +481,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .maxBatchSize(body.getMaxBatchSize())
                         .maxParallelCalls(body.getMaxParallelCalls())
                         .maxRetries(body.getMaxRetries())
-                        .providerOptions(body.getProviderOptions())
                         .metadata(Map.of("source", "console-test"))
                         .build())
                     .map(TestEmbeddingResponse::from)))
@@ -498,7 +497,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .query(body.getQuery())
                         .documents(toRerankDocuments(body.getDocuments()))
                         .topN(body.getTopN())
-                        .providerOptions(body.getProviderOptions())
                         .metadata(Map.of("source", "console-test"))
                         .build())
                     .map(TestRerankResponse::from)))
@@ -554,13 +552,17 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .temperature(body.getTemperature())
             .topP(body.getTopP())
             .topK(body.getTopK())
+            .minP(body.getMinP())
             .presencePenalty(body.getPresencePenalty())
             .frequencyPenalty(body.getFrequencyPenalty())
+            .repetitionPenalty(body.getRepetitionPenalty())
+            .logprobs(body.getLogprobs())
+            .topLogprobs(body.getTopLogprobs())
+            .parallelToolCalls(body.getParallelToolCalls())
             .stopSequences(body.getStopSequences())
             .maxOutputTokens(body.getMaxOutputTokens())
             .seed(body.getSeed())
             .maxRetries(body.getMaxRetries())
-            .providerOptions(body.getProviderOptions())
             .reasoning(body.getReasoning())
             .headers(body.getHeaders())
             .metadata(Map.of("source", "console-rag-test"))
@@ -596,8 +598,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             return Mono.just(Optional.empty());
         }
         return aiModelService.rerankingModel(body.getRerankModelName())
-            .map(model -> new ConsoleRagSourceReranker(model, body.getTopN(),
-                body.getRerankProviderOptions(), diagnostics))
+            .map(model -> new ConsoleRagSourceReranker(model, body.getTopN(), diagnostics))
             .map(Optional::<RagSourceReranker>of);
     }
 
@@ -740,13 +741,17 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .temperature(request.getTemperature())
             .topP(request.getTopP())
             .topK(request.getTopK())
+            .minP(request.getMinP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .repetitionPenalty(request.getRepetitionPenalty())
+            .logprobs(request.getLogprobs())
+            .topLogprobs(request.getTopLogprobs())
+            .parallelToolCalls(request.getParallelToolCalls())
             .stopSequences(request.getStopSequences())
             .maxOutputTokens(request.getMaxOutputTokens())
             .seed(request.getSeed())
             .maxRetries(request.getMaxRetries())
-            .providerOptions(request.getProviderOptions())
             .reasoning(request.getReasoning())
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
@@ -759,13 +764,17 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .temperature(generation.getTemperature())
             .topP(generation.getTopP())
             .topK(generation.getTopK())
+            .minP(generation.getMinP())
             .presencePenalty(generation.getPresencePenalty())
             .frequencyPenalty(generation.getFrequencyPenalty())
+            .repetitionPenalty(generation.getRepetitionPenalty())
+            .logprobs(generation.getLogprobs())
+            .topLogprobs(generation.getTopLogprobs())
+            .parallelToolCalls(generation.getParallelToolCalls())
             .stopSequences(generation.getStopSequences())
             .maxOutputTokens(generation.getMaxOutputTokens())
             .seed(generation.getSeed())
             .maxRetries(generation.getMaxRetries())
-            .providerOptions(generation.getProviderOptions())
             .reasoning(generation.getReasoning())
             .headers(generation.getHeaders())
             .metadata(generation.getMetadata())
@@ -1156,13 +1165,17 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .temperature(request.getTemperature())
             .topP(request.getTopP())
             .topK(request.getTopK())
+            .minP(request.getMinP())
             .presencePenalty(request.getPresencePenalty())
             .frequencyPenalty(request.getFrequencyPenalty())
+            .repetitionPenalty(request.getRepetitionPenalty())
+            .logprobs(request.getLogprobs())
+            .topLogprobs(request.getTopLogprobs())
+            .parallelToolCalls(request.getParallelToolCalls())
             .stopSequences(request.getStopSequences())
             .maxOutputTokens(request.getMaxOutputTokens())
             .seed(request.getSeed())
             .maxRetries(request.getMaxRetries())
-            .providerOptions(request.getProviderOptions())
             .reasoning(request.getReasoning())
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
@@ -1183,9 +1196,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .mask(toDataContent(request.getMask()))
             .n(request.getN())
             .aspectRatio(request.getAspectRatio())
+            .negativePrompt(request.getNegativePrompt())
             .seed(request.getSeed())
             .responseFormat(request.getResponseFormat())
-            .providerOptions(request.getProviderOptions())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())
@@ -1264,7 +1277,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .description(stringValue(output.get("description")))
             .schema(objectMapValue(output.get("schema")))
             .strict(booleanValue(output.get("strict")))
-            .providerOptions(providerOptionsValue(output.get("providerOptions")))
             .build();
     }
 
@@ -1290,18 +1302,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             return (Map<String, Object>) map;
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "schema must be an object");
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Map<String, Object>> providerOptionsValue(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Map<?, ?> map) {
-            return (Map<String, Map<String, Object>>) map;
-        }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-            "providerOptions must be an object");
     }
 
     private static Boolean booleanValue(Object value) {
@@ -1465,7 +1465,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Integer maxBatchSize;
         private Integer maxParallelCalls;
         private Integer maxRetries;
-        private Map<String, Map<String, Object>> providerOptions;
     }
 
     @Data
@@ -1476,7 +1475,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private String query;
         private List<String> documents;
         private Integer topN;
-        private Map<String, Map<String, Object>> providerOptions;
     }
 
     @Data
@@ -1492,11 +1490,11 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Integer width;
         private Integer height;
         private String aspectRatio;
+        private String negativePrompt;
         private Integer seed;
         private ImageResponseFormat responseFormat;
         private Integer maxRetries;
         private Integer maxParallelCalls;
-        private Map<String, Map<String, Object>> providerOptions;
         private Map<String, String> headers;
     }
 
@@ -1524,14 +1522,17 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Double temperature;
         private Double topP;
         private Integer topK;
+        private Double minP;
         private Double presencePenalty;
         private Double frequencyPenalty;
+        private Double repetitionPenalty;
+        private Boolean logprobs;
+        private Integer topLogprobs;
+        private Boolean parallelToolCalls;
         private List<String> stopSequences;
         private Integer maxOutputTokens;
         private Integer seed;
         private Integer maxRetries;
-        private Map<String, Map<String, Object>> providerOptions;
-        private Map<String, Map<String, Object>> rerankProviderOptions;
         private run.halo.aifoundation.chat.ReasoningOptions reasoning;
         private Map<String, String> headers;
         private Map<String, Object> context;
@@ -1580,12 +1581,16 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Double temperature;
         private Double topP;
         private Integer topK;
+        private Double minP;
         private Double presencePenalty;
         private Double frequencyPenalty;
+        private Double repetitionPenalty;
+        private Boolean logprobs;
+        private Integer topLogprobs;
+        private Boolean parallelToolCalls;
         private List<String> stopSequences;
         private Integer seed;
         private Integer maxRetries;
-        private Map<String, Map<String, Object>> providerOptions;
         private run.halo.aifoundation.chat.ReasoningOptions reasoning;
         private Map<String, String> headers;
         private Map<String, Object> metadata;
@@ -1615,12 +1620,16 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Double temperature;
         private Double topP;
         private Integer topK;
+        private Double minP;
         private Double presencePenalty;
         private Double frequencyPenalty;
+        private Double repetitionPenalty;
+        private Boolean logprobs;
+        private Integer topLogprobs;
+        private Boolean parallelToolCalls;
         private List<String> stopSequences;
         private Integer seed;
         private Integer maxRetries;
-        private Map<String, Map<String, Object>> providerOptions;
         private run.halo.aifoundation.chat.ReasoningOptions reasoning;
         private Map<String, String> headers;
         private Map<String, Object> metadata;
@@ -1814,14 +1823,12 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
         private final RerankingModel model;
         private final Integer topN;
-        private final Map<String, Map<String, Object>> providerOptions;
         private final RagTestDiagnostics diagnostics;
 
         ConsoleRagSourceReranker(RerankingModel model, Integer topN,
-            Map<String, Map<String, Object>> providerOptions, RagTestDiagnostics diagnostics) {
+            RagTestDiagnostics diagnostics) {
             this.model = model;
             this.topN = topN;
-            this.providerOptions = providerOptions;
             this.diagnostics = diagnostics;
         }
 
@@ -1838,7 +1845,6 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                     .query(request.getQuery())
                     .documents(documents)
                     .topN(topN != null ? topN : request.getTopN())
-                    .providerOptions(providerOptions)
                     .metadata(request.getMetadata())
                     .context(request.getContext())
                     .build())

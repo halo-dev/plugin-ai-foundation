@@ -46,12 +46,6 @@ export interface OutputSpec {
     'name'?: string;
     /**
      * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
-     * @memberof OutputSpec
-     */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
-    /**
-     * 
      * @type {{ [key: string]: object; }}
      * @memberof OutputSpec
      */

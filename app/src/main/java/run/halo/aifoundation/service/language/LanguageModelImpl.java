@@ -57,6 +57,13 @@ import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
+import run.halo.aifoundation.provider.support.ollama.MappedOllamaChatOptions;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import run.halo.aifoundation.service.language.mapping.LanguageModelChatOptionsBuilder;
 import run.halo.aifoundation.service.language.mapping.LanguageModelMessageMapper;
 import run.halo.aifoundation.service.language.mapping.LanguageModelRequestValidator;
@@ -71,6 +78,7 @@ import run.halo.aifoundation.service.language.tool.LanguageModelToolExecutor;
 import run.halo.aifoundation.service.language.tool.ToolApprovalResolver;
 import run.halo.aifoundation.service.language.tool.ToolExecutionBatch;
 import run.halo.aifoundation.service.language.tool.ToolStepCoordinator;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 @Slf4j
 public class LanguageModelImpl implements LanguageModel {
@@ -104,6 +112,9 @@ public class LanguageModelImpl implements LanguageModel {
     private final LanguageModelStructuredOutputHandler structuredOutputHandler;
     private final ReasoningContentExtractor reasoningExtractor;
     private final LanguageModelRuntimeSupport runtimeSupport;
+    private final RuntimeParameterMappings parameterMappings;
+    private final String modelName;
+    private final String providerName;
 
     LanguageModelImpl(ChatModel chatModel, String providerType) {
         this(chatModel, providerType, LanguageModelProviderOptions.defaults());
@@ -116,6 +127,23 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition) {
+        this(chatModel, composition, EffectiveParameterMappings.empty());
+    }
+
+    LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
+        EffectiveParameterMappings parameterMappings) {
+        this(chatModel, composition, parameterMappings, null, null);
+    }
+
+    LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
+        EffectiveParameterMappings parameterMappings, String modelName, String providerName) {
+        this(chatModel, composition,
+            ModelRuntimeContext.unresolved(composition.providerType(), modelName, providerName,
+                new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
+    }
+
+    LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
+        ModelRuntimeContext context) {
         this.chatModel = chatModel;
         this.providerType = composition.providerType();
         this.providerOptions = composition.providerOptions();
@@ -132,6 +160,9 @@ public class LanguageModelImpl implements LanguageModel {
         this.toolStepCoordinator = composition.toolStepCoordinator();
         this.approvalResolver = composition.approvalResolver();
         this.runtimeSupport = composition.runtimeSupport();
+        this.parameterMappings = context.parameterMappings();
+        this.modelName = context.modelName();
+        this.providerName = context.providerName();
     }
 
     @Override
@@ -516,7 +547,6 @@ public class LanguageModelImpl implements LanguageModel {
             .messages(List.copyOf(executionMessages))
             .tools(nullSafe(request.getTools()))
             .stopWhen(stopWhen)
-            .providerOptions(request.getProviderOptions())
             .build());
         if (!toolStep.canContinue() || !shouldContinue) {
             if (hasStructuredOutput(request) && recordedToolCalls.isEmpty()
@@ -668,7 +698,6 @@ public class LanguageModelImpl implements LanguageModel {
                     .messages(List.copyOf(prepared.executionMessages()))
                     .tools(nullSafe(stepRequest.getTools()))
                     .stopWhen(stopWhen)
-                    .providerOptions(stepRequest.getProviderOptions())
                     .build());
                 return run.stepFinish(stepIndex, generationStep, List.copyOf(state.steps))
                     .then(Mono.defer(() -> {
@@ -1069,9 +1098,20 @@ public class LanguageModelImpl implements LanguageModel {
             .messages(List.copyOf(nullSafe(currentExecutionMessages)))
             .tools(nullSafe(baseRequest.getTools()))
             .stopWhen(currentStopWhen)
+            .maxOutputTokens(baseRequest.getMaxOutputTokens())
+            .temperature(baseRequest.getTemperature())
+            .topP(baseRequest.getTopP())
+            .topK(baseRequest.getTopK())
+            .minP(baseRequest.getMinP())
+            .presencePenalty(baseRequest.getPresencePenalty())
+            .frequencyPenalty(baseRequest.getFrequencyPenalty())
+            .repetitionPenalty(baseRequest.getRepetitionPenalty())
+            .logprobs(effectiveLogprobs(baseRequest))
+            .topLogprobs(baseRequest.getTopLogprobs())
+            .parallelToolCalls(baseRequest.getParallelToolCalls())
+            .stopSequences(baseRequest.getStopSequences())
             .seed(baseRequest.getSeed())
             .maxRetries(baseRequest.getMaxRetries())
-            .providerOptions(baseRequest.getProviderOptions())
             .build();
         var prepared = baseRequest.getPrepareStep() != null
             ? baseRequest.getPrepareStep().prepare(context)
@@ -1113,12 +1153,25 @@ public class LanguageModelImpl implements LanguageModel {
                 : request.getTemperature())
             .topP(prepared.getTopP() != null ? prepared.getTopP() : request.getTopP())
             .topK(prepared.getTopK() != null ? prepared.getTopK() : request.getTopK())
+            .minP(prepared.getMinP() != null ? prepared.getMinP() : request.getMinP())
             .presencePenalty(prepared.getPresencePenalty() != null
                 ? prepared.getPresencePenalty()
                 : request.getPresencePenalty())
             .frequencyPenalty(prepared.getFrequencyPenalty() != null
                 ? prepared.getFrequencyPenalty()
                 : request.getFrequencyPenalty())
+            .repetitionPenalty(prepared.getRepetitionPenalty() != null
+                ? prepared.getRepetitionPenalty()
+                : request.getRepetitionPenalty())
+            .logprobs(prepared.getLogprobs() != null
+                ? prepared.getLogprobs()
+                : effectiveLogprobs(request))
+            .topLogprobs(prepared.getTopLogprobs() != null
+                ? prepared.getTopLogprobs()
+                : request.getTopLogprobs())
+            .parallelToolCalls(prepared.getParallelToolCalls() != null
+                ? prepared.getParallelToolCalls()
+                : request.getParallelToolCalls())
             .stopSequences(prepared.getStopSequences() != null
                 ? prepared.getStopSequences()
                 : request.getStopSequences())
@@ -1126,9 +1179,6 @@ public class LanguageModelImpl implements LanguageModel {
             .maxRetries(prepared.getMaxRetries() != null
                 ? prepared.getMaxRetries()
                 : request.getMaxRetries())
-            .providerOptions(prepared.getProviderOptions() != null
-                ? prepared.getProviderOptions()
-                : request.getProviderOptions())
             .reasoning(request.getReasoning())
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
@@ -1145,6 +1195,11 @@ public class LanguageModelImpl implements LanguageModel {
             .cancellationToken(request.getCancellationToken())
             .timeouts(request.getTimeouts())
             .build();
+    }
+
+    private static Boolean effectiveLogprobs(GenerateTextRequest request) {
+        return request.getLogprobs() != null ? request.getLogprobs()
+            : request.getTopLogprobs() != null ? Boolean.TRUE : null;
     }
 
     private void validateActiveTools(GenerateTextRequest request, PreparedStep prepared) {
@@ -1202,7 +1257,281 @@ public class LanguageModelImpl implements LanguageModel {
 
     private org.springframework.ai.chat.prompt.ChatOptions buildChatOptions(
         GenerateTextRequest request) {
-        return chatOptionsBuilder.build(request);
+        var mappedRequest = withoutUnsupportedParameters(request);
+        var options = chatOptionsBuilder.build(mappedRequest);
+        var target = new ParameterMappingTarget();
+        for (var entry : parameterMappings.values().entrySet()) {
+            var mapping = entry.getValue();
+            if (mapping == null
+                || mapping.mode() != run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+                continue;
+            }
+            var value = languageParameterValue(entry.getKey(), mappedRequest);
+            parameterMappings.apply(entry.getKey(), value, target);
+        }
+        if (options instanceof OllamaChatOptions ollamaOptions) {
+            return applyOllamaMappedValues(ollamaOptions, target, request);
+        }
+        if (!(options instanceof OpenAiCompatibleChatOptions openAiOptions)) {
+            return options;
+        }
+        var builder = openAiOptions.mutate();
+        applyOpenAiMappedValues(builder, target.root());
+        applyOpenAiUnsupportedValues(builder);
+        applyOpenAiReasoning(builder, request);
+        return builder.build();
+    }
+
+    private OllamaChatOptions applyOllamaMappedValues(OllamaChatOptions options,
+        ParameterMappingTarget target, GenerateTextRequest request) {
+        var builder = options.mutate();
+        for (var entry : parameterMappings.values().entrySet()) {
+            if (entry.getValue() != null
+                && entry.getValue().mode()
+                == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+                clearOllamaNativeValue(builder, entry.getKey());
+            }
+        }
+        var mappedOptions = new LinkedHashMap<String, Object>();
+        mappedOptions.putAll(target.root());
+        mappedOptions.putAll(target.options());
+        mappedOptions.remove("think");
+        var mapped = MappedOllamaChatOptions.from(builder.build(), mappedOptions);
+        return applyOllamaReasoning(mapped, request);
+    }
+
+    private void clearOllamaNativeValue(OllamaChatOptions.Builder builder,
+        ModelParameter parameter) {
+        switch (parameter) {
+            case MAX_OUTPUT_TOKENS -> builder.numPredict(null);
+            case TEMPERATURE -> builder.temperature(null);
+            case TOP_P -> builder.topP(null);
+            case TOP_K -> builder.topK(null);
+            case MIN_P -> builder.minP(null);
+            case PRESENCE_PENALTY -> builder.presencePenalty(null);
+            case FREQUENCY_PENALTY -> builder.frequencyPenalty(null);
+            case REPETITION_PENALTY -> builder.repeatPenalty(null);
+            case STOP_SEQUENCES -> builder.stop(null);
+            case SEED -> builder.seed(null);
+            case REASONING -> builder.thinkOption(null);
+            default -> {
+                // Unsupported Ollama parameters have no native option field to clear.
+            }
+        }
+    }
+
+    private GenerateTextRequest withoutUnsupportedParameters(GenerateTextRequest request) {
+        if (request == null) {
+            return null;
+        }
+        return GenerateTextRequest.builder()
+            .system(request.getSystem())
+            .prompt(request.getPrompt())
+            .messages(request.getMessages())
+            .maxOutputTokens(supported(ModelParameter.MAX_OUTPUT_TOKENS,
+                request.getMaxOutputTokens()))
+            .temperature(supported(ModelParameter.TEMPERATURE, request.getTemperature()))
+            .topP(supported(ModelParameter.TOP_P, request.getTopP()))
+            .topK(supported(ModelParameter.TOP_K, request.getTopK()))
+            .minP(supported(ModelParameter.MIN_P, request.getMinP()))
+            .presencePenalty(supported(ModelParameter.PRESENCE_PENALTY,
+                request.getPresencePenalty()))
+            .frequencyPenalty(supported(ModelParameter.FREQUENCY_PENALTY,
+                request.getFrequencyPenalty()))
+            .repetitionPenalty(supported(ModelParameter.REPETITION_PENALTY,
+                request.getRepetitionPenalty()))
+            .logprobs(supported(ModelParameter.LOGPROBS, effectiveLogprobs(request)))
+            .topLogprobs(supported(ModelParameter.TOP_LOGPROBS, request.getTopLogprobs()))
+            .parallelToolCalls(supported(ModelParameter.PARALLEL_TOOL_CALLS,
+                request.getParallelToolCalls()))
+            .stopSequences(supported(ModelParameter.STOP_SEQUENCES, request.getStopSequences()))
+            .seed(supported(ModelParameter.SEED, request.getSeed()))
+            .maxRetries(request.getMaxRetries())
+            .reasoning(parameterMappings.get(ModelParameter.REASONING) == null
+                ? request.getReasoning() : null)
+            .headers(request.getHeaders())
+            .metadata(request.getMetadata())
+            .context(request.getContext())
+            .output(request.getOutput())
+            .tools(request.getTools())
+            .toolChoice(request.getToolChoice())
+            .stopWhen(request.getStopWhen())
+            .prepareStep(request.getPrepareStep())
+            .lifecycle(request.getLifecycle())
+            .toolCallRepair(request.getToolCallRepair())
+            .cancellationToken(request.getCancellationToken())
+            .timeouts(request.getTimeouts())
+            .middleware(request.getMiddleware() != null
+                ? request.getMiddleware().toArray(
+                    run.halo.aifoundation.chat.middleware.LanguageModelMiddleware[]::new)
+                : null)
+            .build();
+    }
+
+    private <T> T supported(ModelParameter parameter, T value) {
+        return parameterMappings.isUnsupported(parameter) ? null : value;
+    }
+
+    private void applyOpenAiReasoning(OpenAiCompatibleChatOptions.Builder builder,
+        GenerateTextRequest request) {
+        var reasoning = request.getReasoning();
+        var target = new ParameterMappingTarget();
+        if (parameterMappings.applyReasoning(reasoning, target)) {
+            mergeExtraBody(builder, target.root());
+        }
+    }
+
+    private OllamaChatOptions applyOllamaReasoning(OllamaChatOptions options,
+        GenerateTextRequest request) {
+        var reasoning = request.getReasoning();
+        var target = new ParameterMappingTarget();
+        if (!parameterMappings.applyReasoning(reasoning, target)) {
+            return options;
+        }
+        var think = target.options().get("think");
+        if (think == null) {
+            return options;
+        }
+        var builder = options.mutate();
+        if (think instanceof Boolean enabled) {
+            if (enabled) {
+                builder.enableThinking();
+            } else {
+                builder.disableThinking();
+            }
+        } else {
+            switch (think.toString().toLowerCase(java.util.Locale.ROOT)) {
+                case "low" -> builder.thinkLow();
+                case "medium" -> builder.thinkMedium();
+                case "high" -> builder.thinkHigh();
+                default -> {
+                    return options;
+                }
+            }
+        }
+        return builder.build();
+    }
+
+    private void mergeExtraBody(OpenAiCompatibleChatOptions.Builder builder,
+        Map<String, Object> values) {
+        var merged = new LinkedHashMap<String, Object>();
+        var existing = builder.build().getExtraBody();
+        if (existing != null) {
+            merged.putAll(existing);
+        }
+        merged.putAll(values);
+        builder.extraBody(merged);
+    }
+
+    private Object languageParameterValue(ModelParameter parameter, GenerateTextRequest request) {
+        return switch (parameter) {
+            case MAX_OUTPUT_TOKENS -> request.getMaxOutputTokens();
+            case TEMPERATURE -> request.getTemperature();
+            case TOP_P -> request.getTopP();
+            case TOP_K -> request.getTopK();
+            case MIN_P -> request.getMinP();
+            case PRESENCE_PENALTY -> request.getPresencePenalty();
+            case FREQUENCY_PENALTY -> request.getFrequencyPenalty();
+            case REPETITION_PENALTY -> request.getRepetitionPenalty();
+            case STOP_SEQUENCES -> request.getStopSequences();
+            case SEED -> request.getSeed();
+            case LOGPROBS -> effectiveLogprobs(request);
+            case TOP_LOGPROBS -> request.getTopLogprobs();
+            case PARALLEL_TOOL_CALLS -> request.getParallelToolCalls();
+            default -> null;
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyOpenAiMappedValues(OpenAiCompatibleChatOptions.Builder builder,
+        Map<String, Object> values) {
+        for (var entry : parameterMappings.values().entrySet()) {
+            if (entry.getValue() != null
+                && entry.getValue().mode()
+                == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+                clearOpenAiNativeValue(builder, entry.getKey());
+            }
+        }
+        var extra = new LinkedHashMap<>(values);
+        if (extra.containsKey("max_tokens")) {
+            builder.maxTokens((Integer) extra.remove("max_tokens"));
+        }
+        if (extra.containsKey("max_completion_tokens")) {
+            builder.maxCompletionTokens((Integer) extra.remove("max_completion_tokens"));
+        }
+        if (extra.containsKey("temperature")) {
+            builder.temperature((Double) extra.remove("temperature"));
+        }
+        if (extra.containsKey("top_p")) {
+            builder.topP((Double) extra.remove("top_p"));
+        }
+        if (extra.containsKey("presence_penalty")) {
+            builder.presencePenalty((Double) extra.remove("presence_penalty"));
+        }
+        if (extra.containsKey("frequency_penalty")) {
+            builder.frequencyPenalty((Double) extra.remove("frequency_penalty"));
+        }
+        if (extra.containsKey("stop")) {
+            builder.stop((List<String>) extra.remove("stop"));
+        }
+        if (extra.containsKey("seed")) {
+            builder.seed((Integer) extra.remove("seed"));
+        }
+        if (extra.containsKey("logprobs")) {
+            builder.logprobs((Boolean) extra.remove("logprobs"));
+        }
+        if (extra.containsKey("top_logprobs")) {
+            builder.topLogprobs((Integer) extra.remove("top_logprobs"));
+        }
+        if (extra.containsKey("parallel_tool_calls")) {
+            builder.parallelToolCalls((Boolean) extra.remove("parallel_tool_calls"));
+        }
+        mergeExtraBody(builder, extra);
+    }
+
+    private void clearOpenAiNativeValue(OpenAiCompatibleChatOptions.Builder builder,
+        ModelParameter parameter) {
+        switch (parameter) {
+            case MAX_OUTPUT_TOKENS -> builder.maxTokens(null).maxCompletionTokens(null);
+            case TEMPERATURE -> builder.temperature(null);
+            case TOP_P -> builder.topP(null);
+            case TOP_K -> builder.topK(null);
+            case PRESENCE_PENALTY -> builder.presencePenalty(null);
+            case FREQUENCY_PENALTY -> builder.frequencyPenalty(null);
+            case STOP_SEQUENCES -> builder.stop(null);
+            case SEED -> builder.seed(null);
+            case LOGPROBS -> builder.logprobs(null);
+            case TOP_LOGPROBS -> builder.topLogprobs(null);
+            case PARALLEL_TOOL_CALLS -> builder.parallelToolCalls(null);
+            case REASONING -> builder.reasoningEffort(null);
+            default -> {
+                // Parameters serialized exclusively through extraBody have no native field to clear.
+            }
+        }
+    }
+
+    private void applyOpenAiUnsupportedValues(OpenAiCompatibleChatOptions.Builder builder) {
+        parameterMappings.values().forEach((parameter, mapping) -> {
+            if (mapping == null
+                || mapping.mode() != run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED) {
+                return;
+            }
+            switch (parameter) {
+                case MAX_OUTPUT_TOKENS -> builder.maxTokens(null).maxCompletionTokens(null);
+                case TEMPERATURE -> builder.temperature(null);
+                case TOP_P -> builder.topP(null);
+                case TOP_K -> builder.topK(null);
+                case PRESENCE_PENALTY -> builder.presencePenalty(null);
+                case FREQUENCY_PENALTY -> builder.frequencyPenalty(null);
+                case STOP_SEQUENCES -> builder.stop(null);
+                case SEED -> builder.seed(null);
+                case LOGPROBS -> builder.logprobs(null);
+                case TOP_LOGPROBS -> builder.topLogprobs(null);
+                case PARALLEL_TOOL_CALLS -> builder.parallelToolCalls(null);
+                default -> {
+                }
+            }
+        });
     }
 
     private Mono<ChatResponse> callProvider(GenerateTextRequest request,
@@ -1705,6 +2034,30 @@ public class LanguageModelImpl implements LanguageModel {
 
     private List<GenerationWarning> requestWarnings(GenerateTextRequest request) {
         var warnings = new ArrayList<GenerationWarning>();
+        if (request != null) {
+            parameterMappings.values().forEach((parameter, mapping) -> {
+                if (mapping != null
+                    && mapping.mode()
+                    == run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED
+                    && languageParameterValue(parameter, request) != null) {
+                    warnings.add(parameterMappings.unsupportedDiagnostic(parameter)
+                        .languageWarning());
+                }
+            });
+            var reasoningMapping = parameterMappings.get(ModelParameter.REASONING);
+            if (reasoningMapping != null
+                && request.getReasoning() != null && request.getReasoning().isExplicit()) {
+                var unsupported = reasoningMapping.mode()
+                    == run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED;
+                var cannotExpress = reasoningMapping.mode()
+                    == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE
+                    && !parameterMappings.canApplyReasoning(request.getReasoning());
+                if (unsupported || cannotExpress) {
+                    warnings.add(parameterMappings.unsupportedDiagnostic(ModelParameter.REASONING)
+                        .languageWarning());
+                }
+            }
+        }
         if (hasStructuredOutput(request)
             && providerOptions.structuredOutputChatOptionsFactory() == null) {
             warnings.add(warning(WARNING_STRUCTURED_OUTPUT_PROMPT_GUIDANCE,

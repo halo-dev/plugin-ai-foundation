@@ -21,6 +21,11 @@ import run.halo.aifoundation.provider.support.rerank.ZhiPuRerankingClient;
 @Component
 public class ZhiPuProvider extends AbstractAiProviderType {
 
+    @Override
+    protected String defaultReasoningMappingTemplate() {
+        return "reasoning.thinking-type";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
     private static final String CHAT_PATH = "/chat/completions";
     private static final String EMBEDDING_PATH = "/embeddings";

@@ -40,7 +40,6 @@ public class ModelArkImageGenerationClient extends AbstractJsonImageGenerationCl
                 ? "b64_json" : "url");
         }
         body.put("stream", false);
-        putProviderOptions(body, request);
         return body;
     }
 
@@ -48,8 +47,7 @@ public class ModelArkImageGenerationClient extends AbstractJsonImageGenerationCl
     GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
         var root = readTree(data, "ModelArk");
         var images = new ArrayList<GeneratedFile>();
-        var outputFormat = String.valueOf(providerOptions(request).getOrDefault("output_format",
-            "png"));
+        var outputFormat = "png";
         var mediaType = outputMediaType(outputFormat);
         var dataNode = root.path("data");
         if (dataNode.isArray()) {

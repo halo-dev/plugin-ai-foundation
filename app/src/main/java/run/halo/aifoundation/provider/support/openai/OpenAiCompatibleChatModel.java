@@ -440,7 +440,25 @@ public class OpenAiCompatibleChatModel implements ChatModel {
                 })
                 .toList());
         }
+        var reasoningContent = firstMetadataText(message.getMetadata(),
+            Fields.REASONING_CONTENT_CAMEL, Fields.REASONING_CONTENT);
+        if (hasText(reasoningContent)) {
+            body.put(Fields.REASONING_CONTENT, reasoningContent);
+        }
         return body;
+    }
+
+    private String firstMetadataText(Map<String, Object> metadata, String... keys) {
+        if (metadata == null) {
+            return null;
+        }
+        for (var key : keys) {
+            var value = metadata.get(key);
+            if (value != null && hasText(value.toString())) {
+                return value.toString();
+            }
+        }
+        return null;
     }
 
     private List<Map<String, Object>> tools(List<ToolCallback> callbacks) {

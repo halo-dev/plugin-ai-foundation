@@ -20,6 +20,7 @@ import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 
 abstract class AbstractJsonImageGenerationClient implements ProviderImageGenerationClient {
 
@@ -36,6 +37,12 @@ abstract class AbstractJsonImageGenerationClient implements ProviderImageGenerat
 
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
+        return generateImage(request, null);
+    }
+
+    @Override
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
+        ParameterMappingTarget target) {
         return webClient.method(HttpMethod.POST)
             .uri(URI.create(endpointUrl()))
             .headers(headers -> {
@@ -48,7 +55,7 @@ abstract class AbstractJsonImageGenerationClient implements ProviderImageGenerat
                     request.getHeaders().forEach(headers::set);
                 }
             })
-            .bodyValue(requestBody(request))
+            .bodyValue(mappedRequestBody(request, target))
             .exchangeToMono(response -> {
                 if (!response.statusCode().is2xxSuccessful()) {
                     return errorBody(response)
@@ -62,6 +69,41 @@ abstract class AbstractJsonImageGenerationClient implements ProviderImageGenerat
 
     abstract Map<String, Object> requestBody(GenerateImageRequest request);
 
+    private Map<String, Object> mappedRequestBody(GenerateImageRequest request,
+        ParameterMappingTarget target) {
+        var body = requestBody(request);
+        if (target == null) {
+            return body;
+        }
+        removeMappedFields(body);
+        body.putAll(target.root());
+        if (!target.parameters().isEmpty()) {
+            @SuppressWarnings("unchecked")
+            var parameters = (Map<String, Object>) body.computeIfAbsent("parameters",
+                ignored -> new java.util.LinkedHashMap<String, Object>());
+            parameters.putAll(target.parameters());
+        }
+        return body;
+    }
+
+    private void removeMappedFields(Map<String, Object> body) {
+        for (var field : List.of("n", "batch_size", "size", "image_size", "aspect_ratio",
+            "seed", "response_format", "negative_prompt", "width", "height")) {
+            body.remove(field);
+        }
+        if (body.get("parameters") instanceof Map<?, ?> raw) {
+            @SuppressWarnings("unchecked")
+            var parameters = (Map<String, Object>) raw;
+            for (var field : List.of("n", "size", "aspect_ratio", "seed", "response_format",
+                "negative_prompt")) {
+                parameters.remove(field);
+            }
+            if (parameters.isEmpty()) {
+                body.remove("parameters");
+            }
+        }
+    }
+
     abstract GenerateImageResult imageResponse(String data, GenerateImageRequest request);
 
     protected String endpointUrl() {
@@ -69,14 +111,6 @@ abstract class AbstractJsonImageGenerationClient implements ProviderImageGenerat
     }
 
     protected abstract String endpointPath();
-
-    protected Map<String, Object> providerOptions(GenerateImageRequest request) {
-        if (request.getProviderOptions() == null) {
-            return Map.of();
-        }
-        var values = request.getProviderOptions().get(options.providerType());
-        return values == null ? Map.of() : values;
-    }
 
     protected void putIfHasText(Map<String, Object> body, String key, String value) {
         if (hasText(value)) {
@@ -88,10 +122,6 @@ abstract class AbstractJsonImageGenerationClient implements ProviderImageGenerat
         if (value != null) {
             body.put(key, value);
         }
-    }
-
-    protected void putProviderOptions(Map<String, Object> body, GenerateImageRequest request) {
-        body.putAll(providerOptions(request));
     }
 
     protected String imageSource(DataContent content) {

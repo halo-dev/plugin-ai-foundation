@@ -2,7 +2,6 @@
 
 ## Purpose
 Defines provider-neutral middleware for wrapping, transforming, short-circuiting, and composing image generation calls.
-
 ## Requirements
 ### Requirement: Image generation middleware wraps execution
 The SDK SHALL provide provider-neutral middleware for image generation calls.
@@ -137,3 +136,15 @@ Image generation middleware SHALL target the existing non-streaming image genera
 - **WHEN** callers use image generation middleware
 - **THEN** the middleware API SHALL wrap `generateImage`
 - **AND** it SHALL NOT introduce image streaming, progress events, or asynchronous image job contracts
+
+### Requirement: Image middleware preserves mapped typed parameters
+Image generation middleware request copies and helpers SHALL preserve all typed provider parameters, including `negativePrompt`, without carrying provider-native option maps.
+
+#### Scenario: Middleware transforms unrelated fields
+- **WHEN** middleware copies a request while changing an unrelated image setting
+- **THEN** the copied request SHALL preserve `negativePrompt` and other typed fields
+
+#### Scenario: Middleware supplies negative prompt
+- **WHEN** middleware returns a request with `negativePrompt`
+- **THEN** the provider invocation SHALL translate it through the effective administrator mapping
+

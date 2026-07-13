@@ -91,22 +91,27 @@ The Console model test workbench SHALL show tool-enabled streams progressively i
 - **AND** it SHALL NOT treat the pause after `tool-call` as stream completion
 
 ### Requirement: Workbench supports structured output testing
-The Console model test workbench SHALL provide a minimal way to exercise structured output requests.
+The Console model test workbench SHALL exercise structured output requests using typed settings only.
 
 #### Scenario: Structured output request from workbench
-- **WHEN** a super administrator selects structured output mode and enters a JSON Schema or choice options
+- **WHEN** a super administrator selects structured output and supplies schema or choices
 - **THEN** the next test request SHALL include the corresponding `GenerateTextRequest.output`
-- **AND** the request SHALL still include existing system prompt, message history, parameters, tools, and provider options
+- **AND** it SHALL preserve system, history, typed parameters, and tools without provider-native option maps
 
 #### Scenario: Structured output stream display
-- **WHEN** a test-chat stream returns structured JSON text
-- **THEN** the workbench SHALL display that JSON as assistant answer text
+- **WHEN** a stream returns structured JSON text
+- **THEN** the workbench SHALL display it as assistant answer text
 - **AND** reasoning and tool activity rendering SHALL remain unchanged
 
 #### Scenario: Structured output validation error display
-- **WHEN** a structured stream emits an `error` part for validation failure
-- **THEN** the workbench SHALL display the safe error message on the active assistant message
-- **AND** the request SHALL no longer be marked as loading
+- **WHEN** a structured stream emits a validation error
+- **THEN** the workbench SHALL display the safe error on the active assistant message
+- **AND** the request SHALL no longer be marked loading
+
+#### Scenario: Stop condition reached before structured output
+- **WHEN** tool calling reaches the step limit before a final structured answer
+- **THEN** the result or stream SHALL include the existing stop-condition warning
+- **AND** structured output validation SHALL fail if no valid output exists
 
 ### Requirement: Test chat uses stream result full stream
 The Console test-chat streaming endpoint SHALL preserve its SSE protocol while consuming the full stream view from `StreamTextResult`.
@@ -141,3 +146,4 @@ The model test workbench SHALL continue rendering the full Halo stream while str
 #### Scenario: Tool input delta event
 - **WHEN** the UI receives tool input delta events before a tool call
 - **THEN** the parser MUST keep the final tool call display associated with the same tool call id
+

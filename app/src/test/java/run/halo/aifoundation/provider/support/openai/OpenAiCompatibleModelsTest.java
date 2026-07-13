@@ -28,6 +28,47 @@ import org.springframework.web.reactive.function.client.WebClient;
 class OpenAiCompatibleModelsTest {
 
     @Test
+    void chatRequestBody_serializesMappedCustomFieldsAndDeepSeekThinking() {
+        var options = chatOptions().mutate()
+            .maxTokens(null)
+            .extraBody(Map.of(
+                "output_limit", 256,
+                "thinking", Map.of("type", "disabled")
+            ))
+            .build();
+        var model = new OpenAiCompatibleChatModel(options, WebClient.builder());
+        var prompt = new Prompt(List.of(new UserMessage("answer quickly")), options);
+
+        @SuppressWarnings("unchecked")
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, options, false);
+
+        assertThat(body).containsEntry("output_limit", 256)
+            .doesNotContainKey("max_tokens");
+        assertThat((Map<String, Object>) body.get("thinking"))
+            .containsEntry("type", "disabled");
+    }
+
+    @Test
+    void chatRequestBody_replaysReasoningContentForToolContinuation() {
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
+        var assistant = AssistantMessage.builder()
+            .content("")
+            .properties(Map.of("reasoningContent", "tool reasoning"))
+            .build();
+        var prompt = new Prompt(List.of(assistant), chatOptions());
+
+        @SuppressWarnings("unchecked")
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, chatOptions(), false);
+        @SuppressWarnings("unchecked")
+        var messages = (List<Map<String, Object>>) body.get("messages");
+
+        assertThat(messages.getFirst())
+            .containsEntry("reasoning_content", "tool reasoning");
+    }
+
+    @Test
     void chatRequestBody_mapsUserMediaToOpenAiContentParts() {
         var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
         var image = Media.builder()
@@ -183,7 +224,6 @@ class OpenAiCompatibleModelsTest {
             .n(2)
             .size("1024x1024")
             .responseFormat(ImageResponseFormat.BASE64)
-            .providerOptions(Map.of("openai", Map.of("quality", "high")))
             .build();
 
         @SuppressWarnings("unchecked")
@@ -195,8 +235,7 @@ class OpenAiCompatibleModelsTest {
             .containsEntry("prompt", "Draw Halo")
             .containsEntry("n", 2)
             .containsEntry("size", "1024x1024")
-            .containsEntry("response_format", "b64_json")
-            .containsEntry("quality", "high");
+            .containsEntry("response_format", "b64_json");
     }
 
     @Test
@@ -272,6 +311,23 @@ class OpenAiCompatibleModelsTest {
             .containsEntry("model", "text-embedding-request")
             .containsEntry("dimensions", 256)
             .containsEntry("user", "user-1");
+    }
+
+    @Test
+    void embeddingRequestBody_serializesMappedCustomDimensionsFieldOnly() {
+        var model = new OpenAiCompatibleEmbeddingModel(embeddingOptions(), WebClient.builder());
+        var options = OpenAiCompatibleEmbeddingOptions.builder()
+            .model("text-embedding-request")
+            .extraBody(Map.of("output_dimension", 384))
+            .build();
+        var request = new EmbeddingRequest(List.of("hello"), options);
+
+        @SuppressWarnings("unchecked")
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", request.getInstructions(), request.getOptions());
+
+        assertThat(body).containsEntry("output_dimension", 384)
+            .doesNotContainKey("dimensions");
     }
 
     @Test

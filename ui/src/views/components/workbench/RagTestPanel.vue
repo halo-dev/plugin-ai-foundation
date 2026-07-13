@@ -13,10 +13,6 @@ defineProps<{
   rerankModelName?: string
   rerankModels: ModelOption[]
   topN?: number
-  providerOptionsText: string
-  providerOptionsError?: string
-  rerankProviderOptionsText: string
-  rerankProviderOptionsError?: string
   messages: WorkbenchMessage[]
   error?: string
   isLoading: boolean
@@ -28,8 +24,6 @@ defineEmits<{
   (e: 'update:sources', value: TestRagSource[]): void
   (e: 'update:rerankModelName', value: string | undefined): void
   (e: 'update:topN', value: number | undefined): void
-  (e: 'update:providerOptionsText', value: string): void
-  (e: 'update:rerankProviderOptionsText', value: string): void
   (e: 'run'): void
   (e: 'clear'): void
 }>()
@@ -198,42 +192,6 @@ function addSource(sources: TestRagSource[]) {
           </div>
         </div>
       </div>
-
-      <details class=":uno: border border-slate-200 rounded-lg bg-white shadow-sm !p-4">
-        <summary class=":uno: cursor-pointer select-none text-sm text-slate-800 font-semibold">
-          Provider Options
-        </summary>
-        <div class=":uno: grid mt-3 gap-3 lg:grid-cols-2">
-          <div>
-            <label class=":uno: text-xs text-slate-500">Language Provider Options</label>
-            <textarea
-              :value="providerOptionsText"
-              rows="5"
-              class=":uno: mt-1 w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs"
-              :class="{ ':uno: !border-rose-300': providerOptionsError }"
-              :disabled="disabled || isLoading"
-              @input="$emit('update:providerOptionsText', ($event.target as HTMLTextAreaElement).value)"
-            />
-            <div class=":uno: mt-1 text-[10px] text-rose-500">{{ providerOptionsError }}</div>
-          </div>
-          <div>
-            <label class=":uno: text-xs text-slate-500">Rerank Provider Options</label>
-            <textarea
-              :value="rerankProviderOptionsText"
-              rows="5"
-              class=":uno: mt-1 w-full text-slate-700 font-mono outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-3 !py-2 !text-xs"
-              :class="{ ':uno: !border-rose-300': rerankProviderOptionsError }"
-              :disabled="disabled || isLoading"
-              @input="
-                $emit('update:rerankProviderOptionsText', ($event.target as HTMLTextAreaElement).value)
-              "
-            />
-            <div class=":uno: mt-1 text-[10px] text-rose-500">
-              {{ rerankProviderOptionsError }}
-            </div>
-          </div>
-        </div>
-      </details>
 
       <div class=":uno: flex items-center justify-end gap-2">
         <VButton :disabled="isLoading" @click="$emit('clear')">清空结果</VButton>

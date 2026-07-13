@@ -75,6 +75,7 @@ function onSubmit(data: ProviderFormState) {
         apiKeySecretName: provider.spec.apiKeySecretName,
         proxyHost: provider.spec.proxyHost,
         proxyPort: provider.spec.proxyPort,
+        parameterMappings: provider.spec.parameterMappings,
       }"
       @submit="onSubmit"
     />

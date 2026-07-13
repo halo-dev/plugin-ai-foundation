@@ -49,6 +49,12 @@ export interface TestRagRequest {
     'headers'?: { [key: string]: string; };
     /**
      * 
+     * @type {boolean}
+     * @memberof TestRagRequest
+     */
+    'logprobs'?: boolean;
+    /**
+     * 
      * @type {number}
      * @memberof TestRagRequest
      */
@@ -64,13 +70,19 @@ export interface TestRagRequest {
      * @type {number}
      * @memberof TestRagRequest
      */
-    'presencePenalty'?: number;
+    'minP'?: number;
     /**
      * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
+     * @type {boolean}
      * @memberof TestRagRequest
      */
-    'providerOptions'?: { [key: string]: { [key: string]: object; }; };
+    'parallelToolCalls'?: boolean;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestRagRequest
+     */
+    'presencePenalty'?: number;
     /**
      * 
      * @type {string}
@@ -91,16 +103,16 @@ export interface TestRagRequest {
     'reasoning'?: ReasoningOptions;
     /**
      * 
+     * @type {number}
+     * @memberof TestRagRequest
+     */
+    'repetitionPenalty'?: number;
+    /**
+     * 
      * @type {string}
      * @memberof TestRagRequest
      */
     'rerankModelName'?: string;
-    /**
-     * 
-     * @type {{ [key: string]: { [key: string]: object; }; }}
-     * @memberof TestRagRequest
-     */
-    'rerankProviderOptions'?: { [key: string]: { [key: string]: object; }; };
     /**
      * 
      * @type {number}
@@ -137,6 +149,12 @@ export interface TestRagRequest {
      * @memberof TestRagRequest
      */
     'topK'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof TestRagRequest
+     */
+    'topLogprobs'?: number;
     /**
      * 
      * @type {number}

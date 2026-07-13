@@ -62,6 +62,23 @@ class ImageGenerationMiddlewaresTest {
     }
 
     @Test
+    void terminalRequestPreservesNegativePrompt() {
+        var model = new RecordingImageGenerationModel();
+        var request = GenerateImageRequest.builder()
+            .prompt("draw")
+            .negativePrompt("blurry")
+            .middleware(new ImageGenerationMiddleware() {
+            })
+            .build();
+
+        StepVerifier.create(ImageGenerationMiddlewares.applyRequestMiddleware(model, request))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        assertThat(model.capturedRequest.getNegativePrompt()).isEqualTo("blurry");
+    }
+
+    @Test
     void shortCircuitReturnsResultWithoutInvokingProvider() {
         var model = new RecordingImageGenerationModel();
         var wrapped = ImageGenerationMiddlewares.wrap(model, shortCircuit("cached"));
@@ -146,7 +163,7 @@ class ImageGenerationMiddlewaresTest {
         var defaults = GenerateImageRequest.builder()
             .size(1024)
             .responseFormat(ImageResponseFormat.BASE64)
-            .providerOptions(Map.of("openai", Map.of("quality", "high")))
+            .negativePrompt("blurry")
             .build();
         var warning = ImageGenerationWarning.builder()
             .code("test-warning")
@@ -158,7 +175,7 @@ class ImageGenerationMiddlewaresTest {
                 .prompt(request.getPrompt() + "|mapped")
                 .size(request.getSize())
                 .responseFormat(request.getResponseFormat())
-                .providerOptions(request.getProviderOptions())
+                .negativePrompt(request.getNegativePrompt())
                 .build()),
             ImageGenerationMiddlewares.mapResult(result ->
                 ImageGenerationResults.withWarnings(result, warning)));
@@ -173,8 +190,7 @@ class ImageGenerationMiddlewaresTest {
 
         assertThat(model.capturedRequest.getSize()).isEqualTo("1024x1024");
         assertThat(model.capturedRequest.getResponseFormat()).isEqualTo(ImageResponseFormat.BASE64);
-        assertThat(model.capturedRequest.getProviderOptions())
-            .containsEntry("openai", Map.of("quality", "high"));
+        assertThat(model.capturedRequest.getNegativePrompt()).isEqualTo("blurry");
     }
 
     @Test

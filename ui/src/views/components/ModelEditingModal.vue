@@ -29,6 +29,9 @@ const { data: providers } = useProvidersFetch()
 const providerType = computed(() => {
   return providers.value?.find((p) => p.metadata.name === providerName)?.spec.providerType
 })
+const providerMappings = computed(() => {
+  return providers.value?.find((p) => p.metadata.name === providerName)?.spec.parameterMappings
+})
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ModelFormState) => {
@@ -45,6 +48,7 @@ const { mutate, isPending } = useMutation({
           features: formState.features?.length ? formState.features : undefined,
           capabilities: formState.capabilities,
           capabilitySources: formState.capabilitySources,
+          parameterMappings: formState.parameterMappings,
           adapterType: formState.adapterType || props.model.spec.adapterType,
           discoverySource:
             props.model.spec.discoverySource || AiModelSpecDiscoverySourceEnum.Manual,
@@ -78,6 +82,7 @@ function onSubmit(data: ModelFormState) {
     <ModelForm
       ref="form"
       :provider-type="providerType || ''"
+      :inherited-mappings="providerMappings"
       :model-name="model.metadata.name"
       :form-state="{
         modelId: model.spec.modelId,
@@ -88,6 +93,7 @@ function onSubmit(data: ModelFormState) {
         adapterType: model.spec.adapterType,
         capabilities: model.spec.capabilities,
         capabilitySources: model.spec.capabilitySources,
+        parameterMappings: model.spec.parameterMappings,
       }"
       @submit="onSubmit"
     />

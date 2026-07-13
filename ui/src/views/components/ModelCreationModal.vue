@@ -41,6 +41,7 @@ const { mutate, isPending } = useMutation({
           features: formState.features?.length ? formState.features : undefined,
           capabilities: formState.capabilities,
           capabilitySources: formState.capabilitySources,
+          parameterMappings: formState.parameterMappings,
           discoverySource: AiModelSpecDiscoverySourceEnum.Manual,
           discoveryConfidence: AiModelSpecDiscoveryConfidenceEnum.High,
           ...(formState.adapterType ? { adapterType: formState.adapterType } : {}),
@@ -69,7 +70,12 @@ function onSubmit(data: ModelFormState) {
     ref="modal"
     @close="emit('close')"
   >
-    <ModelForm ref="form" :provider-type="providerType" @submit="onSubmit" />
+    <ModelForm
+      ref="form"
+      :provider-type="providerType"
+      :inherited-mappings="provider.spec.parameterMappings"
+      @submit="onSubmit"
+    />
     <template #footer>
       <VSpace>
         <VButton type="secondary" :loading="isPending" @click="form?.submit()"> 保存 </VButton>

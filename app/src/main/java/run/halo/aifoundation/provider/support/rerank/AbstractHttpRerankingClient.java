@@ -11,6 +11,7 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
@@ -39,8 +40,14 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
 
     @Override
     public Mono<RerankResponse> rerank(RerankRequest request) {
+        return rerank(request, null);
+    }
+
+    @Override
+    public Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target) {
         var uri = endpoint(request);
         var body = requestBody(request);
+        applyMappedParameters(body, target);
         return webClient.post()
             .uri(uri)
             .headers(headers -> {
@@ -57,6 +64,27 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
                 return response.bodyToMono(MAP_TYPE)
                     .map(json -> response(json, request, uri));
             });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyMappedParameters(Map<String, Object> body, ParameterMappingTarget target) {
+        if (target == null) {
+            return;
+        }
+        body.remove("top_n");
+        var parameters = body.get("parameters") instanceof Map<?, ?> values
+            ? (Map<String, Object>) values : null;
+        if (parameters != null) {
+            parameters.remove("top_n");
+        }
+        body.putAll(target.root());
+        if (!target.parameters().isEmpty()) {
+            if (parameters == null) {
+                parameters = new LinkedHashMap<>();
+                body.put("parameters", parameters);
+            }
+            parameters.putAll(target.parameters());
+        }
     }
 
     protected abstract URI endpoint(RerankRequest request);
@@ -115,11 +143,7 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
     }
 
     protected Map<String, Object> namespacedOptions(RerankRequest request) {
-        if (request == null || request.getProviderOptions() == null) {
-            return Map.of();
-        }
-        var options = request.getProviderOptions().get(providerType);
-        return options != null ? options : Map.of();
+        return Map.of();
     }
 
     protected List<String> documentTexts(RerankRequest request) {

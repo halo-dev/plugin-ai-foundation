@@ -63,14 +63,13 @@ class ReasoningProviderOptionsTest {
     }
 
     @Test
-    void minimaxOptions_keepTypedReasoningUnsupportedButAllowRawProviderOptions() {
+    void minimaxOptions_keepTypedReasoningUnsupported() {
         var providerType = new MiniMaxProvider();
         var options = openAiOptions(providerType, GenerateTextRequest.builder()
             .prompt("Generate")
-            .providerOptions(Map.of("minimax", Map.of("reasoning_split", true)))
             .build());
 
-        assertThat(options.getExtraBody()).containsEntry("reasoning_split", true);
+        assertThat(options.getExtraBody()).isNullOrEmpty();
         assertThatThrownBy(() -> providerType.languageModelProviderOptions()
             .reasoningControlOptions()
             .validate("minimax", GenerateTextRequest.builder()
@@ -92,11 +91,9 @@ class ReasoningProviderOptionsTest {
         var options = openAiOptions(providerType, GenerateTextRequest.builder()
             .prompt("Fast")
             .reasoning(ReasoningOptions.disabled())
-            .providerOptions(Map.of(providerKey, Map.of("trace_id", "trace-1")))
             .build());
 
         assertThat(options.getExtraBody())
-            .containsEntry("trace_id", "trace-1")
             .containsEntry("thinking", Map.of("type", "disabled"));
     }
 
@@ -104,11 +101,9 @@ class ReasoningProviderOptionsTest {
         var options = openAiOptions(providerType, GenerateTextRequest.builder()
             .prompt("Fast")
             .reasoning(ReasoningOptions.disabled())
-            .providerOptions(Map.of(providerKey, Map.of("trace_id", "trace-1")))
             .build());
 
         assertThat(options.getExtraBody())
-            .containsEntry("trace_id", "trace-1")
             .containsEntry("enable_thinking", false);
     }
 }

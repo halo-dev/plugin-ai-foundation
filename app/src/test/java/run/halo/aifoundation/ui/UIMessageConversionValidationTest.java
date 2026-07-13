@@ -275,7 +275,7 @@ class UIMessageConversionValidationTest {
         assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
         assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
             .containsExactly(PartType.REASONING, PartType.TOOL_CALL);
-        assertThat(result.messages().get(0).getContent().getFirst().getProviderOptions())
+        assertThat(result.messages().get(0).getContent().getFirst().getProviderMetadata())
             .isEqualTo(Map.of("signature", "opaque"));
         assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
         assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
@@ -338,7 +338,7 @@ class UIMessageConversionValidationTest {
         assertThat(defaultResult.messages()).hasSize(1);
         assertThat(defaultResult.messages().getFirst().getContent().getFirst().getType())
             .isEqualTo(PartType.REASONING);
-        assertThat(defaultResult.messages().getFirst().getContent().getFirst().getProviderOptions())
+        assertThat(defaultResult.messages().getFirst().getContent().getFirst().getProviderMetadata())
             .isEqualTo(Map.of("opaque", "state"));
 
         var included = UIMessageConverters.toModelMessages(messages, options -> options

@@ -17,6 +17,9 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 
 public interface AiProviderType {
 
@@ -106,6 +109,11 @@ public interface AiProviderType {
             ModelFeature.STRUCTURED_OUTPUT,
             ModelFeature.REASONING
         );
+    }
+
+    default java.util.Map<ModelParameter, DefaultParameterMapping>
+        getDefaultParameterMappings() {
+        return ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes());
     }
 
     // ── Behavior ──────────────────────────────────────────────

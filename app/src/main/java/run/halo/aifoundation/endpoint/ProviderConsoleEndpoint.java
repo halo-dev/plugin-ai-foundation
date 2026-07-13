@@ -23,6 +23,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
@@ -40,6 +41,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
     private final SecretResolver secretResolver;
+    private final ParameterMappingValidator parameterMappingValidator;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -185,6 +187,8 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
         try {
             validateProxyConfig(provider.getSpec());
             normalizeEndpointPaths(provider.getSpec());
+            parameterMappingValidator.validateProvider(
+                provider.getSpec().getParameterMappings(), type);
         } catch (IllegalArgumentException e) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
         }

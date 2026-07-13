@@ -5,7 +5,7 @@
     "version" : "2.25.4"
   },
   "servers" : [ {
-    "url" : "http://localhost:64918",
+    "url" : "http://localhost:55124",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1362,6 +1362,9 @@
             "description" : "Primary model purpose",
             "enum" : [ "language", "embedding", "rerank", "image-generation" ]
           },
+          "parameterMappings" : {
+            "$ref" : "#/components/schemas/ModelParameterMappings"
+          },
           "providerName" : {
             "type" : "string",
             "description" : "References AiProvider.metadata.name (provider instance resource name)"
@@ -1469,6 +1472,9 @@
           "imageEndpointPath" : {
             "type" : "string",
             "description" : "Image generation endpoint path relative to baseUrl. OpenAI-compatible providers only."
+          },
+          "parameterMappings" : {
+            "$ref" : "#/components/schemas/ModelParameterMappings"
           },
           "providerType" : {
             "type" : "string",
@@ -1602,6 +1608,17 @@
           }
         }
       },
+      "DefaultParameterMappingInfo" : {
+        "type" : "object",
+        "properties" : {
+          "mode" : {
+            "type" : "string"
+          },
+          "template" : {
+            "type" : "string"
+          }
+        }
+      },
       "DiscoveredModelItem" : {
         "type" : "object",
         "properties" : {
@@ -1644,6 +1661,15 @@
             "enum" : [ "remote", "catalog", "rule", "manual" ]
           }
         }
+      },
+      "EmbeddingMappings" : {
+        "type" : "object",
+        "properties" : {
+          "dimensions" : {
+            "$ref" : "#/components/schemas/Selection"
+          }
+        },
+        "description" : "Embedding model parameter mappings"
       },
       "EmbeddingPreview" : {
         "type" : "object",
@@ -1802,6 +1828,30 @@
           }
         }
       },
+      "ImageGenerationMappings" : {
+        "type" : "object",
+        "properties" : {
+          "aspectRatio" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "n" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "negativePrompt" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "responseFormat" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "seed" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "size" : {
+            "$ref" : "#/components/schemas/Selection"
+          }
+        },
+        "description" : "Image generation model parameter mappings"
+      },
       "ImageGenerationWarning" : {
         "type" : "object",
         "properties" : {
@@ -1890,6 +1940,54 @@
             "type" : "boolean"
           }
         }
+      },
+      "LanguageMappings" : {
+        "type" : "object",
+        "properties" : {
+          "frequencyPenalty" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "logprobs" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "maxOutputTokens" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "minP" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "parallelToolCalls" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "presencePenalty" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "repetitionPenalty" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "seed" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "stopSequences" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "temperature" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "topK" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "topLogprobs" : {
+            "$ref" : "#/components/schemas/Selection"
+          },
+          "topP" : {
+            "$ref" : "#/components/schemas/Selection"
+          }
+        },
+        "description" : "Language model parameter mappings"
       },
       "Metadata" : {
         "required" : [ "name" ],
@@ -2010,7 +2108,7 @@
           "media" : {
             "$ref" : "#/components/schemas/DataContent"
           },
-          "providerOptions" : {
+          "providerMetadata" : {
             "type" : "object",
             "additionalProperties" : {
               "type" : "object"
@@ -2159,6 +2257,24 @@
         },
         "description" : "Structured details for unavailable options"
       },
+      "ModelParameterMappings" : {
+        "type" : "object",
+        "properties" : {
+          "embedding" : {
+            "$ref" : "#/components/schemas/EmbeddingMappings"
+          },
+          "imageGeneration" : {
+            "$ref" : "#/components/schemas/ImageGenerationMappings"
+          },
+          "language" : {
+            "$ref" : "#/components/schemas/LanguageMappings"
+          },
+          "rerank" : {
+            "$ref" : "#/components/schemas/RerankMappings"
+          }
+        },
+        "description" : "Administrator overrides for provider-neutral parameter mappings"
+      },
       "MoveOperation" : {
         "required" : [ "op", "from", "path" ],
         "type" : "object",
@@ -2202,15 +2318,6 @@
           "name" : {
             "type" : "string"
           },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
-          },
           "schema" : {
             "type" : "object",
             "additionalProperties" : {
@@ -2223,6 +2330,43 @@
           "type" : {
             "type" : "string",
             "enum" : [ "TEXT", "OBJECT", "ARRAY", "CHOICE", "JSON" ]
+          }
+        }
+      },
+      "ParameterMappingTemplateInfo" : {
+        "type" : "object",
+        "properties" : {
+          "adapterTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+            }
+          },
+          "configurationType" : {
+            "type" : "string"
+          },
+          "defaultField" : {
+            "type" : "string"
+          },
+          "defaultReasoningMapping" : {
+            "$ref" : "#/components/schemas/ReasoningMapping"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "modelType" : {
+            "type" : "string",
+            "enum" : [ "language", "embedding", "rerank", "image-generation" ]
+          },
+          "parameter" : {
+            "type" : "string"
           }
         }
       },
@@ -2255,6 +2399,12 @@
           "defaultBaseUrl" : {
             "type" : "string"
           },
+          "defaultParameterMappings" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/DefaultParameterMappingInfo"
+            }
+          },
           "description" : {
             "type" : "string"
           },
@@ -2272,6 +2422,12 @@
           },
           "imageEndpointPath" : {
             "type" : "string"
+          },
+          "parameterMappingTemplates" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParameterMappingTemplateInfo"
+            }
           },
           "providerType" : {
             "type" : "string"
@@ -2308,6 +2464,27 @@
           }
         }
       },
+      "ReasoningMapping" : {
+        "type" : "object",
+        "properties" : {
+          "disabled" : {
+            "$ref" : "#/components/schemas/ReasoningValueMapping"
+          },
+          "enabled" : {
+            "$ref" : "#/components/schemas/ReasoningValueMapping"
+          },
+          "high" : {
+            "$ref" : "#/components/schemas/ReasoningValueMapping"
+          },
+          "low" : {
+            "$ref" : "#/components/schemas/ReasoningValueMapping"
+          },
+          "medium" : {
+            "$ref" : "#/components/schemas/ReasoningValueMapping"
+          }
+        },
+        "description" : "Per-intent native field and typed value mappings for reasoning"
+      },
       "ReasoningOptions" : {
         "type" : "object",
         "properties" : {
@@ -2321,6 +2498,24 @@
           "mode" : {
             "type" : "string",
             "enum" : [ "DEFAULT", "ENABLED", "DISABLED" ]
+          }
+        }
+      },
+      "ReasoningValueMapping" : {
+        "type" : "object",
+        "properties" : {
+          "field" : {
+            "type" : "string",
+            "description" : "Constrained native request field/path"
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "Scalar request value encoded as text"
+          },
+          "valueType" : {
+            "type" : "string",
+            "description" : "Scalar request value type",
+            "enum" : [ "STRING", "BOOLEAN", "INTEGER", "DECIMAL" ]
           }
         }
       },
@@ -2358,6 +2553,15 @@
             "description" : "Value can be any JSON value"
           }
         }
+      },
+      "RerankMappings" : {
+        "type" : "object",
+        "properties" : {
+          "topN" : {
+            "$ref" : "#/components/schemas/Selection"
+          }
+        },
+        "description" : "Reranking model parameter mappings"
       },
       "RerankPreview" : {
         "type" : "object",
@@ -2431,6 +2635,27 @@
           }
         }
       },
+      "Selection" : {
+        "type" : "object",
+        "properties" : {
+          "field" : {
+            "type" : "string",
+            "description" : "Optional constrained native field/path override"
+          },
+          "mode" : {
+            "type" : "string",
+            "description" : "Inheritance or override mode",
+            "enum" : [ "INHERIT", "TEMPLATE", "UNSUPPORTED" ]
+          },
+          "reasoningMapping" : {
+            "$ref" : "#/components/schemas/ReasoningMapping"
+          },
+          "template" : {
+            "type" : "string",
+            "description" : "Registered template id; required only for TEMPLATE mode"
+          }
+        }
+      },
       "TestCompletionStreamRequest" : {
         "type" : "object",
         "properties" : {
@@ -2450,6 +2675,9 @@
               "type" : "string"
             }
           },
+          "logprobs" : {
+            "type" : "boolean"
+          },
           "maxOutputTokens" : {
             "type" : "integer",
             "format" : "int32"
@@ -2464,6 +2692,13 @@
               "type" : "object"
             }
           },
+          "minP" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "parallelToolCalls" : {
+            "type" : "boolean"
+          },
           "presencePenalty" : {
             "type" : "number",
             "format" : "double"
@@ -2471,17 +2706,12 @@
           "prompt" : {
             "type" : "string"
           },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
-          },
           "reasoning" : {
             "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "repetitionPenalty" : {
+            "type" : "number",
+            "format" : "double"
           },
           "seed" : {
             "type" : "integer",
@@ -2501,6 +2731,10 @@
             "format" : "double"
           },
           "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topLogprobs" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -2534,15 +2768,6 @@
           "maxRetries" : {
             "type" : "integer",
             "format" : "int32"
-          },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
           }
         }
       },
@@ -2653,17 +2878,11 @@
             "type" : "integer",
             "format" : "int32"
           },
-          "prompt" : {
+          "negativePrompt" : {
             "type" : "string"
           },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
+          "prompt" : {
+            "type" : "string"
           },
           "responseFormat" : {
             "type" : "string",
@@ -2757,6 +2976,9 @@
           "input" : {
             "type" : "string"
           },
+          "logprobs" : {
+            "type" : "boolean"
+          },
           "maxOutputTokens" : {
             "type" : "integer",
             "format" : "int32"
@@ -2771,11 +2993,18 @@
               "type" : "object"
             }
           },
+          "minP" : {
+            "type" : "number",
+            "format" : "double"
+          },
           "output" : {
             "type" : "object",
             "additionalProperties" : {
               "type" : "object"
             }
+          },
+          "parallelToolCalls" : {
+            "type" : "boolean"
           },
           "presencePenalty" : {
             "type" : "number",
@@ -2784,17 +3013,12 @@
           "prompt" : {
             "type" : "string"
           },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
-          },
           "reasoning" : {
             "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "repetitionPenalty" : {
+            "type" : "number",
+            "format" : "double"
           },
           "schema" : {
             "type" : "object",
@@ -2820,6 +3044,10 @@
             "format" : "double"
           },
           "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topLogprobs" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -2908,6 +3136,9 @@
               "type" : "string"
             }
           },
+          "logprobs" : {
+            "type" : "boolean"
+          },
           "maxOutputTokens" : {
             "type" : "integer",
             "format" : "int32"
@@ -2916,18 +3147,16 @@
             "type" : "integer",
             "format" : "int32"
           },
-          "presencePenalty" : {
+          "minP" : {
             "type" : "number",
             "format" : "double"
           },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
+          "parallelToolCalls" : {
+            "type" : "boolean"
+          },
+          "presencePenalty" : {
+            "type" : "number",
+            "format" : "double"
           },
           "query" : {
             "type" : "string"
@@ -2938,17 +3167,12 @@
           "reasoning" : {
             "$ref" : "#/components/schemas/ReasoningOptions"
           },
+          "repetitionPenalty" : {
+            "type" : "number",
+            "format" : "double"
+          },
           "rerankModelName" : {
             "type" : "string"
-          },
-          "rerankProviderOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
           },
           "seed" : {
             "type" : "integer",
@@ -2974,6 +3198,10 @@
             "format" : "double"
           },
           "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topLogprobs" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -3030,15 +3258,6 @@
             "type" : "array",
             "items" : {
               "type" : "string"
-            }
-          },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
             }
           },
           "query" : {
@@ -3134,6 +3353,9 @@
           "id" : {
             "type" : "string"
           },
+          "logprobs" : {
+            "type" : "boolean"
+          },
           "maxOutputTokens" : {
             "type" : "integer",
             "format" : "int32"
@@ -3157,24 +3379,26 @@
               "type" : "object"
             }
           },
+          "minP" : {
+            "type" : "number",
+            "format" : "double"
+          },
           "output" : {
             "$ref" : "#/components/schemas/OutputSpec"
+          },
+          "parallelToolCalls" : {
+            "type" : "boolean"
           },
           "presencePenalty" : {
             "type" : "number",
             "format" : "double"
           },
-          "providerOptions" : {
-            "type" : "object",
-            "additionalProperties" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "object"
-              }
-            }
-          },
           "reasoning" : {
             "$ref" : "#/components/schemas/ReasoningOptions"
+          },
+          "repetitionPenalty" : {
+            "type" : "number",
+            "format" : "double"
           },
           "seed" : {
             "type" : "integer",
@@ -3197,6 +3421,10 @@
             "$ref" : "#/components/schemas/ToolChoice"
           },
           "topK" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "topLogprobs" : {
             "type" : "integer",
             "format" : "int32"
           },

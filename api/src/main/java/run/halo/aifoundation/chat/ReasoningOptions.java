@@ -21,9 +21,8 @@ import lombok.NoArgsConstructor;
  *     .build();
  * }</pre>
  *
- * <p>Do not combine an explicit typed reasoning setting with raw provider-native reasoning keys
- * in {@link GenerateTextRequest#getProviderOptions()}. Use the typed setting for normal SDK usage,
- * and raw provider options only when a provider-specific parameter is not modeled yet.
+ * <p>The administrator maps this provider-neutral intent to a fixed Provider or Model template.
+ * Callers do not select provider-native reasoning fields.
  */
 @Data
 @Builder

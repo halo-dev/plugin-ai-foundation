@@ -65,8 +65,7 @@ class ProviderRerankingClientTest {
                 .contains("\"query\":\"query\"")
                 .contains("\"documents\":[\"first\",\"second\"]")
                 .contains("\"top_n\":2")
-                .contains("\"return_documents\":true")
-                .contains("\"return_raw_scores\":true");
+                .contains("\"return_documents\":true");
         } finally {
             server.stop(0);
         }
@@ -113,42 +112,6 @@ class ProviderRerankingClientTest {
                 .contains("\"model\":\"dash-rerank\"")
                 .contains("\"input\":{\"query\":\"query\",\"documents\":[\"first\",\"second\"]}")
                 .contains("\"parameters\":{\"top_n\":2,\"return_documents\":true");
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    @Test
-    void dashScopeClient_canUseCompatibleRerankApi() throws Exception {
-        var capture = new AtomicReference<RequestCapture>();
-        var server = server(exchange -> {
-            capture.set(capture(exchange));
-            respond(exchange, 200, """
-                {"id":"dash-compatible","results":[{"index":0,"relevance_score":0.8}]}
-                """);
-        });
-
-        try {
-            var client = new DashScopeRerankingClient(baseUrl(server), "dash-rerank", "sk-test",
-                WebClient.builder());
-
-            StepVerifier.create(client.rerank(RerankRequest.builder()
-                    .query("query")
-                    .documents("first", "second")
-                    .topN(1)
-                    .providerOptions(Map.of("dashscope", Map.of("apiFormat", "compatible")))
-                    .build()))
-                .assertNext(response -> assertThat(response.getResponse().getId())
-                    .isEqualTo("dash-compatible"))
-                .verifyComplete();
-
-            assertThat(capture.get().path()).isEqualTo("/compatible-api/v1/reranks");
-            assertThat(capture.get().body())
-                .contains("\"model\":\"dash-rerank\"")
-                .contains("\"query\":\"query\"")
-                .contains("\"documents\":[\"first\",\"second\"]")
-                .contains("\"top_n\":1")
-                .doesNotContain("apiFormat");
         } finally {
             server.stop(0);
         }
@@ -219,8 +182,7 @@ class ProviderRerankingClientTest {
                 .contains("\"query\":\"query\"")
                 .contains("\"documents\":[\"first\",\"second\"]")
                 .contains("\"top_n\":2")
-                .contains("\"return_documents\":true")
-                .contains("\"return_raw_scores\":true");
+                .contains("\"return_documents\":true");
         } finally {
             server.stop(0);
         }
@@ -255,8 +217,7 @@ class ProviderRerankingClientTest {
                 .contains("\"query\":\"query\"")
                 .contains("\"documents\":[\"first\",\"second\"]")
                 .contains("\"top_n\":2")
-                .contains("\"return_documents\":true")
-                .contains("\"return_raw_scores\":true");
+                .contains("\"return_documents\":true");
         } finally {
             server.stop(0);
         }
@@ -290,7 +251,6 @@ class ProviderRerankingClientTest {
                 RerankDocument.builder().id("second").text("second").build()
             ))
             .topN(2)
-            .providerOptions(Map.of(providerType, Map.of("return_raw_scores", true)))
             .build();
     }
 

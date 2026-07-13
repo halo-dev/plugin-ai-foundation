@@ -3,6 +3,7 @@ import type {
   AiModelSpecAdapterTypeEnum,
   AiModelSpecFeaturesEnum,
   AiModelSpecModelTypeEnum,
+  ModelParameterMappings,
 } from '@/api/generated'
 
 export interface ProviderFormState {
@@ -17,6 +18,7 @@ export interface ProviderFormState {
   apiKeySecretName?: string
   proxyHost?: string
   proxyPort?: number
+  parameterMappings?: ModelParameterMappings
 }
 
 export interface ModelFormState {
@@ -28,4 +30,5 @@ export interface ModelFormState {
   adapterType?: AiModelSpecAdapterTypeEnum
   capabilities?: AiModel['spec']['capabilities']
   capabilitySources?: AiModel['spec']['capabilitySources']
+  parameterMappings?: ModelParameterMappings
 }

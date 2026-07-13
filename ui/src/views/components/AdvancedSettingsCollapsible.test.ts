@@ -20,7 +20,9 @@ describe('AdvancedSettingsCollapsible', () => {
 
     expect(trigger.attributes('aria-expanded')).toBe('false')
     expect(contentId).toBeTruthy()
-    expect(wrapper.get('[data-state="closed"][hidden]').attributes('id')).toBe(contentId)
+    const content = wrapper.get('[data-state="closed"][hidden]')
+    expect(content.attributes('id')).toBe(contentId)
+    expect(content.attributes('style')).toContain('display: none')
     expect(wrapper.find('[data-testid="advanced-field"]').exists()).toBe(true)
     expect(wrapper.find('[data-state="closed"][hidden]').exists()).toBe(true)
   })
@@ -32,11 +34,16 @@ describe('AdvancedSettingsCollapsible', () => {
     await trigger.trigger('click')
     await flushPromises()
     expect(trigger.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.get('[data-state="open"]').attributes('hidden')).toBeUndefined()
+    const content = wrapper.get('[data-state="open"]')
+    expect(content.attributes('hidden')).toBeUndefined()
+    expect(content.attributes('style') || '').not.toContain('display: none')
 
     await trigger.trigger('click')
     await flushPromises()
     expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('[data-state="closed"][hidden]').attributes('style')).toContain(
+      'display: none',
+    )
   })
 })
 

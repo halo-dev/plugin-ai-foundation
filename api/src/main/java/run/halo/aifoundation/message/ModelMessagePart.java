@@ -24,7 +24,7 @@ import run.halo.aifoundation.tool.ToolResult;
  *   <li>{@link PartType#IMAGE}: {@link #media}</li>
  *   <li>{@link PartType#FILE}: {@link #media}</li>
  *   <li>{@link PartType#REASONING}: {@link #text}, {@link #signature},
- *   {@link #providerOptions}</li>
+ *   {@link #providerMetadata}</li>
  *   <li>{@link PartType#TOOL_CALL}: {@link #toolCallId}, {@link #toolName}, {@link #input}</li>
  *   <li>{@link PartType#TOOL_RESULT}: {@link #toolCallId}, {@link #toolName}, {@link #result}</li>
  *   <li>{@link PartType#TOOL_ERROR}: {@link #toolCallId}, {@link #toolName},
@@ -97,10 +97,9 @@ public class ModelMessagePart {
      */
     private String reason;
     /**
-     * Provider-specific options scoped to this part. Most callers should prefer request-level
-     * provider options unless a provider explicitly documents part-level behavior.
+     * Opaque provider-owned state retained for reasoning or tool continuation.
      */
-    private Map<String, Object> providerOptions;
+    private Map<String, Object> providerMetadata;
 
     /**
      * Creates a text message part.
@@ -172,7 +171,7 @@ public class ModelMessagePart {
      * Creates a persisted assistant reasoning part from visible reasoning text.
      *
      * <p>Reasoning parts are valid only in assistant messages and should be kept separate from
-     * answer text. Provider-specific continuation fields belong in {@link #providerOptions}.
+     * answer text. Provider-specific continuation fields belong in {@link #providerMetadata}.
      *
      * @param text visible reasoning text
      * @return an assistant reasoning part
@@ -192,7 +191,7 @@ public class ModelMessagePart {
             .type(PartType.REASONING)
             .text(reasoning.getText())
             .signature(reasoning.getSignature())
-            .providerOptions(reasoning.getProviderMetadata())
+            .providerMetadata(reasoning.getProviderMetadata())
             .build();
     }
 
@@ -228,7 +227,7 @@ public class ModelMessagePart {
             .toolName(request.getToolName())
             .input(request.getInput())
             .stepIndex(request.getStepIndex())
-            .providerOptions(request.getProviderMetadata())
+            .providerMetadata(request.getProviderMetadata())
             .build();
     }
 
@@ -246,7 +245,7 @@ public class ModelMessagePart {
             .toolName(response.getToolName())
             .approved(response.getApproved())
             .reason(response.getReason())
-            .providerOptions(response.getProviderMetadata())
+            .providerMetadata(response.getProviderMetadata())
             .build();
     }
 
@@ -292,23 +291,23 @@ public class ModelMessagePart {
         }
         switch (type) {
             case PartType.TEXT -> rejectFields("text", signature, approvalId, toolCallId,
-                toolName, stepIndex, input, result, errorText, approved, reason, providerOptions,
+                toolName, stepIndex, input, result, errorText, approved, reason, providerMetadata,
                 media);
             case PartType.IMAGE -> {
                 requirePresent(media, "image message part media");
                 rejectFields("image", text, signature, approvalId, toolCallId, toolName, stepIndex,
-                    input, result, errorText, approved, reason, providerOptions);
+                    input, result, errorText, approved, reason, providerMetadata);
             }
             case PartType.FILE -> {
                 requirePresent(media, "file message part media");
                 rejectFields("file", text, signature, approvalId, toolCallId, toolName, stepIndex,
-                    input, result, errorText, approved, reason, providerOptions);
+                    input, result, errorText, approved, reason, providerMetadata);
             }
             case PartType.REASONING -> {
                 if ((text == null || text.isBlank())
-                    && (providerOptions == null || providerOptions.isEmpty())) {
+                    && (providerMetadata == null || providerMetadata.isEmpty())) {
                     throw new IllegalArgumentException(
-                        "reasoning message part must include text or provider options");
+                        "reasoning message part must include text or provider metadata");
                 }
                 rejectFields("reasoning", approvalId, toolCallId, toolName, stepIndex, input,
                     result, errorText, approved, reason, media);
@@ -317,20 +316,20 @@ public class ModelMessagePart {
                 requireText(toolCallId, "tool-call message part toolCallId");
                 requireText(toolName, "tool-call message part toolName");
                 rejectFields("tool-call", text, signature, approvalId, stepIndex, result, errorText,
-                    approved, reason, providerOptions, media);
+                    approved, reason, providerMetadata, media);
             }
             case PartType.TOOL_RESULT -> {
                 requireText(toolCallId, "tool-result message part toolCallId");
                 requireText(toolName, "tool-result message part toolName");
                 rejectFields("tool-result", text, signature, approvalId, stepIndex, input, errorText,
-                    approved, reason, providerOptions, media);
+                    approved, reason, providerMetadata, media);
             }
             case PartType.TOOL_ERROR -> {
                 requireText(toolCallId, "tool-error message part toolCallId");
                 requireText(toolName, "tool-error message part toolName");
                 requireText(errorText, "tool-error message part errorText");
                 rejectFields("tool-error", text, signature, approvalId, stepIndex, input, result,
-                    approved, reason, providerOptions, media);
+                    approved, reason, providerMetadata, media);
             }
             case PartType.TOOL_APPROVAL_REQUEST -> {
                 requireText(approvalId, "tool-approval-request message part approvalId");

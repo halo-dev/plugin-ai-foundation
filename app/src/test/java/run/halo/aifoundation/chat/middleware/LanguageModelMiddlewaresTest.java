@@ -54,6 +54,31 @@ class LanguageModelMiddlewaresTest {
     }
 
     @Test
+    void terminalRequestPreservesTypedSamplingAndToolSettings() {
+        var model = new RecordingLanguageModel();
+        var request = GenerateTextRequest.builder()
+            .prompt("hello")
+            .minP(0.1)
+            .repetitionPenalty(1.2)
+            .logprobs(true)
+            .topLogprobs(3)
+            .parallelToolCalls(false)
+            .middleware(new LanguageModelMiddleware() {
+            })
+            .build();
+
+        StepVerifier.create(LanguageModelMiddlewares.applyRequestMiddleware(model, request))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        assertThat(model.capturedRequest.getMinP()).isEqualTo(0.1);
+        assertThat(model.capturedRequest.getRepetitionPenalty()).isEqualTo(1.2);
+        assertThat(model.capturedRequest.getLogprobs()).isTrue();
+        assertThat(model.capturedRequest.getTopLogprobs()).isEqualTo(3);
+        assertThat(model.capturedRequest.getParallelToolCalls()).isFalse();
+    }
+
+    @Test
     void streamTextSharesAsyncTransformedExecutionAcrossViews() {
         var model = new RecordingLanguageModel();
         var wrapped = LanguageModelMiddlewares.wrap(model,

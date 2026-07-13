@@ -68,6 +68,10 @@ public final class OpenAiChatOptionsSupport {
             .maxTokens(request.getMaxOutputTokens())
             .seed(request.getSeed())
             .stop(request.getStopSequences())
+            .logprobs(request.getLogprobs() != null ? request.getLogprobs()
+                : request.getTopLogprobs() != null ? Boolean.TRUE : null)
+            .topLogprobs(request.getTopLogprobs())
+            .parallelToolCalls(request.getParallelToolCalls())
             .customHeaders(request.getHeaders() != null ? request.getHeaders() : Map.of());
     }
 }
