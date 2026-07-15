@@ -18,6 +18,7 @@ import run.halo.aifoundation.provider.SiliconFlowProvider;
 import run.halo.aifoundation.provider.XiaomiMiMoProvider;
 import run.halo.aifoundation.provider.ZhiPuProvider;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.mapping.ModelParameterCatalog;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 
 class ProviderTypeConsoleEndpointTest {
@@ -25,7 +26,7 @@ class ProviderTypeConsoleEndpointTest {
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
     private final WebTestClient webTestClient = WebTestClient
         .bindToRouterFunction(new ProviderTypeConsoleEndpoint(providerClientCache,
-            new ParameterMappingTemplateRegistry()).endpoint())
+            new ParameterMappingTemplateRegistry(), new ModelParameterCatalog()).endpoint())
         .configureClient()
         .build();
 
@@ -55,6 +56,21 @@ class ProviderTypeConsoleEndpointTest {
             .isEqualTo("openai.max-tokens")
             .jsonPath("$[0].defaultParameterMappings.REASONING.template")
             .isEqualTo("reasoning.thinking-type")
+            .jsonPath("$[0].parameterDefinitions.length()").isEqualTo(14)
+            .jsonPath("$[0].parameterDefinitions[?(@.parameter == 'MAX_OUTPUT_TOKENS')]"
+                + ".displayName")
+            .isEqualTo("最大输出 Token")
+            .jsonPath("$[0].parameterDefinitions[?(@.parameter == 'MAX_OUTPUT_TOKENS')]"
+                + ".domain")
+            .isEqualTo("language")
+            .jsonPath("$[0].parameterDefinitions[?(@.parameter == 'MAX_OUTPUT_TOKENS')]"
+                + ".field")
+            .isEqualTo("maxOutputTokens")
+            .jsonPath("$[0].parameterDefinitions[?(@.parameter == 'MAX_OUTPUT_TOKENS')]"
+                + ".common")
+            .isEqualTo(true)
+            .jsonPath("$[0].parameterDefinitions[?(@.parameter == 'MIN_P')]")
+            .isNotEmpty()
             .jsonPath("$[0].parameterMappingTemplates[?(@.id == 'openai.max-tokens')].defaultField")
             .isEqualTo("max_tokens")
             .jsonPath("$[0].parameterMappingTemplates[?(@.id == 'reasoning.thinking-budget')]")

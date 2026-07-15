@@ -51,6 +51,7 @@ models/model-message.ts
 models/model-option-provider.ts
 models/model-option-unavailable-detail.ts
 models/model-option.ts
+models/model-parameter-definition-info.ts
 models/model-parameter-mappings.ts
 models/move-operation.ts
 models/output-spec.ts

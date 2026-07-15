@@ -7,6 +7,8 @@ import run.halo.aifoundation.provider.support.AdapterType;
 
 public final class ProviderParameterMappingDefaults {
 
+    private static final ModelParameterCatalog CATALOG = new ModelParameterCatalog();
+
     private ProviderParameterMappingDefaults() {
     }
 
@@ -17,10 +19,8 @@ public final class ProviderParameterMappingDefaults {
             return Map.of();
         }
         var modelTypes = adapters.stream().map(AdapterType::getModelType).distinct().toList();
-        for (var parameter : ModelParameter.values()) {
-            if (modelTypes.contains(parameter.getModelType())) {
-                defaults.put(parameter, DefaultParameterMapping.unsupported());
-            }
+        for (var definition : CATALOG.definitionsFor(modelTypes)) {
+            defaults.put(definition.parameter(), DefaultParameterMapping.unsupported());
         }
         if (adapters.contains(AdapterType.OPENAI_CHAT)) {
             putLanguage(defaults, "openai.max-tokens");

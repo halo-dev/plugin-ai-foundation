@@ -1,7 +1,10 @@
-import type { ModelParameterMappings, ParameterMappingTemplateInfo } from '@/api/generated'
+import type {
+  ModelParameterDefinitionInfo,
+  ModelParameterMappings,
+  ParameterMappingTemplateInfo,
+} from '@/api/generated'
 import { describe, expect, it } from '@rstest/core'
 import {
-  definitionsForModelType,
   effectiveSelection,
   mappingsForModelType,
   templatesForParameter,
@@ -9,12 +12,9 @@ import {
   writeSelection,
 } from './parameter-mappings'
 
-const maxTokens = definitionsForModelType('language').find(
-  (item) => item.parameter === 'MAX_OUTPUT_TOKENS',
-)!
-const reasoning = definitionsForModelType('language').find(
-  (item) => item.parameter === 'REASONING',
-)!
+const maxTokens = definition('MAX_OUTPUT_TOKENS', 'language', 'maxOutputTokens')
+const reasoning = definition('REASONING', 'language', 'reasoning')
+const dimensions = definition('DIMENSIONS', 'embedding', 'dimensions')
 
 describe('parameter mapping controls', () => {
   it('filters templates by parameter, model type, and adapter', () => {
@@ -62,9 +62,17 @@ describe('parameter mapping controls', () => {
       language: { maxOutputTokens: { mode: 'UNSUPPORTED' } },
       embedding: { dimensions: { mode: 'UNSUPPORTED' } },
     }
-    expect(mappingsForModelType(mappings, 'embedding')).toEqual({
+    expect(mappingsForModelType(mappings, 'embedding', [maxTokens, dimensions])).toEqual({
       embedding: { dimensions: { mode: 'UNSUPPORTED' } },
     })
+  })
+
+  it('preserves mappings while the parameter catalog is unavailable', () => {
+    const mappings: ModelParameterMappings = {
+      language: { maxOutputTokens: { mode: 'UNSUPPORTED' } },
+    }
+
+    expect(mappingsForModelType(mappings, 'language', undefined)).toBe(mappings)
   })
 
   it('validates typed reasoning intent values', () => {
@@ -96,3 +104,27 @@ describe('parameter mapping controls', () => {
     expect(mappings?.language?.maxOutputTokens?.field).toBe('generation.max_tokens')
   })
 })
+
+function definition(
+  parameter: string,
+  domain: string,
+  field: string,
+): ModelParameterDefinitionInfo & {
+  parameter: string
+  domain: 'language' | 'embedding'
+  field: string
+  displayName: string
+  description: string
+  modelType: 'language' | 'embedding'
+  common: boolean
+} {
+  return {
+    parameter,
+    domain: domain as 'language' | 'embedding',
+    field,
+    displayName: parameter,
+    description: parameter,
+    modelType: domain as 'language' | 'embedding',
+    common: true,
+  }
+}

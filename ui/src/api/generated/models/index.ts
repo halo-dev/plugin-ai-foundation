@@ -33,6 +33,7 @@ export * from './model-message-part';
 export * from './model-option';
 export * from './model-option-provider';
 export * from './model-option-unavailable-detail';
+export * from './model-parameter-definition-info';
 export * from './model-parameter-mappings';
 export * from './move-operation';
 export * from './output-spec';

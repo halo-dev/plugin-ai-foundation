@@ -12,11 +12,13 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.provider.mapping.ModelParameterCatalog;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
+import run.halo.aifoundation.provider.support.DefaultParameterMappingInfo;
+import run.halo.aifoundation.provider.support.ModelParameterDefinitionInfo;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderTypeInfo;
 import run.halo.aifoundation.provider.support.ParameterMappingTemplateInfo;
-import run.halo.aifoundation.provider.support.DefaultParameterMappingInfo;
-import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 
@@ -27,6 +29,7 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
 
     private final ProviderClientCache providerClientCache;
     private final ParameterMappingTemplateRegistry parameterMappingTemplateRegistry;
+    private final ModelParameterCatalog modelParameterCatalog;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -67,6 +70,18 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                 .supportedModelTypes(type.getSupportedModelTypes())
                 .supportedFeatures(type.getSupportedFeatures())
                 .supportedAdapterTypes(type.getSupportedAdapterTypes())
+                .parameterDefinitions(modelParameterCatalog
+                    .definitionsFor(type.getSupportedModelTypes()).stream()
+                    .map(definition -> ModelParameterDefinitionInfo.builder()
+                        .parameter(definition.parameter().name())
+                        .modelType(definition.modelType())
+                        .domain(definition.domain())
+                        .field(definition.field())
+                        .displayName(definition.displayName())
+                        .description(definition.description())
+                        .common(definition.common())
+                        .build())
+                    .toList())
                 .parameterMappingTemplates(parameterMappingTemplateRegistry.list().stream()
                     .filter(template -> template.adapterTypes().stream()
                         .anyMatch(type.getSupportedAdapterTypes()::contains))
@@ -76,7 +91,7 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                         .description(template.description())
                         .defaultField(template.defaultField())
                         .parameter(template.parameter().name())
-                        .modelType(template.parameter().getModelType())
+                        .modelType(modelParameterCatalog.definition(template.parameter()).modelType())
                         .adapterTypes(List.copyOf(template.adapterTypes()))
                         .configurationType(template.configurationType().name())
                         .defaultReasoningMapping(template.defaultReasoningMapping())

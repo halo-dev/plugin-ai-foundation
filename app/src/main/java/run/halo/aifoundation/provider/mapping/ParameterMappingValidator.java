@@ -1,11 +1,10 @@
 package run.halo.aifoundation.provider.mapping;
 
-import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import run.halo.aifoundation.extension.ModelParameterMappings;
-import run.halo.aifoundation.extension.ModelParameterMappings.Selection;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -14,13 +13,21 @@ import run.halo.aifoundation.provider.support.ModelType;
 public class ParameterMappingValidator {
 
     private final ParameterMappingTemplateRegistry registry;
+    private final ModelParameterCatalog catalog;
 
     public ParameterMappingValidator(ParameterMappingTemplateRegistry registry) {
+        this(new ModelParameterCatalog(), registry);
+    }
+
+    @Autowired
+    public ParameterMappingValidator(ModelParameterCatalog catalog,
+        ParameterMappingTemplateRegistry registry) {
+        this.catalog = catalog;
         this.registry = registry;
     }
 
     public void normalize(ModelParameterMappings mappings) {
-        entries(mappings).forEach(entry -> {
+        catalog.selections(mappings).forEach(entry -> {
             var selection = entry.selection();
             if (selection.getMode() == null) {
                 selection.setMode(ModelParameterMappings.Mode.INHERIT);
@@ -43,7 +50,7 @@ public class ParameterMappingValidator {
         normalize(mappings);
         var supportedAdapters = providerType.getSupportedAdapterTypes() != null
             ? providerType.getSupportedAdapterTypes() : List.<AdapterType>of();
-        for (var entry : entries(mappings)) {
+        for (var entry : catalog.selections(mappings)) {
             validateSelection(entry, supportedAdapters, null);
         }
     }
@@ -58,12 +65,13 @@ public class ParameterMappingValidator {
         if (adapterType == null) {
             throw new IllegalArgumentException("adapterType is required for parameter mappings");
         }
-        for (var entry : entries(mappings)) {
+        for (var entry : catalog.selections(mappings)) {
             validateSelection(entry, List.of(adapterType), modelType);
         }
     }
 
-    private void validateSelection(Entry entry, List<AdapterType> adapters, ModelType modelType) {
+    private void validateSelection(ModelParameterCatalog.ConfiguredSelection entry,
+        List<AdapterType> adapters, ModelType modelType) {
         var selection = entry.selection();
         var mode = selection.getMode();
         if (mode != ModelParameterMappings.Mode.TEMPLATE) {
@@ -85,7 +93,7 @@ public class ParameterMappingValidator {
             throw invalid(entry, "Template is not compatible with this parameter: "
                 + descriptor.id());
         }
-        if (modelType != null && descriptor.parameter().getModelType() != modelType) {
+        if (modelType != null && entry.definition().modelType() != modelType) {
             throw invalid(entry, "Template is not compatible with model type: " + modelType);
         }
         if (adapters.stream().noneMatch(descriptor.adapterTypes()::contains)) {
@@ -99,7 +107,7 @@ public class ParameterMappingValidator {
         validateConfiguration(entry, descriptor);
     }
 
-    private void validateField(Entry entry, String field) {
+    private void validateField(ModelParameterCatalog.ConfiguredSelection entry, String field) {
         if (!StringUtils.hasText(field)) {
             return;
         }
@@ -110,7 +118,7 @@ public class ParameterMappingValidator {
         }
     }
 
-    private void validateConfiguration(Entry entry,
+    private void validateConfiguration(ModelParameterCatalog.ConfiguredSelection entry,
         ParameterMappingTemplateDescriptor descriptor) {
         var reasoning = entry.selection().getReasoningMapping();
         if (descriptor.configurationType()
@@ -134,7 +142,7 @@ public class ParameterMappingValidator {
         }
     }
 
-    private int validateReasoningValue(Entry entry,
+    private int validateReasoningValue(ModelParameterCatalog.ConfiguredSelection entry,
         ParameterMappingTemplateDescriptor descriptor,
         ModelParameterMappings.ReasoningValueMapping value) {
         if (value == null) {
@@ -197,73 +205,17 @@ public class ParameterMappingValidator {
         if (modelType == null) {
             throw new IllegalArgumentException("modelType is required for parameter mappings");
         }
-        if (mappings.getLanguage() != null && modelType != ModelType.LANGUAGE) {
-            throw new IllegalArgumentException("language parameter mappings require language model");
-        }
-        if (mappings.getEmbedding() != null && modelType != ModelType.EMBEDDING) {
-            throw new IllegalArgumentException("embedding parameter mappings require embedding model");
-        }
-        if (mappings.getRerank() != null && modelType != ModelType.RERANK) {
-            throw new IllegalArgumentException("rerank parameter mappings require rerank model");
-        }
-        if (mappings.getImageGeneration() != null
-            && modelType != ModelType.IMAGE_GENERATION) {
-            throw new IllegalArgumentException(
-                "imageGeneration parameter mappings require image-generation model");
+        for (var domain : catalog.presentDomains(mappings)) {
+            if (domain.getModelType() != modelType) {
+                throw new IllegalArgumentException(domain.getValue()
+                    + " parameter mappings require " + domain.getModelType().getValue() + " model");
+            }
         }
     }
 
-    private IllegalArgumentException invalid(Entry entry, String detail) {
+    private IllegalArgumentException invalid(ModelParameterCatalog.ConfiguredSelection entry,
+        String detail) {
         return new IllegalArgumentException("Invalid parameter mapping " + entry.parameter().name()
             + ": " + detail);
-    }
-
-    static List<Entry> entries(ModelParameterMappings mappings) {
-        var entries = new ArrayList<Entry>();
-        if (mappings == null) {
-            return entries;
-        }
-        var language = mappings.getLanguage();
-        if (language != null) {
-            add(entries, ModelParameter.MAX_OUTPUT_TOKENS, language.getMaxOutputTokens());
-            add(entries, ModelParameter.TEMPERATURE, language.getTemperature());
-            add(entries, ModelParameter.TOP_P, language.getTopP());
-            add(entries, ModelParameter.TOP_K, language.getTopK());
-            add(entries, ModelParameter.MIN_P, language.getMinP());
-            add(entries, ModelParameter.PRESENCE_PENALTY, language.getPresencePenalty());
-            add(entries, ModelParameter.FREQUENCY_PENALTY, language.getFrequencyPenalty());
-            add(entries, ModelParameter.REPETITION_PENALTY, language.getRepetitionPenalty());
-            add(entries, ModelParameter.STOP_SEQUENCES, language.getStopSequences());
-            add(entries, ModelParameter.SEED, language.getSeed());
-            add(entries, ModelParameter.LOGPROBS, language.getLogprobs());
-            add(entries, ModelParameter.TOP_LOGPROBS, language.getTopLogprobs());
-            add(entries, ModelParameter.PARALLEL_TOOL_CALLS, language.getParallelToolCalls());
-            add(entries, ModelParameter.REASONING, language.getReasoning());
-        }
-        if (mappings.getEmbedding() != null) {
-            add(entries, ModelParameter.DIMENSIONS, mappings.getEmbedding().getDimensions());
-        }
-        if (mappings.getRerank() != null) {
-            add(entries, ModelParameter.TOP_N, mappings.getRerank().getTopN());
-        }
-        var image = mappings.getImageGeneration();
-        if (image != null) {
-            add(entries, ModelParameter.IMAGE_COUNT, image.getN());
-            add(entries, ModelParameter.IMAGE_SIZE, image.getSize());
-            add(entries, ModelParameter.ASPECT_RATIO, image.getAspectRatio());
-            add(entries, ModelParameter.IMAGE_SEED, image.getSeed());
-            add(entries, ModelParameter.RESPONSE_FORMAT, image.getResponseFormat());
-            add(entries, ModelParameter.NEGATIVE_PROMPT, image.getNegativePrompt());
-        }
-        return List.copyOf(entries);
-    }
-
-    private static void add(List<Entry> entries, ModelParameter parameter, Selection selection) {
-        if (selection != null) {
-            entries.add(new Entry(parameter, selection));
-        }
-    }
-
-    record Entry(ModelParameter parameter, Selection selection) {
     }
 }

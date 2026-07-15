@@ -200,6 +200,7 @@ function onSubmit(data: ModelFormRawState) {
   const normalizedMappings = mappingsForModelType(
     parameterMappings.value,
     data.modelType as MappingModelType,
+    selectedProviderType.value?.parameterDefinitions,
   )
   const mappingErrors = validateReasoningMappings(normalizedMappings)
   if (mappingErrors.length) {
@@ -445,6 +446,7 @@ function sameJson(a: unknown, b: unknown) {
         context="model"
         :model-type="selectedModelType as MappingModelType"
         :adapter-type="formState?.adapterType"
+        :definitions="selectedProviderType?.parameterDefinitions"
         :templates="selectedProviderType?.parameterMappingTemplates"
         :defaults="selectedProviderType?.defaultParameterMappings"
         :inherited-mappings="inheritedMappings"

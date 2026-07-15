@@ -108,7 +108,9 @@ const imageEndpointPlaceholder = computed(() => {
   return selectedProviderType.value?.imageEndpointPath || '/images/generations'
 })
 
-const chatEndpointHelp = computed(() => endpointHelp(chatEndpointPath.value, chatEndpointPlaceholder.value))
+const chatEndpointHelp = computed(() =>
+  endpointHelp(chatEndpointPath.value, chatEndpointPlaceholder.value),
+)
 
 const embeddingEndpointHelp = computed(() =>
   endpointHelp(embeddingEndpointPath.value, embeddingEndpointPlaceholder.value),
@@ -273,16 +275,18 @@ defineExpose({
     />
 
     <AdvancedSettingsCollapsible
-      v-if="selectedProviderType?.parameterMappingTemplates?.length"
+      v-if="selectedProviderType?.parameterDefinitions?.length"
       title="参数映射"
       source-label="管理员配置"
     >
       <p class=":uno: mb-3 text-xs text-gray-500">
-        将 AI Foundation 的统一参数映射到当前供应商实际接受的字段。未修改的项目使用供应商类型内置默认值。
+        将 AI Foundation
+        的统一参数映射到当前供应商实际接受的字段。未修改的项目使用供应商类型内置默认值。
       </p>
       <ParameterMappingFields
         v-model="parameterMappings"
         context="provider"
+        :definitions="selectedProviderType.parameterDefinitions"
         :templates="selectedProviderType.parameterMappingTemplates"
         :defaults="selectedProviderType.defaultParameterMappings"
       />

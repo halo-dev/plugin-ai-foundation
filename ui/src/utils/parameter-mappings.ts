@@ -1,5 +1,7 @@
 import type {
   DefaultParameterMappingInfo,
+  ModelParameterDefinitionInfo,
+  ModelParameterDefinitionInfoDomainEnum,
   ModelParameterMappings,
   ParameterMappingTemplateInfo,
   Selection,
@@ -8,61 +10,34 @@ import type {
 export type MappingContext = 'provider' | 'model'
 export type MappingModelType = 'language' | 'embedding' | 'rerank' | 'image-generation'
 
-export interface ParameterDefinition {
+export interface ParameterDefinition extends ModelParameterDefinitionInfo {
   parameter: string
-  domain: keyof ModelParameterMappings
+  domain: ModelParameterDefinitionInfoDomainEnum & keyof ModelParameterMappings
   field: string
-  label: string
+  displayName: string
   description: string
   modelType: MappingModelType
+  common: boolean
 }
 
-export const PARAMETER_DEFINITIONS: ParameterDefinition[] = [
-  parameter('MAX_OUTPUT_TOKENS', 'language', 'maxOutputTokens', '最大输出 Token', '限制单次生成的最大输出长度', 'language'),
-  parameter('TEMPERATURE', 'language', 'temperature', '随机性（Temperature）', '控制生成结果的随机程度', 'language'),
-  parameter('TOP_P', 'language', 'topP', 'Top P', '按累计概率限制候选 Token', 'language'),
-  parameter('TOP_K', 'language', 'topK', 'Top K', '限制候选 Token 数量', 'language'),
-  parameter('MIN_P', 'language', 'minP', 'Min P', '过滤低于相对概率阈值的 Token', 'language'),
-  parameter('PRESENCE_PENALTY', 'language', 'presencePenalty', '存在惩罚', '降低已出现内容再次出现的概率', 'language'),
-  parameter('FREQUENCY_PENALTY', 'language', 'frequencyPenalty', '频率惩罚', '按出现频率降低重复内容', 'language'),
-  parameter('REPETITION_PENALTY', 'language', 'repetitionPenalty', '重复惩罚', '控制重复 Token 的惩罚倍率', 'language'),
-  parameter('STOP_SEQUENCES', 'language', 'stopSequences', '停止序列', '遇到指定文本序列时停止生成', 'language'),
-  parameter('SEED', 'language', 'seed', '随机种子', '尽可能复现相同的生成结果', 'language'),
-  parameter('LOGPROBS', 'language', 'logprobs', 'Token 概率', '返回输出 Token 的对数概率', 'language'),
-  parameter('TOP_LOGPROBS', 'language', 'topLogprobs', '候选 Token 概率数', '返回每个位置概率最高的候选 Token', 'language'),
-  parameter('PARALLEL_TOOL_CALLS', 'language', 'parallelToolCalls', '并行工具调用', '允许模型在一步中发起多个工具调用', 'language'),
-  parameter('REASONING', 'language', 'reasoning', '推理模式', '映射开启、关闭及低中高推理强度', 'language'),
-  parameter('DIMENSIONS', 'embedding', 'dimensions', '向量维度', '指定 Embedding 输出向量的维度', 'embedding'),
-  parameter('TOP_N', 'rerank', 'topN', '返回结果数', '指定 Rerank 返回的最高排名结果数', 'rerank'),
-  parameter('IMAGE_COUNT', 'imageGeneration', 'n', '图片数量', '指定单次请求生成的图片数量', 'image-generation'),
-  parameter('IMAGE_SIZE', 'imageGeneration', 'size', '图片尺寸', '指定图片宽高或尺寸字符串', 'image-generation'),
-  parameter('ASPECT_RATIO', 'imageGeneration', 'aspectRatio', '图片比例', '指定图片宽高比', 'image-generation'),
-  parameter('IMAGE_SEED', 'imageGeneration', 'seed', '图片随机种子', '尽可能复现相同的图片结果', 'image-generation'),
-  parameter('RESPONSE_FORMAT', 'imageGeneration', 'responseFormat', '图片返回格式', '选择 URL 或 Base64 等返回格式', 'image-generation'),
-  parameter('NEGATIVE_PROMPT', 'imageGeneration', 'negativePrompt', '反向提示词', '描述图片中不希望出现的内容', 'image-generation'),
-]
-
-function parameter(
-  parameter: string,
-  domain: keyof ModelParameterMappings,
-  field: string,
-  label: string,
-  description: string,
-  modelType: MappingModelType,
-): ParameterDefinition {
-  return { parameter, domain, field, label, description, modelType }
-}
-
-export function definitionsForModelType(modelType?: string) {
-  return PARAMETER_DEFINITIONS.filter((item) => !modelType || item.modelType === modelType)
+export function parameterDefinitionsForModelType(
+  definitions: ModelParameterDefinitionInfo[] | undefined,
+  modelType?: string,
+) {
+  return (definitions || []).filter(
+    (definition): definition is ParameterDefinition =>
+      isParameterDefinition(definition) && (!modelType || definition.modelType === modelType),
+  )
 }
 
 export function mappingsForModelType(
   mappings: ModelParameterMappings | undefined,
   modelType: MappingModelType,
+  definitions: ModelParameterDefinitionInfo[] | undefined,
 ) {
-  const domain = PARAMETER_DEFINITIONS.find((item) => item.modelType === modelType)?.domain
-  if (!domain || !mappings?.[domain]) return undefined
+  const domain = parameterDefinitionsForModelType(definitions, modelType)[0]?.domain
+  if (!domain) return mappings
+  if (!mappings?.[domain]) return undefined
   return { [domain]: mappings[domain] } as ModelParameterMappings
 }
 
@@ -75,7 +50,9 @@ export function templatesForParameter(
     (template) =>
       template.parameter === definition.parameter &&
       template.modelType === definition.modelType &&
-      (!adapterType || !template.adapterTypes?.length || template.adapterTypes.includes(adapterType as never)),
+      (!adapterType ||
+        !template.adapterTypes?.length ||
+        template.adapterTypes.includes(adapterType as never)),
   )
 }
 
@@ -135,9 +112,7 @@ export function effectiveSelection(
 
 export function validateReasoningMappings(mappings?: ModelParameterMappings) {
   const errors: string[] = []
-  const definition = PARAMETER_DEFINITIONS.find((item) => item.parameter === 'REASONING')
-  if (!definition) return errors
-  const selection = readSelection(mappings, definition)
+  const selection = mappings?.language?.reasoning
   if (selection?.mode !== 'TEMPLATE' || !selection.reasoningMapping) return errors
   const labels = { enabled: '开启', disabled: '关闭', low: '低', medium: '中', high: '高' }
   const configured = Object.entries(labels).filter(
@@ -163,4 +138,18 @@ export function validateReasoningMappings(mappings?: ModelParameterMappings) {
     }
   }
   return errors
+}
+
+function isParameterDefinition(
+  definition: ModelParameterDefinitionInfo,
+): definition is ParameterDefinition {
+  return Boolean(
+    definition.parameter &&
+    definition.field &&
+    definition.displayName &&
+    definition.description &&
+    definition.modelType &&
+    definition.common !== undefined &&
+    definition.domain,
+  )
 }

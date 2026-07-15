@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   DefaultParameterMappingInfo,
+  ModelParameterDefinitionInfo,
   ModelParameterMappings,
   ParameterMappingTemplateInfo,
   ReasoningMapping,
@@ -8,8 +9,8 @@ import type {
   Selection,
 } from '@/api/generated'
 import {
-  definitionsForModelType,
   effectiveSelection,
+  parameterDefinitionsForModelType,
   readSelection,
   templatesForParameter,
   writeSelection,
@@ -31,24 +32,13 @@ const REASONING_INTENTS = [
   { key: 'medium', label: '中', defaultValue: 'medium' },
   { key: 'high', label: '高', defaultValue: 'high' },
 ] as const
-const COMMON_PARAMETERS = new Set([
-  'MAX_OUTPUT_TOKENS',
-  'TEMPERATURE',
-  'TOP_P',
-  'REASONING',
-  'DIMENSIONS',
-  'TOP_N',
-  'IMAGE_COUNT',
-  'IMAGE_SIZE',
-  'ASPECT_RATIO',
-])
-
 type ReasoningIntent = (typeof REASONING_INTENTS)[number]['key']
 
 const props = defineProps<{
   context: MappingContext
   modelType?: MappingModelType
   adapterType?: string
+  definitions?: ModelParameterDefinitionInfo[]
   templates?: ParameterMappingTemplateInfo[]
   defaults?: Record<string, DefaultParameterMappingInfo>
   inheritedMappings?: ModelParameterMappings
@@ -58,17 +48,17 @@ const mappings = defineModel<ModelParameterMappings>()
 const showAdditionalMappings = shallowRef(false)
 
 const definitions = computed(() =>
-  definitionsForModelType(props.modelType).filter(
+  parameterDefinitionsForModelType(props.definitions, props.modelType).filter(
     (definition) =>
       props.defaults?.[definition.parameter] ||
       templatesForParameter(props.templates, definition, props.adapterType).length,
   ),
 )
 const commonDefinitions = computed(() =>
-  definitions.value.filter((definition) => COMMON_PARAMETERS.has(definition.parameter)),
+  definitions.value.filter((definition) => definition.common),
 )
 const additionalDefinitions = computed(() =>
-  definitions.value.filter((definition) => !COMMON_PARAMETERS.has(definition.parameter)),
+  definitions.value.filter((definition) => !definition.common),
 )
 const visibleDefinitions = computed(() => [
   ...commonDefinitions.value,
@@ -117,9 +107,7 @@ function mappingOptions(definition: ParameterDefinition) {
         value: INHERIT_CHOICE,
         label: props.context === 'provider' ? '使用内置默认' : '继承 Provider',
       },
-      ...(templates.length
-        ? [{ value: REASONING_CUSTOM_CHOICE, label: '自定义五档映射' }]
-        : []),
+      ...(templates.length ? [{ value: REASONING_CUSTOM_CHOICE, label: '自定义五档映射' }] : []),
       { value: UNSUPPORTED_CHOICE, label: '标记为不支持' },
     ]
   }
@@ -264,7 +252,11 @@ function updateReasoningState(
   const current = reasoningState(definition, intent)
   if (!current) return
   const next = { ...current, [property]: String(value) }
-  if (property === 'valueType' && value === 'BOOLEAN' && !['true', 'false'].includes(next.value || '')) {
+  if (
+    property === 'valueType' &&
+    value === 'BOOLEAN' &&
+    !['true', 'false'].includes(next.value || '')
+  ) {
     next.value = intent === 'disabled' ? 'false' : 'true'
   }
   setReasoningState(definition, intent, next)
@@ -272,9 +264,7 @@ function updateReasoningState(
 
 function cloneReasoningMapping(value?: ReasoningMapping): ReasoningMapping {
   return Object.fromEntries(
-    REASONING_INTENTS.flatMap(({ key }) =>
-      value?.[key] ? [[key, { ...value[key] }]] : [],
-    ),
+    REASONING_INTENTS.flatMap(({ key }) => (value?.[key] ? [[key, { ...value[key] }]] : [])),
   ) as ReasoningMapping
 }
 
@@ -317,7 +307,7 @@ function effectiveLabel(definition: ParameterDefinition) {
     >
       <div class=":uno: flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div class=":uno: text-sm text-gray-800 font-medium">{{ definition.label }}</div>
+          <div class=":uno: text-sm text-gray-800 font-medium">{{ definition.displayName }}</div>
           <div class=":uno: mt-0.5 text-xs text-gray-500">{{ definition.description }}</div>
         </div>
         <span class=":uno: shrink-0 rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-600">
@@ -339,8 +329,7 @@ function effectiveLabel(definition: ParameterDefinition) {
 
       <FormKit
         v-if="
-          definition.parameter !== 'REASONING' &&
-          mappingChoice(definition) === CUSTOM_FIELD_CHOICE
+          definition.parameter !== 'REASONING' && mappingChoice(definition) === CUSTOM_FIELD_CHOICE
         "
         type="text"
         :name="`parameterMappingCustomField_${definition.parameter}`"

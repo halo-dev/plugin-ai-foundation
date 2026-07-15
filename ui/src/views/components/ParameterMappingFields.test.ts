@@ -1,5 +1,6 @@
 import type {
   DefaultParameterMappingInfo,
+  ModelParameterDefinitionInfo,
   ModelParameterMappings,
   ParameterMappingTemplateInfo,
 } from '@/api/generated'
@@ -44,23 +45,27 @@ const dashScopeImageCountTemplate: ParameterMappingTemplateInfo = {
   configurationType: 'NONE',
 }
 
+const languageDefinitions = [
+  definition('MAX_OUTPUT_TOKENS', 'language', 'maxOutputTokens', '最大输出 Token', true),
+  definition('TEMPERATURE', 'language', 'temperature', '随机性（Temperature）', true),
+  definition('TOP_P', 'language', 'topP', 'Top P', true),
+  definition('TOP_K', 'language', 'topK', 'Top K'),
+  definition('MIN_P', 'language', 'minP', 'Min P'),
+  definition('PRESENCE_PENALTY', 'language', 'presencePenalty', '存在惩罚'),
+  definition('FREQUENCY_PENALTY', 'language', 'frequencyPenalty', '频率惩罚'),
+  definition('REPETITION_PENALTY', 'language', 'repetitionPenalty', '重复惩罚'),
+  definition('STOP_SEQUENCES', 'language', 'stopSequences', '停止序列'),
+  definition('SEED', 'language', 'seed', '随机种子'),
+  definition('LOGPROBS', 'language', 'logprobs', 'Token 概率'),
+  definition('TOP_LOGPROBS', 'language', 'topLogprobs', '候选 Token 概率数'),
+  definition('PARALLEL_TOOL_CALLS', 'language', 'parallelToolCalls', '并行工具调用'),
+  definition('REASONING', 'language', 'reasoning', '推理模式', true),
+]
+const temperatureDefinition = languageDefinitions[1]
+const reasoningDefinition = languageDefinitions[13]
+const imageCountDefinition = definition('IMAGE_COUNT', 'imageGeneration', 'n', '图片数量', true)
 const languageDefaults = Object.fromEntries(
-  [
-    'MAX_OUTPUT_TOKENS',
-    'TEMPERATURE',
-    'TOP_P',
-    'TOP_K',
-    'MIN_P',
-    'PRESENCE_PENALTY',
-    'FREQUENCY_PENALTY',
-    'REPETITION_PENALTY',
-    'STOP_SEQUENCES',
-    'SEED',
-    'LOGPROBS',
-    'TOP_LOGPROBS',
-    'PARALLEL_TOOL_CALLS',
-    'REASONING',
-  ].map((parameter) => [parameter, { mode: 'UNSUPPORTED' }]),
+  languageDefinitions.map(({ parameter }) => [parameter, { mode: 'UNSUPPORTED' }]),
 ) as Record<string, DefaultParameterMappingInfo>
 
 describe('ParameterMappingFields', () => {
@@ -211,7 +216,7 @@ function mountHost() {
       components: { ParameterMappingFields },
       setup() {
         const mappings = ref<ModelParameterMappings>()
-        return { mappings, temperatureTemplate }
+        return { mappings, temperatureDefinition, temperatureTemplate }
       },
       template: `
         <ParameterMappingFields
@@ -219,6 +224,7 @@ function mountHost() {
           context="provider"
           model-type="language"
           adapter-type="openai-chat"
+          :definitions="[temperatureDefinition]"
           :templates="[temperatureTemplate]"
         />
       `,
@@ -240,7 +246,7 @@ function mountReasoningHost() {
         const defaults = {
           REASONING: { mode: 'TEMPLATE', template: 'reasoning.effort' },
         }
-        return { mappings, defaults, reasoningTemplate }
+        return { mappings, defaults, reasoningDefinition, reasoningTemplate }
       },
       template: `
         <ParameterMappingFields
@@ -248,6 +254,7 @@ function mountReasoningHost() {
           context="provider"
           model-type="language"
           adapter-type="openai-chat"
+          :definitions="[reasoningDefinition]"
           :templates="[reasoningTemplate]"
           :defaults="defaults"
         />
@@ -267,7 +274,7 @@ function mountScopedHost() {
       components: { ParameterMappingFields },
       setup() {
         const mappings = ref<ModelParameterMappings>()
-        return { dashScopeImageCountTemplate, mappings }
+        return { dashScopeImageCountTemplate, imageCountDefinition, mappings }
       },
       template: `
         <ParameterMappingFields
@@ -275,6 +282,7 @@ function mountScopedHost() {
           context="provider"
           model-type="image-generation"
           adapter-type="dashscope-image"
+          :definitions="[imageCountDefinition]"
           :templates="[dashScopeImageCountTemplate]"
         />
       `,
@@ -293,13 +301,14 @@ function mountVisibilityHost(initialMappings?: ModelParameterMappings) {
       components: { ParameterMappingFields },
       setup() {
         const mappings = ref<ModelParameterMappings | undefined>(initialMappings)
-        return { mappings, languageDefaults }
+        return { languageDefinitions, mappings, languageDefaults }
       },
       template: `
         <ParameterMappingFields
           v-model="mappings"
           context="provider"
           model-type="language"
+          :definitions="languageDefinitions"
           :defaults="languageDefaults"
         />
       `,
@@ -315,4 +324,22 @@ function mountVisibilityHost(initialMappings?: ModelParameterMappings) {
 async function settleFormKit() {
   await new Promise((resolve) => setTimeout(resolve, 25))
   await nextTick()
+}
+
+function definition(
+  parameter: string,
+  domain: 'language' | 'embedding' | 'rerank' | 'imageGeneration',
+  field: string,
+  displayName: string,
+  common = false,
+): ModelParameterDefinitionInfo {
+  return {
+    parameter,
+    domain,
+    field,
+    displayName,
+    description: `${displayName}说明`,
+    modelType: domain === 'imageGeneration' ? 'image-generation' : domain,
+    common,
+  }
 }

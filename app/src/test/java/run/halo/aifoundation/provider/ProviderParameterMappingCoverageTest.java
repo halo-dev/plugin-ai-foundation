@@ -3,17 +3,19 @@ package run.halo.aifoundation.provider;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ModelParameterCatalog;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 
 class ProviderParameterMappingCoverageTest {
 
     private final ParameterMappingTemplateRegistry registry =
         new ParameterMappingTemplateRegistry();
+    private final ModelParameterCatalog catalog = new ModelParameterCatalog();
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("providers")
@@ -38,13 +40,14 @@ class ProviderParameterMappingCoverageTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("providers")
-    void everySupportedModelDomainHasADeclaration(AiProviderType providerType) {
+    void everySupportedModelDomainHasCompleteDeclarations(AiProviderType providerType) {
         var defaults = providerType.getDefaultParameterMappings();
-        providerType.getSupportedModelTypes().forEach(modelType ->
-            assertThat(defaults.keySet().stream()
-                .anyMatch(parameter -> parameter.getModelType() == modelType))
-                .as("mapping declaration for %s", modelType)
-                .isTrue());
+        var expected = catalog.definitionsFor(providerType.getSupportedModelTypes()).stream()
+            .map(definition -> definition.parameter())
+            .toList();
+
+        assertThat(defaults.keySet())
+            .containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test

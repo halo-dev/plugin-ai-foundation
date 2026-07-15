@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.25.4"
+    "version" : "2.25.2"
   },
   "servers" : [ {
-    "url" : "http://localhost:55124",
+    "url" : "http://localhost:41657",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -2257,6 +2257,34 @@
         },
         "description" : "Structured details for unavailable options"
       },
+      "ModelParameterDefinitionInfo" : {
+        "type" : "object",
+        "properties" : {
+          "common" : {
+            "type" : "boolean"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "domain" : {
+            "type" : "string",
+            "enum" : [ "language", "embedding", "rerank", "imageGeneration" ]
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "modelType" : {
+            "type" : "string",
+            "enum" : [ "language", "embedding", "rerank", "image-generation" ]
+          },
+          "parameter" : {
+            "type" : "string"
+          }
+        }
+      },
       "ModelParameterMappings" : {
         "type" : "object",
         "properties" : {
@@ -2422,6 +2450,12 @@
           },
           "imageEndpointPath" : {
             "type" : "string"
+          },
+          "parameterDefinitions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelParameterDefinitionInfo"
+            }
           },
           "parameterMappingTemplates" : {
             "type" : "array",

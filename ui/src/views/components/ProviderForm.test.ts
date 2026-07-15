@@ -103,6 +103,17 @@ function providerType(providerType: string): ProviderTypeInfo {
   return {
     providerType,
     displayName: providerType,
+    parameterDefinitions: [
+      {
+        parameter: 'TEMPERATURE',
+        modelType: 'language',
+        domain: 'language',
+        field: 'temperature',
+        displayName: '随机性（Temperature）',
+        description: '控制生成结果的随机程度',
+        common: true,
+      },
+    ],
     parameterMappingTemplates: [
       {
         id: 'chat.temperature',

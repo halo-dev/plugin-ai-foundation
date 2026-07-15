@@ -1,22 +1,26 @@
 package run.halo.aifoundation.provider.mapping;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import run.halo.aifoundation.provider.support.ModelType;
-
-@Getter
-@RequiredArgsConstructor
 public enum ModelParameter {
-    MAX_OUTPUT_TOKENS(ModelType.LANGUAGE), TEMPERATURE(ModelType.LANGUAGE),
-    TOP_P(ModelType.LANGUAGE), TOP_K(ModelType.LANGUAGE), MIN_P(ModelType.LANGUAGE),
-    PRESENCE_PENALTY(ModelType.LANGUAGE), FREQUENCY_PENALTY(ModelType.LANGUAGE),
-    REPETITION_PENALTY(ModelType.LANGUAGE), STOP_SEQUENCES(ModelType.LANGUAGE),
-    SEED(ModelType.LANGUAGE), LOGPROBS(ModelType.LANGUAGE), TOP_LOGPROBS(ModelType.LANGUAGE),
-    PARALLEL_TOOL_CALLS(ModelType.LANGUAGE), REASONING(ModelType.LANGUAGE),
-    DIMENSIONS(ModelType.EMBEDDING), TOP_N(ModelType.RERANK),
-    IMAGE_COUNT(ModelType.IMAGE_GENERATION), IMAGE_SIZE(ModelType.IMAGE_GENERATION),
-    ASPECT_RATIO(ModelType.IMAGE_GENERATION), IMAGE_SEED(ModelType.IMAGE_GENERATION),
-    RESPONSE_FORMAT(ModelType.IMAGE_GENERATION), NEGATIVE_PROMPT(ModelType.IMAGE_GENERATION);
-
-    private final ModelType modelType;
+    MAX_OUTPUT_TOKENS,
+    TEMPERATURE,
+    TOP_P,
+    TOP_K,
+    MIN_P,
+    PRESENCE_PENALTY,
+    FREQUENCY_PENALTY,
+    REPETITION_PENALTY,
+    STOP_SEQUENCES,
+    SEED,
+    LOGPROBS,
+    TOP_LOGPROBS,
+    PARALLEL_TOOL_CALLS,
+    REASONING,
+    DIMENSIONS,
+    TOP_N,
+    IMAGE_COUNT,
+    IMAGE_SIZE,
+    ASPECT_RATIO,
+    IMAGE_SEED,
+    RESPONSE_FORMAT,
+    NEGATIVE_PROMPT
 }
