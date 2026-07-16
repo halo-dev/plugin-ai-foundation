@@ -7,8 +7,8 @@ package run.halo.aifoundation.ui;
  * stream chunks such as tool input deltas, finish events, errors, and aborts are
  * not represented as parts.
  */
-public sealed interface UIMessagePart permits TextPart, ReasoningPart, DataPart, ToolPart,
-    SourceUrlPart, SourceDocumentPart, FilePart {
+public sealed interface UIMessagePart permits StepStartPart, TextPart, ReasoningPart, DataPart,
+    ToolPart, SourceUrlPart, SourceDocumentPart, FilePart {
 
     /**
      * Stable discriminator used by serializers and callers.

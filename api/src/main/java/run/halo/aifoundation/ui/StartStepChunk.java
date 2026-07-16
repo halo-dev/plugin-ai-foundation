@@ -3,7 +3,8 @@ package run.halo.aifoundation.ui;
 /**
  * Lifecycle chunk describing the start of one generation step.
  *
- * <p>Step start chunks are not persisted into {@link UIMessage#parts()} by the stream reader.
+ * <p>The stream reader persists this lifecycle event as a marker-only {@link StepStartPart}.
+ * The invocation-local index remains stream diagnostics and is not copied to the persisted part.
  *
  * @param stepIndex step index
  */

@@ -15,6 +15,7 @@ class UIMessageTransportCodecTest {
     @Test
     void decodesAndEncodesAllBuiltInPartTypes() {
         var parts = List.of(
+            UIMessageParts.stepStart(),
             UIMessageParts.text("text-1", "hello"),
             UIMessageParts.reasoning("reasoning-1", "thinking", Map.of("opaque", "state")),
             UIMessageParts.data("notice", Map.of("level", "info")),

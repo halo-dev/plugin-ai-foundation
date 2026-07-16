@@ -23,6 +23,7 @@ public record UIMessagePartIdentity(String type, String id) {
      */
     public static UIMessagePartIdentity of(UIMessagePart part) {
         return switch (part) {
+            case StepStartPart value -> new UIMessagePartIdentity(value.type(), value.type());
             case TextPart value -> new UIMessagePartIdentity(value.type(), value.id());
             case ReasoningPart value -> new UIMessagePartIdentity(value.type(), value.id());
             case DataPart value -> new UIMessagePartIdentity(value.type(), value.id());

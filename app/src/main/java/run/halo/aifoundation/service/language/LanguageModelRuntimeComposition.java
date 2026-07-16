@@ -19,6 +19,7 @@ public record LanguageModelRuntimeComposition(
     String providerType,
     LanguageModelProviderOptions providerOptions,
     ModelCapabilities modelCapabilities,
+    boolean reasoningHistorySupported,
     LanguageModelRequestValidator requestValidator,
     LanguageModelMessageMapper messageMapper,
     GenerationMessageHistoryAssembler messageHistoryAssembler,
@@ -65,12 +66,14 @@ public record LanguageModelRuntimeComposition(
         var context = configuration.context();
         var resolvedOptions = configuration.providerOptions();
         var resolvedCapabilities = configuration.modelCapabilities();
+        var reasoningHistorySupported = reasoningHistorySupported(resolvedCapabilities,
+            resolvedOptions);
         var requestValidator = new LanguageModelRequestValidator(context.providerType(),
-            resolvedOptions.reasoningHistorySupported(), resolvedCapabilities, context.modelName(),
+            reasoningHistorySupported, resolvedCapabilities, context.modelName(),
             context.providerName(), mediaResourcePolicy, capabilityMatcher);
         var messageMapper = new LanguageModelMessageMapper(context.providerType());
         var messageHistoryAssembler = new GenerationMessageHistoryAssembler(context.providerType(),
-            resolvedOptions.reasoningHistorySupported(), messageMapper);
+            reasoningHistorySupported, messageMapper);
         var chatOptionsBuilder = new LanguageModelChatOptionsBuilder(context.providerType(),
             context.modelId(),
             resolvedOptions, runtimeSupport::writeJson);
@@ -86,10 +89,19 @@ public record LanguageModelRuntimeComposition(
             runtimeSupport::withToolTimeout);
         var toolStepCoordinator = new ToolStepCoordinator(toolExecutor);
         return new LanguageModelRuntimeComposition(context.providerType(), resolvedOptions,
-            resolvedCapabilities, requestValidator, messageMapper, messageHistoryAssembler,
-            chatOptionsBuilder, responseMapper, reasoningExtractor, toolCallMapper,
-            structuredOutputHandler, toolExecutor, toolStepCoordinator, new ToolApprovalResolver(),
-            runtimeSupport);
+            resolvedCapabilities, reasoningHistorySupported, requestValidator, messageMapper,
+            messageHistoryAssembler, chatOptionsBuilder, responseMapper, reasoningExtractor,
+            toolCallMapper, structuredOutputHandler, toolExecutor, toolStepCoordinator,
+            new ToolApprovalResolver(), runtimeSupport);
+    }
+
+    private static boolean reasoningHistorySupported(ModelCapabilities capabilities,
+        LanguageModelProviderOptions providerOptions) {
+        var language = capabilities.getLanguage();
+        if (language != null && language.getReasoningHistory() != null) {
+            return language.getReasoningHistory();
+        }
+        return providerOptions.reasoningHistorySupported();
     }
 
     private static LanguageModelRuntimeConfiguration configuration(String providerType,

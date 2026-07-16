@@ -112,36 +112,24 @@ public final class UIMessageConverters {
             var emitted = false;
             for (var partIndex = 0; partIndex < message.parts().size(); partIndex++) {
                 var part = message.parts().get(partIndex);
+                if (part instanceof StepStartPart) {
+                    emitted |= flushSegment(message, assistantContent, toolContent);
+                    continue;
+                }
                 var context = new UIMessageConversionContext<>(messages, message, messageIndex,
                     part, partIndex);
                 if (isToolApprovalResponse(part)) {
-                    if (!assistantContent.isEmpty()) {
-                        emitted |= flushSegment(message, assistantContent, toolContent);
-                    }
                     assistantContent.addAll(convertToolCall((ToolPart) part));
                     assistantContent.add(convertToolApprovalRequest((ToolPart) part));
-                    emitted |= flushSegment(message, assistantContent, toolContent);
                     toolContent.add(convertToolApprovalResponse((ToolPart) part));
                     continue;
                 }
                 if (isTerminalToolPart(part)) {
-                    if (!toolContent.isEmpty()) {
-                        emitted |= flushSegment(message, assistantContent, toolContent);
-                    }
                     assistantContent.addAll(convertToolCall((ToolPart) part));
-                    emitted |= flushSegment(message, assistantContent, toolContent);
                     toolContent.addAll(convertToolOutput((ToolPart) part));
                     continue;
                 }
-                var converted = convertPart(part, context);
-                if (isToolResponsePart(part)) {
-                    toolContent.addAll(converted);
-                } else {
-                    if (!toolContent.isEmpty()) {
-                        emitted |= flushSegment(message, assistantContent, toolContent);
-                    }
-                    assistantContent.addAll(converted);
-                }
+                assistantContent.addAll(convertPart(part, context));
             }
             emitted |= flushSegment(message, assistantContent, toolContent);
             if (!emitted) {
@@ -165,10 +153,6 @@ public final class UIMessageConverters {
                 emitted = true;
             }
             return emitted;
-        }
-
-        private boolean isToolResponsePart(UIMessagePart part) {
-            return isTerminalToolPart(part) || isToolApprovalResponse(part);
         }
 
         private boolean isToolApprovalResponse(UIMessagePart part) {

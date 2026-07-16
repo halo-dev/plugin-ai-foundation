@@ -11,6 +11,15 @@ public final class UIMessageParts {
     }
 
     /**
+     * Creates a persisted generation-step boundary marker.
+     *
+     * @return step-start marker
+     */
+    public static StepStartPart stepStart() {
+        return new StepStartPart();
+    }
+
+    /**
      * Creates a persisted text part.
      *
      * @param id text part id

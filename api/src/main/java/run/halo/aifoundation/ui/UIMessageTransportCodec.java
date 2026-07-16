@@ -286,6 +286,7 @@ public final class UIMessageTransportCodec {
                 objectMap(map.get("providerMetadata")));
         }
         return switch (type) {
+            case UIMessageChunkType.STEP_START -> UIMessageParts.stepStart();
             case UIMessageChunkType.TEXT -> UIMessageParts.text(stringValue(map.get("id")),
                 stringValue(map.get("text")));
             case UIMessageChunkType.REASONING -> UIMessageParts.reasoning(
@@ -322,6 +323,8 @@ public final class UIMessageTransportCodec {
         var map = new LinkedHashMap<String, Object>();
         put(map, "type", part.type());
         switch (part) {
+            case StepStartPart ignored -> {
+            }
             case TextPart text -> {
                 put(map, "id", text.id());
                 put(map, "text", text.text());

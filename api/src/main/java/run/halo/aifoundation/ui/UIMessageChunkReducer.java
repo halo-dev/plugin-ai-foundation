@@ -32,7 +32,7 @@ public final class UIMessageChunkReducer {
      * Applies a stream chunk.
      *
      * @param chunk stream chunk
-     * @return true when persisted message parts changed
+     * @return true when visible persisted message content changed
      */
     public boolean accept(UIMessageChunk chunk) {
         UIMessageChunkValidator.validate(chunk);
@@ -74,7 +74,10 @@ public final class UIMessageChunkReducer {
                 tool.providerMetadata());
             case ToolChunk tool -> replaceTool(tool);
             case FinishStepChunk ignored -> false;
-            case StartStepChunk ignored -> false;
+            case StartStepChunk ignored -> {
+                parts.add(UIMessageParts.stepStart());
+                yield false;
+            }
             case FinishChunk finish -> {
                 terminal = terminal.withFinish(finish.finishReason(), finish.usage());
                 yield false;

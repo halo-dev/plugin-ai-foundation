@@ -17,6 +17,7 @@ import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.Metadata;
@@ -124,6 +125,51 @@ class ModelCapabilityServiceTest {
         var capabilities = service.effectiveCapabilities(model, providerType);
 
         assertThat(capabilities.getImageGeneration().getTextToImage()).isTrue();
+    }
+
+    @Test
+    void effectiveCapabilities_inheritsProviderReasoningHistoryDefault() {
+        var model = model(ModelType.LANGUAGE);
+        var providerType = mock(AiProviderType.class);
+        when(providerType.languageModelProviderOptions()).thenReturn(
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .build());
+
+        var capabilities = service.effectiveCapabilities(model, providerType);
+
+        assertThat(capabilities.getLanguage().getReasoningHistory()).isTrue();
+    }
+
+    @Test
+    void effectiveCapabilities_modelReasoningHistoryOverridesProviderDefault() {
+        var model = model(ModelType.LANGUAGE);
+        model.getSpec().setCapabilities(ModelCapabilities.builder()
+            .language(LanguageCapability.builder()
+                .reasoningHistory(false)
+                .build())
+            .build());
+        var providerType = mock(AiProviderType.class);
+        when(providerType.languageModelProviderOptions()).thenReturn(
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .build());
+
+        var capabilities = service.effectiveCapabilities(model, providerType);
+
+        assertThat(capabilities.getLanguage().getReasoningHistory()).isFalse();
+    }
+
+    @Test
+    void effectiveCapabilities_inheritsUnsupportedProviderReasoningHistoryDefault() {
+        var model = model(ModelType.LANGUAGE);
+        var providerType = mock(AiProviderType.class);
+        when(providerType.languageModelProviderOptions())
+            .thenReturn(LanguageModelProviderOptions.defaults());
+
+        var capabilities = service.effectiveCapabilities(model, providerType);
+
+        assertThat(capabilities.getLanguage().getReasoningHistory()).isFalse();
     }
 
     @Test

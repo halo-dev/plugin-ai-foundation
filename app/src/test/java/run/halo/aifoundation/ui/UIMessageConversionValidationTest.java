@@ -52,21 +52,15 @@ class UIMessageConversionValidationTest {
         ));
 
         assertThat(result.warnings()).isEmpty();
-        assertThat(result.messages()).hasSize(4);
+        assertThat(result.messages()).hasSize(2);
         assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
         assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TEXT, PartType.TOOL_CALL);
+            .containsExactly(PartType.TEXT, PartType.TOOL_CALL, PartType.TOOL_CALL);
         assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
         assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TOOL_RESULT);
+            .containsExactly(PartType.TOOL_RESULT, PartType.TOOL_ERROR);
         assertThat(result.messages().get(1).getContent().getFirst().getResult())
             .isEqualTo(Map.of("temp", 20));
-        assertThat(result.messages().get(2).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
-        assertThat(result.messages().get(2).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TOOL_CALL);
-        assertThat(result.messages().get(3).getRole()).isEqualTo(ModelMessageRole.TOOL);
-        assertThat(result.messages().get(3).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TOOL_ERROR);
     }
 
     @Test
@@ -86,22 +80,16 @@ class UIMessageConversionValidationTest {
 
         assertThat(result.warnings()).extracting(UIMessageConversionWarning::code)
             .containsExactly("tool.pending-skipped");
-        assertThat(result.messages()).hasSize(4);
+        assertThat(result.messages()).hasSize(2);
         assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
         assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TEXT, PartType.TOOL_CALL);
+            .containsExactly(PartType.TEXT, PartType.TOOL_CALL, PartType.TOOL_CALL);
         assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
         assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TOOL_RESULT);
+            .containsExactly(PartType.TOOL_RESULT, PartType.TOOL_ERROR);
         assertThat(result.messages().get(1).getContent().get(0).getResult())
             .isEqualTo(Map.of("result", "Halo"));
-        assertThat(result.messages().get(2).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
-        assertThat(result.messages().get(2).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TOOL_CALL);
-        assertThat(result.messages().get(3).getRole()).isEqualTo(ModelMessageRole.TOOL);
-        assertThat(result.messages().get(3).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.TOOL_ERROR);
-        assertThat(result.messages().get(3).getContent().getFirst().getErrorText())
+        assertThat(result.messages().get(1).getContent().get(1).getErrorText())
             .isEqualTo("Denied");
     }
 
@@ -271,18 +259,64 @@ class UIMessageConversionValidationTest {
         ));
 
         assertThat(result.warnings()).isEmpty();
-        assertThat(result.messages()).hasSize(3);
+        assertThat(result.messages()).hasSize(2);
         assertThat(result.messages().get(0).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
         assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
-            .containsExactly(PartType.REASONING, PartType.TOOL_CALL);
+            .containsExactly(PartType.REASONING, PartType.TOOL_CALL, PartType.TEXT);
         assertThat(result.messages().get(0).getContent().getFirst().getProviderMetadata())
             .isEqualTo(Map.of("signature", "opaque"));
         assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
         assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
             .containsExactly(PartType.TOOL_RESULT);
+    }
+
+    @Test
+    void preservesExplicitStepBoundariesAndGroupsMultipleToolCalls() {
+        var result = UIMessageConverters.convertToModelMessages(List.of(
+            new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(
+                UIMessageParts.stepStart(),
+                UIMessageParts.reasoning("reasoning-1", "Need both tools.", Map.of()),
+                UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("city", "Hangzhou"), null, Map.of("temp", 20), null, null,
+                    Map.of()),
+                UIMessageParts.tool("call-2", "search", ToolPartState.OUTPUT_AVAILABLE,
+                    Map.of("q", "Halo"), null, Map.of("result", "Halo"), null, null,
+                    Map.of()),
+                UIMessageParts.stepStart(),
+                UIMessageParts.text("final", "done"),
+                UIMessageParts.stepStart()
+            ), new Metadata("chat"))
+        ));
+
+        assertThat(result.warnings()).isEmpty();
+        assertThat(result.messages()).hasSize(3);
+        assertThat(result.messages().get(0).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.REASONING, PartType.TOOL_CALL, PartType.TOOL_CALL);
+        assertThat(result.messages().get(1).getRole()).isEqualTo(ModelMessageRole.TOOL);
+        assertThat(result.messages().get(1).getContent()).extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_RESULT, PartType.TOOL_RESULT);
         assertThat(result.messages().get(2).getRole()).isEqualTo(ModelMessageRole.ASSISTANT);
         assertThat(result.messages().get(2).getContent()).extracting(ModelMessagePart::getType)
             .containsExactly(PartType.TEXT);
+    }
+
+    @Test
+    void validatesStepStartPartRole() {
+        var assistant = UIMessageValidators.safeValidate(List.of(
+            new UIMessage<>("assistant", UIMessageRole.ASSISTANT,
+                List.of(UIMessageParts.stepStart()), new Metadata("chat"))));
+        var user = UIMessageValidators.safeValidate(List.of(
+            new UIMessage<>("user", UIMessageRole.USER,
+                List.of(UIMessageParts.stepStart()), new Metadata("chat"))));
+        var system = UIMessageValidators.safeValidate(List.of(
+            new UIMessage<>("system", UIMessageRole.SYSTEM,
+                List.of(UIMessageParts.stepStart()), new Metadata("chat"))));
+
+        assertThat(assistant.isValid()).isTrue();
+        assertThat(user.issues()).extracting(UIMessageValidationIssue::code)
+            .containsExactly("part.step-start.role.invalid");
+        assertThat(system.issues()).extracting(UIMessageValidationIssue::code)
+            .containsExactly("part.step-start.role.invalid");
     }
 
     @Test

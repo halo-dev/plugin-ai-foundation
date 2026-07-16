@@ -662,7 +662,12 @@ Mono<UIMessageStreamTerminal> terminal = read.finish();
 | `tool-input-available`                                  | 聚合为同一个动态 `tool-*` 消息片段的 `input-available` 状态 |
 | `tool-output-available` / `tool-output-error`           | 聚合为同一个动态 `tool-*` 消息片段的完成状态                |
 | `tool-approval-request` / `tool-approval-response`      | 聚合为同一个动态 `tool-*` 消息片段的审批状态                |
-| `start-step` / `finish-step` / `error` / `abort`        | 只更新生命周期或终态信息，不进入 `UIMessage.parts`          |
+| `start-step`                                            | 追加无字段的 `StepStartPart`（传输类型为 `step-start`）      |
+| `finish-step` / `error` / `abort`                       | 只更新生命周期或终态信息，不进入 `UIMessage.parts`          |
+
+`StepStartPart` 只记录它在有序 `parts` 中的位置，不保存每次调用都会重新计数的
+`stepIndex`，也不会单独触发一条可见消息。保存 assistant 消息时应原样保留 `parts` 的顺序；
+后续转换会用这些 marker 恢复同一步中的 reasoning、文本和多个工具调用。
 
 SSE 传输层使用 `tool-input-*`、`tool-output-*` 和 `tool-approval-*` 这类规范工具数据块
 表达“流中发生的事件”。聚合后的 assistant `UIMessage.parts` 仍然使用动态
@@ -672,8 +677,8 @@ SSE 传输层使用 `tool-input-*`、`tool-output-*` 和 `tool-approval-*` 这�
 ## 工具续跑
 
 `UIMessage` 不使用 `TOOL` 角色。工具生命周期保存在 assistant `UIMessage.parts()` 中的
-动态 `tool-*` 消息片段；转换为模型请求时，SDK 会按消息片段顺序拆成 assistant 和 tool
-`ModelMessage`。
+动态 `tool-*` 消息片段；转换为模型请求时，SDK 会按 `StepStartPart` 划分 generation step，
+每个非空 step 最多生成一条 assistant `ModelMessage` 和随后一条 tool `ModelMessage`。
 
 外部工具执行成功后，把包含原始 `tool-*` 消息片段的 assistant 消息更新为 `output-available`：
 
@@ -866,6 +871,7 @@ UIMessageConversionResult conversion =
 | ------------------------------------------------ | --------------------------------------------------------------------- |
 | `TextPart`                                       | 转为模型文本                                                          |
 | `ReasoningPart`                                  | 由模型能力决定；支持 reasoning history 时保留，不支持时丢弃并记录警告 |
+| `StepStartPart`                                  | 仅划分 generation step，不生成模型内容                              |
 | `ToolPart` + `input-available`                   | 转为 assistant 工具调用内容                                           |
 | `ToolPart` + `approval-requested`                | 转为 assistant 审批请求内容                                           |
 | `ToolPart` + `output-available` / `output-error` | 转为工具消息                                                          |
@@ -873,9 +879,9 @@ UIMessageConversionResult conversion =
 | `DataPart`                                       | 跳过并记录警告，除非注册转换器                                        |
 | `SourceUrlPart` / `FilePart`                     | 跳过并记录警告                                                        |
 
-转换会保留工具边界。例如 assistant 文本后面出现 `output-available` 工具消息片段，再出现 assistant 文本，
-结果会拆成 assistant、tool、assistant 三段 `ModelMessage`。连续的工具响应可以合并在
-同一个工具 `ModelMessage` 中。
+同一个 step 中的 reasoning、文本和多个工具调用会合并到一条 assistant `ModelMessage`，
+对应的多个工具结果会合并到随后一条 tool `ModelMessage`。下一个 `StepStartPart` 才会开始新的
+assistant/tool 组合；调用方手动构造且不含 marker 的 assistant 消息按一个隐式 step 处理。
 
 通过 `UIMessageChatHandlers.streamText(model, request, ...)` 调用时，推理默认使用
 `UIReasoningConversion.AUTO`。SDK 会根据 `LanguageModel.capabilities()` 自动决定是否

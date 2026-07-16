@@ -29,6 +29,7 @@ export interface UIMessage<METADATA = unknown> {
 }
 
 export type UIMessagePart =
+  | StepStartPart
   | TextPart
   | ReasoningPart
   | DataPart
@@ -36,6 +37,10 @@ export type UIMessagePart =
   | SourceDocumentPart
   | FilePart
   | ToolPart
+
+export interface StepStartPart {
+  type: 'step-start'
+}
 
 export interface TextPart {
   type: 'text'

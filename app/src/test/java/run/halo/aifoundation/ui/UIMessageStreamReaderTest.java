@@ -97,6 +97,20 @@ class UIMessageStreamReaderTest {
     }
 
     @Test
+    void readerPersistsStepStartWithoutEmittingVisibleSnapshot() {
+        var result = UIMessageStreamReader.read(new UIMessageStream(Flux.just(
+            UIMessageChunks.start("msg-step"),
+            UIMessageChunks.startStep(0),
+            UIMessageChunks.finishStep(0, null, null, null, List.of(), null, null, Map.of()),
+            UIMessageChunks.finish(null, null, null)
+        )));
+
+        assertThat(result.messages().collectList().block()).isEmpty();
+        assertThat(result.responseMessage().block().parts())
+            .containsExactly(UIMessageParts.stepStart());
+    }
+
+    @Test
     void readerReplacesStablePartsById() {
         var result = UIMessageStreamReader.read(new UIMessageStream(Flux.just(
             UIMessageChunks.sourceUrl("source-1", "https://old.example", "Old", Map.of()),
@@ -157,6 +171,7 @@ class UIMessageStreamReaderTest {
 
         assertThat(result.messages().collectList().block()).hasSize(2);
         assertThat(result.responseMessage().block().parts()).containsExactly(
+            UIMessageParts.stepStart(),
             UIMessageParts.tool("call-1", "weather", ToolPartState.INPUT_STREAMING,
                 null, "{\"city\"", null, null, null, Map.of())
         );

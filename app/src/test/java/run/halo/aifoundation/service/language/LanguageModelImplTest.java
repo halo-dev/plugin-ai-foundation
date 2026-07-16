@@ -839,8 +839,57 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .expectErrorMessage("reasoning content is not supported by provider type: ollama")
+            .expectErrorMessage(
+                "assistant reasoning history is not supported by the resolved model")
             .verify();
+    }
+
+    @Test
+    void generateText_modelCapabilityCanEnableReasoningHistory() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 3, 5));
+        var model = languageModelWithCapabilities(chatModel, "deepseek",
+            LanguageModelProviderOptions.defaults(), LanguageCapability.builder()
+                .reasoningHistory(true)
+                .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(
+                    ModelMessage.assistant(List.of(ModelMessagePart.reasoning("thinking"))),
+                    ModelMessage.user("Continue")
+                ))
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        assertThat(model.capabilities().reasoningHistorySupported()).isTrue();
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        assertThat(captor.getValue().getInstructions().getFirst())
+            .isInstanceOfSatisfying(DeepSeekAssistantMessage.class,
+                message -> assertThat(message.getReasoningContent()).isEqualTo("thinking"));
+    }
+
+    @Test
+    void generateText_modelCapabilityCanDisableProviderReasoningHistory() {
+        var chatModel = mock(ChatModel.class);
+        var model = languageModelWithCapabilities(chatModel, "deepseek",
+            new DeepSeekProvider().languageModelProviderOptions(), LanguageCapability.builder()
+                .reasoningHistory(false)
+                .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(
+                    ModelMessage.assistant(List.of(ModelMessagePart.reasoning("thinking"))),
+                    ModelMessage.user("Continue")
+                ))
+                .build()))
+            .expectErrorMessage(
+                "assistant reasoning history is not supported by the resolved model")
+            .verify();
+
+        assertThat(model.capabilities().reasoningHistorySupported()).isFalse();
+        verify(chatModel, times(0)).call(any(Prompt.class));
     }
 
     @Test
@@ -3625,11 +3674,18 @@ class LanguageModelImplTest {
 
     private LanguageModelImpl languageModelWithCapabilities(ChatModel chatModel,
         LanguageCapability languageCapability) {
-        var context = run.halo.aifoundation.service.model.ModelRuntimeContext.unresolved("openai",
+        return languageModelWithCapabilities(chatModel, "openai",
+            LanguageModelProviderOptions.defaults(), languageCapability);
+    }
+
+    private LanguageModelImpl languageModelWithCapabilities(ChatModel chatModel,
+        String providerType, LanguageModelProviderOptions providerOptions,
+        LanguageCapability languageCapability) {
+        var context = run.halo.aifoundation.service.model.ModelRuntimeContext.unresolved(providerType,
             "gpt-4o", "vision-model", "openai-provider",
             run.halo.aifoundation.provider.mapping.RuntimeParameterMappings.empty());
         var configuration = new LanguageModelRuntimeConfiguration(context,
-            LanguageModelProviderOptions.defaults(), ModelCapabilities.language(languageCapability));
+            providerOptions, ModelCapabilities.language(languageCapability));
         return new LanguageModelImpl(chatModel, LanguageModelRuntimeComposition.create(configuration,
             new LanguageModelRuntimeSupport(), new MediaResourcePolicy(),
             new ModelCapabilityMatcher()));

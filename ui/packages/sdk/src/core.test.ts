@@ -106,7 +106,7 @@ describe('UI message reducer', () => {
     expect(state.terminal.finishReason).toBe('stop')
   })
 
-  it('reduces canonical tool chunks and keeps start-step lifecycle-only', () => {
+  it('persists start-step markers before canonical tool parts', () => {
     const state = createUIMessageReducer({ messageId: 'assistant-1' })
 
     for (const chunk of [
@@ -158,6 +158,7 @@ describe('UI message reducer', () => {
     }
 
     expect(state.message.parts).toEqual([
+      { type: 'step-start' },
       {
         type: 'tool-search',
         toolCallId: 'call-1',
@@ -195,6 +196,20 @@ describe('UI message reducer', () => {
         providerMetadata: undefined,
       },
     ])
+  })
+
+  it('persists start-step without making a marker-only message visible', () => {
+    const state = createUIMessageReducer({ messageId: 'assistant-1' })
+
+    applyUIMessageChunk(state, { type: 'start-step', stepIndex: 0 })
+
+    expect(state.message.parts).toEqual([{ type: 'step-start' }])
+    expect(state.visible).toBe(false)
+
+    const existing = createUIMessageReducer({
+      message: { id: 'assistant-2', role: 'assistant', parts: [{ type: 'step-start' }] },
+    })
+    expect(existing.visible).toBe(false)
   })
 
   it('validates dynamic data and tool chunk protocol', () => {
@@ -711,6 +726,7 @@ describe('UI message persistence helpers', () => {
         id: 'assistant-1',
         role: 'assistant',
         parts: [
+          { type: 'step-start' },
           {
             type: 'tool-search',
             toolCallId: 'pending',
@@ -818,6 +834,24 @@ describe('UI message persistence helpers', () => {
         { id: 'assistant-1', role: 'assistant', parts: [{ type: 'unknown' } as never] },
       ]),
     ).toThrow(AIUIMessageValidationError)
+  })
+
+  it('allows step-start only in assistant messages', () => {
+    const assistantIssues = validateUIMessages([
+      { id: 'assistant-1', role: 'assistant', parts: [{ type: 'step-start' }] },
+    ])
+    const userIssues = validateUIMessages([
+      { id: 'user-1', role: 'user', parts: [{ type: 'step-start' }] },
+    ])
+
+    expect(assistantIssues).toEqual([])
+    expect(userIssues).toEqual([
+      {
+        path: '$[0].parts[0].type',
+        code: 'part.step-start.role.invalid',
+        message: 'Step-start parts are only allowed in assistant messages.',
+      },
+    ])
   })
 
   it('uses metadata and data schemas during validation', () => {

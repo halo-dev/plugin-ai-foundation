@@ -5,11 +5,12 @@ import { resolve } from 'node:path'
 import { ref } from 'vue'
 
 const formKitStub = {
-  props: ['label', 'name'],
+  props: ['label', 'name', 'options'],
   template: `
     <div>
       <label v-if="label">{{ label }}</label>
       <input v-if="name" :name="name" />
+      <span v-for="option in options" :key="option.value">{{ option.label }}</span>
       <slot />
     </div>
   `,
@@ -40,6 +41,9 @@ describe('model group removal', () => {
 
     expect(wrapper.text()).not.toContain('分组')
     expect(wrapper.find('input[name="group"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('支持推理历史回传')
+    expect(wrapper.text()).toContain('继承供应商')
+    expect(wrapper.find('input[name="languageReasoningHistory"]').exists()).toBe(true)
   })
 
   it('keeps parameter mappings and model capabilities in sibling panels', () => {

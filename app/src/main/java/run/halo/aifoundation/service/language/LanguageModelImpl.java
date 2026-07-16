@@ -100,6 +100,7 @@ public class LanguageModelImpl implements LanguageModel {
     private final String providerType;
     private final LanguageModelProviderOptions providerOptions;
     private final run.halo.aifoundation.capability.ModelCapabilities modelCapabilities;
+    private final boolean reasoningHistorySupported;
     private final LanguageModelRequestValidator requestValidator;
     private final LanguageModelMessageMapper messageMapper;
     private final GenerationMessageHistoryAssembler messageHistoryAssembler;
@@ -148,6 +149,7 @@ public class LanguageModelImpl implements LanguageModel {
         this.providerType = composition.providerType();
         this.providerOptions = composition.providerOptions();
         this.modelCapabilities = composition.modelCapabilities();
+        this.reasoningHistorySupported = composition.reasoningHistorySupported();
         this.requestValidator = composition.requestValidator();
         this.messageMapper = composition.messageMapper();
         this.messageHistoryAssembler = composition.messageHistoryAssembler();
@@ -211,7 +213,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     @Override
     public LanguageModelCapabilities capabilities() {
-        return LanguageModelCapabilities.of(providerOptions.reasoningHistorySupported(),
+        return LanguageModelCapabilities.of(reasoningHistorySupported,
             modelCapabilities);
     }
 
@@ -1276,7 +1278,7 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     protected boolean supportsReasoningHistory() {
-        return providerOptions.reasoningHistorySupported();
+        return reasoningHistorySupported;
     }
 
     private String toolCallingUnsupportedMessage() {

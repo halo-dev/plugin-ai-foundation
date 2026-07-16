@@ -324,8 +324,8 @@ public final class LanguageModelRequestValidator {
                 "reasoning content part is only supported for assistant messages");
         }
         if (!reasoningHistorySupported) {
-            throw new IllegalArgumentException("reasoning content is not supported by provider type: "
-                + providerType);
+            throw new IllegalArgumentException(
+                "assistant reasoning history is not supported by the resolved model");
         }
         if (!hasText(part.getText()) && (part.getProviderMetadata() == null
             || part.getProviderMetadata().isEmpty())) {

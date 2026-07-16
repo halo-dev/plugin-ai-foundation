@@ -44,7 +44,7 @@ export function pruneMessages<METADATA = unknown>(
     const parts = removePendingToolParts
       ? message.parts.filter((part) => !isPendingToolPart(part))
       : [...message.parts]
-    if (parts.length === 0) {
+    if (!parts.some((part) => part.type !== 'step-start')) {
       continue
     }
     pruned.push({ ...message, parts: parts.map((part) => ({ ...part }) as UIMessagePart) })
@@ -109,12 +109,13 @@ function validateMessage<METADATA>(
     }
   }
   message.parts.forEach((part, partIndex) => {
-    validatePart(part, `${path}.parts[${partIndex}]`, options, issues)
+    validatePart(part, message.role, `${path}.parts[${partIndex}]`, options, issues)
   })
 }
 
 function validatePart(
   part: UIMessagePart,
+  role: UIMessageRole,
   path: string,
   options: ValidateUIMessagesOptions,
   issues: UIMessageValidationIssue[],
@@ -136,6 +137,17 @@ function validatePart(
     return
   }
   switch (part.type) {
+    case 'step-start':
+      if (role !== 'assistant') {
+        issues.push(
+          issue(
+            `${path}.type`,
+            'part.step-start.role.invalid',
+            'Step-start parts are only allowed in assistant messages.',
+          ),
+        )
+      }
+      break
     case 'text':
       requireString(
         part.id,

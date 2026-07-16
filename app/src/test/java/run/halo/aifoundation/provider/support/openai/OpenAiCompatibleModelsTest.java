@@ -55,6 +55,12 @@ class OpenAiCompatibleModelsTest {
         var assistant = AssistantMessage.builder()
             .content("")
             .properties(Map.of("reasoningContent", "tool reasoning"))
+            .toolCalls(List.of(
+                new AssistantMessage.ToolCall("call-1", "function", "weather",
+                    "{\"city\":\"Hangzhou\"}"),
+                new AssistantMessage.ToolCall("call-2", "function", "search",
+                    "{\"query\":\"Halo\"}")
+            ))
             .build();
         var prompt = new Prompt(List.of(assistant), chatOptions());
 
@@ -66,6 +72,9 @@ class OpenAiCompatibleModelsTest {
 
         assertThat(messages.getFirst())
             .containsEntry("reasoning_content", "tool reasoning");
+        @SuppressWarnings("unchecked")
+        var toolCalls = (List<Map<String, Object>>) messages.getFirst().get("tool_calls");
+        assertThat(toolCalls).hasSize(2);
     }
 
     @Test

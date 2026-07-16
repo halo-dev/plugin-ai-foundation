@@ -41,7 +41,7 @@ export function createUIMessageReducer<METADATA = unknown>(
       metadata: options.metadata,
     },
     terminal: {},
-    visible: Boolean(options.message?.parts.length),
+    visible: Boolean(options.message?.parts.some(isPersistedVisiblePart)),
     messageMetadataSchema: options.messageMetadataSchema,
     dataPartSchemas: options.dataPartSchemas,
   }
@@ -140,6 +140,7 @@ export function applyUIMessageChunk<METADATA>(
       break
     }
     case 'start-step':
+      upsertPart(state, { type: 'step-start' })
       break
     case 'finish-step':
       state.terminal = {
@@ -371,7 +372,7 @@ function samePartIdentity(left: UIMessagePart, right: UIMessagePart): boolean {
 }
 
 function isPersistedVisiblePart(part: UIMessagePart): boolean {
-  return !isDataPart(part) || !part.transientData
+  return part.type !== 'step-start' && (!isDataPart(part) || !part.transientData)
 }
 
 function finishTerminal(

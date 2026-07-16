@@ -16,6 +16,7 @@ import {
 } from '@/api/generated'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import type { ModelFormState } from '@/types/form'
+import { booleanCapabilityFormValue, booleanCapabilityValue } from '@/utils/boolean-capability-form'
 import {
   capabilityDomainSource,
   capabilitySourceLabel,
@@ -86,6 +87,12 @@ const booleanCapabilityOptions = [
   { label: '不支持', value: 'false' },
 ]
 
+const reasoningHistoryOptions = [
+  { label: '继承供应商', value: '' },
+  { label: '支持', value: 'true' },
+  { label: '不支持', value: 'false' },
+]
+
 const inputSourceOptions = [
   { label: 'Base64 / Data', value: LanguageCapabilityInputSourcesEnum.Data },
   { label: 'URL', value: LanguageCapabilityInputSourcesEnum.Url },
@@ -95,7 +102,7 @@ const selectedFeatures = ref<string[]>(
   props.formState?.features ? [...props.formState.features] : [],
 )
 const languageFileInputValue = ref(
-  booleanFormValue(props.formState?.capabilities?.language?.fileInput),
+  booleanCapabilityFormValue(props.formState?.capabilities?.language?.fileInput),
 )
 
 const hasImageRecognitionFeature = computed(() =>
@@ -192,7 +199,7 @@ watch(
 watch(
   () => props.formState?.capabilities?.language?.fileInput,
   (value) => {
-    languageFileInputValue.value = booleanFormValue(value)
+    languageFileInputValue.value = booleanCapabilityFormValue(value)
   },
 )
 
@@ -230,6 +237,7 @@ defineExpose({
 
 interface ModelFormRawState extends ModelFormState {
   languageFileInput?: boolean | string
+  languageReasoningHistory?: boolean | string
   languageInputMediaTypes?: string
   languageInputSources?: string | string[]
   imageGenerationTextToImage?: boolean | string
@@ -258,13 +266,14 @@ function buildCapabilities(data: ModelFormRawState): AiModel['spec']['capabiliti
 }
 
 function buildLanguageCapability(data: ModelFormRawState): LanguageCapability | undefined {
-  const fileInput = booleanValue(data.languageFileInput)
+  const fileInput = booleanCapabilityValue(data.languageFileInput)
   const shouldKeepMediaDetails =
     hasFeature(data.features, ModelFeature.Vision) ||
     hasFeature(data.features, ModelFeature.AudioInput) ||
     fileInput === true
   const domain: LanguageCapability = {
     fileInput,
+    reasoningHistory: booleanCapabilityValue(data.languageReasoningHistory),
     inputMediaTypes: shouldKeepMediaDetails ? listValue(data.languageInputMediaTypes) : undefined,
     inputSources: shouldKeepMediaDetails
       ? (listValue(data.languageInputSources) as LanguageCapability['inputSources'])
@@ -277,9 +286,9 @@ function buildImageGenerationCapability(
   data: ModelFormRawState,
 ): ImageGenerationCapability | undefined {
   const domain: ImageGenerationCapability = {
-    textToImage: booleanValue(data.imageGenerationTextToImage),
-    imageToImage: booleanValue(data.imageGenerationImageToImage),
-    maskInput: booleanValue(data.imageGenerationMaskInput),
+    textToImage: booleanCapabilityValue(data.imageGenerationTextToImage),
+    imageToImage: booleanCapabilityValue(data.imageGenerationImageToImage),
+    maskInput: booleanCapabilityValue(data.imageGenerationMaskInput),
     maxImagesPerCall: positiveIntegerValue(data.imageGenerationMaxImagesPerCall),
     sizes: listValue(data.imageGenerationSizes),
     aspectRatios: listValue(data.imageGenerationAspectRatios),
@@ -320,16 +329,6 @@ function sourceFor(
     : ModelCapabilitySourcesImageGenerationEnum.Manual
 }
 
-function booleanValue(value: unknown) {
-  if (value === true || value === 'true') {
-    return true
-  }
-  if (value === false || value === 'false') {
-    return false
-  }
-  return undefined
-}
-
 function listValue(value: unknown) {
   const values = Array.isArray(value)
     ? value
@@ -348,16 +347,6 @@ function positiveIntegerValue(value: unknown) {
   return Number.isInteger(number) && number > 0 ? number : undefined
 }
 
-function booleanFormValue(value?: boolean) {
-  if (value === true) {
-    return 'true'
-  }
-  if (value === false) {
-    return 'false'
-  }
-  return ''
-}
-
 function listFormValue(values?: string[]) {
   return values?.join('\n') || ''
 }
@@ -367,8 +356,7 @@ function onFeaturesInput(value: unknown) {
 }
 
 function onLanguageFileInput(value: unknown) {
-  languageFileInputValue.value =
-    typeof value === 'string' ? value : booleanFormValue(value as boolean)
+  languageFileInputValue.value = booleanCapabilityFormValue(booleanCapabilityValue(value))
 }
 
 function hasFeature(features: ModelFormRawState['features'], feature: AiModelSpecFeaturesEnum) {
@@ -467,6 +455,14 @@ function sameJson(a: unknown, b: unknown) {
         />
         <FormKit
           type="select"
+          name="languageReasoningHistory"
+          label="支持推理历史回传"
+          help="继承供应商时使用供应商默认能力；仅在单个模型需要覆盖时明确选择支持或不支持。"
+          :options="reasoningHistoryOptions"
+          :value="booleanCapabilityFormValue(formState?.capabilities?.language?.reasoningHistory)"
+        />
+        <FormKit
+          type="select"
           name="languageFileInput"
           label="支持文件/音频识别"
           :options="booleanCapabilityOptions"
@@ -501,14 +497,18 @@ function sameJson(a: unknown, b: unknown) {
             name="imageGenerationTextToImage"
             label="文生图"
             :options="booleanCapabilityOptions"
-            :value="booleanFormValue(formState?.capabilities?.imageGeneration?.textToImage)"
+            :value="
+              booleanCapabilityFormValue(formState?.capabilities?.imageGeneration?.textToImage)
+            "
           />
           <FormKit
             type="select"
             name="imageGenerationImageToImage"
             label="图生图"
             :options="booleanCapabilityOptions"
-            :value="booleanFormValue(formState?.capabilities?.imageGeneration?.imageToImage)"
+            :value="
+              booleanCapabilityFormValue(formState?.capabilities?.imageGeneration?.imageToImage)
+            "
           />
         </div>
         <FormKit
@@ -516,7 +516,7 @@ function sameJson(a: unknown, b: unknown) {
           name="imageGenerationMaskInput"
           label="蒙版输入"
           :options="booleanCapabilityOptions"
-          :value="booleanFormValue(formState?.capabilities?.imageGeneration?.maskInput)"
+          :value="booleanCapabilityFormValue(formState?.capabilities?.imageGeneration?.maskInput)"
         />
         <FormKit
           type="number"

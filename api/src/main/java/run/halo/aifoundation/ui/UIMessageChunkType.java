@@ -9,6 +9,8 @@ public final class UIMessageChunkType {
     public static final String START = "start";
     /** Starts one generation step. */
     public static final String START_STEP = "start-step";
+    /** Persisted generation-step boundary marker. */
+    public static final String STEP_START = "step-start";
     /** Persisted text part type. */
     public static final String TEXT = "text";
     /** Opens a streamed text block. */

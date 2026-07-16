@@ -146,6 +146,12 @@ public final class UIMessageValidators {
                     "UI message part type must not be blank"));
             }
             switch (part) {
+                case StepStartPart ignored -> {
+                    if (message.role() != UIMessageRole.ASSISTANT) {
+                        issues.add(issue(message, part, null, "part.step-start.role.invalid",
+                            "Step-start parts are only allowed in assistant messages"));
+                    }
+                }
                 case TextPart text -> require(message, part, text.id(), "part.id.required",
                     "Text part id must not be blank");
                 case ReasoningPart reasoning -> require(message, part, reasoning.id(),

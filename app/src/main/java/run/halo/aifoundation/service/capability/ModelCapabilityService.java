@@ -32,7 +32,7 @@ public class ModelCapabilityService {
         var imageGeneration = copy(explicit == null ? null : explicit.getImageGeneration());
 
         if (spec.getModelType() == ModelType.LANGUAGE) {
-            language = applyLanguageDefaults(language, spec.getFeatures());
+            language = applyLanguageDefaults(language, spec.getFeatures(), providerType);
         }
         if (spec.getModelType() == ModelType.IMAGE_GENERATION
             && sources.getImageGeneration() != CapabilitySource.MANUAL) {
@@ -47,10 +47,18 @@ public class ModelCapabilityService {
     }
 
     private LanguageCapability applyLanguageDefaults(LanguageCapability language,
-        List<ModelFeature> features) {
+        List<ModelFeature> features, @Nullable AiProviderType providerType) {
         var result = language;
         var hasVision = features != null && features.contains(ModelFeature.VISION);
         var hasAudioInput = features != null && features.contains(ModelFeature.AUDIO_INPUT);
+        if (providerType != null) {
+            result = result == null ? LanguageCapability.unknown() : result;
+            if (result.getReasoningHistory() == null) {
+                var providerOptions = providerType.languageModelProviderOptions();
+                result.setReasoningHistory(providerOptions != null
+                    && providerOptions.reasoningHistorySupported());
+            }
+        }
         if (hasVision) {
             result = result == null ? LanguageCapability.unknown() : result;
             if (result.getImageInput() == null) {
