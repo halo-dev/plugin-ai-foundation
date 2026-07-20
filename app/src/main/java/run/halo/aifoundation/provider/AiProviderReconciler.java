@@ -40,8 +40,9 @@ public class AiProviderReconciler implements Reconciler<Reconciler.Request> {
                 }
                 return;
             }
-            addFinalizers(provider.getMetadata(), Set.of(FINALIZER_NAME));
-            client.update(provider);
+            if (addFinalizers(provider.getMetadata(), Set.of(FINALIZER_NAME))) {
+                client.update(provider);
+            }
         });
         return Result.doNotRetry();
     }

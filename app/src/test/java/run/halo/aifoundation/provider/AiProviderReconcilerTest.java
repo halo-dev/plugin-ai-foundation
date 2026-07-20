@@ -80,6 +80,20 @@ class AiProviderReconcilerTest {
     }
 
     @Test
+    void reconcile_existingProviderWithFinalizer_doesNotUpdate() {
+        var provider = provider("openai-prod");
+        provider.getMetadata().setFinalizers(Set.of(AiProviderReconciler.FINALIZER_NAME));
+
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Optional.of(provider));
+
+        var result = reconciler.reconcile(new Reconciler.Request("openai-prod"));
+
+        assertThat(result.reEnqueue()).isFalse();
+        verify(client, never()).delete(any(AiModel.class));
+        verify(client, never()).update(any());
+    }
+
+    @Test
     void reconcile_providerNotFound_returnsDoNotRetry() {
         when(client.fetch(AiProvider.class, "missing")).thenReturn(Optional.empty());
 
