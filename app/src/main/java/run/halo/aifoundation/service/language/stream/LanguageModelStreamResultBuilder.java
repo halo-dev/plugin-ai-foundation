@@ -48,7 +48,7 @@ public final class LanguageModelStreamResultBuilder {
             case PartType.TOOL_CALL -> acceptToolCall(part);
             case PartType.TOOL_APPROVAL_REQUEST -> acceptToolApprovalRequest(part);
             case PartType.TOOL_RESULT -> acceptToolResult(part);
-            case PartType.TOOL_ERROR -> acceptToolError(part);
+            case PartType.TOOL_INPUT_ERROR, PartType.TOOL_ERROR -> acceptToolError(part);
             case PartType.SOURCE -> acceptSource(part);
             case PartType.FILE -> acceptFile(part);
             case PartType.FINISH_STEP -> acceptFinishStep(part);

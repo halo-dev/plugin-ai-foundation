@@ -7,6 +7,7 @@ import {
   type MessageMetadataSchema,
 } from '@halo-dev/ai-foundation-sdk'
 import { utils } from '@halo-dev/ui-shared'
+import type { ToolInputStreamDiagnostic } from './model-test-workbench-tool-input-stream'
 
 export type ChatRole = 'user' | 'assistant'
 
@@ -19,6 +20,7 @@ export interface WorkbenchMessage {
   reasoningContent?: string
   reasoningState?: 'streaming' | 'done'
   toolEvents?: WorkbenchToolEvent[]
+  toolInputStreamDiagnostics?: ToolInputStreamDiagnostic[]
   modelName?: string
   modelDisplayName?: string
   state?: 'streaming' | 'done' | 'error' | 'stopped'
@@ -163,6 +165,13 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     content:
       '请调用 get_current_page_context 查看当前后台测试工作台上下文。拿到工具结果后不要再调用其他工具，直接总结当前页面上下文。',
   },
+  {
+    id: 'tool-input-stream-test',
+    icon: 'ri-pulse-line',
+    title: '流式工具入参',
+    content:
+      '这是流式工具入参专项测试。你必须且只能调用一次 halo_tool_input_stream_test，不要调用其他工具。参数 title 请填写“AI Foundation 流式工具入参测试”；payload 请完整填写“这是一段用于观察 JSON 工具参数是否按多个增量片段持续到达浏览器与后端回调的测试内容，请保持本句完整，不要缩写。”；sequence 请依次填写 ["start", "delta", "available"]。获得工具结果后，请简要说明 backendLifecycle 中的事件顺序和 deltaCount。',
+  },
 ]
 
 export async function copyToClipboard(text: string): Promise<boolean> {
@@ -210,6 +219,7 @@ export interface ChatStreamOptions {
   externalTestToolEnabled?: boolean
   agentTestToolsEnabled?: boolean
   toolCallRepairEnabled?: boolean
+  toolInputStreamTestEnabled?: boolean
 }
 
 export interface UIMessage<M = Record<string, unknown>> {
@@ -469,7 +479,11 @@ export function buildTestUiMessageChatRequest(
   }
 }
 
-export function createUserUIMessage(id: string, text: string, files: UIMessagePart[] = []): UIMessage {
+export function createUserUIMessage(
+  id: string,
+  text: string,
+  files: UIMessagePart[] = [],
+): UIMessage {
   const parts: UIMessagePart[] = []
   if (text) {
     parts.push({ type: 'text', id: `${id}-text`, text })
@@ -562,6 +576,9 @@ function chatStreamQueryParams(options: ChatStreamOptions) {
   }
   if (options.toolCallRepairEnabled) {
     params.set('enableToolCallRepair', 'true')
+  }
+  if (options.toolInputStreamTestEnabled) {
+    params.set('enableToolInputStreamTest', 'true')
   }
   return params
 }

@@ -43,13 +43,19 @@ public final class UIMessageChunkValidator {
             case ToolInputStartChunk tool -> validateToolIdentity(tool.type(), tool.toolCallId(),
                 tool.toolName(), issues);
             case ToolInputDeltaChunk tool -> {
-                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
+                validateToolIdentityWithoutName(tool.type(), tool.toolCallId(), issues);
                 require(tool.type(), tool.toolCallId(), tool.inputTextDelta(),
                     "chunk.tool.input-delta.required",
                     "Tool input delta must not be blank", issues);
             }
             case ToolInputAvailableChunk tool -> validateToolIdentity(tool.type(),
                 tool.toolCallId(), tool.toolName(), issues);
+            case ToolInputErrorChunk tool -> {
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
+                require(tool.type(), tool.toolCallId(), tool.errorText(),
+                    "chunk.tool.input-error-text.required",
+                    "Tool input error text must not be blank", issues);
+            }
             case ToolOutputAvailableChunk tool -> validateToolIdentity(tool.type(),
                 tool.toolCallId(), tool.toolName(), issues);
             case ToolOutputErrorChunk tool -> {
@@ -137,12 +143,17 @@ public final class UIMessageChunkValidator {
 
     private static void validateToolIdentity(String type, String toolCallId, String toolName,
         List<UIMessageValidationIssue> issues) {
+        validateToolIdentityWithoutName(type, toolCallId, issues);
+        require(type, toolCallId, toolName, "chunk.tool.name.required",
+            "Tool name must not be blank", issues);
+    }
+
+    private static void validateToolIdentityWithoutName(String type, String toolCallId,
+        List<UIMessageValidationIssue> issues) {
         require(type, toolCallId, type, "chunk.tool.type.required",
             "Tool chunk type must not be blank", issues);
         require(type, toolCallId, toolCallId, "chunk.tool.id.required",
             "Tool call id must not be blank", issues);
-        require(type, toolCallId, toolName, "chunk.tool.name.required",
-            "Tool name must not be blank", issues);
     }
 
     private static void require(String partType, String partId, String value, String code,

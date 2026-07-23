@@ -131,7 +131,8 @@ public class TextStreamPart {
      */
     private Map<String, Object> providerMetadata;
     /**
-     * Error text for {@link PartType#TOOL_ERROR} or {@link PartType#ERROR}.
+     * Error text for {@link PartType#TOOL_INPUT_ERROR}, {@link PartType#TOOL_ERROR}, or
+     * {@link PartType#ERROR}.
      */
     private String errorText;
     /**
@@ -240,6 +241,32 @@ public class TextStreamPart {
             .toolCallId(toolCallId)
             .toolName(toolName)
             .delta(delta)
+            .build();
+    }
+
+    /**
+     * Creates a tool input block end event.
+     */
+    public static TextStreamPart toolInputEnd(String id, String toolCallId, String toolName) {
+        return TextStreamPart.builder()
+            .type(PartType.TOOL_INPUT_END)
+            .id(id)
+            .toolCallId(toolCallId)
+            .toolName(toolName)
+            .build();
+    }
+
+    /**
+     * Creates an event for tool input that could not be normalized.
+     */
+    public static TextStreamPart toolInputError(String toolCallId, String toolName,
+        String errorText, Map<String, Object> providerMetadata) {
+        return TextStreamPart.builder()
+            .type(PartType.TOOL_INPUT_ERROR)
+            .toolCallId(toolCallId)
+            .toolName(toolName)
+            .errorText(errorText)
+            .providerMetadata(providerMetadata)
             .build();
     }
 
@@ -410,6 +437,16 @@ public class TextStreamPart {
                 requireText(toolCallId, "tool-input-delta stream part toolCallId");
                 requireText(toolName, "tool-input-delta stream part toolName");
                 requirePresent(delta, "tool-input-delta stream part delta");
+            }
+            case PartType.TOOL_INPUT_END -> {
+                requireText(id, "tool-input-end stream part id");
+                requireText(toolCallId, "tool-input-end stream part toolCallId");
+                requireText(toolName, "tool-input-end stream part toolName");
+            }
+            case PartType.TOOL_INPUT_ERROR -> {
+                requireText(toolCallId, "tool-input-error stream part toolCallId");
+                requireText(toolName, "tool-input-error stream part toolName");
+                requireText(errorText, "tool-input-error stream part errorText");
             }
             case PartType.TOOL_CALL, PartType.TOOL_RESULT, PartType.TOOL_ERROR -> {
                 requireText(toolCallId, type + " stream part toolCallId");

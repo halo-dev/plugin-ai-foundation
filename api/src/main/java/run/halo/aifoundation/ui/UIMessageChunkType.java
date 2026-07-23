@@ -43,6 +43,8 @@ public final class UIMessageChunkType {
     public static final String TOOL_INPUT_DELTA = "tool-input-delta";
     /** Complete tool input is available. */
     public static final String TOOL_INPUT_AVAILABLE = "tool-input-available";
+    /** Tool input failed validation or repair. */
+    public static final String TOOL_INPUT_ERROR = "tool-input-error";
     /** Tool output is available. */
     public static final String TOOL_OUTPUT_AVAILABLE = "tool-output-available";
     /** Tool output failed with an error. */

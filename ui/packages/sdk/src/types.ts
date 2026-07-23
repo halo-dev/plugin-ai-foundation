@@ -111,8 +111,7 @@ export interface ToolPart {
   toolCallId: string
   toolName: string
   state: ToolPartState
-  input?: Record<string, unknown>
-  inputText?: string
+  input?: unknown
   output?: unknown
   errorText?: string
   approval?: ToolApproval
@@ -167,6 +166,7 @@ export type UIMessageChunk =
   | ToolInputStartChunk
   | ToolInputDeltaChunk
   | ToolInputAvailableChunk
+  | ToolInputErrorChunk
   | ToolOutputAvailableChunk
   | ToolOutputErrorChunk
   | ToolApprovalRequestChunk
@@ -268,7 +268,7 @@ export interface ToolChunk {
   toolCallId: string
   toolName: string
   state: ToolPartState
-  input?: Record<string, unknown>
+  input?: unknown
   inputTextDelta?: string
   output?: unknown
   errorText?: string
@@ -285,7 +285,6 @@ export interface ToolInputStartChunk {
 export interface ToolInputDeltaChunk {
   type: 'tool-input-delta'
   toolCallId: string
-  toolName: string
   inputTextDelta: string
 }
 
@@ -293,7 +292,15 @@ export interface ToolInputAvailableChunk {
   type: 'tool-input-available'
   toolCallId: string
   toolName: string
-  input?: Record<string, unknown>
+  input?: unknown
+  providerMetadata?: Record<string, unknown>
+}
+
+export interface ToolInputErrorChunk {
+  type: 'tool-input-error'
+  toolCallId: string
+  toolName: string
+  errorText: string
   providerMetadata?: Record<string, unknown>
 }
 

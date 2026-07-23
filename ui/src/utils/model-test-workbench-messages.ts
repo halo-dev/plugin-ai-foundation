@@ -87,6 +87,11 @@ export function cloneWorkbenchMessage(message: WorkbenchMessage): WorkbenchMessa
         }
       : undefined,
     toolEvents: message.toolEvents?.map((event) => ({ ...event })),
+    toolInputStreamDiagnostics: message.toolInputStreamDiagnostics?.map((diagnostic) => ({
+      ...diagnostic,
+      events: diagnostic.events.map((event) => ({ ...event })),
+      protocolIssues: [...diagnostic.protocolIssues],
+    })),
     warnings: message.warnings?.map((warning) => ({ ...warning })),
     files: message.files?.map((file) => ({ ...file })),
     transientData: message.transientData ? { ...message.transientData } : undefined,

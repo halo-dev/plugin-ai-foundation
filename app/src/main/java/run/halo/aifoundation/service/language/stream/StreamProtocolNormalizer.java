@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service.language.stream;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import reactor.core.publisher.Flux;
 import run.halo.aifoundation.part.PartType;
@@ -22,7 +23,7 @@ public final class StreamProtocolNormalizer {
     private static final class State {
         private String textId;
         private String reasoningId;
-        private String toolInputId;
+        private final LinkedHashMap<String, TextStreamPart> toolInputs = new LinkedHashMap<>();
 
         List<TextStreamPart> accept(TextStreamPart part) {
             if (part == null || part.getType() == null) {
@@ -38,16 +39,18 @@ public final class StreamProtocolNormalizer {
                 case PartType.REASONING_END -> acceptReasoningEnd(part, parts);
                 case PartType.TOOL_INPUT_START -> acceptToolInputStart(part, parts);
                 case PartType.TOOL_INPUT_DELTA -> acceptToolInputDelta(part, parts);
-                case PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST -> {
+                case PartType.TOOL_INPUT_END -> acceptToolInputEnd(part, parts);
+                case PartType.TOOL_CALL, PartType.TOOL_INPUT_ERROR,
+                    PartType.TOOL_APPROVAL_REQUEST -> {
                     closeText(parts);
                     closeReasoning(parts);
-                    closeToolInput();
+                    closeToolInputs(parts);
                     parts.add(part);
                 }
                 case PartType.FINISH_STEP, PartType.FINISH, PartType.ERROR, PartType.ABORT -> {
                     closeText(parts);
                     closeReasoning(parts);
-                    closeToolInput();
+                    closeToolInputs(parts);
                     parts.add(part);
                 }
                 default -> parts.add(part);
@@ -57,14 +60,14 @@ public final class StreamProtocolNormalizer {
 
         private void acceptTextStart(TextStreamPart part, List<TextStreamPart> parts) {
             closeReasoning(parts);
-            closeToolInput();
+            closeToolInputs(parts);
             textId = part.getId();
             parts.add(part);
         }
 
         private void acceptTextDelta(TextStreamPart part, List<TextStreamPart> parts) {
             closeReasoning(parts);
-            closeToolInput();
+            closeToolInputs(parts);
             if (textId == null) {
                 textId = part.getId();
                 parts.add(TextStreamPart.textStart(textId));
@@ -81,14 +84,14 @@ public final class StreamProtocolNormalizer {
 
         private void acceptReasoningStart(TextStreamPart part, List<TextStreamPart> parts) {
             closeText(parts);
-            closeToolInput();
+            closeToolInputs(parts);
             reasoningId = part.getId();
             parts.add(part);
         }
 
         private void acceptReasoningDelta(TextStreamPart part, List<TextStreamPart> parts) {
             closeText(parts);
-            closeToolInput();
+            closeToolInputs(parts);
             if (reasoningId == null) {
                 reasoningId = part.getId();
                 parts.add(TextStreamPart.reasoningStart(reasoningId));
@@ -106,26 +109,33 @@ public final class StreamProtocolNormalizer {
         private void acceptToolInputStart(TextStreamPart part, List<TextStreamPart> parts) {
             closeText(parts);
             closeReasoning(parts);
-            toolInputId = part.getId();
+            toolInputs.put(part.getId(), part);
             parts.add(part);
         }
 
         private void acceptToolInputDelta(TextStreamPart part, List<TextStreamPart> parts) {
             closeText(parts);
             closeReasoning(parts);
-            if (toolInputId == null) {
-                toolInputId = part.getId();
-                parts.add(TextStreamPart.toolInputStart(toolInputId, part.getToolCallId(),
-                    part.getToolName()));
+            if (!toolInputs.containsKey(part.getId())) {
+                var start = TextStreamPart.toolInputStart(part.getId(), part.getToolCallId(),
+                    part.getToolName());
+                toolInputs.put(part.getId(), start);
+                parts.add(start);
             }
             parts.add(part);
+        }
+
+        private void acceptToolInputEnd(TextStreamPart part, List<TextStreamPart> parts) {
+            if (toolInputs.remove(part.getId()) != null) {
+                parts.add(part);
+            }
         }
 
         List<TextStreamPart> closeOpenBlocks() {
             var parts = new ArrayList<TextStreamPart>();
             closeText(parts);
             closeReasoning(parts);
-            closeToolInput();
+            closeToolInputs(parts);
             return parts;
         }
 
@@ -143,8 +153,10 @@ public final class StreamProtocolNormalizer {
             }
         }
 
-        private void closeToolInput() {
-            toolInputId = null;
+        private void closeToolInputs(List<TextStreamPart> parts) {
+            toolInputs.values().forEach(start -> parts.add(TextStreamPart.toolInputEnd(
+                start.getId(), start.getToolCallId(), start.getToolName())));
+            toolInputs.clear();
         }
     }
 }

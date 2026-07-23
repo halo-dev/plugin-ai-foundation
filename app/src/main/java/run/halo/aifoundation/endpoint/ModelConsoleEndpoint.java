@@ -102,6 +102,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private static final String CONSOLE_EXTERNAL_TEST_TOOL_NAME = "halo_external_test_info";
     private static final String CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME = "get_current_page_context";
     private static final String CONSOLE_AGENT_ECHO_TOOL_NAME = "halo_agent_test_action";
+    private static final String CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME =
+        "halo_tool_input_stream_test";
     private static final String CONSOLE_REPAIR_TEST_TOOL_NAME = "halo_repair_test_info";
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
@@ -686,6 +688,12 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .orElse(false);
     }
 
+    private static boolean consoleToolInputStreamTestEnabled(ServerRequest request) {
+        return request.queryParam("enableToolInputStreamTest")
+            .map(Boolean::parseBoolean)
+            .orElse(false);
+    }
+
     private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request,
         ConsoleTestToolOptions options) {
         if (!options.hasAnyEnabled()) {
@@ -699,6 +707,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             || CONSOLE_EXTERNAL_TEST_TOOL_NAME.equals(tool.getName())
             || CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME.equals(tool.getName())
             || CONSOLE_AGENT_ECHO_TOOL_NAME.equals(tool.getName())
+            || CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME.equals(tool.getName())
             || CONSOLE_REPAIR_TEST_TOOL_NAME.equals(tool.getName()));
         if (options.basicEnabled() || options.approvalEnabled()) {
             tools.add(consoleTestTool(options.approvalEnabled()));
@@ -709,6 +718,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         if (options.agentEnabled()) {
             tools.add(consoleAgentPageContextTool());
             tools.add(consoleAgentTestActionTool());
+        }
+        if (options.toolInputStreamEnabled()) {
+            tools.add(consoleToolInputStreamTestTool());
         }
         if (options.repairEnabled()) {
             tools.add(consoleRepairTestTool());
@@ -907,6 +919,53 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 ),
                 "required", List.of("message")
             ))
+            .build();
+    }
+
+    private ToolDefinition consoleToolInputStreamTestTool() {
+        var lifecycleEvents = new CopyOnWriteArrayList<String>();
+        return ToolDefinition.builder()
+            .name(CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME)
+            .description("Halo 控制台流式工具入参专项测试。仅当用户明确要求流式工具入参测试时调用；"
+                + "按 schema 完整生成较长参数，以验证 provider 原生 delta、UI Message 事件和"
+                + "服务端工具输入生命周期回调。")
+            .inputSchema(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "title", Map.of(
+                        "type", "string",
+                        "description", "本次测试标题"
+                    ),
+                    "payload", Map.of(
+                        "type", "string",
+                        "description", "用于产生多个流式 JSON 参数片段的完整长文本"
+                    ),
+                    "sequence", Map.of(
+                        "type", "array",
+                        "description", "期望观察的生命周期名称，按顺序填写",
+                        "items", Map.of("type", "string")
+                    )
+                ),
+                "required", List.of("title", "payload", "sequence")
+            ))
+            .onInputStart(context -> Mono.fromRunnable(() -> lifecycleEvents.add("start")))
+            .onInputDelta(context -> Mono.fromRunnable(() -> lifecycleEvents.add("delta")))
+            .onInputAvailable(context -> Mono.fromRunnable(() -> lifecycleEvents.add("available")))
+            .executor(context -> {
+                var deltaCount = lifecycleEvents.stream().filter("delta"::equals).count();
+                var mode = deltaCount > 0 ? "provider-native-delta" : "final-only";
+                return Mono.just(Map.of(
+                    "tool", CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME,
+                    "message", "Halo console tool input streaming test executed successfully.",
+                    "input", context.getInput() != null ? context.getInput() : Map.of(),
+                    "backendLifecycle", Map.of(
+                        "events", List.copyOf(lifecycleEvents),
+                        "deltaCount", deltaCount,
+                        "mode", mode
+                    ),
+                    "nextAction", "Summarize backendLifecycle without calling another tool."
+                ));
+            })
             .build();
     }
 
@@ -1400,7 +1459,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         boolean approvalEnabled,
         boolean externalEnabled,
         boolean agentEnabled,
-        boolean repairEnabled
+        boolean repairEnabled,
+        boolean toolInputStreamEnabled
     ) {
         static ConsoleTestToolOptions from(ServerRequest request) {
             return new ConsoleTestToolOptions(
@@ -1408,13 +1468,14 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 consoleTestToolApprovalEnabled(request),
                 consoleExternalTestToolEnabled(request),
                 consoleAgentTestToolsEnabled(request),
-                consoleToolCallRepairEnabled(request)
+                consoleToolCallRepairEnabled(request),
+                consoleToolInputStreamTestEnabled(request)
             );
         }
 
         boolean hasAnyEnabled() {
             return basicEnabled || approvalEnabled || externalEnabled || agentEnabled
-                || repairEnabled;
+                || repairEnabled || toolInputStreamEnabled;
         }
     }
 

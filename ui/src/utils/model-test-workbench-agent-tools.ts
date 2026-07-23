@@ -21,10 +21,14 @@ export async function executeWorkbenchAgentTool(
     case 'get_current_page_context':
       return currentWorkbenchPageContext(context)
     case 'halo_agent_test_action':
-      return executeWorkbenchAgentTestAction(part.input ?? {})
+      return executeWorkbenchAgentTestAction(isRecord(part.input) ? part.input : {})
     default:
       throw new Error(`未知 Agent 测试工具：${part.toolName}`)
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function currentWorkbenchPageContext(context: WorkbenchPageContext): Record<string, unknown> {

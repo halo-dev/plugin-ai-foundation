@@ -261,13 +261,11 @@ public final class UIMessageChunks {
      * Creates a canonical streamed tool input delta chunk.
      *
      * @param toolCallId tool call id
-     * @param toolName tool name
      * @param inputTextDelta streamed input text delta
      * @return tool input delta chunk
      */
-    public static ToolInputDeltaChunk toolInputDelta(String toolCallId, String toolName,
-        String inputTextDelta) {
-        return new ToolInputDeltaChunk(toolCallId, toolName, inputTextDelta);
+    public static ToolInputDeltaChunk toolInputDelta(String toolCallId, String inputTextDelta) {
+        return new ToolInputDeltaChunk(toolCallId, inputTextDelta);
     }
 
     /**
@@ -282,6 +280,20 @@ public final class UIMessageChunks {
     public static ToolInputAvailableChunk toolInputAvailable(String toolCallId, String toolName,
         Object input, Map<String, Object> providerMetadata) {
         return new ToolInputAvailableChunk(toolCallId, toolName, input, providerMetadata);
+    }
+
+    /**
+     * Creates a canonical failed tool input chunk.
+     *
+     * @param toolCallId tool call id
+     * @param toolName tool name
+     * @param errorText safe input error text
+     * @param providerMetadata provider-specific metadata
+     * @return tool input error chunk
+     */
+    public static ToolInputErrorChunk toolInputError(String toolCallId, String toolName,
+        String errorText, Map<String, Object> providerMetadata) {
+        return new ToolInputErrorChunk(toolCallId, toolName, errorText, providerMetadata);
     }
 
     /**

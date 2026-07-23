@@ -162,7 +162,7 @@ class UIMessageStreamReaderTest {
             UIMessageChunks.transientData("status", "retrieving"),
             UIMessageChunks.startStep(0),
             UIMessageChunks.toolInputStart("call-1", "weather"),
-            UIMessageChunks.toolInputDelta("call-1", "weather", "{\"city\""),
+            UIMessageChunks.toolInputDelta("call-1", "{\"city\""),
             UIMessageChunks.finishStep(0, null, null, null, List.of(), null, null, Map.of()),
             UIMessageChunks.error("failed"),
             UIMessageChunks.abort(),
@@ -183,8 +183,8 @@ class UIMessageStreamReaderTest {
     void readerReducesCanonicalToolChunksToDynamicToolParts() {
         var result = UIMessageStreamReader.read(new UIMessageStream(Flux.just(
             UIMessageChunks.toolInputStart("call-1", "weather"),
-            UIMessageChunks.toolInputDelta("call-1", "weather", "{\"city\""),
-            UIMessageChunks.toolInputDelta("call-1", "weather", ":\"Hangzhou\"}"),
+            UIMessageChunks.toolInputDelta("call-1", "{\"city\""),
+            UIMessageChunks.toolInputDelta("call-1", ":\"Hangzhou\"}"),
             UIMessageChunks.toolInputAvailable("call-1", "weather",
                 Map.of("city", "Hangzhou"), Map.of("provider", "test")),
             UIMessageChunks.toolOutputAvailable("call-1", "weather",

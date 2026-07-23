@@ -67,6 +67,26 @@ public class ToolDefinition {
      */
     private ToolApprovalPolicy approvalPolicy;
     /**
+     * Backpressured callback invoked before streamed input-start is exposed, or before a final-only
+     * input is normalized. It is checked for cancellation before and after invocation, uses the
+     * generation step timeout, and a failure terminates generation before approval or execution.
+     */
+    private transient ToolInputStartCallback onInputStart;
+    /**
+     * Backpressured callback invoked before each provider-native tool input delta is exposed.
+     * It is serialized with all input events, checked for cancellation before and after invocation,
+     * and uses the generation step timeout. A failure terminates generation. This callback is not
+     * invoked for final-only or non-streaming tool calls.
+     */
+    private transient ToolInputDeltaCallback onInputDelta;
+    /**
+     * Backpressured callback invoked after normalized input is published as available and before
+     * approval, external handoff, or server-side execution. It is checked for cancellation before
+     * and after invocation, uses the generation step timeout, and a failure prevents every
+     * downstream tool action.
+     */
+    private transient ToolInputAvailableCallback onInputAvailable;
+    /**
      * Server-side tool implementation. Return values should be JSON serializable.
      */
     private transient ToolExecutor executor;

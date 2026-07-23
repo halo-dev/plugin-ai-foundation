@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -35,6 +36,7 @@ import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.Disposable;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
@@ -1095,7 +1097,9 @@ class LanguageModelImplTest {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
             toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3),
-            toolCallResponse("call_2", "weather", "{\"city\":\"NYC\"}", 2, 3)
+            chatResponse("Recovered without repair.", "stop", 4, 5),
+            toolCallResponse("call_2", "weather", "{\"city\":\"NYC\"}", 2, 3),
+            chatResponse("Recovered after failed repair.", "stop", 4, 5)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -1136,7 +1140,9 @@ class LanguageModelImplTest {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
             toolCallResponse("call_1", "unknown", "{}", 2, 3),
-            toolCallResponse("call_2", "weather", "{\"location\":\"SF\"}", 2, 3)
+            chatResponse("Recovered from the unknown tool.", "stop", 4, 5),
+            toolCallResponse("call_2", "weather", "{\"location\":\"SF\"}", 2, 3),
+            chatResponse("Recovered from the invalid output.", "stop", 4, 5)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
         var repairCalls = new AtomicInteger();
@@ -1661,7 +1667,8 @@ class LanguageModelImplTest {
     void generateText_recordsToolErrorWhenExecutorFails() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{}", 2, 3)
+            toolCallResponse("call_1", "weather", "{}", 2, 3),
+            chatResponse("Recovered.", "stop", 4, 5)
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -1682,7 +1689,8 @@ class LanguageModelImplTest {
                     .satisfies(error -> assertThat(error.getErrorText()).isEqualTo("tool failed"));
                 assertThat(result.getResponseMessages())
                     .extracting(ModelMessage::getRole)
-                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL);
+                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL,
+                        ModelMessageRole.ASSISTANT);
                 assertThat(result.getResponseMessages().get(1).getContent().getFirst())
                     .satisfies(part -> {
                         assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
@@ -2351,6 +2359,7 @@ class LanguageModelImplTest {
                     PartType.START,
                     PartType.START_STEP,
                     PartType.TOOL_CALL,
+                    PartType.TOOL_CALL,
                     PartType.TOOL_APPROVAL_REQUEST,
                     PartType.FINISH_STEP,
                     PartType.FINISH
@@ -2360,17 +2369,17 @@ class LanguageModelImplTest {
         StepVerifier.create(result.result())
             .assertNext(finalResult -> {
                 assertThat(finalResult.getToolCalls())
-                    .singleElement()
-                    .satisfies(call -> {
-                        assertThat(call.getToolCallId()).isEqualTo("call_2");
-                        assertThat(call.getToolName()).isEqualTo("run");
-                    });
+                    .extracting(ToolCall::getToolCallId)
+                    .containsExactly("call_1", "call_2");
                 assertThat(finalResult.getToolApprovalRequests()).hasSize(1);
                 assertThat(finalResult.getToolResults()).isEmpty();
                 assertThat(finalResult.getResponseMessages().stream()
                     .flatMap(message -> message.getContent().stream())
                     .map(ModelMessagePart::getType))
-                    .containsExactly(PartType.TOOL_CALL, PartType.TOOL_APPROVAL_REQUEST);
+                    .containsExactly(
+                        PartType.TOOL_CALL,
+                        PartType.TOOL_APPROVAL_REQUEST
+                    );
             })
             .verifyComplete();
 
@@ -2494,7 +2503,8 @@ class LanguageModelImplTest {
     void streamText_emitsToolErrorForFailedToolExecution() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
-            Flux.just(toolCallResponse("call_1", "weather", "{}", 2, 3))
+            Flux.just(toolCallResponse("call_1", "weather", "{}", 2, 3)),
+            Flux.just(chatResponse("Recovered.", "stop", 4, 5))
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -2519,6 +2529,14 @@ class LanguageModelImplTest {
                 assertThat(part.getErrorText()).isEqualTo("tool failed");
             })
             .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Recovered.");
+            })
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
             .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
@@ -2526,7 +2544,8 @@ class LanguageModelImplTest {
             .assertNext(finalResult -> {
                 assertThat(finalResult.getResponseMessages())
                     .extracting(ModelMessage::getRole)
-                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL);
+                    .containsExactly(ModelMessageRole.ASSISTANT, ModelMessageRole.TOOL,
+                        ModelMessageRole.ASSISTANT);
                 assertThat(finalResult.getResponseMessages().get(1).getContent().getFirst())
                     .satisfies(part -> {
                         assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
@@ -2887,7 +2906,8 @@ class LanguageModelImplTest {
     void streamText_recordsToolErrorForUnknownTool() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
-            Flux.just(toolCallResponse("call_1", "unknown", "{}", 2, 3))
+            Flux.just(toolCallResponse("call_1", "unknown", "{}", 2, 3)),
+            Flux.just(chatResponse("Recovered.", "stop", 4, 5))
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -2903,16 +2923,23 @@ class LanguageModelImplTest {
         StepVerifier.create(model.streamText(request).fullStream())
             .expectNextMatches(part -> PartType.START.equals(part.getType()))
             .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
-            .expectNextMatches(part -> PartType.TOOL_CALL.equals(part.getType()))
             .assertNext(part -> {
-                assertThat(part.getType()).isEqualTo(PartType.TOOL_ERROR);
+                assertThat(part.getType()).isEqualTo(PartType.TOOL_INPUT_ERROR);
                 assertThat(part.getErrorText()).contains("Unknown tool");
             })
+            .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(PartType.TEXT_DELTA);
+                assertThat(part.getDelta()).isEqualTo("Recovered.");
+            })
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
             .expectNextMatches(part -> PartType.FINISH_STEP.equals(part.getType()))
             .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
-        verify(chatModel).stream(any(Prompt.class));
+        verify(chatModel, times(2)).stream(any(Prompt.class));
     }
 
     @Test
@@ -3075,10 +3102,11 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void streamText_failedRepairEmitsOriginalToolCallAndToolError() {
+    void streamText_failedRepairEmitsToolInputErrorWithoutToolCall() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
-            Flux.just(toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3))
+            Flux.just(toolCallResponse("call_1", "weather", "{\"city\":\"SF\"}", 2, 3)),
+            Flux.just(chatResponse("Recovered.", "stop", 4, 5))
         );
         var model = new LanguageModelImpl(chatModel, "openai");
 
@@ -3092,15 +3120,10 @@ class LanguageModelImplTest {
         StepVerifier.create(model.streamText(request).fullStream().collectList())
             .assertNext(parts -> {
                 assertThat(parts).extracting(TextStreamPart::getType)
-                    .containsSubsequence(PartType.TOOL_CALL, PartType.TOOL_ERROR);
+                    .contains(PartType.TOOL_INPUT_ERROR)
+                    .doesNotContain(PartType.TOOL_CALL, PartType.TOOL_ERROR);
                 assertThat(parts.stream()
-                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
-                    .findFirst()
-                    .orElseThrow()
-                    .getInput())
-                    .containsEntry("city", "SF");
-                assertThat(parts.stream()
-                    .filter(part -> PartType.TOOL_ERROR.equals(part.getType()))
+                    .filter(part -> PartType.TOOL_INPUT_ERROR.equals(part.getType()))
                     .findFirst()
                     .orElseThrow()
                     .getErrorText())
@@ -3115,7 +3138,7 @@ class LanguageModelImplTest {
             })
             .verifyComplete();
 
-        verify(chatModel).stream(any(Prompt.class));
+        verify(chatModel, times(2)).stream(any(Prompt.class));
     }
 
     @Test
@@ -3217,6 +3240,7 @@ class LanguageModelImplTest {
                         PartType.START,
                         PartType.START_STEP,
                         PartType.TOOL_CALL,
+                        PartType.TOOL_CALL,
                         PartType.FINISH_STEP,
                         PartType.FINISH
                     );
@@ -3236,18 +3260,15 @@ class LanguageModelImplTest {
         StepVerifier.create(result.result())
             .assertNext(finalResult -> {
                 assertThat(finalResult.getToolCalls())
-                    .singleElement()
-                    .satisfies(call -> {
-                        assertThat(call.getToolCallId()).isEqualTo("call_2");
-                        assertThat(call.getToolName()).isEqualTo("search");
-                    });
+                    .extracting(ToolCall::getToolCallId)
+                    .containsExactly("call_1", "call_2");
                 assertThat(finalResult.getToolResults()).isEmpty();
                 assertThat(finalResult.getToolErrors()).isEmpty();
                 assertThat(finalResult.getResponseMessages())
                     .singleElement()
                     .satisfies(message -> assertThat(message.getContent())
-                        .singleElement()
-                        .satisfies(part -> assertThat(part.getToolCallId()).isEqualTo("call_2")));
+                        .extracting(ModelMessagePart::getToolCallId)
+                        .containsExactly("call_2"));
             })
             .verifyComplete();
 
@@ -3507,6 +3528,38 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void streamTextIsLazyAndReplaysTypedCancellationAfterLastSubscriberLeaves() {
+        var chatModel = mock(ChatModel.class);
+        var providerCancelled = new AtomicBoolean();
+        when(chatModel.stream(any(Prompt.class)))
+            .thenReturn(Flux.<ChatResponse>never()
+                .doOnCancel(() -> providerCancelled.set(true)));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var stream = model.streamText(GenerateTextRequest.builder().prompt("Hello").build());
+
+        verify(chatModel, times(0)).stream(any(Prompt.class));
+        var observed = new ArrayList<TextStreamPart>();
+        Disposable subscription = stream.fullStream().subscribe(observed::add);
+        assertThat(observed).extracting(TextStreamPart::getType)
+            .containsExactly(PartType.START, PartType.START_STEP);
+        subscription.dispose();
+
+        assertThat(providerCancelled).isTrue();
+        StepVerifier.create(stream.fullStream().collectList())
+            .assertNext(parts -> {
+                assertThat(parts).startsWith(observed.toArray(TextStreamPart[]::new));
+                assertThat(parts.getLast().getType()).isEqualTo(PartType.ERROR);
+                assertThat(parts.getLast().getProviderMetadata())
+                    .containsEntry("exceptionType", "cancelled");
+            })
+            .verifyComplete();
+        StepVerifier.create(stream.result())
+            .expectError(AiGenerationCancelledException.class)
+            .verify();
+        verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
     void streamText_composesAsyncLifecycleCallbacksOnNonBlockingThread() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(
@@ -3600,7 +3653,10 @@ class LanguageModelImplTest {
     void generateText_recordsToolTimeoutAsToolError() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class)))
-            .thenReturn(toolCallResponse("call_1", "slow", "{}", 2, 3));
+            .thenReturn(
+                toolCallResponse("call_1", "slow", "{}", 2, 3),
+                chatResponse("Recovered.", "stop", 4, 5)
+            );
         var model = new LanguageModelImpl(chatModel, "openai");
 
         var request = GenerateTextRequest.builder()
@@ -3616,9 +3672,14 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .assertNext(result -> assertThat(result.getToolErrors())
-                .singleElement()
-                .satisfies(error -> assertThat(error.getErrorText()).contains("tool timed out")))
+            .assertNext(result -> {
+                assertThat(result.getSteps()).hasSize(2);
+                assertThat(result.getText()).isEqualTo("Recovered.");
+                assertThat(result.getToolErrors())
+                    .singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText())
+                        .contains("tool timed out"));
+            })
             .verifyComplete();
     }
 

@@ -3,11 +3,12 @@ package run.halo.aifoundation.tool;
 import reactor.core.publisher.Mono;
 
 /**
- * Request-scoped callback that can repair invalid tool call input before server-side execution.
+ * Request-scoped callback that can repair invalid tool call input before tool processing.
  *
- * <p>The callback is invoked only for known tools with a server-side executor when the model output
- * fails the tool input schema validation. Returning {@link ToolCallRepairResult#unrepaired()} keeps
- * the original validation failure.
+ * <p>The callback is invoked at most once for a known internal or external tool when model output
+ * fails input schema validation. Repaired input is validated again before availability, approval,
+ * external handoff, or execution. Returning {@link ToolCallRepairResult#unrepaired()} keeps the
+ * original validation failure.
  */
 @FunctionalInterface
 public interface ToolCallRepairCallback {

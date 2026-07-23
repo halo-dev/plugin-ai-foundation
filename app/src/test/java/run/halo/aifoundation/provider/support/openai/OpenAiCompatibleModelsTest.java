@@ -1,6 +1,7 @@
 package run.halo.aifoundation.provider.support.openai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.embedding.EmbeddingResponse;
@@ -24,6 +26,10 @@ import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOp
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
+import run.halo.aifoundation.service.language.stream.FinalOnlyProviderStreamingChatModel;
+import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
+import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModels;
 
 class OpenAiCompatibleModelsTest {
 
@@ -214,6 +220,154 @@ class OpenAiCompatibleModelsTest {
     }
 
     @Test
+    void standardDialect_preservesNativeToolInputLifecycleFromRawSse() {
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
+        var parts = streamParts(model,
+            chunk("""
+                {"id":"response-1","choices":[{"delta":{"tool_calls":[
+                  {"index":0,"id":"call-1","type":"function","function":{
+                    "name":"weather","arguments":"{\\\"city\\\""
+                  }}
+                ]}}]}
+                """),
+            chunk("""
+                {"id":"response-1","choices":[{"delta":{"tool_calls":[
+                  {"index":0,"function":{"arguments":":\\\"Hangzhou\\\"}"}}
+                ]}}]}
+                """),
+            chunk("""
+                {"id":"response-1","choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+                """),
+            "data: [DONE]\n\n");
+
+        assertThat(toolInputParts(parts)).containsExactly(
+            new ProviderStreamPart.ToolInputStartPart(0, "call-1", "weather"),
+            new ProviderStreamPart.ToolInputDeltaPart(0, "{\"city\""),
+            new ProviderStreamPart.ToolInputDeltaPart(0, ":\"Hangzhou\"}"),
+            new ProviderStreamPart.ToolInputEndPart(0));
+        assertThat(parts).anyMatch(ProviderStreamPart.ChatResponsePart.class::isInstance);
+    }
+
+    @Test
+    void standardDialect_treatsSingleCompleteProviderFragmentAsNativeDelta() {
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
+        var parts = streamParts(model,
+            chunk("""
+                {"choices":[{"delta":{"tool_calls":[
+                  {"index":0,"id":"call-1","function":{"name":"weather","arguments":"{}"}}
+                ]},"finish_reason":"tool_calls"}]}
+                """));
+
+        assertThat(toolInputParts(parts)).containsExactly(
+            new ProviderStreamPart.ToolInputStartPart(0, "call-1", "weather"),
+            new ProviderStreamPart.ToolInputDeltaPart(0, "{}"),
+            new ProviderStreamPart.ToolInputEndPart(0));
+    }
+
+    @Test
+    void standardDialect_usesStableFallbackForLateIdAndNameAndIsolatesInterleavedCalls() {
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
+        var parts = streamParts(model,
+            chunk("""
+                {"choices":[{"delta":{"tool_calls":[
+                  {"index":0,"function":{"arguments":"{\\\"city\\\""}},
+                  {"index":1,"id":"call-2","function":{"name":"search","arguments":"{\\\"q\\\""}}
+                ]}}]}
+                """),
+            chunk("""
+                {"choices":[{"delta":{"tool_calls":[
+                  {"index":1,"function":{"arguments":":\\\"Halo\\\"}"}},
+                  {"index":0,"id":"provider-late","function":{"name":"weather","arguments":":\\\"HZ\\\"}"}}
+                ]}}]}
+                """),
+            chunk("""
+                {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+                """));
+        var toolParts = toolInputParts(parts);
+        var starts = toolParts.stream()
+            .filter(ProviderStreamPart.ToolInputStartPart.class::isInstance)
+            .map(ProviderStreamPart.ToolInputStartPart.class::cast)
+            .toList();
+
+        assertThat(starts).hasSize(2);
+        assertThat(starts).anySatisfy(start -> {
+            assertThat(start.index()).isZero();
+            assertThat(start.toolCallId()).startsWith("call_").isNotEqualTo("provider-late");
+            assertThat(start.toolName()).isEqualTo("weather");
+        });
+        assertThat(starts).anySatisfy(start -> {
+            assertThat(start.index()).isEqualTo(1);
+            assertThat(start.toolCallId()).isEqualTo("call-2");
+            assertThat(start.toolName()).isEqualTo("search");
+        });
+        assertThat(toolParts.stream()
+            .filter(ProviderStreamPart.ToolInputDeltaPart.class::isInstance)
+            .map(ProviderStreamPart.ToolInputDeltaPart.class::cast)
+            .map(ProviderStreamPart.ToolInputDeltaPart::index))
+            .containsExactly(1, 1, 0, 0);
+    }
+
+    @Test
+    void cumulativeDialect_emitsSuffixAndStopsAfterSnapshotRegression() {
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder(),
+            new CumulativeToolInputStreamDialect());
+        var parts = streamParts(model,
+            chunk("""
+                {"choices":[{"delta":{"tool_calls":[
+                  {"index":0,"id":"call-1","function":{"name":"weather","arguments":"{\\\"a"}}
+                ]}}]}
+                """),
+            chunk("""
+                {"choices":[{"delta":{"tool_calls":[
+                  {"index":0,"function":{"arguments":"{\\\"ab"}}
+                ]}}]}
+                """),
+            chunk("""
+                {"choices":[{"delta":{"tool_calls":[
+                  {"index":0,"function":{"arguments":"{\\\"x"}}
+                ]}}]}
+                """),
+            chunk("""
+                {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+                """));
+
+        assertThat(toolInputParts(parts).stream()
+            .filter(ProviderStreamPart.ToolInputDeltaPart.class::isInstance)
+            .map(ProviderStreamPart.ToolInputDeltaPart.class::cast)
+            .map(ProviderStreamPart.ToolInputDeltaPart::inputTextDelta))
+            .containsExactly("{\"a", "b");
+        assertThat(toolInputParts(parts)).endsWith(new ProviderStreamPart.ToolInputEndPart(0));
+    }
+
+    @Test
+    void finalOnlyAdapterDoesNotFabricateToolInputAndUnnamedStreamFails() {
+        ChatModel delegate = org.mockito.Mockito.mock(ChatModel.class);
+        org.mockito.Mockito.when(delegate.stream(org.mockito.ArgumentMatchers.any(Prompt.class)))
+            .thenReturn(Flux.just(new ChatResponse(List.of())));
+        var finalOnly = new FinalOnlyProviderStreamingChatModel(delegate);
+
+        assertThat(finalOnly.streamParts(new Prompt("hello")).collectList().block())
+            .singleElement()
+            .isInstanceOf(ProviderStreamPart.ChatResponsePart.class);
+        assertThat(ProviderStreamingChatModels.adapt(delegate))
+            .isInstanceOf(FinalOnlyProviderStreamingChatModel.class);
+
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
+        assertThat(ProviderStreamingChatModels.adapt(model)).isSameAs(model);
+        assertThatThrownBy(() -> streamParts(model,
+            chunk("""
+                {"choices":[{"delta":{"tool_calls":[
+                  {"index":0,"id":"call-1","function":{"arguments":"{}"}}
+                ]}}]}
+                """),
+            chunk("""
+                {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+                """)))
+            .hasMessageContaining(
+                "OpenAI-compatible tool call at index 0 did not provide a name");
+    }
+
+    @Test
     void chatUrl_usesConfiguredEndpointPath() {
         var model = new OpenAiCompatibleChatModel(chatOptions().mutate()
             .endpointPath("compatible/chat")
@@ -385,5 +539,31 @@ class OpenAiCompatibleModelsTest {
     private OpenAiCompatibleImageOptions imageOptions() {
         return new OpenAiCompatibleImageOptions("openai", "http://localhost/v1", null, "sk-test",
             "gpt-image-test", Map.of());
+    }
+
+    private String chunk(String json) {
+        try {
+            return "data: " + new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(json).toString() + "\n\n";
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Invalid test stream fixture", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ProviderStreamPart> streamParts(OpenAiCompatibleChatModel model,
+        String... rawChunks) {
+        var data = (Flux<String>) ReflectionTestUtils.invokeMethod(model, "sseDataLines",
+            Flux.fromArray(rawChunks));
+        var parts = (Flux<ProviderStreamPart>) ReflectionTestUtils.invokeMethod(model,
+            "providerStreamParts", data.filter(chunk -> !"[DONE]".equals(chunk)),
+            model.getOptions());
+        return parts.collectList().block();
+    }
+
+    private List<ProviderStreamPart> toolInputParts(List<ProviderStreamPart> parts) {
+        return parts.stream()
+            .filter(part -> !(part instanceof ProviderStreamPart.ChatResponsePart))
+            .toList();
     }
 }

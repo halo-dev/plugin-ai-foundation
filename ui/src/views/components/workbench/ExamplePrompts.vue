@@ -2,6 +2,7 @@
 import { EXAMPLE_PROMPTS, type ExamplePrompt } from '@/utils/model-test-workbench'
 import RiCodeBoxLine from '~icons/ri/code-box-line'
 import RiLightbulbLine from '~icons/ri/lightbulb-line'
+import RiPulseLine from '~icons/ri/pulse-line'
 import RiQuillPenLine from '~icons/ri/quill-pen-line'
 import RiTableLine from '~icons/ri/table-line'
 import RiToolsLine from '~icons/ri/tools-line'
@@ -20,6 +21,7 @@ const iconMap: Record<string, typeof RiQuillPenLine> = {
   'ri-translate-2': RiTranslate2,
   'ri-tools-line': RiToolsLine,
   'ri-window-line': RiWindowLine,
+  'ri-pulse-line': RiPulseLine,
 }
 </script>
 
@@ -47,9 +49,7 @@ const iconMap: Record<string, typeof RiQuillPenLine> = {
       </p>
     </div>
 
-    <div
-      class=":uno: example-prompts-grid grid mx-auto mt-6 max-w-3xl w-full gap-2.5"
-    >
+    <div class=":uno: example-prompts-grid grid mx-auto mt-6 max-w-3xl w-full gap-2.5">
       <button
         v-for="prompt in EXAMPLE_PROMPTS"
         :key="prompt.id"

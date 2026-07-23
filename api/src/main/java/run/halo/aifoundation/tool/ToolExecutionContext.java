@@ -1,11 +1,11 @@
 package run.halo.aifoundation.tool;
 
 import java.util.List;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Value;
 import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.message.ModelMessage;
 
@@ -15,10 +15,7 @@ import run.halo.aifoundation.message.ModelMessage;
  * <p>The context includes the parsed input and enough call metadata to correlate tool execution
  * with stream events and persisted conversation history.
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Value
 public class ToolExecutionContext {
     /**
      * Provider or Halo generated tool call id.
@@ -45,7 +42,31 @@ public class ToolExecutionContext {
      */
     private Map<String, Object> providerMetadata;
     /**
+     * Caller request context. This data is not added to model prompts.
+     */
+    private Map<String, Object> requestContext;
+    /**
      * Request-scoped cooperative cancellation signal, when the caller supplied one.
      */
     private CancellationToken cancellationToken;
+
+    @Builder
+    public ToolExecutionContext(String toolCallId, String toolName, Map<String, Object> input,
+        Integer stepIndex, List<ModelMessage> messages, Map<String, Object> providerMetadata,
+        Map<String, Object> requestContext, CancellationToken cancellationToken) {
+        this.toolCallId = toolCallId;
+        this.toolName = toolName;
+        this.input = immutableMap(input);
+        this.stepIndex = stepIndex;
+        this.messages = messages == null ? List.of() : List.copyOf(messages);
+        this.providerMetadata = immutableMap(providerMetadata);
+        this.requestContext = immutableMap(requestContext);
+        this.cancellationToken = cancellationToken;
+    }
+
+    private static Map<String, Object> immutableMap(Map<String, Object> source) {
+        return source == null || source.isEmpty()
+            ? Map.of()
+            : Collections.unmodifiableMap(new LinkedHashMap<>(source));
+    }
 }

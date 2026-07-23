@@ -83,9 +83,11 @@ class UIMessageTransportCodecTest {
         var chunks = List.<UIMessageChunk>of(
             UIMessageChunks.startStep(0),
             UIMessageChunks.toolInputStart("call-1", "weather"),
-            UIMessageChunks.toolInputDelta("call-1", "weather", "{\"city\""),
+            UIMessageChunks.toolInputDelta("call-1", "{\"city\""),
             UIMessageChunks.toolInputAvailable("call-1", "weather",
                 Map.of("city", "Hangzhou"), Map.of("provider", "test")),
+            UIMessageChunks.toolInputError("call-invalid", "weather", "invalid input",
+                Map.of("provider", "test")),
             UIMessageChunks.toolOutputAvailable("call-1", "weather",
                 Map.of("temperature", 20), Map.of("provider", "test")),
             UIMessageChunks.toolOutputError("call-2", "search", "failed", Map.of()),
@@ -101,6 +103,9 @@ class UIMessageTransportCodecTest {
             var encoded = UIMessageTransportCodec.chunkToMap(chunk);
             assertThat(encoded).containsEntry("type", chunk.type());
             assertThat(encoded).doesNotContainValue(null);
+            if (chunk instanceof ToolInputDeltaChunk) {
+                assertThat(encoded).doesNotContainKey("toolName");
+            }
             assertThat(UIMessageTransportCodec.chunkFromMap(encoded)).isEqualTo(chunk);
         }
     }

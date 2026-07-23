@@ -132,11 +132,15 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
                 assertThat(result.getToolCalls()).singleElement()
                     .satisfies(call -> assertThat(call.getToolCallId()).isEqualTo("call_1"));
                 assertThat(result.getToolApprovalRequests()).hasSize(1);
-                assertThat(result.getToolErrors()).isEmpty();
+                assertThat(result.getToolErrors()).singleElement()
+                    .satisfies(error -> {
+                        assertThat(error.getToolCallId()).isEqualTo("call_2");
+                        assertThat(error.getErrorText()).contains("Unknown tool");
+                    });
                 assertThat(result.getResponseMessages().stream()
                     .flatMap(message -> message.getContent().stream())
                     .map(ModelMessagePart::getToolCallId))
-                    .containsExactly("call_1", "call_1");
+                    .containsExactly("call_1", "call_1", "call_2");
             })
             .verifyComplete();
 

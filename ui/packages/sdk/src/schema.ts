@@ -91,67 +91,7 @@ export function validateRuntimeSchema<T>(
   })
 }
 
-export function parsePartialJson(text: string): unknown | undefined {
-  const trimmed = text.trim()
-  if (!trimmed) {
-    return undefined
-  }
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    const repaired = repairPartialJson(trimmed)
-    if (!repaired) {
-      return undefined
-    }
-    try {
-      return JSON.parse(repaired)
-    } catch {
-      return undefined
-    }
-  }
-}
-
-function repairPartialJson(text: string): string | undefined {
-  const stack: string[] = []
-  let inString = false
-  let escaped = false
-  let result = ''
-
-  for (const char of text) {
-    result += char
-    if (inString) {
-      if (escaped) {
-        escaped = false
-      } else if (char === '\\') {
-        escaped = true
-      } else if (char === '"') {
-        inString = false
-      }
-      continue
-    }
-    if (char === '"') {
-      inString = true
-    } else if (char === '{') {
-      stack.push('}')
-    } else if (char === '[') {
-      stack.push(']')
-    } else if (char === '}' || char === ']') {
-      if (stack[stack.length - 1] !== char) {
-        return undefined
-      }
-      stack.pop()
-    }
-  }
-
-  if (inString) {
-    result += '"'
-  }
-  result = result.replace(/,\s*$/u, '')
-  while (stack.length) {
-    result += stack.pop()
-  }
-  return result
-}
+export { parsePartialJson } from './partial-json'
 
 function validateSchemaValue<T>(
   value: unknown,

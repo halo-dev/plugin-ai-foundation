@@ -60,6 +60,7 @@ const {
   externalTestToolEnabled,
   agentTestToolsEnabled,
   toolCallRepairEnabled,
+  toolInputStreamTestEnabled,
   outputMode,
   outputSchemaText,
   outputChoicesText,
@@ -404,6 +405,7 @@ function distanceToConversationBottom(element: HTMLElement) {
         :external-test-tool-enabled="externalTestToolEnabled"
         :agent-test-tools-enabled="agentTestToolsEnabled"
         :tool-call-repair-enabled="toolCallRepairEnabled"
+        :tool-input-stream-test-enabled="toolInputStreamTestEnabled"
         :output-mode="outputMode"
         :output-schema-text="outputSchemaText"
         :output-choices-text="outputChoicesText"
@@ -446,6 +448,7 @@ function distanceToConversationBottom(element: HTMLElement) {
         @update:external-test-tool-enabled="externalTestToolEnabled = $event"
         @update:agent-test-tools-enabled="agentTestToolsEnabled = $event"
         @update:tool-call-repair-enabled="toolCallRepairEnabled = $event"
+        @update:tool-input-stream-test-enabled="toolInputStreamTestEnabled = $event"
         @update:output-mode="outputMode = $event"
         @update:output-schema-text="outputSchemaText = $event"
         @update:output-choices-text="outputChoicesText = $event"

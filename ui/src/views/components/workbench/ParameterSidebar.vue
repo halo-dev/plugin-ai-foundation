@@ -31,6 +31,7 @@ defineProps<{
   externalTestToolEnabled?: boolean
   agentTestToolsEnabled?: boolean
   toolCallRepairEnabled?: boolean
+  toolInputStreamTestEnabled?: boolean
   outputMode?: OutputMode
   outputSchemaText?: string
   outputChoicesText?: string
@@ -76,6 +77,7 @@ const emit = defineEmits<{
   'update:externalTestToolEnabled': [value: boolean]
   'update:agentTestToolsEnabled': [value: boolean]
   'update:toolCallRepairEnabled': [value: boolean]
+  'update:toolInputStreamTestEnabled': [value: boolean]
   'update:outputMode': [value: OutputMode]
   'update:outputSchemaText': [value: string]
   'update:outputChoicesText': [value: string]
@@ -135,6 +137,7 @@ const emit = defineEmits<{
         :external-test-tool-enabled="externalTestToolEnabled"
         :agent-test-tools-enabled="agentTestToolsEnabled"
         :tool-call-repair-enabled="toolCallRepairEnabled"
+        :tool-input-stream-test-enabled="toolInputStreamTestEnabled"
         :output-mode="outputMode"
         :output-schema-text="outputSchemaText"
         :output-choices-text="outputChoicesText"
@@ -163,6 +166,7 @@ const emit = defineEmits<{
         @update:external-test-tool-enabled="emit('update:externalTestToolEnabled', $event)"
         @update:agent-test-tools-enabled="emit('update:agentTestToolsEnabled', $event)"
         @update:tool-call-repair-enabled="emit('update:toolCallRepairEnabled', $event)"
+        @update:tool-input-stream-test-enabled="emit('update:toolInputStreamTestEnabled', $event)"
         @update:output-mode="emit('update:outputMode', $event)"
         @update:output-schema-text="emit('update:outputSchemaText', $event)"
         @update:output-choices-text="emit('update:outputChoicesText', $event)"

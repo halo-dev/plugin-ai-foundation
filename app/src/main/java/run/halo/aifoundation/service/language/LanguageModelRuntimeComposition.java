@@ -86,7 +86,8 @@ public record LanguageModelRuntimeComposition(
         var toolExecutor = new LanguageModelToolExecutor(
             structuredOutputHandler::validateJsonValue,
             runtimeSupport::checkCancellation,
-            runtimeSupport::withToolTimeout);
+            runtimeSupport::withToolTimeout,
+            runtimeSupport::withStepTimeout);
         var toolStepCoordinator = new ToolStepCoordinator(toolExecutor);
         return new LanguageModelRuntimeComposition(context.providerType(), resolvedOptions,
             resolvedCapabilities, reasoningHistorySupported, requestValidator, messageMapper,

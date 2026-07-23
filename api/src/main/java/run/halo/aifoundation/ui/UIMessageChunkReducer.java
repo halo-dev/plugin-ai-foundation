@@ -51,13 +51,13 @@ public final class UIMessageChunkReducer {
             case SourceUrlChunk source -> replaceSource(source);
             case SourceDocumentChunk source -> replaceSource(source);
             case FileChunk file -> replaceFile(file);
-            case ToolInputStartChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
-                ToolPartState.INPUT_STREAMING, null, "", null, null, null, Map.of());
-            case ToolInputDeltaChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
-                ToolPartState.INPUT_STREAMING, null, tool.inputTextDelta(), null, null, null,
-                Map.of());
+            case ToolInputStartChunk tool -> startToolInput(tool);
+            case ToolInputDeltaChunk tool -> appendToolInput(tool);
             case ToolInputAvailableChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
                 ToolPartState.INPUT_AVAILABLE, tool.input(), null, null, null, null,
+                tool.providerMetadata());
+            case ToolInputErrorChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.OUTPUT_ERROR, null, null, null, tool.errorText(), null,
                 tool.providerMetadata());
             case ToolOutputAvailableChunk tool -> replaceTool(tool.toolCallId(), tool.toolName(),
                 ToolPartState.OUTPUT_AVAILABLE, null, null, tool.output(), null, null,
@@ -200,28 +200,68 @@ public final class UIMessageChunkReducer {
             tool.providerMetadata());
     }
 
+    private boolean startToolInput(ToolInputStartChunk tool) {
+        replaceByIdentity(UIMessageParts.tool(tool.toolCallId(), tool.toolName(),
+            ToolPartState.INPUT_STREAMING, null, "", null, null, null, Map.of()));
+        return true;
+    }
+
+    private boolean appendToolInput(ToolInputDeltaChunk tool) {
+        var existing = findTool(tool.toolCallId());
+        if (existing == null || existing.state() != ToolPartState.INPUT_STREAMING) {
+            throw new InvalidUIMessageException(List.of(new UIMessageValidationIssue(
+                null, null, tool.type(), tool.toolCallId(), "chunk.tool.input-start.required",
+                "Tool input delta requires a preceding tool input start")));
+        }
+        return replaceTool(tool.toolCallId(), existing.toolName(), ToolPartState.INPUT_STREAMING,
+            null, tool.inputTextDelta(), null, null, null, Map.of());
+    }
+
     private boolean replaceTool(String toolCallId, String toolName, ToolPartState state,
         Object input, String inputTextDelta, Object output, String errorText,
         ToolApproval approval, Map<String, Object> providerMetadata) {
         var existing = findTool(toolCallId);
-        var inputText = switch (state) {
-            case INPUT_STREAMING -> (existing != null ? existing.inputText() : "")
-                + (inputTextDelta != null ? inputTextDelta : "");
-            default -> null;
-        };
-        var metadata = providerMetadata == null ? Map.<String, Object>of() : providerMetadata;
+        var inputText = accumulatedInputText(state, existing, inputTextDelta);
+        var resolvedInput = input;
+        var resolvedOutput = output;
+        var resolvedErrorText = errorText;
+        var resolvedApproval = approval;
+        var resolvedMetadata =
+            providerMetadata == null ? Map.<String, Object>of() : providerMetadata;
+
+        if (existing != null) {
+            if (resolvedInput == null) {
+                resolvedInput = existing.input();
+            }
+            if (resolvedOutput == null) {
+                resolvedOutput = existing.output();
+            }
+            if (resolvedErrorText == null) {
+                resolvedErrorText = existing.errorText();
+            }
+            if (resolvedApproval == null) {
+                resolvedApproval = existing.approval();
+            }
+            if (resolvedMetadata.isEmpty()) {
+                resolvedMetadata = existing.providerMetadata();
+            }
+        }
+
         replaceByIdentity(UIMessageParts.tool(toolCallId, toolName, state,
-            input != null ? input : existing != null ? existing.input() : null,
-            inputText,
-            output != null ? output : existing != null ? existing.output() : null,
-            errorText != null ? errorText
-                : existing != null ? existing.errorText() : null,
-            approval != null ? approval
-                : existing != null ? existing.approval() : null,
-            metadata.isEmpty() && existing != null
-                ? existing.providerMetadata()
-                : metadata));
+            resolvedInput, inputText, resolvedOutput, resolvedErrorText, resolvedApproval,
+            resolvedMetadata));
         return true;
+    }
+
+    private String accumulatedInputText(ToolPartState state, ToolPart existing,
+        String inputTextDelta) {
+        if (state != ToolPartState.INPUT_STREAMING) {
+            return null;
+        }
+        var currentText =
+            existing == null || existing.inputText() == null ? "" : existing.inputText();
+        var delta = inputTextDelta == null ? "" : inputTextDelta;
+        return currentText + delta;
     }
 
     private ToolPart findTool(String toolCallId) {

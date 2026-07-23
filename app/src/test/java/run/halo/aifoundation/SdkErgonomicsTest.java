@@ -36,6 +36,9 @@ import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolCallRepairContext;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolExecutionContext;
+import run.halo.aifoundation.tool.ToolInputAvailableContext;
+import run.halo.aifoundation.tool.ToolInputDeltaContext;
+import run.halo.aifoundation.tool.ToolInputStartContext;
 import run.halo.aifoundation.ui.FilePart;
 import run.halo.aifoundation.ui.UIMessageStreamReader;
 import run.halo.aifoundation.ui.UIMessageStreams;
@@ -135,6 +138,69 @@ class SdkErgonomicsTest {
         assertThat(dynamic.getApprovalPolicy().requiresApproval(ToolExecutionContext.builder()
             .input(Map.of("amount", 1200))
             .build())).isTrue();
+    }
+
+    @Test
+    void toolDefinition_acceptsBackpressuredInputCallbacksAndImmutableContexts() {
+        var mutableMessages = new java.util.ArrayList<>(List.of(ModelMessage.user("hello")));
+        var mutableContext = new java.util.LinkedHashMap<String, Object>();
+        mutableContext.put("traceId", "trace-1");
+        var start = ToolInputStartContext.builder()
+            .toolCallId("call-1")
+            .toolName("weather")
+            .messages(mutableMessages)
+            .requestContext(mutableContext)
+            .build();
+        var delta = ToolInputDeltaContext.builder()
+            .toolCallId("call-1")
+            .toolName("weather")
+            .inputTextDelta("{\"city\"")
+            .messages(mutableMessages)
+            .requestContext(mutableContext)
+            .build();
+        var available = ToolInputAvailableContext.builder()
+            .toolCallId("call-1")
+            .toolName("weather")
+            .input(Map.of("city", "Hangzhou"))
+            .messages(mutableMessages)
+            .requestContext(mutableContext)
+            .build();
+        var tool = ToolDefinition.builder()
+            .name("weather")
+            .onInputStart(context -> Mono.empty())
+            .onInputDelta(context -> Mono.empty())
+            .onInputAvailable(context -> Mono.empty())
+            .build();
+
+        mutableMessages.clear();
+        mutableContext.put("traceId", "changed");
+
+        assertThat(tool.getOnInputStart()).isNotNull();
+        assertThat(tool.getOnInputDelta()).isNotNull();
+        assertThat(tool.getOnInputAvailable()).isNotNull();
+        assertThat(start.getMessages()).hasSize(1);
+        assertThat(start.getRequestContext()).containsEntry("traceId", "trace-1");
+        assertThat(delta.getInputTextDelta()).isEqualTo("{\"city\"");
+        assertThat(available.getInput()).containsEntry("city", "Hangzhou");
+        assertThatThrownBy(() -> start.getRequestContext().put("new", "value"))
+            .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void toolInputEndAndErrorAreValidatedTypedStreamParts() throws Exception {
+        var end = TextStreamPart.toolInputEnd("input-1", "call-1", "weather");
+        var error = TextStreamPart.toolInputError("call-1", "weather", "invalid input",
+            Map.of("provider", "test"));
+        var mapper = JsonMapper.builder().build();
+
+        assertThat(end.getType()).isEqualTo(PartType.TOOL_INPUT_END);
+        assertThat(error.getType()).isEqualTo(PartType.TOOL_INPUT_ERROR);
+        assertThat(mapper.writeValueAsString(end)).contains("\"type\":\"tool-input-end\"");
+        assertThat(mapper.writeValueAsString(error)).contains("\"errorText\":\"invalid input\"");
+        assertThatThrownBy(() -> TextStreamPart.toolInputEnd("", "call-1", "weather"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> TextStreamPart.toolInputError("call-1", "weather", "", Map.of()))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

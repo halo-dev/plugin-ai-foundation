@@ -796,7 +796,6 @@ function preserveExternalToolUpdates<METADATA>(
       ...part,
       ...external,
       input: external.input ?? part.input,
-      inputText: external.inputText ?? part.inputText,
       providerMetadata: external.providerMetadata ?? part.providerMetadata,
     }
   })

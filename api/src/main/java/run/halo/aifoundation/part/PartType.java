@@ -97,6 +97,16 @@ public final class PartType {
      */
     public static final String TOOL_INPUT_DELTA = "tool-input-delta";
     /**
+     * Stream event: incremental tool input has ended. Relevant fields: {@code toolCallId},
+     * {@code toolName}, {@code id}.
+     */
+    public static final String TOOL_INPUT_END = "tool-input-end";
+    /**
+     * Stream event: completed tool input could not be normalized. Relevant fields:
+     * {@code toolCallId}, {@code toolName}, {@code errorText}.
+     */
+    public static final String TOOL_INPUT_ERROR = "tool-input-error";
+    /**
      * Stream event: one model invocation step has ended. Includes finish reason, usage, warnings,
      * request metadata, response metadata, and provider metadata when available.
      */

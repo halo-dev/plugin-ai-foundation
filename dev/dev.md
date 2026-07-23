@@ -287,6 +287,14 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 | `StopCondition.stepCountIs(n)` | 限制最大模型步骤 |
 | `prepareStep(...)` | 按步骤调整工具、消息或采样参数 |
 
+`stopWhen` 决定是否需要继续；没有设置时，请求只执行一个模型步骤。AI Foundation 还会
+使用服务端属性 `halo.ai-foundation.language.max-steps` 限制单次多步骤生成的绝对上限，
+默认 32，可配置为 1～64。调用方应继续使用 `stopWhen` 设置更小的业务预算。
+
+工具输入校验、工具查找、执行或超时错误会作为 `ToolError` 写入消息历史；只要
+`stopWhen` 和服务端上限仍允许，模型会获得下一步机会来修正调用、选择其他工具或
+结束任务，而不是因单次可恢复的工具错误直接终止整个多步骤请求。
+
 外部工具不提供 `executor`。第一次请求会返回 assistant `tool-call`，调用方执行后追加
 `ModelMessage.tool(...)`，再发起下一次请求。
 
@@ -295,7 +303,35 @@ GenerateTextRequest request = GenerateTextRequest.builder()
 如果使用 UI Message，审批响应保存在 assistant `UIMessage.parts()` 中，不需要额外创建
 `TOOL` role 的 UI 消息。
 
-工具入参修复使用 `toolCallRepair(...)`。它只处理“已知工具、服务端执行、入参 schema 校验失败”的场景。
+工具入参修复使用 `toolCallRepair(...)`。已知的服务端工具和外部工具都会先解析、校验，
+校验失败时最多修复一次并重新校验；只有成功归一化的输入才会进入审批、外部交接或执行。
+
+需要观察流式工具入参时，可以在 `ToolDefinition` 上配置响应式回调：
+
+```java
+ToolDefinition weather = ToolDefinition.builder()
+    .name("get_weather")
+    .inputSchema(weatherSchema)
+    .onInputStart(context -> audit("start", context.getToolCallId()))
+    .onInputDelta(context -> audit("delta", context.getInputTextDelta()))
+    .onInputAvailable(context -> audit("available", context.getInput()))
+    .executor(context -> executeWeather(context.getInput()))
+    .build();
+```
+
+对于 provider 原生增量，顺序为：`onInputStart` → `tool-input-start`，随后每个
+`onInputDelta` → `tool-input-delta`，最后是后端 `tool-input-end`、权威 `tool-call`、
+`onInputAvailable`，再进入审批、外部交接或执行。回调会参与背压，并受 total/step timeout
+与 cancellation 约束；回调失败会终止本次生成，不会降级为 lifecycle warning。
+
+并非所有模型都会提供真实 delta。使用通用 Spring AI `ChatModel` 的 provider 和 Ollama
+保持 final-only：不会产生 `onInputDelta`，但完整输入仍会经过 `onInputStart`、校验/修复和
+`onInputAvailable`。OpenAI-compatible provider 只有在该次响应实际提供可追加参数片段时才
+产生 delta；不通过静态 provider 名称推断能力。
+
+解析、schema 校验或修复失败会产生该调用自己的 `tool-input-error`，不会进入审批、交接或
+执行，也不会阻止同一步中的其他有效调用。provider 从未给出工具名则属于协议错误，会终止
+该 step。
 
 ## 8. 结构化输出
 

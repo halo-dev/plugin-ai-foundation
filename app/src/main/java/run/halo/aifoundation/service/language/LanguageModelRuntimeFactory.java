@@ -13,23 +13,28 @@ public class LanguageModelRuntimeFactory {
     private final LanguageModelRuntimeSupport runtimeSupport;
     private final MediaResourcePolicy mediaResourcePolicy;
     private final ModelCapabilityMatcher capabilityMatcher;
+    private final LanguageModelRuntimeProperties runtimeProperties;
 
     public LanguageModelRuntimeFactory(LanguageModelRuntimeSupport runtimeSupport) {
-        this(runtimeSupport, new MediaResourcePolicy(), new ModelCapabilityMatcher());
+        this(runtimeSupport, new MediaResourcePolicy(), new ModelCapabilityMatcher(),
+            new LanguageModelRuntimeProperties());
     }
 
     @Autowired
     public LanguageModelRuntimeFactory(LanguageModelRuntimeSupport runtimeSupport,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
+        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
+        LanguageModelRuntimeProperties runtimeProperties) {
         this.runtimeSupport = runtimeSupport;
         this.mediaResourcePolicy = mediaResourcePolicy;
         this.capabilityMatcher = capabilityMatcher;
+        this.runtimeProperties = runtimeProperties;
     }
 
     public LanguageModel create(ChatModel chatModel,
         LanguageModelRuntimeConfiguration configuration) {
         var composition = LanguageModelRuntimeComposition.create(configuration, runtimeSupport,
             mediaResourcePolicy, capabilityMatcher);
-        return new LanguageModelImpl(chatModel, composition, configuration.context());
+        return new LanguageModelImpl(chatModel, composition, configuration.context(),
+            runtimeProperties.getMaxSteps());
     }
 }

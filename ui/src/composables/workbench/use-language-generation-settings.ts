@@ -31,6 +31,7 @@ export function useLanguageGenerationSettings() {
   const externalTestToolEnabled = shallowRef(false)
   const agentTestToolsEnabled = shallowRef(false)
   const toolCallRepairEnabled = shallowRef(false)
+  const toolInputStreamTestEnabled = shallowRef(false)
   const outputMode = shallowRef<OutputMode>('TEXT')
   const outputSchemaText = shallowRef(`{
   "type": "object",
@@ -105,6 +106,7 @@ export function useLanguageGenerationSettings() {
       externalTestToolEnabled: externalTestToolEnabled.value,
       agentTestToolsEnabled: agentTestToolsEnabled.value,
       toolCallRepairEnabled: toolCallRepairEnabled.value,
+      toolInputStreamTestEnabled: toolInputStreamTestEnabled.value,
     }
   }
 
@@ -138,6 +140,7 @@ export function useLanguageGenerationSettings() {
     externalTestToolEnabled,
     agentTestToolsEnabled,
     toolCallRepairEnabled,
+    toolInputStreamTestEnabled,
     outputMode,
     outputSchemaText,
     outputChoicesText,

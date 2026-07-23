@@ -27,6 +27,7 @@ export type {
   ValidateUIMessagesOptions,
 } from './persistence'
 export { parsePartialJson, toJsonSchema, validateFinalValue, validateRuntimeSchema } from './schema'
+export { fixJson } from './partial-json'
 export type {
   DataPartSchemas,
   MessageMetadataSchema,

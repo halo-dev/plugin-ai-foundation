@@ -283,6 +283,7 @@ canonical tool chunks 包括：
 - `tool-input-start`
 - `tool-input-delta`
 - `tool-input-available`
+- `tool-input-error`
 - `tool-output-available`
 - `tool-output-error`
 - `tool-approval-request`
@@ -290,6 +291,15 @@ canonical tool chunks 包括：
 
 reducer 会把这些事件聚合为最终的 `tool-*` message part。`start-step` 和 `finish-step` 是
 生命周期事件，不会写入 `message.parts`。
+
+`tool-input-delta`：只包含 `toolCallId` 和
+`inputTextDelta`，工具名来自同一调用之前的 `tool-input-start`。SDK 会在私有 reducer 状态
+中累积 JSON 文本，`input-streaming` part 只公开 best-effort 解析后的 `input`，不会暴露原始
+字符串；`tool-input-available` 的最终输入会覆盖 partial 值。delta 先于 start 会抛出协议
+错误，重复 start 会重置累积状态，只有 availability 会触发 `onToolCall`。
+
+provider 不保证提供真实 delta。final-only 调用会直接到 `tool-input-available`，这是正常
+路径；`tool-input-error` 表示输入校验/修复失败并进入 `output-error`，不会触发工具回调。
 
 ```ts
 await chat.addToolOutput({

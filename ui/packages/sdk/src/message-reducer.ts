@@ -1,5 +1,6 @@
 import { AIUIProtocolError } from './errors'
 import { generateId } from './id'
+import { parsePartialJson } from './partial-json'
 import { validateRuntimeSchema, type DataPartSchemas, type MessageMetadataSchema } from './schema'
 import type {
   DataPart,
@@ -13,6 +14,39 @@ import type {
   UIMessagePart,
   UIMessageStreamTerminal,
 } from './types'
+
+interface ToolInputStreamState {
+  toolName: string
+  text: string
+}
+
+type CanonicalToolChunkType =
+  | 'tool-input-start'
+  | 'tool-input-delta'
+  | 'tool-input-available'
+  | 'tool-input-error'
+  | 'tool-output-available'
+  | 'tool-output-error'
+  | 'tool-approval-request'
+  | 'tool-approval-response'
+
+type CanonicalToolChunk = Extract<UIMessageChunk, { type: CanonicalToolChunkType }>
+type ToolInputStartChunk = Extract<CanonicalToolChunk, { type: 'tool-input-start' }>
+type ToolInputDeltaChunk = Extract<CanonicalToolChunk, { type: 'tool-input-delta' }>
+type ToolInputAvailableChunk = Extract<CanonicalToolChunk, { type: 'tool-input-available' }>
+type ToolInputErrorChunk = Extract<CanonicalToolChunk, { type: 'tool-input-error' }>
+type ToolPartUpdateChunk = Extract<
+  CanonicalToolChunk,
+  {
+    type:
+      | 'tool-output-available'
+      | 'tool-output-error'
+      | 'tool-approval-request'
+      | 'tool-approval-response'
+  }
+>
+
+const privateToolInputStreams = new WeakMap<object, Map<string, ToolInputStreamState>>()
 
 export interface UIMessageReducerState<METADATA = unknown> {
   message: UIMessage<METADATA>
@@ -33,7 +67,7 @@ export interface CreateReducerOptions<METADATA = unknown> {
 export function createUIMessageReducer<METADATA = unknown>(
   options: CreateReducerOptions<METADATA> = {},
 ): UIMessageReducerState<METADATA> {
-  return {
+  const state: UIMessageReducerState<METADATA> = {
     message: options.message ?? {
       id: options.messageId ?? generateId('msg'),
       role: 'assistant',
@@ -45,6 +79,8 @@ export function createUIMessageReducer<METADATA = unknown>(
     messageMetadataSchema: options.messageMetadataSchema,
     dataPartSchemas: options.dataPartSchemas,
   }
+  privateToolInputStreams.set(state, new Map())
+  return state
 }
 
 export function applyUIMessageChunk<METADATA>(
@@ -66,7 +102,7 @@ export function applyUIMessageChunk<METADATA>(
     return state
   }
   if (isCanonicalToolChunk(chunk)) {
-    upsertToolPart(state, toolPartUpdateFromCanonicalChunk(chunk))
+    applyCanonicalToolChunk(state, chunk)
     return state
   }
   if (isLegacyToolChunk(chunk)) {
@@ -182,12 +218,21 @@ export function validateUIMessageChunk(chunk: UIMessageChunk): void {
     return
   }
   if (isCanonicalToolChunk(chunk)) {
-    validateToolIdentity(chunk.type, chunk.toolCallId, chunk.toolName)
+    if (chunk.type === 'tool-input-delta') {
+      if (!chunk.toolCallId) {
+        throw new AIUIProtocolError(`${chunk.type} chunk toolCallId is required.`)
+      }
+    } else {
+      validateToolIdentity(chunk.type, chunk.toolCallId, chunk.toolName)
+    }
     if (chunk.type === 'tool-input-delta' && !chunk.inputTextDelta) {
       throw new AIUIProtocolError('Tool input-delta chunk inputTextDelta is required.')
     }
     if (chunk.type === 'tool-output-error' && !chunk.errorText) {
       throw new AIUIProtocolError('Tool output-error chunk errorText is required.')
+    }
+    if (chunk.type === 'tool-input-error' && !chunk.errorText) {
+      throw new AIUIProtocolError('Tool input-error chunk errorText is required.')
     }
     if (
       (chunk.type === 'tool-approval-request' || chunk.type === 'tool-approval-response') &&
@@ -442,17 +487,12 @@ export function messageText(message: UIMessage): string {
 
 function upsertToolPart<METADATA>(state: UIMessageReducerState<METADATA>, chunk: ToolChunk) {
   const existing = findToolPart(state.message, chunk.toolCallId)
-  const inputText =
-    chunk.state === 'input-streaming'
-      ? `${existing?.inputText ?? ''}${chunk.inputTextDelta ?? ''}`
-      : undefined
   upsertPart(state, {
     type: chunk.type,
     toolCallId: chunk.toolCallId,
     toolName: chunk.toolName,
     state: chunk.state,
     input: chunk.input ?? existing?.input,
-    inputText,
     output: chunk.output ?? existing?.output,
     errorText: chunk.errorText ?? existing?.errorText,
     approval: chunk.approval ?? existing?.approval,
@@ -460,21 +500,113 @@ function upsertToolPart<METADATA>(state: UIMessageReducerState<METADATA>, chunk:
   })
 }
 
-function toolPartUpdateFromCanonicalChunk(
-  chunk: Extract<
-    UIMessageChunk,
-    {
-      type:
-        | 'tool-input-start'
-        | 'tool-input-delta'
-        | 'tool-input-available'
-        | 'tool-output-available'
-        | 'tool-output-error'
-        | 'tool-approval-request'
-        | 'tool-approval-response'
-    }
-  >,
-): ToolChunk {
+function applyCanonicalToolChunk<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+  chunk: CanonicalToolChunk,
+): void {
+  switch (chunk.type) {
+    case 'tool-input-start':
+      startToolInput(state, chunk)
+      return
+    case 'tool-input-delta':
+      appendToolInput(state, chunk)
+      return
+    case 'tool-input-available':
+      completeToolInput(state, chunk)
+      return
+    case 'tool-input-error':
+      failToolInput(state, chunk)
+      return
+    default:
+      upsertToolPart(state, toolPartUpdateFromCanonicalChunk(chunk))
+  }
+}
+
+function startToolInput<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+  chunk: ToolInputStartChunk,
+): void {
+  toolInputStreams(state).set(chunk.toolCallId, {
+    toolName: chunk.toolName,
+    text: '',
+  })
+  upsertPart(state, {
+    type: `tool-${chunk.toolName}`,
+    toolCallId: chunk.toolCallId,
+    toolName: chunk.toolName,
+    state: 'input-streaming',
+    input: undefined,
+  })
+}
+
+function appendToolInput<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+  chunk: ToolInputDeltaChunk,
+): void {
+  const stream = toolInputStreams(state).get(chunk.toolCallId)
+  if (!stream) {
+    throw new AIUIProtocolError(
+      `Tool input delta for ${chunk.toolCallId} requires a preceding tool-input-start.`,
+    )
+  }
+
+  stream.text += chunk.inputTextDelta
+  const existing = findToolPart(state.message, chunk.toolCallId)
+  upsertPart(state, {
+    type: `tool-${stream.toolName}`,
+    toolCallId: chunk.toolCallId,
+    toolName: stream.toolName,
+    state: 'input-streaming',
+    input: parsePartialJson(stream.text),
+    providerMetadata: existing?.providerMetadata,
+  })
+}
+
+function completeToolInput<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+  chunk: ToolInputAvailableChunk,
+): void {
+  toolInputStreams(state).delete(chunk.toolCallId)
+  const existing = findToolPart(state.message, chunk.toolCallId)
+  upsertPart(state, {
+    type: `tool-${chunk.toolName}`,
+    toolCallId: chunk.toolCallId,
+    toolName: chunk.toolName,
+    state: 'input-available',
+    input: chunk.input,
+    providerMetadata: chunk.providerMetadata ?? existing?.providerMetadata,
+  })
+}
+
+function failToolInput<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+  chunk: ToolInputErrorChunk,
+): void {
+  toolInputStreams(state).delete(chunk.toolCallId)
+  const existing = findToolPart(state.message, chunk.toolCallId)
+  upsertPart(state, {
+    type: `tool-${chunk.toolName}`,
+    toolCallId: chunk.toolCallId,
+    toolName: chunk.toolName,
+    state: 'output-error',
+    input: existing?.input,
+    errorText: chunk.errorText,
+    providerMetadata: chunk.providerMetadata ?? existing?.providerMetadata,
+  })
+}
+
+function toolInputStreams<METADATA>(
+  state: UIMessageReducerState<METADATA>,
+): Map<string, ToolInputStreamState> {
+  let streams = privateToolInputStreams.get(state)
+  if (!streams) {
+    streams = new Map()
+    privateToolInputStreams.set(state, streams)
+  }
+  return streams
+}
+
+function toolPartUpdateFromCanonicalChunk(chunk: ToolPartUpdateChunk): ToolChunk {
   const base = {
     type: `tool-${chunk.toolName}` as `tool-${string}`,
     toolCallId: chunk.toolCallId,
@@ -482,24 +614,6 @@ function toolPartUpdateFromCanonicalChunk(
     providerMetadata: 'providerMetadata' in chunk ? chunk.providerMetadata : undefined,
   }
   switch (chunk.type) {
-    case 'tool-input-start':
-      return {
-        ...base,
-        state: 'input-streaming',
-        inputTextDelta: '',
-      }
-    case 'tool-input-delta':
-      return {
-        ...base,
-        state: 'input-streaming',
-        inputTextDelta: chunk.inputTextDelta,
-      }
-    case 'tool-input-available':
-      return {
-        ...base,
-        state: 'input-available',
-        input: chunk.input,
-      }
     case 'tool-output-available':
       return {
         ...base,
@@ -543,23 +657,12 @@ function isDataChunk(
   return chunk.type.startsWith('data-')
 }
 
-function isCanonicalToolChunk(chunk: UIMessageChunk): chunk is Extract<
-  UIMessageChunk,
-  {
-    type:
-      | 'tool-input-start'
-      | 'tool-input-delta'
-      | 'tool-input-available'
-      | 'tool-output-available'
-      | 'tool-output-error'
-      | 'tool-approval-request'
-      | 'tool-approval-response'
-  }
-> {
+function isCanonicalToolChunk(chunk: UIMessageChunk): chunk is CanonicalToolChunk {
   return (
     chunk.type === 'tool-input-start' ||
     chunk.type === 'tool-input-delta' ||
     chunk.type === 'tool-input-available' ||
+    chunk.type === 'tool-input-error' ||
     chunk.type === 'tool-output-available' ||
     chunk.type === 'tool-output-error' ||
     chunk.type === 'tool-approval-request' ||

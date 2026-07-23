@@ -71,6 +71,10 @@ import run.halo.aifoundation.service.language.mapping.LanguageModelResponseMappe
 import run.halo.aifoundation.service.language.mapping.LanguageModelToolCallMapper;
 import run.halo.aifoundation.service.language.reasoning.ReasoningContentExtractor;
 import run.halo.aifoundation.service.language.stream.LanguageModelStreamResultBuilder;
+import run.halo.aifoundation.service.language.stream.CancellableStreamReplayCoordinator;
+import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
+import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
+import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModels;
 import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
 import run.halo.aifoundation.service.language.structured.LanguageModelStructuredOutputHandler;
 import run.halo.aifoundation.service.language.structured.StructuredOutput;
@@ -82,8 +86,7 @@ import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 @Slf4j
 public class LanguageModelImpl implements LanguageModel {
-    private static final int DEFAULT_STEP_LIMIT = 1;
-    private static final int MAX_STEP_LIMIT = 10;
+    private static final int SINGLE_STEP_LIMIT = 1;
     private static final int DEFAULT_MAX_RETRIES = 2;
     private static final String WARNING_STRUCTURED_OUTPUT_PROMPT_GUIDANCE =
         "structured-output-prompt-guidance";
@@ -97,6 +100,7 @@ public class LanguageModelImpl implements LanguageModel {
         "reasoning-returned-while-disabled";
 
     private final ChatModel chatModel;
+    private final ProviderStreamingChatModel providerStreamingChatModel;
     private final String providerType;
     private final LanguageModelProviderOptions providerOptions;
     private final run.halo.aifoundation.capability.ModelCapabilities modelCapabilities;
@@ -116,6 +120,7 @@ public class LanguageModelImpl implements LanguageModel {
     private final RuntimeParameterMappings parameterMappings;
     private final String modelName;
     private final String providerName;
+    private final int maxMultiStepLimit;
 
     LanguageModelImpl(ChatModel chatModel, String providerType) {
         this(chatModel, providerType, LanguageModelProviderOptions.defaults());
@@ -145,7 +150,13 @@ public class LanguageModelImpl implements LanguageModel {
 
     LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
         ModelRuntimeContext context) {
+        this(chatModel, composition, context, LanguageModelRuntimeProperties.DEFAULT_MAX_STEPS);
+    }
+
+    LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
+        ModelRuntimeContext context, int maxMultiStepLimit) {
         this.chatModel = chatModel;
+        this.providerStreamingChatModel = ProviderStreamingChatModels.adapt(chatModel);
         this.providerType = composition.providerType();
         this.providerOptions = composition.providerOptions();
         this.modelCapabilities = composition.modelCapabilities();
@@ -165,6 +176,7 @@ public class LanguageModelImpl implements LanguageModel {
         this.parameterMappings = context.parameterMappings();
         this.modelName = context.modelName();
         this.providerName = context.providerName();
+        this.maxMultiStepLimit = maxMultiStepLimit;
     }
 
     @Override
@@ -185,19 +197,22 @@ public class LanguageModelImpl implements LanguageModel {
     public StreamTextResult streamText(GenerateTextRequest request) {
         var run = new LanguageModelGenerationRun(request, providerType,
             resolvedStopCondition(request));
-        var fullStream = StreamProtocolNormalizer.normalize(
+        var source = StreamProtocolNormalizer.normalize(
             streamTextParts(request, run)
                 .transform(stream -> withTotalTimeout(stream, request))
                 .onErrorResume(error -> run.error(error, null, List.of())
                     .thenMany(Flux.just(terminalErrorPart(error))))
-        ).cache();
+        );
+        var replay = new CancellableStreamReplayCoordinator<>(source,
+            () -> terminalErrorPart(new AiGenerationCancelledException(
+                "Generation cancelled because all stream subscribers cancelled")));
+        var fullStream = replay.flux();
         var textStream = fullStream
             .filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
             .map(TextStreamPart::getDelta)
             .filter(this::hasContent);
         var result = fullStream.collectList()
-            .map(parts -> resultFromStreamParts(request, parts))
-            .cache();
+            .map(parts -> resultFromStreamParts(request, parts));
         var output = hasStructuredOutput(request)
             ? result.map(GenerateTextResult::getOutput)
             : Mono.empty();
@@ -423,17 +438,17 @@ public class LanguageModelImpl implements LanguageModel {
             }
             var accumulator = new StreamStepAccumulator(stepIndex);
             var prompt = new Prompt(prepared.messages(), buildChatOptions(prepared.request()));
-            var stream = chatModel.stream(prompt)
-                .transform(flux -> withStepTimeout(flux, prepared.request()))
-                .<ChatResponse>handle((response, sink) -> {
+            var stream = providerStreamingChatModel.streamParts(prompt)
+                .<ProviderStreamPart>handle((part, sink) -> {
                     try {
                         checkCancellation(prepared.request());
-                        sink.next(response);
+                        sink.next(part);
                     } catch (RuntimeException e) {
                         sink.error(e);
                     }
                 })
-                .concatMap(response -> mapToolStreamResponse(prepared.request(), response, accumulator))
+                .concatMap(part -> mapProviderToolStreamPart(prepared, part, accumulator))
+                .transform(flux -> withStepTimeout(flux, prepared.request()))
                 .onErrorResume(e -> {
                     log.error("[{}] Tool streaming error", providerType, e);
                     accumulator.failed = true;
@@ -445,6 +460,55 @@ public class LanguageModelImpl implements LanguageModel {
                 .thenMany(Flux.concat(Flux.just(TextStreamPart.startStep(stepIndex)), stream,
                     Flux.defer(() -> completeToolStreamStep(prepared, accumulator, loop))));
         });
+    }
+
+    private Flux<TextStreamPart> mapProviderToolStreamPart(PreparedInvocation prepared,
+        ProviderStreamPart part, StreamStepAccumulator accumulator) {
+        return switch (part) {
+            case ProviderStreamPart.ChatResponsePart response ->
+                mapToolStreamResponse(prepared.request(), response.response(), accumulator);
+            case ProviderStreamPart.ToolInputStartPart start ->
+                startToolInput(prepared, accumulator, start);
+            case ProviderStreamPart.ToolInputDeltaPart delta ->
+                appendToolInput(prepared, accumulator, delta);
+            case ProviderStreamPart.ToolInputEndPart end -> endToolInput(accumulator, end);
+        };
+    }
+
+    private Flux<TextStreamPart> startToolInput(PreparedInvocation prepared,
+        StreamStepAccumulator accumulator, ProviderStreamPart.ToolInputStartPart start) {
+        var input = accumulator.startToolInput(start.index(), start.toolCallId(), start.toolName());
+        var tool = toolDefinition(prepared.request(), start.toolName());
+        return toolExecutor.inputStart(start.toolCallId(), start.toolName(), tool,
+                prepared.request(), accumulator.stepIndex, prepared.executionMessages(),
+                accumulator.providerMetadata())
+            .thenMany(Flux.just(TextStreamPart.toolInputStart(input.inputId(),
+                start.toolCallId(), start.toolName())));
+    }
+
+    private Flux<TextStreamPart> appendToolInput(PreparedInvocation prepared,
+        StreamStepAccumulator accumulator, ProviderStreamPart.ToolInputDeltaPart delta) {
+        var input = accumulator.toolInput(delta.index());
+        var tool = toolDefinition(prepared.request(), input.toolName());
+        return toolExecutor.inputDelta(input.toolCallId(), input.toolName(),
+                delta.inputTextDelta(), tool, prepared.request(), accumulator.stepIndex,
+                prepared.executionMessages(), accumulator.providerMetadata())
+            .thenMany(Flux.just(TextStreamPart.toolInputDelta(input.inputId(),
+                input.toolCallId(), input.toolName(), delta.inputTextDelta())));
+    }
+
+    private Flux<TextStreamPart> endToolInput(StreamStepAccumulator accumulator,
+        ProviderStreamPart.ToolInputEndPart end) {
+        var input = accumulator.endToolInput(end.index());
+        return Flux.just(TextStreamPart.toolInputEnd(input.inputId(), input.toolCallId(),
+            input.toolName()));
+    }
+
+    private ToolDefinition toolDefinition(GenerateTextRequest request, String toolName) {
+        return nullSafe(request.getTools()).stream()
+            .filter(tool -> tool != null && Objects.equals(toolName, tool.getName()))
+            .findFirst()
+            .orElse(null);
     }
 
     private Flux<TextStreamPart> mapToolStreamResponse(GenerateTextRequest request, ChatResponse response,
@@ -508,12 +572,24 @@ public class LanguageModelImpl implements LanguageModel {
 
         var toolCalls = accumulator.toolCalls();
         var toolExecutionAllowed = accumulator.stepIndex + 1 < resolvedStepLimit(prepared.request());
-        return toolStepCoordinator.resolve(new ToolStepCoordinator.ToolStepRequest(toolCalls,
-                prepared.request(), accumulator.stepIndex, prepared.executionMessages(),
-                accumulator.providerMetadata(), loop.run(), approvalResolver::approvalId,
-                toolExecutionAllowed))
-            .flatMapMany(toolStep -> completeResolvedToolStreamStep(prepared, accumulator, loop,
-                parts, toolStep));
+        var request = new ToolStepCoordinator.ToolStepRequest(toolCalls,
+            prepared.request(), accumulator.stepIndex, prepared.executionMessages(),
+            accumulator.providerMetadata(), loop.run(), approvalResolver::approvalId,
+            accumulator.streamedInputCallIds(), toolExecutionAllowed);
+        return toolStepCoordinator.normalize(request)
+            .flatMapMany(normalized -> {
+                normalized.toolCalls().stream()
+                    .map(TextStreamPart::toolCall)
+                    .forEach(parts::add);
+                normalized.inputErrors().stream()
+                    .map(error -> TextStreamPart.toolInputError(error.getToolCallId(),
+                        error.getToolName(), error.getErrorText(), error.getProviderMetadata()))
+                    .forEach(parts::add);
+                return Flux.concat(Flux.fromIterable(parts),
+                    Flux.defer(() -> toolStepCoordinator.resolveNormalized(request, normalized)
+                        .flatMapMany(toolStep -> completeResolvedToolStreamStep(prepared,
+                            accumulator, loop, new ArrayList<>(), toolStep))));
+            });
     }
 
     private Flux<TextStreamPart> completeResolvedToolStreamStep(PreparedInvocation prepared,
@@ -528,11 +604,12 @@ public class LanguageModelImpl implements LanguageModel {
         var stopWhen = prepared.stopWhen();
         var toolResults = toolStep.execution();
         var recordedToolCalls = toolStep.toolCalls();
-        recordedToolCalls.forEach(toolCall -> parts.add(TextStreamPart.toolCall(toolCall)));
         var approvalRequests = toolStep.approvalRequests();
         approvalRequests.forEach(approval -> parts.add(TextStreamPart.toolApprovalRequest(approval)));
         toolResults.results().forEach(result -> parts.add(TextStreamPart.toolResult(result)));
-        toolResults.errors().forEach(error -> parts.add(TextStreamPart.toolError(error)));
+        toolResults.errors().stream()
+            .filter(error -> !toolStep.inputErrorCallIds().contains(error.getToolCallId()))
+            .forEach(error -> parts.add(TextStreamPart.toolError(error)));
 
         var warnings = new ArrayList<>(accumulator.warnings());
         warnings.addAll(toolStep.warnings());
@@ -703,7 +780,7 @@ public class LanguageModelImpl implements LanguageModel {
         var toolExecutionAllowed = stepIndex + 1 < resolvedStepLimit(stepRequest);
         return toolStepCoordinator.resolve(new ToolStepCoordinator.ToolStepRequest(step.toolCalls(),
                 stepRequest, stepIndex, prepared.executionMessages(), step.providerMetadata(), run,
-                approvalResolver::approvalId, toolExecutionAllowed))
+                approvalResolver::approvalId, Set.of(), toolExecutionAllowed))
             .flatMap(toolStep -> {
                 var generationStep = recordGenerateTextStep(stepRequest, prepared, stopWhen, step,
                     toolStep, state);
@@ -1917,14 +1994,17 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private int resolvedStepLimit(GenerateTextRequest request) {
-        return request.getStopWhen() != null ? MAX_STEP_LIMIT : DEFAULT_STEP_LIMIT;
+        if (request.getStopWhen() == null) {
+            return SINGLE_STEP_LIMIT;
+        }
+        return maxMultiStepLimit;
     }
 
     private StopCondition resolvedStopCondition(GenerateTextRequest request) {
         if (request.getStopWhen() != null) {
             return request.getStopWhen();
         }
-        return StopCondition.stepCountIs(DEFAULT_STEP_LIMIT);
+        return StopCondition.stepCountIs(SINGLE_STEP_LIMIT);
     }
 
     private boolean hasTools(GenerateTextRequest request) {
@@ -2289,6 +2369,7 @@ public class LanguageModelImpl implements LanguageModel {
         private final StringBuilder text = new StringBuilder();
         private final StringBuilder reasoning = new StringBuilder();
         private final ArrayList<AssistantMessage.ToolCall> toolCalls = new ArrayList<>();
+        private final Map<Integer, StreamedToolInput> streamedToolInputs = new LinkedHashMap<>();
         private ChatResponse lastResponse;
         private String rawFinishReason;
         private boolean textStarted;
@@ -2297,6 +2378,33 @@ public class LanguageModelImpl implements LanguageModel {
 
         StreamStepAccumulator(int stepIndex) {
             this.stepIndex = stepIndex;
+        }
+
+        StreamedToolInput startToolInput(int index, String toolCallId, String toolName) {
+            var input = new StreamedToolInput(
+                "input_" + UUID.randomUUID().toString().replace("-", ""),
+                toolCallId, toolName);
+            streamedToolInputs.put(index, input);
+            return input;
+        }
+
+        StreamedToolInput toolInput(int index) {
+            var input = streamedToolInputs.get(index);
+            if (input == null) {
+                throw new IllegalStateException(
+                    "Tool input delta arrived before start for provider index " + index);
+            }
+            return input;
+        }
+
+        StreamedToolInput endToolInput(int index) {
+            return toolInput(index);
+        }
+
+        Set<String> streamedInputCallIds() {
+            return streamedToolInputs.values().stream()
+                .map(StreamedToolInput::toolCallId)
+                .collect(Collectors.toUnmodifiableSet());
         }
 
         void accept(ChatResponse response) {
@@ -2377,6 +2485,9 @@ public class LanguageModelImpl implements LanguageModel {
         Map<String, Object> providerMetadata() {
             return lastResponse != null ? responseMapper.mapMetadata(lastResponse) : Map.of();
         }
+    }
+
+    private record StreamedToolInput(String inputId, String toolCallId, String toolName) {
     }
 
     private record StepSnapshot(

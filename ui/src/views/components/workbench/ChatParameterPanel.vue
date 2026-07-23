@@ -28,6 +28,7 @@ const props = defineProps<{
   externalTestToolEnabled?: boolean
   agentTestToolsEnabled?: boolean
   toolCallRepairEnabled?: boolean
+  toolInputStreamTestEnabled?: boolean
   outputMode?: OutputMode
   outputSchemaText?: string
   outputChoicesText?: string
@@ -59,6 +60,7 @@ const emit = defineEmits<{
   (e: 'update:externalTestToolEnabled', value: boolean): void
   (e: 'update:agentTestToolsEnabled', value: boolean): void
   (e: 'update:toolCallRepairEnabled', value: boolean): void
+  (e: 'update:toolInputStreamTestEnabled', value: boolean): void
   (e: 'update:outputMode', value: OutputMode): void
   (e: 'update:outputSchemaText', value: string): void
   (e: 'update:outputChoicesText', value: string): void
@@ -286,10 +288,7 @@ function updateNumberField(key: NumberField, value: string) {
             placeholder="默认"
             class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs placeholder:text-slate-400 focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
             @input="
-              updateNumberField(
-                field.key as NumberField,
-                ($event.target as HTMLInputElement).value,
-              )
+              updateNumberField(field.key as NumberField, ($event.target as HTMLInputElement).value)
             "
           />
         </label>
@@ -509,6 +508,13 @@ function updateNumberField(key: NumberField, value: string) {
         </div>
         <div class=":uno: mt-2 flex items-center gap-2">
           <VSwitch
+            :model-value="toolInputStreamTestEnabled"
+            @update:model-value="emit('update:toolInputStreamTestEnabled', $event)"
+          />
+          <span class=":uno: text-xs text-slate-700">启用流式工具入参诊断</span>
+        </div>
+        <div class=":uno: mt-2 flex items-center gap-2">
+          <VSwitch
             :model-value="toolCallRepairEnabled"
             @update:model-value="emit('update:toolCallRepairEnabled', $event)"
           />
@@ -516,8 +522,9 @@ function updateNumberField(key: NumberField, value: string) {
         </div>
         <div class=":uno: mt-1 text-[10px] text-slate-400">
           halo_test_info 可用于服务端工具测试；外部工具会注入
-          halo_external_test_info；修复测试会注入 halo_repair_test_info；前端自动工具会注入
-          get_current_page_context 和 halo_agent_test_action，并由工作台前端自动回填工具结果。
+          halo_external_test_info；流式诊断会注入 halo_tool_input_stream_test；修复测试会注入
+          halo_repair_test_info；前端自动工具会注入 get_current_page_context 和
+          halo_agent_test_action，并由工作台前端自动回填工具结果。
         </div>
       </div>
     </details>

@@ -42,11 +42,13 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
+import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 
 /**
  * OpenAI-compatible chat model backed entirely by WebClient.
  */
-public class OpenAiCompatibleChatModel implements ChatModel {
+public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingChatModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String CHAT_COMPLETIONS_PATH = "/chat/completions";
@@ -56,11 +58,19 @@ public class OpenAiCompatibleChatModel implements ChatModel {
 
     private final OpenAiCompatibleChatOptions defaultOptions;
     private final WebClient webClient;
+    private final StreamDialect streamDialect;
 
     public OpenAiCompatibleChatModel(OpenAiCompatibleChatOptions defaultOptions,
         WebClient.Builder webClientBuilder) {
+        this(defaultOptions, webClientBuilder, new OpenAiChatCompletionsStreamDialect());
+    }
+
+    OpenAiCompatibleChatModel(OpenAiCompatibleChatOptions defaultOptions,
+        WebClient.Builder webClientBuilder, StreamDialect streamDialect) {
         this.defaultOptions = defaultOptions;
         this.webClient = webClientBuilder.build();
+        this.streamDialect = java.util.Objects.requireNonNull(streamDialect,
+            "streamDialect must not be null");
     }
 
     @Override
@@ -90,6 +100,13 @@ public class OpenAiCompatibleChatModel implements ChatModel {
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
+        return streamParts(prompt)
+            .ofType(ProviderStreamPart.ChatResponsePart.class)
+            .map(ProviderStreamPart.ChatResponsePart::response);
+    }
+
+    @Override
+    public Flux<ProviderStreamPart> streamParts(Prompt prompt) {
         var requestPrompt = requestPrompt(prompt);
         var options = requestOptions(requestPrompt);
         var body = requestBody(requestPrompt, options, true);
@@ -105,26 +122,43 @@ public class OpenAiCompatibleChatModel implements ChatModel {
                     .map(this::readAndRelease)
                     .transform(this::sseDataLines)
                     .filter(data -> !data.isBlank() && !SSE_DONE.equals(data))
-                    .<ChatResponse>handle(new StreamChunkHandler(options));
+                    .transform(data -> providerStreamParts(data, options));
             });
     }
 
-    private final class StreamChunkHandler implements
-        java.util.function.BiConsumer<String, reactor.core.publisher.SynchronousSink<ChatResponse>> {
+    private Flux<ProviderStreamPart> providerStreamParts(Flux<String> data,
+        OpenAiCompatibleChatOptions options) {
+        return Flux.defer(() -> {
+            var state = new ToolCallState();
+            return data.concatMapIterable(chunk -> providerStreamParts(chunk, state, options))
+                .concatWith(Flux.defer(() -> Flux.fromIterable(state.finishParts())));
+        });
+    }
 
-        private final OpenAiCompatibleChatOptions options;
-        private final ToolCallState toolCallState = new ToolCallState();
-
-        private StreamChunkHandler(OpenAiCompatibleChatOptions options) {
-            this.options = options;
-        }
-
-        @Override
-        public void accept(String data, reactor.core.publisher.SynchronousSink<ChatResponse> sink) {
-            var responseChunk = chatResponseChunk(data, toolCallState, options);
-            if (responseChunk != null) {
-                sink.next(responseChunk);
+    private List<ProviderStreamPart> providerStreamParts(String data, ToolCallState state,
+        OpenAiCompatibleChatOptions options) {
+        try {
+            var root = OBJECT_MAPPER.readTree(data);
+            var parts = new ArrayList<ProviderStreamPart>();
+            var choices = root.path(Fields.CHOICES);
+            var finished = false;
+            if (choices.isArray()) {
+                for (var choice : choices) {
+                    var delta = choice.path(Fields.DELTA);
+                    parts.addAll(state.update(delta.path(Fields.TOOL_CALLS)));
+                    finished = finished || hasText(textOrNull(choice.path(Fields.FINISH_REASON)));
+                }
             }
+            if (finished) {
+                parts.addAll(state.finishParts());
+            }
+            var response = chatResponseChunk(data, state, options);
+            if (response != null) {
+                parts.add(new ProviderStreamPart.ChatResponsePart(response));
+            }
+            return parts;
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to parse OpenAI-compatible stream chunk", e);
         }
     }
 
@@ -132,22 +166,35 @@ public class OpenAiCompatibleChatModel implements ChatModel {
 
         private final Map<Integer, MutableToolCall> toolCalls = new LinkedHashMap<>();
 
-        List<AssistantMessage.ToolCall> update(JsonNode node) {
+        List<ProviderStreamPart> update(JsonNode node) {
             if (!node.isArray() || node.isEmpty()) {
                 return List.of();
             }
+            var parts = new ArrayList<ProviderStreamPart>();
             var batchSize = node.size();
             var ordinal = 0;
             for (var item : node) {
                 var index = toolCallIndex(item, ordinal, batchSize);
                 var current = toolCalls.computeIfAbsent(index,
                     ignored -> new MutableToolCall(fallbackToolCallId(index)));
-                current.append(item);
+                parts.addAll(current.append(index, item));
                 ordinal++;
             }
+            return parts;
+        }
+
+        List<AssistantMessage.ToolCall> currentToolCalls() {
             return toolCalls.values().stream()
                 .map(MutableToolCall::toToolCall)
                 .toList();
+        }
+
+        List<ProviderStreamPart> finishParts() {
+            var parts = new ArrayList<ProviderStreamPart>();
+            for (var entry : toolCalls.entrySet()) {
+                parts.addAll(entry.getValue().finish(entry.getKey()));
+            }
+            return parts;
         }
 
         private int toolCallIndex(JsonNode item, int ordinal, int batchSize) {
@@ -170,33 +217,131 @@ public class OpenAiCompatibleChatModel implements ChatModel {
         private String type = "function";
         private String name = "";
         private final StringBuilder arguments = new StringBuilder();
+        private final List<String> bufferedDeltas = new ArrayList<>();
+        private ToolInputStreamingStatus streamingStatus = ToolInputStreamingStatus.UNKNOWN;
+        private boolean idFrozen;
+        private boolean lifecycleStarted;
+        private boolean lifecycleEnded;
+        private boolean deltasReliable = true;
 
         MutableToolCall(String fallbackId) {
             this.id = fallbackId;
         }
 
-        void append(JsonNode node) {
+        List<ProviderStreamPart> append(int index, JsonNode node) {
+            var parts = new ArrayList<ProviderStreamPart>();
+            updateIdentity(node);
+
+            var function = node.path(Fields.FUNCTION);
+            updateName(function);
+            appendArguments(index, function, parts);
+            flushBufferedDeltasWhenNamed(index, parts);
+            return parts;
+        }
+
+        private void updateIdentity(JsonNode node) {
             var nextId = textOrNull(node.path(Fields.ID));
-            if (hasText(nextId)) {
+            if (hasText(nextId) && !idFrozen) {
                 id = nextId;
             }
             var nextType = textOrNull(node.path(Fields.TYPE));
             if (hasText(nextType)) {
                 type = nextType;
             }
-            var function = node.path(Fields.FUNCTION);
+        }
+
+        private void updateName(JsonNode function) {
             var nextName = textOrNull(function.path(Fields.NAME));
             if (hasText(nextName)) {
                 name = nextName;
             }
-            if (function.path(Fields.ARGUMENTS).isTextual()) {
-                arguments.append(function.path(Fields.ARGUMENTS).asText());
+        }
+
+        private void appendArguments(int index, JsonNode function,
+            List<ProviderStreamPart> parts) {
+            var argumentNode = function.path(Fields.ARGUMENTS);
+            if (!argumentNode.isTextual()) {
+                return;
             }
+
+            var providerArguments = argumentNode.asText();
+            if (!hasContent(providerArguments)) {
+                return;
+            }
+            idFrozen = true;
+
+            var normalized = streamDialect.normalizeArguments(index, arguments.toString(),
+                providerArguments);
+            if (!normalized.reliable()) {
+                markDeltasUnreliable(providerArguments);
+                return;
+            }
+
+            var delta = normalized.delta() == null ? "" : normalized.delta();
+            arguments.append(delta);
+            if (!deltasReliable || !hasContent(delta)) {
+                return;
+            }
+
+            streamingStatus = ToolInputStreamingStatus.DELTA_OBSERVED;
+            if (!hasText(name)) {
+                bufferedDeltas.add(delta);
+                return;
+            }
+
+            startAndFlush(index, parts);
+            parts.add(new ProviderStreamPart.ToolInputDeltaPart(index, delta));
+        }
+
+        private void markDeltasUnreliable(String providerArguments) {
+            deltasReliable = false;
+            bufferedDeltas.clear();
+            arguments.setLength(0);
+            arguments.append(providerArguments);
+        }
+
+        private void flushBufferedDeltasWhenNamed(int index,
+            List<ProviderStreamPart> parts) {
+            if (deltasReliable && hasText(name) && !bufferedDeltas.isEmpty()) {
+                startAndFlush(index, parts);
+            }
+        }
+
+        private void startAndFlush(int index, List<ProviderStreamPart> parts) {
+            if (!lifecycleStarted) {
+                lifecycleStarted = true;
+                parts.add(new ProviderStreamPart.ToolInputStartPart(index, id, name));
+            }
+            for (var delta : bufferedDeltas) {
+                parts.add(new ProviderStreamPart.ToolInputDeltaPart(index, delta));
+            }
+            bufferedDeltas.clear();
+        }
+
+        List<ProviderStreamPart> finish(int index) {
+            if (!hasText(name)) {
+                throw new IllegalStateException(
+                    "OpenAI-compatible tool call at index " + index + " did not provide a name");
+            }
+            if (streamingStatus == ToolInputStreamingStatus.UNKNOWN) {
+                streamingStatus = ToolInputStreamingStatus.FINAL_ONLY;
+            }
+            if (lifecycleStarted && !lifecycleEnded) {
+                lifecycleEnded = true;
+                return List.of(new ProviderStreamPart.ToolInputEndPart(index));
+            }
+            return List.of();
         }
 
         AssistantMessage.ToolCall toToolCall() {
             return new AssistantMessage.ToolCall(id, type, name, arguments.toString());
         }
+    }
+
+    private enum ToolInputStreamingStatus {
+        UNKNOWN,
+        DELTA_OBSERVED,
+        FINAL_ONLY
     }
 
     private Prompt requestPrompt(Prompt prompt) {
@@ -218,7 +363,7 @@ public class OpenAiCompatibleChatModel implements ChatModel {
         return errorBody(response).flatMap(body -> Mono.error(requestFailed(response, body)));
     }
 
-    private Flux<ChatResponse> errorFlux(ClientResponse response) {
+    private <T> Flux<T> errorFlux(ClientResponse response) {
         return errorBody(response).flatMapMany(body -> Flux.error(requestFailed(response, body)));
     }
 
@@ -684,7 +829,7 @@ public class OpenAiCompatibleChatModel implements ChatModel {
             return List.of();
         }
         if (toolCallState != null) {
-            return toolCallState.update(node);
+            return toolCallState.currentToolCalls();
         }
         var toolCalls = new ArrayList<AssistantMessage.ToolCall>();
         var ordinal = 0;

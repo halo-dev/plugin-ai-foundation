@@ -10,11 +10,12 @@ import { VTag } from '@halo-dev/components'
 import { computed, ref } from 'vue'
 import RiCheckLine from '~icons/ri/check-line'
 import RiCpuLine from '~icons/ri/cpu-line'
-import RiFileLine from '~icons/ri/file-line'
 import RiFileCopyLine from '~icons/ri/file-copy-line'
+import RiFileLine from '~icons/ri/file-line'
 import RiImageLine from '~icons/ri/image-line'
 import RiRestartLine from '~icons/ri/restart-line'
 import RiUserLine from '~icons/ri/user-line'
+import ToolInputStreamDiagnostics from './ToolInputStreamDiagnostics.vue'
 
 const props = defineProps<{
   message: WorkbenchMessage
@@ -210,9 +211,7 @@ function filePreviewUrl(file: WorkbenchFileReference) {
             <span
               class=":uno: h-1.5 w-1.5 rounded-full transition-colors"
               :class="
-                message.reasoningState === 'streaming'
-                  ? ':uno: bg-teal-500'
-                  : ':uno: bg-slate-300'
+                message.reasoningState === 'streaming' ? ':uno: bg-teal-500' : ':uno: bg-slate-300'
               "
             />
             推理过程
@@ -222,6 +221,10 @@ function filePreviewUrl(file: WorkbenchFileReference) {
             v-html="renderMarkdown(message.reasoningContent)"
           />
         </details>
+
+        <div v-if="message.role === 'assistant' && message.toolInputStreamDiagnostics?.length">
+          <ToolInputStreamDiagnostics :diagnostics="message.toolInputStreamDiagnostics" />
+        </div>
 
         <div
           v-if="message.role === 'assistant' && message.toolEvents?.length"
@@ -233,7 +236,9 @@ function filePreviewUrl(file: WorkbenchFileReference) {
             class=":uno: border rounded-md px-3 py-2 text-xs"
             :class="{
               ':uno: border-slate-200 bg-slate-50 text-slate-700':
-                event.type === 'tool-call' || event.type === 'tool-result' || event.type === 'tool-approval-request',
+                event.type === 'tool-call' ||
+                event.type === 'tool-result' ||
+                event.type === 'tool-approval-request',
               ':uno: border-rose-200 bg-rose-50 text-rose-700': event.type === 'tool-error',
             }"
           >
@@ -242,7 +247,9 @@ function filePreviewUrl(file: WorkbenchFileReference) {
                 class=":uno: h-1.5 w-1.5 rounded-full"
                 :class="{
                   ':uno: bg-slate-400':
-                    event.type === 'tool-call' || event.type === 'tool-result' || event.type === 'tool-approval-request',
+                    event.type === 'tool-call' ||
+                    event.type === 'tool-result' ||
+                    event.type === 'tool-approval-request',
                   ':uno: bg-rose-500': event.type === 'tool-error',
                 }"
               />
@@ -393,11 +400,7 @@ function filePreviewUrl(file: WorkbenchFileReference) {
             <div class=":uno: flex items-center gap-2 px-3 py-2">
               <span
                 class=":uno: size-7 flex flex-none items-center justify-center rounded-md"
-                :class="
-                  message.role === 'user'
-                    ? ':uno: text-slate-100'
-                    : ':uno: text-slate-600'
-                "
+                :class="message.role === 'user' ? ':uno: text-slate-100' : ':uno: text-slate-600'"
               >
                 <RiImageLine v-if="file.mediaType?.startsWith('image/')" class=":uno: size-3.5" />
                 <RiFileLine v-else class=":uno: size-3.5" />

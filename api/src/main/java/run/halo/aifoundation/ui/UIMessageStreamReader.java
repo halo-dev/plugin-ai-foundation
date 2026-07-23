@@ -163,6 +163,7 @@ public final class UIMessageStreamReader {
                 case ToolInputStartChunk ignored -> changed;
                 case ToolInputDeltaChunk ignored -> changed;
                 case ToolInputAvailableChunk ignored -> changed;
+                case ToolInputErrorChunk ignored -> changed;
                 case ToolOutputAvailableChunk ignored -> changed;
                 case ToolOutputErrorChunk ignored -> changed;
                 case ToolApprovalRequestChunk ignored -> changed;

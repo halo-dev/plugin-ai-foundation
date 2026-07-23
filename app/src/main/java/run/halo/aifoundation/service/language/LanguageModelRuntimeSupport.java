@@ -33,6 +33,16 @@ public class LanguageModelRuntimeSupport {
                 error -> new AiGenerationTimeoutException("tool", timeout, error));
     }
 
+    public <T> Mono<T> withStepTimeout(Mono<T> mono, GenerateTextRequest request) {
+        var timeout = stepTimeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return mono;
+        }
+        return mono.timeout(timeout)
+            .onErrorMap(TimeoutException.class,
+                error -> new AiGenerationTimeoutException("step", timeout, error));
+    }
+
     public String writeJson(Object value) {
         try {
             return JSON_MAPPER.writeValueAsString(value != null ? value : Map.of());
@@ -44,6 +54,12 @@ public class LanguageModelRuntimeSupport {
     private Duration toolTimeout(GenerateTextRequest request) {
         return request != null && request.getTimeouts() != null
             ? request.getTimeouts().getToolTimeout()
+            : null;
+    }
+
+    private Duration stepTimeout(GenerateTextRequest request) {
+        return request != null && request.getTimeouts() != null
+            ? request.getTimeouts().getStepTimeout()
             : null;
     }
 }

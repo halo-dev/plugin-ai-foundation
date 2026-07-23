@@ -61,4 +61,11 @@ describe('useLanguageGenerationSettings', () => {
     await nextTick()
     expect(settings.testToolApprovalEnabled.value).toBe(false)
   })
+
+  it('maps the tool input stream diagnostic switch to stream options', () => {
+    const settings = useLanguageGenerationSettings()
+    settings.toolInputStreamTestEnabled.value = true
+
+    expect(settings.streamOptions()).toMatchObject({ toolInputStreamTestEnabled: true })
+  })
 })

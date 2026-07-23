@@ -115,13 +115,11 @@ describe('UI message reducer', () => {
       {
         type: 'tool-input-delta',
         toolCallId: 'call-1',
-        toolName: 'search',
         inputTextDelta: '{"q"',
       },
       {
         type: 'tool-input-delta',
         toolCallId: 'call-1',
-        toolName: 'search',
         inputTextDelta: ':"Halo"}',
       },
       {
@@ -165,7 +163,6 @@ describe('UI message reducer', () => {
         toolName: 'search',
         state: 'output-available',
         input: { q: 'Halo' },
-        inputText: undefined,
         output: { ok: true },
         errorText: undefined,
         approval: undefined,
@@ -177,7 +174,6 @@ describe('UI message reducer', () => {
         toolName: 'pay',
         state: 'approval-responded',
         input: { amount: 100 },
-        inputText: undefined,
         output: undefined,
         errorText: undefined,
         approval: { id: 'approval-1', approved: false, reason: 'Denied' },
@@ -189,13 +185,115 @@ describe('UI message reducer', () => {
         toolName: 'lookup',
         state: 'output-error',
         input: undefined,
-        inputText: undefined,
         output: undefined,
         errorText: 'failed',
         approval: undefined,
         providerMetadata: undefined,
       },
     ])
+  })
+
+  it('parses streamed tool input privately and resets duplicate starts', () => {
+    const state = createUIMessageReducer({ messageId: 'assistant-1' })
+
+    applyUIMessageChunk(state, {
+      type: 'tool-input-start',
+      toolCallId: 'call-1',
+      toolName: 'search',
+    })
+    applyUIMessageChunk(state, {
+      type: 'tool-input-delta',
+      toolCallId: 'call-1',
+      inputTextDelta: '{"query":"Hal',
+    })
+    expect(state.message.parts[0]).toMatchObject({
+      state: 'input-streaming',
+      input: { query: 'Hal' },
+    })
+    expect(state.message.parts[0]).not.toHaveProperty('inputText')
+
+    applyUIMessageChunk(state, {
+      type: 'tool-input-start',
+      toolCallId: 'call-1',
+      toolName: 'search',
+    })
+    applyUIMessageChunk(state, {
+      type: 'tool-input-delta',
+      toolCallId: 'call-1',
+      inputTextDelta: '{"page":1}',
+    })
+    expect(state.message.parts[0]).toMatchObject({ input: { page: 1 } })
+
+    applyUIMessageChunk(state, {
+      type: 'tool-input-available',
+      toolCallId: 'call-1',
+      toolName: 'search',
+      input: { authoritative: true },
+    })
+    expect(state.message.parts[0]).toMatchObject({
+      state: 'input-available',
+      input: { authoritative: true },
+    })
+  })
+
+  it('rejects delta before start and accepts availability without start', () => {
+    const state = createUIMessageReducer({ messageId: 'assistant-1' })
+
+    expect(() =>
+      applyUIMessageChunk(state, {
+        type: 'tool-input-delta',
+        toolCallId: 'call-1',
+        inputTextDelta: '{}',
+      }),
+    ).toThrow(/tool-input-start/)
+
+    applyUIMessageChunk(state, {
+      type: 'tool-input-available',
+      toolCallId: 'call-1',
+      toolName: 'search',
+      input: { query: 'Halo' },
+    })
+    expect(state.message.parts[0]).toMatchObject({
+      state: 'input-available',
+      input: { query: 'Halo' },
+    })
+  })
+
+  it('maps canonical input error without fabricating availability', () => {
+    const state = createUIMessageReducer({ messageId: 'assistant-1' })
+    applyUIMessageChunk(state, {
+      type: 'tool-input-error',
+      toolCallId: 'call-1',
+      toolName: 'search',
+      errorText: 'Invalid input',
+    })
+
+    expect(state.message.parts[0]).toMatchObject({
+      state: 'output-error',
+      errorText: 'Invalid input',
+    })
+  })
+
+  it('keeps interrupted partial input in streaming state', () => {
+    const state = createUIMessageReducer({ messageId: 'assistant-1' })
+    applyUIMessageChunk(state, {
+      type: 'tool-input-start',
+      toolCallId: 'call-1',
+      toolName: 'search',
+    })
+    applyUIMessageChunk(state, {
+      type: 'tool-input-delta',
+      toolCallId: 'call-1',
+      inputTextDelta: '{"query":"Hal',
+    })
+    applyUIMessageChunk(state, { type: 'error', errorText: 'connection lost' })
+
+    expect(state.message.parts[0]).toMatchObject({
+      state: 'input-streaming',
+      input: { query: 'Hal' },
+    })
+    expect(state.message.parts[0]).not.toHaveProperty('errorText')
+    expect(state.terminal.errorText).toBe('connection lost')
   })
 
   it('persists start-step without making a marker-only message visible', () => {
@@ -480,7 +578,6 @@ describe('UI message stream reader', () => {
       {
         type: 'tool-input-delta',
         toolCallId: 'call-1',
-        toolName: 'search',
         inputTextDelta: '{"q"',
       },
       {
@@ -488,6 +585,12 @@ describe('UI message stream reader', () => {
         toolCallId: 'call-1',
         toolName: 'search',
         input: { q: 'Halo' },
+      },
+      {
+        type: 'tool-input-error',
+        toolCallId: 'call-2',
+        toolName: 'search',
+        errorText: 'Invalid input',
       },
       {
         type: 'tool-input-available',
@@ -542,6 +645,13 @@ describe('UI message stream reader', () => {
         input: { q: 'Halo' },
       }),
     ])
+    expect(result.message.parts).toContainEqual(
+      expect.objectContaining({
+        toolCallId: 'call-2',
+        state: 'output-error',
+        errorText: 'Invalid input',
+      }),
+    )
     expect(result.message.parts).toContainEqual({
       type: 'data-status',
       id: 'status-1',
@@ -992,7 +1102,6 @@ describe('Chat', () => {
       {
         type: 'tool-input-delta',
         toolCallId: 'call-1',
-        toolName: 'search',
         inputTextDelta: '{"q":"Halo"}',
       },
       {

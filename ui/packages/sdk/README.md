@@ -297,6 +297,7 @@ Canonical tool chunks include:
 - `tool-input-start`
 - `tool-input-delta`
 - `tool-input-available`
+- `tool-input-error`
 - `tool-output-available`
 - `tool-output-error`
 - `tool-approval-request`
@@ -305,6 +306,19 @@ Canonical tool chunks include:
 The reducer aggregates those events into final `tool-*` message parts.
 `start-step` and `finish-step` are lifecycle events and are not stored in
 `message.parts`.
+
+`tool-input-delta` now has the breaking, minimal shape `{ toolCallId,
+inputTextDelta }`; the tool name is resolved from the preceding
+`tool-input-start`. The SDK keeps raw JSON text in private reducer state and
+exposes only best-effort parsed `input` while streaming. Authoritative
+`tool-input-available.input` replaces that partial value. A delta before start
+is a protocol error, a duplicate start resets accumulation, and only input
+availability invokes `onToolCall`.
+
+Providers are not required to emit real deltas. A final-only call can go
+directly to `tool-input-available`. `tool-input-error` represents validation or
+repair failure, transitions the part to `output-error`, and never invokes the
+tool callback.
 
 ```ts
 await chat.addToolOutput({

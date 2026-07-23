@@ -23,7 +23,10 @@ import {
   workbenchMessagesToHalo,
 } from '@/utils/model-test-workbench-messages'
 import {
-  DefaultChatTransport,
+  ObservingChatTransport,
+  recordToolInputStreamChunk,
+} from '@/utils/model-test-workbench-tool-input-stream'
+import {
   lastAssistantMessageHasCompletedToolContinuations,
   useChat,
   type FilePart as HaloFilePart,
@@ -52,13 +55,19 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
 
   const uiChat = useChat<Record<string, unknown>>({
     id: 'model-test-workbench-ui-message',
-    transport: new DefaultChatTransport({
-      api: '',
-      prepareSendMessagesRequest: ({ body }) => {
-        if (!activeModelName) throw new Error('未选择模型')
-        return { api: testUiMessageChatStreamUrl(activeModelName, settings.streamOptions()), body }
+    transport: new ObservingChatTransport(
+      {
+        api: '',
+        prepareSendMessagesRequest: ({ body }) => {
+          if (!activeModelName) throw new Error('未选择模型')
+          return {
+            api: testUiMessageChatStreamUrl(activeModelName, settings.streamOptions()),
+            body,
+          }
+        },
       },
-    }),
+      (chunk) => recordActiveToolInputChunk(chunk),
+    ),
     generateId: () => activeWorkbenchId || utils.id.uuid(),
     sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
     maxAutomaticSteps: 5,
@@ -108,6 +117,16 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
   })
 
   watch(uiChat.messages, (uiMessages) => syncActiveSnapshot(uiMessages ?? []), { deep: true })
+
+  function recordActiveToolInputChunk(chunk: Parameters<typeof recordToolInputStreamChunk>[1]) {
+    if (!activeWorkbenchId) return
+    const message = messages.value.find((item) => item.id === activeWorkbenchId)
+    if (!message) return
+    message.toolInputStreamDiagnostics = recordToolInputStreamChunk(
+      message.toolInputStreamDiagnostics || [],
+      chunk,
+    )
+  }
 
   async function sendMessage(content?: string) {
     const text = (content ?? input.value).trim()
@@ -216,6 +235,7 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
     message.reasoningContent = undefined
     message.reasoningState = undefined
     message.toolEvents = undefined
+    message.toolInputStreamDiagnostics = undefined
     message.transientData = undefined
     message.warnings = undefined
     message.state = 'streaming'
@@ -475,12 +495,22 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
 
   function applyExamplePrompt(prompt: ExamplePrompt) {
     input.value = prompt.content
+    if (prompt.id === 'tool-input-stream-test') {
+      settings.testToolEnabled.value = false
+      settings.testToolApprovalEnabled.value = false
+      settings.externalTestToolEnabled.value = false
+      settings.agentTestToolsEnabled.value = false
+      settings.toolCallRepairEnabled.value = false
+      settings.toolInputStreamTestEnabled.value = true
+      return
+    }
     if (prompt.id !== 'agent-tool-test') return
     settings.testToolEnabled.value = false
     settings.testToolApprovalEnabled.value = false
     settings.externalTestToolEnabled.value = false
     settings.agentTestToolsEnabled.value = true
     settings.toolCallRepairEnabled.value = false
+    settings.toolInputStreamTestEnabled.value = false
   }
 
   onBeforeUnmount(() => uiChat.stop())

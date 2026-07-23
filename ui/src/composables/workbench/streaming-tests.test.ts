@@ -1,5 +1,6 @@
 import { ModelOptionModelTypeEnum, type ModelOption } from '@/api/generated'
 import { useLanguageGenerationSettings } from '@/composables/workbench/use-language-generation-settings'
+import { EXAMPLE_PROMPTS } from '@/utils/model-test-workbench'
 import { useChat } from '@halo-dev/ai-foundation-sdk'
 import { afterEach, beforeEach, describe, expect, it, rstest } from '@rstest/core'
 import { computed, createApp, ref, shallowRef, type App } from 'vue'
@@ -96,6 +97,27 @@ describe('useChatWorkbench', () => {
     expect(chatInstances[0].stop).toHaveBeenCalled()
     expect(chat.messages.value[1]).toMatchObject({ state: 'stopped' })
     expect(chat.isStreaming.value).toBe(false)
+  })
+
+  it('configures the dedicated tool input stream test from its example prompt', () => {
+    const settings = useLanguageGenerationSettings()
+    const { result: chat } = withSetup(() =>
+      useChatWorkbench({
+        selectedModel: computed(() => languageModel),
+        activeModels: computed(() => [languageModel]),
+        testMode: ref('chat'),
+        settings,
+      }),
+    )
+    const prompt = EXAMPLE_PROMPTS.find((item) => item.id === 'tool-input-stream-test')
+    expect(prompt).toBeDefined()
+
+    chat.applyExamplePrompt(prompt!)
+
+    expect(chat.input.value).toContain('halo_tool_input_stream_test')
+    expect(settings.toolInputStreamTestEnabled.value).toBe(true)
+    expect(settings.testToolEnabled.value).toBe(false)
+    expect(settings.agentTestToolsEnabled.value).toBe(false)
   })
 })
 

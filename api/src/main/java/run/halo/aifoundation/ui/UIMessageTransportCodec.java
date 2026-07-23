@@ -74,11 +74,13 @@ public final class UIMessageTransportCodec {
             case UIMessageChunkType.TOOL_INPUT_START -> UIMessageChunks.toolInputStart(
                 stringValue(map.get("toolCallId")), stringValue(map.get("toolName")));
             case UIMessageChunkType.TOOL_INPUT_DELTA -> UIMessageChunks.toolInputDelta(
-                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
-                stringValue(map.get("inputTextDelta")));
+                stringValue(map.get("toolCallId")), stringValue(map.get("inputTextDelta")));
             case UIMessageChunkType.TOOL_INPUT_AVAILABLE -> UIMessageChunks.toolInputAvailable(
                 stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
                 map.get("input"), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_INPUT_ERROR -> UIMessageChunks.toolInputError(
+                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                stringValue(map.get("errorText")), objectMap(map.get("providerMetadata")));
             case UIMessageChunkType.TOOL_OUTPUT_AVAILABLE -> UIMessageChunks.toolOutputAvailable(
                 stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
                 map.get("output"), objectMap(map.get("providerMetadata")));
@@ -184,13 +186,18 @@ public final class UIMessageTransportCodec {
             }
             case ToolInputDeltaChunk tool -> {
                 put(map, "toolCallId", tool.toolCallId());
-                put(map, "toolName", tool.toolName());
                 put(map, "inputTextDelta", tool.inputTextDelta());
             }
             case ToolInputAvailableChunk tool -> {
                 put(map, "toolCallId", tool.toolCallId());
                 put(map, "toolName", tool.toolName());
                 put(map, "input", tool.input());
+                put(map, "providerMetadata", nonEmpty(tool.providerMetadata()));
+            }
+            case ToolInputErrorChunk tool -> {
+                put(map, "toolCallId", tool.toolCallId());
+                put(map, "toolName", tool.toolName());
+                put(map, "errorText", tool.errorText());
                 put(map, "providerMetadata", nonEmpty(tool.providerMetadata()));
             }
             case ToolOutputAvailableChunk tool -> {

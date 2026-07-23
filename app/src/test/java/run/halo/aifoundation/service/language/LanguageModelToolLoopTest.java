@@ -76,6 +76,74 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
     }
 
     @Test
+    void generateTextContinuesAfterUnknownToolError() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "missing", "{}", 2, 3),
+            chatResponse("Recovered after the tool error.", "stop", 4, 5)
+        );
+        var model = languageModel(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Use a tool")
+            .tools(List.of(ToolDefinition.builder()
+                .name("available")
+                .executor(context -> Mono.just(Map.of("ok", true)))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getSteps()).hasSize(2);
+                assertThat(result.getText()).isEqualTo("Recovered after the tool error.");
+                assertThat(result.getToolErrors())
+                    .singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText())
+                        .contains("Unknown tool: missing"));
+            })
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).call(captor.capture());
+        assertThat(captor.getAllValues().get(1).getInstructions())
+            .extracting(message -> message.getMessageType().getValue())
+            .contains("tool");
+    }
+
+    @Test
+    void generateTextContinuesAfterToolExecutionError() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "unstable", "{}", 2, 3),
+            chatResponse("Recovered after execution failed.", "stop", 4, 5)
+        );
+        var model = languageModel(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Use a tool")
+            .tools(List.of(ToolDefinition.builder()
+                .name("unstable")
+                .executor(context -> Mono.error(new IllegalStateException("temporary failure")))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getSteps()).hasSize(2);
+                assertThat(result.getText()).isEqualTo("Recovered after execution failed.");
+                assertThat(result.getToolErrors())
+                    .singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText())
+                        .isEqualTo("temporary failure"));
+            })
+            .verifyComplete();
+
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
     void generateTextProvidesPriorToolHistoryToLaterToolExecutions() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
@@ -118,10 +186,49 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
     }
 
     @Test
+    void generateTextAllowsMoreThanTheFormerTenStepCeiling() {
+        var chatModel = mock(ChatModel.class);
+        var providerCalls = new AtomicInteger();
+        when(chatModel.call(any(Prompt.class))).thenAnswer(invocation -> {
+            var call = providerCalls.getAndIncrement();
+            if (call < 11) {
+                return toolCallResponse("call_" + call, "research", "{}", 2, 3);
+            }
+            return chatResponse("Done", "stop", 4, 5);
+        });
+        var model = languageModel(chatModel, "openai");
+        var toolExecutions = new AtomicInteger();
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Research thoroughly")
+            .tools(List.of(ToolDefinition.builder()
+                .name("research")
+                .executor(context -> {
+                    toolExecutions.incrementAndGet();
+                    return Mono.just(Map.of("ok", true));
+                })
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(12))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getSteps()).hasSize(12);
+                assertThat(result.getText()).isEqualTo("Done");
+                assertThat(result.getToolResults()).hasSize(11);
+            })
+            .verifyComplete();
+
+        assertThat(toolExecutions).hasValue(11);
+        verify(chatModel, times(12)).call(any(Prompt.class));
+    }
+
+    @Test
     void generateTextRunsLocalValidationWhenStrictOrExamplesAreUnsupportedByProvider() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
-            toolCallResponse("call_1", "weather", "{}", 2, 3)
+            toolCallResponse("call_1", "weather", "{}", 2, 3),
+            chatResponse("Recovered after validation failed.", "stop", 4, 5)
         );
         var model = languageModel(chatModel, "openai");
         var executions = new AtomicInteger();
@@ -143,6 +250,8 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
 
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> {
+                assertThat(result.getSteps()).hasSize(2);
+                assertThat(result.getText()).isEqualTo("Recovered after validation failed.");
                 assertThat(result.getToolResults()).isEmpty();
                 assertThat(result.getToolErrors()).singleElement()
                     .satisfies(error -> assertThat(error.getErrorText())

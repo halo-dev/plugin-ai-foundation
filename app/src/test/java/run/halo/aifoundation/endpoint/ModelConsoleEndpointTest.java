@@ -637,6 +637,50 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
+    void testUiMessageChatStream_withToolInputStreamTest_injectsLifecycleAwareTool() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.toolCall(run.halo.aifoundation.tool.ToolCall.builder()
+                    .toolCallId("call_stream")
+                    .toolName("halo_tool_input_stream_test")
+                    .input(Map.of(
+                        "title", "stream test",
+                        "payload", "long payload",
+                        "sequence", List.of("start", "delta", "available")
+                    ))
+                    .build()),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post()
+            .uri("/models/gpt-4/test-chat/ui-message/stream?enableToolInputStreamTest=true")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(uiMessageBody("请执行流式工具入参测试"))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .contains("\"type\":\"tool-input-available\"")
+                .contains("halo_tool_input_stream_test"));
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        assertThat(captor.getValue().getTools())
+            .singleElement()
+            .satisfies(tool -> {
+                assertThat(tool.getName()).isEqualTo("halo_tool_input_stream_test");
+                assertThat(tool.getOnInputStart()).isNotNull();
+                assertThat(tool.getOnInputDelta()).isNotNull();
+                assertThat(tool.getOnInputAvailable()).isNotNull();
+                assertThat(tool.getExecutor()).isNotNull();
+                assertThat(tool.getInputSchema()).containsEntry("required",
+                    List.of("title", "payload", "sequence"));
+            });
+    }
+
+    @Test
     void testUiMessageChatStream_regenerateTruncatesTargetAssistantMessage() {
         var languageModel = mock(LanguageModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));

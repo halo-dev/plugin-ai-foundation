@@ -246,6 +246,7 @@ class UIMessageStreamTest {
                 "a.txt", "text/plain", "abc", Map.of("size", 3))),
             TextStreamPart.toolInputStart("input-1", "call-1", "weather"),
             TextStreamPart.toolInputDelta("input-1", "call-1", "weather", "{\"city\""),
+            TextStreamPart.toolInputEnd("input-1", "call-1", "weather"),
             TextStreamPart.toolCall(ToolCall.builder()
                 .toolCallId("call-1")
                 .toolName("weather")
@@ -322,6 +323,29 @@ class UIMessageStreamTest {
             .isNull();
         assertThat((FinishChunk) chunks.get(19)).extracting(FinishChunk::messageMetadata)
             .isNull();
+    }
+
+    @Test
+    void mapsToolInputErrorAndOmitsBackendOnlyInputEnd() {
+        var stream = new StreamTextResult(Flux.just(
+            TextStreamPart.toolInputStart("input-1", "call-1", "weather"),
+            TextStreamPart.toolInputDelta("input-1", "call-1", "weather", "{\"city\""),
+            TextStreamPart.toolInputEnd("input-1", "call-1", "weather"),
+            TextStreamPart.toolInputError("call-1", "weather", "Invalid input",
+                Map.of("provider", "test"))
+        ), Flux.empty(), Flux.empty(), Flux.empty(), Mono.empty(), Mono.empty());
+
+        var chunks = stream.toUIMessageStream().chunks().collectList().block();
+
+        assertThat(chunks).extracting(UIMessageChunk::type).containsExactly(
+            UIMessageChunkType.TOOL_INPUT_START,
+            UIMessageChunkType.TOOL_INPUT_DELTA,
+            UIMessageChunkType.TOOL_INPUT_ERROR
+        );
+        assertThat(chunks.get(1)).isEqualTo(UIMessageChunks.toolInputDelta(
+            "call-1", "{\"city\""));
+        assertThat(chunks.getLast()).isEqualTo(UIMessageChunks.toolInputError(
+            "call-1", "weather", "Invalid input", Map.of("provider", "test")));
     }
 
     @Test

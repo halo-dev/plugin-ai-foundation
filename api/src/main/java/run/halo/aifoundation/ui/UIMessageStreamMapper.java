@@ -73,7 +73,11 @@ public final class UIMessageStreamMapper {
             case PartType.TOOL_INPUT_START -> UIMessageChunks.toolInputStart(
                 part.getToolCallId(), part.getToolName());
             case PartType.TOOL_INPUT_DELTA -> UIMessageChunks.toolInputDelta(
-                part.getToolCallId(), part.getToolName(), part.getDelta());
+                part.getToolCallId(), part.getDelta());
+            case PartType.TOOL_INPUT_END -> null;
+            case PartType.TOOL_INPUT_ERROR -> UIMessageChunks.toolInputError(
+                part.getToolCallId(), part.getToolName(), part.getErrorText(),
+                part.getProviderMetadata());
             case PartType.TOOL_CALL -> UIMessageChunks.toolInputAvailable(part.getToolCallId(),
                 part.getToolName(), part.getInput(), part.getProviderMetadata());
             case PartType.TOOL_RESULT -> UIMessageChunks.toolOutputAvailable(part.getToolCallId(),

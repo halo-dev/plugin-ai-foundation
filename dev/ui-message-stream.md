@@ -658,8 +658,9 @@ Mono<UIMessageStreamTerminal> terminal = read.finish();
 | `data` 且 `transientData=true`                          | 不进入 `UIMessage.parts`                                    |
 | `message-metadata`                                      | 合并到 `UIMessage.metadata`                                 |
 | `source-url` / `file`                                   | 写入或替换来源/文件消息片段                                 |
-| `tool-input-start` / `tool-input-delta`                 | 聚合为同一个动态 `tool-*` 消息片段的 `input-streaming` 状态 |
-| `tool-input-available`                                  | 聚合为同一个动态 `tool-*` 消息片段的 `input-available` 状态 |
+| `tool-input-start` / `tool-input-delta`                 | 私下累加原始 JSON，并把最佳 partial `input` 聚合到同一个动态 `tool-*` 片段 |
+| `tool-input-available`                                  | 用权威最终输入覆盖 partial input，并进入 `input-available` 状态 |
+| `tool-input-error`                                      | 输入校验或修复失败，进入 `output-error`；不会触发 `onToolCall` |
 | `tool-output-available` / `tool-output-error`           | 聚合为同一个动态 `tool-*` 消息片段的完成状态                |
 | `tool-approval-request` / `tool-approval-response`      | 聚合为同一个动态 `tool-*` 消息片段的审批状态                |
 | `start-step`                                            | 追加无字段的 `StepStartPart`（传输类型为 `step-start`）      |
@@ -673,6 +674,20 @@ SSE 传输层使用 `tool-input-*`、`tool-output-*` 和 `tool-approval-*` 这�
 表达“流中发生的事件”。聚合后的 assistant `UIMessage.parts` 仍然使用动态
 `tool-*` 消息片段表达最终 UI 状态。旧的动态 `tool-*` 数据块只作为内部兼容读取形态保留，
 不作为外部流协议推荐。
+
+`tool-input-delta` 的 wire shape 是 `{ type, toolCallId, inputTextDelta }`，不再携带
+`toolName`；reducer 必须从此前同一 `toolCallId` 的 `tool-input-start` 解析名称。因此 delta
+先于 start 是协议错误，而重复 start 会重置该调用的私有累积文本。后端的
+`tool-input-end` 只用于 `fullStream()` 的块边界，不投影到 UI Message wire。
+
+流式 JSON 解析是 best-effort：`input-streaming` 期间公开 part 只包含当前可解析的 `input`
+或 `undefined`，不会暴露累积原文。最终 `tool-input-available.input` 始终覆盖 partial 值。
+如果外层 stream 在输入未完成时 error/abort，part 保持 `input-streaming` 和最后可解析值，
+不会伪造 `tool-input-error`。
+
+OpenAI-compatible provider 可能产生真实 delta，也可能在某次响应中只给出最终调用；通用
+Spring AI model 与 Ollama 为 final-only。调用方必须同时接受“start/delta/available”和仅
+“available”两种正常路径，不能依据 provider 名称假设 delta 必然存在。
 
 ## 工具续跑
 
