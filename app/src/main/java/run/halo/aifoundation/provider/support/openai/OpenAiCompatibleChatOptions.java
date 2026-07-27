@@ -34,6 +34,7 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
     private final @Nullable Integer topK;
     private final @Nullable Double topP;
     private final @Nullable List<ToolCallback> toolCallbacks;
+    private final @Nullable Map<String, Boolean> toolStrict;
     private final @Nullable Map<String, Object> toolContext;
     private final @Nullable Map<String, Integer> logitBias;
     private final @Nullable Boolean logprobs;
@@ -73,6 +74,7 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
         this.topK = builder.topK;
         this.topP = builder.topP;
         this.toolCallbacks = builder.toolCallbacks != null ? List.copyOf(builder.toolCallbacks) : null;
+        this.toolStrict = copyMap(builder.toolStrict);
         this.toolContext = copyObjectMap(builder.toolContext);
         this.logitBias = copyMap(builder.logitBias);
         this.logprobs = builder.logprobs;
@@ -127,6 +129,7 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
             .topK(topK)
             .topP(topP)
             .toolCallbacks(toolCallbacks)
+            .toolStrict(toolStrict)
             .toolContext(toolContext)
             .logitBias(logitBias)
             .logprobs(logprobs)
@@ -224,6 +227,10 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
     @Override
     public @Nullable List<ToolCallback> getToolCallbacks() {
         return toolCallbacks;
+    }
+
+    public @Nullable Map<String, Boolean> getToolStrict() {
+        return toolStrict;
     }
 
     @Override
@@ -389,6 +396,7 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
         private @Nullable Integer topK;
         private @Nullable Double topP;
         private @Nullable List<ToolCallback> toolCallbacks;
+        private @Nullable Map<String, Boolean> toolStrict;
         private @Nullable Map<String, Object> toolContext;
         private @Nullable Map<String, Integer> logitBias;
         private @Nullable Boolean logprobs;
@@ -417,6 +425,7 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
                 copy.customHeaders = customHeaders != null ? new HashMap<>(customHeaders) : null;
                 copy.stopSequences = stopSequences != null ? new ArrayList<>(stopSequences) : null;
                 copy.toolCallbacks = toolCallbacks != null ? new ArrayList<>(toolCallbacks) : null;
+                copy.toolStrict = toolStrict != null ? new HashMap<>(toolStrict) : null;
                 copy.toolContext = toolContext != null ? new HashMap<>(toolContext) : null;
                 copy.logitBias = logitBias != null ? new HashMap<>(logitBias) : null;
                 copy.outputModalities = outputModalities != null ? new ArrayList<>(outputModalities) : null;
@@ -533,6 +542,11 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
                 this.toolCallbacks = new ArrayList<>();
             }
             this.toolCallbacks.addAll(List.of(toolCallbacks));
+            return this;
+        }
+
+        public Builder toolStrict(@Nullable Map<String, Boolean> toolStrict) {
+            this.toolStrict = toolStrict;
             return this;
         }
 
@@ -666,6 +680,7 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
             topK = that.topK != null ? that.topK : topK;
             topP = that.topP != null ? that.topP : topP;
             toolCallbacks = that.toolCallbacks != null ? that.toolCallbacks : toolCallbacks;
+            toolStrict = that.toolStrict != null ? that.toolStrict : toolStrict;
             toolContext = that.toolContext != null ? that.toolContext : toolContext;
             baseUrl = that.baseUrl != null ? that.baseUrl : baseUrl;
             apiKey = that.apiKey != null ? that.apiKey : apiKey;

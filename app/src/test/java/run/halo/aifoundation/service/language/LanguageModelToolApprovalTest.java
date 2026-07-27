@@ -25,6 +25,7 @@ import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
 import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolDefinition;
 
 class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
@@ -129,8 +130,9 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
 
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> {
-                assertThat(result.getToolCalls()).singleElement()
-                    .satisfies(call -> assertThat(call.getToolCallId()).isEqualTo("call_1"));
+                assertThat(result.getToolCalls())
+                    .extracting(ToolCall::getToolCallId)
+                    .containsExactly("call_1", "call_2");
                 assertThat(result.getToolApprovalRequests()).hasSize(1);
                 assertThat(result.getToolErrors()).singleElement()
                     .satisfies(error -> {
@@ -140,7 +142,7 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
                 assertThat(result.getResponseMessages().stream()
                     .flatMap(message -> message.getContent().stream())
                     .map(ModelMessagePart::getToolCallId))
-                    .containsExactly("call_1", "call_1", "call_2");
+                    .containsExactly("call_1", "call_2", "call_1", "call_2");
             })
             .verifyComplete();
 

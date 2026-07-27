@@ -42,6 +42,11 @@ public class ToolCall {
      */
     private Object rawInput;
     /**
+     * Parse failure for malformed provider arguments. When present, {@link #input} must not be
+     * treated as successfully parsed tool arguments.
+     */
+    private ToolInputParseError inputParseError;
+    /**
      * Provider-specific metadata associated with the call.
      */
     private Map<String, Object> providerMetadata;

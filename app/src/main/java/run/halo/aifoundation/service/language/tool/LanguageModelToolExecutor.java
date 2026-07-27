@@ -57,7 +57,7 @@ public final class LanguageModelToolExecutor {
 
     private Mono<ToolExecutionBatch> executeNext(List<ToolCall> toolCalls, int index,
         ToolStepContext context, ExecutionAccumulator accumulator) {
-        if (index >= toolCalls.size() || accumulator.hasErrors()) {
+        if (index >= toolCalls.size()) {
             return Mono.just(accumulator.toBatch());
         }
         var toolCall = toolCalls.get(index);
@@ -66,7 +66,7 @@ public final class LanguageModelToolExecutor {
             var tool = context.tool(toolCall);
             if (tool == null) {
                 accumulator.addError(unknownToolError(toolCall));
-                return Mono.just(accumulator.toBatch());
+                return executeNext(toolCalls, index + 1, context, accumulator);
             }
             if (tool.getExecutor() == null) {
                 accumulator.addWarning(externalToolPendingWarning(tool));
@@ -79,13 +79,13 @@ public final class LanguageModelToolExecutor {
                     accumulator.addWarnings(repair.warnings());
                     if (repair.error() != null) {
                         accumulator.addError(repair.error());
-                        return Mono.just(accumulator.toBatch());
+                        return executeNext(toolCalls, index + 1, context, accumulator);
                     }
                     return executeOne(currentCall, tool, context)
                         .flatMap(outcome -> {
                             if (outcome.error() != null) {
                                 accumulator.addError(outcome.error());
-                                return Mono.just(accumulator.toBatch());
+                                return executeNext(toolCalls, index + 1, context, accumulator);
                             }
                             accumulator.addResult(outcome.result());
                             return executeNext(toolCalls, index + 1, context, accumulator);
@@ -93,7 +93,7 @@ public final class LanguageModelToolExecutor {
                 });
         } catch (RuntimeException e) {
             accumulator.addError(toolError(resolvedCall, e));
-            return Mono.just(accumulator.toBatch());
+            return executeNext(toolCalls, index + 1, context, accumulator);
         }
     }
 
@@ -131,7 +131,8 @@ public final class LanguageModelToolExecutor {
         Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle,
         Set<String> streamedInputCallIds) {
         if (toolCalls.isEmpty()) {
-            return Mono.just(new ToolNormalizationBatch(List.of(), List.of(), Set.of(), List.of()));
+            return Mono.just(new ToolNormalizationBatch(List.of(), List.of(), List.of(), Set.of(),
+                List.of()));
         }
         var context = ToolStepContext.normalization(request, stepIndex, executionMessages,
             stepProviderMetadata, lifecycle, toolsByName(request),
@@ -148,7 +149,7 @@ public final class LanguageModelToolExecutor {
         try {
             var tool = context.tool(toolCall);
             if (tool == null) {
-                accumulator.addInputError(unknownToolError(toolCall));
+                accumulator.addInvalidToolCall(toolCall, unknownToolError(toolCall));
                 return normalizeNext(toolCalls, index + 1, context, accumulator);
             }
             cancellationChecker.check(context.request());
@@ -157,14 +158,14 @@ public final class LanguageModelToolExecutor {
                 .flatMap(repair -> {
                     accumulator.addWarnings(repair.warnings());
                     if (repair.error() != null) {
-                        accumulator.addInputError(repair.error());
+                        accumulator.addInvalidToolCall(toolCall, repair.error());
                     } else {
                         accumulator.addToolCall(repair.toolCall());
                     }
                     return normalizeNext(toolCalls, index + 1, context, accumulator);
                 });
         } catch (RuntimeException e) {
-            accumulator.addInputError(toolError(toolCall, e));
+            accumulator.addInvalidToolCall(toolCall, toolError(toolCall, e));
             return normalizeNext(toolCalls, index + 1, context, accumulator);
         }
     }
@@ -400,30 +401,40 @@ public final class LanguageModelToolExecutor {
 
     private Mono<RepairAttempt> repairIfNeeded(ToolCall toolCall, ToolDefinition tool,
         ToolStepContext context) {
+        var parseError = toolCall.getInputParseError();
+        if (parseError != null) {
+            return repair(toolCall, tool, context,
+                new IllegalArgumentException(parseError.getMessage()));
+        }
         try {
             validateInput(toolCall, tool);
             return Mono.just(new RepairAttempt(toolCall, null, List.of()));
         } catch (RuntimeException validationFailure) {
-            var repairCallback = context.request().getToolCallRepair();
-            if (repairCallback == null) {
-                return Mono.just(new RepairAttempt(toolCall, toolError(toolCall, validationFailure),
-                    List.of()));
-            }
-            return repairCallback.repair(ToolCallRepairContext.builder()
-                    .toolCall(toolCall)
-                    .tool(tool)
-                    .validationError(safeErrorMessage(validationFailure))
-                    .validationPath(validationPath(toolCall))
-                    .stepIndex(context.stepIndex())
-                    .messages(List.copyOf(context.executionMessages()))
-                    .requestContext(copyContext(context.request().getContext()))
-                    .providerMetadata(mergeProviderMetadata(context.stepProviderMetadata(),
-                        toolCall.getProviderMetadata()))
-                    .build())
-                .map(result -> repairedAttempt(toolCall, tool, validationFailure, result))
-                .onErrorResume(RuntimeException.class, repairFailure ->
-                    Mono.just(failedRepairAttempt(toolCall, validationFailure, repairFailure)));
+            return repair(toolCall, tool, context, validationFailure);
         }
+    }
+
+    private Mono<RepairAttempt> repair(ToolCall toolCall, ToolDefinition tool,
+        ToolStepContext context, RuntimeException validationFailure) {
+        var repairCallback = context.request().getToolCallRepair();
+        if (repairCallback == null) {
+            return Mono.just(new RepairAttempt(toolCall, toolError(toolCall, validationFailure),
+                List.of()));
+        }
+        return repairCallback.repair(ToolCallRepairContext.builder()
+                .toolCall(toolCall)
+                .tool(tool)
+                .validationError(safeErrorMessage(validationFailure))
+                .validationPath(validationPath(toolCall))
+                .stepIndex(context.stepIndex())
+                .messages(List.copyOf(context.executionMessages()))
+                .requestContext(copyContext(context.request().getContext()))
+                .providerMetadata(mergeProviderMetadata(context.stepProviderMetadata(),
+                    toolCall.getProviderMetadata()))
+                .build())
+            .map(result -> repairedAttempt(toolCall, tool, validationFailure, result))
+            .onErrorResume(RuntimeException.class, repairFailure ->
+                Mono.just(failedRepairAttempt(toolCall, validationFailure, repairFailure)));
     }
 
     private RepairAttempt repairedAttempt(ToolCall toolCall, ToolDefinition tool,
@@ -464,6 +475,7 @@ public final class LanguageModelToolExecutor {
             .toolName(original.getToolName())
             .input(repaired.getInput() != null ? repaired.getInput() : Map.of())
             .rawInput(repaired.getRawInput() != null ? repaired.getRawInput() : original.getRawInput())
+            .inputParseError(null)
             .providerMetadata(mergeProviderMetadata(original.getProviderMetadata(),
                 repaired.getProviderMetadata()))
             .build();
@@ -569,10 +581,6 @@ public final class LanguageModelToolExecutor {
         private final ArrayList<ToolError> errors = new ArrayList<>();
         private final ArrayList<GenerationWarning> warnings = new ArrayList<>();
 
-        boolean hasErrors() {
-            return !errors.isEmpty();
-        }
-
         void addResult(ToolResult result) {
             results.add(result);
         }
@@ -643,16 +651,19 @@ public final class LanguageModelToolExecutor {
     }
 
     private static final class NormalizationAccumulator {
-        private final ArrayList<ToolCall> toolCalls = new ArrayList<>();
+        private final ArrayList<ToolCall> recordedToolCalls = new ArrayList<>();
+        private final ArrayList<ToolCall> executableToolCalls = new ArrayList<>();
         private final ArrayList<ToolError> inputErrors = new ArrayList<>();
         private final HashSet<String> inputErrorCallIds = new HashSet<>();
         private final ArrayList<GenerationWarning> warnings = new ArrayList<>();
 
         void addToolCall(ToolCall toolCall) {
-            toolCalls.add(toolCall);
+            recordedToolCalls.add(toolCall);
+            executableToolCalls.add(toolCall);
         }
 
-        void addInputError(ToolError error) {
+        void addInvalidToolCall(ToolCall toolCall, ToolError error) {
+            recordedToolCalls.add(toolCall);
             inputErrors.add(error);
             inputErrorCallIds.add(error.getToolCallId());
         }
@@ -662,7 +673,8 @@ public final class LanguageModelToolExecutor {
         }
 
         ToolNormalizationBatch toBatch() {
-            return new ToolNormalizationBatch(List.copyOf(toolCalls), List.copyOf(inputErrors),
+            return new ToolNormalizationBatch(List.copyOf(recordedToolCalls),
+                List.copyOf(executableToolCalls), List.copyOf(inputErrors),
                 Set.copyOf(inputErrorCallIds), List.copyOf(warnings));
         }
     }

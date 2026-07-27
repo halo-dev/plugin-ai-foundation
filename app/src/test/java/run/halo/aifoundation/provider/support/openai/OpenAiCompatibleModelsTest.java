@@ -2,6 +2,8 @@ package run.halo.aifoundation.provider.support.openai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -11,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.ChatModel;
@@ -18,6 +21,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingRequest;
+import org.springframework.ai.tool.ToolCallback;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageResponseFormat;
@@ -81,6 +85,71 @@ class OpenAiCompatibleModelsTest {
         @SuppressWarnings("unchecked")
         var toolCalls = (List<Map<String, Object>>) messages.getFirst().get("tool_calls");
         assertThat(toolCalls).hasSize(2);
+    }
+
+    @Test
+    void chatRequestBody_serializesNativeStrictToolMetadata() {
+        var callback = mock(ToolCallback.class);
+        when(callback.getToolDefinition()).thenReturn(
+            org.springframework.ai.tool.definition.ToolDefinition.builder()
+                .name("editorEdit")
+                .description("Edit a document")
+                .inputSchema("""
+                    {
+                      "type": "object",
+                      "properties": {"documentVersion": {"type": "string"}},
+                      "required": ["documentVersion"],
+                      "additionalProperties": false
+                    }
+                    """)
+                .build());
+        var options = chatOptions().mutate()
+            .toolCallbacks(List.of(callback))
+            .toolStrict(Map.of("editorEdit", true))
+            .build();
+        var model = new OpenAiCompatibleChatModel(options, WebClient.builder());
+        var prompt = new Prompt(List.of(new UserMessage("Edit the document")), options);
+
+        @SuppressWarnings("unchecked")
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, options, false);
+        @SuppressWarnings("unchecked")
+        var tools = (List<Map<String, Object>>) body.get("tools");
+        @SuppressWarnings("unchecked")
+        var function = (Map<String, Object>) tools.getFirst().get("function");
+
+        assertThat(function)
+            .containsEntry("name", "editorEdit")
+            .containsEntry("strict", true);
+    }
+
+    @Test
+    void chatRequestBody_serializesFailedToolResponseForContinuation() {
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
+        var assistant = AssistantMessage.builder()
+            .content("")
+            .toolCalls(List.of(new AssistantMessage.ToolCall(
+                "call-1", "function", "generateImage", "{}")))
+            .build();
+        var toolResponse = ToolResponseMessage.builder()
+            .responses(List.of(new ToolResponseMessage.ToolResponse(
+                "call-1", "generateImage",
+                "OpenAI-compatible image request failed: status=429, body=余额不足")))
+            .build();
+        var prompt = new Prompt(List.of(assistant, toolResponse), chatOptions());
+
+        @SuppressWarnings("unchecked")
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, chatOptions(), false);
+        @SuppressWarnings("unchecked")
+        var messages = (List<Map<String, Object>>) body.get("messages");
+
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(1))
+            .containsEntry("role", "tool")
+            .containsEntry("tool_call_id", "call-1")
+            .containsEntry("content",
+                "OpenAI-compatible image request failed: status=429, body=余额不足");
     }
 
     @Test

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolInputParseError;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -18,25 +19,44 @@ public final class LanguageModelToolCallMapper {
             return List.of();
         }
         return toolCalls.stream()
-            .map(toolCall -> ToolCall.builder()
-                .toolCallId(toolCall.id())
-                .toolName(toolCall.name())
-                .input(parseToolInput(toolCall.arguments()))
-                .rawInput(toolCall.arguments())
-                .providerMetadata(Map.of("type", toolCall.type()))
-                .build())
+            .map(this::mapToolCall)
             .toList();
     }
 
-    private Map<String, Object> parseToolInput(String arguments) {
+    private ToolCall mapToolCall(AssistantMessage.ToolCall toolCall) {
+        var parsedInput = parseToolInput(toolCall.arguments());
+        return ToolCall.builder()
+            .toolCallId(toolCall.id())
+            .toolName(toolCall.name())
+            .input(parsedInput.input())
+            .rawInput(toolCall.arguments())
+            .inputParseError(parsedInput.error())
+            .providerMetadata(Map.of("type", toolCall.type()))
+            .build();
+    }
+
+    private ParsedToolInput parseToolInput(String arguments) {
         if (arguments == null || arguments.isBlank()) {
-            return Map.of();
+            return new ParsedToolInput(Map.of(), null);
         }
         try {
             var parsed = JSON_MAPPER.readValue(arguments, MAP_TYPE);
-            return parsed != null ? parsed : Map.of();
+            return new ParsedToolInput(parsed != null ? parsed : Map.of(), null);
         } catch (JacksonException e) {
-            return Map.of("_raw", arguments);
+            var location = e.getLocation();
+            var characterOffset = location != null && location.getCharOffset() >= 0
+                ? location.getCharOffset()
+                : null;
+            var message = characterOffset != null
+                ? "Tool arguments contain malformed JSON at character " + characterOffset
+                : "Tool arguments contain malformed JSON";
+            return new ParsedToolInput(Map.of(), ToolInputParseError.builder()
+                .message(message)
+                .characterOffset(characterOffset)
+                .build());
         }
+    }
+
+    private record ParsedToolInput(Map<String, Object> input, ToolInputParseError error) {
     }
 }

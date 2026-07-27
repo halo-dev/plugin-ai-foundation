@@ -17,12 +17,13 @@ class ProviderNativeToolStrictTest {
 
     @ParameterizedTest
     @MethodSource("nativeStrictProviders")
-    void rc1OpenAiProvidersCannotApplyLegacyNativeStrictToolSchema(AiProviderType providerType) {
+    void nativeStrictProvidersApplyStrictToolSchema(AiProviderType providerType) {
         var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(strictRequest(), List.of(), Set.of());
 
-        assertThat(options.getToolCallbacks()).isEmpty();
+        assertThat(providerType.languageModelProviderOptions().nativeStrictToolSchemas()).isTrue();
+        assertThat(options.getToolStrict()).containsEntry("halo_test_info", true);
     }
 
     @ParameterizedTest
@@ -33,7 +34,9 @@ class ProviderNativeToolStrictTest {
             .build(strictRequest(), List.of(), Set.of());
 
         if (options instanceof OpenAiCompatibleChatOptions openAiOptions) {
-            assertThat(openAiOptions.getToolCallbacks()).isEmpty();
+            assertThat(providerType.languageModelProviderOptions().nativeStrictToolSchemas())
+                .isFalse();
+            assertThat(openAiOptions.getToolStrict()).isNullOrEmpty();
         }
     }
 
@@ -53,13 +56,17 @@ class ProviderNativeToolStrictTest {
             .toolCallingChatOptionsFactory()
             .build(strictRequest(), List.of(), Set.of());
 
-        assertThat(options.getToolCallbacks()).isEmpty();
+        assertThat(new DeepSeekProvider().languageModelProviderOptions()
+            .nativeStrictToolSchemas()).isTrue();
+        assertThat(options.getToolStrict()).containsEntry("halo_test_info", true);
     }
 
     static Stream<AiProviderType> nativeStrictProviders() {
         return Stream.of(
             new OpenAiProvider(),
-            new OpenAiLikeProvider()
+            new OpenAiLikeProvider(),
+            new OpenRouterProvider(),
+            new DashScopeProvider()
         );
     }
 

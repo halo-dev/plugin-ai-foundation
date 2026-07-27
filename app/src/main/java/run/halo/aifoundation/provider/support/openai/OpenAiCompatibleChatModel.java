@@ -451,7 +451,7 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
         putIfPresent(body, Fields.METADATA, options.getMetadata());
         putIfPresent(body, Fields.SERVICE_TIER, options.getServiceTier());
         if (!CollectionUtils.isEmpty(options.getToolCallbacks())) {
-            body.put(Fields.TOOLS, tools(options.getToolCallbacks()));
+            body.put(Fields.TOOLS, tools(options.getToolCallbacks(), options.getToolStrict()));
         }
         putIfPresent(body, Fields.TOOL_CHOICE, toolChoice(options.getToolChoice()));
         if (options.getExtraBody() != null) {
@@ -606,7 +606,8 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
         return null;
     }
 
-    private List<Map<String, Object>> tools(List<ToolCallback> callbacks) {
+    private List<Map<String, Object>> tools(List<ToolCallback> callbacks,
+        Map<String, Boolean> strictByToolName) {
         return callbacks.stream()
             .<Map<String, Object>>map(callback -> {
                 var definition = callback.getToolDefinition();
@@ -614,6 +615,10 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
                 function.put(Fields.NAME, textOrEmpty(definition.name()));
                 function.put(Fields.DESCRIPTION, textOrEmpty(definition.description()));
                 function.put(Fields.PARAMETERS, parseJsonObject(definition.inputSchema()));
+                if (strictByToolName != null
+                    && strictByToolName.containsKey(definition.name())) {
+                    function.put(Fields.STRICT, strictByToolName.get(definition.name()));
+                }
                 Map<String, Object> tool = new LinkedHashMap<>();
                 tool.put(Fields.TYPE, Values.FUNCTION);
                 tool.put(Fields.FUNCTION, function);

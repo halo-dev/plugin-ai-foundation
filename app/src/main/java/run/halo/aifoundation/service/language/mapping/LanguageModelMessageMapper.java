@@ -2,8 +2,10 @@ package run.halo.aifoundation.service.language.mapping;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -21,6 +23,7 @@ import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
@@ -47,12 +50,43 @@ public final class LanguageModelMessageMapper {
         };
     }
 
-    public ToolResponseMessage toolResponseMessage(List<ToolResult> results) {
-        var responses = results.stream()
-            .map(result -> new ToolResponseMessage.ToolResponse(result.getToolCallId(),
-                result.getToolName(), writeJson(result.getResult())))
-            .toList();
+    public ToolResponseMessage toolResponseMessage(List<ToolCall> toolCalls,
+        List<ToolResult> results, List<ToolError> errors) {
+        var resultsByCallId = indexByToolCallId(results, ToolResult::getToolCallId, "result");
+        var errorsByCallId = indexByToolCallId(errors, ToolError::getToolCallId, "error");
+        var responses = new ArrayList<ToolResponseMessage.ToolResponse>();
+        for (var toolCall : nullSafe(toolCalls)) {
+            var callId = toolCall.getToolCallId();
+            var result = resultsByCallId.remove(callId);
+            var error = errorsByCallId.remove(callId);
+            if ((result == null) == (error == null)) {
+                throw new IllegalStateException(
+                    "Expected exactly one tool response for tool call: " + callId);
+            }
+            responses.add(result != null
+                ? new ToolResponseMessage.ToolResponse(callId, result.getToolName(),
+                    writeJson(result.getResult()))
+                : new ToolResponseMessage.ToolResponse(callId, error.getToolName(),
+                    error.getErrorText()));
+        }
+        if (!resultsByCallId.isEmpty() || !errorsByCallId.isEmpty()) {
+            throw new IllegalStateException(
+                "Tool responses contain ids without matching assistant tool calls");
+        }
         return ToolResponseMessage.builder().responses(responses).build();
+    }
+
+    private <T> Map<String, T> indexByToolCallId(List<T> values,
+        Function<T, String> idExtractor, String responseType) {
+        var valuesByCallId = new LinkedHashMap<String, T>();
+        for (var value : nullSafe(values)) {
+            var callId = idExtractor.apply(value);
+            if (valuesByCallId.putIfAbsent(callId, value) != null) {
+                throw new IllegalStateException(
+                    "Duplicate tool " + responseType + " for tool call: " + callId);
+            }
+        }
+        return valuesByCallId;
     }
 
     public List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,

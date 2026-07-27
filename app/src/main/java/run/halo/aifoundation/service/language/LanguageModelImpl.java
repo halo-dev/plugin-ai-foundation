@@ -578,7 +578,7 @@ public class LanguageModelImpl implements LanguageModel {
             accumulator.streamedInputCallIds(), toolExecutionAllowed);
         return toolStepCoordinator.normalize(request)
             .flatMapMany(normalized -> {
-                normalized.toolCalls().stream()
+                normalized.executableToolCalls().stream()
                     .map(TextStreamPart::toolCall)
                     .forEach(parts::add);
                 normalized.inputErrors().stream()
@@ -603,7 +603,7 @@ public class LanguageModelImpl implements LanguageModel {
         var run = loop.run();
         var stopWhen = prepared.stopWhen();
         var toolResults = toolStep.execution();
-        var recordedToolCalls = toolStep.toolCalls();
+        var recordedToolCalls = toolStep.recordedToolCalls();
         var approvalRequests = toolStep.approvalRequests();
         approvalRequests.forEach(approval -> parts.add(TextStreamPart.toolApprovalRequest(approval)));
         toolResults.results().forEach(result -> parts.add(TextStreamPart.toolResult(result)));
@@ -672,7 +672,8 @@ public class LanguageModelImpl implements LanguageModel {
             generationStep.getResponse(), accumulator.providerMetadata()));
 
         messages.add(accumulator.output(recordedToolCalls));
-        messages.add(messageMapper.toolResponseMessage(toolResults.results()));
+        messages.add(messageMapper.toolResponseMessage(recordedToolCalls, toolResults.results(),
+            toolResults.errors()));
         executionMessages.addAll(nullSafe(generationStep.getResponseMessages()));
         var nextLoop = loop.next(request, messages, executionMessages, stopWhen);
         return run.stepFinish(accumulator.stepIndex, generationStep, List.copyOf(completedSteps))
@@ -814,9 +815,10 @@ public class LanguageModelImpl implements LanguageModel {
                         checkCancellation(stepRequest);
                         var nextMessages = new ArrayList<>(prepared.messages());
                         nextMessages.add(assistantOutput(step.text(), step.reasoning(),
-                            toolStep.toolCalls()));
+                            toolStep.recordedToolCalls()));
                         nextMessages.add(messageMapper.toolResponseMessage(
-                            toolStep.execution().results()));
+                            toolStep.recordedToolCalls(), toolStep.execution().results(),
+                            toolStep.execution().errors()));
                         var nextExecutionMessages = new ArrayList<>(prepared.executionMessages());
                         nextExecutionMessages.addAll(nullSafe(generationStep.getResponseMessages()));
                         return generateTextStep(baseRequest, run, nextMessages, nextExecutionMessages,
@@ -829,7 +831,7 @@ public class LanguageModelImpl implements LanguageModel {
         PreparedInvocation prepared, StopCondition stopWhen, StepSnapshot step,
         ToolStepCoordinator.ToolStepResolution toolStep, NonStreamingGenerationState state) {
         var approvalRequests = toolStep.approvalRequests();
-        var recordedToolCalls = toolStep.toolCalls();
+        var recordedToolCalls = toolStep.recordedToolCalls();
         var toolResults = toolStep.execution();
         var stepContent = contentWithToolCalls(step.content(), recordedToolCalls);
         approvalRequests.stream()
@@ -2190,13 +2192,13 @@ public class LanguageModelImpl implements LanguageModel {
                 "Tool input examples are ignored by the default tool adapter."));
         }
         if (request != null && request.getTools() != null
-            && !"deepseek".equals(providerType)
+            && !providerOptions.nativeStrictToolSchemas()
             && request.getTools().stream()
                 .anyMatch(tool -> tool != null && Boolean.TRUE.equals(tool.getStrict()))) {
             warnings.add(warning(WARNING_TOOL_STRICT_SCHEMA_DOWNGRADED,
-                "Strict tool input schema was requested, but provider-native strict schema "
-                    + "metadata is not available with Spring AI 2.0.0-RC1. Local tool input "
-                    + "validation still applies."));
+                "Strict tool input schema was requested, but this provider adapter does not "
+                    + "support native strict schema metadata. Local tool input validation still "
+                    + "applies."));
         }
         return warnings;
     }

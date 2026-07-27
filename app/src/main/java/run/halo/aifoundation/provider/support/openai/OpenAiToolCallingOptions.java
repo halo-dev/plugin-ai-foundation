@@ -1,5 +1,6 @@
 package run.halo.aifoundation.provider.support.openai;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.ai.tool.ToolCallback;
@@ -42,7 +43,14 @@ public final class OpenAiToolCallingOptions {
 
     public static void applyNativeTools(OpenAiCompatibleChatOptions.Builder builder,
         GenerateTextRequest request) {
-        // RC1 derives provider tool declarations from ToolCallback definitions.
+        var strictByToolName = new LinkedHashMap<String, Boolean>();
+        if (request.getTools() != null) {
+            request.getTools().stream()
+                .filter(tool -> tool != null && tool.getName() != null
+                    && tool.getStrict() != null)
+                .forEach(tool -> strictByToolName.put(tool.getName(), tool.getStrict()));
+        }
+        builder.toolStrict(strictByToolName);
     }
 
     public static void applyToolChoice(OpenAiCompatibleChatOptions.Builder builder, ToolChoice toolChoice,

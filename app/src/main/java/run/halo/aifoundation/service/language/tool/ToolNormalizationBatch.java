@@ -7,10 +7,12 @@ import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 
 /**
- * Tool calls after common name resolution, validation, and optional repair.
+ * Separates model-produced calls retained in history from calls that passed validation and may be
+ * executed.
  */
 public record ToolNormalizationBatch(
-    List<ToolCall> toolCalls,
+    List<ToolCall> recordedToolCalls,
+    List<ToolCall> executableToolCalls,
     List<ToolError> inputErrors,
     Set<String> inputErrorCallIds,
     List<GenerationWarning> warnings

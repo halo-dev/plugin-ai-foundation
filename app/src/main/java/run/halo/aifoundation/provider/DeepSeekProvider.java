@@ -98,6 +98,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)
+            .nativeStrictToolSchemas(true)
             .chatOptionsFactory(request -> OpenAiChatOptionsSupport.buildBasic(request,
                 getProviderType(), reasoningControlOptions, null))
             .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) ->

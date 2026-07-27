@@ -8,6 +8,7 @@ public record LanguageModelProviderOptions(
     boolean streamToolCallsForReasoning,
     boolean requestHeadersSupported,
     boolean seedSupported,
+    boolean nativeStrictToolSchemas,
     ChatOptionsFactory chatOptionsFactory,
     ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
     StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory,
@@ -27,6 +28,7 @@ public record LanguageModelProviderOptions(
         private boolean streamToolCallsForReasoning;
         private boolean requestHeadersSupported;
         private boolean seedSupported;
+        private boolean nativeStrictToolSchemas;
         private ChatOptionsFactory chatOptionsFactory;
         private ToolCallingChatOptionsFactory toolCallingChatOptionsFactory;
         private StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory;
@@ -53,6 +55,11 @@ public record LanguageModelProviderOptions(
 
         public Builder seedSupported(boolean seedSupported) {
             this.seedSupported = seedSupported;
+            return this;
+        }
+
+        public Builder nativeStrictToolSchemas(boolean nativeStrictToolSchemas) {
+            this.nativeStrictToolSchemas = nativeStrictToolSchemas;
             return this;
         }
 
@@ -92,6 +99,7 @@ public record LanguageModelProviderOptions(
                 streamToolCallsForReasoning,
                 requestHeadersSupported,
                 seedSupported,
+                nativeStrictToolSchemas,
                 chatOptionsFactory,
                 toolCallingChatOptionsFactory,
                 structuredOutputChatOptionsFactory,

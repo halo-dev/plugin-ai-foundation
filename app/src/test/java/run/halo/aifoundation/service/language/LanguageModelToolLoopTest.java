@@ -14,8 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.control.CancellationSource;
@@ -140,7 +143,140 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
             })
             .verifyComplete();
 
-        verify(chatModel, times(2)).call(any(Prompt.class));
+        var secondPrompt = capturedCallPrompts(chatModel).get(1);
+        assertThat(toolResponses(secondPrompt))
+            .singleElement()
+            .satisfies(response -> {
+                assertThat(response.id()).isEqualTo("call_1");
+                assertThat(response.name()).isEqualTo("unstable");
+                assertThat(response.responseData()).isEqualTo("temporary failure");
+            });
+    }
+
+    @Test
+    void generateTextIncludesResponsesForSuccessfulAndFailedToolCalls() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            multiToolCallResponse(List.of(
+                new AssistantMessage.ToolCall("call_1", "function", "unstable", "{}"),
+                new AssistantMessage.ToolCall("call_2", "function", "stable", "{}")
+            ), 2, 3),
+            chatResponse("Handled both tool responses.", "stop", 4, 5)
+        );
+        var model = languageModel(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Use both tools")
+            .tools(List.of(
+                ToolDefinition.builder()
+                    .name("unstable")
+                    .executor(context -> Mono.error(new IllegalStateException("quota exceeded")))
+                    .build(),
+                ToolDefinition.builder()
+                    .name("stable")
+                    .executor(context -> Mono.just(Map.of("ok", true)))
+                    .build()
+            ))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getToolResults()).hasSize(1);
+                assertThat(result.getToolErrors()).hasSize(1);
+                assertThat(result.getText()).isEqualTo("Handled both tool responses.");
+            })
+            .verifyComplete();
+
+        var responses = toolResponses(capturedCallPrompts(chatModel).get(1));
+        assertThat(responses)
+            .extracting(ToolResponseMessage.ToolResponse::id)
+            .containsExactlyInAnyOrder("call_1", "call_2");
+        assertThat(responses)
+            .filteredOn(response -> response.id().equals("call_1"))
+            .singleElement()
+            .satisfies(response -> assertThat(response.responseData())
+                .isEqualTo("quota exceeded"));
+    }
+
+    @Test
+    void streamTextIncludesFailedToolResponseInNextPrompt() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "generateImage", "{}", 2, 3)),
+            Flux.just(chatResponse("The image tool has insufficient balance.", "stop", 4, 5))
+        );
+        var model = languageModel(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate an image")
+            .tools(List.of(ToolDefinition.builder()
+                .name("generateImage")
+                .executor(context -> Mono.error(new IllegalStateException(
+                    "OpenAI-compatible image request failed: status=429, body=余额不足")))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.streamText(request).result())
+            .assertNext(result -> {
+                assertThat(result.getText())
+                    .isEqualTo("The image tool has insufficient balance.");
+                assertThat(result.getToolErrors()).singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText()).contains("status=429"));
+            })
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).stream(captor.capture());
+        assertThat(toolResponses(captor.getAllValues().get(1)))
+            .singleElement()
+            .satisfies(response -> {
+                assertThat(response.id()).isEqualTo("call_1");
+                assertThat(response.name()).isEqualTo("generateImage");
+                assertThat(response.responseData())
+                    .isEqualTo(
+                        "OpenAI-compatible image request failed: status=429, body=余额不足");
+            });
+    }
+
+    @Test
+    void streamTextPreservesInvalidToolCallWhenContinuingWithInputError() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "weather",
+                "{\"location\":\"S\"F\"}", 2, 3)),
+            Flux.just(chatResponse("The tool arguments were malformed.", "stop", 4, 5))
+        );
+        var model = languageModel(chatModel, "openai");
+
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather?")
+            .tools(List.of(repairableWeatherTool(context ->
+                Mono.just(Map.of("temperature", 22)))))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(model.streamText(request).result())
+            .assertNext(result -> assertThat(result.getToolErrors()).singleElement()
+                .satisfies(error -> assertThat(error.getErrorText())
+                    .startsWith("Tool arguments contain malformed JSON at character")))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).stream(captor.capture());
+        var secondPrompt = captor.getAllValues().get(1);
+        assertThat(secondPrompt.getInstructions().stream()
+            .filter(AssistantMessage.class::isInstance)
+            .map(AssistantMessage.class::cast)
+            .flatMap(message -> message.getToolCalls().stream())
+            .map(AssistantMessage.ToolCall::id))
+            .contains("call_1");
+        assertThat(toolResponses(secondPrompt))
+            .filteredOn(response -> "call_1".equals(response.id()))
+            .singleElement()
+            .satisfies(response -> assertThat(response.responseData())
+                .startsWith("Tool arguments contain malformed JSON at character"));
     }
 
     @Test
@@ -288,5 +424,19 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
             .verifyComplete();
 
         assertThat(observedToken.get()).isSameAs(source.token());
+    }
+
+    private List<Prompt> capturedCallPrompts(ChatModel chatModel) {
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).call(captor.capture());
+        return captor.getAllValues();
+    }
+
+    private List<ToolResponseMessage.ToolResponse> toolResponses(Prompt prompt) {
+        return prompt.getInstructions().stream()
+            .filter(ToolResponseMessage.class::isInstance)
+            .map(ToolResponseMessage.class::cast)
+            .flatMap(message -> message.getResponses().stream())
+            .toList();
     }
 }

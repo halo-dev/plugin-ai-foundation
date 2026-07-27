@@ -164,6 +164,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         return LanguageModelProviderOptions.builder()
             .requestHeadersSupported(true)
             .seedSupported(true)
+            .nativeStrictToolSchemas(nativeStrictToolSchemas)
             .chatOptionsFactory(request -> OpenAiChatOptionsSupport.buildBasic(request,
                 getProviderType(), reasoningControlOptions, extraBodyCustomizer))
             .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) ->

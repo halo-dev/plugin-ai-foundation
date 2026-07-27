@@ -100,7 +100,7 @@ class DeepSeekProviderTest {
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
 
-        assertThat(options.getToolCallbacks()).isEmpty();
+        assertThat(options.getToolStrict()).containsEntry("halo_test_info", true);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service.language.tool;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,19 +33,19 @@ public final class ToolStepCoordinator {
     public Mono<ToolStepResolution> resolveNormalized(ToolStepRequest request,
         ToolNormalizationBatch normalized) {
         if (!request.toolExecutionAllowed()) {
-            var execution = withInputErrors(toolExecutor.stepLimitReached(normalized.toolCalls()),
-                normalized);
+            var execution = withInputErrors(
+                toolExecutor.stepLimitReached(normalized.executableToolCalls()), normalized);
             var warnings = mergeWarnings(normalized.warnings(), execution.warnings());
-            return toolExecutor.notifyInputAvailable(normalized.toolCalls(),
+            return toolExecutor.notifyInputAvailable(normalized.executableToolCalls(),
                     request.generationRequest(), request.stepIndex(), request.executionMessages(),
                     request.stepProviderMetadata())
-                .thenReturn(new ToolStepResolution(normalized.toolCalls(), List.of(), execution,
-                    normalized.inputErrorCallIds(), warnings, false));
+                .thenReturn(new ToolStepResolution(normalized.recordedToolCalls(), List.of(),
+                    execution, normalized.inputErrorCallIds(), warnings, false));
         }
 
-        return toolExecutor.evaluateApproval(normalized.toolCalls(), request.generationRequest(),
-                request.stepIndex(), request.executionMessages(), request.stepProviderMetadata(),
-                request.lifecycle(), request.approvalIdFactory())
+        return toolExecutor.evaluateApproval(normalized.executableToolCalls(),
+                request.generationRequest(), request.stepIndex(), request.executionMessages(),
+                request.stepProviderMetadata(), request.lifecycle(), request.approvalIdFactory())
             .flatMap(approval -> executeApprovedTools(request, approval)
                 .map(execution -> resolution(approval,
                     withInputErrors(execution, normalized), normalized)));
@@ -91,8 +92,22 @@ public final class ToolStepCoordinator {
         var canContinue = approval.approvalRequests().isEmpty()
             && !approval.hasPendingExternalCalls()
             && hasToolResponse;
-        return new ToolStepResolution(approval.toolCalls(), approval.approvalRequests(),
-            execution, normalized.inputErrorCallIds(), List.copyOf(warnings), canContinue);
+        return new ToolStepResolution(recordedToolCalls(normalized, approval, execution),
+            approval.approvalRequests(), execution, normalized.inputErrorCallIds(),
+            List.copyOf(warnings), canContinue);
+    }
+
+    private List<ToolCall> recordedToolCalls(ToolNormalizationBatch normalized,
+        ToolApprovalBatch approval, ToolExecutionBatch execution) {
+        var recordedCallIds = new HashSet<String>();
+        approval.toolCalls().stream()
+            .map(ToolCall::getToolCallId)
+            .forEach(recordedCallIds::add);
+        execution.results().forEach(result -> recordedCallIds.add(result.getToolCallId()));
+        execution.errors().forEach(error -> recordedCallIds.add(error.getToolCallId()));
+        return normalized.recordedToolCalls().stream()
+            .filter(toolCall -> recordedCallIds.contains(toolCall.getToolCallId()))
+            .toList();
     }
 
     private List<GenerationWarning> mergeWarnings(List<GenerationWarning> left,
@@ -117,7 +132,7 @@ public final class ToolStepCoordinator {
     }
 
     public record ToolStepResolution(
-        List<ToolCall> toolCalls,
+        List<ToolCall> recordedToolCalls,
         List<ToolApprovalRequest> approvalRequests,
         ToolExecutionBatch execution,
         Set<String> inputErrorCallIds,
