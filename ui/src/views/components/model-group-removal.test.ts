@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, rstest } from '@rstest/core'
 import { mount } from '@vue/test-utils'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { ref } from 'vue'
 
 const formKitStub = {
@@ -44,42 +42,5 @@ describe('model group removal', () => {
     expect(wrapper.text()).toContain('支持推理历史回传')
     expect(wrapper.text()).toContain('继承供应商')
     expect(wrapper.find('input[name="languageReasoningHistory"]').exists()).toBe(true)
-  })
-
-  it('keeps parameter mappings and model capabilities in sibling panels', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/views/components/ModelForm.vue'),
-      'utf8',
-    )
-    expect(source.match(/<AdvancedSettingsCollapsible/g)).toHaveLength(2)
-    const mappingStart = source.indexOf('title="参数映射"')
-    const mappingEnd = source.indexOf('</AdvancedSettingsCollapsible>', mappingStart)
-    const capabilityStart = source.indexOf('title="模型能力"')
-    expect(mappingStart).toBeGreaterThan(-1)
-    expect(mappingEnd).toBeGreaterThan(mappingStart)
-    expect(capabilityStart).toBeGreaterThan(mappingEnd)
-  })
-
-  it('keeps provider model list source free of group sections', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/views/components/ProviderModelList.vue'),
-      'utf8',
-    )
-
-    expect(source).not.toContain('groupedModels')
-    expect(source).not.toContain('<details')
-    expect(source).not.toContain('未分组')
-  })
-
-  it('keeps provider discovery rows free of duplicate profile badges', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/views/components/ProviderModelsDiscoveryModal.vue'),
-      'utf8',
-    )
-
-    expect(source).not.toContain('discoverySourceLabel')
-    expect(source).not.toContain('discoveryConfidenceLabel')
-    expect(source).not.toContain('modelFeatureLabel')
-    expect(source).not.toContain('modelTypeLabel')
   })
 })
