@@ -7,6 +7,10 @@ streams. It helps frontends send chat, completion, and object-stream requests,
 consume Halo UIMessage SSE responses, reduce stream chunks into UI messages, and
 validate or persist those messages.
 
+For task-oriented guides, see the repository's
+[SDK UI developer documentation](../../../dev/en/sdk-ui/README.md). For lookup by export name,
+use the [public export index](../../../dev/en/sdk-ui/api-reference.md).
+
 This package is not a backend provider SDK. Model selection, provider
 configuration, and conversion from UI messages to model messages stay on the
 Halo AI Foundation backend.
@@ -423,12 +427,6 @@ Use these exports when building custom adapters:
   `AIUIMessageValidationError`
 - Protocol constants: `DONE_MARKER`, `HALO_UI_MESSAGE_STREAM_HEADER`,
   `HALO_UI_MESSAGE_STREAM_VERSION`
-
-## Current Limits
-
-The package does not implement resume, reconnect, replay, an active stream
-registry, file upload management, `source-document` placeholder handling, or npm
-side conversion from UI messages to model messages.
 
 ## Development
 

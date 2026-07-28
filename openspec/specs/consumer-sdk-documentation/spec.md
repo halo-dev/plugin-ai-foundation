@@ -7,7 +7,7 @@ TBD - created by archiving change finalize-core-alignment-and-consumer-docs. Upd
 The project SHALL provide a consumer-facing SDK guide organized around plugin author workflows and typed APIs.
 
 #### Scenario: Caller starts from quick start
-- **WHEN** a plugin author opens `dev/dev.md`
+- **WHEN** a plugin author opens `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** the document SHALL first explain setup, runtime dependency, `AiModelService`, and `AiModel.metadata.name` lookup
 
 #### Scenario: Caller finds feature workflows
@@ -24,7 +24,7 @@ The consumer guide SHALL NOT require plugin authors to understand internal provi
 
 #### Scenario: Implementation detail is useful for maintainers only
 - **WHEN** documentation content explains internal classes, package layout, provider cache behavior, or backend implementation mechanics
-- **THEN** that content SHALL be removed from `dev/dev.md` or moved to an implementation-oriented artifact outside the consumer guide
+- **THEN** that content SHALL be removed from `dev/zh-CN/dev.md` and `dev/en/dev.md` or moved to an implementation-oriented artifact outside the consumer guides
 
 #### Scenario: Provider caveat is caller-visible
 - **WHEN** provider-specific behavior affects a caller's request or response
@@ -263,12 +263,12 @@ Consumer documentation SHALL record chat-handler-adjacent work that remains inte
 Consumer documentation SHALL explain how plugin authors use image generation middleware.
 
 #### Scenario: Model-level middleware usage is documented
-- **WHEN** a plugin author reads the image generation section of `dev/dev.md`
+- **WHEN** a plugin author reads the image generation section of `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** the guide SHALL show how to wrap an `ImageGenerationModel` with image generation middleware
 - **AND** it SHALL explain that the wrapped value is still used through `generateImage`
 
 #### Scenario: Request-level middleware usage is documented
-- **WHEN** a plugin author reads the image generation section of `dev/dev.md`
+- **WHEN** a plugin author reads the image generation section of `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** the guide SHALL show how to attach middleware to a single `GenerateImageRequest`
 - **AND** it SHALL explain that request-level middleware is useful for one-off behavior
 
@@ -483,7 +483,7 @@ Consumer documentation SHALL reduce long prose and make integration steps easier
 The main consumer guide SHALL follow the order in which a plugin author adopts and uses the typed SDK.
 
 #### Scenario: Setup comes before feature details
-- **WHEN** a plugin author opens `dev/dev.md`
+- **WHEN** a plugin author opens `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** setup, service resolution, and model selection SHALL precede feature details
 
 #### Scenario: Common workflows define the document order
@@ -512,14 +512,14 @@ The main consumer SDK guide SHALL reduce long prose and make common workflows ea
 The main consumer SDK guide SHALL introduce UI Message usage without duplicating the dedicated UI Message guide.
 
 #### Scenario: UI Message stream has a short entry point
-- **WHEN** a plugin author reads the streaming section in `dev/dev.md`
+- **WHEN** a plugin author reads the streaming section in `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** the guide explains when to use `UIMessageStream` and `UIMessage`
-- **AND** it links to `dev/ui-message-stream.md` for the complete backend UI Message workflow
+- **AND** it links to the corresponding `dev/zh-CN/ui-message-stream.md` or `dev/en/ui-message-stream.md` guide for the complete backend UI Message workflow
 
 #### Scenario: Detailed UI Message content stays in dedicated guide
 - **WHEN** UI Message details involve chunk aggregation, metadata lifecycle, UI Message validation, conversion, regeneration, or cancellation
 - **THEN** the main guide summarizes the topic briefly
-- **AND** the detailed instructions remain in `dev/ui-message-stream.md`
+- **AND** the detailed instructions are in `dev/zh-CN/ui-message-stream.md` and `dev/en/ui-message-stream.md`
 
 ### Requirement: Main SDK Guide Records Deferred Frontend Work
 The main consumer SDK guide SHALL keep frontend helper and runtime deferrals visible without presenting them as current backend features.
@@ -533,9 +533,9 @@ The main consumer SDK guide SHALL keep frontend helper and runtime deferrals vis
 Consumer documentation SHALL explain the completed Java backend UI Message contract from the caller perspective.
 
 #### Scenario: Main guide links to detailed backend contract
-- **WHEN** a plugin author reads `dev/dev.md`
+- **WHEN** a plugin author reads `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** the guide provides a concise UI Message entry point
-- **AND** links to `dev/ui-message-stream.md` for the detailed backend workflow
+- **AND** links to the corresponding `dev/zh-CN/ui-message-stream.md` or `dev/en/ui-message-stream.md` guide for the detailed backend workflow
 
 #### Scenario: UI Message guide explains persisted tool state
 - **WHEN** a plugin author reads the UI Message guide
@@ -638,12 +638,12 @@ Consumer documentation SHALL describe caller-visible typed settings and warnings
 - **THEN** it SHALL fail on stale `providerOptions`, stale imports, missing typed fields, or examples that require Spring AI classes
 
 ### Requirement: Documentation Covers Stabilized UI Message Runtime
-Consumer documentation SHALL explain the stabilized UI message runtime in `dev/ui-message-stream.md`.
+Consumer documentation SHALL explain the stabilized UI message runtime in `dev/zh-CN/ui-message-stream.md` and `dev/en/ui-message-stream.md`.
 
 #### Scenario: UI message guide is the detailed entrypoint
 - **WHEN** a plugin author needs UI message stream or frontend runtime guidance
-- **THEN** `dev/ui-message-stream.md` SHALL be the detailed documentation entrypoint
-- **AND** `dev/dev.md` SHALL NOT duplicate the detailed UI message runtime guide
+- **THEN** `dev/zh-CN/ui-message-stream.md` and `dev/en/ui-message-stream.md` SHALL be the detailed documentation entrypoints
+- **AND** `dev/zh-CN/dev.md` and `dev/en/dev.md` SHALL NOT duplicate the detailed UI message runtime guides
 
 #### Scenario: Dynamic data parts are documented
 - **WHEN** a plugin author reads the UI message stream guide
@@ -781,7 +781,7 @@ Consumer documentation SHALL keep RAG content in a clear sequence and avoid dupl
 Consumer SDK documentation SHALL explain how plugin authors send image and file inputs to language models.
 
 #### Scenario: Media input examples
-- **WHEN** a plugin author reads `dev/dev.md`
+- **WHEN** a plugin author reads `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** the guide SHALL show typed Java examples for `ModelMessagePart.image(...)`, `ModelMessagePart.file(...)`, and `DataContent`
 - **AND** it SHALL explain URL input without implying AI Foundation downloads URLs
 
@@ -806,7 +806,7 @@ Consumer SDK documentation SHALL describe capability filtering inside the existi
 Consumer SDK documentation SHALL explain the image generation model workflow.
 
 #### Scenario: Image generation SDK example
-- **WHEN** a plugin author reads `dev/dev.md`
+- **WHEN** a plugin author reads `dev/zh-CN/dev.md` or `dev/en/dev.md`
 - **THEN** the guide SHALL show how to resolve `imageGenerationModel()` or `imageGenerationModel(modelName)`
 - **AND** it SHALL show how to call `generateImage` with prompt, images, mask, and result handling
 
@@ -839,3 +839,19 @@ The guide SHALL use `providerMetadata` for opaque response and continuation stat
 - **THEN** request `providerOptions` SHALL be absent
 - **AND** provider-owned continuation examples SHALL use `providerMetadata`
 
+### Requirement: UI message documentation explains persisted step boundaries
+The developer UI-message guides SHALL document the caller-visible generation-step persistence and reuse contract without internal implementation detail.
+
+#### Scenario: Persisted marker is documented
+- **WHEN** a plugin author reads `dev/zh-CN/ui-message-stream.md` or `dev/en/ui-message-stream.md`
+- **THEN** the guide SHALL explain that stream `start-step` chunks accumulate into marker-only `step-start` parts
+- **AND** it SHALL explain that callers must preserve ordered message parts when storing assistant messages
+
+#### Scenario: Conversion grouping is documented
+- **WHEN** a plugin author reads the UI message conversion section
+- **THEN** the guide SHALL explain that conversion groups reasoning and multiple tool calls by generation step
+- **AND** it SHALL explain that messages without a marker are treated as one implicit step
+
+#### Scenario: Internal details are excluded
+- **WHEN** the developer guide describes step-boundary reuse
+- **THEN** it SHALL NOT include reducer internals, incident-specific failure analysis, or runtime capability-resolution algorithms

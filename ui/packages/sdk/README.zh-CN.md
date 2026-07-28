@@ -6,6 +6,10 @@
 stream SDK。它帮助前端发送聊天、补全和对象流请求，消费 Halo UIMessage SSE 响应，
 把 stream chunk 归约为 UI message，并校验或持久化这些消息。
 
+按场景拆分的完整指南见仓库中的
+[SDK UI 开发者文档](../../../dev/zh-CN/sdk-ui/README.md)；按导出名称查询时使用
+[公开导出索引](../../../dev/zh-CN/sdk-ui/api-reference.md)。
+
 这个包不是后端 Provider SDK。模型选择、Provider 配置，以及从 UI message 转换到模型
 message 的逻辑仍由 Halo AI Foundation 后端负责。
 
@@ -397,11 +401,6 @@ const object = experimental_useObject({
   `AIUIMessageValidationError`
 - 协议常量：`DONE_MARKER`、`HALO_UI_MESSAGE_STREAM_HEADER`、
   `HALO_UI_MESSAGE_STREAM_VERSION`
-
-## 当前限制
-
-当前包不提供 resume、reconnect、replay、active stream registry、file 上传管理、
-`source-document` 占位协议处理，或 npm 侧 UI message 到模型 message 的转换。
 
 ## 开发
 

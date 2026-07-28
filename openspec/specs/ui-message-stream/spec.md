@@ -1341,17 +1341,59 @@ The SDK SHALL expose canonical UI message stream chunks for tool lifecycle event
 - **AND** the chunks SHALL preserve approval id, approval decision, reason, input, and provider metadata when present
 
 ### Requirement: Step start UI lifecycle chunks
-The SDK SHALL preserve `start-step` as a UI message stream lifecycle chunk without adding it to accumulated UI message parts.
+The SDK SHALL emit `start-step` as a UI message stream lifecycle chunk and persist generation-step starts in accumulated assistant messages as marker-only `step-start` parts.
 
 #### Scenario: Start step is emitted
 - **WHEN** a `StreamTextResult` emits a `start-step` part
 - **THEN** `toUIMessageStream()` SHALL emit a UI message chunk with type `start-step`
-- **AND** the chunk SHALL carry the step index when present
 
-#### Scenario: Reader does not persist start step
+#### Scenario: Start step becomes persisted marker
 - **WHEN** a UI message stream reader receives a `start-step` chunk
-- **THEN** the response message parts SHALL remain unchanged by that chunk
-- **AND** terminal summary SHALL remain unchanged until a terminal or finish-step chunk is received
+- **THEN** it SHALL append a `step-start` part at the same ordered position in the assistant message
+- **AND** the part SHALL NOT contain an invocation-local step index
+
+#### Scenario: First step is marked
+- **WHEN** a normal generated assistant stream begins its first generation step
+- **THEN** the accumulated assistant message SHALL include the first `step-start` part
+
+#### Scenario: Marker alone is not visible content
+- **WHEN** an assistant message contains only a `step-start` part
+- **THEN** the default reader and frontend rendering SHALL NOT emit an empty visible message bubble solely for that marker
+
+#### Scenario: Step finish remains lifecycle-only
+- **WHEN** a UI message stream reader receives a step-finish lifecycle chunk
+- **THEN** it SHALL NOT append a persisted step-finish part
+
+### Requirement: Step-start part role is validated
+The SDK SHALL allow `step-start` parts only in assistant UI messages.
+
+#### Scenario: Assistant marker is valid
+- **WHEN** an assistant UI message contains a `step-start` part
+- **THEN** UI message validation SHALL accept the marker
+
+#### Scenario: User or system marker is invalid
+- **WHEN** a user or system UI message contains a `step-start` part
+- **THEN** UI message validation SHALL reject the message before model invocation
+
+### Requirement: Model history preserves generation steps
+The SDK SHALL convert each assistant generation-step block into at most one assistant model message followed by at most one tool model message.
+
+#### Scenario: Multiple tool calls stay in one assistant message
+- **WHEN** one step block contains reasoning and multiple completed tool calls
+- **THEN** conversion SHALL emit one assistant model message containing the reasoning and all tool calls
+- **AND** it SHALL emit one following tool model message containing all corresponding tool results
+
+#### Scenario: Separate steps remain separate
+- **WHEN** an assistant UI message contains multiple nonempty blocks separated by `step-start` parts
+- **THEN** conversion SHALL preserve the ordered assistant and tool message sequence for each block
+
+#### Scenario: Message without marker is one implicit step
+- **WHEN** a caller constructs an assistant UI message without a `step-start` part
+- **THEN** conversion SHALL treat all its parts as one implicit generation step
+
+#### Scenario: Empty step block is ignored
+- **WHEN** consecutive markers or a trailing marker create an empty step block
+- **THEN** conversion SHALL NOT emit an empty model message for that block
 
 ### Requirement: Source and file scope remains real
 The SDK SHALL keep existing `source-url` and `file` UI message stream behavior without adding document-source placeholders.

@@ -1,0 +1,1126 @@
+# Halo AI Foundation SDK 调用指南
+
+简体中文 | [English](../en/dev.md)
+
+本文面向在 Halo 插件中调用 AI Foundation 的开发者。
+
+> 本文是便于全文搜索的 SDK Core 单页参考。按任务阅读时，建议从
+> [开发者文档首页](./README.md) 或 [SDK Core 主题文档](./sdk-core/README.md) 开始。
+
+## 1. 接入插件
+
+`api` 模块会自动发布到 Maven Central。普通插件项目直接通过
+Maven 接入即可：
+
+```groovy
+dependencies {
+    compileOnly "run.halo.aifoundation:api:1.0.0-SNAPSHOT"
+    testImplementation "run.halo.aifoundation:api:1.0.0-SNAPSHOT"
+}
+```
+
+如果使用 `SNAPSHOT` 版本，需要在调用方插件的仓库配置中加入 Maven Central
+Snapshots 仓库：
+
+```groovy
+repositories {
+    maven {
+        url = uri('https://central.sonatype.com/repository/maven-snapshots/')
+        mavenContent {
+            snapshotsOnly()
+        }
+    }
+    mavenCentral()
+}
+```
+
+`main` 分支推送后会自动发布 `gradle.properties` 中的 `SNAPSHOT` 版本；
+
+推送 `v*` 标签后会发布对应的正式版本，例如 `v1.0.0` 会发布 `run.halo.aifoundation:api:1.0.0`。使用正式版本时不需要配置 Snapshots 仓库。
+
+`plugin.yaml` 中需要添加插件依赖声明：
+
+```yaml
+spec:
+    pluginDependencies:
+        ai-foundation: "*"
+```
+
+不要使用 `implementation` 打包 API。AI Foundation 插件运行时会提供同一份 API 类型；
+调用方再次打包可能造成 classloader 中出现两份类型。
+
+## 2. 获取服务
+
+`AiModelService` 是后端调用入口。调用方插件通过 Halo 的 `ExtensionGetter` 获取当前启用的实现：
+
+```java
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+import run.halo.aifoundation.AiModelService;
+import run.halo.app.plugin.extensionpoint.ExtensionGetter;
+
+@Service
+@RequiredArgsConstructor
+public class ArticleAiService {
+
+    private final ExtensionGetter extensionGetter;
+
+    private Mono<AiModelService> aiModelService() {
+        return extensionGetter.getEnabledExtension(AiModelService.class);
+    }
+}
+```
+
+常用方法：
+
+| 方法                                     | 说明                                           |
+| ---------------------------------------- | ---------------------------------------------- |
+| `languageModel()`                        | 获取默认语言模型                               |
+| `languageModel(String modelName)`        | 获取指定语言模型；空值使用默认语言模型         |
+| `embeddingModel()`                       | 获取默认嵌入模型                               |
+| `embeddingModel(String modelName)`       | 获取指定嵌入模型；空值使用默认嵌入模型         |
+| `rerankingModel()`                       | 获取默认 Rerank 模型                           |
+| `rerankingModel(String modelName)`       | 获取指定 Rerank 模型；空值使用默认 Rerank 模型 |
+| `imageGenerationModel()`                 | 获取默认图像生成模型                           |
+| `imageGenerationModel(String modelName)` | 获取指定图像生成模型；空值使用默认图像生成模型 |
+
+`modelName` 是 `AiModel.metadata.name`，不是供应方原始模型 ID。
+
+## 3. 生成文本
+
+最小调用：
+
+```java
+return aiModelService()
+    .flatMap(service -> service.languageModel(modelName))
+    .flatMap(model -> model.generateText("请用一句话介绍 Halo CMS"))
+    .map(GenerateTextResult::getText);
+```
+
+需要系统提示词、采样参数或多轮消息时使用 `GenerateTextRequest`：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .system("你是一个回答简洁的助手。")
+    .messages(List.of(
+        ModelMessage.user("请介绍 Halo CMS")
+    ))
+    .temperature(0.7)
+    .topP(0.9)
+    .maxOutputTokens(1024)
+    .maxRetries(2)
+    .build();
+
+return model.generateText(request)
+    .map(GenerateTextResult::getText);
+```
+
+输入规则：
+
+| 字段       | 说明                                             |
+| ---------- | ------------------------------------------------ |
+| `prompt`   | 单轮用户输入                                     |
+| `messages` | 多轮上下文                                       |
+| `system`   | 顶层系统提示词，可与 `prompt` 或 `messages` 搭配 |
+
+`prompt` 和 `messages` 不能同时传。
+
+媒体输入使用 `ModelMessagePart.image(...)` 和 `ModelMessagePart.file(...)`。URL 和数据是两种不同来源：
+AI Foundation 不会下载 URL，只有目标模型支持 URL 输入时才会把 URL 原样交给供应方。
+
+```java
+GenerateTextRequest visualRequest = GenerateTextRequest.builder()
+    .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+        ModelMessagePart.text("请描述这张图"),
+        ModelMessagePart.image(DataContent.url(
+            "https://example.com/image.png",
+            "image/png",
+            "image.png"))
+    ))))
+    .build();
+```
+
+数据输入传入 base64 或 byte 数组，并明确媒体类型：
+
+```java
+GenerateTextRequest fileRequest = GenerateTextRequest.builder()
+    .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+        ModelMessagePart.text("请总结这个文件"),
+        ModelMessagePart.file(DataContent.data(pdfBytes, "application/pdf", "brief.pdf"))
+    ))))
+    .build();
+```
+
+如果保存了 assistant 历史消息，其中的图片或文件 part 也可以随下一轮消息回放；system 消息仍然只支持文本。
+
+## 4. 保存多轮上下文
+
+如果要继续对话，保存本轮请求消息和 `result.getResponseMessages()`：
+
+```java
+return model.generateText(request)
+    .map(result -> {
+        messages.addAll(result.getResponseMessages());
+        return result.getText();
+    });
+```
+
+下一轮请求时把保存的 `messages` 传回：
+
+```java
+GenerateTextRequest next = GenerateTextRequest.builder()
+    .messages(messages)
+    .build();
+```
+
+不要只保存最终文本。工具调用、工具结果、工具错误和审批请求也会通过
+`responseMessages` 保存，否则下一轮模型不知道前面发生过什么。
+
+## 5. 流式文本
+
+`streamText` 返回 `StreamTextResult`：
+
+```java
+StreamTextResult stream = model.streamText(GenerateTextRequest.builder()
+    .prompt("写一段 Halo 插件开发简介")
+    .build());
+
+return stream.textStream()
+    .doOnNext(delta -> log.debug("delta={}", delta))
+    .then(stream.result());
+```
+
+常用流：
+
+| 方法                    | 适合场景                                                     |
+| ----------------------- | ------------------------------------------------------------ |
+| `textStream()`          | 只需要文本增量                                               |
+| `fullStream()`          | 需要文本、推理、工具、source、file、finish、error 等完整事件 |
+| `partialOutputStream()` | 结构化对象的中间状态                                         |
+| `elementStream()`       | 结构化数组的元素流                                           |
+| `result()`              | 流结束后的完整 `GenerateTextResult`                          |
+
+`fullStream()` 适合后端编排和调试。如果要把聊天状态返回给前端，优先使用
+`UIMessageStream` 和 `UIMessageStreamResponse`。完整后端流程见
+[UI Message Stream](./ui-message-stream.md)。
+
+## 6. UI Message Stream
+
+`UIMessage` 面向聊天界面和消息持久化：
+
+| 类型                      | 用途                          |
+| ------------------------- | ----------------------------- |
+| `UIMessageChatRequest<M>` | 前端或数据库传回的聊天请求    |
+| `UIMessage<M>`            | 可保存的 UI 消息              |
+| `UIMessageChunk`          | 发送给前端的流式事件          |
+| `UIMessageStreamResponse` | 带协议 header 的 SSE 响应描述 |
+
+后端最小形态：
+
+```java
+UIMessageChatResult<Map<String, Object>> chat = UIMessageChatHandlers.streamText(
+    model,
+    chatRequest,
+    options -> options
+        .serializer(chunk -> objectMapper.writeValueAsString(chunk))
+        .request(builder -> builder
+            .system("你是站点助手。")
+            .maxRetries(2))
+        .onFinish(finish -> saveMessages(finish.messages()))
+);
+
+UIMessageStreamResponse response = chat.response();
+```
+
+Vue 前端可以安装 `@halo-dev/ai-foundation-sdk` 消费 UI Message SSE：
+
+```bash
+pnpm add @halo-dev/ai-foundation-sdk
+```
+
+前端 SDK 提供 `useChat`、`DefaultChatTransport`、`readUIMessageStream` 等入口。完整用法见
+[前端 SDK 中文文档](../../ui/packages/sdk/README.zh-CN.md)。
+
+`response.headers()` 会自动包含：
+
+```http
+X-Halo-AI-UI-Message-Stream: v1
+```
+
+主文档只介绍入口。chunk 聚合、metadata 生命周期、重新生成、取消、自定义 data 和保存规则见
+[UI Message Stream](./ui-message-stream.md)。
+
+如果 HTTP 入参是普通 JSON，先解析成 `Map` / `List`，再用 `UIMessageTransportCodec`
+转成 `UIMessageChatRequest`。工具审批、外部工具结果、WebFlux SSE 返回方式也都在
+[UI Message Stream](./ui-message-stream.md) 中说明。
+
+## 7. 工具调用
+
+工具用 `ToolDefinition` 声明。服务端执行工具时提供 `executor`：
+
+```java
+ToolDefinition weather = ToolDefinition.builder()
+    .name("get_weather")
+    .description("查询城市天气")
+    .inputSchema(JsonSchema.object()
+        .property("city", JsonSchema.string())
+        .required("city")
+        .build())
+    .executor(context -> {
+        String city = (String) context.getInput().get("city");
+        return Mono.just(Map.of("city", city, "temperature", 22));
+    })
+    .build();
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("杭州今天适合出门吗？")
+    .tools(List.of(weather))
+    .toolChoice(ToolChoice.auto())
+    .stopWhen(StopCondition.stepCountIs(3))
+    .build();
+```
+
+常用设置：
+
+| API                            | 说明                           |
+| ------------------------------ | ------------------------------ |
+| `ToolChoice.auto()`            | 由模型决定是否调用工具         |
+| `ToolChoice.required()`        | 要求模型调用工具               |
+| `ToolChoice.tool("name")`      | 固定调用指定工具               |
+| `ToolChoice.none()`            | 禁用工具调用                   |
+| `StopCondition.stepCountIs(n)` | 限制最大模型步骤               |
+| `prepareStep(...)`             | 按步骤调整工具、消息或采样参数 |
+
+`stopWhen` 决定是否需要继续；没有设置时，请求只执行一个模型步骤。AI Foundation 还会
+使用服务端属性 `halo.ai-foundation.language.max-steps` 限制单次多步骤生成的绝对上限，
+默认 32，可配置为 1～64。调用方应继续使用 `stopWhen` 设置更小的业务预算。
+
+工具输入校验、工具查找、执行或超时错误会作为 `ToolError` 写入消息历史；只要
+`stopWhen` 和服务端上限仍允许，模型会获得下一步机会来修正调用、选择其他工具或
+结束任务，而不是因单次可恢复的工具错误直接终止整个多步骤请求。
+
+外部工具不提供 `executor`。第一次请求会返回 assistant `tool-call`，调用方执行后追加
+`ModelMessage.tool(...)`，再发起下一次请求。
+
+需要审批的工具使用 `needsApproval(true)` 或 `needsApproval(predicate)`。审批不会挂起同一个请求：
+第一次返回 `tool-approval-request`，调用方追加 `tool-approval-response` 后再次调用模型。
+如果使用 UI Message，审批响应保存在 assistant `UIMessage.parts()` 中，不需要额外创建
+`TOOL` role 的 UI 消息。
+
+工具入参修复使用 `toolCallRepair(...)`。已知的服务端工具和外部工具都会先解析、校验，
+校验失败时最多修复一次并重新校验；只有成功归一化的输入才会进入审批、外部交接或执行。
+
+需要观察流式工具入参时，可以在 `ToolDefinition` 上配置响应式回调：
+
+```java
+ToolDefinition weather = ToolDefinition.builder()
+    .name("get_weather")
+    .inputSchema(weatherSchema)
+    .onInputStart(context -> audit("start", context.getToolCallId()))
+    .onInputDelta(context -> audit("delta", context.getInputTextDelta()))
+    .onInputAvailable(context -> audit("available", context.getInput()))
+    .executor(context -> executeWeather(context.getInput()))
+    .build();
+```
+
+对于 provider 原生增量，顺序为：`onInputStart` → `tool-input-start`，随后每个
+`onInputDelta` → `tool-input-delta`，最后是后端 `tool-input-end`、权威 `tool-call`、
+`onInputAvailable`，再进入审批、外部交接或执行。回调会参与背压，并受 total/step timeout
+与 cancellation 约束；回调失败会终止本次生成，不会降级为 lifecycle warning。
+
+并非所有模型都会提供真实 delta。使用通用 Spring AI `ChatModel` 的 provider 和 Ollama
+保持 final-only：不会产生 `onInputDelta`，但完整输入仍会经过 `onInputStart`、校验/修复和
+`onInputAvailable`。OpenAI-compatible provider 只有在该次响应实际提供可追加参数片段时才
+产生 delta；不通过静态 provider 名称推断能力。
+
+解析、schema 校验或修复失败会产生该调用自己的 `tool-input-error`，不会进入审批、交接或
+执行，也不会阻止同一步中的其他有效调用。provider 从未给出工具名则属于协议错误，会终止
+该 step。
+
+## 8. 结构化输出
+
+优先使用 `OutputSpec`，不要靠手写提示词解析 JSON：
+
+```java
+Map<String, Object> schema = JsonSchema.object()
+    .property("title", JsonSchema.string())
+    .property("summary", JsonSchema.string())
+    .required("title", "summary")
+    .build();
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("总结 Halo CMS")
+    .output(OutputSpec.object(schema))
+    .build();
+
+return model.generateText(request)
+    .map(result -> (Map<?, ?>) result.getOutput());
+```
+
+输出类型：
+
+| API                               | 说明         |
+| --------------------------------- | ------------ |
+| `OutputSpec.object(schema)`       | JSON 对象    |
+| `OutputSpec.array(elementSchema)` | JSON 数组    |
+| `OutputSpec.choice(values)`       | 枚举字符串   |
+| `OutputSpec.json()`               | 任意 JSON 值 |
+
+也可以用 Java 类型生成 schema：
+
+```java
+record ArticleSummary(String title, String summary) {
+}
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("总结这篇文章")
+    .output(OutputSpec.object(ArticleSummary.class))
+    .build();
+```
+
+结构化输出校验失败会抛出 `StructuredOutputValidationException`。
+
+## 9. 推理和元数据
+
+推理控制：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("分析这段内容的风险")
+    .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
+    .build();
+```
+
+常用读取：
+
+| 字段                           | 说明               |
+| ------------------------------ | ------------------ |
+| `result.getText()`             | 最终回答           |
+| `result.getReasoningText()`    | 已识别的推理文本   |
+| `result.getReasoning()`        | 推理 part 列表     |
+| `result.getRequest()`          | 标准化请求元数据   |
+| `result.getResponse()`         | 标准化响应元数据   |
+| `result.getProviderMetadata()` | 供应方原生附加信息 |
+
+如果需要响应 ID 或模型 ID，优先读取 `result.getResponse()`。`providerMetadata` 只适合调试或供应方特有能力。
+
+部分供应方需要在续写时保留推理相关原生信息。后端会保留可识别的推理文本和可回传的
+reasoning metadata；是否允许回传由供应方能力校验决定。
+使用 `UIMessageChatHandlers` 时，这个判断会自动完成，调用方不需要自行查询供应方类型。
+
+## 10. 取消、超时和重试
+
+取消：
+
+```java
+CancellationSource source = new CancellationSource();
+
+Mono<GenerateTextResult> task = model.generateText(GenerateTextRequest.builder()
+    .prompt("生成一篇长文")
+    .cancellationToken(source.token())
+    .build());
+
+source.cancel();
+```
+
+超时：
+
+```java
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("生成一篇长文")
+    .timeouts(GenerationTimeouts.builder()
+        .totalTimeout(Duration.ofSeconds(30))
+        .stepTimeout(Duration.ofSeconds(15))
+        .toolTimeout(Duration.ofSeconds(5))
+        .build())
+    .build();
+```
+
+重试：
+
+| 设置               | 行为             |
+| ------------------ | ---------------- |
+| `maxRetries(null)` | 使用默认重试预算 |
+| `maxRetries(0)`    | 不重试           |
+| `maxRetries(1)`    | 最多重试 1 次    |
+
+`maxRetries` 只作用于可重试的非流式供应方调用。参数错误、取消、超时和结构化输出校验失败不会被重试。
+流式响应已经发出事件后，不适合在 SDK 层自动重试。
+
+## 11. 嵌入
+
+简单查询向量：
+
+```java
+return aiModelService()
+    .flatMap(AiModelService::embeddingModel)
+    .flatMap(model -> model.embedQuery("Halo 插件开发"));
+```
+
+普通文本值向量：
+
+```java
+return embeddingModel.embedValue("Halo 插件开发");
+```
+
+批量普通文本值：
+
+```java
+return embeddingModel.embedValues(List.of("Halo", "插件", "模型能力"));
+```
+
+批量嵌入：
+
+```java
+EmbeddingRequest request = EmbeddingRequest.builder()
+    .inputs(List.of("Halo", "插件", "模型能力"))
+    .dimensions(1024)
+    .maxBatchSize(8)
+    .maxParallelCalls(2)
+    .maxRetries(2)
+    .build();
+
+return embeddingModel.embed(request)
+    .map(EmbeddingResponse::getEmbeddings);
+```
+
+常用字段：
+
+| 字段               | 说明                 |
+| ------------------ | -------------------- |
+| `dimensions`       | 期望向量维度         |
+| `maxBatchSize`     | 单批输入数量         |
+| `maxParallelCalls` | 最大并行批次数       |
+| `maxRetries`       | 可重试调用的重试次数 |
+| `headers`          | 请求级 header        |
+
+`dimensions` 是统一字段。管理员在 Provider 或 Model 的参数映射中决定它对应供应方的哪个字段；
+`EmbeddingUtils.cosineSimilarity(a, b)` 可计算余弦相似度。
+
+## 12. 图像生成
+
+图像生成通过独立的 `ImageGenerationModel` 调用：
+
+```java
+return aiModelService()
+    .flatMap(service -> service.imageGenerationModel(imageModelName))
+    .flatMap(model -> model.generateImage(GenerateImageRequest.builder()
+        .prompt("一张 Halo CMS 插件市场插画")
+        .n(2)
+        .size(1024)
+        .responseFormat(ImageResponseFormat.URL)
+        .build()));
+```
+
+图生图或编辑请求通过 `images` 传入参考图，支持的来源和媒体类型由模型能力决定：
+
+```java
+GenerateImageRequest request = GenerateImageRequest.builder()
+    .prompt("保留构图，改成夜间霓虹风格")
+    .images(List.of(DataContent.url(
+        "https://example.com/source.png",
+        "image/png",
+        "source.png")))
+    .size(1024, 1024)
+    .build();
+```
+
+如果使用 `mask`，请求必须同时提供至少一张 `images` 参考图；是否支持蒙版编辑由模型的
+`imageGeneration.maskInput` 能力决定。
+
+如果供应方返回 URL，`GeneratedFile.getUrl()` 有值；如果返回 base64，`GeneratedFile.getBase64()` 有值。
+AI Foundation 不会自动保存生成文件，调用方插件自行决定是否保存为附件、缓存或业务资源。
+
+```java
+return imageModel.generateImage(request)
+    .map(result -> result.getImages().stream()
+        .map(file -> {
+            if (file.isUrl()) {
+                return Map.of("url", file.getUrl(), "mediaType", file.getMediaType());
+            }
+            return Map.of("base64", file.getBase64(), "mediaType", file.getMediaType());
+        })
+        .toList());
+```
+
+常用字段：
+
+| 字段                   | 说明                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `prompt`               | 文生图或编辑提示词                                                                     |
+| `images`               | 图生图或编辑参考图                                                                     |
+| `mask`                 | 蒙版图，必须与 `images` 一起使用，是否支持取决于模型能力                               |
+| `n`                    | 请求图片数量                                                                           |
+| `size` / `aspectRatio` | 图片尺寸或宽高比；`size(1024)` 等价于 `1024x1024`，`size(1024, 768)` 等价于 `1024x768` |
+| `seed`                 | 确定性种子，是否生效取决于供应方                                                       |
+| `responseFormat`       | 期望 URL 或 base64                                                                     |
+| `negativePrompt`       | 不希望出现在图片中的内容                                                               |
+| `headers`              | 请求级 HTTP header                                                                     |
+| `maxParallelCalls`     | 拆分调用时的最大并行数                                                                 |
+
+### 图像生成 Middleware
+
+如果调用方需要给图片生成统一补默认值、改写请求、处理结果、接入缓存或做业务策略，可以使用图像生成
+middleware。模型级 middleware 适合长期复用：
+
+```java
+ImageGenerationModel imageModel = ImageGenerationMiddlewares.wrap(
+    rawImageModel,
+    ImageGenerationMiddlewares.defaultSettings(GenerateImageRequest.builder()
+        .size(1024)
+        .responseFormat(ImageResponseFormat.BASE64)
+        .build()),
+    ImageGenerationMiddlewares.mapResult(result ->
+        ImageGenerationResults.withWarnings(result, ImageGenerationWarning.builder()
+            .code("served-by-plugin-policy")
+            .message("Image result passed through plugin policy middleware.")
+            .build()))
+);
+
+return imageModel.generateImage("一张 Halo CMS 插件市场插画");
+```
+
+单次请求也可以挂 middleware，适合临时追加策略：
+
+```java
+GenerateImageRequest request = GenerateImageRequest.builder()
+    .prompt("生成一张活动封面")
+    .middleware(ImageGenerationMiddlewares.mapRequest(source ->
+        ImageGenerationRequests.builderFrom(source)
+            .prompt(source.getPrompt() + "，画面保持简洁")
+            .build()))
+    .build();
+
+return imageModel.generateImage(request);
+```
+
+middleware 可以继续调用供应方，也可以直接返回结果或错误。直接返回成功结果时，结果仍然必须包含至少一个合法
+`GeneratedFile`：
+
+```java
+ImageGenerationMiddleware cacheMiddleware = new ImageGenerationMiddleware() {
+    @Override
+    public Mono<GenerateImageResult> wrapGenerate(
+        ImageGenerationContext context,
+        GenerateImageNext next
+    ) {
+        return findCachedImage(context.request())
+            .map(file -> GenerateImageResult.builder()
+                .images(List.of(file))
+                .build())
+            .switchIfEmpty(next.generate(context.request()));
+    }
+};
+```
+
+内置 helper 只处理低业务判断的组合逻辑，例如默认设置、请求映射、结果映射和 warning 追加。缓存存储、安全过滤、
+配额、水印、生成文件生命周期等业务策略由调用方插件自行实现。
+
+## 13. 类型化参数与管理员映射
+
+调用方只使用 AI Foundation 定义的统一字段：
+
+| 能力           | 推荐字段                   |
+| -------------- | -------------------------- |
+| 推理控制       | `reasoning`                |
+| 确定性采样     | `seed`                     |
+| 输出长度       | `maxOutputTokens`          |
+| Token 概率     | `logprobs` / `topLogprobs` |
+| Embedding 维度 | `dimensions`               |
+| Rerank 数量    | `topN`                     |
+| 图片反向提示词 | `negativePrompt`           |
+| 请求 header    | `headers`                  |
+| 输出结构       | `output`                   |
+
+插件开发者不需要、也不能指定供应方原生字段。
+
+Halo 管理员在 AI Foundation 后台维护 Provider 与
+Model 时，为统一参数选择固定的映射模板，或者明确标记为“不支持”。
+
+如果调用方设置了一个被管理员标记为不支持的可选字段，AI Foundation 会省略该字段，并返回稳定代码
+`mapped-parameter-unsupported`。warning 的 `providerMetadata` 包含 `parameter`、`modelName` 和
+`providerName`，调用方可以记录诊断信息或提示管理员检查映射。必填请求内容与请求形状仍会在调用供应方前
+直接校验失败。
+
+`providerMetadata` 与请求参数不同：它是模型响应、推理历史、工具状态等返回的供应方不透明延续数据。
+保存多轮消息时应原样保留，但不要把它当作可写的供应方配置。
+
+## 14. Rerank 模型
+
+Rerank 通过 `AiModelService.rerankingModel(...)` 获取，调用形态与语言模型、嵌入模型保持一致：
+
+```java
+return aiModelService()
+    .flatMap(service -> service.rerankingModel(rerankModelName))
+    .flatMap(model -> model.rerank(RerankRequest.builder()
+        .query("Halo AI Foundation 如何支持 RAG?")
+        .documents(
+            "AI Foundation 提供统一 AI 能力。",
+            "RAG 通常需要检索、重排和上下文注入。")
+        .topN(2)
+        .build()));
+```
+
+内置 provider-backed Rerank 适配覆盖智谱 AI、DashScope、SiliconFlow、文心一言、豆包、OpenRouter、Gitee 模力方舟和 AIHubMix。AI Foundation 不在代码或文档中维护推荐模型清单；管理员应根据供应商控制台和实际可用模型，手动创建 `modelType=rerank` 的模型，或使用远程发现结果导入。
+
+远程发现的边界是：
+
+- 只有供应商返回显式的 rerank 类型、能力字段，或供应商官方 typed endpoint 明确返回 reranker 分组时，发现结果才会标记为 `rerank`。
+- 如果远程接口只返回模型 ID，AI Foundation 不会因为模型名包含 `rerank`、`reranker` 等字符串就推断为 Rerank。
+- 发现不到 Rerank 模型不代表供应商不可用；手动创建模型仍然是兜底方式。
+
+`topN` 会根据管理员配置映射到供应商的根字段或嵌套参数；标记为不支持时会在
+`RerankResponse.warnings` 中返回诊断，而不会发送错误字段。
+
+## 15. RAG 组合
+
+在插件中实现 RAG 时，先用自己的业务检索得到 `RetrievedSource`，再把 retriever 交给
+`RagLanguageModelMiddleware`。生成结果中的 `getSources()` 可直接用于前端引用展示：
+
+```java
+RagRetriever retriever = request -> Mono.just(RetrievedContext.builder()
+    .query(request.getQuery())
+    .sources(mySearch(request.getQuery()))
+    .build());
+
+return aiModelService()
+    .flatMap(service -> Mono.zip(
+        service.languageModel(languageModelName),
+        service.rerankingModel(rerankModelName)))
+    .flatMap(tuple -> {
+        var languageModel = tuple.getT1();
+        var reranker = new RerankingModelRagSourceReranker(tuple.getT2());
+        var request = GenerateTextRequest.builder()
+            .prompt("请基于资料回答用户问题：" + userQuestion)
+            .middleware(new RagLanguageModelMiddleware(RagMiddlewareOptions.builder()
+                .retriever(retriever)
+                .reranker(reranker)
+                .maxResults(6)
+                .build()))
+            .build();
+        return languageModel.generateText(request);
+    })
+    .map(result -> Map.of(
+        "answer", result.getText(),
+        "sources", result.getSources()));
+```
+
+## 16. Middleware、来源和 RAG
+
+语言模型 middleware 可以按模型或单次请求附加，用于请求变换、非流式包装和流式包装：
+
+```java
+LanguageModel modelWithMiddleware = LanguageModelMiddlewares.wrap(languageModel, middleware);
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("介绍 Halo")
+    .middleware(middleware)
+    .build();
+```
+
+调用方插件可以用自己的文章、页面、文件或外部检索结果构造 `RetrievedSource`。`content`
+用于模型上下文，`title`、`url`、`score` 和 `metadata` 用于展示与诊断：
+
+```java
+RagRetriever retriever = request -> search(request.getQuery())
+    .map(results -> RetrievedContext.builder()
+        .query(request.getQuery())
+        .sources(results.stream()
+            .map(item -> RetrievedSource.builder()
+                .id(item.id())
+                .sourceType("post")
+                .title(item.title())
+                .url(item.url())
+                .content(item.content())
+                .score(item.score())
+                .build())
+            .toList())
+        .build());
+
+GenerateTextRequest request = GenerateTextRequest.builder()
+    .prompt("这篇文章讲了什么？")
+    .middleware(RagMiddlewares.rag(retriever))
+    .build();
+```
+
+默认行为：
+
+| 场景                         | 默认行为                               |
+| ---------------------------- | -------------------------------------- |
+| 有检索结果                   | 将上下文注入最后一条用户消息           |
+| 空上下文                     | 不调用语言模型，返回可配置空上下文文本 |
+| 检索失败                     | 请求失败                               |
+| 配置 reranker 且 rerank 失败 | 请求失败                               |
+| 流式输出                     | source 事件出现在回答文本前            |
+
+`GenerateTextResult.getSources()`、`GenerationStep.getSources()` 和 `StreamTextResult.sources()`
+会返回可展示的 `SourceReference`。`RetrievedSource.content` 默认只用于 prompt，不会暴露给 UI。
+
+当结果需要以 UI Message 流返回给前端时，可以组合模型流、source part 和调用方自定义
+`data-*`。source 有 URL 时会映射为 `source-url`；没有 URL 时会映射为 `source-document`。
+`data-*` 的名称和 payload 由调用方定义：
+
+```java
+return aiModelService()
+    .flatMap(AiModelService::languageModel)
+    .map(model -> UIMessageStreams.createWithOptions(options -> options
+        .messageId(messageId)
+        .execute(writer -> {
+            writer.writeTransientData("rag-status", Map.of("stage", "retrieving"));
+
+            var request = GenerateTextRequest.builder()
+                .prompt(userQuestion)
+                .middleware(RagMiddlewares.rag(retriever))
+                .build();
+            var stream = model.streamText(request);
+
+            writer.writeTransientData("rag-status", Map.of("stage", "generating"));
+            writer.merge(stream.toUIMessageStream());
+        })))
+    .map(stream -> new UIMessageStreamResponse(stream,
+        chunk -> objectMapper.writeValueAsString(chunk)));
+```
+
+如果要手动写入来源，也可以直接使用 `SourceReferences`：
+
+```java
+SourceReference source = SourceReference.builder()
+    .id("post-hello")
+    .sourceType("post")
+    .title("Hello Halo")
+    .metadata(Map.of("mediaType", "text/markdown", "filename", "hello.md"))
+    .build();
+
+writer.write(SourceReferences.toUIMessageChunk(source));
+```
+
+可选 reranker：
+
+```java
+RagSourceReranker reranker = new RerankingModelRagSourceReranker(rerankingModel);
+
+LanguageModelMiddleware rag = RagMiddlewares.rag(RagMiddlewareOptions.defaults(retriever)
+    .toBuilder()
+    .reranker(reranker)
+    .rerankFailurePolicy(RagFailurePolicy.USE_RETRIEVED_ORDER)
+    .build());
+```
+
+## 17. 错误和告警
+
+常见异常：
+
+| 类型                                  | 说明                                           |
+| ------------------------------------- | ---------------------------------------------- |
+| `IllegalArgumentException`            | 请求参数无效                                   |
+| `AiGenerationTimeoutException`        | 文本生成超时                                   |
+| `AiGenerationCancelledException`      | 文本生成被取消                                 |
+| `StructuredOutputValidationException` | 结构化输出校验失败                             |
+| `InvalidMediaContentException`        | 媒体结构、data URL 或 base64 数据无效          |
+| `MediaContentTooLargeException`       | 媒体超过框架资源限制                           |
+| `UnsupportedModelCapabilityException` | 选中的模型不满足图片、文件、来源或图像生成能力 |
+| `ImageGenerationException`            | 图像生成响应无法作为成功结果处理               |
+| `EmbeddingTimeoutException`           | 嵌入调用超时                                   |
+| `EmbeddingCancelledException`         | 嵌入调用被取消                                 |
+| `RerankTimeoutException`              | Rerank 调用超时                                |
+| `RerankCancelledException`            | Rerank 调用被取消                              |
+
+`warnings` 表示请求已经完成，但存在能力差异或可恢复问题。建议记录 warning，并在需要时提示用户。
+
+媒体和能力异常适合转成可恢复提示，例如让用户更换模型或重新选择文件：
+
+```java
+return model.generateText(request)
+    .onErrorResume(UnsupportedModelCapabilityException.class, e ->
+        Mono.error(new UserVisibleException("当前模型不支持所选媒体，请选择具备对应能力的模型")))
+    .onErrorResume(InvalidMediaContentException.class, e ->
+        Mono.error(new UserVisibleException("媒体内容无效，请重新选择文件")));
+```
+
+## 18. 核心类型字段速查
+
+前面的章节按使用流程介绍；如果需要确认某个类型有哪些可用字段，可以查下面的表。
+更细的行为约束以 API 包 JavaDoc 为准。
+
+### `GenerateTextRequest`
+
+| 字段                                                         | 说明                                             |
+| ------------------------------------------------------------ | ------------------------------------------------ |
+| `system`                                                     | 系统提示词                                       |
+| `prompt`                                                     | 单轮用户输入，不能和 `messages` 同时使用         |
+| `messages`                                                   | 多轮消息，不能和 `prompt` 同时使用               |
+| `maxOutputTokens`                                            | 最大输出 token 数                                |
+| `temperature`                                                | 采样温度                                         |
+| `topP` / `topK`                                              | 采样范围                                         |
+| `minP`                                                       | 最小相对概率阈值                                 |
+| `presencePenalty` / `frequencyPenalty` / `repetitionPenalty` | 重复惩罚，是否生效取决于管理员映射               |
+| `stopSequences`                                              | 停止序列                                         |
+| `seed`                                                       | 确定性采样种子，复现程度取决于模型和供应方       |
+| `logprobs` / `topLogprobs`                                   | 输出 Token 概率及候选数量                        |
+| `parallelToolCalls`                                          | 是否允许并行工具调用                             |
+| `maxRetries`                                                 | 可重试非流式调用的重试次数，`0` 表示不重试       |
+| `reasoning`                                                  | 推理能力控制                                     |
+| `headers`                                                    | 请求级 HTTP header                               |
+| `metadata`                                                   | 调用方元数据，只暴露给 lifecycle，不进入模型输入 |
+| `context`                                                    | 调用方上下文，只暴露给 lifecycle，不进入模型输入 |
+| `output`                                                     | 结构化输出声明                                   |
+| `tools`                                                      | 本次请求可用工具                                 |
+| `toolChoice`                                                 | 工具选择策略                                     |
+| `stopWhen`                                                   | 多步骤继续规则                                   |
+| `prepareStep`                                                | 每一步开始前调整消息、工具和参数                 |
+| `lifecycle`                                                  | 请求生命周期回调                                 |
+| `toolCallRepair`                                             | 工具入参修复回调                                 |
+| `cancellationToken`                                          | 取消信号                                         |
+| `timeouts`                                                   | 总耗时、单步骤和工具超时                         |
+| `middleware`                                                 | 本次请求使用的语言模型 middleware                |
+
+### `GenerateTextResult`
+
+| 字段                               | 说明                               |
+| ---------------------------------- | ---------------------------------- |
+| `text`                             | 最终回答文本                       |
+| `output` / `outputText`            | 结构化输出解析结果和原始输出文本   |
+| `reasoningText` / `reasoning`      | 推理文本和推理 part                |
+| `content`                          | 标准化内容 part                    |
+| `sources`                          | 可展示的来源引用                   |
+| `finishReason` / `rawFinishReason` | 标准化结束原因和供应方原始结束原因 |
+| `usage` / `totalUsage`             | 最后一步 usage 和总 usage          |
+| `warnings`                         | 可恢复告警或能力差异               |
+| `request` / `response`             | 标准化请求和响应元数据             |
+| `steps`                            | 多步骤调用明细                     |
+| `responseMessages`                 | 本次调用产生的可持久化消息         |
+| `toolCalls`                        | 聚合后的工具调用                   |
+| `toolApprovalRequests`             | 待处理工具审批请求                 |
+| `toolResults` / `toolErrors`       | 聚合后的工具结果和工具错误         |
+| `providerMetadata`                 | 清理后的供应方元数据               |
+
+### `StreamTextResult`
+
+| 方法                                             | 说明                           |
+| ------------------------------------------------ | ------------------------------ |
+| `fullStream()`                                   | 完整 `TextStreamPart` 事件流   |
+| `textStream()`                                   | 文本 delta 流                  |
+| `partialOutputStream()`                          | 结构化对象的中间状态           |
+| `elementStream()`                                | 结构化数组的已完成元素         |
+| `output()`                                       | 最终结构化输出                 |
+| `result()`                                       | 最终 `GenerateTextResult`      |
+| `text()` / `reasoningText()`                     | 最终文本和推理文本快捷读取     |
+| `content()` / `reasoning()`                      | 内容 part 和推理 part 快捷读取 |
+| `sources()`                                      | 来源引用快捷读取               |
+| `finishReason()` / `rawFinishReason()`           | 结束原因快捷读取               |
+| `usage()` / `totalUsage()`                       | usage 快捷读取                 |
+| `warnings()`                                     | warning 快捷读取               |
+| `request()` / `response()`                       | 请求和响应元数据快捷读取       |
+| `steps()` / `responseMessages()`                 | 步骤和可持久化消息快捷读取     |
+| `toolCalls()` / `toolResults()` / `toolErrors()` | 工具相关结果快捷读取           |
+| `providerMetadata()`                             | 供应方元数据快捷读取           |
+| `toUIMessageStream()`                            | 转成 `UIMessageStream`         |
+| `toUIMessageStreamResponse(...)`                 | 转成 `UIMessageStreamResponse` |
+
+### `TextStreamPart`
+
+| 类型                                                    | 说明                   |
+| ------------------------------------------------------- | ---------------------- |
+| `start` / `finish`                                      | 整体开始和结束         |
+| `start-step` / `finish-step`                            | 单个模型步骤开始和结束 |
+| `text-start` / `text-delta` / `text-end`                | 文本块                 |
+| `reasoning-start` / `reasoning-delta` / `reasoning-end` | 推理块                 |
+| `tool-input-start` / `tool-input-delta`                 | 流式工具入参           |
+| `tool-call` / `tool-result` / `tool-error`              | 工具调用、结果和错误   |
+| `tool-approval-request`                                 | 工具审批请求           |
+| `tool-approval-response`                                | 工具审批响应           |
+| `source` / `file`                                       | 来源和文件             |
+| `raw`                                                   | 供应方原始事件         |
+| `error` / `abort`                                       | 错误和取消             |
+
+### `EmbeddingRequest` / `EmbeddingResponse`
+
+| 类型                | 字段                   | 说明                  |
+| ------------------- | ---------------------- | --------------------- |
+| `EmbeddingRequest`  | `inputs`               | 要向量化的文本列表    |
+| `EmbeddingRequest`  | `dimensions`           | 期望向量维度          |
+| `EmbeddingRequest`  | `maxBatchSize`         | 调用方批大小上限      |
+| `EmbeddingRequest`  | `maxParallelCalls`     | 最大并行批次数        |
+| `EmbeddingRequest`  | `maxRetries`           | 可重试调用次数        |
+| `EmbeddingRequest`  | `headers`              | 请求级 HTTP header    |
+| `EmbeddingRequest`  | `metadata` / `context` | 调用方 lifecycle 数据 |
+| `EmbeddingRequest`  | `lifecycle`            | 嵌入生命周期回调      |
+| `EmbeddingRequest`  | `cancellationToken`    | 取消信号              |
+| `EmbeddingRequest`  | `timeouts`             | 超时设置              |
+| `EmbeddingResponse` | `embeddings`           | 与输入顺序一致的向量  |
+| `EmbeddingResponse` | `usage`                | token 使用量          |
+| `EmbeddingResponse` | `response`             | 响应元数据            |
+| `EmbeddingResponse` | `warnings`             | 可恢复告警            |
+| `EmbeddingResponse` | `providerMetadata`     | 供应方元数据          |
+
+### `GenerateImageRequest` / `GenerateImageResult`
+
+| 类型                   | 字段                             | 说明                                                                              |
+| ---------------------- | -------------------------------- | --------------------------------------------------------------------------------- |
+| `GenerateImageRequest` | `prompt`                         | 文生图或编辑提示词                                                                |
+| `GenerateImageRequest` | `images`                         | 参考图列表                                                                        |
+| `GenerateImageRequest` | `mask`                           | 蒙版图                                                                            |
+| `GenerateImageRequest` | `n`                              | 期望生成数量                                                                      |
+| `GenerateImageRequest` | `size` / `aspectRatio`           | 尺寸或宽高比；builder 支持 `size(1024)`、`size(1024, 768)` 和 `size("1024x1024")` |
+| `GenerateImageRequest` | `seed`                           | 确定性种子                                                                        |
+| `GenerateImageRequest` | `responseFormat`                 | URL 或 base64 偏好                                                                |
+| `GenerateImageRequest` | `negativePrompt`                 | 不希望出现在图片中的内容                                                          |
+| `GenerateImageRequest` | `headers`                        | 请求级 HTTP header                                                                |
+| `GenerateImageRequest` | `maxRetries`                     | 可重试调用次数                                                                    |
+| `GenerateImageRequest` | `maxParallelCalls`               | 拆分调用时的最大并行数                                                            |
+| `GenerateImageRequest` | `metadata` / `context`           | 调用方数据                                                                        |
+| `GenerateImageRequest` | `cancellationToken` / `timeouts` | 取消和超时                                                                        |
+| `GenerateImageRequest` | `middleware`                     | 本次请求使用的图像生成 middleware                                                 |
+| `GenerateImageResult`  | `image`                          | 第一张生成图快捷读取                                                              |
+| `GenerateImageResult`  | `images`                         | 全部生成文件                                                                      |
+| `GenerateImageResult`  | `usage` / `responses`            | usage 和响应元数据                                                                |
+| `GenerateImageResult`  | `warnings` / `providerMetadata`  | 告警和供应方元数据                                                                |
+
+### `RerankRequest` / `RerankResponse`
+
+| 类型             | 字段                             | 说明                            |
+| ---------------- | -------------------------------- | ------------------------------- |
+| `RerankRequest`  | `query`                          | 排序查询                        |
+| `RerankRequest`  | `documents`                      | 候选文档，结果 index 指向该顺序 |
+| `RerankRequest`  | `topN`                           | 返回结果上限                    |
+| `RerankRequest`  | `metadata` / `context`           | 调用方数据                      |
+| `RerankRequest`  | `cancellationToken` / `timeouts` | 取消和超时                      |
+| `RerankResponse` | `query`                          | 本次排序使用的查询文本          |
+| `RerankResponse` | `results`                        | 排序结果                        |
+| `RerankResponse` | `usage` / `response`             | usage 和响应元数据              |
+| `RerankResponse` | `warnings` / `providerMetadata`  | 告警和供应方元数据              |
+
+### `UIMessage` 相关类型
+
+| 类型                      | 字段 / 方法                            | 说明                                     |
+| ------------------------- | -------------------------------------- | ---------------------------------------- |
+| `UIMessageChatRequest<M>` | `id`                                   | 调用方会话或请求 ID                      |
+| `UIMessageChatRequest<M>` | `messages`                             | 前端或数据库传回的 `UIMessage` 列表      |
+| `UIMessageChatRequest<M>` | `trigger`                              | `submit-message` 或 `regenerate-message` |
+| `UIMessageChatRequest<M>` | `messageId`                            | 重新生成时目标 assistant 消息 ID         |
+| `UIMessage<M>`            | `id`                                   | 消息 ID                                  |
+| `UIMessage<M>`            | `role`                                 | `SYSTEM`、`USER`、`ASSISTANT`            |
+| `UIMessage<M>`            | `parts`                                | 可持久化 UI message part                 |
+| `UIMessage<M>`            | `metadata`                             | 消息级元数据                             |
+| `UIMessage<M>`            | `text()`                               | 拼接所有 text part                       |
+| `UIMessage<M>`            | `parts(type)` / `part(type, id)`       | 按类型和 ID 查找 part                    |
+| `UIMessage<M>`            | `dataParts()` / `data(name, type)`     | 读取自定义 data                          |
+| `UIMessage<M>`            | `withParts(...)` / `withMetadata(...)` | 创建替换 parts 或 metadata 的副本        |
+
+常见 `UIMessagePart`：
+
+| 类型                       | 关键字段                                        | 说明                                               |
+| -------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| `StepStartPart`            | 无                                              | 标记持久化 assistant 消息中的 generation step 边界 |
+| `TextPart`                 | `id`, `text`                                    | 文本                                               |
+| `ReasoningPart`            | `id`, `text`, `providerMetadata`                | 推理内容                                           |
+| `DataPart`                 | `name`, `data`                                  | 自定义数据                                         |
+| `SourceUrlPart`            | `sourceId`, `url`, `title`                      | URL 来源                                           |
+| `SourceDocumentPart`       | `sourceId`, `mediaType`, `title`, `filename`    | 文档来源                                           |
+| `FilePart`                 | `fileId`, `url`, `mediaType`, `data`            | 文件                                               |
+| `ToolCallPart`             | `toolCallId`, `toolName`, `input`               | 工具调用                                           |
+| `ToolResultPart`           | `toolCallId`, `toolName`, `result`              | 工具结果                                           |
+| `ToolErrorPart`            | `toolCallId`, `toolName`, `errorText`           | 工具错误                                           |
+| `ToolApprovalRequestPart`  | `approvalId`, `toolCallId`, `toolName`, `input` | 工具审批请求                                       |
+| `ToolApprovalResponsePart` | `approvalId`, `approved`, `reason`              | 工具审批响应                                       |
+
+流中的 `start-step` 会聚合为持久化类型 `step-start`。保存 assistant 消息时必须原样保留
+`StepStartPart` 及整个 `parts` 列表的顺序，后续转换依靠这些标记恢复多步生成中的 reasoning、
+文本和工具调用边界。
+
+完整聚合、校验和转换规则见 [UI Message Stream](./ui-message-stream.md)。
+
+## 19. 可选 FormKit 输入：`aiModelSelector`
+
+`aiModelSelector` 是本插件提供的 FormKit 输入类型，可在调用方插件设置页中让用户选择模型。
+保存值是 `AiModel.metadata.name`，可直接传给 `languageModel(modelName)`、`embeddingModel(modelName)`、
+`rerankingModel(modelName)` 或 `imageGenerationModel(modelName)`。
+
+FormKit Schema 示例：
+
+```yaml
+formSchema:
+    - $formkit: aiModelSelector
+      name: languageModelName
+      label: 语言模型
+      modelType: language
+      clearable: true
+      placeholder: 请选择语言模型
+
+    - $formkit: aiModelSelector
+      name: embeddingModelName
+      label: 嵌入模型
+      modelType: embedding
+
+    - $formkit: aiModelSelector
+      name: visualModelName
+      label: 图片识别模型
+      modelType: language
+      requiredFeatures:
+          - vision
+
+    - $formkit: aiModelSelector
+      name: audioModelName
+      label: 音频识别模型
+      modelType: language
+      requiredFeatures:
+          - audio-input
+
+    - $formkit: aiModelSelector
+      name: imageModelName
+      label: 图像生成模型
+      modelType: image-generation
+      requiredCapabilities:
+          imageGeneration:
+              textToImage: true
+```
+
+常用 props：
+
+| Prop                   | 说明                                                         |
+| ---------------------- | ------------------------------------------------------------ |
+| `modelType`            | 筛选 `language`、`embedding`、`rerank` 或 `image-generation` |
+| `providerName`         | 筛选指定 `AiProvider.metadata.name`                          |
+| `providerType`         | 筛选指定供应方类型                                           |
+| `enabled`              | 按 `AiModel.spec.enabled` 筛选                               |
+| `available`            | 只显示可用模型，默认 `true`                                  |
+| `requiredFeatures`     | 只显示具备指定粗能力的模型                                   |
+| `requiredCapabilities` | 只显示满足细粒度能力要求的模型                               |
+| `placeholder`          | 未选择模型时的占位文本                                       |
+| `searchPlaceholder`    | 搜索框的占位文本                                             |
+| `clearable`            | 是否允许清空                                                 |
+| `fullWidth`            | 是否占满容器宽度                                             |
+
+`requiredFeatures` 适合筛选流式、图片识别、音频识别、工具调用等常用粗能力；`requiredCapabilities`
+适合在确实需要时筛选媒体输入来源、媒体类型、图生图、单次生成数量等细粒度能力。没有匹配模型通常表示供应方未配置、模型被禁用，或模型能力不满足筛选条件。
+
+`requiredCapabilities` 支持两个顶层域：`language` 和 `imageGeneration`。所有填写的条件都是
+“全部满足”关系；未知能力不会被当作支持。
+
+`language` 支持的字段：
+
+| 字段               | 类型                  | 说明                                                                                    |
+| ------------------ | --------------------- | --------------------------------------------------------------------------------------- |
+| `imageInput`       | `boolean`             | 要求模型支持图片识别                                                                    |
+| `fileInput`        | `boolean`             | 要求模型支持非图片文件或音频识别                                                        |
+| `reasoningHistory` | `boolean`             | 要求模型支持把已保存的 reasoning 片段作为历史传回                                       |
+| `inputMediaTypes`  | `string[]`            | 要求模型覆盖指定输入媒体类型，支持 `image/*`、`image/png`、`application/pdf` 这类模式   |
+| `inputSources`     | `("data" \| "url")[]` | 要求模型支持指定输入来源；`url` 表示供应方原生 URL 输入，AI Foundation 不会替你下载 URL |
+
+`imageGeneration` 支持的字段：
+
+| 字段               | 类型       | 说明                                                               |
+| ------------------ | ---------- | ------------------------------------------------------------------ |
+| `textToImage`      | `boolean`  | 要求模型支持文生图                                                 |
+| `imageToImage`     | `boolean`  | 要求模型支持图生图或图片编辑                                       |
+| `maskInput`        | `boolean`  | 要求模型支持蒙版图                                                 |
+| `maxImagesPerCall` | `number`   | 要求模型单次调用至少支持这个生成数量                               |
+| `sizes`            | `string[]` | 要求模型支持指定尺寸，如 `1024x1024`                               |
+| `aspectRatios`     | `string[]` | 要求模型支持指定宽高比，如 `16:9`                                  |
+| `outputMediaTypes` | `string[]` | 要求模型覆盖指定输出媒体类型，支持 `image/*`、`image/png` 这类模式 |
+
+媒体类型匹配使用覆盖语义：模型支持 `image/*` 可以匹配调用方要求的 `image/png`；
+模型只支持 `image/png` 不能匹配调用方要求的 `image/*`。列表字段也是全部满足关系。
+
+调用方插件通过上面的 FormKit `aiModelSelector` 输入选择模型。

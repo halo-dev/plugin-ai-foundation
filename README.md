@@ -1,32 +1,50 @@
 # Halo AI Foundation
 
-Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提供文本生成、嵌入向量、工具调用等智能化能力。
+English | [简体中文](./README.zh-CN.md)
+
+Halo's official AI capability platform. It provides unified access to popular AI providers and
+shared capabilities such as text generation, embeddings, and tool calling for the Halo plugin
+ecosystem.
 
 ![](./images/preview-providers.png)
 
-## 功能特性
+## Features
 
-- **多提供商支持**：内置 OpenAI、DeepSeek、Kimi（Moonshot）、SiliconFlow、豆包、文心一言、智谱 AI、Ollama、OpenAI-like、AIHubMix、Gitee 模力方舟、MiniMax、Xiaomi MiMo 等主流 AI 提供商
-- **统一模型管理**：通过 Halo 控制台统一管理 AI 提供商和模型配置
-- **模型自动发现**：支持从提供商自动拉取可用模型列表
-- **流式对话**：支持 SSE 流式输出，适用于实时聊天场景
-- **工具调用**：支持模型调用外部工具，适用于复杂任务编排
-- **文本嵌入**：支持文本向量化，适用于语义搜索、RAG 等场景
-- **Rerank 重排**：支持统一的 Rerank 模型配置和调用，当前内置智谱 AI、DashScope、SiliconFlow、文心一言、豆包、OpenRouter、Gitee 模力方舟和 AIHubMix 的 provider-backed 适配
-- **RAG 测试工作台**：支持在控制台用手动来源、可选 Rerank 模型和 UI Message 流验证单轮 RAG 效果
-- **默认模型设置**：支持配置系统默认的语言模型和嵌入模型
-- **模型测试 Playground**：内置测试页面，支持验证文本生成、流式输出、工具调用、结构化输出、嵌入、Rerank 和 RAG 等
-- **Java SDK**：通过 `api` 模块为其他 Halo 插件提供标准化的 AI 调用接口
+- **Multiple AI providers**: Built-in support for OpenAI, OpenRouter, DeepSeek, Moonshot Kimi,
+  SiliconFlow, Alibaba Cloud Model Studio, Doubao, ERNIE, Zhipu AI, Ollama, OpenAI-compatible
+  providers, AIHubMix, Gitee AI, MiniMax, and Xiaomi MiMo
+- **Unified model management**: Manage providers, API key secrets, language, embedding, reranking,
+  and image models, adapters, and model capabilities from the Halo Console
+- **Model discovery**: Fetch available models from providers while retaining the source of remote
+  declarations, built-in capabilities, and administrator overrides
+- **Parameter mapping**: Configure provider- or model-level mappings for sampling, retries,
+  reasoning, embedding, reranking, and image parameters
+- **Text and multimodal generation**: Generate text with streaming or non-streaming responses,
+  image and file inputs, reasoning content, sources, structured output, and multi-step results
+- **Tool calling**: Use server-side and external tools, streamed tool input, approval, input repair,
+  parallel tool calls, and step controls
+- **Embeddings, reranking, and RAG**: Create embeddings, process batches, calculate similarity,
+  rerank results, and compose retrieval, reranking, and context-injection middleware
+- **Image generation**: Generate and edit images with masks, aggregate multiple images, and apply
+  image middleware
+- **UI Message Stream**: Use a persistable message protocol, SSE responses, message validation and
+  conversion, cancellation, and frontend tool continuation
+- **Default models**: Configure separate default models for language, embedding, reranking, and
+  image generation
+- **Model playground**: Validate chat, embeddings, reranking, image generation, and single-turn RAG
+  while inspecting stream events, usage, warnings, and diagnostics
+- **Consumer SDKs**: Use a provider-neutral Java API, a browser/Vue npm package, and the FormKit
+  `aiModelSelector`
 
-## 已接入插件
+## Plugins using AI Foundation
 
-- [AI 回评](https://www.halo.run/store/apps/app-mo5tivjt)
-- [Live2d 看板娘](https://www.halo.run/store/apps/app-oPNFQ)
-- [智阅全能AI助手](https://www.halo.run/store/apps/app-OWBzA)
-- [评论组件 Next](https://www.halo.run/store/apps/app-p8xona4f)
-- [轻言](https://www.halo.run/store/apps/app-cmisffbv)
+- [AI Review Reply](https://www.halo.run/store/apps/app-mo5tivjt)
+- [Live2D Widget](https://www.halo.run/store/apps/app-oPNFQ)
+- [AI Assistant](https://www.halo.run/store/apps/app-OWBzA)
+- [Comment Widget Next](https://www.halo.run/store/apps/app-p8xona4f)
+- [Qingyan](https://www.halo.run/store/apps/app-cmisffbv)
 
-## 界面预览
+## Screenshots
 
 ![](./images/preview-providers.png)
 
@@ -36,70 +54,87 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 
 ![](./images/preview-test.png)
 
-## 项目结构
+## Project structure
 
-本项目为多模块 Gradle 项目：
+This repository is a multi-module Gradle project:
 
-| 模块   | 说明                                                                                         |
-| ------ | -------------------------------------------------------------------------------------------- |
-| `api/` | 对外发布的 Java SDK（`run.halo.aifoundation:api`）。其他 Halo 插件依赖此模块即可调用 AI 能力 |
-| `app/` | 插件实现模块。包含 Extension 定义、提供商类型、Endpoint、Service 实现和 RBAC 配置            |
-| `ui/`  | 基于 Vue 3 + Rsbuild 的控制台界面，用于提供商和模型的可视化管理                              |
+| Module | Description                                                                                                                        |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `api/` | Published Java SDK (`run.halo.aifoundation:api`) used by other Halo plugins to access AI capabilities                              |
+| `app/` | Plugin implementation containing Extension definitions, provider types, endpoints, service implementations, and RBAC configuration |
+| `ui/`  | Console interface built with Vue 3 and Rsbuild for visually managing providers and models                                          |
 
-## 开发环境
+## Prerequisites
 
 - Java 21
 - Node.js 24
 - pnpm
-- Docker（`haloServer` 开发服务器需要）
+- Docker, required by the `haloServer` development server
 
-## 开发
+## Development
 
 ```bash
-# 1. 启动 Halo 开发服务器（会自动构建并加载插件）
+# 1. Start the Halo development server.
+# It builds and loads the plugin automatically.
 ./gradlew haloServer
 
-# 2. 启动前端开发服务器
+# 2. Start the frontend development server.
 cd ui && pnpm install && pnpm dev
 ```
 
-开发服务器启动后，访问 `http://127.0.0.1:8090/console/`（默认账号 admin / admin）即可在控制台中看到「Ai Foundation」菜单。
+After the development server starts, open `http://127.0.0.1:8090/console/` and sign in with the
+default credentials, `admin` / `admin`. The **AI Foundation** menu will be available in the
+Console.
 
-修改后端代码后，重载插件：
+Reload the plugin after changing backend code:
 
 ```bash
 ./gradlew reloadPlugin
 ```
 
-修改后端 API 或字段后，重新生成前端 API 客户端：
+Regenerate the frontend API client after changing backend API endpoints or fields:
 
 ```bash
 ./gradlew generateApiClient
 ```
 
-## 构建
+## Build
 
 ```bash
-# 完整构建（后端 + 前端 + 测试）
+# Full build: backend, frontend, and tests
 ./gradlew build
 
-# 仅编译检查
+# Compile only
 ./gradlew compileJava
 
-# 运行测试
+# Run tests
 ./gradlew test
 ```
 
-构建完成后，插件 JAR 文件位于 `app/build/libs/` 目录。
+The plugin JAR is generated in `app/build/libs/`.
 
-## 其他插件集成
+## Integration with other plugins
 
-其他 Halo 插件可以通过依赖 `api` 模块来调用本插件提供的 AI 能力，包括文本生成、流式输出、工具调用、文本嵌入和结构化输出等。
+Other Halo plugins can depend on the `api` module to use language, embedding, reranking, image
+generation, RAG, and UI Message capabilities.
 
-本插件还提供了前端 `AiModelSelector` 组件，供其他插件在设置页中直接选择已配置的 AI 模型。
+AI Foundation also registers the FormKit `aiModelSelector` input so that plugins can select
+configured models from their settings forms.
 
-详细集成说明请参考 [dev/dev.md](./dev/dev.md)。
+- [SDK Core](./dev/en/sdk-core/README.md): Java APIs for text generation, tools, structured output,
+  embeddings, reranking, RAG, image generation, middleware, and error handling
+- [SDK UI](./dev/en/sdk-ui/README.md): Vue chat, message persistence, tool interaction, completion,
+  object streams, transport, and the UI Message protocol
+- [Plugin integration examples](./dev/en/plugin-integration-examples.md): Plugin dependencies,
+  backend model calls, UI Message endpoints, Vue chat, and model settings
 
-## 许可证
+The [SDK Core single-page reference](./dev/en/dev.md) and
+[UI Message Stream single-page reference](./dev/en/ui-message-stream.md) are suited to full-text
+lookup.
+
+When using AI-assisted development, invoke the repository's
+[`$use-ai-foundation-sdk`](./.codex/skills/use-ai-foundation-sdk/SKILL.md) Skill.
+
+## License
 
 [GPL-3.0](./LICENSE) © Halo

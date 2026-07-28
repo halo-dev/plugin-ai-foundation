@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use AI Foundation SDK"
+  short_description: "查询并集成 Halo AI Foundation SDK"
+  default_prompt: "Use $use-ai-foundation-sdk to implement an AI feature in this Halo plugin using the current SDK contracts."

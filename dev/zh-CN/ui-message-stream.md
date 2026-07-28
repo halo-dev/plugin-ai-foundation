@@ -1,8 +1,14 @@
 # UI Message Stream
 
+简体中文 | [English](../en/ui-message-stream.md)
+
 本文档面向需要在 Halo 插件后端接入聊天界面的调用者。
 
-# 什么时候使用
+> 本文是便于全文搜索的 UI Message 单页参考。按任务阅读时，建议从
+> [SDK UI 主题文档](./sdk-ui/README.md) 开始；wire 格式可直接查
+> [Stream Protocol](./sdk-ui/stream-protocol.md)。
+
+## 什么时候使用
 
 | API               | 适合场景                               | 数据形态               |
 | ----------------- | -------------------------------------- | ---------------------- |
@@ -206,12 +212,7 @@ X-Halo-AI-UI-Message-Stream: v1
 发送给后端：
 
 ```ts
-import {
-    DefaultChatTransport,
-    filePartsFromFiles,
-    useChat,
-    type FilePart,
-} from "@halo-dev/ai-foundation-sdk";
+import { DefaultChatTransport, filePartsFromFiles, useChat, type FilePart } from "@halo-dev/ai-foundation-sdk";
 import { ref } from "vue";
 
 const input = ref("");
@@ -617,9 +618,9 @@ writer.write(UIMessageChunks.file(
 RAG source 默认使用标准 source chunk，最终会持久化为 `SourceUrlPart`。AI Foundation
 约定的 RAG 自定义 data 名称为：
 
-| 名称 | 用途 |
-| --- | --- |
-| `RagUIMessageDataNames.SOURCES` | 仅发送可展示 source references |
+| 名称                                   | 用途                             |
+| -------------------------------------- | -------------------------------- |
+| `RagUIMessageDataNames.SOURCES`        | 仅发送可展示 source references   |
 | `RagUIMessageDataNames.RETRIEVED_DATA` | 调用方显式选择时发送完整检索数据 |
 
 默认推荐 `RagUIMessageOutputMode.SOURCES_ONLY`。只有确认前端和存储层可以接收检索全文时，
@@ -650,32 +651,31 @@ Mono<UIMessageStreamTerminal> terminal = read.finish();
 
 ## 聚合规则
 
-| 数据块                                                  | 聚合结果                                                    |
-| ------------------------------------------------------- | ----------------------------------------------------------- |
-| `text-start` / `text-delta` / `text-end`                | 累加为 `TextPart`                                           |
-| `reasoning-start` / `reasoning-delta` / `reasoning-end` | 累加为 `ReasoningPart`                                      |
-| `data` 且 `transientData=false`                         | 写入或替换 `DataPart`                                       |
-| `data` 且 `transientData=true`                          | 不进入 `UIMessage.parts`                                    |
-| `message-metadata`                                      | 合并到 `UIMessage.metadata`                                 |
-| `source-url` / `file`                                   | 写入或替换来源/文件消息片段                                 |
+| 数据块                                                  | 聚合结果                                                                   |
+| ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `text-start` / `text-delta` / `text-end`                | 累加为 `TextPart`                                                          |
+| `reasoning-start` / `reasoning-delta` / `reasoning-end` | 累加为 `ReasoningPart`                                                     |
+| `data` 且 `transientData=false`                         | 写入或替换 `DataPart`                                                      |
+| `data` 且 `transientData=true`                          | 不进入 `UIMessage.parts`                                                   |
+| `message-metadata`                                      | 合并到 `UIMessage.metadata`                                                |
+| `source-url` / `file`                                   | 写入或替换来源/文件消息片段                                                |
 | `tool-input-start` / `tool-input-delta`                 | 私下累加原始 JSON，并把最佳 partial `input` 聚合到同一个动态 `tool-*` 片段 |
-| `tool-input-available`                                  | 用权威最终输入覆盖 partial input，并进入 `input-available` 状态 |
-| `tool-input-error`                                      | 输入校验或修复失败，进入 `output-error`；不会触发 `onToolCall` |
-| `tool-output-available` / `tool-output-error`           | 聚合为同一个动态 `tool-*` 消息片段的完成状态                |
-| `tool-approval-request` / `tool-approval-response`      | 聚合为同一个动态 `tool-*` 消息片段的审批状态                |
-| `start-step`                                            | 追加无字段的 `StepStartPart`（传输类型为 `step-start`）      |
-| `finish-step` / `error` / `abort`                       | 只更新生命周期或终态信息，不进入 `UIMessage.parts`          |
+| `tool-input-available`                                  | 用权威最终输入覆盖 partial input，并进入 `input-available` 状态            |
+| `tool-input-error`                                      | 输入校验或修复失败，进入 `output-error`；不会触发 `onToolCall`             |
+| `tool-output-available` / `tool-output-error`           | 聚合为同一个动态 `tool-*` 消息片段的完成状态                               |
+| `tool-approval-request` / `tool-approval-response`      | 聚合为同一个动态 `tool-*` 消息片段的审批状态                               |
+| `start-step`                                            | 追加无字段的 `StepStartPart`（传输类型为 `step-start`）                    |
+| `finish-step` / `error` / `abort`                       | 只更新生命周期或终态信息，不进入 `UIMessage.parts`                         |
 
 `StepStartPart` 只记录它在有序 `parts` 中的位置，不保存每次调用都会重新计数的
 `stepIndex`，也不会单独触发一条可见消息。保存 assistant 消息时应原样保留 `parts` 的顺序；
 后续转换会用这些 marker 恢复同一步中的 reasoning、文本和多个工具调用。
 
 SSE 传输层使用 `tool-input-*`、`tool-output-*` 和 `tool-approval-*` 这类规范工具数据块
-表达“流中发生的事件”。聚合后的 assistant `UIMessage.parts` 仍然使用动态
-`tool-*` 消息片段表达最终 UI 状态。旧的动态 `tool-*` 数据块只作为内部兼容读取形态保留，
-不作为外部流协议推荐。
+表达“流中发生的事件”。聚合后的 assistant `UIMessage.parts` 使用动态
+`tool-*` 消息片段表达最终 UI 状态。
 
-`tool-input-delta` 的 wire shape 是 `{ type, toolCallId, inputTextDelta }`，不再携带
+`tool-input-delta` 的 wire shape 是 `{ type, toolCallId, inputTextDelta }`，不包含
 `toolName`；reducer 必须从此前同一 `toolCallId` 的 `tool-input-start` 解析名称。因此 delta
 先于 start 是协议错误，而重复 start 会重置该调用的私有累积文本。后端的
 `tool-input-end` 只用于 `fullStream()` 的块边界，不投影到 UI Message wire。
@@ -886,7 +886,7 @@ UIMessageConversionResult conversion =
 | ------------------------------------------------ | --------------------------------------------------------------------- |
 | `TextPart`                                       | 转为模型文本                                                          |
 | `ReasoningPart`                                  | 由模型能力决定；支持 reasoning history 时保留，不支持时丢弃并记录警告 |
-| `StepStartPart`                                  | 仅划分 generation step，不生成模型内容                              |
+| `StepStartPart`                                  | 仅划分 generation step，不生成模型内容                                |
 | `ToolPart` + `input-available`                   | 转为 assistant 工具调用内容                                           |
 | `ToolPart` + `approval-requested`                | 转为 assistant 审批请求内容                                           |
 | `ToolPart` + `output-available` / `output-error` | 转为工具消息                                                          |
