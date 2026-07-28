@@ -60,26 +60,11 @@ Provider 配置与模型调用由插件后端通过 SDK Core 完成。
 主题文档适合按任务学习；单页参考适合查字段和协议细节。若两处描述有差异，以公开类型的
 JavaDoc、TypeScript 类型和实现为准。
 
-使用 AI 辅助开发时，可以调用仓库 Skill：
-
-```text
-$use-ai-foundation-sdk
-```
-
-Skill 会根据任务查找对应文档、公开源码和插件集成示例。
-
-## 文档覆盖检查
-
-修改 Java API、npm 包入口、模型选择器或开发者文档后运行：
+使用 AI 辅助开发时，可以安装公开 Skill：
 
 ```bash
-node scripts/check-sdk-docs.mjs
+npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk
 ```
 
-检查会确保：
-
-- 每个 Java 公开顶层类型都能在 Core API 索引中查到，且索引没有暴露包私有顶层类型。
-- 每个 npm 包入口导出都能在 UI API 索引中查到，文档示例没有从包入口导入内部符号。
-- FormKit 模型选择器的每个 Prop 都有说明。
-- 所有开发者文档都能从本页导航到，本地链接和 Markdown 代码围栏有效。
-- 文档中的 `run.halo.aifoundation` import 指向公开 Java 类型。
+安装后通过 `$use-ai-foundation-sdk` 调用。Skill 会根据目标插件使用的 SDK 版本查找对应文档、
+公开源码和插件集成示例。

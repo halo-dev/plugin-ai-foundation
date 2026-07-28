@@ -132,8 +132,25 @@ The [SDK Core single-page reference](./dev/en/dev.md) and
 [UI Message Stream single-page reference](./dev/en/ui-message-stream.md) are suited to full-text
 lookup.
 
-When using AI-assisted development, invoke the repository's
-[`$use-ai-foundation-sdk`](./.codex/skills/use-ai-foundation-sdk/SKILL.md) Skill.
+## AI-assisted development
+
+The repository provides a distributable
+[`use-ai-foundation-sdk`](./skills/use-ai-foundation-sdk/SKILL.md) Skill. Install it in a project
+with the [Skills CLI](https://skills.sh/docs/cli):
+
+```bash
+npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk
+```
+
+To install it globally for Codex:
+
+```bash
+npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk --global --agent codex
+```
+
+After installation, invoke it with `$use-ai-foundation-sdk`. The Skill resolves the SDK version
+used by the target plugin, reuses installed Java or npm artifacts when available, and pulls the
+matching official repository only when more documentation or source context is needed.
 
 ## License
 

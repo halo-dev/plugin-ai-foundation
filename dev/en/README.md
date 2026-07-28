@@ -40,14 +40,10 @@ These single-page references are suited to full-text lookup:
 - [SDK Core single-page reference](./dev.md)
 - [UI Message Stream single-page reference](./ui-message-stream.md)
 
-For AI-assisted development, invoke the repository Skill:
-
-```text
-$use-ai-foundation-sdk
-```
-
-Documentation coverage is checked with:
+For AI-assisted development, install the public Skill:
 
 ```bash
-node scripts/check-sdk-docs.mjs
+npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk
 ```
+
+Then invoke it with `$use-ai-foundation-sdk`.

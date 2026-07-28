@@ -112,8 +112,24 @@ UI Message 能力。
 [SDK Core 单页参考](./dev/zh-CN/dev.md) 与
 [UI Message Stream 单页参考](./dev/zh-CN/ui-message-stream.md) 适合全文搜索。
 
-使用 AI 辅助集成时，可以调用仓库中的
-[`$use-ai-foundation-sdk`](./.codex/skills/use-ai-foundation-sdk/SKILL.md) Skill。
+## AI 辅助开发
+
+仓库提供可分发的
+[`use-ai-foundation-sdk`](./skills/use-ai-foundation-sdk/SKILL.md) Skill。可以使用
+[Skills CLI](https://skills.sh/docs/cli) 安装到当前项目：
+
+```bash
+npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk
+```
+
+也可以为 Codex 全局安装：
+
+```bash
+npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk --global --agent codex
+```
+
+安装后通过 `$use-ai-foundation-sdk` 调用。Skill 会识别目标插件使用的 SDK 版本，优先复用
+本地已安装的 Java 或 npm 依赖；只有需要更多文档或源码上下文时才拉取对应版本的官方仓库。
 
 ## 许可证
 
