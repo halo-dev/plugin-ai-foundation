@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import { effectScope, nextTick } from 'vue'
 import { Chat } from './chat'
 import { fromOpenAPIRequestArgs } from './openapi'

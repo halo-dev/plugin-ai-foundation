@@ -1,15 +1,15 @@
 import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
-import { afterEach, beforeEach, describe, expect, it, rstest } from '@rstest/core'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 import AiModelSelector from './AiModelSelector.vue'
 
-rstest.mock('@/composables/use-model-options-fetch', () => ({
-  useModelOptionsFetch: rstest.fn(),
+vi.mock('@/composables/use-model-options-fetch', () => ({
+  useModelOptionsFetch: vi.fn(),
 }))
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   VLoading: { template: '<div>Loading</div>' },
 }))
 
@@ -48,7 +48,7 @@ describe('AiModelSelector', () => {
       }),
     ]
     isLoading.value = false
-    rstest.mocked(useModelOptionsFetch).mockReturnValue({
+    vi.mocked(useModelOptionsFetch).mockReturnValue({
       data: modelOptions,
       isLoading,
     } as ReturnType<typeof useModelOptionsFetch>)
@@ -59,7 +59,7 @@ describe('AiModelSelector', () => {
       wrapper.unmount()
     }
     document.body.innerHTML = ''
-    rstest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('selects an available model and updates the controlled value', async () => {

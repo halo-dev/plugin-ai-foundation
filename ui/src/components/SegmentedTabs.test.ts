@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from '@rstest/core'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
 import SegmentedTabs, { type Tab } from './SegmentedTabs.vue'
 
 const tabs: Tab[] = [

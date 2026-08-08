@@ -1,5 +1,4 @@
 import { definePlugin } from '@halo-dev/ui-shared'
-import 'uno.css'
 import { markRaw } from 'vue'
 import MingcuteAiLine from '~icons/mingcute/ai-line'
 import {
@@ -20,8 +19,7 @@ const pluginModule = {
       route: {
         path: '/ai-foundation',
         name: AI_FOUNDATION_ROUTE_NAMES.ROOT,
-        component: () =>
-          import(/* webpackChunkName: "ProviderManager" */ './views/ProviderManager.vue'),
+        component: () => import('./views/ProviderManager.vue'),
         redirect: {
           name: AI_FOUNDATION_ROUTE_NAMES.PROVIDERS,
         },
@@ -40,40 +38,27 @@ const pluginModule = {
           {
             path: 'providers',
             name: AI_FOUNDATION_ROUTE_NAMES.PROVIDERS,
-            component: () =>
-              import(
-                /* webpackChunkName: "AiFoundationProviders" */ './views/ProviderConfigView.vue'
-              ),
+            component: () => import('./views/ProviderConfigView.vue'),
           },
           {
             path: 'models',
             name: AI_FOUNDATION_ROUTE_NAMES.MODELS,
-            component: () =>
-              import(/* webpackChunkName: "AiFoundationModels" */ './views/AllModelListView.vue'),
+            component: () => import('./views/AllModelListView.vue'),
           },
           {
             path: 'defaults',
             name: AI_FOUNDATION_ROUTE_NAMES.DEFAULTS,
-            component: () =>
-              import(
-                /* webpackChunkName: "AiFoundationDefaults" */ './views/DefaultModelSlotsView.vue'
-              ),
+            component: () => import('./views/DefaultModelSlotsView.vue'),
           },
           {
             path: 'callers',
             name: AI_FOUNDATION_ROUTE_NAMES.CALLERS,
-            component: () =>
-              import(
-                /* webpackChunkName: "AiFoundationCallers" */ './views/CallerPluginListView.vue'
-              ),
+            component: () => import('./views/CallerPluginListView.vue'),
           },
           {
             path: 'test',
             name: AI_FOUNDATION_ROUTE_NAMES.TEST,
-            component: () =>
-              import(
-                /* webpackChunkName: "AiFoundationTest" */ './views/ModelTestWorkbenchView.vue'
-              ),
+            component: () => import('./views/ModelTestWorkbenchView.vue'),
           },
         ],
       },

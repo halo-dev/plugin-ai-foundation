@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { useLanguageGenerationSettings } from './use-language-generation-settings'
 
