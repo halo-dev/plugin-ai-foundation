@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolChoice;
 import run.halo.aifoundation.tool.ToolDefinition;
@@ -33,6 +34,49 @@ class DeepSeekProviderTest {
             .build(request);
 
         assertThat(options.getResponseFormat()).isNotNull();
+        assertThat(options.getResponseFormat().getType())
+            .isEqualTo(OpenAiCompatibleChatOptions.ResponseFormat.Type.JSON_OBJECT);
+    }
+
+    @Test
+    void structuredOutputOptions_useJsonObjectForRawJsonButNotArrayOrChoice() {
+        var factory = providerType.languageModelProviderOptions()
+            .structuredOutputChatOptionsFactory();
+
+        var jsonOptions = (OpenAiCompatibleChatOptions) factory.build(
+            GenerateTextRequest.builder().prompt("Generate JSON").output(OutputSpec.json()).build());
+        var arrayOptions = (OpenAiCompatibleChatOptions) factory.build(
+            GenerateTextRequest.builder().prompt("Generate array")
+                .output(OutputSpec.array(Map.of("type", "string"))).build());
+        var choiceOptions = (OpenAiCompatibleChatOptions) factory.build(
+            GenerateTextRequest.builder().prompt("Choose")
+                .output(OutputSpec.choice(List.of("yes", "no"))).build());
+
+        assertThat(jsonOptions.getResponseFormat().getType())
+            .isEqualTo(OpenAiCompatibleChatOptions.ResponseFormat.Type.JSON_OBJECT);
+        assertThat(arrayOptions.getResponseFormat()).isNull();
+        assertThat(choiceOptions.getResponseFormat()).isNull();
+        assertThat(providerType.languageModelProviderOptions().structuredOutputSupport())
+            .isEqualTo(StructuredOutputSupport.JSON_OBJECT);
+    }
+
+    @Test
+    void strictOpenSchemaDoesNotClaimNativeStrictEnforcement() {
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate JSON")
+            .output(OutputSpec.builder()
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                .schema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("name", Map.of("type", "string"))
+                ))
+                .strict(true)
+                .build())
+            .build();
+
+        var options = (OpenAiCompatibleChatOptions) providerType.languageModelProviderOptions()
+            .structuredOutputChatOptionsFactory().build(request);
+
         assertThat(options.getResponseFormat().getType())
             .isEqualTo(OpenAiCompatibleChatOptions.ResponseFormat.Type.JSON_OBJECT);
     }

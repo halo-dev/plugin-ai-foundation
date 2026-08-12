@@ -42,6 +42,7 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 
@@ -83,17 +84,25 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
         var requestPrompt = requestPrompt(prompt);
         var options = requestOptions(requestPrompt);
         var body = requestBody(requestPrompt, options, false);
+        var diagnosticId = AiFoundationDiagnostics.newInvocationId();
+        var url = chatCompletionsUrl(options);
+        traceRequest(diagnosticId, url, body, false);
         return webClient.method(HttpMethod.POST)
-            .uri(URI.create(chatCompletionsUrl(options)))
+            .uri(URI.create(url))
             .headers(headers -> applyHeaders(headers, options))
             .bodyValue(body)
             .exchangeToMono(response -> {
                 if (!response.statusCode().is2xxSuccessful()) {
-                    return errorMono(response);
+                    return errorMono(response, diagnosticId);
                 }
                 return response.bodyToMono(String.class)
                     .defaultIfEmpty("")
-                    .map(data -> chatResponse(data, options));
+                    .map(data -> {
+                        traceResponse(diagnosticId, response, data);
+                        var chatResponse = chatResponse(data, options, diagnosticId);
+                        traceNormalizedResponse(diagnosticId, chatResponse, false);
+                        return chatResponse;
+                    });
             })
             .block(options.getTimeout());
     }
@@ -107,36 +116,49 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
 
     @Override
     public Flux<ProviderStreamPart> streamParts(Prompt prompt) {
-        var requestPrompt = requestPrompt(prompt);
-        var options = requestOptions(requestPrompt);
-        var body = requestBody(requestPrompt, options, true);
-        return webClient.method(HttpMethod.POST)
-            .uri(URI.create(chatCompletionsUrl(options)))
-            .headers(headers -> applyHeaders(headers, options))
-            .bodyValue(body)
-            .exchangeToFlux(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return errorFlux(response);
-                }
-                return response.bodyToFlux(DataBuffer.class)
-                    .map(this::readAndRelease)
-                    .transform(this::sseDataLines)
-                    .filter(data -> !data.isBlank() && !SSE_DONE.equals(data))
-                    .transform(data -> providerStreamParts(data, options));
-            });
+        return Flux.defer(() -> {
+            var requestPrompt = requestPrompt(prompt);
+            var options = requestOptions(requestPrompt);
+            var body = requestBody(requestPrompt, options, true);
+            var diagnosticId = AiFoundationDiagnostics.newInvocationId();
+            var url = chatCompletionsUrl(options);
+            traceRequest(diagnosticId, url, body, true);
+            return webClient.method(HttpMethod.POST)
+                .uri(URI.create(url))
+                .headers(headers -> applyHeaders(headers, options))
+                .bodyValue(body)
+                .exchangeToFlux(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return errorFlux(response, diagnosticId);
+                    }
+                    traceResponseStatus(diagnosticId, response);
+                    return response.bodyToFlux(DataBuffer.class)
+                        .map(this::readAndRelease)
+                        .transform(this::sseDataLines)
+                        .filter(data -> !data.isBlank() && !SSE_DONE.equals(data))
+                        .doOnNext(data -> traceStreamEvent(diagnosticId, data))
+                        .transform(data -> providerStreamParts(data, options, diagnosticId));
+                });
+        });
     }
 
     private Flux<ProviderStreamPart> providerStreamParts(Flux<String> data,
-        OpenAiCompatibleChatOptions options) {
+        OpenAiCompatibleChatOptions options, String diagnosticId) {
         return Flux.defer(() -> {
             var state = new ToolCallState();
-            return data.concatMapIterable(chunk -> providerStreamParts(chunk, state, options))
+            return data.concatMapIterable(chunk ->
+                    providerStreamParts(chunk, state, options, diagnosticId))
                 .concatWith(Flux.defer(() -> Flux.fromIterable(state.finishParts())));
         });
     }
 
-    private List<ProviderStreamPart> providerStreamParts(String data, ToolCallState state,
+    private Flux<ProviderStreamPart> providerStreamParts(Flux<String> data,
         OpenAiCompatibleChatOptions options) {
+        return providerStreamParts(data, options, AiFoundationDiagnostics.newInvocationId());
+    }
+
+    private List<ProviderStreamPart> providerStreamParts(String data, ToolCallState state,
+        OpenAiCompatibleChatOptions options, String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
             var parts = new ArrayList<ProviderStreamPart>();
@@ -152,8 +174,9 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
             if (finished) {
                 parts.addAll(state.finishParts());
             }
-            var response = chatResponseChunk(data, state, options);
+            var response = chatResponseChunk(data, state, options, diagnosticId);
             if (response != null) {
+                traceNormalizedResponse(diagnosticId, response, true);
                 parts.add(new ProviderStreamPart.ChatResponsePart(response));
             }
             return parts;
@@ -359,12 +382,73 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
         return (OpenAiCompatibleChatOptions) prompt.getOptions();
     }
 
-    private Mono<ChatResponse> errorMono(ClientResponse response) {
-        return errorBody(response).flatMap(body -> Mono.error(requestFailed(response, body)));
+    private void traceRequest(String diagnosticId, String url, Map<String, Object> body,
+        boolean stream) {
+        AiFoundationDiagnostics.trace("provider-request", diagnosticId,
+            () -> AiFoundationDiagnostics.fields(
+                "adapter", "openai-compatible",
+                "stream", stream,
+                "url", url,
+                "body", diagnosticJson(body)));
     }
 
-    private <T> Flux<T> errorFlux(ClientResponse response) {
-        return errorBody(response).flatMapMany(body -> Flux.error(requestFailed(response, body)));
+    private void traceResponseStatus(String diagnosticId, ClientResponse response) {
+        AiFoundationDiagnostics.trace("provider-response-status", diagnosticId,
+            () -> AiFoundationDiagnostics.fields("status", response.statusCode().value()));
+    }
+
+    private void traceResponse(String diagnosticId, ClientResponse response, String body) {
+        AiFoundationDiagnostics.trace("provider-response", diagnosticId,
+            () -> AiFoundationDiagnostics.fields(
+                "status", response.statusCode().value(),
+                "body", AiFoundationDiagnostics.redactSensitiveText(body)));
+    }
+
+    private void traceStreamEvent(String diagnosticId, String data) {
+        AiFoundationDiagnostics.trace("provider-stream-event", diagnosticId,
+            () -> AiFoundationDiagnostics.fields(
+                "data", AiFoundationDiagnostics.redactSensitiveText(data)));
+    }
+
+    private void traceNormalizedResponse(String diagnosticId, ChatResponse response,
+        boolean stream) {
+        AiFoundationDiagnostics.trace("provider-normalized-output", diagnosticId, () -> {
+            var result = response != null ? response.getResult() : null;
+            var output = result != null ? result.getOutput() : null;
+            return AiFoundationDiagnostics.fields(
+                "stream", stream,
+                "responseId", response != null && response.getMetadata() != null
+                    ? response.getMetadata().getId() : null,
+                "model", response != null && response.getMetadata() != null
+                    ? response.getMetadata().getModel() : null,
+                "finishReason", result != null && result.getMetadata() != null
+                    ? result.getMetadata().getFinishReason() : null,
+                "text", output != null ? output.getText() : null,
+                "outputMetadata", output != null ? output.getMetadata() : null);
+        });
+    }
+
+    private String diagnosticJson(Object value) {
+        try {
+            return AiFoundationDiagnostics.redactSensitiveText(
+                OBJECT_MAPPER.writeValueAsString(value));
+        } catch (JsonProcessingException e) {
+            return AiFoundationDiagnostics.redactSensitiveText(String.valueOf(value));
+        }
+    }
+
+    private Mono<ChatResponse> errorMono(ClientResponse response, String diagnosticId) {
+        return errorBody(response).flatMap(body -> {
+            traceResponse(diagnosticId, response, body);
+            return Mono.error(requestFailed(response, body));
+        });
+    }
+
+    private <T> Flux<T> errorFlux(ClientResponse response, String diagnosticId) {
+        return errorBody(response).flatMapMany(body -> {
+            traceResponse(diagnosticId, response, body);
+            return Flux.error(requestFailed(response, body));
+        });
     }
 
     private Mono<String> errorBody(ClientResponse response) {
@@ -648,14 +732,21 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
         return switch (responseFormat.getType()) {
             case TEXT -> Map.of(Fields.TYPE, Values.TEXT);
             case JSON_OBJECT -> Map.of(Fields.TYPE, Values.JSON_OBJECT);
-            case JSON_SCHEMA -> Map.of(
-                Fields.TYPE, Values.JSON_SCHEMA,
-                Fields.JSON_SCHEMA, Map.of(
-                    Fields.NAME, Values.JSON_SCHEMA,
-                    Fields.STRICT, true,
-                    Fields.SCHEMA, parseJsonObject(responseFormat.getJsonSchema())
-                )
-            );
+            case JSON_SCHEMA -> {
+                var jsonSchema = new LinkedHashMap<String, Object>();
+                jsonSchema.put(Fields.NAME, responseFormat.getName());
+                if (responseFormat.getDescription() != null) {
+                    jsonSchema.put(Fields.DESCRIPTION, responseFormat.getDescription());
+                }
+                jsonSchema.put(Fields.STRICT,
+                    Boolean.TRUE.equals(responseFormat.getStrict()));
+                jsonSchema.put(Fields.SCHEMA,
+                    parseJsonObject(responseFormat.getJsonSchema()));
+                var body = new LinkedHashMap<String, Object>();
+                body.put(Fields.TYPE, Values.JSON_SCHEMA);
+                body.put(Fields.JSON_SCHEMA, jsonSchema);
+                yield body;
+            }
         };
     }
 
@@ -697,6 +788,11 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
     }
 
     private ChatResponse chatResponse(String data, OpenAiCompatibleChatOptions options) {
+        return chatResponse(data, options, AiFoundationDiagnostics.newInvocationId());
+    }
+
+    private ChatResponse chatResponse(String data, OpenAiCompatibleChatOptions options,
+        String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
             var id = root.path(Fields.ID).asText("");
@@ -704,13 +800,15 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
             var usage = usage(root.path(Fields.USAGE));
             var choices = root.path(Fields.CHOICES);
             if (!choices.isArray() || choices.isEmpty()) {
-                return new ChatResponse(List.of(), metadata(id, model, usage, root));
+                return new ChatResponse(List.of(),
+                    metadata(id, model, usage, root, diagnosticId));
             }
             var generations = new ArrayList<Generation>();
             for (var choice : choices) {
                 generations.add(generation(choice, choice.path(Fields.MESSAGE), id, null, options));
             }
-            return new ChatResponse(generations, metadata(id, model, usage, root));
+            return new ChatResponse(generations,
+                metadata(id, model, usage, root, diagnosticId));
         } catch (IOException e) {
             throw new IllegalStateException("Failed to parse OpenAI-compatible chat response", e);
         }
@@ -718,6 +816,12 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
 
     private ChatResponse chatResponseChunk(String data, ToolCallState toolCallState,
         OpenAiCompatibleChatOptions options) {
+        return chatResponseChunk(data, toolCallState, options,
+            AiFoundationDiagnostics.newInvocationId());
+    }
+
+    private ChatResponse chatResponseChunk(String data, ToolCallState toolCallState,
+        OpenAiCompatibleChatOptions options, String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
             var id = root.path(Fields.ID).asText("");
@@ -726,7 +830,8 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
             var choices = root.path(Fields.CHOICES);
             if (!choices.isArray() || choices.isEmpty()) {
                 return usage != null
-                    ? new ChatResponse(List.of(), metadata(id, model, usage, root))
+                    ? new ChatResponse(List.of(),
+                        metadata(id, model, usage, root, diagnosticId))
                     : null;
             }
             var generations = new ArrayList<Generation>();
@@ -740,7 +845,8 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
             if (generations.isEmpty() && usage == null) {
                 return null;
             }
-            return new ChatResponse(generations, metadata(id, model, usage, root));
+            return new ChatResponse(generations,
+                metadata(id, model, usage, root, diagnosticId));
         } catch (IOException e) {
             throw new IllegalStateException("Failed to parse OpenAI-compatible stream chunk", e);
         }
@@ -859,10 +965,12 @@ public class OpenAiCompatibleChatModel implements ChatModel, ProviderStreamingCh
             + "_" + Math.max(index, 0);
     }
 
-    private ChatResponseMetadata metadata(String id, String model, Usage usage, JsonNode root) {
+    private ChatResponseMetadata metadata(String id, String model, Usage usage, JsonNode root,
+        String diagnosticId) {
         var builder = ChatResponseMetadata.builder()
             .id(id)
-            .model(model);
+            .model(model)
+            .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
         if (usage != null) {
             builder.usage(usage);
         }

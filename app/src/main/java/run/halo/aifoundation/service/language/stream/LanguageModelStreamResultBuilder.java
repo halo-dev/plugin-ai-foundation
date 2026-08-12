@@ -35,7 +35,6 @@ public final class LanguageModelStreamResultBuilder {
     private GenerationResponseMetadata response;
     private Map<String, Object> providerMetadata = Map.of();
     private String errorText;
-    private String errorType;
 
     public void accept(TextStreamPart part) {
         if (part == null || part.getType() == null) {
@@ -151,10 +150,6 @@ public final class LanguageModelStreamResultBuilder {
         }
         if (part.getProviderMetadata() != null) {
             providerMetadata = part.getProviderMetadata();
-            var exceptionType = part.getProviderMetadata().get("exceptionType");
-            if (exceptionType != null) {
-                errorType = exceptionType.toString();
-            }
         }
     }
 
@@ -162,8 +157,12 @@ public final class LanguageModelStreamResultBuilder {
         return errorText;
     }
 
-    public String errorType() {
-        return errorType;
+    public FinishReason finishReason() {
+        return finishReason;
+    }
+
+    public String rawFinishReason() {
+        return rawFinishReason;
     }
 
     public Integer currentStepIndex() {

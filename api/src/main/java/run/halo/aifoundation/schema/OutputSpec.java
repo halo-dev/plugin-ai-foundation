@@ -35,11 +35,14 @@ public class OutputSpec {
      */
     private OutputType type;
     /**
-     * Optional output name used for provider guidance when supported.
+     * Optional output name forwarded to provider-native structured output formats when supported.
+     *
+     * <p>Provider adapters may impose additional character and length constraints. Invalid names
+     * fail locally before a provider request is sent.
      */
     private String name;
     /**
-     * Optional output description used for provider guidance when supported.
+     * Optional human-readable description forwarded as structured output guidance when supported.
      */
     private String description;
     /**
@@ -55,7 +58,12 @@ public class OutputSpec {
      */
     private List<String> choices;
     /**
-     * Whether provider/local validation should prefer strict schema behavior when possible.
+     * Whether to request provider-native strict schema enforcement.
+     *
+     * <p>Only {@link Boolean#TRUE} opts into native strict enforcement. {@code false} and
+     * {@code null} are non-strict and never cause the schema to be rewritten. AI Foundation always
+     * performs final local parsing and validation, including when the selected provider cannot
+     * guarantee strict output natively.
      */
     private Boolean strict;
     /**

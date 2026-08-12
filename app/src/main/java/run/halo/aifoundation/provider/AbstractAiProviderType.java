@@ -44,6 +44,7 @@ import run.halo.aifoundation.provider.support.openai.OpenAiChatOptionsSupport;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatModel;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingModel;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
 import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
@@ -165,14 +166,16 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             .requestHeadersSupported(true)
             .seedSupported(true)
             .nativeStrictToolSchemas(nativeStrictToolSchemas)
+            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
             .chatOptionsFactory(request -> OpenAiChatOptionsSupport.buildBasic(request,
                 getProviderType(), reasoningControlOptions, extraBodyCustomizer))
             .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) ->
                 OpenAiChatOptionsSupport.buildToolCalling(request, toolCallbacks, toolNames,
                     getProviderType(), reasoningControlOptions, extraBodyCustomizer,
-                    nativeStrictToolSchemas))
+                    nativeStrictToolSchemas, StructuredOutputSupport.JSON_SCHEMA))
             .structuredOutputChatOptionsFactory(request -> OpenAiChatOptionsSupport.buildStructured(
-                request, getProviderType(), reasoningControlOptions, extraBodyCustomizer))
+                request, getProviderType(), reasoningControlOptions, extraBodyCustomizer,
+                StructuredOutputSupport.JSON_SCHEMA))
             .reasoningControlOptions(reasoningControlOptions)
             .build();
     }

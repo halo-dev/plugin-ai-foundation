@@ -6,6 +6,7 @@ import java.util.function.BiConsumer;
 import org.springframework.ai.tool.ToolCallback;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 
 /**
  * Builds OpenAI-compatible chat options while preserving provider-specific extensions.
@@ -27,10 +28,18 @@ public final class OpenAiChatOptionsSupport {
     public static OpenAiCompatibleChatOptions buildStructured(GenerateTextRequest request,
         String providerType, ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
+        return buildStructured(request, providerType, reasoningControlOptions,
+            extraBodyCustomizer, StructuredOutputSupport.JSON_SCHEMA);
+    }
+
+    public static OpenAiCompatibleChatOptions buildStructured(GenerateTextRequest request,
+        String providerType, ReasoningControlOptions reasoningControlOptions,
+        BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer,
+        StructuredOutputSupport structuredOutputSupport) {
         var builder = baseBuilder(request);
         reasoningControlOptions.apply(builder, request);
         OpenAiExtraBodyOptions.apply(builder, request, providerType, extraBodyCustomizer);
-        OpenAiStructuredOutputOptions.apply(builder, request);
+        OpenAiStructuredOutputOptions.apply(builder, request, structuredOutputSupport);
         return builder.build();
     }
 
@@ -39,7 +48,8 @@ public final class OpenAiChatOptionsSupport {
         ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
         return buildToolCalling(request, toolCallbacks, toolNames, providerType,
-            reasoningControlOptions, extraBodyCustomizer, false);
+            reasoningControlOptions, extraBodyCustomizer, false,
+            StructuredOutputSupport.JSON_SCHEMA);
     }
 
     public static OpenAiCompatibleChatOptions buildToolCalling(GenerateTextRequest request,
@@ -47,6 +57,16 @@ public final class OpenAiChatOptionsSupport {
         ReasoningControlOptions reasoningControlOptions,
         BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer,
         boolean nativeStrictToolSchemas) {
+        return buildToolCalling(request, toolCallbacks, toolNames, providerType,
+            reasoningControlOptions, extraBodyCustomizer, nativeStrictToolSchemas,
+            StructuredOutputSupport.JSON_SCHEMA);
+    }
+
+    public static OpenAiCompatibleChatOptions buildToolCalling(GenerateTextRequest request,
+        java.util.List<ToolCallback> toolCallbacks, Set<String> toolNames, String providerType,
+        ReasoningControlOptions reasoningControlOptions,
+        BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer,
+        boolean nativeStrictToolSchemas, StructuredOutputSupport structuredOutputSupport) {
         var builder = baseBuilder(request)
             .toolCallbacks(toolCallbacks);
         if (nativeStrictToolSchemas) {
@@ -55,7 +75,7 @@ public final class OpenAiChatOptionsSupport {
         reasoningControlOptions.apply(builder, request);
         OpenAiExtraBodyOptions.apply(builder, request, providerType, extraBodyCustomizer);
         OpenAiToolCallingOptions.applyToolChoice(builder, request.getToolChoice(), toolNames);
-        OpenAiStructuredOutputOptions.apply(builder, request);
+        OpenAiStructuredOutputOptions.apply(builder, request, structuredOutputSupport);
         return builder.build();
     }
 

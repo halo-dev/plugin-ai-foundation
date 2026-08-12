@@ -23,6 +23,7 @@ import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageOptions;
 
@@ -114,6 +115,7 @@ public class OllamaProvider extends AbstractAiProviderType {
         var reasoningControlOptions = ReasoningControlOptions.ollama();
         return LanguageModelProviderOptions.builder()
             .seedSupported(true)
+            .structuredOutputSupport(StructuredOutputSupport.PROMPT_ONLY)
             .chatOptionsFactory(this::buildChatOptions)
             .toolCallingChatOptionsFactory(this::buildToolCallingChatOptions)
             .structuredOutputChatOptionsFactory(this::buildChatOptions)

@@ -334,10 +334,17 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
 
         private final @Nullable Type type;
         private final @Nullable String jsonSchema;
+        private final @Nullable String name;
+        private final @Nullable String description;
+        private final @Nullable Boolean strict;
 
-        private ResponseFormat(@Nullable Type type, @Nullable String jsonSchema) {
+        private ResponseFormat(@Nullable Type type, @Nullable String jsonSchema,
+            @Nullable String name, @Nullable String description, @Nullable Boolean strict) {
             this.type = type;
             this.jsonSchema = jsonSchema;
+            this.name = name;
+            this.description = description;
+            this.strict = strict;
         }
 
         public static ResponseFormat.Builder builder() {
@@ -352,6 +359,18 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
             return jsonSchema;
         }
 
+        public @Nullable String getName() {
+            return name;
+        }
+
+        public @Nullable String getDescription() {
+            return description;
+        }
+
+        public @Nullable Boolean getStrict() {
+            return strict;
+        }
+
         public enum Type {
             TEXT, JSON_OBJECT, JSON_SCHEMA
         }
@@ -360,6 +379,9 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
 
             private @Nullable Type type;
             private @Nullable String jsonSchema;
+            private @Nullable String name;
+            private @Nullable String description;
+            private @Nullable Boolean strict;
 
             public Builder type(@Nullable Type type) {
                 this.type = type;
@@ -371,8 +393,23 @@ public class OpenAiCompatibleChatOptions implements ToolCallingChatOptions {
                 return this;
             }
 
+            public Builder name(@Nullable String name) {
+                this.name = name;
+                return this;
+            }
+
+            public Builder description(@Nullable String description) {
+                this.description = description;
+                return this;
+            }
+
+            public Builder strict(@Nullable Boolean strict) {
+                this.strict = strict;
+                return this;
+            }
+
             public ResponseFormat build() {
-                return new ResponseFormat(type, jsonSchema);
+                return new ResponseFormat(type, jsonSchema, name, description, strict);
             }
         }
     }

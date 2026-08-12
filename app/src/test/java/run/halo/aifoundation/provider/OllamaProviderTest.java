@@ -16,6 +16,7 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageOptions;
 import run.halo.app.extension.Metadata;
@@ -32,6 +33,12 @@ class OllamaProviderTest {
         assertThat(providerType.getSupportedModelTypes())
             .containsExactly(ModelType.LANGUAGE, ModelType.EMBEDDING,
                 ModelType.IMAGE_GENERATION);
+    }
+
+    @Test
+    void languageOptions_reportPromptOnlyStructuredOutputSupport() {
+        assertThat(providerType.languageModelProviderOptions().structuredOutputSupport())
+            .isEqualTo(StructuredOutputSupport.PROMPT_ONLY);
     }
 
     @Test

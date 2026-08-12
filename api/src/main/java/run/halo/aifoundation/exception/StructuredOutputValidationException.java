@@ -7,6 +7,10 @@ import run.halo.aifoundation.schema.OutputType;
 /**
  * Raised when a model or tool result does not satisfy the requested structured schema.
  *
+ * <p>If an explicit provider finish reason prevented a valid result, the runtime returns the
+ * specialized {@link StructuredOutputTerminationException} subtype with normalized and raw finish
+ * reasons.
+ *
  * <p>The exception carries safe debugging context for callers that need to show or log validation
  * failures without depending on provider-specific error shapes:
  *

@@ -25,6 +25,7 @@ import org.springframework.ai.tool.ToolCallback;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageResponseFormat;
+import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
 import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -36,6 +37,27 @@ import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModels;
 
 class OpenAiCompatibleModelsTest {
+
+    @Test
+    void chatResponseCarriesProviderInvocationDiagnosticId() {
+        var model = new OpenAiCompatibleChatModel(chatOptions(), WebClient.builder());
+        var response = (ChatResponse) ReflectionTestUtils.invokeMethod(model,
+            "chatResponse", """
+                {
+                  "id": "chatcmpl-1",
+                  "model": "gpt-test",
+                  "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "{\\\"ok\\\":true}"},
+                    "finish_reason": "stop"
+                  }]
+                }
+                """, chatOptions(), "ai_test_invocation");
+
+        Object diagnosticId = response.getMetadata()
+            .get(AiFoundationDiagnostics.CORRELATION_ID_KEY);
+        assertThat(diagnosticId).isEqualTo("ai_test_invocation");
+    }
 
     @Test
     void chatRequestBody_serializesMappedCustomFieldsAndDeepSeekThinking() {

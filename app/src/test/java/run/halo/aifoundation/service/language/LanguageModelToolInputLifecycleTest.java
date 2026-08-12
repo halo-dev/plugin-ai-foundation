@@ -203,8 +203,7 @@ class LanguageModelToolInputLifecycleTest extends LanguageModelTestSupport {
                 .fullStream().collectList())
             .assertNext(parts -> {
                 assertThat(parts.getLast().getType()).isEqualTo(PartType.ERROR);
-                assertThat(parts.getLast().getProviderMetadata())
-                    .containsEntry("exceptionType", "timeout");
+                assertThat(parts.getLast().getProviderMetadata()).isNullOrEmpty();
             })
             .verifyComplete();
 
@@ -226,8 +225,7 @@ class LanguageModelToolInputLifecycleTest extends LanguageModelTestSupport {
                 .fullStream().collectList())
             .assertNext(parts -> {
                 assertThat(parts.getLast().getType()).isEqualTo(PartType.ERROR);
-                assertThat(parts.getLast().getProviderMetadata())
-                    .containsEntry("exceptionType", "cancelled");
+                assertThat(parts.getLast().getProviderMetadata()).isNullOrEmpty();
             })
             .verifyComplete();
     }

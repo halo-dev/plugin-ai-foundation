@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.GenerateTextRequest;
@@ -34,6 +35,7 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
     private final String providerType;
     private final StopCondition initialStopWhen;
     private final ArrayList<GenerationWarning> lifecycleWarnings = new ArrayList<>();
+    private final AtomicReference<Throwable> terminalError = new AtomicReference<>();
     private boolean started;
     private boolean finished;
     private boolean errorNotified;
@@ -47,6 +49,16 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
 
     List<GenerationWarning> warnings() {
         return List.copyOf(lifecycleWarnings);
+    }
+
+    Throwable terminalError() {
+        return terminalError.get();
+    }
+
+    void recordTerminalError(Throwable error) {
+        if (error != null) {
+            terminalError.compareAndSet(null, error);
+        }
     }
 
     Mono<Void> start() {
@@ -152,6 +164,7 @@ final class LanguageModelGenerationRun implements LanguageModelToolExecutor.Tool
     }
 
     Mono<Void> error(Throwable error, Integer stepIndex, List<GenerationStep> steps) {
+        recordTerminalError(error);
         if (errorNotified || finished) {
             return Mono.empty();
         }

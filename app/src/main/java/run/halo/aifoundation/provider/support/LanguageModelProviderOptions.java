@@ -9,6 +9,7 @@ public record LanguageModelProviderOptions(
     boolean requestHeadersSupported,
     boolean seedSupported,
     boolean nativeStrictToolSchemas,
+    StructuredOutputSupport structuredOutputSupport,
     ChatOptionsFactory chatOptionsFactory,
     ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
     StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory,
@@ -29,6 +30,8 @@ public record LanguageModelProviderOptions(
         private boolean requestHeadersSupported;
         private boolean seedSupported;
         private boolean nativeStrictToolSchemas;
+        private StructuredOutputSupport structuredOutputSupport =
+            StructuredOutputSupport.PROMPT_ONLY;
         private ChatOptionsFactory chatOptionsFactory;
         private ToolCallingChatOptionsFactory toolCallingChatOptionsFactory;
         private StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory;
@@ -60,6 +63,14 @@ public record LanguageModelProviderOptions(
 
         public Builder nativeStrictToolSchemas(boolean nativeStrictToolSchemas) {
             this.nativeStrictToolSchemas = nativeStrictToolSchemas;
+            return this;
+        }
+
+        public Builder structuredOutputSupport(
+            StructuredOutputSupport structuredOutputSupport) {
+            this.structuredOutputSupport = structuredOutputSupport != null
+                ? structuredOutputSupport
+                : StructuredOutputSupport.PROMPT_ONLY;
             return this;
         }
 
@@ -100,6 +111,7 @@ public record LanguageModelProviderOptions(
                 requestHeadersSupported,
                 seedSupported,
                 nativeStrictToolSchemas,
+                structuredOutputSupport,
                 chatOptionsFactory,
                 toolCallingChatOptionsFactory,
                 structuredOutputChatOptionsFactory,

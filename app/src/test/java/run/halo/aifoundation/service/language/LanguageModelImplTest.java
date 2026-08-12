@@ -40,6 +40,7 @@ import reactor.core.Disposable;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.exception.AiGenerationTimeoutException;
 import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
 import run.halo.aifoundation.control.CancellationSource;
 import run.halo.aifoundation.chat.FinishReason;
@@ -60,7 +61,9 @@ import run.halo.aifoundation.chat.PreparedStep;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.chat.StepContext;
+import run.halo.aifoundation.exception.StructuredOutputTerminationException;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
+import run.halo.aifoundation.exception.StructuredOutputSchemaException;
 import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.provider.DeepSeekProvider;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
@@ -2007,6 +2010,204 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_reportsDeepSeekJsonObjectAndTopLevelArrayTruthfully() {
+        var objectChatModel = mock(ChatModel.class);
+        when(objectChatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("{\"name\":\"Halo\"}", "stop", 2, 4));
+        var providerOptions = new run.halo.aifoundation.provider.DeepSeekProvider()
+            .languageModelProviderOptions();
+        var objectModel = new LanguageModelImpl(objectChatModel, "deepseek", providerOptions);
+        var strictObjectRequest = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.builder()
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                .schema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("name", Map.of("type", "string")),
+                    "required", List.of("name")
+                ))
+                .strict(true)
+                .build())
+            .build();
+
+        StepVerifier.create(objectModel.generateText(strictObjectRequest))
+            .assertNext(result -> assertThat(result.getWarnings()).extracting("code")
+                .contains("structured-output-strict-not-guaranteed")
+                .doesNotContain("structured-output-prompt-guidance"))
+            .verifyComplete();
+
+        var arrayChatModel = mock(ChatModel.class);
+        when(arrayChatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("[\"Halo\"]", "stop", 2, 4));
+        var arrayModel = new LanguageModelImpl(arrayChatModel, "deepseek", providerOptions);
+        var arrayRequest = GenerateTextRequest.builder()
+            .prompt("Generate projects")
+            .output(OutputSpec.array(Map.of("type", "string")))
+            .build();
+
+        StepVerifier.create(arrayModel.generateText(arrayRequest))
+            .assertNext(result -> assertThat(result.getWarnings()).extracting("code")
+                .contains("structured-output-prompt-guidance")
+                .doesNotContain("structured-output-strict-not-guaranteed"))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_reportsOpenAiNonObjectRootFallbackWithoutWrapping() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("[\"Halo\"]", "stop", 2, 4));
+        var model = new LanguageModelImpl(chatModel, "openai",
+            new run.halo.aifoundation.provider.OpenAiProvider().languageModelProviderOptions());
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate projects")
+            .output(OutputSpec.array(Map.of("type", "string")))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getWarnings()).extracting("code")
+                .contains("structured-output-prompt-guidance")
+                .doesNotContain("structured-output-strict-not-guaranteed"))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        assertThat(options.getResponseFormat()).isNull();
+    }
+
+    @Test
+    void generateText_reportsOllamaPromptOnlyStrictFallback() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("{\"name\":\"Halo\"}", "stop", 2, 4));
+        var model = new LanguageModelImpl(chatModel, "ollama",
+            new run.halo.aifoundation.provider.OllamaProvider().languageModelProviderOptions());
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.builder()
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                .schema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("name", Map.of("type", "string")),
+                    "required", List.of("name")
+                ))
+                .strict(true)
+                .build())
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .assertNext(result -> assertThat(result.getWarnings()).extracting("code")
+                .contains("structured-output-prompt-guidance",
+                    "structured-output-strict-not-guaranteed"))
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_rejectsInvalidStrictSchemaBeforeProviderInvocation() {
+        var chatModel = mock(ChatModel.class);
+        var model = new LanguageModelImpl(chatModel, "openai",
+            new run.halo.aifoundation.provider.OpenAiProvider().languageModelProviderOptions());
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.builder()
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                .schema(Map.of(
+                    "type", "object",
+                    "properties", Map.of("name", Map.of("type", "string")),
+                    "required", List.of("name")
+                ))
+                .strict(true)
+                .build())
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(StructuredOutputSchemaException.class);
+                assertThat(((StructuredOutputSchemaException) error).getValidationPath())
+                    .isEqualTo("$.additionalProperties");
+            })
+            .verify();
+        verify(chatModel, times(0)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_keepsFinalLocalValidationForNonStrictSchema() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("{}", "stop", 2, 4));
+        var model = new LanguageModelImpl(chatModel, "openai",
+            new run.halo.aifoundation.provider.OpenAiProvider().languageModelProviderOptions());
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(StructuredOutputValidationException.class);
+                assertThat(((StructuredOutputValidationException) error).getValidationPath())
+                    .isEqualTo("$.name");
+            })
+            .verify();
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_validatesPluginLinksStyleNullableOptionalFieldsLocally() {
+        var schema = Map.<String, Object>of(
+            "type", "object",
+            "properties", Map.of(
+                "isLinkApplication", Map.of("type", "boolean"),
+                "url", Map.of("anyOf", List.of(
+                    Map.of("type", "string"),
+                    Map.of("type", "null")
+                ))
+            ),
+            "required", List.of("isLinkApplication")
+        );
+        var validChatModel = mock(ChatModel.class);
+        when(validChatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("{\"isLinkApplication\":true,\"url\":null}", "stop", 2, 4));
+        var validModel = new LanguageModelImpl(validChatModel, "generic");
+
+        StepVerifier.create(validModel.generateText(GenerateTextRequest.builder()
+                .prompt("Recognize link")
+                .output(OutputSpec.object(schema))
+                .build()))
+            .assertNext(result -> {
+                assertThat(result.getOutput()).isInstanceOf(Map.class);
+                var output = (Map<?, ?>) result.getOutput();
+                assertThat(output.get("isLinkApplication")).isEqualTo(true);
+                assertThat(output.get("url")).isNull();
+            })
+            .verifyComplete();
+        var promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        verify(validChatModel).call(promptCaptor.capture());
+        assertThat(promptCaptor.getValue().getInstructions().getFirst().getText())
+            .contains("Example:", "\"url\":\"\"");
+
+        var invalidChatModel = mock(ChatModel.class);
+        when(invalidChatModel.call(any(Prompt.class))).thenReturn(
+            chatResponse("{\"isLinkApplication\":true,\"url\":42}", "stop", 2, 4));
+        var invalidModel = new LanguageModelImpl(invalidChatModel, "generic");
+
+        StepVerifier.create(invalidModel.generateText(GenerateTextRequest.builder()
+                .prompt("Recognize link")
+                .output(OutputSpec.object(schema))
+                .build()))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(StructuredOutputValidationException.class);
+                assertThat(((StructuredOutputValidationException) error).getValidationPath())
+                    .isEqualTo("$.url");
+            })
+            .verify();
+    }
+
+    @Test
     void generateText_warnsWhenStrictToolSchemaIsDowngraded() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 2, 4));
@@ -2715,6 +2916,92 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_classifiesTokenLimitBeforeInvalidJson() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("", "length", 275, 500));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var request = structuredProjectRequest();
+
+        StepVerifier.create(model.generateText(request))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(StructuredOutputTerminationException.class);
+                var termination = (StructuredOutputTerminationException) error;
+                assertThat(termination.getMessage()).contains("output token limit");
+                assertThat(termination.getFinishReason()).isEqualTo(FinishReason.LENGTH);
+                assertThat(termination.getRawFinishReason()).isEqualTo("length");
+                assertThat(termination.getOutputText()).isEmpty();
+                assertThat(termination.getStepIndex()).isZero();
+                assertThat(termination.getUsage().getOutputTokens()).isEqualTo(500);
+                assertThat(termination.getResponse().getId()).isEqualTo("resp_1");
+            })
+            .verify();
+    }
+
+    @Test
+    void generateText_classifiesContentFilterBeforeInvalidJson() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenReturn(chatResponse("", "content_filter", 10, 1));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(structuredProjectRequest()))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(StructuredOutputTerminationException.class);
+                var termination = (StructuredOutputTerminationException) error;
+                assertThat(termination.getMessage()).contains("content filter");
+                assertThat(termination.getFinishReason()).isEqualTo(FinishReason.CONTENT_FILTER);
+                assertThat(termination.getRawFinishReason()).isEqualTo("content_filter");
+            })
+            .verify();
+    }
+
+    @Test
+    void generateText_keepsOrdinaryValidationForNormalStop() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("", "stop", 10, 1));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(structuredProjectRequest()))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isExactlyInstanceOf(StructuredOutputValidationException.class);
+                assertThat(error.getMessage()).contains("output is not valid JSON");
+            })
+            .verify();
+    }
+
+    @Test
+    void generateText_acceptsValidStructuredOutputAtTokenLimit() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenReturn(chatResponse("{\"name\":\"Halo\"}", "length", 10, 10));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(structuredProjectRequest()))
+            .assertNext(result -> {
+                assertThat(result.getOutput()).isEqualTo(Map.of("name", "Halo"));
+                assertThat(result.getFinishReason()).isEqualTo(FinishReason.LENGTH);
+                assertThat(result.getRawFinishReason()).isEqualTo("length");
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void generateText_keepsPartialPlainTextAtTokenLimit() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenReturn(chatResponse("Partial answer", "length", 10, 10));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder().prompt("Answer").build()))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("Partial answer");
+                assertThat(result.getFinishReason()).isEqualTo(FinishReason.LENGTH);
+                assertThat(result.getRawFinishReason()).isEqualTo("length");
+            })
+            .verifyComplete();
+    }
+
+    @Test
     void generateText_failsWhenStructuredOutputIsInvalid() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("{\"age\":\"old\"}", "stop", 2, 4));
@@ -2803,6 +3090,40 @@ class LanguageModelImplTest {
             .verify();
         StepVerifier.create(result.output())
             .expectErrorSatisfies(this::assertStructuredStreamValidationError)
+            .verify();
+    }
+
+    @Test
+    void streamText_preservesTokenLimitTerminationAcrossErrorAndResult() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("{\"name\":", null, null, null),
+            chatResponse("", "length", 275, 500)
+        ));
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var result = model.streamText(structuredProjectRequest());
+
+        StepVerifier.create(result.fullStream())
+            .expectNextMatches(part -> PartType.START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.START_STEP.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_START.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_DELTA.equals(part.getType()))
+            .expectNextMatches(part -> PartType.TEXT_END.equals(part.getType()))
+            .assertNext(part -> {
+                assertThat(part.getType()).isEqualTo(PartType.ERROR);
+                assertThat(part.getErrorText()).contains("output token limit");
+                assertThat(part.getProviderMetadata())
+                    .doesNotContainKey("exceptionType")
+                    .containsEntry("finishReason", FinishReason.LENGTH)
+                    .containsEntry("rawFinishReason", "length");
+            })
+            .verifyComplete();
+
+        StepVerifier.create(result.result())
+            .expectErrorSatisfies(this::assertTokenLimitTermination)
+            .verify();
+        StepVerifier.create(result.output())
+            .expectErrorSatisfies(this::assertTokenLimitTermination)
             .verify();
     }
 
@@ -3549,14 +3870,30 @@ class LanguageModelImplTest {
             .assertNext(parts -> {
                 assertThat(parts).startsWith(observed.toArray(TextStreamPart[]::new));
                 assertThat(parts.getLast().getType()).isEqualTo(PartType.ERROR);
-                assertThat(parts.getLast().getProviderMetadata())
-                    .containsEntry("exceptionType", "cancelled");
+                assertThat(parts.getLast().getProviderMetadata()).isNullOrEmpty();
             })
             .verifyComplete();
         StepVerifier.create(stream.result())
             .expectError(AiGenerationCancelledException.class)
             .verify();
         verify(chatModel).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamTextResultPreservesTypedTimeoutWithoutMetadataDispatch() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.never());
+        var model = new LanguageModelImpl(chatModel, "openai");
+        var stream = model.streamText(GenerateTextRequest.builder()
+            .prompt("Hello")
+            .timeouts(GenerationTimeouts.builder()
+                .stepTimeout(Duration.ofMillis(25))
+                .build())
+            .build());
+
+        StepVerifier.create(stream.result())
+            .expectError(AiGenerationTimeoutException.class)
+            .verify();
     }
 
     @Test
@@ -3980,6 +4317,29 @@ class LanguageModelImplTest {
     }
 
     public record NativeCompletionTokenDetails(Integer reasoningTokens) {
+    }
+
+    private GenerateTextRequest structuredProjectRequest() {
+        return GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+    }
+
+    private void assertTokenLimitTermination(Throwable error) {
+        assertThat(error).isInstanceOf(StructuredOutputTerminationException.class);
+        var termination = (StructuredOutputTerminationException) error;
+        assertThat(termination.getMessage()).contains("output token limit");
+        assertThat(termination.getFinishReason()).isEqualTo(FinishReason.LENGTH);
+        assertThat(termination.getRawFinishReason()).isEqualTo("length");
+        assertThat(termination.getOutputText()).isEqualTo("{\"name\":");
+        assertThat(termination.getStepIndex()).isZero();
+        assertThat(termination.getUsage().getOutputTokens()).isEqualTo(500);
+        assertThat(termination.getResponse()).isNotNull();
     }
 
     private void assertStructuredStreamValidationError(Throwable error) {

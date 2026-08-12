@@ -39,6 +39,7 @@ import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.chat.ReasoningOptions;
+import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
@@ -46,7 +47,9 @@ import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.chat.PreparedStep;
+import run.halo.aifoundation.exception.StructuredOutputTerminationException;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
+import run.halo.aifoundation.exception.StructuredOutputSchemaException;
 import run.halo.aifoundation.chat.StepContext;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.chat.StreamTextResult;
@@ -57,6 +60,7 @@ import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
@@ -203,16 +207,19 @@ public class LanguageModelImpl implements LanguageModel {
                 .onErrorResume(error -> run.error(error, null, List.of())
                     .thenMany(Flux.just(terminalErrorPart(error))))
         );
-        var replay = new CancellableStreamReplayCoordinator<>(source,
-            () -> terminalErrorPart(new AiGenerationCancelledException(
-                "Generation cancelled because all stream subscribers cancelled")));
+        var replay = new CancellableStreamReplayCoordinator<>(source, () -> {
+            var error = new AiGenerationCancelledException(
+                "Generation cancelled because all stream subscribers cancelled");
+            run.recordTerminalError(error);
+            return terminalErrorPart(error);
+        });
         var fullStream = replay.flux();
         var textStream = fullStream
             .filter(part -> PartType.TEXT_DELTA.equals(part.getType()))
             .map(TextStreamPart::getDelta)
             .filter(this::hasContent);
         var result = fullStream.collectList()
-            .map(parts -> resultFromStreamParts(request, parts));
+            .map(parts -> resultFromStreamParts(request, parts, run));
         var output = hasStructuredOutput(request)
             ? result.map(GenerateTextResult::getOutput)
             : Mono.empty();
@@ -408,7 +415,8 @@ public class LanguageModelImpl implements LanguageModel {
             validateFinalStructuredOutput(request, accumulator);
         } catch (StructuredOutputValidationException e) {
             parts.add(structuredValidationErrorPart(e, accumulator));
-            return Flux.fromIterable(parts);
+            return run.error(e, accumulator.stepIndex, List.of())
+                .thenMany(Flux.fromIterable(parts));
         }
         var warnings = new ArrayList<>(accumulator.warnings());
         warnings.addAll(requestWarnings(request));
@@ -648,14 +656,19 @@ public class LanguageModelImpl implements LanguageModel {
                     validateFinalStructuredOutput(request, accumulator);
                 } catch (StructuredOutputValidationException e) {
                     parts.add(structuredValidationErrorPart(e, accumulator));
-                    return Flux.fromIterable(parts);
+                    return run.error(e, accumulator.stepIndex, completedSteps)
+                        .thenMany(Flux.fromIterable(parts));
                 }
             } else if (hasStructuredOutput(request) && (!recordedToolCalls.isEmpty()
                 || !shouldContinue)) {
-                parts.add(streamErrorPart(
+                var error = new StructuredOutputValidationException(
                     "Structured output validation failed: final structured output was not produced",
-                    accumulator, null));
-                return Flux.fromIterable(parts);
+                    null, request.getOutput().getType(), accumulator.text.toString(), null,
+                    accumulator.stepIndex, accumulator.usage(), accumulator.response());
+                var enriched = enrichStructuredOutputFailure(request, accumulator, error);
+                parts.add(structuredValidationErrorPart(enriched, accumulator));
+                return run.error(enriched, accumulator.stepIndex, completedSteps)
+                    .thenMany(Flux.fromIterable(parts));
             }
                 parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
                     accumulator.rawFinishReason, accumulator.usage(), warnings, accumulator.request(),
@@ -908,12 +921,13 @@ public class LanguageModelImpl implements LanguageModel {
                 : state.steps.get(state.steps.size() - 1).getText();
             try {
                 structuredOutput = structuredOutputHandler.parse(request.getOutput(),
-                    outputSourceText);
+                    outputSourceText, diagnosticId(state.finalResponseMetadata));
             } catch (StructuredOutputValidationException e) {
                 throw structuredOutputHandler.enrich(e, request.getOutput(), outputSourceText,
                     state.steps.isEmpty() ? null
                         : state.steps.get(state.steps.size() - 1).getStepIndex(),
-                    usage, state.finalResponseMetadata);
+                    usage, state.finalResponseMetadata, state.finalFinishReason,
+                    state.finalRawFinishReason);
             }
             if (!state.steps.isEmpty()) {
                 var finalStep = state.steps.get(state.steps.size() - 1);
@@ -1089,7 +1103,8 @@ public class LanguageModelImpl implements LanguageModel {
         if (hasText(request.getSystem())) {
             messages.add(new SystemMessage(request.getSystem().trim()));
         }
-        var outputInstruction = structuredOutputHandler.instruction(request.getOutput());
+        var outputInstruction = structuredOutputHandler.instruction(request.getOutput(),
+            providerOptions.structuredOutputSupport() != StructuredOutputSupport.JSON_SCHEMA);
         if (hasText(outputInstruction)) {
             messages.add(new SystemMessage(outputInstruction));
         }
@@ -1331,7 +1346,8 @@ public class LanguageModelImpl implements LanguageModel {
         if (hasText(request.getSystem())) {
             messages.add(ModelMessage.system(request.getSystem().trim()));
         }
-        var outputInstruction = structuredOutputHandler.instruction(request.getOutput());
+        var outputInstruction = structuredOutputHandler.instruction(request.getOutput(),
+            providerOptions.structuredOutputSupport() != StructuredOutputSupport.JSON_SCHEMA);
         if (hasText(outputInstruction)) {
             messages.add(ModelMessage.system(outputInstruction));
         }
@@ -1672,6 +1688,7 @@ public class LanguageModelImpl implements LanguageModel {
         return !(error instanceof IllegalArgumentException
             || error instanceof AiGenerationCancelledException
             || error instanceof AiGenerationTimeoutException
+            || error instanceof StructuredOutputSchemaException
             || error instanceof StructuredOutputValidationException
             || error instanceof TimeoutException);
     }
@@ -1791,21 +1808,35 @@ public class LanguageModelImpl implements LanguageModel {
         if (!hasStructuredOutput(request)) {
             return;
         }
-        structuredOutputHandler.parse(request.getOutput(), accumulator.text.toString());
+        try {
+            structuredOutputHandler.parse(request.getOutput(), accumulator.text.toString(),
+                diagnosticId(accumulator.providerMetadata()));
+        } catch (StructuredOutputValidationException error) {
+            throw enrichStructuredOutputFailure(request, accumulator, error);
+        }
+    }
+
+    private StructuredOutputValidationException enrichStructuredOutputFailure(
+        GenerateTextRequest request, StreamStepAccumulator accumulator,
+        StructuredOutputValidationException error) {
+        return structuredOutputHandler.enrich(error, request.getOutput(), accumulator.text.toString(),
+            accumulator.stepIndex, accumulator.usage(), accumulator.response(),
+            accumulator.finishReason(), accumulator.rawFinishReason);
     }
 
     private GenerateTextResult resultFromStreamParts(GenerateTextRequest request,
-        List<TextStreamPart> parts) {
+        List<TextStreamPart> parts, LanguageModelGenerationRun run) {
         var builder = new LanguageModelStreamResultBuilder();
         for (var part : parts) {
             builder.accept(part);
         }
         if (builder.errorText() != null) {
-            if ("cancelled".equals(builder.errorType())) {
-                throw new AiGenerationCancelledException(builder.errorText());
+            var terminalError = run.terminalError();
+            if (terminalError instanceof RuntimeException runtimeError) {
+                throw runtimeError;
             }
-            if ("timeout".equals(builder.errorType())) {
-                throw new AiGenerationTimeoutException("stream", builder.errorText());
+            if (terminalError != null) {
+                throw new IllegalStateException(builder.errorText(), terminalError);
             }
             if (hasStructuredOutput(request)) {
                 throw new StructuredOutputValidationException(builder.errorText(), null,
@@ -1819,10 +1850,11 @@ public class LanguageModelImpl implements LanguageModel {
         if (hasStructuredOutput(request)) {
             try {
                 structuredOutput = structuredOutputHandler.parse(request.getOutput(),
-                    builder.finalStepText());
+                    builder.finalStepText(), diagnosticId(builder.response()));
             } catch (StructuredOutputValidationException e) {
                 throw structuredOutputHandler.enrich(e, request.getOutput(), builder.finalStepText(),
-                    builder.currentStepIndex(), builder.usage(), builder.response());
+                    builder.currentStepIndex(), builder.usage(), builder.response(),
+                    builder.finishReason(), builder.rawFinishReason());
             }
         }
         return builder.build(structuredOutput);
@@ -1830,13 +1862,22 @@ public class LanguageModelImpl implements LanguageModel {
 
     private TextStreamPart structuredValidationErrorPart(StructuredOutputValidationException error,
         StreamStepAccumulator accumulator) {
-        return streamErrorPart(error.getMessage(), accumulator, error.getValidationPath());
+        var errorMetadata = new LinkedHashMap<String, Object>();
+        if (error instanceof StructuredOutputTerminationException termination) {
+            errorMetadata.put("finishReason", termination.getFinishReason());
+            if (termination.getRawFinishReason() != null) {
+                errorMetadata.put("rawFinishReason", termination.getRawFinishReason());
+            }
+        }
+        return streamErrorPart(error.getMessage(), accumulator, error.getValidationPath(),
+            errorMetadata);
     }
 
     private TextStreamPart streamErrorPart(String message, StreamStepAccumulator accumulator,
-        String validationPath) {
+        String validationPath, Map<String, Object> errorMetadata) {
         var metadata = new LinkedHashMap<String, Object>();
         metadata.putAll(accumulator.providerMetadata());
+        metadata.putAll(errorMetadata);
         if (validationPath != null) {
             metadata.put("validationPath", validationPath);
         }
@@ -1975,13 +2016,9 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private TextStreamPart terminalErrorPart(Throwable error) {
-        var type = error instanceof AiGenerationCancelledException
-            ? "cancelled"
-            : error instanceof AiGenerationTimeoutException ? "timeout" : "error";
         return TextStreamPart.builder()
             .type(PartType.ERROR)
             .errorText(safeErrorMessage(error))
-            .providerMetadata(Map.of("exceptionType", type))
             .build();
     }
 
@@ -2018,6 +2055,18 @@ public class LanguageModelImpl implements LanguageModel {
             && request.getOutput() != null
             && request.getOutput().getType() != null
             && request.getOutput().getType() != OutputType.TEXT;
+    }
+
+    private String diagnosticId(GenerationResponseMetadata response) {
+        return response != null ? diagnosticId(response.getMetadata()) : null;
+    }
+
+    private String diagnosticId(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        var value = metadata.get(AiFoundationDiagnostics.CORRELATION_ID_KEY);
+        return value != null ? value.toString() : null;
     }
 
     private <T> List<T> nullSafe(List<T> list) {
@@ -2170,15 +2219,22 @@ public class LanguageModelImpl implements LanguageModel {
                 }
             }
         }
-        if (hasStructuredOutput(request)
-            && providerOptions.structuredOutputChatOptionsFactory() == null) {
+        var structuredOutputSupport = providerOptions.structuredOutputSupport();
+        var outputType = hasStructuredOutput(request) ? request.getOutput().getType() : null;
+        var nativeObjectShape = outputType == OutputType.OBJECT
+            || outputType == OutputType.JSON;
+        var requiresPromptGuidance = hasStructuredOutput(request)
+            && (structuredOutputSupport == StructuredOutputSupport.PROMPT_ONLY
+                || !nativeObjectShape);
+        if (requiresPromptGuidance) {
             warnings.add(warning(WARNING_STRUCTURED_OUTPUT_PROMPT_GUIDANCE,
-                "Structured output is guided by prompt instructions because the provider adapter "
-                    + "does not expose native structured output options."));
+                "Structured output is guided by prompt instructions because the provider's "
+                    + "native format cannot represent the requested top-level output shape."));
         }
         if (hasStructuredOutput(request)
             && Boolean.TRUE.equals(request.getOutput().getStrict())
-            && providerOptions.structuredOutputChatOptionsFactory() == null) {
+            && (structuredOutputSupport != StructuredOutputSupport.JSON_SCHEMA
+                || outputType != OutputType.OBJECT)) {
             warnings.add(warning(WARNING_STRUCTURED_OUTPUT_STRICT_NOT_GUARANTEED,
                 "Strict structured output was requested, but provider-native strict schema "
                     + "enforcement is not available for this adapter."));

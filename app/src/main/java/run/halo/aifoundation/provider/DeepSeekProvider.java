@@ -7,14 +7,12 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
 import org.springframework.stereotype.Component;
-import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.openai.OpenAiChatOptionsSupport;
-import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
-import run.halo.aifoundation.schema.OutputType;
 
 @Component
 public class DeepSeekProvider extends AbstractAiProviderType {
@@ -99,29 +97,18 @@ public class DeepSeekProvider extends AbstractAiProviderType {
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)
             .nativeStrictToolSchemas(true)
+            .structuredOutputSupport(StructuredOutputSupport.JSON_OBJECT)
             .chatOptionsFactory(request -> OpenAiChatOptionsSupport.buildBasic(request,
                 getProviderType(), reasoningControlOptions, null))
             .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) ->
-                useJsonObject(OpenAiChatOptionsSupport.buildToolCalling(request, toolCallbacks,
-                    toolNames, getProviderType(), reasoningControlOptions, null, true), request))
+                OpenAiChatOptionsSupport.buildToolCalling(request, toolCallbacks,
+                    toolNames, getProviderType(), reasoningControlOptions, null, true,
+                    StructuredOutputSupport.JSON_OBJECT))
             .structuredOutputChatOptionsFactory(request ->
-                useJsonObject(OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
-                    reasoningControlOptions, null), request))
+                OpenAiChatOptionsSupport.buildStructured(request, getProviderType(),
+                    reasoningControlOptions, null, StructuredOutputSupport.JSON_OBJECT))
             .reasoningControlOptions(reasoningControlOptions)
             .reasoningContentExtractor(this::reasoningContent)
-            .build();
-    }
-
-    private OpenAiCompatibleChatOptions useJsonObject(OpenAiCompatibleChatOptions options,
-        GenerateTextRequest request) {
-        if (request.getOutput() == null || request.getOutput().getType() == null
-            || request.getOutput().getType() == OutputType.TEXT) {
-            return options;
-        }
-        return options.mutate()
-            .responseFormat(OpenAiCompatibleChatOptions.ResponseFormat.builder()
-                .type(OpenAiCompatibleChatOptions.ResponseFormat.Type.JSON_OBJECT)
-                .build())
             .build();
     }
 
