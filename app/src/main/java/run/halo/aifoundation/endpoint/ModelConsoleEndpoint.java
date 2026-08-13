@@ -6,12 +6,14 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,6 +34,8 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
+import run.halo.aifoundation.agent.Agent;
+import run.halo.aifoundation.agent.AgentOptions;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingResponseMetadata;
 import run.halo.aifoundation.embedding.EmbeddingUsage;
@@ -39,11 +43,14 @@ import run.halo.aifoundation.embedding.EmbeddingUtils;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerationResponseMetadata;
+import run.halo.aifoundation.chat.PreparedStep;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.image.ImageResponseFormat;
 import run.halo.aifoundation.image.ImageUsage;
+import run.halo.aifoundation.lifecycle.GenerationLifecycle;
+import run.halo.aifoundation.lifecycle.GenerationStepFinishEvent;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.part.PartType;
@@ -68,6 +75,8 @@ import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.source.RetrievedContext;
 import run.halo.aifoundation.source.RetrievedSource;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallFailureKind;
+import run.halo.aifoundation.tool.ToolCallRepairCallback;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.ui.InvalidUIMessageException;
@@ -105,6 +114,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private static final String CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME =
         "halo_tool_input_stream_test";
     private static final String CONSOLE_REPAIR_TEST_TOOL_NAME = "halo_repair_test_info";
+    private static final String CONSOLE_LEGACY_REPAIR_TEST_TOOL_NAME =
+        "halo_legacy_repair_test_info";
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final ReactiveExtensionClient client;
@@ -211,6 +222,13 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         .in(ParameterIn.QUERY)
                         .description("Whether to inject console-only browser Agent test tools "
                             + "that are executed by the workbench frontend.")
+                        .implementation(Boolean.class)
+                        .required(false))
+                    .parameter(parameterBuilder()
+                        .name("enableToolInputStreamTest")
+                        .in(ParameterIn.QUERY)
+                        .description("Whether to inject the console-only lifecycle-aware tool for "
+                            + "streamed tool-input diagnostics.")
                         .implementation(Boolean.class)
                         .required(false))
                     .requestBody(requestBodyBuilder()
@@ -390,23 +408,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .flatMap(body -> validateTestUiMessageChatRequest(body).then(Mono.defer(() -> {
                 var cancellation = UIMessageCancellations.create();
                 return aiModelService.languageModel(modelName)
-                    .map(languageModel -> UIMessageChatHandlers.<Map<String, Object>>streamText(
-                        options -> options
-                            .model(languageModel)
-                            .chatRequest(toUiMessageChatRequest(body))
-                            .metadataSupplier(() -> new LinkedHashMap<>())
-                            .serializer(ModelConsoleEndpoint::writeJson)
-                            .request(builder -> applyConsoleGenerationOptions(builder, body,
-                                ConsoleTestToolOptions.from(request)))
-                            .cancellationToken(cancellation.token())
-                            .onError(ModelConsoleEndpoint::safeMessage)
-                            .onFinish(finish -> log.debug(
-                                "UI message chat test finished: modelName={}, messages={}, "
-                                    + "aborted={}, errorText={}",
-                                modelName, finish.messages().size(), finish.terminal().aborted(),
-                                finish.terminal().errorText()
-                            ))
-                    ))
+                    .map(languageModel -> body.agentEnabled()
+                        ? consoleAgentChat(languageModel, body, cancellation, modelName)
+                        : directModelChat(languageModel, body, request, cancellation, modelName))
                     .flatMap(chat -> uiMessageStreamResponse(chat.response(), cancellation));
             })))
             .onErrorResume(error -> {
@@ -420,6 +424,104 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         Map.of("exceptionType", "error")))
                 ), ModelConsoleEndpoint::writeJson), UIMessageCancellations.create());
             });
+    }
+
+    private run.halo.aifoundation.ui.UIMessageChatResult<Map<String, Object>> directModelChat(
+        run.halo.aifoundation.chat.LanguageModel languageModel,
+        TestUiMessageChatRequest body, ServerRequest request,
+        UIMessageCancellation cancellation, String modelName) {
+        return UIMessageChatHandlers.streamText(options -> options
+            .model(languageModel)
+            .chatRequest(toUiMessageChatRequest(body))
+            .metadataSupplier(LinkedHashMap::new)
+            .serializer(ModelConsoleEndpoint::writeJson)
+            .request(builder -> applyConsoleGenerationOptions(builder, body,
+                ConsoleTestToolOptions.from(request)))
+            .cancellationToken(cancellation.token())
+            .onError(ModelConsoleEndpoint::safeMessage)
+            .onFinish(finish -> logUiMessageFinish(modelName, finish))
+        );
+    }
+
+    private run.halo.aifoundation.ui.UIMessageChatResult<Map<String, Object>> consoleAgentChat(
+        run.halo.aifoundation.chat.LanguageModel languageModel,
+        TestUiMessageChatRequest body, UIMessageCancellation cancellation, String modelName) {
+        var agentOptions = body.effectiveAgent();
+        var diagnostics = consoleAgentDiagnostics(body, agentOptions);
+        var preparationCount = new AtomicInteger();
+        var testTools = consoleAgentTestTools(agentOptions);
+        var activeTools = testTools.stream().map(ToolDefinition::getName).toList();
+        var definition = AgentOptions.forModel(languageModel, ConsoleAgentCallOptions.class)
+            .id("console-model-test-agent")
+            .instructions(body.getSystem())
+            .tools(testTools)
+            .activeTools(activeTools)
+            .toolChoice(body.getToolChoice())
+            .output(body.getOutput())
+            .stopWhen(StopCondition.stepCountIs(agentOptions.effectiveMaxSteps()))
+            .prepareStep(context -> consolePreparedStep(context.getStepIndex(), agentOptions,
+                activeTools, diagnostics))
+            .toolCallRepair(consoleAgentRepair(agentOptions))
+            .reasoning(body.getReasoning())
+            .maxOutputTokens(body.getMaxOutputTokens())
+            .temperature(body.getTemperature())
+            .topP(body.getTopP())
+            .topK(body.getTopK())
+            .minP(body.getMinP())
+            .presencePenalty(body.getPresencePenalty())
+            .frequencyPenalty(body.getFrequencyPenalty())
+            .repetitionPenalty(body.getRepetitionPenalty())
+            .logprobs(body.getLogprobs())
+            .topLogprobs(body.getTopLogprobs())
+            .parallelToolCalls(body.getParallelToolCalls())
+            .stopSequences(body.getStopSequences())
+            .seed(body.getSeed())
+            .maxRetries(body.getMaxRetries())
+            .lifecycle(List.of(consoleAgentLifecycle(diagnostics)))
+            .callValidator(options -> {
+                if (options == null || options.profile() == null) {
+                    throw new IllegalArgumentException("agent call profile must be set");
+                }
+            })
+            .prepareCall(context -> {
+                var count = preparationCount.incrementAndGet();
+                diagnostics.put("callPreparationCount", count);
+                var effectiveInstructions = consoleAgentInstructions(body.getSystem(),
+                    context.getOptions().profile());
+                diagnostics.put("effectiveInstructions", effectiveInstructions);
+                var preparedRequest = context.getRequestBuilder().build();
+                var metadata = new LinkedHashMap<String, Object>();
+                if (preparedRequest.getMetadata() != null) {
+                    metadata.putAll(preparedRequest.getMetadata());
+                }
+                metadata.put("agentDiagnostics", diagnostics);
+                context.getRequestBuilder()
+                    .system(effectiveInstructions)
+                    .metadata(metadata);
+                return Mono.just(context.prepared());
+            })
+            .build();
+        var agent = Agent.create(definition);
+        var callOptions = new ConsoleAgentCallOptions(agentOptions.effectiveProfile());
+        return UIMessageChatHandlers.streamAgent(agent, toUiMessageChatRequest(body), callOptions,
+            options -> options
+                .metadataSupplier(LinkedHashMap::new)
+                .serializer(ModelConsoleEndpoint::writeJson)
+                .request(builder -> builder
+                    .headers(body.getHeaders())
+                    .metadata(body.getMetadata())
+                    .context(body.getContext()))
+                .cancellationToken(cancellation.token())
+                .onError(ModelConsoleEndpoint::safeMessage)
+                .onFinish(finish -> logUiMessageFinish(modelName, finish))
+        );
+    }
+
+    private static void logUiMessageFinish(String modelName,
+        run.halo.aifoundation.ui.UIMessageStreamFinish<Map<String, Object>> finish) {
+        log.debug("UI message chat test finished: modelName={}, messages={}, aborted={}, "
+                + "errorText={}", modelName, finish.messages().size(), finish.terminal().aborted(),
+            finish.terminal().errorText());
     }
 
     private Mono<ServerResponse> uiMessageStreamResponse(UIMessageStreamResponse response,
@@ -745,6 +847,145 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return request;
     }
 
+    private List<ToolDefinition> consoleAgentTestTools(TestAgentOptions options) {
+        var tools = new ArrayList<ToolDefinition>();
+        if (options.serverToolEnabled()) {
+            tools.add(consoleTestTool(options.approvalRequired()));
+        }
+        if (options.externalToolEnabled()) {
+            tools.add(consoleExternalTestTool());
+        }
+        if (options.browserToolEnabled()) {
+            tools.add(consoleAgentPageContextTool());
+            tools.add(consoleAgentTestActionTool());
+        }
+        if (options.toolInputStreamEnabled()) {
+            tools.add(consoleToolInputStreamTestTool());
+        }
+        if (options.effectiveRecoveryScenario() != ConsoleAgentRecoveryScenario.NONE) {
+            tools.add(consoleRepairTestTool());
+        }
+        return List.copyOf(tools);
+    }
+
+    @SuppressWarnings("unchecked")
+    private PreparedStep consolePreparedStep(Integer stepIndex, TestAgentOptions options,
+        List<String> allTools, Map<String, Object> diagnostics) {
+        var index = stepIndex != null ? stepIndex : 0;
+        List<String> activeTools = switch (options.effectiveStepPolicy()) {
+            case ALL_TOOLS -> allTools;
+            case SERVER_THEN_ALL -> index == 0
+                ? allTools.stream().filter(this::isServerConsoleTool).toList()
+                : allTools;
+            case SERVER_THEN_BROWSER -> index == 0
+                ? allTools.stream().filter(this::isServerConsoleTool).toList()
+                : allTools.stream().filter(name -> !isServerConsoleTool(name)).toList();
+        };
+        var entries = (List<Map<String, Object>>) diagnostics.get("stepPreparation");
+        entries.add(Map.of(
+            "stepIndex", index,
+            "activeTools", activeTools,
+            "policy", options.effectiveStepPolicy().name()
+        ));
+        return PreparedStep.builder().activeTools(activeTools).build();
+    }
+
+    private boolean isServerConsoleTool(String name) {
+        return CONSOLE_TEST_TOOL_NAME.equals(name)
+            || CONSOLE_REPAIR_TEST_TOOL_NAME.equals(name)
+            || CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME.equals(name);
+    }
+
+    private ToolCallRepairCallback consoleAgentRepair(TestAgentOptions options) {
+        return switch (options.effectiveRecoveryScenario()) {
+            case NONE -> null;
+            case INVALID_INPUT -> context -> {
+                if (context.getFailureKind() != ToolCallFailureKind.INVALID_INPUT
+                    || !CONSOLE_REPAIR_TEST_TOOL_NAME.equals(
+                    context.getToolCall().getToolName())) {
+                    return Mono.just(ToolCallRepairResult.unrepaired());
+                }
+                return repairedConsoleToolCall(context, CONSOLE_REPAIR_TEST_TOOL_NAME);
+            };
+            case RENAMED_TOOL -> context -> {
+                if (context.getFailureKind() != ToolCallFailureKind.UNKNOWN_TOOL
+                    || !CONSOLE_LEGACY_REPAIR_TEST_TOOL_NAME.equals(
+                    context.getToolCall().getToolName())) {
+                    return Mono.just(ToolCallRepairResult.unrepaired());
+                }
+                return repairedConsoleToolCall(context, CONSOLE_REPAIR_TEST_TOOL_NAME);
+            };
+            case FAILED_RECOVERY -> context -> Mono.just(ToolCallRepairResult.repaired(
+                ToolCall.builder()
+                    .toolCallId(context.getToolCall().getToolCallId())
+                    .toolName("halo_unavailable_recovery_target")
+                    .input(context.getToolCall().getInput())
+                    .build()));
+        };
+    }
+
+    private Mono<ToolCallRepairResult> repairedConsoleToolCall(
+        run.halo.aifoundation.tool.ToolCallRepairContext context, String resolvedName) {
+        var repairedQuery = repairedConsoleQuery(context.getToolCall().getInput());
+        if (repairedQuery == null || repairedQuery.isBlank()) {
+            return Mono.just(ToolCallRepairResult.unrepaired());
+        }
+        return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+            .toolCallId(context.getToolCall().getToolCallId())
+            .toolName(resolvedName)
+            .input(Map.of(
+                "query", repairedQuery,
+                "repairSource", "console-agent"
+            ))
+            .build()));
+    }
+
+    private Map<String, Object> consoleAgentDiagnostics(TestUiMessageChatRequest body,
+        TestAgentOptions options) {
+        var diagnostics = new LinkedHashMap<String, Object>();
+        diagnostics.put("enabled", true);
+        diagnostics.put("profile", options.effectiveProfile().name());
+        diagnostics.put("maximumSteps", options.effectiveMaxSteps());
+        diagnostics.put("stepPolicy", options.effectiveStepPolicy().name());
+        diagnostics.put("activeTools", consoleAgentTestTools(options).stream()
+            .map(ToolDefinition::getName).toList());
+        diagnostics.put("outputMode", body.getOutput() != null
+            && body.getOutput().getType() != null ? body.getOutput().getType().name() : "TEXT");
+        diagnostics.put("approvalRequired", options.approvalRequired());
+        diagnostics.put("externalToolEnabled", options.externalToolEnabled());
+        diagnostics.put("browserToolEnabled", options.browserToolEnabled());
+        diagnostics.put("recoveryScenario", options.effectiveRecoveryScenario().name());
+        diagnostics.put("callPreparationCount", 0);
+        diagnostics.put("completedSteps", 0);
+        diagnostics.put("stepPreparation", new CopyOnWriteArrayList<Map<String, Object>>());
+        return diagnostics;
+    }
+
+    private GenerationLifecycle consoleAgentLifecycle(Map<String, Object> diagnostics) {
+        return new GenerationLifecycle() {
+            @Override
+            public Mono<Void> onStepFinish(GenerationStepFinishEvent event) {
+                diagnostics.put("completedSteps", event.getSteps().size());
+                if (event.getStep() != null && event.getStep().getFinishReason() != null) {
+                    diagnostics.put("latestFinishReason",
+                        event.getStep().getFinishReason().name());
+                }
+                return Mono.empty();
+            }
+        };
+    }
+
+    private String consoleAgentInstructions(String instructions, ConsoleAgentProfile profile) {
+        var base = instructions == null || instructions.isBlank()
+            ? "You are the Halo AI Foundation console test agent."
+            : instructions.trim();
+        return switch (profile) {
+            case BALANCED -> base + " Respond clearly and use tools only when requested.";
+            case CONCISE -> base + " Keep the final answer concise and factual.";
+            case EXPLICIT -> base + " Explain the final result explicitly after every tool round.";
+        };
+    }
+
     private void applyConsoleGenerationOptions(
         GenerateTextRequest.GenerateTextRequestBuilder builder,
         TestUiMessageChatRequest request, ConsoleTestToolOptions options) {
@@ -1023,6 +1264,14 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         }
         for (var message : request.getMessages()) {
             validateConsoleUiMessage(message);
+        }
+        if (request.agentEnabled()) {
+            var agent = request.effectiveAgent();
+            if (agent.getMaxSteps() != null
+                && (agent.getMaxSteps() < 1 || agent.getMaxSteps() > 100)) {
+                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "agent.maxSteps must be between 1 and 100"));
+            }
         }
         return Mono.empty();
     }
@@ -1697,6 +1946,91 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Map<String, Object> context;
         private run.halo.aifoundation.schema.OutputSpec output;
         private run.halo.aifoundation.tool.ToolChoice toolChoice;
+        @Schema(description = "Agent workbench execution and diagnostic options.")
+        private TestAgentOptions agent;
+
+        boolean agentEnabled() {
+            return agent != null && Boolean.TRUE.equals(agent.getEnabled());
+        }
+
+        TestAgentOptions effectiveAgent() {
+            return agent != null ? agent : new TestAgentOptions();
+        }
+    }
+
+    public enum ConsoleAgentProfile {
+        BALANCED,
+        CONCISE,
+        EXPLICIT
+    }
+
+    public enum ConsoleAgentStepPolicy {
+        ALL_TOOLS,
+        SERVER_THEN_ALL,
+        SERVER_THEN_BROWSER
+    }
+
+    public enum ConsoleAgentRecoveryScenario {
+        NONE,
+        INVALID_INPUT,
+        RENAMED_TOOL,
+        FAILED_RECOVERY
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TestAgentOptions {
+        private Boolean enabled;
+        private ConsoleAgentProfile profile;
+        private Integer maxSteps;
+        private ConsoleAgentStepPolicy stepPolicy;
+        private Boolean serverToolEnabled;
+        private Boolean browserToolEnabled;
+        private Boolean externalToolEnabled;
+        private Boolean approvalRequired;
+        private Boolean toolInputStreamEnabled;
+        private ConsoleAgentRecoveryScenario recoveryScenario;
+
+        ConsoleAgentProfile effectiveProfile() {
+            return profile != null ? profile : ConsoleAgentProfile.BALANCED;
+        }
+
+        int effectiveMaxSteps() {
+            return maxSteps != null ? maxSteps : Agent.DEFAULT_MAX_STEPS;
+        }
+
+        ConsoleAgentStepPolicy effectiveStepPolicy() {
+            return stepPolicy != null ? stepPolicy : ConsoleAgentStepPolicy.ALL_TOOLS;
+        }
+
+        ConsoleAgentRecoveryScenario effectiveRecoveryScenario() {
+            return recoveryScenario != null ? recoveryScenario
+                : ConsoleAgentRecoveryScenario.NONE;
+        }
+
+        boolean serverToolEnabled() {
+            return serverToolEnabled == null || serverToolEnabled;
+        }
+
+        boolean browserToolEnabled() {
+            return Boolean.TRUE.equals(browserToolEnabled);
+        }
+
+        boolean externalToolEnabled() {
+            return Boolean.TRUE.equals(externalToolEnabled);
+        }
+
+        boolean approvalRequired() {
+            return Boolean.TRUE.equals(approvalRequired);
+        }
+
+        boolean toolInputStreamEnabled() {
+            return Boolean.TRUE.equals(toolInputStreamEnabled);
+        }
+    }
+
+    private record ConsoleAgentCallOptions(ConsoleAgentProfile profile) {
     }
 
     @Data

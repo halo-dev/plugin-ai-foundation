@@ -201,8 +201,10 @@ public final class UIMessageChunkReducer {
     }
 
     private boolean startToolInput(ToolInputStartChunk tool) {
-        replaceByIdentity(UIMessageParts.tool(tool.toolCallId(), tool.toolName(),
-            ToolPartState.INPUT_STREAMING, null, "", null, null, null, Map.of()));
+        replace(part -> part instanceof ToolPart value
+                && tool.toolCallId().equals(value.toolCallId()),
+            UIMessageParts.tool(tool.toolCallId(), tool.toolName(),
+                ToolPartState.INPUT_STREAMING, null, "", null, null, null, Map.of()));
         return true;
     }
 
@@ -247,9 +249,11 @@ public final class UIMessageChunkReducer {
             }
         }
 
-        replaceByIdentity(UIMessageParts.tool(toolCallId, toolName, state,
-            resolvedInput, inputText, resolvedOutput, resolvedErrorText, resolvedApproval,
-            resolvedMetadata));
+        replace(part -> part instanceof ToolPart value
+                && toolCallId.equals(value.toolCallId()),
+            UIMessageParts.tool(toolCallId, toolName, state,
+                resolvedInput, inputText, resolvedOutput, resolvedErrorText, resolvedApproval,
+                resolvedMetadata));
         return true;
     }
 

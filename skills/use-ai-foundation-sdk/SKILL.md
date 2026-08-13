@@ -1,6 +1,6 @@
 ---
 name: use-ai-foundation-sdk
-description: Query, explain, integrate, and debug the Halo AI Foundation Java SDK, browser/Vue SDK, UI Message transport, and FormKit model selector. Use when an AI coding agent needs to answer AI Foundation API questions, add AI capabilities to a Halo plugin, implement text generation, structured output, tools, embeddings, reranking, RAG, image generation, streaming chat, message persistence, or model selection, or verify a consumer plugin against the official SDK contracts.
+description: Query, explain, integrate, and debug the Halo AI Foundation Java SDK, agent runtime, browser/Vue SDK, UI Message transport, and FormKit model selector. Use when an AI coding agent needs to answer AI Foundation API questions, add AI capabilities to a Halo plugin, implement agents, text generation, structured output, tools, embeddings, reranking, RAG, image generation, streaming chat, message persistence, or model selection, or verify a consumer plugin against the official SDK contracts.
 ---
 
 # Use AI Foundation SDK
@@ -95,6 +95,7 @@ the relevant documentation and public source.
 
 1. Identify the requested surface:
     - Java backend SDK Core.
+    - Java Agent runtime and typed UI Message endpoint.
     - Browser or Vue SDK UI.
     - UI Message backend-to-frontend transport.
     - FormKit `aiModelSelector`.
@@ -129,6 +130,8 @@ Apply these defaults unless the target plugin establishes a stronger convention:
 - Use `ExtensionGetter.getEnabledExtension(AiModelService.class)` across plugin
   `ApplicationContext` boundaries.
 - Store and pass `AiModel.metadata.name` as `modelName`.
+- Build reusable agent policy with `AgentOptions`; keep per-call input and operational controls in
+  `AgentCall`.
 - Resolve the appropriate `LanguageModel`, `EmbeddingModel`, `RerankingModel`, or
   `ImageGenerationModel` through `AiModelService`.
 - Register beans that reference AI Foundation types only when AI Foundation is available if the
@@ -143,6 +146,10 @@ Apply these defaults unless the target plugin establishes a stronger convention:
 - Keep Reactor composition non-blocking. Do not call `block()` in request paths.
 - Use either `prompt` or `messages`; combine either with `system` when needed.
 - Preserve `responseMessages` for tool loops or continued model context.
+- Treat `Agent` as one-call orchestration, not durable run, checkpoint, scheduler, or memory
+  storage. The consumer owns persistence and resume policy.
+- Keep a recovered tool call id stable and rely on full runtime revalidation after invalid-input
+  or renamed-tool recovery.
 - Consume `StreamTextResult` projections according to the caller's need:
   `textStream()`, `fullStream()`, `partialOutputStream()`, `elementStream()`, `output()`, or
   `result()`.

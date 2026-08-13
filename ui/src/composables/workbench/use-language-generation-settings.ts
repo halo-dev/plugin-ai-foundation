@@ -1,6 +1,9 @@
 import {
   buildOutputSpec,
   buildReasoningOptions,
+  type AgentProfile,
+  type AgentRecoveryScenario,
+  type AgentStepPolicy,
   type OutputMode,
   type ReasoningEffort,
   type ReasoningMode,
@@ -32,6 +35,16 @@ export function useLanguageGenerationSettings() {
   const agentTestToolsEnabled = shallowRef(false)
   const toolCallRepairEnabled = shallowRef(false)
   const toolInputStreamTestEnabled = shallowRef(false)
+  const agentModeEnabled = shallowRef(false)
+  const agentProfile = shallowRef<AgentProfile>('BALANCED')
+  const agentMaxSteps = shallowRef(20)
+  const agentStepPolicy = shallowRef<AgentStepPolicy>('ALL_TOOLS')
+  const agentServerToolEnabled = shallowRef(true)
+  const agentBrowserToolEnabled = shallowRef(false)
+  const agentExternalToolEnabled = shallowRef(false)
+  const agentApprovalRequired = shallowRef(false)
+  const agentToolInputStreamEnabled = shallowRef(false)
+  const agentRecoveryScenario = shallowRef<AgentRecoveryScenario>('NONE')
   const outputMode = shallowRef<OutputMode>('TEXT')
   const outputSchemaText = shallowRef(`{
   "type": "object",
@@ -80,6 +93,18 @@ export function useLanguageGenerationSettings() {
       }),
       headers,
       output,
+      agent: {
+        enabled: agentModeEnabled.value,
+        profile: agentProfile.value,
+        maxSteps: numberOrUndefined(agentMaxSteps.value),
+        stepPolicy: agentStepPolicy.value,
+        serverToolEnabled: agentServerToolEnabled.value,
+        browserToolEnabled: agentBrowserToolEnabled.value,
+        externalToolEnabled: agentExternalToolEnabled.value,
+        approvalRequired: agentApprovalRequired.value,
+        toolInputStreamEnabled: agentToolInputStreamEnabled.value,
+        recoveryScenario: agentRecoveryScenario.value,
+      },
     }
   }
 
@@ -100,6 +125,7 @@ export function useLanguageGenerationSettings() {
   }
 
   function streamOptions() {
+    if (agentModeEnabled.value) return {}
     return {
       testToolEnabled: testToolEnabled.value,
       testToolApprovalEnabled: testToolApprovalEnabled.value,
@@ -115,6 +141,12 @@ export function useLanguageGenerationSettings() {
   })
   watch(testToolEnabled, (enabled) => {
     if (!enabled) testToolApprovalEnabled.value = false
+  })
+  watch(agentApprovalRequired, (enabled) => {
+    if (enabled && !agentServerToolEnabled.value) agentServerToolEnabled.value = true
+  })
+  watch(agentServerToolEnabled, (enabled) => {
+    if (!enabled) agentApprovalRequired.value = false
   })
 
   return {
@@ -141,6 +173,16 @@ export function useLanguageGenerationSettings() {
     agentTestToolsEnabled,
     toolCallRepairEnabled,
     toolInputStreamTestEnabled,
+    agentModeEnabled,
+    agentProfile,
+    agentMaxSteps,
+    agentStepPolicy,
+    agentServerToolEnabled,
+    agentBrowserToolEnabled,
+    agentExternalToolEnabled,
+    agentApprovalRequired,
+    agentToolInputStreamEnabled,
+    agentRecoveryScenario,
     outputMode,
     outputSchemaText,
     outputChoicesText,

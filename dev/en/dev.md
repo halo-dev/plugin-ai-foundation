@@ -21,6 +21,7 @@ public Java type.
 | Text, messages, media, reasoning, streaming, result metadata        | [Generating text](./sdk-core/generating-text.md)                             |
 | Objects, arrays, choices, partial and final validation              | [Structured output](./sdk-core/generating-structured-data.md)                |
 | Server and external tools, steps, approval, repair, input deltas    | [Tools](./sdk-core/tools-and-tool-calling.md)                                |
+| Immutable agents, typed call preparation, bounded steps, UI Message | [Agent runtime](./sdk-core/agents.md)                                        |
 | Embedding batches, similarity, reranking, RAG middleware, sources   | [Embeddings, reranking, and RAG](./sdk-core/embeddings-reranking-and-rag.md) |
 | Text-to-image, image editing, masks, middleware, generated files    | [Image generation](./sdk-core/image-generation.md)                           |
 | Middleware, lifecycle, cancellation, timeout, retry                 | [Middleware and lifecycle](./sdk-core/middleware-and-lifecycle.md)           |
@@ -37,5 +38,7 @@ public Java type.
 - Treat capability data, warnings, and provider metadata as runtime data.
 - Keep authorization, persistence, vector storage, file lifecycle, and business policy in the
   consumer plugin.
+- Treat an agent as one-call orchestration; durable runs, resume, scheduling, and memory remain
+  consumer responsibilities.
 
 See the [complete plugin integration example](./plugin-integration-examples.md).

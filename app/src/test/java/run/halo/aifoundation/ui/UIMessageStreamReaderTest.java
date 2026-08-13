@@ -210,6 +210,24 @@ class UIMessageStreamReaderTest {
     }
 
     @Test
+    void readerFinalizesRecoveredToolNameOnExistingCallIdentity() {
+        var result = UIMessageStreamReader.read(new UIMessageStream(Flux.just(
+            UIMessageChunks.toolInputStart("call-1", "legacyWeather"),
+            UIMessageChunks.toolInputDelta("call-1", "{\"location\":\"SF\"}"),
+            UIMessageChunks.toolInputAvailable("call-1", "weather",
+                Map.of("location", "SF"), Map.of("recovered", true)),
+            UIMessageChunks.toolOutputAvailable("call-1", "weather",
+                Map.of("temperature", 22), Map.of())
+        )));
+
+        assertThat(result.responseMessage().block().parts()).containsExactly(
+            UIMessageParts.tool("call-1", "weather", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("location", "SF"), null, Map.of("temperature", 22), null, null,
+                Map.of("recovered", true))
+        );
+    }
+
+    @Test
     void readerHonorsIdPriorityMetadataSupplierAndImmutableSnapshots() {
         var metadataCalls = new AtomicInteger();
         var existing = new UIMessage<>("existing", UIMessageRole.ASSISTANT,

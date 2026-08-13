@@ -69,6 +69,7 @@ import run.halo.aifoundation.provider.DeepSeekProvider;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolApprovalResponse;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallFailureKind;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolExecutor;
@@ -1139,7 +1140,7 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void generateText_doesNotRepairUnknownToolOrOutputSchemaFailure() {
+    void generateText_repairsUnknownToolButNotOutputSchemaFailure() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
             toolCallResponse("call_1", "unknown", "{}", 2, 3),
@@ -1189,7 +1190,7 @@ class LanguageModelImplTest {
                 .satisfies(error -> assertThat(error.getErrorText()).contains("temperature")))
             .verifyComplete();
 
-        assertThat(repairCalls).hasValue(0);
+        assertThat(repairCalls).hasValue(1);
     }
 
     @Test
@@ -3260,6 +3261,82 @@ class LanguageModelImplTest {
             .expectNextMatches(part -> PartType.FINISH.equals(part.getType()))
             .verifyComplete();
 
+        verify(chatModel, times(2)).stream(any(Prompt.class));
+    }
+
+    @Test
+    void streamText_recoversUnknownToolWithResolvedNameAndStableIdentity() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "legacyWeather",
+                "{\"location\":\"SF\"}", 2, 3)),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5))
+        );
+        var executions = new AtomicInteger();
+        var contexts = new AtomicReference<run.halo.aifoundation.tool.ToolCallRepairContext>();
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(repairableWeatherTool(context -> {
+                executions.incrementAndGet();
+                return Mono.just(Map.of("temperature", 22));
+            })))
+            .toolCallRepair(context -> {
+                contexts.set(context);
+                return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                    .toolCallId(context.getToolCall().getToolCallId())
+                    .toolName("weather")
+                    .input(context.getToolCall().getInput())
+                    .build()));
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+        var stream = new LanguageModelImpl(chatModel, "openai").streamText(request);
+
+        StepVerifier.create(stream.fullStream().collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsSubsequence(PartType.TOOL_CALL, PartType.TOOL_RESULT)
+                    .doesNotContain(PartType.TOOL_INPUT_ERROR);
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .toList())
+                    .singleElement()
+                    .satisfies(part -> {
+                        assertThat(part.getToolCallId()).isEqualTo("call_1");
+                        assertThat(part.getToolName()).isEqualTo("weather");
+                    });
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_RESULT.equals(part.getType()))
+                    .toList())
+                    .singleElement()
+                    .satisfies(part -> {
+                        assertThat(part.getToolCallId()).isEqualTo("call_1");
+                        assertThat(part.getToolName()).isEqualTo("weather");
+                    });
+                assertThat(parts.stream()
+                    .filter(part -> PartType.FINISH_STEP.equals(part.getType()))
+                    .findFirst().orElseThrow().getWarnings())
+                    .extracting("code")
+                    .contains("tool-call-repaired");
+            })
+            .verifyComplete();
+
+        StepVerifier.create(stream.result())
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("It is 22C.");
+                assertThat(result.getResponseMessages().stream()
+                    .flatMap(message -> message.getContent().stream())
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .toList())
+                    .singleElement()
+                    .satisfies(part -> {
+                        assertThat(part.getToolCallId()).isEqualTo("call_1");
+                        assertThat(part.getToolName()).isEqualTo("weather");
+                    });
+            })
+            .verifyComplete();
+        assertThat(contexts.get().getFailureKind()).isEqualTo(ToolCallFailureKind.UNKNOWN_TOOL);
+        assertThat(executions).hasValue(1);
         verify(chatModel, times(2)).stream(any(Prompt.class));
     }
 

@@ -10,6 +10,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.agent.Agent;
+import run.halo.aifoundation.agent.AgentCallException;
+import run.halo.aifoundation.agent.AgentCallPhase;
+import run.halo.aifoundation.agent.AgentOptions;
 import run.halo.aifoundation.control.CancellationSource;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.GenerateTextResult;
@@ -21,6 +25,7 @@ import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolResult;
 import org.junit.jupiter.api.Test;
@@ -28,6 +33,220 @@ import org.junit.jupiter.api.Test;
 class UIMessageChatHandlerTest {
 
     record Metadata(String chatId) {
+    }
+
+    record AgentProfile(String instructions) {
+    }
+
+    @Test
+    void typedAgentSubmitReceivesConvertedMessagesAndOperationalControls() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.start("assistant-agent"),
+            TextStreamPart.textDelta("text-1", "agent answer"),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var preparations = new AtomicInteger();
+        var middleware = new LanguageModelMiddleware() {
+        };
+        var cancellation = new CancellationSource();
+        var agent = Agent.create(AgentOptions.forModel(model, AgentProfile.class)
+            .instructions("base")
+            .callValidator(options -> {
+                if (options == null || options.instructions().isBlank()) {
+                    throw new IllegalArgumentException("instructions required");
+                }
+            })
+            .prepareCall(context -> {
+                preparations.incrementAndGet();
+                assertThat(context.getCall().getMessages()).singleElement()
+                    .satisfies(message -> assertThat(message.getContent().getFirst().getText())
+                        .isEqualTo("Hi"));
+                assertThat(context.getOptions()).isEqualTo(new AgentProfile("prepared"));
+                context.getRequestBuilder().system(context.getOptions().instructions());
+                return Mono.just(context.prepared());
+            })
+            .build());
+        var request = new UIMessageChatRequest<>("chat-1", List.of(
+            new UIMessage<>("user", UIMessageRole.USER,
+                List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat"))
+        ), UIMessageChatTrigger.SUBMIT_MESSAGE, null);
+
+        var chat = UIMessageChatHandlers.streamAgent(agent, request,
+            new AgentProfile("prepared"), options -> options
+                .request(builder -> builder
+                    .metadata(Map.of("endpoint", "agent"))
+                    .context(Map.of("tenant", "demo"))
+                    .headers(Map.of("trace", "trace-1")))
+                .cancellationToken(cancellation.token())
+                .middleware(middleware));
+
+        chat.response().stream().collectList().block();
+        var finish = chat.finish().block();
+
+        assertThat(preparations).hasValue(1);
+        assertThat(model.streamTextCalls).hasValue(1);
+        assertThat(model.capturedRequest.getSystem()).isEqualTo("prepared");
+        assertThat(model.capturedRequest.getMetadata()).containsEntry("endpoint", "agent");
+        assertThat(model.capturedRequest.getContext()).containsEntry("tenant", "demo");
+        assertThat(model.capturedRequest.getHeaders()).containsEntry("trace", "trace-1");
+        assertThat(model.capturedRequest.getMiddleware()).containsExactly(middleware);
+        assertThat(model.capturedRequest.getCancellationToken()).isSameAs(cancellation.token());
+        assertThat(finish.responseMessage().text()).isEqualTo("agent answer");
+        assertThat(finish.messages()).hasSize(2);
+    }
+
+    @Test
+    void typedAgentRegenerateUsesExistingTriggerSemantics() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.textDelta("text-1", "new answer"),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var agent = Agent.create(model, "answer");
+        var user = new UIMessage<>("user-1", UIMessageRole.USER,
+            List.of(UIMessageParts.text("question", "Question")), new Metadata("chat"));
+        var oldAssistant = new UIMessage<>("assistant-1", UIMessageRole.ASSISTANT,
+            List.of(UIMessageParts.text("old", "Old answer")), new Metadata("chat"));
+        var laterUser = new UIMessage<>("user-2", UIMessageRole.USER,
+            List.of(UIMessageParts.text("later", "Later")), new Metadata("chat"));
+        var request = new UIMessageChatRequest<>("chat-1",
+            List.of(user, oldAssistant, laterUser), UIMessageChatTrigger.REGENERATE_MESSAGE,
+            "assistant-1");
+
+        var chat = UIMessageChatHandlers.streamAgent(agent, request, null);
+        chat.response().stream().collectList().block();
+
+        assertThat(model.capturedRequest.getMessages()).singleElement()
+            .satisfies(message -> assertThat(message.getContent().getFirst().getText())
+                .isEqualTo("Question"));
+        assertThat(chat.validation().messages()).containsExactly(user);
+        assertThat(chat.finish().block().responseMessage().text()).isEqualTo("new answer");
+    }
+
+    @Test
+    void handlerRejectsMissingOrConflictingExecutionAndAgentPolicyOverrides() {
+        var model = new FakeLanguageModel(List.of());
+        var agent = Agent.create(model, "agent policy");
+        var messages = List.of(new UIMessage<>("user", UIMessageRole.USER,
+            List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat")));
+
+        assertThatThrownBy(() -> UIMessageChatHandlers.<Metadata>streamText(options ->
+            options.messages(messages)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("exactly one");
+        assertThatThrownBy(() -> UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .model(model)
+            .agent(agent)
+            .messages(messages)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("exactly one");
+        assertThatThrownBy(() -> UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .agent(agent)
+            .messages(messages)
+            .request(builder -> builder.system("transport override"))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("must not replace agent policy");
+        assertThatThrownBy(() -> UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .agent(agent)
+            .messages(messages)
+            .prepare(context -> Mono.empty())))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("unavailable for agent execution");
+        assertThat(model.streamTextCalls).hasValue(0);
+    }
+
+    @Test
+    void agentValidationAndPreparationFailuresUseExistingTerminalErrorFlow() {
+        var model = new FakeLanguageModel(List.of());
+        var validationAgent = Agent.create(AgentOptions.forModel(model, String.class)
+            .callValidator(value -> {
+                throw new IllegalArgumentException("profile rejected");
+            })
+            .build());
+        var preparationAgent = Agent.create(AgentOptions.forModel(model)
+            .prepareCall(context -> Mono.error(new IllegalStateException("prepare failed")))
+            .build());
+        var messages = List.of(new UIMessage<>("user", UIMessageRole.USER,
+            List.of(UIMessageParts.text("text", "Hi")), new Metadata("chat")));
+
+        var validation = UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .agent(validationAgent, "invalid")
+            .messages(messages)
+            .onError(error -> ((AgentCallException) error).getPhase().name()));
+        var preparation = UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .agent(preparationAgent)
+            .messages(messages)
+            .onError(error -> ((AgentCallException) error).getPhase().name()));
+
+        assertThat(validation.response().stream().collectList().block()).singleElement()
+            .isEqualTo(UIMessageChunks.error(AgentCallPhase.VALIDATION.name()));
+        assertThat(preparation.response().stream().collectList().block()).singleElement()
+            .isEqualTo(UIMessageChunks.error(AgentCallPhase.PREPARATION.name()));
+        assertThat(model.streamTextCalls).hasValue(0);
+    }
+
+    @Test
+    void agentUsesCanonicalMultiStepToolWireAndFinalizesRecoveredName() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.start("assistant-agent"),
+            TextStreamPart.startStep(0),
+            TextStreamPart.toolInputStart("input-1", "call-1", "legacyWeather"),
+            TextStreamPart.toolInputDelta("input-1", "call-1", "legacyWeather",
+                "{\"location\":\"SF\"}"),
+            TextStreamPart.toolInputEnd("input-1", "call-1", "legacyWeather"),
+            TextStreamPart.toolCall(ToolCall.builder()
+                .toolCallId("call-1")
+                .toolName("weather")
+                .input(Map.of("location", "SF"))
+                .build()),
+            TextStreamPart.toolResult(ToolResult.builder()
+                .toolCallId("call-1")
+                .toolName("weather")
+                .result(Map.of("temperature", 22))
+                .build()),
+            TextStreamPart.finishStep(0, null, null, null, List.of(), null, null, Map.of()),
+            TextStreamPart.startStep(1),
+            TextStreamPart.textDelta("text-1", "{\"answer\":\"22C\"}"),
+            TextStreamPart.finishStep(1, null, null, null, List.of(), null, null, Map.of()),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var agent = Agent.create(AgentOptions.forModel(model)
+            .instructions("structured agent")
+            .output(OutputSpec.json())
+            .build());
+        var messages = List.of(new UIMessage<>("user", UIMessageRole.USER,
+            List.of(UIMessageParts.text("text", "Weather?")), new Metadata("chat")));
+
+        var chat = UIMessageChatHandlers.<Metadata>streamText(options -> options
+            .agent(agent)
+            .messages(messages));
+        var chunks = chat.response().stream().collectList().block();
+        var finish = chat.finish().block();
+
+        assertThat(chunks).extracting(UIMessageChunk::type)
+            .containsExactly(
+                UIMessageChunkType.START,
+                UIMessageChunkType.START_STEP,
+                UIMessageChunkType.TOOL_INPUT_START,
+                UIMessageChunkType.TOOL_INPUT_DELTA,
+                UIMessageChunkType.TOOL_INPUT_AVAILABLE,
+                UIMessageChunkType.TOOL_OUTPUT_AVAILABLE,
+                UIMessageChunkType.FINISH_STEP,
+                UIMessageChunkType.START_STEP,
+                UIMessageChunkType.TEXT_DELTA,
+                UIMessageChunkType.FINISH_STEP,
+                UIMessageChunkType.FINISH
+            );
+        assertThat(finish.responseMessage().parts())
+            .filteredOn(ToolPart.class::isInstance)
+            .singleElement()
+            .satisfies(part -> {
+                var tool = (ToolPart) part;
+                assertThat(tool.toolCallId()).isEqualTo("call-1");
+                assertThat(tool.toolName()).isEqualTo("weather");
+                assertThat(tool.state()).isEqualTo(ToolPartState.OUTPUT_AVAILABLE);
+            });
+        assertThat(model.capturedRequest.getOutput().getType())
+            .isEqualTo(OutputSpec.json().getType());
     }
 
     @Test

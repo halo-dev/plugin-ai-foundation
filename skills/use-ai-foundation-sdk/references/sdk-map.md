@@ -28,6 +28,7 @@ workspace is an AI Foundation source checkout, resolve the same paths from its r
 | Generate or stream text                              | `dev/{locale}/sdk-core/generating-text.md`                |
 | Generate typed JSON, arrays, or choices              | `dev/{locale}/sdk-core/generating-structured-data.md`     |
 | Define tools, approvals, repair, or multiple steps   | `dev/{locale}/sdk-core/tools-and-tool-calling.md`         |
+| Build a reusable agent or typed UI Message endpoint  | `dev/{locale}/sdk-core/agents.md`                         |
 | Embed, rerank, or compose RAG                        | `dev/{locale}/sdk-core/embeddings-reranking-and-rag.md`   |
 | Generate or edit images                              | `dev/{locale}/sdk-core/image-generation.md`               |
 | Add middleware, lifecycle, cancellation, or timeouts | `dev/{locale}/sdk-core/middleware-and-lifecycle.md`       |
@@ -50,6 +51,7 @@ workspace is an AI Foundation source checkout, resolve the same paths from its r
 | ------------------------ | ------------------------------------------------------------- |
 | Model discovery          | `api/src/main/java/run/halo/aifoundation/AiModelService.java` |
 | Text request and result  | `api/src/main/java/run/halo/aifoundation/chat/`               |
+| Agent runtime            | `api/src/main/java/run/halo/aifoundation/agent/`              |
 | Model messages and parts | `api/src/main/java/run/halo/aifoundation/message/`            |
 | Stream parts             | `api/src/main/java/run/halo/aifoundation/part/`               |
 | Structured output        | `api/src/main/java/run/halo/aifoundation/schema/`             |

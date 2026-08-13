@@ -40,6 +40,18 @@ describe('useLanguageGenerationSettings', () => {
       reasoning: undefined,
       headers: { 'X-Trace': 'trace-1' },
       output: { type: 'CHOICE', choices: ['yes', 'no'] },
+      agent: {
+        enabled: false,
+        profile: 'BALANCED',
+        maxSteps: 20,
+        stepPolicy: 'ALL_TOOLS',
+        serverToolEnabled: true,
+        browserToolEnabled: false,
+        externalToolEnabled: false,
+        approvalRequired: false,
+        toolInputStreamEnabled: false,
+        recoveryScenario: 'NONE',
+      },
     })
   })
 
@@ -67,5 +79,37 @@ describe('useLanguageGenerationSettings', () => {
     settings.toolInputStreamTestEnabled.value = true
 
     expect(settings.streamOptions()).toMatchObject({ toolInputStreamTestEnabled: true })
+  })
+
+  it('builds the complete typed agent options and disables direct-mode query flags', async () => {
+    const settings = useLanguageGenerationSettings()
+    settings.testToolEnabled.value = true
+    settings.agentModeEnabled.value = true
+    settings.agentProfile.value = 'EXPLICIT'
+    settings.agentMaxSteps.value = 7
+    settings.agentStepPolicy.value = 'SERVER_THEN_BROWSER'
+    settings.agentServerToolEnabled.value = false
+    await nextTick()
+    settings.agentBrowserToolEnabled.value = true
+    settings.agentExternalToolEnabled.value = true
+    settings.agentApprovalRequired.value = true
+    settings.agentToolInputStreamEnabled.value = true
+    settings.agentRecoveryScenario.value = 'RENAMED_TOOL'
+    await nextTick()
+
+    expect(settings.agentServerToolEnabled.value).toBe(true)
+    expect(settings.buildValidatedParameters()?.agent).toEqual({
+      enabled: true,
+      profile: 'EXPLICIT',
+      maxSteps: 7,
+      stepPolicy: 'SERVER_THEN_BROWSER',
+      serverToolEnabled: true,
+      browserToolEnabled: true,
+      externalToolEnabled: true,
+      approvalRequired: true,
+      toolInputStreamEnabled: true,
+      recoveryScenario: 'RENAMED_TOOL',
+    })
+    expect(settings.streamOptions()).toEqual({})
   })
 })

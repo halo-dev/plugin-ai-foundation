@@ -61,6 +61,16 @@ const {
   agentTestToolsEnabled,
   toolCallRepairEnabled,
   toolInputStreamTestEnabled,
+  agentModeEnabled,
+  agentProfile,
+  agentMaxSteps,
+  agentStepPolicy,
+  agentServerToolEnabled,
+  agentBrowserToolEnabled,
+  agentExternalToolEnabled,
+  agentApprovalRequired,
+  agentToolInputStreamEnabled,
+  agentRecoveryScenario,
   outputMode,
   outputSchemaText,
   outputChoicesText,
@@ -409,6 +419,16 @@ function distanceToConversationBottom(element: HTMLElement) {
         :agent-test-tools-enabled="agentTestToolsEnabled"
         :tool-call-repair-enabled="toolCallRepairEnabled"
         :tool-input-stream-test-enabled="toolInputStreamTestEnabled"
+        :agent-mode-enabled="agentModeEnabled"
+        :agent-profile="agentProfile"
+        :agent-max-steps="agentMaxSteps"
+        :agent-step-policy="agentStepPolicy"
+        :agent-server-tool-enabled="agentServerToolEnabled"
+        :agent-browser-tool-enabled="agentBrowserToolEnabled"
+        :agent-external-tool-enabled="agentExternalToolEnabled"
+        :agent-approval-required="agentApprovalRequired"
+        :agent-tool-input-stream-enabled="agentToolInputStreamEnabled"
+        :agent-recovery-scenario="agentRecoveryScenario"
         :output-mode="outputMode"
         :output-schema-text="outputSchemaText"
         :output-choices-text="outputChoicesText"
@@ -452,6 +472,16 @@ function distanceToConversationBottom(element: HTMLElement) {
         @update:agent-test-tools-enabled="agentTestToolsEnabled = $event"
         @update:tool-call-repair-enabled="toolCallRepairEnabled = $event"
         @update:tool-input-stream-test-enabled="toolInputStreamTestEnabled = $event"
+        @update:agent-mode-enabled="agentModeEnabled = $event"
+        @update:agent-profile="agentProfile = $event"
+        @update:agent-max-steps="agentMaxSteps = $event"
+        @update:agent-step-policy="agentStepPolicy = $event"
+        @update:agent-server-tool-enabled="agentServerToolEnabled = $event"
+        @update:agent-browser-tool-enabled="agentBrowserToolEnabled = $event"
+        @update:agent-external-tool-enabled="agentExternalToolEnabled = $event"
+        @update:agent-approval-required="agentApprovalRequired = $event"
+        @update:agent-tool-input-stream-enabled="agentToolInputStreamEnabled = $event"
+        @update:agent-recovery-scenario="agentRecoveryScenario = $event"
         @update:output-mode="outputMode = $event"
         @update:output-schema-text="outputSchemaText = $event"
         @update:output-choices-text="outputChoicesText = $event"

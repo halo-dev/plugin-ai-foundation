@@ -37,6 +37,22 @@
 模型选择器使用同一套 capability 语义，详见
 [FormKit：AI 模型选择器](../model-selector.md)。
 
+## Agent 运行时
+
+| 类型                                   | 用途                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| `Agent<O>`                             | 不可变、可复用的类型化 Agent 定义及 `generate` / `stream` 入口。                |
+| `AgentOptions<O>`                      | 模型、instructions、工具、输出、步骤、恢复、采样和默认运行控制。                |
+| `AgentCall<O>`                         | 单次 prompt 或 messages、类型化 options、metadata、context、取消和 middleware。 |
+| `AgentCallValidator<O>`                | 在 Provider 调用前校验端点拥有的类型化 options。                                |
+| `AgentCallPrepare<O>`                  | 一次性异步修改当前调用请求或替换当前调用模型。                                  |
+| `AgentCallPrepareContext<O>`           | 当前调用、options、基础模型和新请求 builder。                                   |
+| `PreparedAgentCall`                    | 调用准备后的有效模型与请求。                                                    |
+| `AgentCallPhase`、`AgentCallException` | 区分 validation 与 preparation 阶段的失败。                                     |
+
+Agent 在没有显式 stop condition 时最多执行 20 步；直接 `LanguageModel` 默认行为不变。完整构造、
+恢复、UI Message 端点和持久化边界见 [Agent 运行时](./agents.md)。
+
 ## 文本生成
 
 ### 模型、请求与结果
@@ -154,20 +170,20 @@
 
 ## 工具与多步骤
 
-| 类型                                                                      | 用途                                                         |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `ToolDefinition`                                                          | 工具名、描述、输入 schema、执行器、审批、strict 和输入示例。 |
-| `ToolChoice`                                                              | auto、none、required 或指定工具。                            |
-| `ToolExecutor`                                                            | 在 AI Foundation 后端执行工具。                              |
-| `ToolExecutionContext`                                                    | 工具执行时可读取的调用 ID、消息、metadata 和 context。       |
-| `ToolCall`、`ToolResult`、`ToolError`                                     | 模型请求、成功输出和失败输出的持久结果。                     |
-| `ToolInputParseError`                                                     | 工具输入无法按 schema 解析。                                 |
-| `ToolApprovalPolicy`、`ToolApprovalPredicate`                             | 声明工具是否总是、从不或按输入等待审批。                     |
-| `ToolApprovalRequest`、`ToolApprovalResponse`                             | 跨请求保存审批请求和调用方决定。                             |
-| `ToolCallRepairCallback`、`ToolCallRepairContext`、`ToolCallRepairResult` | 已知服务端工具的输入修复钩子及结果。                         |
-| `ToolInputStartCallback`、`ToolInputStartContext`                         | 观察工具输入开始。                                           |
-| `ToolInputDeltaCallback`、`ToolInputDeltaContext`                         | 观察工具输入文本增量。                                       |
-| `ToolInputAvailableCallback`、`ToolInputAvailableContext`                 | 观察完整且已解析的工具输入。                                 |
+| 类型                                                                                             | 用途                                                         |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `ToolDefinition`                                                                                 | 工具名、描述、输入 schema、执行器、审批、strict 和输入示例。 |
+| `ToolChoice`                                                                                     | auto、none、required 或指定工具。                            |
+| `ToolExecutor`                                                                                   | 在 AI Foundation 后端执行工具。                              |
+| `ToolExecutionContext`                                                                           | 工具执行时可读取的调用 ID、消息、metadata 和 context。       |
+| `ToolCall`、`ToolResult`、`ToolError`                                                            | 模型请求、成功输出和失败输出的持久结果。                     |
+| `ToolInputParseError`                                                                            | 工具输入无法按 schema 解析。                                 |
+| `ToolApprovalPolicy`、`ToolApprovalPredicate`                                                    | 声明工具是否总是、从不或按输入等待审批。                     |
+| `ToolApprovalRequest`、`ToolApprovalResponse`                                                    | 跨请求保存审批请求和调用方决定。                             |
+| `ToolCallFailureKind`、`ToolCallRepairCallback`、`ToolCallRepairContext`、`ToolCallRepairResult` | 已知工具无效输入与未知/更名工具的统一恢复契约。              |
+| `ToolInputStartCallback`、`ToolInputStartContext`                                                | 观察工具输入开始。                                           |
+| `ToolInputDeltaCallback`、`ToolInputDeltaContext`                                                | 观察工具输入文本增量。                                       |
+| `ToolInputAvailableCallback`、`ToolInputAvailableContext`                                        | 观察完整且已解析的工具输入。                                 |
 
 `ToolDefinition` 的主要 builder 字段为 `name`、`description`、`inputSchema`、`executor`、
 `strict`、`inputExamples`、`approvalPolicy` 和 `approvalPredicate`。服务端执行、外部工具、
@@ -276,17 +292,20 @@
 
 | 类型                                                  | 用途                                                                    |
 | ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| `UIMessageChatHandlers`                               | 校验、转换、准备请求、执行模型并创建 UI Message stream。                |
-| `UIMessageChatOptions`                                | 配置模型、消息、请求、middleware、校验、转换、取消和回调。              |
+| `UIMessageChatHandlers`                               | 校验、转换、准备请求，执行模型或类型化 Agent 并创建 UI Message stream。 |
+| `UIMessageChatOptions`                                | 互斥配置模型或 Agent，以及消息、middleware、校验、转换、取消和回调。    |
 | `UIMessageChatRequest`、`UIMessageChatTrigger`        | 前端提交的会话、触发方式和 regenerate 目标。                            |
 | `UIMessageChatPrepare`、`UIMessageChatPrepareContext` | 执行前异步补充业务请求配置。                                            |
 | `UIMessageChatResult`                                 | stream、HTTP response、校验、转换和最终消息的组合结果。                 |
 | `UIMessageCancellation`、`UIMessageCancellations`     | 创建调用方拥有的 token，并在订阅者取消 Flux / Mono 时联动取消模型调用。 |
 
-`UIMessageChatOptions` 的公开链式配置为 `model`、`messages`、`chatRequest`、`message`、
+`UIMessageChatOptions` 的公开链式配置为 `model` / `agent`（二选一）、`messages`、`chatRequest`、`message`、
 `metadataSupplier`、`generateMessageId`、`serializer`、`request`、`prepare`、
 `middleware`、`validation`、`conversion`、`onFinish`、`onError`、`onReadError`、
 `cancellationToken` 和 `terminateOnError`。
+
+Agent 端点优先使用类型安全的 `UIMessageChatHandlers.streamAgent(...)`，Transport 请求不能覆盖
+Agent 的 semantic policy。详见 [Agent 运行时](./agents.md)。
 
 ### 校验与转换
 

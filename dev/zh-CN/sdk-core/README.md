@@ -24,11 +24,12 @@ ExtensionGetter
 2. [生成与流式文本](./generating-text.md)
 3. [生成结构化数据](./generating-structured-data.md)
 4. [工具调用与多步骤](./tools-and-tool-calling.md)
-5. [Embedding、Rerank 与 RAG](./embeddings-reranking-and-rag.md)
-6. [图像生成](./image-generation.md)
-7. [Middleware、步骤控制与生命周期](./middleware-and-lifecycle.md)
-8. [错误处理](./error-handling.md)
-9. [完整公开 API 索引](./api-reference.md)
+5. [Agent 运行时](./agents.md)
+6. [Embedding、Rerank 与 RAG](./embeddings-reranking-and-rag.md)
+7. [图像生成](./image-generation.md)
+8. [Middleware、步骤控制与生命周期](./middleware-and-lifecycle.md)
+9. [错误处理](./error-handling.md)
+10. [完整公开 API 索引](./api-reference.md)
 
 ## API 入口速览
 
@@ -40,12 +41,13 @@ ExtensionGetter
 | 消息       | `ModelMessage`、`ModelMessagePart`、`DataContent`                 |
 | 结构化输出 | `OutputSpec`、`JsonSchema`、`StructuredSchema`                    |
 | 工具       | `ToolDefinition`、`ToolChoice`、`StopCondition`、`PreparedStep`   |
+| Agent      | `Agent`、`AgentOptions`、`AgentCall`、`PreparedAgentCall`         |
 | Embedding  | `EmbeddingModel`、`EmbeddingRequest`、`EmbeddingUtils`            |
 | Rerank     | `RerankingModel`、`RerankRequest`                                 |
 | RAG        | `RagRetriever`、`RagMiddlewares`、`RagMiddlewareOptions`          |
 | 图像       | `ImageGenerationModel`、`GenerateImageRequest`、`GeneratedFile`   |
 | 控制       | `CancellationSource`、`GenerationTimeouts`、`GenerationLifecycle` |
-| UI bridge  | `UIMessageChatHandlers`、`UIMessageStreamResponse`                |
+| UI bridge  | `UIMessageChatHandlers`、`UIMessageStreamResponse`、`streamAgent` |
 
 需要按类型名查找完整公开面时，使用
 [SDK Core：公开 API 索引](./api-reference.md)。

@@ -28,6 +28,7 @@ import run.halo.aifoundation.part.TextStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallFailureKind;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
 
@@ -107,6 +108,102 @@ class LanguageModelToolInputLifecycleTest extends LanguageModelTestSupport {
         );
         assertThat(callbackCount).hasValue(4);
         assertThat(executorCount).hasValue(1);
+    }
+
+    @Test
+    void streamedUnknownToolReplaysResolvedCallbacksInCanonicalOrder() {
+        var chatModel = providerStreamingModel();
+        var provider = (ProviderStreamingChatModel) chatModel;
+        when(provider.streamParts(any(Prompt.class))).thenReturn(
+            Flux.just(
+                new ProviderStreamPart.ToolInputStartPart(0, "call_1", "legacyWeather"),
+                new ProviderStreamPart.ToolInputDeltaPart(0, "{\"location\":"),
+                new ProviderStreamPart.ToolInputDeltaPart(0, "\"SF\"}"),
+                new ProviderStreamPart.ToolInputEndPart(0),
+                new ProviderStreamPart.ChatResponsePart(
+                    toolCallResponse("call_1", "legacyWeather",
+                        "{\"location\":\"SF\"}", 2, 3))
+            ),
+            Flux.just(new ProviderStreamPart.ChatResponsePart(
+                chatResponse("It is 22C.", "stop", 4, 5)))
+        );
+        var events = new ArrayList<String>();
+        var callbacks = new AtomicInteger();
+        var tool = ToolDefinition.builder()
+            .name("weather")
+            .inputSchema(weatherInputSchema())
+            .onInputStart(context -> Mono.fromRunnable(() -> {
+                callbacks.incrementAndGet();
+                events.add("callback:start:" + context.getToolName());
+            }))
+            .onInputDelta(context -> Mono.fromRunnable(() -> {
+                callbacks.incrementAndGet();
+                events.add("callback:delta:" + context.getInputTextDelta());
+            }))
+            .onInputAvailable(context -> Mono.fromRunnable(() -> {
+                callbacks.incrementAndGet();
+                events.add("callback:available:" + context.getToolName());
+            }))
+            .executor(context -> Mono.fromSupplier(() -> {
+                events.add("executor:" + context.getToolName());
+                return Map.of("temperature", 22);
+            }))
+            .build();
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(tool))
+            .toolCallRepair(context -> {
+                assertThat(context.getFailureKind()).isEqualTo(ToolCallFailureKind.UNKNOWN_TOOL);
+                events.add("recovery:" + context.getToolCall().getToolName());
+                return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                    .toolCallId(context.getToolCall().getToolCallId())
+                    .toolName("weather")
+                    .input(context.getToolCall().getInput())
+                    .rawInput(context.getToolCall().getRawInput())
+                    .build()));
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        var stream = languageModel(chatModel, "openai").streamText(request);
+        StepVerifier.create(stream.fullStream()
+                .doOnNext(part -> events.add("part:" + part.getType()
+                    + ":" + part.getToolName()))
+                .collectList())
+            .assertNext(parts -> {
+                assertThat(parts).extracting(TextStreamPart::getType)
+                    .containsSubsequence(
+                        PartType.TOOL_INPUT_START,
+                        PartType.TOOL_INPUT_DELTA,
+                        PartType.TOOL_INPUT_DELTA,
+                        PartType.TOOL_INPUT_END,
+                        PartType.TOOL_CALL,
+                        PartType.TOOL_RESULT
+                    );
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .toList())
+                    .singleElement()
+                    .satisfies(part -> {
+                        assertThat(part.getToolCallId()).isEqualTo("call_1");
+                        assertThat(part.getToolName()).isEqualTo("weather");
+                    });
+            })
+            .verifyComplete();
+        StepVerifier.create(stream.result())
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("It is 22C."))
+            .verifyComplete();
+
+        assertThat(events).containsSubsequence(
+            "recovery:legacyWeather",
+            "callback:start:weather",
+            "callback:delta:{\"location\":\"SF\"}",
+            "part:tool-call:weather",
+            "callback:available:weather",
+            "executor:weather",
+            "part:tool-result:weather"
+        );
+        assertThat(callbacks).hasValue(3);
     }
 
     @Test
@@ -359,6 +456,100 @@ class LanguageModelToolInputLifecycleTest extends LanguageModelTestSupport {
             "start:first", "start:second", "delta:first", "delta:second",
             "available:first", "available:second"
         );
+    }
+
+    @Test
+    void recoversInterleavedUnknownStreamsWithoutCrossingCallIdentity() {
+        var chatModel = providerStreamingModel();
+        when(((ProviderStreamingChatModel) chatModel).streamParts(any(Prompt.class)))
+            .thenReturn(
+                Flux.just(
+                    new ProviderStreamPart.ToolInputStartPart(0, "call_1", "legacyFirst"),
+                    new ProviderStreamPart.ToolInputStartPart(1, "call_2", "legacySecond"),
+                    new ProviderStreamPart.ToolInputDeltaPart(0, "{\"value\":1}"),
+                    new ProviderStreamPart.ToolInputDeltaPart(1, "{\"value\":2}"),
+                    new ProviderStreamPart.ToolInputEndPart(0),
+                    new ProviderStreamPart.ToolInputEndPart(1),
+                    new ProviderStreamPart.ChatResponsePart(multiToolCallResponse(List.of(
+                        new AssistantMessage.ToolCall("call_1", "function", "legacyFirst",
+                            "{\"value\":1}"),
+                        new AssistantMessage.ToolCall("call_2", "function", "legacySecond",
+                            "{\"value\":2}")
+                    ), 2, 3))
+                ),
+                Flux.just(new ProviderStreamPart.ChatResponsePart(
+                    chatResponse("Done", "stop", 4, 5)))
+            );
+        var events = new ArrayList<String>();
+        var first = recoveredLifecycleTool("first", events);
+        var second = recoveredLifecycleTool("second", events);
+        var request = GenerateTextRequest.builder()
+            .prompt("Use both")
+            .tools(List.of(first, second))
+            .toolCallRepair(context -> {
+                var resolvedName = switch (context.getToolCall().getToolName()) {
+                    case "legacyFirst" -> "first";
+                    case "legacySecond" -> "second";
+                    default -> throw new IllegalArgumentException("unexpected tool");
+                };
+                events.add("recovery:" + context.getToolCall().getToolCallId()
+                    + ":" + resolvedName);
+                return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                    .toolCallId(context.getToolCall().getToolCallId())
+                    .toolName(resolvedName)
+                    .input(context.getToolCall().getInput())
+                    .rawInput(context.getToolCall().getRawInput())
+                    .build()));
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(languageModel(chatModel, "openai").streamText(request)
+                .fullStream().collectList())
+            .assertNext(parts -> {
+                var resolvedCalls = parts.stream()
+                    .filter(part -> PartType.TOOL_CALL.equals(part.getType()))
+                    .toList();
+                assertThat(resolvedCalls).extracting(TextStreamPart::getToolCallId)
+                    .containsExactly("call_1", "call_2");
+                assertThat(resolvedCalls).extracting(TextStreamPart::getToolName)
+                    .containsExactly("first", "second");
+                assertThat(parts.stream()
+                    .filter(part -> PartType.TOOL_RESULT.equals(part.getType()))
+                    .toList()).extracting(TextStreamPart::getToolCallId)
+                    .containsExactly("call_1", "call_2");
+            })
+            .verifyComplete();
+
+        assertThat(events).containsExactly(
+            "recovery:call_1:first",
+            "start:call_1:first",
+            "delta:call_1:{\"value\":1}",
+            "recovery:call_2:second",
+            "start:call_2:second",
+            "delta:call_2:{\"value\":2}",
+            "available:call_1:first",
+            "available:call_2:second",
+            "execute:call_1:first",
+            "execute:call_2:second"
+        );
+    }
+
+    private ToolDefinition recoveredLifecycleTool(String name, List<String> events) {
+        return ToolDefinition.builder()
+            .name(name)
+            .inputSchema(Map.of("type", "object"))
+            .onInputStart(context -> Mono.fromRunnable(() -> events.add(
+                "start:" + context.getToolCallId() + ":" + context.getToolName())))
+            .onInputDelta(context -> Mono.fromRunnable(() -> events.add(
+                "delta:" + context.getToolCallId() + ":" + context.getInputTextDelta())))
+            .onInputAvailable(context -> Mono.fromRunnable(() -> events.add(
+                "available:" + context.getToolCallId() + ":" + context.getToolName())))
+            .executor(context -> Mono.fromSupplier(() -> {
+                events.add("execute:" + context.getToolCallId() + ":" + context.getToolName());
+                return Map.of("ok", true);
+            }))
+            .build();
     }
 
     private ChatModel providerStreamingModel() {

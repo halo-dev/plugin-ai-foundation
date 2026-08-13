@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -24,11 +25,242 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallFailureKind;
 import run.halo.aifoundation.tool.ToolCallRepairContext;
 import run.halo.aifoundation.tool.ToolCallRepairResult;
 import run.halo.aifoundation.tool.ToolDefinition;
 
 class LanguageModelToolRepairTest extends LanguageModelTestSupport {
+
+    @Test
+    void generateTextRecoversRenamedToolAndPreservesCallIdentity() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "legacyWeather", "{\"location\":\"SF\"}", 2, 3),
+            chatResponse("It is 22C.", "stop", 4, 5)
+        );
+        var executions = new AtomicInteger();
+        var recoveryContext = new AtomicReference<ToolCallRepairContext>();
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .context(Map.of("tenant", "demo"))
+            .tools(List.of(repairableWeatherTool(context -> {
+                executions.incrementAndGet();
+                return Mono.just(Map.of("temperature", 22));
+            })))
+            .toolCallRepair(context -> {
+                recoveryContext.set(context);
+                return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                    .toolCallId(context.getToolCall().getToolCallId())
+                    .toolName("weather")
+                    .input(context.getToolCall().getInput())
+                    .build()));
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(languageModel(chatModel, "openai").generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("It is 22C.");
+                assertThat(result.getToolErrors()).isEmpty();
+                assertThat(result.getToolCalls()).singleElement().satisfies(call -> {
+                    assertThat(call.getToolCallId()).isEqualTo("call_1");
+                    assertThat(call.getToolName()).isEqualTo("weather");
+                });
+                assertThat(result.getToolResults()).singleElement().satisfies(toolResult -> {
+                    assertThat(toolResult.getToolCallId()).isEqualTo("call_1");
+                    assertThat(toolResult.getToolName()).isEqualTo("weather");
+                });
+                assertThat(result.getWarnings()).anySatisfy(warning -> {
+                    assertThat(warning.getCode()).isEqualTo("tool-call-repaired");
+                    assertThat(warning.getProviderMetadata())
+                        .containsEntry("originalToolName", "legacyWeather")
+                        .containsEntry("resolvedToolName", "weather");
+                });
+            })
+            .verifyComplete();
+
+        assertThat(executions).hasValue(1);
+        assertThat(recoveryContext.get().getFailureKind())
+            .isEqualTo(ToolCallFailureKind.UNKNOWN_TOOL);
+        assertThat(recoveryContext.get().getTool()).isNull();
+        assertThat(recoveryContext.get().getAvailableTools())
+            .extracting(ToolDefinition::getName)
+            .containsExactly("weather");
+        assertThat(recoveryContext.get().getStepIndex()).isZero();
+        assertThat(recoveryContext.get().getMessages()).isNotEmpty();
+        assertThat(recoveryContext.get().getRequestContext()).containsEntry("tenant", "demo");
+
+        var secondPrompt = capturedPrompts(chatModel).get(1);
+        assertThat(secondPrompt.getInstructions().stream()
+            .filter(AssistantMessage.class::isInstance)
+            .map(AssistantMessage.class::cast)
+            .flatMap(message -> message.getToolCalls().stream()))
+            .singleElement()
+            .satisfies(call -> {
+                assertThat(call.id()).isEqualTo("call_1");
+                assertThat(call.name()).isEqualTo("weather");
+            });
+    }
+
+    @Test
+    void unknownToolWithoutAvailableTargetDoesNotInvokeRecovery() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "missing", "{}", 2, 3),
+            chatResponse("Recovered after error.", "stop", 4, 5)
+        );
+        var recoveries = new AtomicInteger();
+        var request = GenerateTextRequest.builder()
+            .prompt("Use a tool")
+            .tools(List.of())
+            .toolCallRepair(context -> {
+                recoveries.incrementAndGet();
+                return Mono.just(ToolCallRepairResult.unrepaired());
+            })
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(languageModel(chatModel, "openai").generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getToolErrors()).singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText())
+                        .isEqualTo("Unknown tool: missing"));
+                assertThat(result.getWarnings()).extracting("code")
+                    .doesNotContain("tool-call-repair-failed");
+            })
+            .verifyComplete();
+        assertThat(recoveries).hasValue(0);
+    }
+
+    @Test
+    void unknownToolRejectsEveryUnsafeRecoveryShape() {
+        List<Function<ToolCallRepairContext, Mono<ToolCallRepairResult>>> recoveries = List.of(
+            context -> Mono.just(ToolCallRepairResult.unrepaired()),
+            context -> Mono.empty(),
+            context -> Mono.error(new IllegalStateException("recovery failed")),
+            context -> Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                .toolCallId("changed")
+                .toolName("weather")
+                .input(Map.of("location", "SF"))
+                .build())),
+            context -> Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                .toolCallId("call_1")
+                .toolName("unavailable")
+                .input(Map.of("location", "SF"))
+                .build())),
+            context -> Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
+                .toolCallId("call_1")
+                .toolName("weather")
+                .input(Map.of("city", "SF"))
+                .build()))
+        );
+
+        recoveries.forEach(recovery -> {
+            var chatModel = mock(ChatModel.class);
+            when(chatModel.call(any(Prompt.class))).thenReturn(
+                toolCallResponse("call_1", "legacyWeather", "{\"location\":\"SF\"}", 2, 3),
+                chatResponse("Recovered after error.", "stop", 4, 5)
+            );
+            var executions = new AtomicInteger();
+            var request = GenerateTextRequest.builder()
+                .prompt("Weather")
+                .tools(List.of(repairableWeatherTool(context -> {
+                    executions.incrementAndGet();
+                    return Mono.just(Map.of());
+                })))
+                .toolCallRepair(recovery::apply)
+                .stopWhen(StopCondition.stepCountIs(2))
+                .build();
+
+            var result = languageModel(chatModel, "openai").generateText(request).block();
+            assertThat(result.getToolErrors()).singleElement()
+                .satisfies(error -> assertThat(error.getErrorText())
+                    .isEqualTo("Unknown tool: legacyWeather"));
+            assertThat(result.getWarnings()).extracting("code")
+                .contains("tool-call-repair-failed");
+            assertThat(executions).hasValue(0);
+        });
+    }
+
+    @Test
+    void recoveredUnknownToolStillRequiresApprovalBeforeExecution() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "legacyWeather", "{\"location\":\"SF\"}", 2, 3)
+        );
+        var executions = new AtomicInteger();
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(weatherInputSchema())
+                .needsApproval(true)
+                .executor(context -> {
+                    executions.incrementAndGet();
+                    return Mono.just(Map.of());
+                })
+                .build()))
+            .toolCallRepair(context -> Mono.just(ToolCallRepairResult.repaired(
+                ToolCall.builder()
+                    .toolCallId(context.getToolCall().getToolCallId())
+                    .toolName("weather")
+                    .input(context.getToolCall().getInput())
+                    .build())))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(languageModel(chatModel, "openai").generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getToolApprovalRequests()).singleElement()
+                    .satisfies(approval -> {
+                        assertThat(approval.getToolCallId()).isEqualTo("call_1");
+                        assertThat(approval.getToolName()).isEqualTo("weather");
+                    });
+                assertThat(result.getToolResults()).isEmpty();
+                assertThat(result.getWarnings()).extracting("code")
+                    .contains("tool-call-repaired");
+            })
+            .verifyComplete();
+        assertThat(executions).hasValue(0);
+        verify(chatModel, times(1)).call(any(Prompt.class));
+    }
+
+    @Test
+    void recoveredUnknownExternalToolIsHandedOffWithoutExecution() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(
+            toolCallResponse("call_1", "legacyWeather", "{\"location\":\"SF\"}", 2, 3)
+        );
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(weatherInputSchema())
+                .build()))
+            .toolCallRepair(context -> Mono.just(ToolCallRepairResult.repaired(
+                ToolCall.builder()
+                    .toolCallId(context.getToolCall().getToolCallId())
+                    .toolName("weather")
+                    .input(context.getToolCall().getInput())
+                    .build())))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(languageModel(chatModel, "openai").generateText(request))
+            .assertNext(result -> {
+                assertThat(result.getToolCalls()).singleElement().satisfies(call -> {
+                    assertThat(call.getToolCallId()).isEqualTo("call_1");
+                    assertThat(call.getToolName()).isEqualTo("weather");
+                });
+                assertThat(result.getToolResults()).isEmpty();
+                assertThat(result.getToolErrors()).isEmpty();
+                assertThat(result.getWarnings()).extracting("code")
+                    .contains("tool-call-repaired", "external-tool-pending");
+            })
+            .verifyComplete();
+        verify(chatModel, times(1)).call(any(Prompt.class));
+    }
 
     @Test
     void generateTextReportsMalformedJsonBeforeSchemaValidationAndPreservesPairing() {

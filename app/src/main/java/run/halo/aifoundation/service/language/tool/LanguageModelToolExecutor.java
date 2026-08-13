@@ -16,6 +16,7 @@ import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolCallFailureKind;
 import run.halo.aifoundation.tool.ToolCallRepairContext;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolError;
@@ -63,23 +64,23 @@ public final class LanguageModelToolExecutor {
         var toolCall = toolCalls.get(index);
         var resolvedCall = toolCall;
         try {
-            var tool = context.tool(toolCall);
-            if (tool == null) {
-                accumulator.addError(unknownToolError(toolCall));
-                return executeNext(toolCalls, index + 1, context, accumulator);
-            }
-            if (tool.getExecutor() == null) {
-                accumulator.addWarning(externalToolPendingWarning(tool));
-                return Mono.just(accumulator.toBatch());
-            }
             cancellationChecker.check(context.request());
-            return repairIfNeeded(toolCall, tool, context)
+            return resolveToolCall(toolCall, context)
                 .flatMap(repair -> {
                     var currentCall = repair.toolCall();
                     accumulator.addWarnings(repair.warnings());
                     if (repair.error() != null) {
                         accumulator.addError(repair.error());
                         return executeNext(toolCalls, index + 1, context, accumulator);
+                    }
+                    var tool = context.tool(currentCall);
+                    if (tool == null) {
+                        accumulator.addError(unknownToolError(currentCall));
+                        return executeNext(toolCalls, index + 1, context, accumulator);
+                    }
+                    if (tool.getExecutor() == null) {
+                        accumulator.addWarning(externalToolPendingWarning(tool));
+                        return Mono.just(accumulator.toBatch());
                     }
                     return executeOne(currentCall, tool, context)
                         .flatMap(outcome -> {
@@ -148,21 +149,22 @@ public final class LanguageModelToolExecutor {
         var toolCall = toolCalls.get(index);
         try {
             var tool = context.tool(toolCall);
-            if (tool == null) {
-                accumulator.addInvalidToolCall(toolCall, unknownToolError(toolCall));
-                return normalizeNext(toolCalls, index + 1, context, accumulator);
-            }
             cancellationChecker.check(context.request());
             return notifyInputStartUnlessStreamed(toolCall, tool, context)
-                .then(Mono.defer(() -> repairIfNeeded(toolCall, tool, context)))
+                .then(Mono.defer(() -> resolveToolCall(toolCall, context)))
                 .flatMap(repair -> {
                     accumulator.addWarnings(repair.warnings());
                     if (repair.error() != null) {
                         accumulator.addInvalidToolCall(toolCall, repair.error());
-                    } else {
-                        accumulator.addToolCall(repair.toolCall());
+                        return normalizeNext(toolCalls, index + 1, context, accumulator);
                     }
-                    return normalizeNext(toolCalls, index + 1, context, accumulator);
+                    var resolvedTool = context.tool(repair.toolCall());
+                    return replayResolvedInputIfNeeded(toolCall, repair.toolCall(), resolvedTool,
+                            context)
+                        .then(Mono.defer(() -> {
+                            accumulator.addToolCall(repair.toolCall());
+                            return normalizeNext(toolCalls, index + 1, context, accumulator);
+                        }));
                 });
         } catch (RuntimeException e) {
             accumulator.addInvalidToolCall(toolCall, toolError(toolCall, e));
@@ -172,12 +174,37 @@ public final class LanguageModelToolExecutor {
 
     private Mono<Void> notifyInputStartUnlessStreamed(ToolCall toolCall, ToolDefinition tool,
         ToolStepContext context) {
+        if (tool == null) {
+            return Mono.empty();
+        }
         if (context.streamedInputCallIds().contains(toolCall.getToolCallId())) {
             return Mono.empty();
         }
         return inputStart(toolCall.getToolCallId(), toolCall.getToolName(), tool,
             context.request(), context.stepIndex(), context.executionMessages(),
             context.providerMetadata(toolCall));
+    }
+
+    private Mono<Void> replayResolvedInputIfNeeded(ToolCall original, ToolCall resolved,
+        ToolDefinition resolvedTool, ToolStepContext context) {
+        if (context.tool(original) != null || resolvedTool == null) {
+            return Mono.empty();
+        }
+        var start = inputStart(resolved.getToolCallId(), resolved.getToolName(), resolvedTool,
+            context.request(), context.stepIndex(), context.executionMessages(),
+            context.providerMetadata(resolved));
+        if (!context.streamedInputCallIds().contains(original.getToolCallId())) {
+            return start;
+        }
+        var rawInput = resolved.getRawInput() != null
+            ? resolved.getRawInput()
+            : original.getRawInput();
+        if (!(rawInput instanceof String inputText) || inputText.isEmpty()) {
+            return start;
+        }
+        return start.then(inputDelta(resolved.getToolCallId(), resolved.getToolName(), inputText,
+            resolvedTool, context.request(), context.stepIndex(), context.executionMessages(),
+            context.providerMetadata(resolved)));
     }
 
     public Mono<ToolApprovalBatch> evaluateApproval(List<ToolCall> toolCalls,
@@ -399,31 +426,41 @@ public final class LanguageModelToolExecutor {
         }
     }
 
-    private Mono<RepairAttempt> repairIfNeeded(ToolCall toolCall, ToolDefinition tool,
-        ToolStepContext context) {
+    private Mono<RepairAttempt> resolveToolCall(ToolCall toolCall, ToolStepContext context) {
+        var tool = context.tool(toolCall);
+        if (tool == null) {
+            return repair(toolCall, null, ToolCallFailureKind.UNKNOWN_TOOL, context,
+                new IllegalArgumentException("Unknown tool: " + toolCall.getToolName()));
+        }
         var parseError = toolCall.getInputParseError();
         if (parseError != null) {
-            return repair(toolCall, tool, context,
+            return repair(toolCall, tool, ToolCallFailureKind.INVALID_INPUT, context,
                 new IllegalArgumentException(parseError.getMessage()));
         }
         try {
             validateInput(toolCall, tool);
             return Mono.just(new RepairAttempt(toolCall, null, List.of()));
         } catch (RuntimeException validationFailure) {
-            return repair(toolCall, tool, context, validationFailure);
+            return repair(toolCall, tool, ToolCallFailureKind.INVALID_INPUT, context,
+                validationFailure);
         }
     }
 
     private Mono<RepairAttempt> repair(ToolCall toolCall, ToolDefinition tool,
-        ToolStepContext context, RuntimeException validationFailure) {
+        ToolCallFailureKind failureKind, ToolStepContext context,
+        RuntimeException validationFailure) {
         var repairCallback = context.request().getToolCallRepair();
-        if (repairCallback == null) {
+        if (repairCallback == null
+            || (failureKind == ToolCallFailureKind.UNKNOWN_TOOL
+                && context.toolsByName().isEmpty())) {
             return Mono.just(new RepairAttempt(toolCall, toolError(toolCall, validationFailure),
                 List.of()));
         }
         return repairCallback.repair(ToolCallRepairContext.builder()
+                .failureKind(failureKind)
                 .toolCall(toolCall)
                 .tool(tool)
+                .availableTools(List.copyOf(context.toolsByName().values()))
                 .validationError(safeErrorMessage(validationFailure))
                 .validationPath(validationPath(toolCall))
                 .stepIndex(context.stepIndex())
@@ -432,12 +469,16 @@ public final class LanguageModelToolExecutor {
                 .providerMetadata(mergeProviderMetadata(context.stepProviderMetadata(),
                     toolCall.getProviderMetadata()))
                 .build())
-            .map(result -> repairedAttempt(toolCall, tool, validationFailure, result))
-            .onErrorResume(RuntimeException.class, repairFailure ->
+            .map(result -> repairedAttempt(toolCall, tool, failureKind, context,
+                validationFailure, result))
+            .defaultIfEmpty(failedRepairAttempt(toolCall, validationFailure,
+                new IllegalStateException("Tool call recovery returned no result")))
+            .onErrorResume(Throwable.class, repairFailure ->
                 Mono.just(failedRepairAttempt(toolCall, validationFailure, repairFailure)));
     }
 
     private RepairAttempt repairedAttempt(ToolCall toolCall, ToolDefinition tool,
+        ToolCallFailureKind failureKind, ToolStepContext context,
         RuntimeException validationFailure,
         run.halo.aifoundation.tool.ToolCallRepairResult result) {
         var warnings = new ArrayList<GenerationWarning>();
@@ -447,9 +488,19 @@ public final class LanguageModelToolExecutor {
             return new RepairAttempt(toolCall, toolError(toolCall, validationFailure), warnings);
         }
         try {
-            var normalized = normalizeRepairedCall(toolCall, repaired);
-            validateInput(normalized, tool);
-            warnings.add(repairedWarning(toolCall, normalized));
+            var normalized = normalizeRepairedCall(toolCall, repaired, failureKind);
+            var resolvedTool = context.tool(normalized);
+            if (resolvedTool == null) {
+                throw new IllegalArgumentException(
+                    "Recovered tool is not currently available: " + normalized.getToolName());
+            }
+            if (failureKind == ToolCallFailureKind.INVALID_INPUT
+                && resolvedTool != tool) {
+                throw new IllegalArgumentException(
+                    "Invalid-input recovery cannot change the tool name");
+            }
+            validateInput(normalized, resolvedTool);
+            warnings.add(repairedWarning(toolCall, normalized, failureKind));
             return new RepairAttempt(normalized, null, warnings);
         } catch (RuntimeException repairFailure) {
             return failedRepairAttempt(toolCall, validationFailure, repairFailure);
@@ -469,10 +520,29 @@ public final class LanguageModelToolExecutor {
         return Collections.unmodifiableMap(new LinkedHashMap<>(context));
     }
 
-    private ToolCall normalizeRepairedCall(ToolCall original, ToolCall repaired) {
+    private ToolCall normalizeRepairedCall(ToolCall original, ToolCall repaired,
+        ToolCallFailureKind failureKind) {
+        if (original.getToolCallId() == null || original.getToolCallId().isBlank()) {
+            throw new IllegalArgumentException("Original tool call id must not be blank");
+        }
+        if (repaired.getToolCallId() != null
+            && !original.getToolCallId().equals(repaired.getToolCallId())) {
+            throw new IllegalArgumentException("Recovered tool call id must match the original id");
+        }
+        var repairedName = repaired.getToolName();
+        if (failureKind == ToolCallFailureKind.INVALID_INPUT
+            && repairedName != null && !original.getToolName().equals(repairedName)) {
+            throw new IllegalArgumentException(
+                "Invalid-input recovery cannot change the tool name");
+        }
+        var resolvedName = failureKind == ToolCallFailureKind.UNKNOWN_TOOL
+            ? repairedName : original.getToolName();
+        if (resolvedName == null || resolvedName.isBlank()) {
+            throw new IllegalArgumentException("Recovered tool name must not be blank");
+        }
         return ToolCall.builder()
             .toolCallId(original.getToolCallId())
-            .toolName(original.getToolName())
+            .toolName(resolvedName)
             .input(repaired.getInput() != null ? repaired.getInput() : Map.of())
             .rawInput(repaired.getRawInput() != null ? repaired.getRawInput() : original.getRawInput())
             .inputParseError(null)
@@ -481,13 +551,20 @@ public final class LanguageModelToolExecutor {
             .build();
     }
 
-    private GenerationWarning repairedWarning(ToolCall original, ToolCall repaired) {
+    private GenerationWarning repairedWarning(ToolCall original, ToolCall repaired,
+        ToolCallFailureKind failureKind) {
+        var renamed = failureKind == ToolCallFailureKind.UNKNOWN_TOOL;
         return GenerationWarning.builder()
             .code(WARNING_TOOL_CALL_REPAIRED)
-            .message("Tool call input was repaired before execution: " + original.getToolName())
+            .message(renamed
+                ? "Unknown tool call was recovered before execution: "
+                    + original.getToolName() + " -> " + repaired.getToolName()
+                : "Tool call input was repaired before execution: " + original.getToolName())
             .providerMetadata(Map.of(
                 "toolCallId", repaired.getToolCallId(),
-                "toolName", repaired.getToolName()
+                "originalToolName", original.getToolName(),
+                "resolvedToolName", repaired.getToolName(),
+                "failureKind", failureKind.name()
             ))
             .build();
     }
@@ -498,7 +575,7 @@ public final class LanguageModelToolExecutor {
             .message("Tool call input repair failed: " + safeErrorMessage(e))
             .providerMetadata(Map.of(
                 "toolCallId", toolCall.getToolCallId(),
-                "toolName", toolCall.getToolName()
+                "originalToolName", toolCall.getToolName()
             ))
             .build();
     }

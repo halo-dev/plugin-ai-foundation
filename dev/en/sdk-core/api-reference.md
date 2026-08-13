@@ -21,6 +21,23 @@ not consumer APIs.
 `imageGenerationTextToImage()` cover common requirements. The same capability model is used by
 the [FormKit model selector](../model-selector.md).
 
+## Agent runtime
+
+| Public type                            | Purpose                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------ |
+| `Agent<O>`                             | Immutable reusable typed definition with `generate` and `stream`.                    |
+| `AgentOptions<O>`                      | Model, instructions, tools, output, steps, recovery, sampling, and default controls. |
+| `AgentCall<O>`                         | One prompt or message call with typed options and operational controls.              |
+| `AgentCallValidator<O>`                | Validate endpoint-owned typed options before provider execution.                     |
+| `AgentCallPrepare<O>`                  | Asynchronously prepare one call and optionally replace its model.                    |
+| `AgentCallPrepareContext<O>`           | Current call, options, base model, and fresh request builder.                        |
+| `PreparedAgentCall`                    | Effective model and request after call preparation.                                  |
+| `AgentCallPhase`, `AgentCallException` | Validation- and preparation-phase failure reporting.                                 |
+
+An agent without an explicit stop condition permits at most 20 steps; direct `LanguageModel`
+defaults are unchanged. See [Agent runtime](./agents.md) for construction, recovery, UI Message,
+and persistence boundaries.
+
 ## Text generation
 
 | Area                        | Public types                                                          |
@@ -92,15 +109,15 @@ package that matches model input, generation output, or persisted UI state. In p
 
 ## Tools
 
-| Area                     | Public types                                                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| Definition and selection | `ToolDefinition`, `ToolChoice`, `ToolExecutor`, `ToolExecutionContext`                       |
-| Results                  | `ToolCall`, `ToolResult`, `ToolError`, `ToolInputParseError`                                 |
-| Approval                 | `ToolApprovalPolicy`, `ToolApprovalPredicate`, `ToolApprovalRequest`, `ToolApprovalResponse` |
-| Repair                   | `ToolCallRepairCallback`, `ToolCallRepairContext`, `ToolCallRepairResult`                    |
-| Input start              | `ToolInputStartCallback`, `ToolInputStartContext`                                            |
-| Input delta              | `ToolInputDeltaCallback`, `ToolInputDeltaContext`                                            |
-| Input available          | `ToolInputAvailableCallback`, `ToolInputAvailableContext`                                    |
+| Area                     | Public types                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| Definition and selection | `ToolDefinition`, `ToolChoice`, `ToolExecutor`, `ToolExecutionContext`                           |
+| Results                  | `ToolCall`, `ToolResult`, `ToolError`, `ToolInputParseError`                                     |
+| Approval                 | `ToolApprovalPolicy`, `ToolApprovalPredicate`, `ToolApprovalRequest`, `ToolApprovalResponse`     |
+| Repair                   | `ToolCallFailureKind`, `ToolCallRepairCallback`, `ToolCallRepairContext`, `ToolCallRepairResult` |
+| Input start              | `ToolInputStartCallback`, `ToolInputStartContext`                                                |
+| Input delta              | `ToolInputDeltaCallback`, `ToolInputDeltaContext`                                                |
+| Input available          | `ToolInputAvailableCallback`, `ToolInputAvailableContext`                                        |
 
 The main `ToolDefinition` builder fields are `name`, `description`, `inputSchema`, `executor`,
 `strict`, `inputExamples`, `approvalPolicy`, and `approvalPredicate`.
@@ -161,9 +178,12 @@ All SDK business exceptions derive from `AiFoundationException`.
 | Preparation  | `UIMessageChatPrepare`, `UIMessageChatPrepareContext`                  |
 | Cancellation | `UIMessageCancellation`, `UIMessageCancellations`                      |
 
-`UIMessageChatOptions` configures the model, messages, chat request, response message, metadata,
+`UIMessageChatOptions` configures exactly one model or typed agent, messages, chat request, response message, metadata,
 message IDs, serializer, request builder, preparation, middleware, validation, conversion,
 finish/error callbacks, cancellation, and read-error propagation.
+
+Use the typed `UIMessageChatHandlers.streamAgent(...)` entry point for agent endpoints. Transport
+input cannot replace agent semantic policy; see [Agent runtime](./agents.md).
 
 ### Validation and conversion
 

@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import run.halo.aifoundation.agent.Agent;
+import run.halo.aifoundation.agent.AgentCall;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
@@ -20,6 +22,8 @@ import reactor.core.publisher.Mono;
  */
 public final class UIMessageChatOptions<M> {
     private LanguageModel model;
+    private Agent<?> agent;
+    private UIMessageAgentExecution agentExecution;
     private List<UIMessage<M>> messages;
     private UIMessageChatRequest<M> chatRequest;
     private UIMessage<M> message;
@@ -30,6 +34,7 @@ public final class UIMessageChatOptions<M> {
         builder -> {
         };
     private UIMessageChatPrepare<M> prepareHandler = context -> Mono.empty();
+    private boolean prepareCustomized;
     private final List<LanguageModelMiddleware> middleware = new ArrayList<>();
     private Consumer<UIMessageValidationOptions<M>> validationCustomizer = options -> {
     };
@@ -53,6 +58,42 @@ public final class UIMessageChatOptions<M> {
     public UIMessageChatOptions<M> model(LanguageModel model) {
         this.model = Objects.requireNonNull(model, "model must not be null");
         return this;
+    }
+
+    /**
+     * Selects a typed agent and its endpoint-owned call options for this chat response.
+     *
+     * <p>Use either {@link #model(LanguageModel)} or this method, not both. The options value is
+     * passed to {@link AgentCall} after UI messages have been validated and converted.
+     *
+     * @param agent reusable agent
+     * @param callOptions typed call options derived by the endpoint
+     * @param <O> agent call options type
+     * @return this options object
+     */
+    public <O> UIMessageChatOptions<M> agent(Agent<O> agent, O callOptions) {
+        this.agent = Objects.requireNonNull(agent, "agent must not be null");
+        this.agentExecution = (messages, source, middleware) -> agent.stream(
+            AgentCall.<O>builder()
+                .messages(messages)
+                .options(callOptions)
+                .metadata(source.getMetadata())
+                .context(source.getContext())
+                .headers(source.getHeaders())
+                .cancellationToken(cancellationToken)
+                .timeouts(source.getTimeouts())
+                .lifecycle(source.getLifecycle() == null
+                    ? List.of() : List.of(source.getLifecycle()))
+                .middleware(middleware)
+                .build());
+        return this;
+    }
+
+    /**
+     * Selects a no-options agent for this chat response.
+     */
+    public UIMessageChatOptions<M> agent(Agent<Void> agent) {
+        return agent(agent, null);
     }
 
     /**
@@ -151,6 +192,7 @@ public final class UIMessageChatOptions<M> {
      */
     public UIMessageChatOptions<M> prepare(UIMessageChatPrepare<M> prepare) {
         this.prepareHandler = Objects.requireNonNull(prepare, "prepare must not be null");
+        this.prepareCustomized = true;
         return this;
     }
 
@@ -258,6 +300,14 @@ public final class UIMessageChatOptions<M> {
         return model;
     }
 
+    Agent<?> agent() {
+        return agent;
+    }
+
+    UIMessageAgentExecution agentExecution() {
+        return agentExecution;
+    }
+
     List<UIMessage<M>> messages() {
         return messages;
     }
@@ -290,6 +340,10 @@ public final class UIMessageChatOptions<M> {
         return prepareHandler;
     }
 
+    boolean prepareCustomized() {
+        return prepareCustomized;
+    }
+
     List<LanguageModelMiddleware> middleware() {
         return List.copyOf(middleware);
     }
@@ -320,5 +374,13 @@ public final class UIMessageChatOptions<M> {
 
     boolean terminateOnError() {
         return terminateOnError;
+    }
+
+    @FunctionalInterface
+    interface UIMessageAgentExecution {
+        run.halo.aifoundation.chat.StreamTextResult stream(
+            List<run.halo.aifoundation.message.ModelMessage> messages,
+            GenerateTextRequest source,
+            List<LanguageModelMiddleware> middleware);
     }
 }

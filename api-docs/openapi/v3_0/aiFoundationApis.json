@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.25.2"
+    "version" : "2.25.4"
   },
   "servers" : [ {
-    "url" : "http://localhost:41657",
+    "url" : "http://localhost:33894",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -732,6 +732,13 @@
           "description" : "Whether to inject console-only browser Agent test tools that are executed by the workbench frontend.",
           "in" : "query",
           "name" : "enableAgentTestTools",
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "Whether to inject the console-only lifecycle-aware tool for streamed tool-input diagnostics.",
+          "in" : "query",
+          "name" : "enableToolInputStreamTest",
           "schema" : {
             "type" : "boolean"
           }
@@ -2690,6 +2697,46 @@
           }
         }
       },
+      "TestAgentOptions" : {
+        "type" : "object",
+        "properties" : {
+          "approvalRequired" : {
+            "type" : "boolean"
+          },
+          "browserToolEnabled" : {
+            "type" : "boolean"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "externalToolEnabled" : {
+            "type" : "boolean"
+          },
+          "maxSteps" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "profile" : {
+            "type" : "string",
+            "enum" : [ "BALANCED", "CONCISE", "EXPLICIT" ]
+          },
+          "recoveryScenario" : {
+            "type" : "string",
+            "enum" : [ "NONE", "INVALID_INPUT", "RENAMED_TOOL", "FAILED_RECOVERY" ]
+          },
+          "serverToolEnabled" : {
+            "type" : "boolean"
+          },
+          "stepPolicy" : {
+            "type" : "string",
+            "enum" : [ "ALL_TOOLS", "SERVER_THEN_ALL", "SERVER_THEN_BROWSER" ]
+          },
+          "toolInputStreamEnabled" : {
+            "type" : "boolean"
+          }
+        },
+        "description" : "Agent workbench execution and diagnostic options."
+      },
       "TestCompletionStreamRequest" : {
         "type" : "object",
         "properties" : {
@@ -3368,6 +3415,9 @@
       "TestUiMessageChatRequest" : {
         "type" : "object",
         "properties" : {
+          "agent" : {
+            "$ref" : "#/components/schemas/TestAgentOptions"
+          },
           "context" : {
             "type" : "object",
             "additionalProperties" : {

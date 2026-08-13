@@ -51,6 +51,7 @@ export * from './rerank-response-metadata';
 export * from './rerank-usage';
 export * from './rerank-warning';
 export * from './selection';
+export * from './test-agent-options';
 export * from './test-completion-stream-request';
 export * from './test-embedding-request';
 export * from './test-embedding-response';

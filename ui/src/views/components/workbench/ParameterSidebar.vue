@@ -1,6 +1,14 @@
 <script lang="ts" setup>
-import type { OutputMode, ReasoningEffort, ReasoningMode } from '@/utils/model-test-workbench'
+import type {
+  AgentProfile,
+  AgentRecoveryScenario,
+  AgentStepPolicy,
+  OutputMode,
+  ReasoningEffort,
+  ReasoningMode,
+} from '@/utils/model-test-workbench'
 import RiSettings3Line from '~icons/ri/settings-3-line'
+import AgentParameterPanel from './AgentParameterPanel.vue'
 import ChatParameterPanel from './ChatParameterPanel.vue'
 import EmbeddingParameterPanel from './EmbeddingParameterPanel.vue'
 import ImageParameterPanel from './ImageParameterPanel.vue'
@@ -32,6 +40,16 @@ defineProps<{
   agentTestToolsEnabled?: boolean
   toolCallRepairEnabled?: boolean
   toolInputStreamTestEnabled?: boolean
+  agentModeEnabled?: boolean
+  agentProfile?: AgentProfile
+  agentMaxSteps?: number
+  agentStepPolicy?: AgentStepPolicy
+  agentServerToolEnabled?: boolean
+  agentBrowserToolEnabled?: boolean
+  agentExternalToolEnabled?: boolean
+  agentApprovalRequired?: boolean
+  agentToolInputStreamEnabled?: boolean
+  agentRecoveryScenario?: AgentRecoveryScenario
   outputMode?: OutputMode
   outputSchemaText?: string
   outputChoicesText?: string
@@ -78,6 +96,16 @@ const emit = defineEmits<{
   'update:agentTestToolsEnabled': [value: boolean]
   'update:toolCallRepairEnabled': [value: boolean]
   'update:toolInputStreamTestEnabled': [value: boolean]
+  'update:agentModeEnabled': [value: boolean]
+  'update:agentProfile': [value: AgentProfile]
+  'update:agentMaxSteps': [value: number]
+  'update:agentStepPolicy': [value: AgentStepPolicy]
+  'update:agentServerToolEnabled': [value: boolean]
+  'update:agentBrowserToolEnabled': [value: boolean]
+  'update:agentExternalToolEnabled': [value: boolean]
+  'update:agentApprovalRequired': [value: boolean]
+  'update:agentToolInputStreamEnabled': [value: boolean]
+  'update:agentRecoveryScenario': [value: AgentRecoveryScenario]
   'update:outputMode': [value: OutputMode]
   'update:outputSchemaText': [value: string]
   'update:outputChoicesText': [value: string]
@@ -113,65 +141,89 @@ const emit = defineEmits<{
     </div>
 
     <div class=":uno: flex-1 overflow-y-auto px-4 py-3">
-      <ChatParameterPanel
-        v-if="mode === 'chat'"
-        :system-prompt="systemPrompt"
-        :temperature="temperature"
-        :top-p="topP"
-        :top-k="topK"
-        :min-p="minP"
-        :presence-penalty="presencePenalty"
-        :frequency-penalty="frequencyPenalty"
-        :repetition-penalty="repetitionPenalty"
-        :stop-sequences-text="stopSequencesText"
-        :logprobs="logprobs"
-        :top-logprobs="topLogprobs"
-        :parallel-tool-calls="parallelToolCalls"
-        :max-tokens="maxTokens"
-        :seed="seed"
-        :max-retries="maxRetries"
-        :reasoning-mode="reasoningMode"
-        :reasoning-effort="reasoningEffort"
-        :test-tool-enabled="testToolEnabled"
-        :test-tool-approval-enabled="testToolApprovalEnabled"
-        :external-test-tool-enabled="externalTestToolEnabled"
-        :agent-test-tools-enabled="agentTestToolsEnabled"
-        :tool-call-repair-enabled="toolCallRepairEnabled"
-        :tool-input-stream-test-enabled="toolInputStreamTestEnabled"
-        :output-mode="outputMode"
-        :output-schema-text="outputSchemaText"
-        :output-choices-text="outputChoicesText"
-        :chat-headers-text="chatHeadersText"
-        :chat-headers-error="chatHeadersError"
-        :output-error="outputError"
-        @update:system-prompt="emit('update:systemPrompt', $event)"
-        @update:temperature="emit('update:temperature', $event)"
-        @update:top-p="emit('update:topP', $event)"
-        @update:top-k="emit('update:topK', $event)"
-        @update:min-p="emit('update:minP', $event)"
-        @update:presence-penalty="emit('update:presencePenalty', $event)"
-        @update:frequency-penalty="emit('update:frequencyPenalty', $event)"
-        @update:repetition-penalty="emit('update:repetitionPenalty', $event)"
-        @update:stop-sequences-text="emit('update:stopSequencesText', $event)"
-        @update:logprobs="emit('update:logprobs', $event)"
-        @update:top-logprobs="emit('update:topLogprobs', $event)"
-        @update:parallel-tool-calls="emit('update:parallelToolCalls', $event)"
-        @update:max-tokens="emit('update:maxTokens', $event)"
-        @update:seed="emit('update:seed', $event)"
-        @update:max-retries="emit('update:maxRetries', $event)"
-        @update:reasoning-mode="emit('update:reasoningMode', $event)"
-        @update:reasoning-effort="emit('update:reasoningEffort', $event)"
-        @update:test-tool-enabled="emit('update:testToolEnabled', $event)"
-        @update:test-tool-approval-enabled="emit('update:testToolApprovalEnabled', $event)"
-        @update:external-test-tool-enabled="emit('update:externalTestToolEnabled', $event)"
-        @update:agent-test-tools-enabled="emit('update:agentTestToolsEnabled', $event)"
-        @update:tool-call-repair-enabled="emit('update:toolCallRepairEnabled', $event)"
-        @update:tool-input-stream-test-enabled="emit('update:toolInputStreamTestEnabled', $event)"
-        @update:output-mode="emit('update:outputMode', $event)"
-        @update:output-schema-text="emit('update:outputSchemaText', $event)"
-        @update:output-choices-text="emit('update:outputChoicesText', $event)"
-        @update:chat-headers-text="emit('update:chatHeadersText', $event)"
-      />
+      <template v-if="mode === 'chat'">
+        <AgentParameterPanel
+          :enabled="agentModeEnabled"
+          :profile="agentProfile"
+          :max-steps="agentMaxSteps"
+          :step-policy="agentStepPolicy"
+          :server-tool-enabled="agentServerToolEnabled"
+          :browser-tool-enabled="agentBrowserToolEnabled"
+          :external-tool-enabled="agentExternalToolEnabled"
+          :approval-required="agentApprovalRequired"
+          :tool-input-stream-enabled="agentToolInputStreamEnabled"
+          :recovery-scenario="agentRecoveryScenario"
+          @update:enabled="emit('update:agentModeEnabled', $event)"
+          @update:profile="emit('update:agentProfile', $event)"
+          @update:max-steps="emit('update:agentMaxSteps', $event)"
+          @update:step-policy="emit('update:agentStepPolicy', $event)"
+          @update:server-tool-enabled="emit('update:agentServerToolEnabled', $event)"
+          @update:browser-tool-enabled="emit('update:agentBrowserToolEnabled', $event)"
+          @update:external-tool-enabled="emit('update:agentExternalToolEnabled', $event)"
+          @update:approval-required="emit('update:agentApprovalRequired', $event)"
+          @update:tool-input-stream-enabled="emit('update:agentToolInputStreamEnabled', $event)"
+          @update:recovery-scenario="emit('update:agentRecoveryScenario', $event)"
+        />
+
+        <ChatParameterPanel
+          :system-prompt="systemPrompt"
+          :temperature="temperature"
+          :top-p="topP"
+          :top-k="topK"
+          :min-p="minP"
+          :presence-penalty="presencePenalty"
+          :frequency-penalty="frequencyPenalty"
+          :repetition-penalty="repetitionPenalty"
+          :stop-sequences-text="stopSequencesText"
+          :logprobs="logprobs"
+          :top-logprobs="topLogprobs"
+          :parallel-tool-calls="parallelToolCalls"
+          :max-tokens="maxTokens"
+          :seed="seed"
+          :max-retries="maxRetries"
+          :reasoning-mode="reasoningMode"
+          :reasoning-effort="reasoningEffort"
+          :test-tool-enabled="testToolEnabled"
+          :test-tool-approval-enabled="testToolApprovalEnabled"
+          :external-test-tool-enabled="externalTestToolEnabled"
+          :agent-test-tools-enabled="agentTestToolsEnabled"
+          :tool-call-repair-enabled="toolCallRepairEnabled"
+          :tool-input-stream-test-enabled="toolInputStreamTestEnabled"
+          :output-mode="outputMode"
+          :output-schema-text="outputSchemaText"
+          :output-choices-text="outputChoicesText"
+          :chat-headers-text="chatHeadersText"
+          :chat-headers-error="chatHeadersError"
+          :output-error="outputError"
+          @update:system-prompt="emit('update:systemPrompt', $event)"
+          @update:temperature="emit('update:temperature', $event)"
+          @update:top-p="emit('update:topP', $event)"
+          @update:top-k="emit('update:topK', $event)"
+          @update:min-p="emit('update:minP', $event)"
+          @update:presence-penalty="emit('update:presencePenalty', $event)"
+          @update:frequency-penalty="emit('update:frequencyPenalty', $event)"
+          @update:repetition-penalty="emit('update:repetitionPenalty', $event)"
+          @update:stop-sequences-text="emit('update:stopSequencesText', $event)"
+          @update:logprobs="emit('update:logprobs', $event)"
+          @update:top-logprobs="emit('update:topLogprobs', $event)"
+          @update:parallel-tool-calls="emit('update:parallelToolCalls', $event)"
+          @update:max-tokens="emit('update:maxTokens', $event)"
+          @update:seed="emit('update:seed', $event)"
+          @update:max-retries="emit('update:maxRetries', $event)"
+          @update:reasoning-mode="emit('update:reasoningMode', $event)"
+          @update:reasoning-effort="emit('update:reasoningEffort', $event)"
+          @update:test-tool-enabled="emit('update:testToolEnabled', $event)"
+          @update:test-tool-approval-enabled="emit('update:testToolApprovalEnabled', $event)"
+          @update:external-test-tool-enabled="emit('update:externalTestToolEnabled', $event)"
+          @update:agent-test-tools-enabled="emit('update:agentTestToolsEnabled', $event)"
+          @update:tool-call-repair-enabled="emit('update:toolCallRepairEnabled', $event)"
+          @update:tool-input-stream-test-enabled="emit('update:toolInputStreamTestEnabled', $event)"
+          @update:output-mode="emit('update:outputMode', $event)"
+          @update:output-schema-text="emit('update:outputSchemaText', $event)"
+          @update:output-choices-text="emit('update:outputChoicesText', $event)"
+          @update:chat-headers-text="emit('update:chatHeadersText', $event)"
+        />
+      </template>
 
       <EmbeddingParameterPanel
         v-else-if="mode === 'embedding'"

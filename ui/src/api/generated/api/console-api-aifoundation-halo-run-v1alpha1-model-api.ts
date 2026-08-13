@@ -473,10 +473,11 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
          * @param {boolean} [enableExternalTestTool] Whether to inject the console-only halo_external_test_info tool that must be executed by the workbench caller.
          * @param {boolean} [enableToolCallRepair] Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
          * @param {boolean} [enableAgentTestTools] Whether to inject console-only browser Agent test tools that are executed by the workbench frontend.
+         * @param {boolean} [enableToolInputStreamTest] Whether to inject the console-only lifecycle-aware tool for streamed tool-input diagnostics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        testModelUiMessageChatStream: async (name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableExternalTestTool?: boolean, enableToolCallRepair?: boolean, enableAgentTestTools?: boolean, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        testModelUiMessageChatStream: async (name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableExternalTestTool?: boolean, enableToolCallRepair?: boolean, enableAgentTestTools?: boolean, enableToolInputStreamTest?: boolean, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'name' is not null or undefined
             assertParamExists('testModelUiMessageChatStream', 'name', name)
             // verify required parameter 'testUiMessageChatRequest' is not null or undefined
@@ -520,6 +521,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
 
             if (enableAgentTestTools !== undefined) {
                 localVarQueryParameter['enableAgentTestTools'] = enableAgentTestTools;
+            }
+
+            if (enableToolInputStreamTest !== undefined) {
+                localVarQueryParameter['enableToolInputStreamTest'] = enableToolInputStreamTest;
             }
 
 
@@ -717,11 +722,12 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
          * @param {boolean} [enableExternalTestTool] Whether to inject the console-only halo_external_test_info tool that must be executed by the workbench caller.
          * @param {boolean} [enableToolCallRepair] Whether to inject a console-only repairable tool and deterministic tool-call repair callback.
          * @param {boolean} [enableAgentTestTools] Whether to inject console-only browser Agent test tools that are executed by the workbench frontend.
+         * @param {boolean} [enableToolInputStreamTest] Whether to inject the console-only lifecycle-aware tool for streamed tool-input diagnostics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async testModelUiMessageChatStream(name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableExternalTestTool?: boolean, enableToolCallRepair?: boolean, enableAgentTestTools?: boolean, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UIMessageChunk>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelUiMessageChatStream(name, testUiMessageChatRequest, enableTestTool, enableTestToolApproval, enableExternalTestTool, enableToolCallRepair, enableAgentTestTools, options);
+        async testModelUiMessageChatStream(name: string, testUiMessageChatRequest: TestUiMessageChatRequest, enableTestTool?: boolean, enableTestToolApproval?: boolean, enableExternalTestTool?: boolean, enableToolCallRepair?: boolean, enableAgentTestTools?: boolean, enableToolInputStreamTest?: boolean, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UIMessageChunk>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelUiMessageChatStream(name, testUiMessageChatRequest, enableTestTool, enableTestToolApproval, enableExternalTestTool, enableToolCallRepair, enableAgentTestTools, enableToolInputStreamTest, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelUiMessageChatStream']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -837,7 +843,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
          * @throws {RequiredError}
          */
         testModelUiMessageChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<UIMessageChunk> {
-            return localVarFp.testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableExternalTestTool, requestParameters.enableToolCallRepair, requestParameters.enableAgentTestTools, options).then((request) => request(axios, basePath));
+            return localVarFp.testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableExternalTestTool, requestParameters.enableToolCallRepair, requestParameters.enableAgentTestTools, requestParameters.enableToolInputStreamTest, options).then((request) => request(axios, basePath));
         },
         /**
          * Update an AI model.
@@ -1080,6 +1086,13 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessage
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStream
      */
     readonly enableAgentTestTools?: boolean
+
+    /**
+     * Whether to inject the console-only lifecycle-aware tool for streamed tool-input diagnostics.
+     * @type {boolean}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStream
+     */
+    readonly enableToolInputStreamTest?: boolean
 }
 
 /**
@@ -1217,7 +1230,7 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
      */
     public testModelUiMessageChatStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelUiMessageChatStreamRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableExternalTestTool, requestParameters.enableToolCallRepair, requestParameters.enableAgentTestTools, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelUiMessageChatStream(requestParameters.name, requestParameters.testUiMessageChatRequest, requestParameters.enableTestTool, requestParameters.enableTestToolApproval, requestParameters.enableExternalTestTool, requestParameters.enableToolCallRepair, requestParameters.enableAgentTestTools, requestParameters.enableToolInputStreamTest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

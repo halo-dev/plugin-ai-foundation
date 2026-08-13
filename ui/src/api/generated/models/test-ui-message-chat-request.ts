@@ -21,6 +21,9 @@ import type { OutputSpec } from './output-spec';
 import type { ReasoningOptions } from './reasoning-options';
 // May contain unused imports in some cases
 // @ts-ignore
+import type { TestAgentOptions } from './test-agent-options';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { TestUiMessage } from './test-ui-message';
 // May contain unused imports in some cases
 // @ts-ignore
@@ -32,6 +35,12 @@ import type { ToolChoice } from './tool-choice';
  * @interface TestUiMessageChatRequest
  */
 export interface TestUiMessageChatRequest {
+    /**
+     * 
+     * @type {TestAgentOptions}
+     * @memberof TestUiMessageChatRequest
+     */
+    'agent'?: TestAgentOptions;
     /**
      * 
      * @type {{ [key: string]: object; }}

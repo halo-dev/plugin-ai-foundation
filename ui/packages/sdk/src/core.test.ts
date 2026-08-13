@@ -193,6 +193,48 @@ describe('UI message reducer', () => {
     ])
   })
 
+  it('finalizes a recovered tool name on the existing call identity', () => {
+    const state = createUIMessageReducer({ messageId: 'assistant-1' })
+
+    for (const chunk of [
+      { type: 'tool-input-start', toolCallId: 'call-1', toolName: 'legacyWeather' },
+      {
+        type: 'tool-input-delta',
+        toolCallId: 'call-1',
+        inputTextDelta: '{"location":"SF"}',
+      },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'call-1',
+        toolName: 'weather',
+        input: { location: 'SF' },
+        providerMetadata: { recovered: true },
+      },
+      {
+        type: 'tool-output-available',
+        toolCallId: 'call-1',
+        toolName: 'weather',
+        output: { temperature: 22 },
+      },
+    ] satisfies UIMessageChunk[]) {
+      applyUIMessageChunk(state, chunk)
+    }
+
+    expect(state.message.parts).toEqual([
+      {
+        type: 'tool-weather',
+        toolCallId: 'call-1',
+        toolName: 'weather',
+        state: 'output-available',
+        input: { location: 'SF' },
+        output: { temperature: 22 },
+        errorText: undefined,
+        approval: undefined,
+        providerMetadata: { recovered: true },
+      },
+    ])
+  })
+
   it('parses streamed tool input privately and resets duplicate starts', () => {
     const state = createUIMessageReducer({ messageId: 'assistant-1' })
 

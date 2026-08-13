@@ -21,8 +21,10 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.chat.FinishReason;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerationRequestMetadata;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
+import run.halo.aifoundation.chat.StepContext;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
@@ -573,6 +575,165 @@ class ModelConsoleEndpointTest {
         assertThat(request.getMessages().getFirst().getRole().name()).isEqualTo("USER");
         assertThat(request.getMessages().getFirst().getContent().getFirst().getText())
             .isEqualTo("Hello");
+    }
+
+    @Test
+    void testUiMessageChatStream_agentModeAppliesCompletePublishedAgentPolicy() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.start("assistant-agent"),
+                TextStreamPart.textStart("text-agent"),
+                TextStreamPart.textDelta("text-agent", "Agent result"),
+                TextStreamPart.textEnd("text-agent"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            )));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.ofEntries(
+                Map.entry("id", "chat-agent"),
+                Map.entry("messages", List.of(Map.of(
+                    "id", "user-agent",
+                    "role", "user",
+                    "parts", List.of(Map.of(
+                        "type", "text",
+                        "id", "user-agent-text",
+                        "text", "Run the agent"
+                    ))
+                ))),
+                Map.entry("system", "Base instructions."),
+                Map.entry("temperature", 0.3),
+                Map.entry("maxOutputTokens", 256),
+                Map.entry("headers", Map.of("X-Agent-Test", "true")),
+                Map.entry("metadata", Map.of("tenant", "console")),
+                Map.entry("context", Map.of("requestSource", "workbench")),
+                Map.entry("output", Map.of("type", "JSON")),
+                Map.entry("agent", Map.ofEntries(
+                    Map.entry("enabled", true),
+                    Map.entry("profile", "CONCISE"),
+                    Map.entry("maxSteps", 9),
+                    Map.entry("stepPolicy", "SERVER_THEN_ALL"),
+                    Map.entry("serverToolEnabled", true),
+                    Map.entry("browserToolEnabled", true),
+                    Map.entry("externalToolEnabled", true),
+                    Map.entry("approvalRequired", true),
+                    Map.entry("toolInputStreamEnabled", true),
+                    Map.entry("recoveryScenario", "RENAMED_TOOL")
+                ))
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .contains("Agent result")
+                .contains("[DONE]"));
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getSystem())
+            .isEqualTo("Base instructions. Keep the final answer concise and factual.");
+        assertThat(request.getTemperature()).isEqualTo(0.3);
+        assertThat(request.getMaxOutputTokens()).isEqualTo(256);
+        assertThat(request.getHeaders()).containsEntry("X-Agent-Test", "true");
+        assertThat(request.getContext()).containsEntry("requestSource", "workbench");
+        assertThat(request.getCancellationToken()).isNotNull();
+        assertThat(request.getTools()).extracting(run.halo.aifoundation.tool.ToolDefinition::getName)
+            .containsExactly(
+                "halo_test_info",
+                "halo_external_test_info",
+                "get_current_page_context",
+                "halo_agent_test_action",
+                "halo_tool_input_stream_test",
+                "halo_repair_test_info"
+            );
+        assertThat(request.getTools().getFirst().getApprovalPolicy().getMode().name())
+            .isEqualTo("ALWAYS");
+        assertThat(request.getOutput().getType().name()).isEqualTo("JSON");
+        assertThat(request.getStopWhen().shouldContinue(StepContext.builder().stepIndex(7).build()))
+            .isTrue();
+        assertThat(request.getStopWhen().shouldContinue(StepContext.builder().stepIndex(8).build()))
+            .isFalse();
+        assertThat(request.getMetadata()).containsEntry("tenant", "console");
+        assertThat(request.getMetadata()).containsKey("agentDiagnostics");
+        @SuppressWarnings("unchecked")
+        var diagnostics = (Map<String, Object>) request.getMetadata().get("agentDiagnostics");
+        assertThat(diagnostics)
+            .containsEntry("profile", "CONCISE")
+            .containsEntry("maximumSteps", 9)
+            .containsEntry("stepPolicy", "SERVER_THEN_ALL")
+            .containsEntry("callPreparationCount", 1)
+            .containsEntry("recoveryScenario", "RENAMED_TOOL");
+    }
+
+    @Test
+    void testUiMessageChatStream_agentDiagnosticsAreSafelySerializedOutsideAnswerText() {
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class))).thenAnswer(invocation -> {
+            GenerateTextRequest request = invocation.getArgument(0);
+            return streamResult(Flux.just(
+                TextStreamPart.finishStep(0, FinishReason.STOP, "stop", null, List.of(),
+                    GenerationRequestMetadata.builder()
+                        .id("request-agent")
+                        .model("gpt-4")
+                        .metadata(request.getMetadata())
+                        .build(),
+                    null, Map.of()),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null)
+            ));
+        });
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "id", "chat-agent-diagnostics",
+                "messages", List.of(Map.of(
+                    "id", "user-agent",
+                    "role", "user",
+                    "parts", List.of(Map.of(
+                        "type", "text",
+                        "id", "user-agent-text",
+                        "text", "Hello"
+                    ))
+                )),
+                "agent", Map.of(
+                    "enabled", true,
+                    "profile", "EXPLICIT",
+                    "recoveryScenario", "FAILED_RECOVERY"
+                )
+            ))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody())
+                .contains("\"type\":\"finish-step\"")
+                .contains("\"agentDiagnostics\"")
+                .contains("\"callPreparationCount\":1")
+                .contains("\"recoveryScenario\":\"FAILED_RECOVERY\"")
+                .doesNotContain("CopyOnWriteArrayList"));
+    }
+
+    @Test
+    void testUiMessageChatStream_agentModeRejectsInvalidStepBoundBeforeModelResolution() {
+        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "id", "chat-agent-invalid",
+                "messages", List.of(Map.of(
+                    "id", "user-agent",
+                    "role", "user",
+                    "parts", List.of(Map.of("type", "text", "text", "Hello"))
+                )),
+                "agent", Map.of("enabled", true, "maxSteps", 101)
+            ))
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        verify(aiModelService, never()).languageModel(any());
     }
 
     @Test

@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import run.halo.aifoundation.agent.Agent;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.StreamTextResult;
@@ -60,10 +61,7 @@ public final class UIMessageChatHandlers {
             throw new IllegalArgumentException("UI messages produced no model messages");
         }
 
-        var modelResult = LanguageModelMiddlewares.defer(finalRequest(baseRequest(options),
-            conversion, options, validation)
-            .map(options.model()::streamText)
-            .cache());
+        var modelResult = executionResult(baseRequest(options), conversion, options, validation);
         var finishSink = Sinks.<UIMessageStreamFinish<M>>one();
         var finish = finishSink.asMono().cache();
         var stream = UIMessageStreams.<M>createWithOptions(streamOptions -> {
@@ -110,6 +108,35 @@ public final class UIMessageChatHandlers {
     }
 
     /**
+     * Streams a chat response from a typed agent and transport request.
+     *
+     * @param agent reusable agent
+     * @param chatRequest framework-neutral chat request
+     * @param callOptions typed endpoint-owned agent call options
+     * @param <M> message metadata type
+     * @param <O> agent call options type
+     * @return chat stream result
+     */
+    public static <M, O> UIMessageChatResult<M> streamAgent(Agent<O> agent,
+        UIMessageChatRequest<M> chatRequest, O callOptions) {
+        return streamAgent(agent, chatRequest, callOptions, options -> {
+        });
+    }
+
+    /**
+     * Streams a chat response from a typed agent with transport-level configuration.
+     */
+    public static <M, O> UIMessageChatResult<M> streamAgent(Agent<O> agent,
+        UIMessageChatRequest<M> chatRequest, O callOptions,
+        Consumer<UIMessageChatOptions<M>> configure) {
+        Objects.requireNonNull(configure, "configure must not be null");
+        return streamText(options -> {
+            options.agent(agent, callOptions).chatRequest(chatRequest);
+            configure.accept(options);
+        });
+    }
+
+    /**
      * Streams a chat response from a model and transport request with extra options.
      *
      * @param model language model to call
@@ -128,8 +155,9 @@ public final class UIMessageChatHandlers {
     }
 
     private static <M> void requireOptions(UIMessageChatOptions<M> options) {
-        if (options.model() == null) {
-            throw new IllegalArgumentException("model must not be null");
+        if ((options.model() == null) == (options.agent() == null)) {
+            throw new IllegalArgumentException(
+                "exactly one of model or agent must be configured");
         }
         if (options.chatRequest() == null && options.messages() == null) {
             throw new IllegalArgumentException("messages must not be null");
@@ -187,7 +215,32 @@ public final class UIMessageChatHandlers {
             throw new IllegalArgumentException(
                 "UI message chat request customizer must not set cancellationToken");
         }
+        if (options.agent() != null) {
+            requireAgentTransportRequest(request, options);
+        }
         return request;
+    }
+
+    private static <M> void requireAgentTransportRequest(GenerateTextRequest request,
+        UIMessageChatOptions<M> options) {
+        if (options.prepareCustomized()) {
+            throw new IllegalArgumentException(
+                "UI message model request preparation is unavailable for agent execution");
+        }
+        if (request.getSystem() != null || request.getOutput() != null
+            || request.getTools() != null || request.getToolChoice() != null
+            || request.getStopWhen() != null || request.getPrepareStep() != null
+            || request.getToolCallRepair() != null || request.getReasoning() != null
+            || request.getMaxOutputTokens() != null || request.getTemperature() != null
+            || request.getTopP() != null || request.getTopK() != null || request.getMinP() != null
+            || request.getPresencePenalty() != null || request.getFrequencyPenalty() != null
+            || request.getRepetitionPenalty() != null || request.getLogprobs() != null
+            || request.getTopLogprobs() != null || request.getParallelToolCalls() != null
+            || request.getStopSequences() != null || request.getSeed() != null
+            || request.getMaxRetries() != null) {
+            throw new IllegalArgumentException(
+                "UI message transport options must not replace agent policy");
+        }
     }
 
     private static <M> Consumer<UIMessageConversionOptions<M>> effectiveConversionCustomizer(
@@ -197,7 +250,7 @@ public final class UIMessageChatHandlers {
             if (conversion.reasoningConversion() != UIReasoningConversion.AUTO) {
                 return;
             }
-            conversion.reasoningConversion(reasoningHistorySupported(options.model())
+            conversion.reasoningConversion(reasoningHistorySupported(executionModel(options))
                 ? UIReasoningConversion.PRESERVE_PROVIDER_STATE
                 : UIReasoningConversion.DROP);
         };
@@ -206,6 +259,24 @@ public final class UIMessageChatHandlers {
     private static boolean reasoningHistorySupported(LanguageModel model) {
         var capabilities = model.capabilities();
         return capabilities != null && capabilities.reasoningHistorySupported();
+    }
+
+    private static <M> LanguageModel executionModel(UIMessageChatOptions<M> options) {
+        return options.model() != null
+            ? options.model()
+            : options.agent().options().getModel();
+    }
+
+    private static <M> StreamTextResult executionResult(GenerateTextRequest source,
+        UIMessageConversionResult conversion, UIMessageChatOptions<M> options,
+        List<UIMessage<M>> messages) {
+        if (options.model() != null) {
+            return LanguageModelMiddlewares.defer(finalRequest(source, conversion, options, messages)
+                .map(options.model()::streamText)
+                .cache());
+        }
+        var middleware = combinedMiddleware(source, options);
+        return options.agentExecution().stream(conversion.messages(), source, middleware);
     }
 
     private static <M> Mono<GenerateTextRequest> finalRequest(GenerateTextRequest source,

@@ -69,6 +69,7 @@ models/rerank-response-metadata.ts
 models/rerank-usage.ts
 models/rerank-warning.ts
 models/selection.ts
+models/test-agent-options.ts
 models/test-completion-stream-request.ts
 models/test-embedding-request.ts
 models/test-embedding-response.ts

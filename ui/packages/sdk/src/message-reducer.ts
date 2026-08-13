@@ -393,6 +393,9 @@ function upsertMessagePart<METADATA>(
 }
 
 function samePartIdentity(left: UIMessagePart, right: UIMessagePart): boolean {
+  if (isToolPart(left) && isToolPart(right)) {
+    return left.toolCallId === right.toolCallId
+  }
   if (left.type !== right.type) {
     return false
   }
@@ -409,9 +412,6 @@ function samePartIdentity(left: UIMessagePart, right: UIMessagePart): boolean {
     case 'source-document':
       return 'sourceId' in left && left.sourceId === right.sourceId
     default:
-      if (isToolPart(right)) {
-        return isToolPart(left) && left.toolCallId === right.toolCallId
-      }
       return false
   }
 }
