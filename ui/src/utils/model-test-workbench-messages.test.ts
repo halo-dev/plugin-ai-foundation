@@ -1,5 +1,5 @@
 import type { WorkbenchMessage } from '@/utils/model-test-workbench'
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import {
   cloneWorkbenchMessage,
   haloMessageToWorkbench,

@@ -1,33 +1,33 @@
 import { ModelOptionModelTypeEnum, type ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
-import { beforeEach, describe, expect, it, rstest } from '@rstest/core'
 import { useRouteQuery } from '@vueuse/router'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref, shallowRef } from 'vue'
 import { useWorkbenchModels } from './use-workbench-models'
 
-rstest.mock('@/composables/use-model-options-fetch', () => ({
-  useModelOptionsFetch: rstest.fn(),
+vi.mock('@/composables/use-model-options-fetch', () => ({
+  useModelOptionsFetch: vi.fn(),
 }))
 
-rstest.mock('@vueuse/router', () => ({
-  useRouteQuery: rstest.fn(),
+vi.mock('@vueuse/router', () => ({
+  useRouteQuery: vi.fn(),
 }))
 
 describe('useWorkbenchModels', () => {
   beforeEach(() => {
-    rstest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('preserves the route model until model options finish loading', async () => {
     const modelOptions = ref<ModelOption[] | undefined>()
     const selectedModelName = ref<string | undefined>('deepseek-chat')
-    rstest.mocked(useModelOptionsFetch).mockReturnValue({
+    vi.mocked(useModelOptionsFetch).mockReturnValue({
       data: modelOptions,
       isLoading: shallowRef(true),
       isFetching: shallowRef(true),
-      refetch: rstest.fn(),
+      refetch: vi.fn(),
     } as never)
-    rstest.mocked(useRouteQuery).mockReturnValue(selectedModelName as never)
+    vi.mocked(useRouteQuery).mockReturnValue(selectedModelName as never)
 
     const models = useWorkbenchModels()
 
@@ -43,13 +43,13 @@ describe('useWorkbenchModels', () => {
   it('clears the route model after an empty result has loaded', async () => {
     const modelOptions = ref<ModelOption[] | undefined>()
     const selectedModelName = ref<string | undefined>('missing-model')
-    rstest.mocked(useModelOptionsFetch).mockReturnValue({
+    vi.mocked(useModelOptionsFetch).mockReturnValue({
       data: modelOptions,
       isLoading: shallowRef(true),
       isFetching: shallowRef(true),
-      refetch: rstest.fn(),
+      refetch: vi.fn(),
     } as never)
-    rstest.mocked(useRouteQuery).mockReturnValue(selectedModelName as never)
+    vi.mocked(useRouteQuery).mockReturnValue(selectedModelName as never)
 
     useWorkbenchModels()
     modelOptions.value = []

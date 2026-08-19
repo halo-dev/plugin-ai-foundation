@@ -2,45 +2,45 @@ import { aiConsoleApiClient } from '@/api'
 import type { AiModel } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { Dialog } from '@halo-dev/components'
-import { describe, expect, it, rstest } from '@rstest/core'
 import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import AllModelListItem from './AllModelListItem.vue'
 
-const invalidateQueries = rstest.fn()
+const invalidateQueries = vi.fn()
 
-rstest.mock('@/api', () => ({
+vi.mock('@/api', () => ({
   aiConsoleApiClient: {
     model: {
-      deleteModel: rstest.fn(),
+      deleteModel: vi.fn(),
     },
   },
 }))
 
-rstest.mock('@/composables/use-provider-types-fetch', () => ({
+vi.mock('@/composables/use-provider-types-fetch', () => ({
   useProviderTypesFetch: () => ({ data: ref([]) }),
 }))
 
-rstest.mock('@/composables/use-providers-fetch', () => ({
+vi.mock('@/composables/use-providers-fetch', () => ({
   useProvidersFetch: () => ({ data: ref([]) }),
 }))
 
-rstest.mock('@tanstack/vue-query', () => ({
+vi.mock('@tanstack/vue-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
 }))
 
-rstest.mock('@vueuse/core', () => ({
+vi.mock('@vueuse/core', () => ({
   useClipboard: () => ({
-    copy: rstest.fn(),
+    copy: vi.fn(),
     isSupported: ref(true),
   }),
 }))
 
-rstest.mock('vue-router', () => ({
-  useRouter: () => ({ push: rstest.fn() }),
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: vi.fn() }),
 }))
 
-rstest.mock('@halo-dev/components', () => {
+vi.mock('@halo-dev/components', () => {
   const Stub = {
     template:
       '<div><slot /><slot name="start" /><slot name="end" /><slot name="dropdownItems" /></div>',
@@ -50,10 +50,10 @@ rstest.mock('@halo-dev/components', () => {
     template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
   }
   return {
-    Dialog: { warning: rstest.fn() },
+    Dialog: { warning: vi.fn() },
     Toast: {
-      success: rstest.fn(),
-      error: rstest.fn(),
+      success: vi.fn(),
+      error: vi.fn(),
     },
     VAvatar: Stub,
     VDropdownDivider: Stub,
@@ -67,8 +67,8 @@ rstest.mock('@halo-dev/components', () => {
 
 describe('AllModelListItem', () => {
   it('invalidates all model list queries after deletion', async () => {
-    const deleteModel = rstest.mocked(aiConsoleApiClient.model.deleteModel)
-    const dialogWarning = rstest.mocked(Dialog.warning)
+    const deleteModel = vi.mocked(aiConsoleApiClient.model.deleteModel)
+    const dialogWarning = vi.mocked(Dialog.warning)
     deleteModel.mockResolvedValue({} as Awaited<ReturnType<typeof deleteModel>>)
 
     const wrapper = mount(AllModelListItem, {

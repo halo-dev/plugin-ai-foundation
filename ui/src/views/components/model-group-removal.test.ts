@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, rstest } from '@rstest/core'
 import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 const formKitStub = {
@@ -15,13 +15,13 @@ const formKitStub = {
 }
 
 afterEach(() => {
-  rstest.resetModules()
-  rstest.clearAllMocks()
+  vi.resetModules()
+  vi.clearAllMocks()
 })
 
 describe('model group removal', () => {
   it('does not render a model group field in the model form', async () => {
-    rstest.doMock('@/composables/use-provider-types-fetch', () => ({
+    vi.doMock('@/composables/use-provider-types-fetch', () => ({
       useProviderTypesFetch: () => ({ data: ref([]) }),
     }))
 

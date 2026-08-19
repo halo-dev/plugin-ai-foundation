@@ -5,8 +5,8 @@ import type {
   ParameterMappingTemplateInfo,
 } from '@/api/generated'
 import { defaultConfig, plugin as FormKitPlugin } from '@formkit/vue'
-import { describe, expect, it } from '@rstest/core'
 import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
 import { defineComponent, nextTick, ref } from 'vue'
 import ParameterMappingFields from './ParameterMappingFields.vue'
 
