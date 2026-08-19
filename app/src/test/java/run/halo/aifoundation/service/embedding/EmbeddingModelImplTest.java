@@ -11,7 +11,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.metadata.DefaultUsage;
@@ -30,6 +33,10 @@ import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.usage.NormalizedUsage;
+import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.usage.UsageUnitKind;
 
 class EmbeddingModelImplTest {
 
@@ -235,6 +242,28 @@ class EmbeddingModelImplTest {
     }
 
     @Test
+    void embed_checksCancellationBeforeEachRetryAttempt() {
+        var springModel = mock(EmbeddingModel.class);
+        var source = new CancellationSource();
+        when(springModel.call(any(EmbeddingRequest.class))).thenAnswer(invocation -> {
+            source.cancel();
+            throw new RuntimeException("temporary");
+        });
+        var model = new EmbeddingModelImpl(springModel, "openai", 96, false);
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .inputs(List.of("first"))
+            .maxRetries(1)
+            .cancellationToken(source.token())
+            .build();
+
+        StepVerifier.create(model.embed(request))
+            .expectError(EmbeddingCancelledException.class)
+            .verify();
+
+        verify(springModel).call(any(EmbeddingRequest.class));
+    }
+
+    @Test
     void embed_doesNotRetryWhenMaxRetriesIsZero() {
         var springModel = mock(EmbeddingModel.class);
         when(springModel.call(any(EmbeddingRequest.class)))
@@ -337,6 +366,45 @@ class EmbeddingModelImplTest {
         StepVerifier.create(model.embed(request))
             .expectError(EmbeddingCancelledException.class)
             .verify();
+    }
+
+    @Test
+    void embed_doesNotObserveExecutionWhenLifecycleCancelsBeforeProvider() {
+        var springModel = mock(EmbeddingModel.class);
+        var source = new CancellationSource();
+        var observed = new AtomicBoolean();
+        var observer = new UsageExecutionObserver() {
+            @Override
+            public <T> Mono<T> observe(UsageUnitKind kind, int unitIndex,
+                Supplier<Mono<T>> invocation, Function<T, NormalizedUsage> usage,
+                Function<T, String> responseModel) {
+                observed.set(true);
+                return invocation.get();
+            }
+        };
+        var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
+            EmbeddingModelProviderOptions.defaults("openai"));
+        var model = new EmbeddingModelImpl(springModel, composition,
+            ModelRuntimeContext.unresolved("openai"), observer);
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .inputs(List.of("first"))
+            .cancellationToken(source.token())
+            .lifecycle(new EmbeddingLifecycle() {
+                @Override
+                public Mono<Void> onStart(
+                    run.halo.aifoundation.embedding.EmbeddingStartEvent event) {
+                    source.cancel();
+                    return Mono.empty();
+                }
+            })
+            .build();
+
+        StepVerifier.create(model.embed(request))
+            .expectError(EmbeddingCancelledException.class)
+            .verify();
+
+        assertThat(observed).isFalse();
+        verifyNoInteractions(springModel);
     }
 
     @Test

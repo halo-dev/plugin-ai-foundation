@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.exception.RerankCancelledException;
 import run.halo.aifoundation.exception.RerankTimeoutException;
@@ -20,6 +21,9 @@ import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankWarning;
 import run.halo.aifoundation.rerank.RerankingModel;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.usage.NormalizedUsage;
+import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.usage.UsageUnitKind;
 
 public class RerankingModelImpl implements RerankingModel {
 
@@ -27,6 +31,7 @@ public class RerankingModelImpl implements RerankingModel {
     private final String providerType;
     private final RerankingModelProviderOptions providerOptions;
     private final RuntimeParameterMappings parameterMappings;
+    private final UsageExecutionObserver usageExecutionObserver;
 
     RerankingModelImpl(ProviderRerankingClient client, String providerType,
         RerankingModelProviderOptions providerOptions) {
@@ -49,12 +54,19 @@ public class RerankingModelImpl implements RerankingModel {
 
     RerankingModelImpl(ProviderRerankingClient client,
         RerankingModelProviderOptions providerOptions, ModelRuntimeContext context) {
+        this(client, providerOptions, context, null);
+    }
+
+    RerankingModelImpl(ProviderRerankingClient client,
+        RerankingModelProviderOptions providerOptions, ModelRuntimeContext context,
+        UsageExecutionObserver usageExecutionObserver) {
         this.client = client;
         this.providerType = context.providerType();
         this.providerOptions = providerOptions != null
             ? providerOptions
             : RerankingModelProviderOptions.defaults();
         this.parameterMappings = context.parameterMappings();
+        this.usageExecutionObserver = usageExecutionObserver;
     }
 
     @Override
@@ -67,11 +79,16 @@ public class RerankingModelImpl implements RerankingModel {
                 }
                 var warnings = requestWarnings(request);
                 var target = mappedTopN(request, warnings);
-                return client.rerank(request, target)
+                Supplier<Mono<RerankResponse>> invocation =
+                    () -> withRerankTimeout(client.rerank(request, target), request);
+                var call = usageExecutionObserver == null ? invocation.get()
+                    : usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
+                        response -> NormalizedUsage.from(response.getUsage()),
+                        response -> null);
+                return call
                     .map(response -> withRuntimeWarnings(response, warnings))
                     .doOnNext(response -> checkResultIndexes(request, response));
             })
-            .transform(mono -> withRerankTimeout(mono, request))
             .doOnNext(ignored -> checkCancellation(request));
     }
 

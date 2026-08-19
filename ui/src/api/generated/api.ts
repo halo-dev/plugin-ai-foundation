@@ -22,4 +22,5 @@ export * from './api/console-api-aifoundation-halo-run-v1alpha1-model-api';
 export * from './api/console-api-aifoundation-halo-run-v1alpha1-model-option-api';
 export * from './api/console-api-aifoundation-halo-run-v1alpha1-provider-api';
 export * from './api/console-api-aifoundation-halo-run-v1alpha1-provider-type-api';
+export * from './api/console-api-aifoundation-halo-run-v1alpha1-usage-statistics-api';
 

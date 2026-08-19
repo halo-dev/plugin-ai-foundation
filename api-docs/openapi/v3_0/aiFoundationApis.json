@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.25.2"
+    "version" : "2.25.4"
   },
   "servers" : [ {
-    "url" : "http://localhost:41657",
+    "url" : "/",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1221,6 +1221,358 @@
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/calls" : {
+      "get" : {
+        "description" : "List logical AI calls using cursor pagination.",
+        "operationId" : "ListAiUsageCalls",
+        "parameters" : [ {
+          "description" : "Inclusive ISO-8601 instant; defaults to 30 days before to.",
+          "in" : "query",
+          "name" : "from",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "in" : "query",
+          "name" : "to",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "in" : "query",
+          "name" : "callerPlugin",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "feature",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "providerName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelType",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "operation",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "usageQuality",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Page size from 1 to 200.",
+          "in" : "query",
+          "name" : "size",
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "description" : "Opaque cursor returned by the previous page.",
+          "in" : "query",
+          "name" : "cursor",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsageCallPage"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/calls/{id}" : {
+      "get" : {
+        "description" : "Get a logical AI call and its physical executions.",
+        "operationId" : "GetAiUsageCall",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsageCallDetail"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/health" : {
+      "get" : {
+        "description" : "Get statistics availability and completeness indicators.",
+        "operationId" : "GetAiUsageStatisticsHealth",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsageHealth"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/reset" : {
+      "post" : {
+        "description" : "Delete all usage statistics. Requires confirmation RESET.",
+        "operationId" : "ResetAiUsageStatistics",
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResetResponse"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/summary" : {
+      "get" : {
+        "description" : "Get filtered AI call and token totals.",
+        "operationId" : "GetAiUsageSummary",
+        "parameters" : [ {
+          "description" : "Inclusive ISO-8601 instant; defaults to 30 days before to.",
+          "in" : "query",
+          "name" : "from",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "in" : "query",
+          "name" : "to",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "in" : "query",
+          "name" : "callerPlugin",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "feature",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "providerName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelType",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "operation",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "usageQuality",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsageSummary"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/trends" : {
+      "get" : {
+        "description" : "List filtered UTC usage trend buckets.",
+        "operationId" : "ListAiUsageTrends",
+        "parameters" : [ {
+          "description" : "Inclusive ISO-8601 instant; defaults to 30 days before to.",
+          "in" : "query",
+          "name" : "from",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "in" : "query",
+          "name" : "to",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "in" : "query",
+          "name" : "callerPlugin",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "feature",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "providerName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelType",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "operation",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "usageQuality",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.",
+          "in" : "query",
+          "name" : "resolution",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/UsageTrendPoint"
+                  }
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
+      }
     }
   },
   "components" : {
@@ -2325,6 +2677,43 @@
           }
         }
       },
+      "NormalizedUsage" : {
+        "type" : "object",
+        "properties" : {
+          "accountedTotalTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cacheCreationInputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cacheReadInputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "providerTotalTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "quality" : {
+            "type" : "string",
+            "enum" : [ "REPORTED_COMPONENTS", "REPORTED_TOTAL", "PARTIAL", "ESTIMATED", "MISSING" ]
+          },
+          "reasoningOutputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "OutputSpec" : {
         "type" : "object",
         "properties" : {
@@ -2666,6 +3055,23 @@
             "additionalProperties" : {
               "type" : "object"
             }
+          }
+        }
+      },
+      "ResetRequest" : {
+        "type" : "object",
+        "properties" : {
+          "confirmation" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResetResponse" : {
+        "type" : "object",
+        "properties" : {
+          "epoch" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },
@@ -3488,6 +3894,348 @@
         "properties" : {
           "type" : {
             "type" : "string"
+          }
+        }
+      },
+      "UsageCallDetail" : {
+        "type" : "object",
+        "properties" : {
+          "call" : {
+            "$ref" : "#/components/schemas/UsageCallItem"
+          },
+          "executions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UsageExecutionRecord"
+            }
+          }
+        }
+      },
+      "UsageCallItem" : {
+        "type" : "object",
+        "properties" : {
+          "attemptCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "callerDetectionSource" : {
+            "type" : "string"
+          },
+          "callerPluginName" : {
+            "type" : "string"
+          },
+          "callerPluginVersion" : {
+            "type" : "string"
+          },
+          "complete" : {
+            "type" : "boolean"
+          },
+          "completedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "durationMillis" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "errorType" : {
+            "type" : "string"
+          },
+          "feature" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "missingExecutionCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "modelName" : {
+            "type" : "string"
+          },
+          "modelType" : {
+            "type" : "string"
+          },
+          "operation" : {
+            "type" : "string"
+          },
+          "providerName" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "requestModelId" : {
+            "type" : "string"
+          },
+          "responseModelId" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "IN_PROGRESS", "SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELLED", "ABANDONED" ]
+          },
+          "stepCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "streaming" : {
+            "type" : "boolean"
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/NormalizedUsage"
+          }
+        }
+      },
+      "UsageCallPage" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UsageCallItem"
+            }
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UsageError" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UsageExecutionRecord" : {
+        "type" : "object",
+        "properties" : {
+          "attemptIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "callId" : {
+            "type" : "string"
+          },
+          "completedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "epoch" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "error" : {
+            "$ref" : "#/components/schemas/UsageError"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "requestModelId" : {
+            "type" : "string"
+          },
+          "responseModelId" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "IN_PROGRESS", "SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELLED", "ABANDONED" ]
+          },
+          "unitIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "unitKind" : {
+            "type" : "string",
+            "enum" : [ "GENERATION_STEP", "EMBEDDING_BATCH", "RERANK", "IMAGE_BATCH" ]
+          },
+          "usage" : {
+            "$ref" : "#/components/schemas/NormalizedUsage"
+          }
+        }
+      },
+      "UsageHealth" : {
+        "type" : "object",
+        "properties" : {
+          "affectedSince" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "affectedUntil" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "available" : {
+            "type" : "boolean"
+          },
+          "complete" : {
+            "type" : "boolean"
+          },
+          "droppedEvents" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "incompleteCalls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "integrityError" : {
+            "type" : "string"
+          },
+          "lastWriteErrorAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "migrationError" : {
+            "type" : "string"
+          },
+          "queueDepth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "writeFailures" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "UsageSummary" : {
+        "type" : "object",
+        "properties" : {
+          "abandonedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "accountedTotalTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cacheCreationInputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cacheReadInputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "callCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cancelledCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "complete" : {
+            "type" : "boolean"
+          },
+          "dataFrom" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "dataTo" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "failedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "inProgressCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "knownUsageCalls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "missingUsageCalls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "reasoningOutputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "resolution" : {
+            "type" : "string"
+          },
+          "successCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "timedOutCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "usageCoverage" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "UsageTrendPoint" : {
+        "type" : "object",
+        "properties" : {
+          "accountedTotalTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "bucketStart" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "callCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "complete" : {
+            "type" : "boolean"
+          },
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "knownUsageCalls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "missingUsageCalls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "resolution" : {
+            "type" : "string",
+            "enum" : [ "HOUR", "DAY" ]
           }
         }
       }

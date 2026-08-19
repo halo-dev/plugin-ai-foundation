@@ -37,6 +37,7 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-client-chat'
     implementation 'org.springframework.ai:spring-ai-deepseek'
     implementation 'org.springframework.ai:spring-ai-ollama'
+    implementation 'org.xerial:sqlite-jdbc:3.53.2.0'
 
     compileOnly 'run.halo.app:api'
 
@@ -100,4 +101,38 @@ haloPlugin {
 
 halo {
     version = '2.25'
+}
+
+def generatedOpenApi = layout.projectDirectory.file(
+    '../api-docs/openapi/v3_0/aiFoundationApis.json')
+
+// Halo's documentation task starts on a random port. Normalize only its generated server block so
+// repeated client generation is deterministic; API clients still receive the Console axios base.
+def normalizeGeneratedOpenApiServers = tasks.register('normalizeGeneratedOpenApiServers') {
+    dependsOn tasks.named('generateOpenApiDocs')
+    outputs.upToDateWhen { false }
+    doLast {
+        def spec = generatedOpenApi.asFile
+        def original = spec.getText('UTF-8')
+        if (original.contains('"url" : "/"')) {
+            return
+        }
+        def generatedServerPattern = '(?s)"servers"\\s*:\\s*\\[\\s*\\{\\s*"url"\\s*:' +
+            '\\s*"[^"]+"\\s*,\\s*"description"\\s*:\\s*"Generated server url"\\s*\\}\\s*\\]'
+        def generatedServer = ~generatedServerPattern
+        def normalized = original.replaceFirst(generatedServer, '''"servers" : [ {
+    "url" : "/",
+    "description" : "Generated server url"
+  } ]''')
+        if (normalized == original) {
+            throw new GradleException('Generated OpenAPI server block was not found')
+        }
+        spec.setText(normalized, 'UTF-8')
+    }
+}
+
+afterEvaluate {
+    tasks.named('generateApiClient') {
+        dependsOn normalizeGeneratedOpenApiServers
+    }
 }

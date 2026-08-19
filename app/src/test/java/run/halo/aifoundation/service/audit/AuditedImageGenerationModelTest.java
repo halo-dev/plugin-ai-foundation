@@ -3,6 +3,7 @@ package run.halo.aifoundation.service.audit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,6 +20,9 @@ import run.halo.aifoundation.image.middleware.ImageGenerationMiddleware;
 import run.halo.aifoundation.image.middleware.ImageGenerationMiddlewares;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.service.usage.UsageCallDescriptor;
+import run.halo.aifoundation.service.usage.UsageCallSession;
+import run.halo.aifoundation.service.usage.UsageStatisticsService;
 
 class AuditedImageGenerationModelTest {
 
@@ -31,11 +35,17 @@ class AuditedImageGenerationModelTest {
         "openai",
         "gpt-image-1"
     );
+    private final UsageStatisticsService statistics = mock(UsageStatisticsService.class);
     private final AuditedImageGenerationModel model = new AuditedImageGenerationModel(delegate,
-        context, auditRecorder);
+        context, auditRecorder, statistics);
 
     @Test
     void generateImageRecordsModelInvocation() {
+        when(statistics.describeCall(context, "image.generateImage", false, null))
+            .thenReturn(mock(UsageCallDescriptor.class));
+        when(statistics.beginCall(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mock(UsageCallSession.class));
+
         StepVerifier.create(model.generateImage("draw"))
             .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("draw"))
             .verifyComplete();
@@ -46,6 +56,10 @@ class AuditedImageGenerationModelTest {
 
     @Test
     void wrappedShortCircuitStillRecordsModelInvocation() {
+        when(statistics.describeCall(context, "image.generateImage", false, null))
+            .thenReturn(mock(UsageCallDescriptor.class));
+        when(statistics.beginCall(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mock(UsageCallSession.class));
         var wrapped = ImageGenerationMiddlewares.wrap(model, new ImageGenerationMiddleware() {
             @Override
             public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context,
