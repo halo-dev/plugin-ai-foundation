@@ -25,7 +25,7 @@ public class DouBaoProvider extends AbstractAiProviderType {
 
     private static final String DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
     private static final String CHAT_PATH = "/chat/completions";
-    private static final String EMBEDDING_PATH = "/embeddings";
+    private static final String EMBEDDING_PATH = "/embeddings/multimodal";
 
     @Override
     public String getProviderType() {
