@@ -14,6 +14,7 @@ import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.Metadata;
 
@@ -22,7 +23,9 @@ class ModelRuntimeContextResolverTest {
     @Test
     void resolvesSafeIdentityAndExecutableMappingsWithoutRetainingSecret() {
         var providerType = mock(AiProviderType.class);
-        when(providerType.getDefaultParameterMappings()).thenReturn(Map.of(
+        when(providerType.getSupportedAdapterTypes()).thenReturn(
+            java.util.List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES)).thenReturn(Map.of(
             ModelParameter.MAX_OUTPUT_TOKENS,
             DefaultParameterMapping.template("openai.max-completion-tokens")
         ));
@@ -35,6 +38,7 @@ class ModelRuntimeContextResolverTest {
         assertThat(context.modelId()).isEqualTo("gpt-a");
         assertThat(context.providerName()).isEqualTo("provider-a");
         assertThat(context.providerType()).isEqualTo("openai");
+        assertThat(context.adapterType()).isEqualTo(AdapterType.OPENAI_RESPONSES);
         assertThat(context.providerDefinition()).isSameAs(providerType);
         assertThat(context.parameterMappings().get(ModelParameter.MAX_OUTPUT_TOKENS).template())
             .isEqualTo("openai.max-completion-tokens");
@@ -57,6 +61,7 @@ class ModelRuntimeContextResolverTest {
         modelSpec.setProviderName("provider-a");
         modelSpec.setModelId("gpt-a");
         modelSpec.setModelType(ModelType.LANGUAGE);
+        modelSpec.setAdapterType(AdapterType.OPENAI_RESPONSES);
         model.setSpec(modelSpec);
         return new ModelResolution(model, provider, providerType, "do-not-retain");
     }

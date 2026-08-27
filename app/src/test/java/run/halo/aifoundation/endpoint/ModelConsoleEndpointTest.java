@@ -69,6 +69,8 @@ class ModelConsoleEndpointTest {
             .thenReturn(List.of(ModelFeature.STREAMING, ModelFeature.VISION,
                 ModelFeature.AUDIO_INPUT, ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
                 ModelFeature.REASONING));
+        when(mockType.getSupportedFeatures(any(AdapterType.class)))
+            .thenAnswer(invocation -> mockType.getSupportedFeatures());
         when(mockType.getSupportedAdapterTypes())
             .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
                 AdapterType.RERANK, AdapterType.OPENAI_IMAGE));
@@ -239,6 +241,20 @@ class ModelConsoleEndpointTest {
     void create_explicitUnsupportedAdapterType_returns400() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
         m.getSpec().setAdapterType(AdapterType.OLLAMA_CHAT);
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_adapterForDifferentModelType_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setAdapterType(AdapterType.OPENAI_EMBEDDING);
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
 

@@ -11,6 +11,7 @@ import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.app.extension.Metadata;
@@ -23,11 +24,17 @@ class EffectiveParameterMappingResolverTest {
 
     @BeforeEach
     void setUp() {
-        when(providerType.getDefaultParameterMappings()).thenReturn(Map.of(
+        var defaults = Map.of(
             ModelParameter.MAX_OUTPUT_TOKENS,
             DefaultParameterMapping.template("openai.max-tokens"),
             ModelParameter.REASONING, DefaultParameterMapping.unsupported()
-        ));
+        );
+        when(providerType.getSupportedAdapterTypes()).thenReturn(
+            java.util.List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(
+            java.util.Optional.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
+            .thenReturn(defaults);
     }
 
     @Test

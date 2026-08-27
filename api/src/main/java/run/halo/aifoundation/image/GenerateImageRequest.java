@@ -91,6 +91,15 @@ public class GenerateImageRequest {
      */
     private ImageResponseFormat responseFormat;
 
+    /**
+     * Provider-namespaced image options sent only to the selected provider adapter.
+     *
+     * <p>For example, Qianfan-specific controls belong under {@code ernie}. Provider-neutral
+     * fields on this request remain authoritative when both representations address the same
+     * setting.
+     */
+    private Map<String, Map<String, Object>> providerOptions;
+
 
     /**
      * Request-scoped HTTP headers sent to providers when supported.

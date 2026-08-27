@@ -11,7 +11,7 @@ import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.control.CancellationToken;
 
 /**
- * Advanced request object for embedding one or more text values.
+ * Advanced request object for embedding text values or one multimodal content sequence.
  *
  * <p>For the common case, prefer {@link EmbeddingModel#embedQuery(String)}. Use this request when
  * you need batching controls, dimensions, request headers, lifecycle callbacks,
@@ -37,9 +37,32 @@ public class EmbeddingRequest {
     private List<String> inputs;
 
     /**
+     * Typed parts that jointly produce one multimodal embedding.
+     *
+     * <p>This property and {@link #inputs} are mutually exclusive. Providers that do not expose a
+     * native multimodal embedding endpoint reject requests that use this property.
+     */
+    private List<EmbeddingContent> contents;
+
+    /** Optional natural-language instruction for providers with instruction-tuned embeddings. */
+    private String instructions;
+
+    /** Request a provider-native sparse embedding in response metadata when supported. */
+    private Boolean includeSparseEmbedding;
+
+    /**
+     * Request per-modality embeddings in response metadata in addition to the joint multimodal
+     * embedding when supported.
+     */
+    private Boolean includeModalityEmbeddings;
+
+    /**
      * Provider-neutral dimensions override for models that support variable-size embeddings.
      */
     private Integer dimensions;
+
+    /** Provider-namespaced embedding options sent only to the selected provider adapter. */
+    private Map<String, Map<String, Object>> providerOptions;
 
     /**
      * Caller-side maximum number of inputs per provider request. The implementation also applies

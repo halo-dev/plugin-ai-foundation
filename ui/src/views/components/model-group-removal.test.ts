@@ -3,12 +3,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 const formKitStub = {
-  props: ['label', 'name', 'options'],
+  name: 'FormKit',
+  props: ['label', 'name', 'options', 'value', 'help'],
+  emits: ['input', 'submit'],
   template: `
     <div>
       <label v-if="label">{{ label }}</label>
-      <input v-if="name" :name="name" />
-      <span v-for="option in options" :key="option.value">{{ option.label }}</span>
+      <select
+        v-if="name && options"
+        :name="name"
+        :value="value"
+        @change="$emit('input', $event.target.value)"
+      >
+        <option v-for="option in options" :key="option.value" :value="option.value">
+          {{ option.label }}
+        </option>
+      </select>
+      <input v-else-if="name" :name="name" :value="value" />
+      <small v-if="help">{{ help }}</small>
       <slot />
     </div>
   `,
@@ -41,6 +53,6 @@ describe('model group removal', () => {
     expect(wrapper.find('input[name="group"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('支持推理历史回传')
     expect(wrapper.text()).toContain('继承供应商')
-    expect(wrapper.find('input[name="languageReasoningHistory"]').exists()).toBe(true)
+    expect(wrapper.find('[name="languageReasoningHistory"]').exists()).toBe(true)
   })
 })

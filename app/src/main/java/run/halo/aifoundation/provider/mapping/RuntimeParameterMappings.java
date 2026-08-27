@@ -46,8 +46,13 @@ public final class RuntimeParameterMappings {
 
     public boolean apply(ModelParameter parameter, Object value, ParameterMappingTarget target) {
         var mapping = get(parameter);
-        if (value == null || mapping == null
-            || mapping.mode() != ModelParameterMappings.Mode.TEMPLATE) {
+        if (value == null) {
+            return false;
+        }
+        if (mapping == null) {
+            return false;
+        }
+        if (mapping.mode() != ModelParameterMappings.Mode.TEMPLATE) {
             return false;
         }
         var descriptor = templates.get(mapping.template());

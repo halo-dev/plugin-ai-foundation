@@ -69,6 +69,45 @@ class RuntimeParameterMappingsTest {
         assertThat(target.root()).containsEntry("reasoning", Map.of("mode", "on"));
     }
 
+    @Test
+    void reasoningMappingsRemainExecutableRegardlessOfSource() {
+        for (var source : EffectiveParameterMappings.Source.values()) {
+            var mappings = runtimeReasoningMapping(source,
+                ModelParameterMappings.Mode.TEMPLATE);
+            assertThat(mappings.canApplyReasoning(
+                ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))).isTrue();
+        }
+        assertThat(runtimeReasoningMapping(EffectiveParameterMappings.Source.BUILT_IN,
+            ModelParameterMappings.Mode.UNSUPPORTED)
+            .canApplyReasoning(ReasoningOptions.enabled())).isFalse();
+        assertThat(RuntimeParameterMappings.empty()
+            .canApplyReasoning(ReasoningOptions.enabled())).isFalse();
+    }
+
+    @Test
+    void currentKimiDefaultsUseEffortWithoutPretendingThinkingCanBeDisabled() {
+        var mapping = new EffectiveParameterMappings.EffectiveMapping(
+            ModelParameterMappings.Mode.TEMPLATE, "reasoning.kimi", null, null,
+            EffectiveParameterMappings.Source.BUILT_IN);
+        var mappings = new RuntimeParameterMappings(new EffectiveParameterMappings(
+            Map.of(ModelParameter.REASONING, mapping)), null, "model-a", "provider-a");
+        var target = new ParameterMappingTarget();
+
+        assertThat(mappings.canApplyReasoning(ReasoningOptions.disabled())).isFalse();
+        assertThat(mappings.applyReasoning(
+            ReasoningOptions.effort(ReasoningOptions.Effort.HIGH), target)).isTrue();
+        assertThat(target.root()).containsEntry("reasoning_effort", "max");
+    }
+
+    private RuntimeParameterMappings runtimeReasoningMapping(
+        EffectiveParameterMappings.Source source, ModelParameterMappings.Mode mode) {
+        var mapping = new EffectiveParameterMappings.EffectiveMapping(
+            mode, mode == ModelParameterMappings.Mode.TEMPLATE ? "reasoning.effort" : null,
+            null, source);
+        return new RuntimeParameterMappings(new EffectiveParameterMappings(
+            Map.of(ModelParameter.REASONING, mapping)), null, "model-a", "provider-a");
+    }
+
     private EffectiveParameterMappings.EffectiveMapping mapping(
         ModelParameterMappings.Mode mode, String template) {
         return new EffectiveParameterMappings.EffectiveMapping(mode, template, null,

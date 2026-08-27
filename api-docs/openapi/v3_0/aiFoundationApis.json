@@ -2,10 +2,10 @@
   "openapi" : "3.0.1",
   "info" : {
     "title" : "Halo",
-    "version" : "2.25.2"
+    "version" : "2.25.4"
   },
   "servers" : [ {
-    "url" : "http://localhost:41657",
+    "url" : "http://localhost:41649",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -1225,6 +1225,36 @@
   },
   "components" : {
     "schemas" : {
+      "AdapterTypeInfo" : {
+        "type" : "object",
+        "properties" : {
+          "adapterType" : {
+            "type" : "string",
+            "enum" : [ "openai-chat", "openai-responses", "openai-embedding", "openai-image", "deepseek-chat", "deepseek-responses", "deepseek-messages", "dashscope-chat", "dashscope-responses", "dashscope-messages", "dashscope-embedding", "doubao-responses", "doubao-chat", "doubao-embedding", "ernie-responses", "ernie-chat", "ernie-messages", "ernie-embedding", "gitee-responses", "gitee-chat", "gitee-messages", "gitee-embedding", "kimi-chat", "minimax-messages", "minimax-chat", "minimax-responses", "openrouter-chat", "openrouter-responses", "openrouter-messages", "openrouter-embedding", "siliconflow-chat", "siliconflow-messages", "siliconflow-embedding", "mimo-responses", "mimo-chat", "mimo-messages", "zhipu-chat", "zhipu-messages", "zhipu-embedding", "aihubmix-responses", "aihubmix-chat", "aihubmix-messages", "aihubmix-embedding", "openrouter-image", "dashscope-image", "doubao-image", "ernie-image", "gitee-image", "minimax-image", "siliconflow-image", "zhipu-image", "aihubmix-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-openai-chat", "ollama-responses", "ollama-messages", "ollama-embedding", "ollama-image" ]
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "modelType" : {
+            "type" : "string",
+            "enum" : [ "language", "embedding", "rerank", "image-generation" ]
+          },
+          "recommended" : {
+            "type" : "boolean"
+          },
+          "supportedFeatures" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "streaming", "vision", "audio-input", "tool-call", "structured-output", "reasoning" ]
+            }
+          }
+        },
+        "description" : "Provider-owned invocation adapters available for model configuration"
+      },
       "AddOperation" : {
         "required" : [ "op", "path", "value" ],
         "type" : "object",
@@ -1318,7 +1348,7 @@
           "adapterType" : {
             "type" : "string",
             "description" : "Internal invocation adapter",
-            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+            "enum" : [ "openai-chat", "openai-responses", "openai-embedding", "openai-image", "deepseek-chat", "deepseek-responses", "deepseek-messages", "dashscope-chat", "dashscope-responses", "dashscope-messages", "dashscope-embedding", "doubao-responses", "doubao-chat", "doubao-embedding", "ernie-responses", "ernie-chat", "ernie-messages", "ernie-embedding", "gitee-responses", "gitee-chat", "gitee-messages", "gitee-embedding", "kimi-chat", "minimax-messages", "minimax-chat", "minimax-responses", "openrouter-chat", "openrouter-responses", "openrouter-messages", "openrouter-embedding", "siliconflow-chat", "siliconflow-messages", "siliconflow-embedding", "mimo-responses", "mimo-chat", "mimo-messages", "zhipu-chat", "zhipu-messages", "zhipu-embedding", "aihubmix-responses", "aihubmix-chat", "aihubmix-messages", "aihubmix-embedding", "openrouter-image", "dashscope-image", "doubao-image", "ernie-image", "gitee-image", "minimax-image", "siliconflow-image", "zhipu-image", "aihubmix-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-openai-chat", "ollama-responses", "ollama-messages", "ollama-embedding", "ollama-image" ]
           },
           "capabilities" : {
             "$ref" : "#/components/schemas/ModelCapabilities"
@@ -1624,7 +1654,7 @@
         "properties" : {
           "adapterType" : {
             "type" : "string",
-            "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+            "enum" : [ "openai-chat", "openai-responses", "openai-embedding", "openai-image", "deepseek-chat", "deepseek-responses", "deepseek-messages", "dashscope-chat", "dashscope-responses", "dashscope-messages", "dashscope-embedding", "doubao-responses", "doubao-chat", "doubao-embedding", "ernie-responses", "ernie-chat", "ernie-messages", "ernie-embedding", "gitee-responses", "gitee-chat", "gitee-messages", "gitee-embedding", "kimi-chat", "minimax-messages", "minimax-chat", "minimax-responses", "openrouter-chat", "openrouter-responses", "openrouter-messages", "openrouter-embedding", "siliconflow-chat", "siliconflow-messages", "siliconflow-embedding", "mimo-responses", "mimo-chat", "mimo-messages", "zhipu-chat", "zhipu-messages", "zhipu-embedding", "aihubmix-responses", "aihubmix-chat", "aihubmix-messages", "aihubmix-embedding", "openrouter-image", "dashscope-image", "doubao-image", "ernie-image", "gitee-image", "minimax-image", "siliconflow-image", "zhipu-image", "aihubmix-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-openai-chat", "ollama-responses", "ollama-messages", "ollama-embedding", "ollama-image" ]
           },
           "capabilities" : {
             "$ref" : "#/components/schemas/ModelCapabilities"
@@ -2368,7 +2398,7 @@
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+              "enum" : [ "openai-chat", "openai-responses", "openai-embedding", "openai-image", "deepseek-chat", "deepseek-responses", "deepseek-messages", "dashscope-chat", "dashscope-responses", "dashscope-messages", "dashscope-embedding", "doubao-responses", "doubao-chat", "doubao-embedding", "ernie-responses", "ernie-chat", "ernie-messages", "ernie-embedding", "gitee-responses", "gitee-chat", "gitee-messages", "gitee-embedding", "kimi-chat", "minimax-messages", "minimax-chat", "minimax-responses", "openrouter-chat", "openrouter-responses", "openrouter-messages", "openrouter-embedding", "siliconflow-chat", "siliconflow-messages", "siliconflow-embedding", "mimo-responses", "mimo-chat", "mimo-messages", "zhipu-chat", "zhipu-messages", "zhipu-embedding", "aihubmix-responses", "aihubmix-chat", "aihubmix-messages", "aihubmix-embedding", "openrouter-image", "dashscope-image", "doubao-image", "ernie-image", "gitee-image", "minimax-image", "siliconflow-image", "zhipu-image", "aihubmix-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-openai-chat", "ollama-responses", "ollama-messages", "ollama-embedding", "ollama-image" ]
             }
           },
           "configurationType" : {
@@ -2415,6 +2445,13 @@
       "ProviderTypeInfo" : {
         "type" : "object",
         "properties" : {
+          "adapters" : {
+            "type" : "array",
+            "description" : "Provider-owned invocation adapters available for model configuration",
+            "items" : {
+              "$ref" : "#/components/schemas/AdapterTypeInfo"
+            }
+          },
           "builtIn" : {
             "type" : "boolean"
           },
@@ -2476,7 +2513,7 @@
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "openai-chat", "openai-embedding", "openai-image", "openrouter-image", "dashscope-image", "doubao-image", "minimax-image", "siliconflow-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-embedding" ]
+              "enum" : [ "openai-chat", "openai-responses", "openai-embedding", "openai-image", "deepseek-chat", "deepseek-responses", "deepseek-messages", "dashscope-chat", "dashscope-responses", "dashscope-messages", "dashscope-embedding", "doubao-responses", "doubao-chat", "doubao-embedding", "ernie-responses", "ernie-chat", "ernie-messages", "ernie-embedding", "gitee-responses", "gitee-chat", "gitee-messages", "gitee-embedding", "kimi-chat", "minimax-messages", "minimax-chat", "minimax-responses", "openrouter-chat", "openrouter-responses", "openrouter-messages", "openrouter-embedding", "siliconflow-chat", "siliconflow-messages", "siliconflow-embedding", "mimo-responses", "mimo-chat", "mimo-messages", "zhipu-chat", "zhipu-messages", "zhipu-embedding", "aihubmix-responses", "aihubmix-chat", "aihubmix-messages", "aihubmix-embedding", "openrouter-image", "dashscope-image", "doubao-image", "ernie-image", "gitee-image", "minimax-image", "siliconflow-image", "zhipu-image", "aihubmix-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-openai-chat", "ollama-responses", "ollama-messages", "ollama-embedding", "ollama-image" ]
             }
           },
           "supportedFeatures" : {

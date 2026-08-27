@@ -20,6 +20,7 @@ import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
@@ -37,7 +38,7 @@ class DefaultImageGenerationModelFactoryTest {
         var provider = provider();
         var model = model();
         when(providerClientCache.getOrCreateImageGenerationClient(provider, "sk-test",
-            "image-model-id")).thenReturn(client);
+            ProviderModelRef.from(model))).thenReturn(client);
         var factory = new DefaultImageGenerationModelFactory(providerClientCache,
             new ModelCapabilityService(), new MediaResourcePolicy(), new ModelCapabilityMatcher());
 
@@ -49,7 +50,7 @@ class DefaultImageGenerationModelFactoryTest {
             .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("img"))
             .verifyComplete();
         verify(providerClientCache).getOrCreateImageGenerationClient(provider, "sk-test",
-            "image-model-id");
+            ProviderModelRef.from(model));
     }
 
     private AiModel model() {

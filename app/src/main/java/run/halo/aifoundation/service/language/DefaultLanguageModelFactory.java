@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.service.LanguageModelFactory;
@@ -45,7 +46,7 @@ public class DefaultLanguageModelFactory implements LanguageModelFactory {
             resolution.providerTypeName(), resolution.model().getMetadata().getName(),
             resolution.modelId());
         var chatModel = providerClientCache.getOrCreateChatModel(
-            resolution.provider(), resolution.apiKey(), resolution.modelId());
+            resolution.provider(), resolution.apiKey(), ProviderModelRef.from(resolution.model()));
         var capabilities = resolution.providerType() == null
             ? ModelCapabilities.empty()
             : modelCapabilityService.effectiveCapabilities(resolution.model(),

@@ -15,6 +15,8 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.support.ProviderModelResolver;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
@@ -98,17 +100,15 @@ public interface AiProviderType {
     }
 
     default List<ModelFeature> getSupportedFeatures() {
-        if (!getSupportedModelTypes().contains(ModelType.LANGUAGE)) {
+        return List.of();
+    }
+
+    default List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
+        if (adapterType == null || adapterType.getModelType() != ModelType.LANGUAGE
+            || !getSupportedAdapterTypes().contains(adapterType)) {
             return List.of();
         }
-        return List.of(
-            ModelFeature.STREAMING,
-            ModelFeature.VISION,
-            ModelFeature.AUDIO_INPUT,
-            ModelFeature.TOOL_CALL,
-            ModelFeature.STRUCTURED_OUTPUT,
-            ModelFeature.REASONING
-        );
+        return getSupportedFeatures();
     }
 
     default java.util.Map<ModelParameter, DefaultParameterMapping>
@@ -116,12 +116,25 @@ public interface AiProviderType {
         return ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes());
     }
 
+    default java.util.Map<ModelParameter, DefaultParameterMapping>
+        getDefaultParameterMappings(AdapterType adapterType) {
+        return getDefaultParameterMappings();
+    }
+
     // ── Behavior ──────────────────────────────────────────────
 
     ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId);
 
+    default ChatModel buildChatModel(AiProvider provider, String apiKey, ProviderModelRef model) {
+        return buildChatModel(provider, apiKey, model.modelId());
+    }
+
     default LanguageModelProviderOptions languageModelProviderOptions() {
         return LanguageModelProviderOptions.defaults();
+    }
+
+    default LanguageModelProviderOptions languageModelProviderOptions(AdapterType adapterType) {
+        return languageModelProviderOptions();
     }
 
     default EmbeddingModelProviderOptions embeddingModelProviderOptions() {
@@ -131,6 +144,11 @@ public interface AiProviderType {
     @Nullable
     default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         return null;
+    }
+
+    default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey,
+        ProviderModelRef model) {
+        return buildEmbeddingModel(provider, apiKey, model.modelId());
     }
 
     default RerankingModelProviderOptions rerankingModelProviderOptions() {
@@ -143,10 +161,20 @@ public interface AiProviderType {
         return null;
     }
 
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
+        ProviderModelRef model) {
+        return buildRerankingClient(provider, apiKey, model.modelId());
+    }
+
     @Nullable
     default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
         String apiKey, String modelId) {
         return null;
+    }
+
+    default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
+        String apiKey, ProviderModelRef model) {
+        return buildImageGenerationClient(provider, apiKey, model.modelId());
     }
 
     Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey);
@@ -157,6 +185,10 @@ public interface AiProviderType {
 
     default Optional<AdapterType> recommendAdapterType(ModelType modelType) {
         return AdapterType.firstFor(getSupportedAdapterTypes(), modelType);
+    }
+
+    default ProviderModelRef resolveModel(ProviderModelRef model) {
+        return ProviderModelResolver.resolve(this, model);
     }
 
     default int maxEmbeddingsPerCall() {

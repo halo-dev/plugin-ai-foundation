@@ -36,18 +36,14 @@ public final class LanguageModelChatOptionsBuilder {
 
     public void assertRequestSupported(GenerateTextRequest request, boolean supportsToolCalling,
         String toolCallingUnsupportedMessage) {
-        if (hasTools(request) && !supportsToolCalling) {
+        if (!supportsToolCalling && hasTools(request)) {
             throw new IllegalArgumentException(toolCallingUnsupportedMessage);
         }
-        if (hasTools(request)
-            && request.getToolChoice() != null
-            && request.getToolChoice().getType() == ToolChoice.Type.REQUIRED
-            && providerOptions.toolCallingChatOptionsFactory() == null) {
+        if (requiresUnsupportedToolChoice(request)) {
             throw new IllegalArgumentException("toolChoice REQUIRED is not supported by provider type: "
                 + providerType);
         }
-        if (request != null && request.getHeaders() != null && !request.getHeaders().isEmpty()
-            && !providerOptions.requestHeadersSupported()) {
+        if (hasHeaders(request) && !providerOptions.requestHeadersSupported()) {
             throw new IllegalArgumentException("Request headers are not supported by provider type: "
                 + providerType);
         }
@@ -59,9 +55,7 @@ public final class LanguageModelChatOptionsBuilder {
             throw new IllegalArgumentException("seed is not supported by provider type: "
                 + providerType);
         }
-        if (hasTools(request)
-            && (request.getToolChoice() == null
-            || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
+        if (usesTools(request)) {
             var toolNames = toolNames(request);
             var toolCallbacks = toolCallbacks(request, toolNames);
             if (providerOptions.toolCallingChatOptionsFactory() != null) {
@@ -85,7 +79,7 @@ public final class LanguageModelChatOptionsBuilder {
             return withDefaultModel(providerOptions.structuredOutputChatOptionsFactory()
                 .build(request));
         }
-        if (request.getHeaders() != null && !request.getHeaders().isEmpty()
+        if (hasHeaders(request)
             && providerOptions.structuredOutputChatOptionsFactory() != null) {
             return withDefaultModel(providerOptions.structuredOutputChatOptionsFactory()
                 .build(request));
@@ -106,7 +100,7 @@ public final class LanguageModelChatOptionsBuilder {
     }
 
     private ChatOptions withDefaultModel(ChatOptions options) {
-        if (options == null || modelId == null || modelId.isBlank()) {
+        if (options == null || !hasText(modelId)) {
             return options;
         }
         return options.mutate().model(modelId).build();
@@ -116,22 +110,21 @@ public final class LanguageModelChatOptionsBuilder {
         if (!providerOptions.seedSupported()) {
             return false;
         }
-        if (hasTools(request)
-            && (request.getToolChoice() == null
-            || request.getToolChoice().getType() != ToolChoice.Type.NONE)) {
+        if (usesTools(request)) {
             return providerOptions.toolCallingChatOptionsFactory() != null;
         }
         if (hasStructuredOutput(request)) {
-            return providerOptions.structuredOutputChatOptionsFactory() != null
-                || providerOptions.chatOptionsFactory() != null;
+            if (providerOptions.structuredOutputChatOptionsFactory() != null) {
+                return true;
+            }
+            return providerOptions.chatOptionsFactory() != null;
         }
         return providerOptions.chatOptionsFactory() != null;
     }
 
     private List<ToolCallback> toolCallbacks(GenerateTextRequest request, Set<String> toolNames) {
         return ProviderToolMetadata.from(request).stream()
-            .filter(tool -> toolNames == null || toolNames.isEmpty()
-                || toolNames.contains(tool.name()))
+            .filter(tool -> isSelectedTool(tool.name(), toolNames))
             .map(tool -> FunctionToolCallback
                 .builder(tool.name(), (Function<Map<String, Object>, Object>) input -> Map.of())
                 .description(tool.description())
@@ -144,21 +137,63 @@ public final class LanguageModelChatOptionsBuilder {
     }
 
     private Set<String> toolNames(GenerateTextRequest request) {
-        if (request.getToolChoice() != null
-            && request.getToolChoice().getType() == ToolChoice.Type.TOOL) {
-            return Set.of(request.getToolChoice().getToolName());
+        var choice = request.getToolChoice();
+        if (choice == null || choice.getType() != ToolChoice.Type.TOOL) {
+            return Set.of();
         }
-        return Set.of();
+        return Set.of(choice.getToolName());
+    }
+
+    private boolean requiresUnsupportedToolChoice(GenerateTextRequest request) {
+        if (!hasTools(request)) {
+            return false;
+        }
+        if (providerOptions.toolCallingChatOptionsFactory() != null) {
+            return false;
+        }
+        var choice = request.getToolChoice();
+        return choice != null && choice.getType() == ToolChoice.Type.REQUIRED;
+    }
+
+    private boolean usesTools(GenerateTextRequest request) {
+        if (!hasTools(request)) {
+            return false;
+        }
+        var choice = request.getToolChoice();
+        return choice == null || choice.getType() != ToolChoice.Type.NONE;
+    }
+
+    private boolean hasHeaders(GenerateTextRequest request) {
+        if (request == null || request.getHeaders() == null) {
+            return false;
+        }
+        return !request.getHeaders().isEmpty();
     }
 
     private boolean hasTools(GenerateTextRequest request) {
-        return request != null && request.getTools() != null && !request.getTools().isEmpty();
+        if (request == null || request.getTools() == null) {
+            return false;
+        }
+        return !request.getTools().isEmpty();
     }
 
     private boolean hasStructuredOutput(GenerateTextRequest request) {
-        return request != null && request.getOutput() != null
-            && request.getOutput().getType() != null
-            && request.getOutput().getType() != run.halo.aifoundation.schema.OutputType.TEXT;
+        if (request == null || request.getOutput() == null) {
+            return false;
+        }
+        var type = request.getOutput().getType();
+        return type != null && type != run.halo.aifoundation.schema.OutputType.TEXT;
+    }
+
+    private boolean isSelectedTool(String name, Set<String> selectedNames) {
+        if (selectedNames == null || selectedNames.isEmpty()) {
+            return true;
+        }
+        return selectedNames.contains(name);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String writeJson(Object value) {

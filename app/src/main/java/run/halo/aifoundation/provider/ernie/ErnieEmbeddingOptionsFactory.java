@@ -1,0 +1,31 @@
+package run.halo.aifoundation.provider.ernie;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
+import run.halo.aifoundation.embedding.EmbeddingWarning;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderRequestOptions;
+
+final class ErnieEmbeddingOptionsFactory {
+
+    private ErnieEmbeddingOptionsFactory() {
+    }
+
+    static ErnieEmbeddingOptions build(EmbeddingRequest request,
+        EmbeddingModelProviderOptions ignored, List<EmbeddingWarning> warnings) {
+        if (request == null) {
+            return ErnieEmbeddingOptions.builder().build();
+        }
+        var extraBody = new LinkedHashMap<String, Object>();
+        extraBody.putAll(ProviderRequestOptions.orEmpty(request.getProviderOptions(), "ernie"));
+        return ErnieEmbeddingOptions.builder()
+            .dimensions(request.getDimensions())
+            .instructions(request.getInstructions())
+            .includeSparseEmbedding(Boolean.TRUE.equals(request.getIncludeSparseEmbedding()))
+            .includeModalityEmbeddings(
+                Boolean.TRUE.equals(request.getIncludeModalityEmbeddings()))
+            .extraBody(extraBody)
+            .build();
+    }
+}

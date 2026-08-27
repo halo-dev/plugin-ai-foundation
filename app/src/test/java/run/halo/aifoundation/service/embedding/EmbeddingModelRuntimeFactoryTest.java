@@ -13,10 +13,10 @@ import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
-import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
+import run.halo.aifoundation.provider.openailike.OpenAiCompatibleEmbeddingOptions;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.openailike.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 class EmbeddingModelRuntimeFactoryTest {

@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
 
 @Component
 public class ModelRuntimeContextResolver {
@@ -22,7 +23,8 @@ public class ModelRuntimeContextResolver {
         var providerName = resolution.provider().getMetadata().getName();
         var mappings = new RuntimeParameterMappings(mappingResolver.resolve(resolution),
             mappingTemplates, modelName, providerName);
+        var model = ProviderModelRef.from(resolution.model());
         return new ModelRuntimeContext(modelName, resolution.modelId(), providerName,
-            resolution.providerTypeName(), resolution.providerType(), mappings);
+            resolution.providerTypeName(), model.adapterType(), resolution.providerType(), mappings);
     }
 }

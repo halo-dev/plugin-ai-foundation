@@ -13,6 +13,8 @@ import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.support.ProviderModelResolver;
 import run.halo.app.extension.ReactiveExtensionClient;
 
 @Component
@@ -60,17 +62,25 @@ class ModelConsoleModelValidator {
                 + "' is not supported by provider type '" + providerType
                 + "'. Supported model types: " + type.getSupportedModelTypes());
         }
+        return normalizeAdapterType(model, type)
+            .then(Mono.defer(() -> validateAdapterType(model, providerType, type)))
+            .then(Mono.defer(() -> validateFeatures(model, providerType, type)))
+            .then(Mono.defer(() -> validateParameterMappings(model)));
+    }
+
+    private Mono<Void> validateFeatures(AiModel model, String providerType,
+        AiProviderType type) {
+        var supportedFeatures = type.getSupportedFeatures(model.getSpec().getAdapterType());
         var unsupportedFeatures = model.getSpec().getFeatures().stream()
-            .filter(feature -> !type.getSupportedFeatures().contains(feature))
+            .filter(feature -> !supportedFeatures.contains(feature))
             .toList();
         if (!unsupportedFeatures.isEmpty()) {
             return badRequest("Model features " + unsupportedFeatures
                 + " are not supported by provider type '" + providerType
-                + "'. Supported features: " + type.getSupportedFeatures());
+                + "' and adapter '" + model.getSpec().getAdapterType().getValue()
+                + "'. Supported features: " + supportedFeatures);
         }
-        applyDefaultAdapterType(model, type);
-        return validateAdapterType(model, providerType, type)
-            .then(validateParameterMappings(model));
+        return Mono.empty();
     }
 
     private Mono<Void> validateParameterMappings(AiModel model) {
@@ -111,13 +121,14 @@ class ModelConsoleModelValidator {
         }
     }
 
-    private void applyDefaultAdapterType(AiModel model, AiProviderType providerType) {
-        var spec = model.getSpec();
-        var adapterType = spec.getAdapterType();
-        if (adapterType != null) {
-            return;
+    private Mono<Void> normalizeAdapterType(AiModel model, AiProviderType providerType) {
+        try {
+            var resolved = ProviderModelResolver.resolve(providerType, ProviderModelRef.from(model));
+            model.getSpec().setAdapterType(resolved.adapterType());
+            return Mono.empty();
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return badRequest(e.getMessage());
         }
-        providerType.recommendAdapterType(spec.getModelType()).ifPresent(spec::setAdapterType);
     }
 
     private Mono<Void> badRequest(String message) {

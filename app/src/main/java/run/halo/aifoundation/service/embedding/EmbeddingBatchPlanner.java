@@ -17,12 +17,15 @@ final class EmbeddingBatchPlanner {
     }
 
     List<IndexedBatch> indexedBatches(EmbeddingRequest request) {
+        if (request.getContents() != null && !request.getContents().isEmpty()) {
+            return List.of(new IndexedBatch(0, List.of(), request.getContents()));
+        }
         var batchSize = batchSize(request);
         var batches = new ArrayList<IndexedBatch>();
         var inputs = request.getInputs();
         for (int index = 0, start = 0; start < inputs.size(); index++, start += batchSize) {
             batches.add(new IndexedBatch(index, inputs.subList(start,
-                Math.min(start + batchSize, inputs.size()))));
+                Math.min(start + batchSize, inputs.size())), List.of()));
         }
         return batches;
     }
@@ -52,6 +55,7 @@ final class EmbeddingBatchPlanner {
         return maxEmbeddingsPerCall > 0 ? maxEmbeddingsPerCall : request.getInputs().size();
     }
 
-    record IndexedBatch(int index, List<String> inputs) {
+    record IndexedBatch(int index, List<String> inputs,
+                        List<run.halo.aifoundation.embedding.EmbeddingContent> contents) {
     }
 }

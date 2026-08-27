@@ -99,10 +99,6 @@ const resultText = computed(() => {
 
 const modelTypeOptions = computed(() => modelTypeOptionsForProviderType(selectedProviderType.value))
 
-const featureOptions = computed(() =>
-  modelFeatureOptionsForProviderType(selectedProviderType.value),
-)
-
 function featuresEqual(
   a: NonNullable<AiModel['spec']['features']>,
   b: NonNullable<AiModel['spec']['features']>,
@@ -115,6 +111,10 @@ function profileFor(model: DiscoveredModel) {
     profileOverrides.value[model.modelId] ||
     discoveredModelProfileForProviderType(selectedProviderType.value, model)
   )
+}
+
+function featureOptionsFor(model: DiscoveredModel) {
+  return modelFeatureOptionsForProviderType(selectedProviderType.value, model.adapterType)
 }
 
 function setModelType(model: DiscoveredModel, event: Event) {
@@ -138,7 +138,7 @@ function isFeatureEnabled(model: DiscoveredModel, feature: AiModelSpecFeaturesEn
 }
 
 function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum) {
-  if (!featureOptions.value.some((item) => item.value === feature)) {
+  if (!featureOptionsFor(model).some((item) => item.value === feature)) {
     return
   }
   const profile = profileFor(model)
@@ -374,7 +374,7 @@ onMounted(() => {
                     </div>
                     <div class=":uno: flex flex-wrap justify-end gap-1.5">
                       <button
-                        v-for="item in featureOptions"
+                        v-for="item in featureOptionsFor(model)"
                         :key="item.value"
                         type="button"
                         class=":uno: h-7 inline-flex items-center gap-1 border rounded-md px-2 text-xs transition"

@@ -288,6 +288,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .seed(mapped(ModelParameter.IMAGE_SEED, request.getSeed(), warnings))
             .responseFormat(mapped(ModelParameter.RESPONSE_FORMAT,
                 request.getResponseFormat(), warnings))
+            .providerOptions(request.getProviderOptions())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())
@@ -362,6 +363,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .negativePrompt(request.getNegativePrompt())
             .seed(request.getSeed())
             .responseFormat(request.getResponseFormat())
+            .providerOptions(request.getProviderOptions())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())

@@ -12,8 +12,11 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.mapping.ModelParameterCatalog;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
+import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.AdapterTypeInfo;
 import run.halo.aifoundation.provider.support.DefaultParameterMappingInfo;
 import run.halo.aifoundation.provider.support.ModelParameterDefinitionInfo;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
@@ -70,6 +73,11 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                 .supportedModelTypes(type.getSupportedModelTypes())
                 .supportedFeatures(type.getSupportedFeatures())
                 .supportedAdapterTypes(type.getSupportedAdapterTypes())
+                .adapters(type.getSupportedAdapterTypes().stream()
+                    .map(adapter -> adapterInfo(type, adapter,
+                        AdapterType.firstFor(type.getSupportedAdapterTypes(),
+                            adapter.getModelType()).orElse(null) == adapter))
+                    .toList())
                 .parameterDefinitions(modelParameterCatalog
                     .definitionsFor(type.getSupportedModelTypes()).stream()
                     .map(definition -> ModelParameterDefinitionInfo.builder()
@@ -110,5 +118,18 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                 .thenComparing(ProviderTypeInfo::getProviderType))
             .toList();
         return ServerResponse.ok().bodyValue(types);
+    }
+
+    private AdapterTypeInfo adapterInfo(AiProviderType providerType, AdapterType adapter,
+        boolean recommended) {
+        var protocol = adapter.getProtocol();
+        return AdapterTypeInfo.builder()
+            .adapterType(adapter)
+            .modelType(adapter.getModelType())
+            .displayName(providerType.getDisplayName() + " · " + protocol.getDisplayName())
+            .description(protocol.getDescription())
+            .supportedFeatures(providerType.getSupportedFeatures(adapter))
+            .recommended(recommended)
+            .build();
     }
 }

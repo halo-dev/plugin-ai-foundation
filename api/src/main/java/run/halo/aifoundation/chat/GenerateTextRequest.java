@@ -131,6 +131,13 @@ public class GenerateTextRequest {
      */
     private Map<String, Object> context;
     /**
+     * Namespaced request options for capabilities that are unique to one provider.
+     *
+     * <p>Keys are provider type names, for example {@code doubao}. Provider-neutral request
+     * fields remain authoritative when both forms configure the same behavior.
+     */
+    private Map<String, Map<String, Object>> providerOptions;
+    /**
      * Optional structured output specification.
      */
     private OutputSpec output;

@@ -50,6 +50,10 @@ is a convenience for text-only interfaces.
 The default request body contains `id`, `messages`, `trigger`, and `messageId`. Per-request
 headers, body, and credentials can be passed as the second `sendMessage` argument.
 
+When submitted history ends with an assistant message, the backend continues that message and
+reuses its id in the response stream. This is how tool outputs and approval responses progress
+from an intermediate state to final model output without appending duplicate assistant messages.
+
 ## Files, cancellation, and regeneration
 
 ```ts

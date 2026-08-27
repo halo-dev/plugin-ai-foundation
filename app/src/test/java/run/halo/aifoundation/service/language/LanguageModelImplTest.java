@@ -1,5 +1,7 @@
 package run.halo.aifoundation.service.language;
 
+import run.halo.aifoundation.provider.openai.OpenAiProvider;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,11 +31,11 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
+import run.halo.aifoundation.provider.ollama.OllamaChatOptions;
 import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
-import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.Disposable;
@@ -65,7 +67,10 @@ import run.halo.aifoundation.exception.StructuredOutputTerminationException;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
 import run.halo.aifoundation.exception.StructuredOutputSchemaException;
 import run.halo.aifoundation.part.TextStreamPart;
-import run.halo.aifoundation.provider.DeepSeekProvider;
+import run.halo.aifoundation.provider.deepseek.DeepSeekProvider;
+import run.halo.aifoundation.provider.kimi.KimiProvider;
+import run.halo.aifoundation.provider.mimo.MiMoProvider;
+import run.halo.aifoundation.provider.zhipu.ZhiPuProvider;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
 import run.halo.aifoundation.tool.ToolApprovalResponse;
 import run.halo.aifoundation.tool.ToolCall;
@@ -438,7 +443,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        assertThat(((OpenAiCompatibleChatOptions) captor.getValue().getOptions())
+        assertThat(((ChatCompletionsOptions) captor.getValue().getOptions())
             .getCustomHeaders()).containsEntry("X-Trace-Id", "trace-1");
     }
 
@@ -449,7 +454,7 @@ class LanguageModelImplTest {
         var providerOptions = LanguageModelProviderOptions.builder()
             .requestHeadersSupported(true)
             .seedSupported(true)
-            .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
+            .chatOptionsFactory(request -> ChatCompletionsOptions.builder()
                 .temperature(request.getTemperature())
                 .maxTokens(request.getMaxOutputTokens())
                 .seed(request.getSeed())
@@ -475,7 +480,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        assertThat(((OpenAiCompatibleChatOptions) captor.getValue().getOptions()).getSeed()).isEqualTo(42);
+        assertThat(((ChatCompletionsOptions) captor.getValue().getOptions()).getSeed()).isEqualTo(42);
     }
 
     @Test
@@ -486,7 +491,7 @@ class LanguageModelImplTest {
         var providerOptions = LanguageModelProviderOptions.builder()
             .chatOptionsFactory(request -> {
                 seenRequest.set(request);
-                return OpenAiCompatibleChatOptions.builder().build();
+                return ChatCompletionsOptions.builder().build();
             })
             .build();
         var model = new LanguageModelImpl(chatModel, "openai", providerOptions);
@@ -529,9 +534,9 @@ class LanguageModelImplTest {
             Flux.just(toolCallResponse("call_1", "weather", "{}", 1, 1)));
         var providerOptions = LanguageModelProviderOptions.builder()
             .seedSupported(true)
-            .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder().build())
+            .chatOptionsFactory(request -> ChatCompletionsOptions.builder().build())
             .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) ->
-                OpenAiCompatibleChatOptions.builder()
+                ChatCompletionsOptions.builder()
                     .toolCallbacks(toolCallbacks)
                     .build())
             .build();
@@ -588,7 +593,7 @@ class LanguageModelImplTest {
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = LanguageModelRuntimeComposition.create("openai", "gpt-5",
             LanguageModelProviderOptions.builder()
-                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
+                .chatOptionsFactory(request -> ChatCompletionsOptions.builder()
                     .maxTokens(request.getMaxOutputTokens())
                     .build())
                 .build(), new LanguageModelRuntimeSupport());
@@ -603,7 +608,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
         assertThat(options.getMaxTokens()).isNull();
         assertThat(options.getMaxCompletionTokens()).isEqualTo(256);
     }
@@ -620,7 +625,7 @@ class LanguageModelImplTest {
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = LanguageModelRuntimeComposition.create("openai", "custom-model",
             LanguageModelProviderOptions.builder()
-                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
+                .chatOptionsFactory(request -> ChatCompletionsOptions.builder()
                     .maxTokens(request.getMaxOutputTokens())
                     .build())
                 .build(), new LanguageModelRuntimeSupport());
@@ -635,7 +640,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
         assertThat(options.getMaxTokens()).isNull();
         assertThat(options.getMaxCompletionTokens()).isNull();
         assertThat(options.getExtraBody()).containsEntry("output_limit", 256);
@@ -665,10 +670,103 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
         assertThat(options.getExtraBody()).containsKey("thinking");
         assertThat((Map<String, Object>) options.getExtraBody().get("thinking"))
             .containsEntry("type", "disabled");
+    }
+
+    @Test
+    void generateText_appliesExplicitReasoningMappingsWithoutModelInspection() {
+        var kimi = builtInReasoningOptions("kimi", "kimi-k3",
+            new KimiProvider().languageModelProviderOptions(), "reasoning.kimi",
+            ReasoningOptions.enabled());
+        assertThat(kimi.options().getExtraBody())
+            .containsEntry("reasoning_effort", "max")
+            .doesNotContainKey("thinking");
+        assertThat(kimi.warnings()).noneMatch(this::isMappedParameterWarning);
+
+        var mimo = builtInReasoningOptions("mimo", "mimo-v2.5-pro",
+            new MiMoProvider().languageModelProviderOptions(), "reasoning.effort",
+            ReasoningOptions.effort(ReasoningOptions.Effort.MEDIUM));
+        assertThat(mimo.options().getExtraBody())
+            .containsEntry("reasoning_effort", "medium");
+        assertThat(mimo.warnings()).noneMatch(this::isMappedParameterWarning);
+
+        var zhipu = builtInReasoningOptions("zhipuai", "glm-5.2",
+            new ZhiPuProvider().languageModelProviderOptions(), "reasoning.thinking-type",
+            ReasoningOptions.disabled());
+        assertThat(zhipu.options().getExtraBody())
+            .containsEntry("thinking", Map.of("type", "disabled"))
+            .doesNotContainKey("reasoning_effort");
+        assertThat(zhipu.warnings()).noneMatch(this::isMappedParameterWarning);
+    }
+
+    @Test
+    void generateText_delegatesBuiltInReasoningToOllamaOptions() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var mappings = builtInReasoningMapping("reasoning.ollama-think");
+        var provider = new run.halo.aifoundation.provider.ollama.OllamaProvider();
+        var composition = LanguageModelRuntimeComposition.create("ollama", "qwen3",
+            provider.languageModelProviderOptions(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Think")
+                .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.MEDIUM))
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (OllamaChatOptions) captor.getValue().getOptions();
+        assertThat(options.getThink()).isEqualTo("medium");
+    }
+
+    private BuiltInReasoningResult builtInReasoningOptions(String providerType, String modelId,
+        LanguageModelProviderOptions providerOptions, String template,
+        ReasoningOptions reasoning) {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var composition = LanguageModelRuntimeComposition.create(providerType, modelId,
+            providerOptions, new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition,
+            builtInReasoningMapping(template));
+        var warnings = new AtomicReference<List<run.halo.aifoundation.chat.GenerationWarning>>();
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Think")
+                .reasoning(reasoning)
+                .build()))
+            .assertNext(result -> warnings.set(result.getWarnings()))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        return new BuiltInReasoningResult(
+            (ChatCompletionsOptions) captor.getValue().getOptions(), warnings.get());
+    }
+
+    private run.halo.aifoundation.provider.mapping.EffectiveParameterMappings
+        builtInReasoningMapping(String template) {
+        return new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.REASONING,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    template, null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.BUILT_IN)));
+    }
+
+    private boolean isMappedParameterWarning(
+        run.halo.aifoundation.chat.GenerationWarning warning) {
+        return "mapped-parameter-unsupported".equals(warning.getCode());
+    }
+
+    private record BuiltInReasoningResult(
+        ChatCompletionsOptions options,
+        List<run.halo.aifoundation.chat.GenerationWarning> warnings) {
     }
 
     @Test
@@ -682,7 +780,8 @@ class LanguageModelImplTest {
                     "ollama.num-predict", "output_limit", null,
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = LanguageModelRuntimeComposition.create("ollama", "local-model",
-            new run.halo.aifoundation.provider.OllamaProvider().languageModelProviderOptions(),
+            new run.halo.aifoundation.provider.ollama.OllamaProvider()
+                .languageModelProviderOptions(),
             new LanguageModelRuntimeSupport());
         var model = new LanguageModelImpl(chatModel, composition, mappings);
 
@@ -695,7 +794,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        var options = (org.springframework.ai.ollama.api.OllamaChatOptions)
+        var options = (OllamaChatOptions)
             captor.getValue().getOptions();
         assertThat(options.toMap()).containsEntry("output_limit", 128)
             .doesNotContainKey("num_predict");
@@ -716,7 +815,7 @@ class LanguageModelImplTest {
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = LanguageModelRuntimeComposition.create("openai", "gpt-4o",
             LanguageModelProviderOptions.builder()
-                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder()
+                .chatOptionsFactory(request -> ChatCompletionsOptions.builder()
                     .temperature(request.getTemperature()).build())
                 .build(), new LanguageModelRuntimeSupport());
         var model = new LanguageModelImpl(chatModel, composition, mappings,
@@ -732,7 +831,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        assertThat(((OpenAiCompatibleChatOptions) captor.getValue().getOptions()).getTemperature())
+        assertThat(((ChatCompletionsOptions) captor.getValue().getOptions()).getTemperature())
             .isNull();
     }
 
@@ -755,7 +854,7 @@ class LanguageModelImplTest {
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = LanguageModelRuntimeComposition.create("openai", "reasoning-model",
             LanguageModelProviderOptions.builder()
-                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder().build())
+                .chatOptionsFactory(request -> ChatCompletionsOptions.builder().build())
                 .build(), new LanguageModelRuntimeSupport());
         var model = new LanguageModelImpl(chatModel, composition, mappings,
             "reasoning-model", "provider-a");
@@ -770,7 +869,7 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
         assertThat(options.getExtraBody()).containsEntry("thinking_budget", 512);
     }
 
@@ -786,7 +885,7 @@ class LanguageModelImplTest {
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = LanguageModelRuntimeComposition.create("openai", "reasoning-model",
             LanguageModelProviderOptions.builder()
-                .chatOptionsFactory(request -> OpenAiCompatibleChatOptions.builder().build())
+                .chatOptionsFactory(request -> ChatCompletionsOptions.builder().build())
                 .build(), new LanguageModelRuntimeSupport());
         var model = new LanguageModelImpl(chatModel, composition, mappings,
             "reasoning-model", "provider-a");
@@ -870,9 +969,8 @@ class LanguageModelImplTest {
         assertThat(model.capabilities().reasoningHistorySupported()).isTrue();
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        assertThat(captor.getValue().getInstructions().getFirst())
-            .isInstanceOfSatisfying(DeepSeekAssistantMessage.class,
-                message -> assertThat(message.getReasoningContent()).isEqualTo("thinking"));
+        assertThat(captor.getValue().getInstructions().getFirst().getMetadata())
+            .containsEntry("reasoningContent", "thinking");
     }
 
     @Test
@@ -925,7 +1023,7 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void generateText_extractsDeepSeekAssistantMessageReasoningContent() {
+    void generateText_extractsDeepSeekReasoningContent() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
             deepSeekReasoningResponse("Think through DeepSeek.", "Answer.", "stop")
@@ -1030,28 +1128,32 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void generateText_rejectsUnsupportedExplicitReasoning() {
-        var model = new LanguageModelImpl(mock(ChatModel.class), "ollama");
+    void generateText_warnsForUnsupportedExplicitReasoning() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var model = new LanguageModelImpl(chatModel, "ollama");
         var request = GenerateTextRequest.builder()
             .prompt("Fast")
             .reasoning(ReasoningOptions.disabled())
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .expectErrorMessage("disabled reasoning is not supported by provider type: ollama")
-            .verify();
+            .assertNext(result -> assertThat(result.getWarnings())
+                .anyMatch(this::isMappedParameterWarning))
+            .verifyComplete();
     }
 
     @Test
-    void generateText_rejectsDisabledReasoningWithReasoningHistory() {
-        var model = new LanguageModelImpl(mock(ChatModel.class), "thinking-provider",
+    void generateText_ignoresUnmappedDisabledReasoningWithReasoningHistory() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var model = new LanguageModelImpl(chatModel, "thinking-provider",
             LanguageModelProviderOptions.builder()
                 .reasoningHistorySupported(true)
                 .streamToolCallsForReasoning(true)
                 .requestHeadersSupported(true)
                 .seedSupported(true)
-                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
-                }))
+                .reasoningControlOptions(ReasoningControlOptions.unsupported())
                 .build());
         var request = GenerateTextRequest.builder()
             .messages(List.of(
@@ -1062,9 +1164,9 @@ class LanguageModelImplTest {
             .build();
 
         StepVerifier.create(model.generateText(request))
-            .expectErrorMessage("disabled reasoning cannot be combined with assistant reasoning "
-                + "history for provider type: thinking-provider")
-            .verify();
+            .assertNext(result -> assertThat(result.getWarnings())
+                .anyMatch(this::isMappedParameterWarning))
+            .verifyComplete();
     }
 
     @Test
@@ -1079,8 +1181,7 @@ class LanguageModelImplTest {
                 .streamToolCallsForReasoning(true)
                 .requestHeadersSupported(true)
                 .seedSupported(true)
-                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
-                }))
+                .reasoningControlOptions(ReasoningControlOptions.unsupported())
                 .build());
 
         StepVerifier.create(model.generateText(GenerateTextRequest.builder()
@@ -1402,13 +1503,8 @@ class LanguageModelImplTest {
         assertThat(captor.getAllValues().get(1).getInstructions())
             .filteredOn(message -> "assistant".equals(message.getMessageType().getValue()))
             .singleElement()
-            .satisfies(message -> {
-                assertThat(message).isInstanceOf(DeepSeekAssistantMessage.class);
-                var deepSeekMessage = (DeepSeekAssistantMessage) message;
-                assertThat(deepSeekMessage.getReasoningContent()).isEqualTo("Need weather data.");
-                assertThat(deepSeekMessage.getMetadata())
-                    .containsEntry("reasoningContent", "Need weather data.");
-            });
+            .satisfies(message -> assertThat(message.getMetadata())
+                .containsEntry("reasoningContent", "Need weather data."));
     }
 
     @Test
@@ -1434,8 +1530,8 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).stream(captor.capture());
-        assertThat(captor.getValue().getOptions()).isInstanceOf(OpenAiCompatibleChatOptions.class);
-        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        assertThat(captor.getValue().getOptions()).isInstanceOf(ChatCompletionsOptions.class);
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
         assertThat(options.getExtraBody()).isNullOrEmpty();
     }
 
@@ -2014,7 +2110,7 @@ class LanguageModelImplTest {
         var objectChatModel = mock(ChatModel.class);
         when(objectChatModel.call(any(Prompt.class))).thenReturn(
             chatResponse("{\"name\":\"Halo\"}", "stop", 2, 4));
-        var providerOptions = new run.halo.aifoundation.provider.DeepSeekProvider()
+        var providerOptions = new run.halo.aifoundation.provider.deepseek.DeepSeekProvider()
             .languageModelProviderOptions();
         var objectModel = new LanguageModelImpl(objectChatModel, "deepseek", providerOptions);
         var strictObjectRequest = GenerateTextRequest.builder()
@@ -2058,7 +2154,7 @@ class LanguageModelImplTest {
         when(chatModel.call(any(Prompt.class))).thenReturn(
             chatResponse("[\"Halo\"]", "stop", 2, 4));
         var model = new LanguageModelImpl(chatModel, "openai",
-            new run.halo.aifoundation.provider.OpenAiProvider().languageModelProviderOptions());
+            new run.halo.aifoundation.provider.openai.OpenAiProvider().languageModelProviderOptions());
         var request = GenerateTextRequest.builder()
             .prompt("Generate projects")
             .output(OutputSpec.array(Map.of("type", "string")))
@@ -2072,17 +2168,18 @@ class LanguageModelImplTest {
 
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(captor.capture());
-        var options = (OpenAiCompatibleChatOptions) captor.getValue().getOptions();
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
         assertThat(options.getResponseFormat()).isNull();
     }
 
     @Test
-    void generateText_reportsOllamaPromptOnlyStrictFallback() {
+    void generateText_usesOllamaNativeJsonSchemaWithoutFallbackWarnings() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(
             chatResponse("{\"name\":\"Halo\"}", "stop", 2, 4));
         var model = new LanguageModelImpl(chatModel, "ollama",
-            new run.halo.aifoundation.provider.OllamaProvider().languageModelProviderOptions());
+            new run.halo.aifoundation.provider.ollama.OllamaProvider()
+                .languageModelProviderOptions());
         var request = GenerateTextRequest.builder()
             .prompt("Generate project")
             .output(OutputSpec.builder()
@@ -2098,16 +2195,21 @@ class LanguageModelImplTest {
 
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> assertThat(result.getWarnings()).extracting("code")
-                .contains("structured-output-prompt-guidance",
+                .doesNotContain("structured-output-prompt-guidance",
                     "structured-output-strict-not-guaranteed"))
             .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (OllamaChatOptions) captor.getValue().getOptions();
+        assertThat(options.getFormat()).isEqualTo(request.getOutput().getSchema());
     }
 
     @Test
     void generateText_rejectsInvalidStrictSchemaBeforeProviderInvocation() {
         var chatModel = mock(ChatModel.class);
         var model = new LanguageModelImpl(chatModel, "openai",
-            new run.halo.aifoundation.provider.OpenAiProvider().languageModelProviderOptions());
+            new run.halo.aifoundation.provider.openai.OpenAiProvider().languageModelProviderOptions());
         var request = GenerateTextRequest.builder()
             .prompt("Generate project")
             .output(OutputSpec.builder()
@@ -2136,7 +2238,7 @@ class LanguageModelImplTest {
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("{}", "stop", 2, 4));
         var model = new LanguageModelImpl(chatModel, "openai",
-            new run.halo.aifoundation.provider.OpenAiProvider().languageModelProviderOptions());
+            new run.halo.aifoundation.provider.openai.OpenAiProvider().languageModelProviderOptions());
         var request = GenerateTextRequest.builder()
             .prompt("Generate project")
             .output(OutputSpec.object(Map.of(
@@ -2304,8 +2406,7 @@ class LanguageModelImplTest {
                 .streamToolCallsForReasoning(true)
                 .requestHeadersSupported(true)
                 .seedSupported(true)
-                .reasoningControlOptions(ReasoningControlOptions.thinkingType((builder, request) -> {
-                }))
+                .reasoningControlOptions(ReasoningControlOptions.unsupported())
                 .build());
 
         var parts = model.streamText(GenerateTextRequest.builder()
@@ -2323,7 +2424,7 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void streamText_extractsDeepSeekAssistantMessageReasoningContent() {
+    void streamText_extractsDeepSeekReasoningContent() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
             deepSeekReasoningResponse("Stream thinking.", "Answer", "stop")
@@ -3896,13 +3997,8 @@ class LanguageModelImplTest {
         assertThat(captor.getAllValues().get(1).getInstructions())
             .filteredOn(message -> "assistant".equals(message.getMessageType().getValue()))
             .singleElement()
-            .satisfies(message -> {
-                assertThat(message).isInstanceOf(DeepSeekAssistantMessage.class);
-                var deepSeekMessage = (DeepSeekAssistantMessage) message;
-                assertThat(deepSeekMessage.getReasoningContent()).isEqualTo("Need weather data.");
-                assertThat(deepSeekMessage.getMetadata())
-                    .containsEntry("reasoningContent", "Need weather data.");
-            });
+            .satisfies(message -> assertThat(message.getMetadata())
+                .containsEntry("reasoningContent", "Need weather data."));
     }
 
     @Test
@@ -4310,9 +4406,9 @@ class LanguageModelImplTest {
         var generationMetadata = ChatGenerationMetadata.builder()
             .finishReason(finishReason)
             .build();
-        var output = DeepSeekAssistantMessage.builder()
+        var output = AssistantMessage.builder()
             .content(text)
-            .reasoningContent(reasoning)
+            .properties(Map.of("reasoningContent", reasoning))
             .build();
         return new ChatResponse(
             List.of(new Generation(output, generationMetadata)),
@@ -4471,7 +4567,7 @@ class LanguageModelImplTest {
             .requestHeadersSupported(true)
             .seedSupported(true)
             .toolCallingChatOptionsFactory((request, toolCallbacks, toolNames) -> {
-                var builder = OpenAiCompatibleChatOptions.builder()
+                var builder = ChatCompletionsOptions.builder()
                     .temperature(request.getTemperature())
                     .maxTokens(request.getMaxOutputTokens())
                     .topP(request.getTopP())

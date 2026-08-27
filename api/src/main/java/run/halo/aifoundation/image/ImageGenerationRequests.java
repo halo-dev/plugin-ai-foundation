@@ -33,6 +33,7 @@ public final class ImageGenerationRequests {
             .negativePrompt(request.getNegativePrompt())
             .seed(request.getSeed())
             .responseFormat(request.getResponseFormat())
+            .providerOptions(request.getProviderOptions())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())

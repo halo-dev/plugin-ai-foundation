@@ -156,17 +156,33 @@ public final class UIMessageConverters {
         }
 
         private boolean isToolApprovalResponse(UIMessagePart part) {
-            return part instanceof ToolPart tool
-                && (tool.state() == ToolPartState.APPROVAL_RESPONDED
-                    || tool.state() == ToolPartState.OUTPUT_DENIED)
-                && tool.approval() != null
-                && tool.approval().approved() != null;
+            if (!(part instanceof ToolPart tool)) {
+                return false;
+            }
+            if (!isApprovalResponseState(tool.state())) {
+                return false;
+            }
+            if (tool.approval() == null) {
+                return false;
+            }
+            return tool.approval().approved() != null;
+        }
+
+        private boolean isApprovalResponseState(ToolPartState state) {
+            if (state == ToolPartState.APPROVAL_RESPONDED) {
+                return true;
+            }
+            return state == ToolPartState.OUTPUT_DENIED;
         }
 
         private boolean isTerminalToolPart(UIMessagePart part) {
-            return part instanceof ToolPart tool
-                && (tool.state() == ToolPartState.OUTPUT_AVAILABLE
-                    || tool.state() == ToolPartState.OUTPUT_ERROR);
+            if (!(part instanceof ToolPart tool)) {
+                return false;
+            }
+            if (tool.state() == ToolPartState.OUTPUT_AVAILABLE) {
+                return true;
+            }
+            return tool.state() == ToolPartState.OUTPUT_ERROR;
         }
 
         private List<ModelMessagePart> convertPart(UIMessagePart part,

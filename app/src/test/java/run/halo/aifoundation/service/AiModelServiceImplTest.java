@@ -25,6 +25,7 @@ import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.aifoundation.rerank.RerankResponse;
@@ -175,7 +176,8 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test",
+            ProviderModelRef.from(model)))
             .thenReturn(chatModel);
 
         StepVerifier.create(service.languageModel())
@@ -207,7 +209,8 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test",
+            ProviderModelRef.from(model)))
             .thenReturn(chatModel);
 
         StepVerifier.create(service.languageModel("openai-prod-gpt-4-abc"))
@@ -230,7 +233,8 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateChatModel(provider, "sk-test", "gpt-4"))
+        when(providerClientCache.getOrCreateChatModel(provider, "sk-test",
+            ProviderModelRef.from(model)))
             .thenReturn(chatModel);
 
         StepVerifier.create(service.languageModel("  "))
@@ -253,7 +257,7 @@ class AiModelServiceImplTest {
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("openai")).thenReturn(providerType);
         when(providerClientCache.getOrCreateEmbeddingModel(provider, "sk-test",
-            "text-embedding-3-small")).thenReturn(springEmbeddingModel);
+            ProviderModelRef.from(model))).thenReturn(springEmbeddingModel);
 
         StepVerifier.create(service.embeddingModel())
             .assertNext(embeddingModel -> assertThat(embeddingModel).isNotNull())
@@ -285,7 +289,8 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", "rerank-v3.5"))
+        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test",
+            ProviderModelRef.from(model)))
             .thenReturn(rerankingClient);
 
         StepVerifier.create(service.rerankingModel())
@@ -315,7 +320,8 @@ class AiModelServiceImplTest {
         when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
         when(providerClientCache.getProviderType("native-rerank")).thenReturn(providerType);
-        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test", "rerank-v3.5"))
+        when(providerClientCache.getOrCreateRerankingClient(provider, "sk-test",
+            ProviderModelRef.from(model)))
             .thenReturn(null);
 
         StepVerifier.create(service.rerankingModel("native-rerank-model"))
