@@ -1,17 +1,17 @@
 import { aiConsoleApiClient } from '@/api'
 import type { ModelOption } from '@/api/generated'
-import { beforeEach, describe, expect, it, rstest } from '@rstest/core'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed } from 'vue'
 import { useEmbeddingTest } from './use-embedding-test'
 import { useImageGenerationTest } from './use-image-generation-test'
 import { useRerankTest } from './use-rerank-test'
 
-rstest.mock('@/api', () => ({
+vi.mock('@/api', () => ({
   aiConsoleApiClient: {
     model: {
-      testModelEmbedding: rstest.fn(),
-      testModelRerank: rstest.fn(),
-      testModelImageGeneration: rstest.fn(),
+      testModelEmbedding: vi.fn(),
+      testModelRerank: vi.fn(),
+      testModelImageGeneration: vi.fn(),
     },
   },
 }))
@@ -20,12 +20,12 @@ const selectedModel = computed<ModelOption>(() => ({ name: 'model-1' }))
 
 describe('non-streaming workbench tests', () => {
   beforeEach(() => {
-    rstest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('maps embedding controls to the API request and stores the response', async () => {
     const response = { embeddingsCount: 2, embeddings: [] }
-    rstest.mocked(aiConsoleApiClient.model.testModelEmbedding).mockResolvedValue({
+    vi.mocked(aiConsoleApiClient.model.testModelEmbedding).mockResolvedValue({
       data: response,
     } as never)
     const test = useEmbeddingTest(selectedModel)
@@ -55,7 +55,7 @@ describe('non-streaming workbench tests', () => {
     expect(test.rerankError.value).toBe('请输入 Query')
     expect(aiConsoleApiClient.model.testModelRerank).not.toHaveBeenCalled()
 
-    rstest.mocked(aiConsoleApiClient.model.testModelRerank).mockResolvedValue({
+    vi.mocked(aiConsoleApiClient.model.testModelRerank).mockResolvedValue({
       data: { resultsCount: 1 },
     } as never)
     test.rerankQuery.value = 'question'
@@ -73,7 +73,7 @@ describe('non-streaming workbench tests', () => {
   })
 
   it('maps image controls and headers to the generation request', async () => {
-    rstest.mocked(aiConsoleApiClient.model.testModelImageGeneration).mockResolvedValue({
+    vi.mocked(aiConsoleApiClient.model.testModelImageGeneration).mockResolvedValue({
       data: { images: [] },
     } as never)
     const test = useImageGenerationTest(selectedModel)
@@ -99,9 +99,9 @@ describe('non-streaming workbench tests', () => {
   })
 
   it('surfaces API failures and always clears the loading state', async () => {
-    rstest
-      .mocked(aiConsoleApiClient.model.testModelEmbedding)
-      .mockRejectedValue(new Error('network down'))
+    vi.mocked(aiConsoleApiClient.model.testModelEmbedding).mockRejectedValue(
+      new Error('network down'),
+    )
     const test = useEmbeddingTest(selectedModel)
 
     await test.runEmbeddingTest()

@@ -2,37 +2,37 @@ import { ModelOptionModelTypeEnum, type ModelOption } from '@/api/generated'
 import { useLanguageGenerationSettings } from '@/composables/workbench/use-language-generation-settings'
 import { EXAMPLE_PROMPTS } from '@/utils/model-test-workbench'
 import { useChat } from '@halo-dev/ai-foundation-sdk'
-import { afterEach, beforeEach, describe, expect, it, rstest } from '@rstest/core'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, createApp, ref, shallowRef, type App } from 'vue'
 import { useChatWorkbench } from './use-chat-workbench'
 import { useRagTest } from './use-rag-test'
 
-rstest.mock('@halo-dev/ai-foundation-sdk', () => ({
+vi.mock('@halo-dev/ai-foundation-sdk', () => ({
   DefaultChatTransport: class {
     constructor(_options: unknown) {}
   },
-  lastAssistantMessageHasCompletedToolContinuations: rstest.fn(),
-  useChat: rstest.fn(),
+  lastAssistantMessageHasCompletedToolContinuations: vi.fn(),
+  useChat: vi.fn(),
 }))
 
 interface MockChat {
   messages: ReturnType<typeof shallowRef<unknown[]>>
   error: ReturnType<typeof shallowRef<Error | undefined>>
-  setMessages: ReturnType<typeof rstest.fn>
-  sendMessage: ReturnType<typeof rstest.fn>
-  regenerate: ReturnType<typeof rstest.fn>
-  addToolOutput: ReturnType<typeof rstest.fn>
-  addToolApprovalResponse: ReturnType<typeof rstest.fn>
-  stop: ReturnType<typeof rstest.fn>
+  setMessages: ReturnType<typeof vi.fn>
+  sendMessage: ReturnType<typeof vi.fn>
+  regenerate: ReturnType<typeof vi.fn>
+  addToolOutput: ReturnType<typeof vi.fn>
+  addToolApprovalResponse: ReturnType<typeof vi.fn>
+  stop: ReturnType<typeof vi.fn>
 }
 
 const apps: App[] = []
 const chatInstances: MockChat[] = []
 
 beforeEach(() => {
-  rstest.clearAllMocks()
+  vi.clearAllMocks()
   chatInstances.length = 0
-  rstest.mocked(useChat).mockImplementation(() => {
+  vi.mocked(useChat).mockImplementation(() => {
     const chat = createMockChat()
     chatInstances.push(chat)
     return chat as never
@@ -205,14 +205,14 @@ function createMockChat(): MockChat {
   return {
     messages,
     error: shallowRef<Error>(),
-    setMessages: rstest.fn((next: unknown[]) => {
+    setMessages: vi.fn((next: unknown[]) => {
       messages.value = [...next]
     }),
-    sendMessage: rstest.fn().mockResolvedValue(undefined),
-    regenerate: rstest.fn().mockResolvedValue(undefined),
-    addToolOutput: rstest.fn().mockResolvedValue(undefined),
-    addToolApprovalResponse: rstest.fn().mockResolvedValue(undefined),
-    stop: rstest.fn(),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    regenerate: vi.fn().mockResolvedValue(undefined),
+    addToolOutput: vi.fn().mockResolvedValue(undefined),
+    addToolApprovalResponse: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn(),
   }
 }
 
