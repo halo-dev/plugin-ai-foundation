@@ -1505,6 +1505,110 @@ describe('Chat', () => {
     ).toBe(false)
   })
 
+  it('does not continue server-completed tool output after the final model step', async () => {
+    const transport = new SequenceTransport([
+      [
+        { type: 'start-step', stepIndex: 0 },
+        {
+          type: 'tool-input-available',
+          toolCallId: 'call-1',
+          toolName: 'repairInfo',
+          input: { repaired: true },
+        },
+        {
+          type: 'tool-output-available',
+          toolCallId: 'call-1',
+          toolName: 'repairInfo',
+          output: { ok: true },
+        },
+        { type: 'finish-step', finishReason: 'tool-calls' },
+        { type: 'start-step', stepIndex: 1 },
+        { type: 'text-delta', id: 'text-1', delta: 'Final answer' },
+        { type: 'finish-step', finishReason: 'stop' },
+        { type: 'finish', finishReason: 'stop' },
+      ],
+      [{ type: 'text-delta', id: 'text-2', delta: 'Unexpected continuation' }],
+    ])
+    const chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+    })
+
+    await chat.sendMessage({ text: 'Repair and call the tool' })
+
+    expect(transport.calls).toHaveLength(1)
+    expect(messageText(chat.messages[1])).toBe('Final answer')
+  })
+
+  it('does not continue approved server tool after its final model step', async () => {
+    const transport = new SequenceTransport([
+      [
+        { type: 'start-step', stepIndex: 0 },
+        {
+          type: 'tool-approval-request',
+          approvalId: 'approval-1',
+          toolCallId: 'call-1',
+          toolName: 'inspect',
+          input: {},
+        },
+        { type: 'finish-step', finishReason: 'tool-calls' },
+        { type: 'finish', finishReason: 'tool-calls' },
+      ],
+      [
+        {
+          type: 'tool-output-available',
+          toolCallId: 'call-1',
+          toolName: 'inspect',
+          output: { ok: true },
+        },
+        { type: 'finish-step', finishReason: 'tool-calls' },
+        { type: 'start-step', stepIndex: 1 },
+        { type: 'text-delta', id: 'text-1', delta: 'Approved result' },
+        { type: 'finish-step', finishReason: 'stop' },
+        { type: 'finish', finishReason: 'stop' },
+      ],
+      [{ type: 'text-delta', id: 'text-2', delta: 'Unexpected continuation' }],
+    ])
+    const chat = new Chat({
+      id: 'chat-1',
+      transport,
+      generateId: () => 'assistant-1',
+      sendAutomaticallyWhen: lastAssistantMessageHasCompletedToolContinuations,
+    })
+
+    await chat.sendMessage({ text: 'Inspect with approval' })
+    await chat.addToolApprovalResponse({ id: 'approval-1', approved: true })
+
+    expect(transport.calls).toHaveLength(2)
+    expect(messageText(chat.messages[1])).toBe('Approved result')
+  })
+
+  it('only evaluates tool continuation state from the latest step', () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool-search',
+            toolCallId: 'call-1',
+            toolName: 'search',
+            state: 'output-available',
+            output: { ok: true },
+          },
+          { type: 'step-start' },
+          { type: 'text', id: 'text-1', text: 'Final answer' },
+        ],
+      },
+    ]
+
+    expect(lastAssistantMessageIsCompleteWithToolCalls({ messages })).toBe(false)
+    expect(lastAssistantMessageHasCompletedToolContinuations({ messages })).toBe(false)
+    expect(lastAssistantMessageHasRespondedToToolApprovals({ messages })).toBe(false)
+  })
+
   it('waits for external output while preserving server output in a mixed tool batch', async () => {
     const transport = new SequenceTransport([
       [
