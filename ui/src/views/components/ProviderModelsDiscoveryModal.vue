@@ -7,6 +7,11 @@ import {
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
 import { useProviderType } from '@/composables/use-provider-types-fetch'
+import {
+  capabilityDomainSource,
+  capabilitySourceLabel,
+  capabilitySummaryLabels,
+} from '@/utils/capabilities'
 import { setFocus } from '@/utils/focus'
 import {
   createModelFromDiscovered,
@@ -19,11 +24,6 @@ import {
   syncDiscoveredModelProfiles,
   type DiscoveredModelProfiles,
 } from '@/utils/model'
-import {
-  capabilityDomainSource,
-  capabilitySourceLabel,
-  capabilitySummaryLabels,
-} from '@/utils/capabilities'
 import {
   Toast,
   VButton,
@@ -114,7 +114,10 @@ function profileFor(model: DiscoveredModel) {
 }
 
 function featureOptionsFor(model: DiscoveredModel) {
-  return modelFeatureOptionsForProviderType(selectedProviderType.value, model.adapterType)
+  return modelFeatureOptionsForProviderType(
+    selectedProviderType.value,
+    profileFor(model).adapterType,
+  )
 }
 
 function setModelType(model: DiscoveredModel, event: Event) {

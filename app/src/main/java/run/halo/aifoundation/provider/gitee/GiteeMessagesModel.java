@@ -10,7 +10,7 @@ public final class GiteeMessagesModel extends AnthropicMessagesModel {
 
     public GiteeMessagesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new StandardAnthropicMessagesProfile(
-            "gitee", "gitee-messages", "/messages",
+            "gitee-moark", "gitee-messages", "/messages",
             StandardAnthropicMessagesProfile.Authentication.BEARER));
     }
 }

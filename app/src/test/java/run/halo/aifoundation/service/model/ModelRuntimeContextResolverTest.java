@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
@@ -46,6 +47,25 @@ class ModelRuntimeContextResolverTest {
             .map(component -> component.getName().toLowerCase()))
             .noneMatch(name -> name.contains("key") || name.contains("secret")
                 || name.equals("model") || name.equals("provider"));
+    }
+
+    @Test
+    void normalizesMissingAdapterBeforeCreatingRuntimeContext() {
+        var providerType = mock(AiProviderType.class);
+        when(providerType.getSupportedAdapterTypes()).thenReturn(
+            java.util.List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(
+            Optional.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
+            .thenReturn(Map.of());
+        var resolver = new ModelRuntimeContextResolver(new EffectiveParameterMappingResolver(),
+            new ParameterMappingTemplateRegistry());
+        var resolution = resolution(providerType);
+        resolution.model().getSpec().setAdapterType(null);
+
+        var context = resolver.resolve(resolution);
+
+        assertThat(context.adapterType()).isEqualTo(AdapterType.OPENAI_RESPONSES);
     }
 
     private ModelResolution resolution(AiProviderType providerType) {

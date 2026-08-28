@@ -6,6 +6,7 @@ import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.content.Media;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 
 /** Provider-owned policy for a Responses-compatible wire protocol. */
 public interface ResponsesProfile {
@@ -43,7 +44,7 @@ public interface ResponsesProfile {
     }
 
     default Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
-        return metadata != null ? Map.copyOf(metadata) : Map.of();
+        return ProviderMetadataMaps.immutableNonNull(metadata);
     }
 
     /** Normalize a provider-specific output item while retaining its sanitized original shape. */

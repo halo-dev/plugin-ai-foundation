@@ -18,6 +18,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.util.MimeTypeUtils;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsProfile;
+import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 import run.halo.aifoundation.provider.support.ReasoningProviderMetadata;
 
 /** OpenRouter routing, multimodal, reasoning-continuation, and metadata policy. */
@@ -81,8 +82,7 @@ final class OpenRouterChatProfile implements ChatCompletionsProfile {
 
     @Override
     public Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
-        return metadata == null || metadata.isEmpty()
-            ? Map.of() : Map.of("openrouter", Map.copyOf(metadata));
+        return ProviderMetadataMaps.namespaced("openrouter", metadata);
     }
 
     @Override

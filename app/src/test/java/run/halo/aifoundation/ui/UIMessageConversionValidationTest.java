@@ -114,6 +114,31 @@ class UIMessageConversionValidationTest {
     }
 
     @Test
+    void dropsApprovalSnapshotSupersededByTerminalToolOutput() {
+        var approval = new UIMessage<>("assistant-approval", UIMessageRole.ASSISTANT, List.of(
+            UIMessageParts.tool("call-1", "halo_test_info", ToolPartState.APPROVAL_RESPONDED,
+                Map.of("query", "hello"), null, null, null,
+                new ToolApproval("approval-1", true, "approved"), Map.of())
+        ), new Metadata("chat"));
+        var output = new UIMessage<>("assistant-output", UIMessageRole.ASSISTANT, List.of(
+            UIMessageParts.tool("call-1", "halo_test_info", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("query", "hello"), null, Map.of("ok", true), null,
+                new ToolApproval("approval-1", true, "approved"), Map.of())
+        ), new Metadata("chat"));
+
+        var result = UIMessageConverters.convertToModelMessages(List.of(approval, output));
+
+        assertThat(result.warnings()).isEmpty();
+        assertThat(result.messages()).hasSize(2);
+        assertThat(result.messages().get(0).getContent())
+            .extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_CALL);
+        assertThat(result.messages().get(1).getContent())
+            .extracting(ModelMessagePart::getType)
+            .containsExactly(PartType.TOOL_RESULT);
+    }
+
+    @Test
     void convertsDeniedToolApprovalWithoutToolError() {
         var result = UIMessageConverters.convertToModelMessages(List.of(
             new UIMessage<>("assistant", UIMessageRole.ASSISTANT, List.of(

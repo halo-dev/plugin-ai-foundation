@@ -62,6 +62,16 @@ class AiHubMixProviderTest {
     private final AiHubMixProvider providerType = new AiHubMixProvider();
 
     @Test
+    void chatMetadataDropsNullBeforeNamespacing() {
+        var metadata = new java.util.LinkedHashMap<String, Object>();
+        metadata.put("request_id", null);
+        metadata.put("route", "primary");
+
+        assertThat(new AiHubMixChatProfile().normalizeProviderMetadata(metadata))
+            .containsEntry("aihubmix", Map.of("route", "primary"));
+    }
+
+    @Test
     void declaresProviderOwnedAdaptersClientsAndResponsesDefault() {
         var provider = provider("https://example.com/v1");
         assertThat(providerType.getSupportedAdapterTypes()).containsExactly(

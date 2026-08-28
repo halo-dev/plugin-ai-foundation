@@ -25,6 +25,7 @@ import run.halo.aifoundation.image.ImageResponseFormat;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.protocol.messages.AnthropicMessagesProfile;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -64,9 +65,12 @@ class GiteeProviderTest {
         assertThat(provider.buildChatModel(aiProvider, "test-key", new ProviderModelRef(
             "Qwen3-32B", ModelType.LANGUAGE, AdapterType.GITEE_RESPONSES)))
             .isInstanceOf(GiteeResponsesModel.class);
-        assertThat(provider.buildChatModel(aiProvider, "test-key", new ProviderModelRef(
-            "Qwen3-32B", ModelType.LANGUAGE, AdapterType.GITEE_MESSAGES)))
-            .isInstanceOf(GiteeMessagesModel.class);
+        var messages = (GiteeMessagesModel) provider.buildChatModel(aiProvider, "test-key",
+            new ProviderModelRef("Qwen3-32B", ModelType.LANGUAGE,
+                AdapterType.GITEE_MESSAGES));
+        assertThat(messages).isInstanceOf(GiteeMessagesModel.class);
+        assertThat(((AnthropicMessagesProfile) ReflectionTestUtils.getField(messages, "profile"))
+            .providerType()).isEqualTo("gitee-moark");
         assertThat(((GiteeEmbeddingModel) provider.buildEmbeddingModel(aiProvider, "test-key",
             "Qwen3-Embedding-4B")).getOptions().customHeaders())
             .containsEntry(GiteeProvider.FAILOVER_HEADER, "false");

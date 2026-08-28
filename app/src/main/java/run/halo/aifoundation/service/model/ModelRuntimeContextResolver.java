@@ -5,6 +5,7 @@ import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.support.ProviderModelResolver;
 
 @Component
 public class ModelRuntimeContextResolver {
@@ -23,7 +24,8 @@ public class ModelRuntimeContextResolver {
         var providerName = resolution.provider().getMetadata().getName();
         var mappings = new RuntimeParameterMappings(mappingResolver.resolve(resolution),
             mappingTemplates, modelName, providerName);
-        var model = ProviderModelRef.from(resolution.model());
+        var model = ProviderModelResolver.resolve(resolution.providerType(),
+            ProviderModelRef.from(resolution.model()));
         return new ModelRuntimeContext(modelName, resolution.modelId(), providerName,
             resolution.providerTypeName(), model.adapterType(), resolution.providerType(), mappings);
     }

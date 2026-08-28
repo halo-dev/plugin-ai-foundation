@@ -126,7 +126,7 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
         return AdapterTypeInfo.builder()
             .adapterType(adapter)
             .modelType(adapter.getModelType())
-            .displayName(providerType.getDisplayName() + " · " + protocol.getDisplayName())
+            .displayName(protocol.getDisplayName())
             .description(protocol.getDescription())
             .supportedFeatures(providerType.getSupportedFeatures(adapter))
             .recommended(recommended)

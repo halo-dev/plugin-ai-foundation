@@ -58,6 +58,16 @@ class OpenRouterProviderTest {
     private final OpenRouterProvider providerType = new OpenRouterProvider();
 
     @Test
+    void chatMetadataDropsNullBeforeNamespacing() {
+        var metadata = new java.util.LinkedHashMap<String, Object>();
+        metadata.put("request_id", null);
+        metadata.put("route", "fallback");
+
+        assertThat(new OpenRouterChatProfile().normalizeProviderMetadata(metadata))
+            .containsEntry("openrouter", Map.of("route", "fallback"));
+    }
+
+    @Test
     void declaresDedicatedDomainClientsAndUsesExplicitNativeReasoning() {
         var provider = provider("https://example.com/api/v1");
 

@@ -80,4 +80,28 @@ class ChatCompletionsProfileTest {
             .normalizeArguments(0, "{", "\"name\":\"Halo\"}").delta())
             .isEqualTo("\"name\":\"Halo\"}");
     }
+
+    @Test
+    void standardProfileOmitsNullProviderMetadata() {
+        var options = ChatCompletionsOptions.builder()
+            .baseUrl("https://provider.example/v1")
+            .apiKey("test-key")
+            .model("model-a")
+            .build();
+        var model = new ChatCompletionsModel(options, WebClient.builder(),
+            new StandardChatCompletionsProfile("provider", "provider-chat"));
+
+        var response = (ChatResponse) ReflectionTestUtils.invokeMethod(model, "chatResponse", """
+            {"id":"response-1","model":"model-a","system_fingerprint":null,
+             "choices":[{"message":{"role":"assistant","content":"hello"},
+             "finish_reason":"stop"}]}
+            """, options);
+
+        var metadata = new LinkedHashMap<String, Object>();
+        metadata.put("system_fingerprint", null);
+
+        assertThat((Object) response.getMetadata().get("system_fingerprint")).isNull();
+        assertThat(new StandardChatCompletionsProfile("provider", "provider-chat")
+            .normalizeProviderMetadata(metadata)).doesNotContainKey("system_fingerprint");
+    }
 }

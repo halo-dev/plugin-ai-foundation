@@ -22,6 +22,7 @@ import {
   createModelFromDiscovered,
   defaultAdapterForProviderType,
   defaultModelTypeForProviderType,
+  discoveredModelProfileForProviderType,
   filterModelFeaturesForProviderType,
   findProviderTypeForModel,
   groupDiscoveredModels,
@@ -90,6 +91,21 @@ describe('createModelFromDiscovered', () => {
       modelType: AiModelSpecModelTypeEnum.ImageGeneration,
       features: [],
     })
+    expect(
+      createModelFromDiscovered(
+        'openai-prod',
+        discoveredModel(
+          'maybe-image',
+          AiModelSpecModelTypeEnum.Language,
+          [],
+          DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+        ),
+        {
+          modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+          features: [],
+        },
+      ).spec,
+    ).not.toHaveProperty('adapterType')
   })
 
   it('persists discovered capabilities when importing a model', () => {
@@ -270,25 +286,29 @@ describe('provider type model options', () => {
 
   it('uses backend adapter metadata and preserves a compatible explicit choice', () => {
     const providerType = providerTypeInfo('openai', 'OpenAI', {
+      supportedModelTypes: [
+        ProviderTypeInfoSupportedModelTypesEnum.Language,
+        ProviderTypeInfoSupportedModelTypesEnum.Embedding,
+      ],
       adapters: [
         {
           adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
           modelType: AdapterTypeInfoModelTypeEnum.Language,
-          displayName: 'OpenAI · Responses API',
+          displayName: 'Responses API',
           description: 'OpenAI 原生 Responses API。',
           recommended: true,
         },
         {
           adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiChat,
           modelType: AdapterTypeInfoModelTypeEnum.Language,
-          displayName: 'OpenAI · Chat Completions',
+          displayName: 'Chat Completions',
           description: 'OpenAI Chat Completions API。',
           recommended: false,
         },
         {
           adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiEmbedding,
           modelType: AdapterTypeInfoModelTypeEnum.Embedding,
-          displayName: 'OpenAI · 文本嵌入',
+          displayName: '文本嵌入',
           recommended: true,
         },
       ],
@@ -297,13 +317,13 @@ describe('provider type model options', () => {
     expect(adapterOptionsForProviderType(providerType, AiModelSpecModelTypeEnum.Language)).toEqual([
       {
         value: AiModelSpecAdapterTypeEnum.OpenaiResponses,
-        label: 'OpenAI · Responses API（推荐）',
+        label: 'Responses API（推荐）',
         description: 'OpenAI 原生 Responses API。',
         recommended: true,
       },
       {
         value: AiModelSpecAdapterTypeEnum.OpenaiChat,
-        label: 'OpenAI · Chat Completions',
+        label: 'Chat Completions',
         description: 'OpenAI Chat Completions API。',
         recommended: false,
       },
@@ -323,10 +343,54 @@ describe('provider type model options', () => {
       ),
     ).toBe(AiModelSpecAdapterTypeEnum.OpenaiEmbedding)
   })
-
 })
 
 describe('discovered model profiles', () => {
+  it('selects a compatible adapter when the model type changes', () => {
+    const providerType = providerTypeInfo('openai', 'OpenAI', {
+      supportedModelTypes: [
+        ProviderTypeInfoSupportedModelTypesEnum.Language,
+        ProviderTypeInfoSupportedModelTypesEnum.Embedding,
+      ],
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiChat,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          recommended: true,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiEmbedding,
+          modelType: AdapterTypeInfoModelTypeEnum.Embedding,
+          supportedFeatures: [],
+          recommended: true,
+        },
+      ],
+    })
+    const model = discoveredModel(
+      'candidate',
+      AiModelSpecModelTypeEnum.Language,
+      [AiModelSpecFeaturesEnum.Streaming],
+      DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+    )
+
+    const profile = discoveredModelProfileForProviderType(providerType, model, {
+      modelType: AiModelSpecModelTypeEnum.Embedding,
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiChat,
+      features: [AiModelSpecFeaturesEnum.Streaming],
+    })
+
+    expect(profile).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Embedding,
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+      features: [],
+    })
+    expect(createModelFromDiscovered('openai-prod', model, profile).spec).toMatchObject({
+      modelType: AiModelSpecModelTypeEnum.Embedding,
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+      features: [],
+    })
+  })
+
   it('syncs discovered profiles without keeping stale entries', () => {
     const providerType = providerTypeInfo('openailike', 'OpenAI 兼容', {
       supportedModelTypes: [ProviderTypeInfoSupportedModelTypesEnum.Language],

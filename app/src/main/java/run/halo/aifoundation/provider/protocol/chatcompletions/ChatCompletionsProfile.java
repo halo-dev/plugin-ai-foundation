@@ -6,6 +6,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.chat.prompt.Prompt;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 
 /**
  * Provider-owned policy hooks for the reusable Chat Completions wire implementation.
@@ -40,7 +41,7 @@ public interface ChatCompletionsProfile {
     }
 
     default Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
-        return metadata != null ? Map.copyOf(metadata) : Map.of();
+        return ProviderMetadataMaps.immutableNonNull(metadata);
     }
 
     default String reasoningContent(JsonNode message) {

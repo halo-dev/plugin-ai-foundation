@@ -43,6 +43,7 @@ class AnthropicMessagesModelTest {
             requestBody.set(OBJECT_MAPPER.readValue(exchange.getRequestBody(), Map.class));
             var bytes = """
                 {"id":"msg-1","type":"message","role":"assistant","model":"model-1",
+                 "container":null,
                  "content":[
                    {"type":"thinking","thinking":"Inspect first","signature":"signed-1"},
                    {"type":"text","text":"Done"},
@@ -94,6 +95,7 @@ class AnthropicMessagesModelTest {
                 });
             assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(12);
             assertThat(response.getMetadata().getUsage().getCompletionTokens()).isEqualTo(7);
+            assertThat((Object) response.getMetadata().get("container")).isNull();
             assertThat((Map<String, Object>) response.getMetadata().getUsage().getNativeUsage())
                 .containsEntry("cache_creation_input_tokens", 3)
                 .containsEntry("cache_read_input_tokens", 4);

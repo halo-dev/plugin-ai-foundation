@@ -5,6 +5,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.http.HttpHeaders;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 
 /** Provider-owned policy for the reusable Anthropic Messages wire implementation. */
 public interface AnthropicMessagesProfile {
@@ -34,6 +35,6 @@ public interface AnthropicMessagesProfile {
     }
 
     default Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
-        return metadata != null ? Map.copyOf(metadata) : Map.of();
+        return ProviderMetadataMaps.immutableNonNull(metadata);
     }
 }

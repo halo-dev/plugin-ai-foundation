@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import org.springframework.ai.chat.model.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
@@ -249,7 +251,7 @@ class AiModelServiceImplTest {
             "text-embedding-3-small", "Embedding", true, ModelType.EMBEDDING);
         var provider = aiProvider("openai-prod", "openai", true);
         var springEmbeddingModel = mock(org.springframework.ai.embedding.EmbeddingModel.class);
-        var providerType = mock(AiProviderType.class);
+        var providerType = providerType(ModelType.EMBEDDING);
 
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
         when(client.fetch(AiModel.class, "openai-prod-embedding")).thenReturn(Mono.just(model));
@@ -282,7 +284,7 @@ class AiModelServiceImplTest {
         ProviderRerankingClient rerankingClient = request -> Mono.just(RerankResponse.builder()
             .query(request.getQuery())
             .build());
-        var providerType = mock(AiProviderType.class);
+        var providerType = providerType(ModelType.RERANK);
 
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
         when(client.fetch(AiModel.class, "native-rerank-model")).thenReturn(Mono.just(model));
@@ -314,7 +316,7 @@ class AiModelServiceImplTest {
         var model = aiModel("native-rerank-model", "rerank-provider",
             "rerank-v3.5", "Rerank", true, ModelType.RERANK);
         var provider = aiProvider("rerank-provider", "native-rerank", true);
-        var providerType = mock(AiProviderType.class);
+        var providerType = providerType(ModelType.RERANK);
 
         when(client.fetch(AiModel.class, "native-rerank-model")).thenReturn(Mono.just(model));
         when(client.fetch(AiProvider.class, "rerank-provider")).thenReturn(Mono.just(provider));
@@ -337,7 +339,7 @@ class AiModelServiceImplTest {
         var model = aiModel("openai-prod-image", "openai-prod",
             "gpt-image-1", "Image", true, ModelType.IMAGE_GENERATION);
         var provider = aiProvider("openai-prod", "openai", true);
-        var providerType = mock(AiProviderType.class);
+        var providerType = providerType(ModelType.IMAGE_GENERATION);
 
         when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
         when(client.fetch(AiModel.class, "openai-prod-image")).thenReturn(Mono.just(model));
@@ -394,6 +396,7 @@ class AiModelServiceImplTest {
         spec.setDisplayName(displayName);
         spec.setEnabled(enabled);
         spec.setModelType(modelType);
+        spec.setAdapterType(defaultAdapter(modelType));
         model.setSpec(spec);
         return model;
     }
@@ -431,8 +434,24 @@ class AiModelServiceImplTest {
     }
 
     private AiProviderType languageProviderType() {
-        var type = mock(AiProviderType.class);
+        var type = providerType(ModelType.LANGUAGE);
         when(type.languageModelProviderOptions()).thenReturn(LanguageModelProviderOptions.defaults());
         return type;
+    }
+
+    private AiProviderType providerType(ModelType modelType) {
+        var type = mock(AiProviderType.class);
+        lenient().when(type.getSupportedAdapterTypes())
+            .thenReturn(List.of(defaultAdapter(modelType)));
+        return type;
+    }
+
+    private AdapterType defaultAdapter(ModelType modelType) {
+        return switch (modelType) {
+            case LANGUAGE -> AdapterType.OPENAI_CHAT;
+            case EMBEDDING -> AdapterType.OPENAI_EMBEDDING;
+            case IMAGE_GENERATION -> AdapterType.OPENAI_IMAGE;
+            case RERANK -> AdapterType.RERANK;
+        };
     }
 }

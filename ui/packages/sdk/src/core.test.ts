@@ -1505,6 +1505,30 @@ describe('Chat', () => {
     ).toBe(false)
   })
 
+  it('only evaluates tool continuation state from the latest step', () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool-search',
+            toolCallId: 'call-1',
+            toolName: 'search',
+            state: 'output-available',
+            output: { ok: true },
+          },
+          { type: 'step-start' },
+          { type: 'text', id: 'text-1', text: 'Final answer' },
+        ],
+      },
+    ]
+
+    expect(lastAssistantMessageIsCompleteWithToolCalls({ messages })).toBe(false)
+    expect(lastAssistantMessageHasCompletedToolContinuations({ messages })).toBe(false)
+    expect(lastAssistantMessageHasRespondedToToolApprovals({ messages })).toBe(false)
+  })
+
   it('waits for external output while preserving server output in a mixed tool batch', async () => {
     const transport = new SequenceTransport([
       [

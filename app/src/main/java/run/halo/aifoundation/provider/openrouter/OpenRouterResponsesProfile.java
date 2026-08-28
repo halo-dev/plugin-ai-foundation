@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.responses.ResponsesProfile;
+import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 
 /** OpenRouter policy for its beta OpenResponses endpoint and router-specific options. */
 final class OpenRouterResponsesProfile implements ResponsesProfile {
@@ -29,8 +30,7 @@ final class OpenRouterResponsesProfile implements ResponsesProfile {
 
     @Override
     public Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
-        return metadata == null || metadata.isEmpty()
-            ? Map.of() : Map.of("openrouter", Map.copyOf(metadata));
+        return ProviderMetadataMaps.namespaced("openrouter", metadata);
     }
 
     private void appendServerTools(Map<String, Object> body) {

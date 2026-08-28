@@ -101,7 +101,7 @@ class ProviderTypeConsoleEndpointTest {
             .jsonPath("$[0].adapters[0].adapterType").isEqualTo("openai-responses")
             .jsonPath("$[0].adapters[0].modelType").isEqualTo("language")
             .jsonPath("$[0].adapters[0].displayName")
-            .isEqualTo("OpenAI · Responses API")
+            .isEqualTo("Responses API")
             .jsonPath("$[0].adapters[0].description").isNotEmpty()
             .jsonPath("$[0].adapters[0].recommended").isEqualTo(true)
             .jsonPath("$[0].adapters[1].adapterType").isEqualTo("openai-chat")
@@ -174,11 +174,11 @@ class ProviderTypeConsoleEndpointTest {
             .jsonPath("$[0].defaultBaseUrl").isEqualTo("http://localhost:11434")
             .jsonPath("$[0].completionsPath").isEqualTo("/api/chat")
             .jsonPath("$[0].adapters[0].adapterType").isEqualTo("ollama-chat")
-            .jsonPath("$[0].adapters[0].displayName").isEqualTo("Ollama · Ollama Chat API")
+            .jsonPath("$[0].adapters[0].displayName").isEqualTo("Ollama Chat API")
             .jsonPath("$[0].adapters[0].description")
             .isEqualTo("使用 Ollama 原生 /api/chat 接口。")
             .jsonPath("$[0].adapters[?(@.adapterType == 'ollama-responses')].displayName")
-            .isEqualTo("Ollama · Responses API");
+            .isEqualTo("Responses API");
     }
 
     @Test

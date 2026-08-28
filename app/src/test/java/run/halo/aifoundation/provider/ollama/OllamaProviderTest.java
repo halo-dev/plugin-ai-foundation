@@ -27,6 +27,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
@@ -84,6 +85,23 @@ class OllamaProviderTest {
         assertThat(providerType.getDefaultParameterMappings(AdapterType.OLLAMA_RESPONSES)
             .get(ModelParameter.REASONING).mode())
             .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+        assertThat(providerType.getDefaultParameterMappings(AdapterType.OLLAMA_CHAT)
+            .get(ModelParameter.MAX_OUTPUT_TOKENS).template())
+            .isEqualTo("ollama.num-predict");
+        assertThat(providerType.getDefaultParameterMappings(AdapterType.OLLAMA_CHAT)
+            .get(ModelParameter.LOGPROBS).mode())
+            .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+        var registry = new ParameterMappingTemplateRegistry();
+        for (var adapter : List.of(AdapterType.OLLAMA_OPENAI_CHAT,
+            AdapterType.OLLAMA_RESPONSES, AdapterType.OLLAMA_MESSAGES)) {
+            assertThat(providerType.getDefaultParameterMappings(adapter)
+                .get(ModelParameter.MAX_OUTPUT_TOKENS).template())
+                .as(adapter.getValue())
+                .isEqualTo("openai.max-tokens");
+            assertThat(registry.compatible(ModelParameter.MAX_OUTPUT_TOKENS, adapter))
+                .extracting("id")
+                .contains("openai.max-tokens");
+        }
         assertThat(providerType.buildImageGenerationClient(
             provider("http://127.0.0.1:11434/api"), "", "x/z-image-turbo"))
             .isInstanceOf(OllamaImageGenerationClient.class);

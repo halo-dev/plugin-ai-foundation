@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +20,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AbstractAiProviderType;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
@@ -118,6 +122,23 @@ public class OllamaProvider extends AbstractAiProviderType {
             case OLLAMA_MESSAGES -> "reasoning.messages-thinking";
             default -> null;
         };
+    }
+
+    @Override
+    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
+        AdapterType adapterType) {
+        if (adapterType == null) {
+            return super.getDefaultParameterMappings();
+        }
+        var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
+        defaults.putAll(ProviderParameterMappingDefaults.forAdapters(List.of(adapterType)));
+        var reasoningTemplate = defaultReasoningMappingTemplate(adapterType);
+        if (reasoningTemplate == null) {
+            return Map.copyOf(defaults);
+        }
+        defaults.put(ModelParameter.REASONING,
+            DefaultParameterMapping.template(reasoningTemplate));
+        return Map.copyOf(defaults);
     }
 
     @Override

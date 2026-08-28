@@ -29,7 +29,8 @@ public class ParameterMappingTemplateRegistry {
         AdapterType.SILICONFLOW_CHAT,
         AdapterType.MIMO_RESPONSES, AdapterType.MIMO_CHAT, AdapterType.ZHIPU_CHAT,
         AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
-        AdapterType.OLLAMA_RESPONSES);
+        AdapterType.OLLAMA_OPENAI_CHAT, AdapterType.OLLAMA_RESPONSES,
+        AdapterType.OLLAMA_MESSAGES);
     private static final Set<AdapterType> OLLAMA_CHAT = Set.of(AdapterType.OLLAMA_CHAT);
     private static final Set<AdapterType> RESPONSES = Set.of(
         AdapterType.OPENAI_RESPONSES, AdapterType.DEEPSEEK_RESPONSES,

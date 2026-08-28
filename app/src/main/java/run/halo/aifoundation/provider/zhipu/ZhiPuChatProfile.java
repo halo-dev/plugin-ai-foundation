@@ -16,6 +16,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.util.MimeTypeUtils;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsProfile;
+import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 import run.halo.aifoundation.provider.support.UriReferencePolicy;
 
 /** Current BigModel Chat contract: thinking, streaming tools, built-ins, and multimodal input. */
@@ -107,12 +108,13 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
 
     @Override
     public Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
-        if (metadata == null || metadata.isEmpty()) {
+        var sanitized = ProviderMetadataMaps.immutableNonNull(metadata);
+        if (sanitized.isEmpty()) {
             return Map.of();
         }
-        var normalized = new LinkedHashMap<>(metadata);
-        if (metadata.get("web_search") != null) {
-            normalized.put("sources", metadata.get("web_search"));
+        var normalized = new LinkedHashMap<>(sanitized);
+        if (sanitized.containsKey("web_search")) {
+            normalized.put("sources", sanitized.get("web_search"));
         }
         return Map.copyOf(normalized);
     }

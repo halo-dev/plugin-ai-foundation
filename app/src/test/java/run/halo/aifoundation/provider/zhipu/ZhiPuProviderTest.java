@@ -31,6 +31,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.protocol.messages.AnthropicMessagesProfile;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
@@ -68,9 +69,12 @@ class ZhiPuProviderTest {
             AdapterType.RERANK, AdapterType.ZHIPU_IMAGE);
         assertThat(providerType.buildChatModel(provider, "key", "glm-5.3"))
             .isInstanceOf(ZhiPuChatModel.class);
-        assertThat(providerType.buildChatModel(provider, "key", new ProviderModelRef(
-            "glm-5.3", ModelType.LANGUAGE, AdapterType.ZHIPU_MESSAGES)))
-            .isInstanceOf(ZhiPuMessagesModel.class);
+        var messages = (ZhiPuMessagesModel) providerType.buildChatModel(provider, "key",
+            new ProviderModelRef("glm-5.3", ModelType.LANGUAGE,
+                AdapterType.ZHIPU_MESSAGES));
+        assertThat(messages).isInstanceOf(ZhiPuMessagesModel.class);
+        assertThat(((AnthropicMessagesProfile) ReflectionTestUtils.getField(messages, "profile"))
+            .providerType()).isEqualTo("zhipuai");
         assertThat(providerType.buildEmbeddingModel(provider, "key", "embedding-3"))
             .isInstanceOf(ZhiPuEmbeddingModel.class);
         assertThat(providerType.buildRerankingClient(provider, "key", "rerank"))
@@ -192,7 +196,8 @@ class ZhiPuProviderTest {
         var model = new ZhiPuChatModel(visionOptions, org.springframework.web.reactive.function.client.WebClient.builder());
         var response = (org.springframework.ai.chat.model.ChatResponse)
             ReflectionTestUtils.invokeMethod(model, "chatResponse", """
-                {"id":"chat-1","request_id":"req-123456","model":"glm-5.2",
+                {"id":"chat-1","request_id":"req-123456","nullable_extension":null,
+                 "model":"glm-5.2",
                  "choices":[{"index":0,"message":{"role":"assistant",
                    "reasoning_content":"verify","content":"grounded"},"finish_reason":"stop"}],
                  "usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,
@@ -205,6 +210,7 @@ class ZhiPuProviderTest {
         assertThat((Object) response.getMetadata().get("web_search")).isInstanceOf(List.class);
         assertThat((Object) response.getMetadata().get("sources")).isInstanceOf(List.class);
         assertThat((Object) response.getMetadata().get("content_filter")).isInstanceOf(List.class);
+        assertThat((Object) response.getMetadata().get("nullable_extension")).isNull();
         assertThat((Map<String, Object>) response.getMetadata().getUsage().getNativeUsage())
             .containsKey("prompt_tokens_details");
     }

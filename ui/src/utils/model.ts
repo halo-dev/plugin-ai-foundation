@@ -101,11 +101,13 @@ export function filterModelFeaturesForProviderType(
 
 export interface DiscoveredModelProfileOverride {
   modelType?: AiModel['spec']['modelType']
+  adapterType?: AiModel['spec']['adapterType']
   features?: NonNullable<AiModel['spec']['features']>
 }
 
 export interface DiscoveredModelProfile {
   modelType: AiModel['spec']['modelType']
+  adapterType?: AiModel['spec']['adapterType']
   features: NonNullable<AiModel['spec']['features']>
 }
 
@@ -127,15 +129,23 @@ export function discoveredModelProfileForProviderType(
   model: DiscoveredModel,
   existing?: DiscoveredModelProfile,
 ): DiscoveredModelProfile {
-  return {
-    modelType: defaultModelTypeForProviderType(
+  const modelType = defaultModelTypeForProviderType(
+    providerType,
+    existing?.modelType || model.modelType,
+  )
+  const adapterType =
+    defaultAdapterForProviderType(
       providerType,
-      existing?.modelType || model.modelType,
-    ),
+      modelType,
+      existing?.adapterType || model.adapterType,
+    ) || (modelType === model.modelType ? model.adapterType : undefined)
+  return {
+    modelType,
+    ...(adapterType ? { adapterType } : {}),
     features: filterModelFeaturesForProviderType(
       providerType,
       existing?.features || model.features || [],
-      model.adapterType,
+      adapterType,
     ),
   }
 }
@@ -222,6 +232,8 @@ export function createModelFromDiscovered(
   override?: DiscoveredModelProfileOverride,
 ): AiModel {
   const modelType = override?.modelType || model.modelType || AiModelSpecModelTypeEnum.Language
+  const adapterType =
+    override?.adapterType || (modelType === model.modelType ? model.adapterType : undefined)
   const spec = {
     providerName,
     modelId: model.modelId,
@@ -231,7 +243,7 @@ export function createModelFromDiscovered(
     features: override?.features || model.features || [],
     discoverySource: model.source || AiModelSpecDiscoverySourceEnum.Rule,
     discoveryConfidence: model.confidence || AiModelSpecDiscoveryConfidenceEnum.Low,
-    ...(model.adapterType ? { adapterType: model.adapterType } : {}),
+    ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
   } as AiModel['spec']
 

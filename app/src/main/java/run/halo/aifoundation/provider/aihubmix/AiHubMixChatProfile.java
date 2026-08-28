@@ -15,6 +15,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.util.MimeTypeUtils;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsProfile;
+import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 import run.halo.aifoundation.provider.support.ReasoningProviderMetadata;
 
 /** AIHubMix Chat-specific media, reasoning-detail, annotation, and usage policy. */
@@ -67,8 +68,7 @@ final class AiHubMixChatProfile implements ChatCompletionsProfile {
 
     @Override
     public Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
-        return metadata == null || metadata.isEmpty()
-            ? Map.of() : Map.of("aihubmix", Map.copyOf(metadata));
+        return ProviderMetadataMaps.namespaced("aihubmix", metadata);
     }
 
     @Override
