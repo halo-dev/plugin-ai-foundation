@@ -81,8 +81,8 @@ class ZhiPuProviderTest {
             .isInstanceOf(ZhiPuRerankingClient.class);
         assertThat(providerType.buildImageGenerationClient(provider, "key", "glm-image"))
             .isInstanceOf(ZhiPuImageGenerationClient.class);
-        assertThat(providerType.embeddingModelProviderOptions().providerOptionsNamespace())
-            .isEqualTo("zhipuai");
+        assertThat(providerType.embeddingModelProviderOptions().embeddingOptionsFactory())
+            .isNotNull();
         assertThat(providerType.languageModelProviderOptions().nativeStrictToolSchemas()).isFalse();
         assertThat(providerType.languageModelProviderOptions().structuredOutputSupport())
             .isEqualTo(run.halo.aifoundation.provider.support.StructuredOutputSupport.JSON_OBJECT);
@@ -110,21 +110,23 @@ class ZhiPuProviderTest {
                 "search_result", true));
         var request = GenerateTextRequest.builder()
             .prompt("Research Halo")
-            .providerOptions(Map.of("zhipuai", Map.of(
-                "thinking", Map.of("clear_thinking", false, "type", "enabled"))))
             .build();
-        assertThat((ChatCompletionsOptions) providerType.languageModelProviderOptions()
-            .chatOptionsFactory().build(request)).extracting(ChatCompletionsOptions::getExtraBody)
+        var thinkingOptions = Map.<String, Object>of(
+            "thinking", Map.of("clear_thinking", false, "type", "enabled"));
+        var chatOptions = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
+            .chatOptionsFactory().build(request);
+        chatOptions = chatOptions.mutate().extraBody(thinkingOptions).build();
+        assertThat(chatOptions).extracting(ChatCompletionsOptions::getExtraBody)
             .satisfies(value -> assertThat((Map<String, Object>) value)
                 .containsKey("thinking"));
 
+        var toolOptions = Map.<String, Object>of("builtinTools", List.of(builtin));
         var portable = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder()
                 .prompt("Research Halo")
-                .providerOptions(Map.of("zhipuai", Map.of("builtinTools", List.of(builtin))))
                 .build());
         portable = portable.mutate().baseUrl("https://example.com/api/paas/v4")
-            .model("glm-5.3").build();
+            .model("glm-5.3").extraBody(toolOptions).build();
         var body = chatBody(portable, true, new UserMessage("Research Halo"));
         assertThat(body).doesNotContainKeys("reasoning_effort", "thinking", "tool_stream",
             "stream_options", "parallel_tool_calls");
@@ -266,13 +268,14 @@ class ZhiPuProviderTest {
         try {
             var client = providerType.buildRerankingClient(provider(baseUrl(server)), "sk-test",
                 "rerank");
+            var nativeOptions = Map.<String, Object>of(
+                "return_documents", true,
+                "return_raw_scores", true,
+                "request_id", "request-123456");
             var response = client.rerank(RerankRequest.builder().query("CMS")
                 .documents(List.of(RerankDocument.of("Other"), RerankDocument.of("Halo")))
                 .topN(1)
-                .providerOptions(Map.of("zhipuai", Map.of(
-                    "return_documents", true, "return_raw_scores", true,
-                    "request_id", "request-123456")))
-                .build()).block();
+                .build(), null, nativeOptions).block();
             assertThat(response.getResults().getFirst().getDocument().getText()).isEqualTo("Halo");
             assertThat(response.getResults().getFirst().getScore()).isEqualTo(0.97);
             assertThat(response.getUsage().getInputTokens()).isEqualTo(8);
@@ -306,12 +309,13 @@ class ZhiPuProviderTest {
         try {
             var client = providerType.buildImageGenerationClient(provider(baseUrl(server)),
                 "sk-test", "glm-image");
+            var nativeOptions = Map.<String, Object>of(
+                "quality", "hd",
+                "watermark_enabled", false,
+                "user_id", "user-123456");
             var result = client.generateImage(GenerateImageRequest.builder()
                 .prompt("Halo logo").size(1280)
-                .providerOptions(Map.of("zhipuai", Map.of(
-                    "quality", "hd", "watermark_enabled", false,
-                    "user_id", "user-123456")))
-                .build()).block();
+                .build(), null, nativeOptions).block();
             assertThat(result.getImages()).singleElement().satisfies(image ->
                 assertThat(image.getUrl()).isEqualTo("https://example.com/image.png"));
             assertThat((Map<String, Object>) result.getUsage().getRaw())
@@ -324,8 +328,8 @@ class ZhiPuProviderTest {
             assertThat(client.generateImage(GenerateImageRequest.builder()
                 .prompt("Halo").size(1025, 1024).build()).block()).isNotNull();
             assertThat(client.generateImage(GenerateImageRequest.builder()
-                .prompt("Halo").providerOptions(Map.of("zhipuai",
-                    Map.of("quality", "standard"))).build()).block()).isNotNull();
+                .prompt("Halo").build(), null, Map.of("quality", "standard")).block())
+                .isNotNull();
         } finally {
             server.stop(0);
         }

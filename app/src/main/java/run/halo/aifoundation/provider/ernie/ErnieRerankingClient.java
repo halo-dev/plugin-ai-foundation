@@ -32,9 +32,10 @@ public final class ErnieRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
+    protected Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
-        applyOptions(body, namespacedOptions(request), "model", "query", "documents", "top_n");
+        applyOptions(body, nativeOptions, "model", "query", "documents", "top_n");
         body.put("model", modelId);
         body.put("query", request.getQuery());
         body.put("documents", documentTexts(request));

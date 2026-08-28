@@ -112,10 +112,10 @@ class MiniMaxProviderTest {
     void messagesSupportsCurrentSamplingMediaAndIgnoredParameterSemantics() {
         var options = options(GenerateTextRequest.builder()
             .prompt("Cache")
-            .providerOptions(Map.of("minimax", Map.of(
-                "systemCacheControl", Map.of("type", "ephemeral"),
-                "lastMessageCacheControl", Map.of("type", "ephemeral"))))
             .build(), "MiniMax-M2.7");
+        options = options.mutate().extraBody(Map.of(
+            "systemCacheControl", Map.of("type", "ephemeral"),
+            "lastMessageCacheControl", Map.of("type", "ephemeral"))).build();
         var body = messagesBody(options, new SystemMessage("Rules"), new UserMessage("Cache"));
 
         var system = (List<Map<String, Object>>) body.get("system");
@@ -287,9 +287,8 @@ class MiniMaxProviderTest {
             .prompt("Halo mascot")
             .n(9)
             .size("1024x768")
-            .providerOptions(Map.of("minimax", Map.of(
-                "prompt_optimizer", true, "aigc_watermark", false, "style", "anime")))
-            .build());
+            .build(), Map.of(
+                "prompt_optimizer", true, "aigc_watermark", false, "style", "anime"));
         assertThat(body).containsEntry("prompt_optimizer", true)
             .containsEntry("aigc_watermark", false)
             .containsEntry("style", "anime")

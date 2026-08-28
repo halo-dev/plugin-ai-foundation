@@ -121,14 +121,14 @@ class DouBaoProviderTest {
         var generated = (ChatCompletionsOptions) provider.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder()
                 .prompt("Find current Halo news")
-                .providerOptions(Map.of("doubao", Map.of(
-                    "builtinTools", List.of(builtin),
-                    "thinking", Map.of("type", "disabled"))))
                 .build());
         var options = generated.mutate()
             .baseUrl("https://example.com/api/v3")
             .apiKey("test-key")
             .model("doubao-seed")
+            .extraBody(Map.of(
+                "builtinTools", List.of(builtin),
+                "thinking", Map.of("type", "disabled")))
             .toolCallbacks(List.of(callback))
             .toolContext("doubao-responses.messages", List.of(new UserMessage("news")))
             .build();

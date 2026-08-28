@@ -50,7 +50,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         int maxEmbeddingsPerCall,
         boolean supportsParallelCalls) {
         this(springEmbeddingModel, providerType, maxEmbeddingsPerCall, supportsParallelCalls,
-            EmbeddingModelProviderOptions.defaults(providerType));
+            EmbeddingModelProviderOptions.defaults());
     }
 
     EmbeddingModelImpl(
@@ -198,7 +198,6 @@ public class EmbeddingModelImpl implements EmbeddingModel {
             .instructions(request.getInstructions())
             .includeSparseEmbedding(request.getIncludeSparseEmbedding())
             .includeModalityEmbeddings(request.getIncludeModalityEmbeddings())
-            .providerOptions(request.getProviderOptions())
             .maxBatchSize(request.getMaxBatchSize())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())

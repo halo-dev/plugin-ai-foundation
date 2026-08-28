@@ -5,7 +5,6 @@ import java.util.List;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 
 /** Rejects options that the current BigModel text embedding contract does not define. */
 final class ZhiPuEmbeddingOptionsFactory {
@@ -14,12 +13,11 @@ final class ZhiPuEmbeddingOptionsFactory {
     }
 
     static ZhiPuEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions ignored, List<EmbeddingWarning> warnings) {
+        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
-        var nativeOptions = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "zhipuai");
+        var nativeOptions = providerOptions.nativeOptions();
         if (!nativeOptions.isEmpty()) {
             throw new IllegalArgumentException(
                 "Zhipu embedding does not document provider-specific request fields: "

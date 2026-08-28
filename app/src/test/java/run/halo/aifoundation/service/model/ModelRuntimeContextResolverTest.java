@@ -1,7 +1,9 @@
 package run.halo.aifoundation.service.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
@@ -41,8 +43,10 @@ class ModelRuntimeContextResolverTest {
         assertThat(context.providerType()).isEqualTo("openai");
         assertThat(context.adapterType()).isEqualTo(AdapterType.OPENAI_RESPONSES);
         assertThat(context.providerDefinition()).isSameAs(providerType);
+        assertThat(context.nativeOptions()).containsEntry("thinking_budget", 4096);
         assertThat(context.parameterMappings().get(ModelParameter.MAX_OUTPUT_TOKENS).template())
             .isEqualTo("openai.max-completion-tokens");
+        verify(providerType).validateNativeModelOptions(any());
         assertThat(Arrays.stream(ModelRuntimeContext.class.getRecordComponents())
             .map(component -> component.getName().toLowerCase()))
             .noneMatch(name -> name.contains("key") || name.contains("secret")
@@ -82,6 +86,7 @@ class ModelRuntimeContextResolverTest {
         modelSpec.setModelId("gpt-a");
         modelSpec.setModelType(ModelType.LANGUAGE);
         modelSpec.setAdapterType(AdapterType.OPENAI_RESPONSES);
+        modelSpec.setNativeOptions(Map.of("thinking_budget", 4096));
         model.setSpec(modelSpec);
         return new ModelResolution(model, provider, providerType, "do-not-retain");
     }

@@ -8,20 +8,21 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.lang.Nullable;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderModelResolver;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
-import run.halo.aifoundation.provider.mapping.ModelParameter;
-import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
-import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 
 public interface AiProviderType {
 
@@ -138,7 +139,7 @@ public interface AiProviderType {
     }
 
     default EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return EmbeddingModelProviderOptions.defaults(getProviderType());
+        return EmbeddingModelProviderOptions.defaults();
     }
 
     @Nullable
@@ -189,6 +190,10 @@ public interface AiProviderType {
 
     default ProviderModelRef resolveModel(ProviderModelRef model) {
         return ProviderModelResolver.resolve(this, model);
+    }
+
+    default void validateNativeModelOptions(ProviderModelRef model) {
+        NativeModelOptionsValidator.validate(model.nativeOptions());
     }
 
     default int maxEmbeddingsPerCall() {

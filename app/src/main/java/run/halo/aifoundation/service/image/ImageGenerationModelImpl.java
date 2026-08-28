@@ -54,6 +54,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     private final MediaResourcePolicy mediaResourcePolicy;
     private final ModelCapabilityMatcher capabilityMatcher;
     private final RuntimeParameterMappings parameterMappings;
+    private final Map<String, Object> nativeOptions;
 
     ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
         String modelName, String providerName, String providerType,
@@ -85,6 +86,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher
             : new ModelCapabilityMatcher();
         this.parameterMappings = context.parameterMappings();
+        this.nativeOptions = context.nativeOptions();
     }
 
     @Override
@@ -148,9 +150,8 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     }
 
     private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request) {
-        var call = (parameterMappings.isEmpty()
-            ? client.generateImage(request)
-            : client.generateImage(request, mappingTarget(request)))
+        var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
+        var call = client.generateImage(request, target, nativeOptions)
             .doOnSubscribe(ignored -> checkCancellation(request))
             .doOnNext(ignored -> checkCancellation(request));
         var maxRetries = maxRetries(request);
@@ -288,7 +289,6 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .seed(mapped(ModelParameter.IMAGE_SEED, request.getSeed(), warnings))
             .responseFormat(mapped(ModelParameter.RESPONSE_FORMAT,
                 request.getResponseFormat(), warnings))
-            .providerOptions(request.getProviderOptions())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())
@@ -363,7 +363,6 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             .negativePrompt(request.getNegativePrompt())
             .seed(request.getSeed())
             .responseFormat(request.getResponseFormat())
-            .providerOptions(request.getProviderOptions())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
             .maxParallelCalls(request.getMaxParallelCalls())

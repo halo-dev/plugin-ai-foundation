@@ -212,15 +212,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("dashscope",
-            DashScopeEmbeddingOptionsFactory::build);
-    }
-
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder()
-            .providerOptionsSupported(true)
-            .build();
+        return new EmbeddingModelProviderOptions(DashScopeEmbeddingOptionsFactory::build);
     }
 
     @Override

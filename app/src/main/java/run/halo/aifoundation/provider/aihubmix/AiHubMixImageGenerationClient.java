@@ -14,7 +14,6 @@ import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.provider.support.JsonNodes;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.support.UriReferencePolicy;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
@@ -44,14 +43,16 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
     }
 
     @Override
-    protected String endpointPath(GenerateImageRequest request) {
-        return "/models/" + modelPath(request) + "/predictions";
+    protected String endpointPath(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
+        return "/models/" + modelPath(nativeOptions) + "/predictions";
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request) {
-        validate(request);
-        var values = providerOptions(request);
+    protected Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
+        validate(request, nativeOptions);
+        var values = nativeOptions;
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {
@@ -79,13 +80,14 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "AIHubMix");
         var images = new ArrayList<GeneratedFile>();
-        collectImages(root.path("output"), request, images);
-        collectImages(root.path("data"), request, images);
+        collectImages(root.path("output"), nativeOptions, images);
+        collectImages(root.path("data"), nativeOptions, images);
         if (images.isEmpty()) {
-            collectImage(root, request, images);
+            collectImage(root, nativeOptions, images);
         }
         if (images.isEmpty() && isAsynchronousResponse(root)) {
             throw new IllegalStateException(
@@ -107,15 +109,15 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
         return hasText(textOrNull(root.path("polling_url")));
     }
 
-    private void validate(GenerateImageRequest request) {
+    private void validate(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         requirePrompt(request, "AIHubMix image prompt must not be blank");
         if (request.getMask() != null) {
             throw new IllegalArgumentException(
                 "AIHubMix prediction image route does not document mask input");
         }
         validateImageCount(request.getN());
-        validateStreamOption(providerOptions(request).get("stream"));
-        validateModelPath(modelPath(request));
+        validateStreamOption(nativeOptions.get("stream"));
+        validateModelPath(modelPath(nativeOptions));
     }
 
     private void validateImageCount(Integer count) {
@@ -167,8 +169,8 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
         input.put("image", images.size() == 1 ? images.get(0) : images);
     }
 
-    private String modelPath(GenerateImageRequest request) {
-        var configured = providerOptions(request).get("model_path");
+    private String modelPath(Map<String, Object> nativeOptions) {
+        var configured = nativeOptions.get("model_path");
         if (configured != null) {
             if (configured instanceof String path && !path.isBlank()) {
                 return path;
@@ -176,17 +178,8 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
             throw new IllegalArgumentException("AIHubMix model_path must be a non-blank string");
         }
         throw new IllegalArgumentException(
-            "AIHubMix image requests require providerOptions.aihubmix.model_path; "
-                + "the provider does not infer routing from a model ID");
-    }
-
-    private Map<String, Object> providerOptions(GenerateImageRequest request) {
-        if (request == null) {
-            return Map.of();
-        }
-        var values = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "aihubmix");
-        return Map.copyOf(values);
+            "AIHubMix image models require nativeOptions.model_path; "
+                + "routing is configured by the administrator instead of inferred from model IDs");
     }
 
     private String mappedField(Map<String, Object> values, String option, String fallback) {
@@ -200,22 +193,22 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
         throw new IllegalArgumentException("AIHubMix " + option + " must be a non-blank string");
     }
 
-    private void collectImages(JsonNode node, GenerateImageRequest request,
+    private void collectImages(JsonNode node, Map<String, Object> nativeOptions,
         List<GeneratedFile> images) {
         if (node.isArray()) {
-            node.forEach(item -> collectImage(item, request, images));
+            node.forEach(item -> collectImage(item, nativeOptions, images));
         } else {
-            collectImage(node, request, images);
+            collectImage(node, nativeOptions, images);
         }
     }
 
-    private void collectImage(JsonNode node, GenerateImageRequest request,
+    private void collectImage(JsonNode node, Map<String, Object> nativeOptions,
         List<GeneratedFile> images) {
         if (JsonNodes.isAbsent(node)) {
             return;
         }
         if (node.isTextual()) {
-            addStringImage(node.asText(), configuredMediaType(request), images);
+            addStringImage(node.asText(), configuredMediaType(nativeOptions), images);
             return;
         }
         if (!node.isObject()) {
@@ -224,12 +217,12 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
         for (var field : List.of("images", "results", "data", "output")) {
             var nested = node.path(field);
             if (nested.isArray()) {
-                collectImages(nested, request, images);
+                collectImages(nested, nativeOptions, images);
             }
         }
         var mediaType = firstText(node, "media_type", "mime_type");
         if (!hasText(mediaType)) {
-            mediaType = configuredMediaType(request);
+            mediaType = configuredMediaType(nativeOptions);
         }
         var url = firstText(node, "url", "image_url");
         if (hasText(url)) {
@@ -263,8 +256,8 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
         return comma >= 0 ? value.substring(comma + 1) : value;
     }
 
-    private String configuredMediaType(GenerateImageRequest request) {
-        var format = providerOptions(request).get("output_format");
+    private String configuredMediaType(Map<String, Object> nativeOptions) {
+        var format = nativeOptions.get("output_format");
         return outputMediaType(format != null ? format.toString() : null);
     }
 

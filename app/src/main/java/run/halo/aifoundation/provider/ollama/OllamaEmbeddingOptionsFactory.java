@@ -8,7 +8,6 @@ import org.springframework.ai.embedding.EmbeddingOptions;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 
 /** Maps provider-neutral embedding requests to Ollama's native embed options. */
 final class OllamaEmbeddingOptionsFactory {
@@ -26,7 +25,7 @@ final class OllamaEmbeddingOptionsFactory {
         if (request == null) {
             return null;
         }
-        var source = ProviderRequestOptions.orEmpty(request.getProviderOptions(), "ollama");
+        var source = providerOptions.nativeOptions();
         var unknown = new LinkedHashSet<>(source.keySet());
         unknown.removeAll(PROVIDER_FIELDS);
         if (!unknown.isEmpty()) {

@@ -92,23 +92,22 @@ class AiHubMixProviderTest {
             .isInstanceOf(AiHubMixRerankingClient.class);
         assertThat(providerType.buildImageGenerationClient(provider, "key", "gpt-image-1.5"))
             .isInstanceOf(AiHubMixImageGenerationClient.class);
-        assertThat(providerType.embeddingModelProviderOptions().providerOptionsNamespace())
-            .isEqualTo("aihubmix");
+        assertThat(providerType.embeddingModelProviderOptions().embeddingOptionsFactory())
+            .isNotNull();
         assertThat(providerType.languageModelProviderOptions().nativeStrictToolSchemas()).isTrue();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void responsesCombinesDocumentedBuiltinToolsAndRejectsInvalidReasoning() {
+        var nativeOptions = Map.<String, Object>of("builtinTools", List.of(
+            Map.of("type", "web_search_preview"),
+            Map.of("type", "code_interpreter", "container", Map.of("type", "auto"))));
         var generated = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Search")
-                .providerOptions(Map.of("aihubmix", Map.of("builtinTools", List.of(
-                    Map.of("type", "web_search_preview"),
-                    Map.of("type", "code_interpreter", "container", Map.of("type", "auto")))))
-                )
                 .build());
         var options = generated.mutate().baseUrl("https://example.com/v1").model("gpt-5")
-            .build();
+            .extraBody(nativeOptions).build();
         var body = responsesBody(options, new UserMessage("Search"));
         assertThat(body).doesNotContainKey("builtinTools");
         assertThat((List<Map<String, Object>>) body.get("tools"))
@@ -152,9 +151,10 @@ class AiHubMixProviderTest {
         try {
             var model = providerType.buildEmbeddingModel(provider(baseUrl(server)), "sk-test",
                 "text-embedding-3-small");
-            var requestOptions = providerType.embeddingModelProviderOptions().buildOptions(
+            var requestOptions = providerType.embeddingModelProviderOptions()
+                .withNativeOptions(Map.of("embedding_format", "base64"))
+                .buildOptions(
                 EmbeddingRequest.builder().inputs(List.of("Halo")).dimensions(512)
-                    .providerOptions(Map.of("aihubmix", Map.of("embedding_format", "base64")))
                     .build(), new java.util.ArrayList<>());
             EmbeddingResponse response = model.call(new org.springframework.ai.embedding.EmbeddingRequest(
                 List.of("Halo"), requestOptions));
@@ -201,8 +201,7 @@ class AiHubMixProviderTest {
                 "gte-rerank-v2");
             var response = client.rerank(RerankRequest.builder().query("CMS")
                 .documents(List.of(RerankDocument.of("Other"), RerankDocument.of("Halo")))
-                .topN(1).providerOptions(Map.of("aihubmix",
-                    Map.of("return_documents", true))).build()).block();
+                .topN(1).build(), null, Map.of("return_documents", true)).block();
             assertThat(response.getResults().getFirst().getScore()).isEqualTo(0.98);
             assertThat(response.getResults().getFirst().getDocument().getText()).isEqualTo("Halo");
             assertThat(capture.get().headers()).containsEntry("App-code", "NEUE3459");
@@ -228,13 +227,13 @@ class AiHubMixProviderTest {
         try {
             var client = providerType.buildImageGenerationClient(provider(baseUrl(server)),
                 "sk-test", "imagen-4.0-generate-001");
+            var nativeOptions = Map.<String, Object>of(
+                "model_path", "google/imagen-4.0-generate-001",
+                "output_format", "png",
+                "count_field", "numberOfImages");
             var result = client.generateImage(GenerateImageRequest.builder().prompt("Halo")
                 .n(2).size("1024x1024")
-                .providerOptions(Map.of("aihubmix", Map.of(
-                    "model_path", "google/imagen-4.0-generate-001",
-                    "output_format", "png",
-                    "count_field", "numberOfImages")))
-                .build()).block();
+                .build(), null, nativeOptions).block();
             assertThat(result.getImages()).singleElement().satisfies(image ->
                 assertThat(image.getUrl()).isEqualTo("https://example.com/image.png"));
             assertThat(capture.get().path()).isEqualTo(

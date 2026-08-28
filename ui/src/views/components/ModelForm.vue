@@ -35,6 +35,10 @@ import {
   validateReasoningMappings,
   type MappingModelType,
 } from '@/utils/parameter-mappings'
+import {
+  formatProviderNativeOptions,
+  parseProviderNativeOptions,
+} from '@/utils/provider-native-options'
 import type { FormKitTypeDefinition } from '@formkit/core'
 import { submitForm } from '@formkit/core'
 import { Toast } from '@halo-dev/components'
@@ -240,6 +244,13 @@ watch(
 )
 
 function onSubmit(data: ModelFormRawState) {
+  let nativeOptions: Record<string, unknown> | undefined
+  try {
+    nativeOptions = parseProviderNativeOptions(data.nativeOptionsJson)
+  } catch (error) {
+    Toast.error(error instanceof Error ? error.message : '供应商原生参数不是有效的 JSON 对象。')
+    return
+  }
   const normalizedMappings = mappingsForModelType(
     parameterMappings.value,
     data.modelType as MappingModelType,
@@ -265,6 +276,7 @@ function onSubmit(data: ModelFormRawState) {
     capabilities,
     capabilitySources,
     parameterMappings: normalizedMappings,
+    nativeOptions,
   })
 }
 
@@ -273,6 +285,7 @@ defineExpose({
 })
 
 interface ModelFormRawState extends ModelFormState {
+  nativeOptionsJson?: string
   languageFileInput?: boolean | string
   languageReasoningHistory?: boolean | string
   languageInputMediaTypes?: string
@@ -486,6 +499,18 @@ function sameJson(a: unknown, b: unknown) {
         :templates="selectedProviderType?.parameterMappingTemplates"
         :defaults="selectedProviderType?.defaultParameterMappings"
         :inherited-mappings="inheritedMappings"
+      />
+    </AdvancedSettingsCollapsible>
+
+    <AdvancedSettingsCollapsible title="供应商原生参数" source-label="模型配置">
+      <FormKit
+        type="textarea"
+        name="nativeOptionsJson"
+        label="原生参数（JSON）"
+        help="仅用于这个模型的供应商专属参数，由对应 Provider 校验并发送。业务插件无法在请求中覆盖；密钥仍须通过供应商的 Secret 配置。"
+        placeholder='例如：{&#10;  "reasoning_effort": "high"&#10;}'
+        :rows="8"
+        :value="formatProviderNativeOptions(formState?.nativeOptions)"
       />
     </AdvancedSettingsCollapsible>
 

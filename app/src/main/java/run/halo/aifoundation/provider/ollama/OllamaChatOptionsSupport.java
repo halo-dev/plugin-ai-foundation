@@ -6,13 +6,12 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.ai.tool.ToolCallback;
 import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.schema.OutputType;
 
 /** Maps provider-neutral requests onto Ollama's native chat options. */
 final class OllamaChatOptionsSupport {
 
-    static final String PROVIDER_OPTIONS_CONTEXT_KEY = "halo.ollama.provider-options";
+    static final String MODEL_NATIVE_OPTIONS_CONTEXT_KEY = "halo.ollama.model-native-options";
     static final String REQUEST_HEADERS_CONTEXT_KEY = "halo.ollama.request-headers";
 
     private OllamaChatOptionsSupport() {
@@ -53,6 +52,26 @@ final class OllamaChatOptionsSupport {
         return schema != null ? builder.format(schema).build() : builder.build();
     }
 
+    static org.springframework.ai.chat.prompt.ChatOptions applyNativeOptions(
+        org.springframework.ai.chat.prompt.ChatOptions options,
+        Map<String, Object> nativeOptions) {
+        if (!(options instanceof OllamaChatOptions ollamaOptions)) {
+            return options;
+        }
+        if (nativeOptions == null) {
+            return options;
+        }
+        if (nativeOptions.isEmpty()) {
+            return options;
+        }
+        var context = new LinkedHashMap<String, Object>();
+        if (ollamaOptions.getToolContext() != null) {
+            context.putAll(ollamaOptions.getToolContext());
+        }
+        context.put(MODEL_NATIVE_OPTIONS_CONTEXT_KEY, Map.copyOf(nativeOptions));
+        return ollamaOptions.mutate().toolContext(context).build();
+    }
+
     private static OllamaChatOptions.Builder builder(GenerateTextRequest request) {
         var builder = OllamaChatOptions.builder()
             .temperature(request.getTemperature())
@@ -66,11 +85,6 @@ final class OllamaChatOptionsSupport {
             .seed(request.getSeed())
             .stop(request.getStopSequences());
         var context = new LinkedHashMap<String, Object>();
-        var providerOptions = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "ollama");
-        if (!providerOptions.isEmpty()) {
-            context.put(PROVIDER_OPTIONS_CONTEXT_KEY, Map.copyOf(providerOptions));
-        }
         if (request.getHeaders() != null && !request.getHeaders().isEmpty()) {
             context.put(REQUEST_HEADERS_CONTEXT_KEY, Map.copyOf(request.getHeaders()));
         }

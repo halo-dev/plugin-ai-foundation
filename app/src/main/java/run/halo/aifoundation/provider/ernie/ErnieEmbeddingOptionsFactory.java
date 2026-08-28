@@ -5,7 +5,6 @@ import java.util.List;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 
 final class ErnieEmbeddingOptionsFactory {
 
@@ -13,12 +12,12 @@ final class ErnieEmbeddingOptionsFactory {
     }
 
     static ErnieEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions ignored, List<EmbeddingWarning> warnings) {
+        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return ErnieEmbeddingOptions.builder().build();
         }
         var extraBody = new LinkedHashMap<String, Object>();
-        extraBody.putAll(ProviderRequestOptions.orEmpty(request.getProviderOptions(), "ernie"));
+        extraBody.putAll(providerOptions.nativeOptions());
         return ErnieEmbeddingOptions.builder()
             .dimensions(request.getDimensions())
             .instructions(request.getInstructions())

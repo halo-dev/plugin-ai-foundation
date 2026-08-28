@@ -61,3 +61,21 @@ Each provider adapter SHALL apply only the authentication headers documented for
 - **WHEN** official documentation requires a provider-specific authentication or application header
 - **THEN** the provider-owned adapter SHALL add it
 - **AND** the credential SHALL NOT be copied into plaintext Extension fields or diagnostics
+
+### Requirement: Model administrators own provider-native options
+`AiModel` SHALL support optional provider-native settings owned by the administrator who selects and configures the concrete provider model.
+
+#### Scenario: Administrator configures a provider-native model option
+- **WHEN** an administrator saves provider-native options on an `AiModel`
+- **THEN** the backend SHALL invoke the selected Provider adapter's validation hook and reject structurally invalid options
+- **AND** language, embedding, reranking, and image runtimes SHALL pass the options only to that configured model's provider adapter
+
+#### Scenario: Consumer invokes a dynamically selected model
+- **WHEN** a consumer plugin invokes an `AiModel` by its Halo model name
+- **THEN** the public request SHALL remain provider-neutral
+- **AND** the consumer SHALL NOT provide or override provider-native options
+
+#### Scenario: Native option conflicts with invocation data
+- **WHEN** a saved native option uses a field owned by an individual invocation, such as the model, prompt, messages, tools, input, query, or documents
+- **THEN** the backend SHALL reject the model configuration
+- **AND** provider request encoders SHALL still ensure canonical invocation fields take precedence over native defaults

@@ -26,7 +26,8 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
@@ -51,7 +52,8 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "Doubao");
         var images = new ArrayList<GeneratedFile>();
         var dataNode = root.path("data");

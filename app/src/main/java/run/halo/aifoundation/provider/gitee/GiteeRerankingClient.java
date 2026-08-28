@@ -34,9 +34,10 @@ public final class GiteeRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
+    protected Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
-        applyOptions(body, namespacedOptions(request), "model", "query", "documents", "top_n");
+        applyOptions(body, nativeOptions, "model", "query", "documents", "top_n");
         body.put("model", modelId);
         if (isMultimodal(request)) {
             body.put("query", Map.of("text", request.getQuery()));

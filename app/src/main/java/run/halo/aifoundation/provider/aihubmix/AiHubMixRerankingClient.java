@@ -35,7 +35,8 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
+    protected Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions) {
         if (request == null) {
             throw new IllegalArgumentException("AIHubMix rerank query must not be blank");
         }
@@ -57,7 +58,7 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
             validateDocument(document);
         }
         validateTopN(request);
-        var values = namespacedOptions(request);
+        var values = nativeOptions;
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {

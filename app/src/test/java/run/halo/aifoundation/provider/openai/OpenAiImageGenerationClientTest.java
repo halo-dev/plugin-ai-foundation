@@ -58,10 +58,10 @@ class OpenAiImageGenerationClientTest {
                     DataContent.data(new byte[] {1, 2, 3}, "image/png", "subject.png"),
                     DataContent.data(new byte[] {4, 5, 6}, "image/webp")))
                 .mask(DataContent.data(new byte[] {7, 8, 9}, "image/png", "mask.png"))
-                .providerOptions(Map.of("openai", Map.of("input_fidelity", "high")))
                 .build();
 
-            StepVerifier.create(client.generateImage(request))
+            StepVerifier.create(client.generateImage(request, null,
+                    Map.of("input_fidelity", "high")))
                 .assertNext(result -> {
                     assertThat(result.getImage().getBase64()).isEqualTo("ZWRpdGVk");
                     assertThat(result.getUsage().getTotalTokens()).isEqualTo(12);

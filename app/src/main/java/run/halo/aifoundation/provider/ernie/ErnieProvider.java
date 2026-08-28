@@ -164,14 +164,7 @@ public class ErnieProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("ernie", ErnieEmbeddingOptionsFactory::build);
-    }
-
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder()
-            .providerOptionsSupported(true)
-            .build();
+        return new EmbeddingModelProviderOptions(ErnieEmbeddingOptionsFactory::build);
     }
 
     @Override

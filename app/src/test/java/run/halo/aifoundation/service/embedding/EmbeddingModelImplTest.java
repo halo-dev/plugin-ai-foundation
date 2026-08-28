@@ -73,7 +73,7 @@ class EmbeddingModelImplTest {
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .dimensions(512)
@@ -102,7 +102,7 @@ class EmbeddingModelImplTest {
                     "embedding.dimensions", null, null,
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.PROVIDER)));
         var composition = EmbeddingModelRuntimeComposition.create("dashscope", 20, false,
-            new EmbeddingModelProviderOptions("dashscope", (request, ignored, warnings) ->
+            new EmbeddingModelProviderOptions((request, ignored, warnings) ->
                 new org.springframework.ai.embedding.EmbeddingOptions() {
                     @Override
                     public String getModel() {
@@ -140,7 +140,7 @@ class EmbeddingModelImplTest {
                     null, null,
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var model = new EmbeddingModelImpl(springModel, composition, mapping,
             "embedding-model", "openai-provider");
 
@@ -175,7 +175,7 @@ class EmbeddingModelImplTest {
                     "embedding.dimensions", "output_dimension", null,
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var model = new EmbeddingModelImpl(springModel, composition, mapping,
             "embedding-model", "openai-provider");
 
@@ -200,7 +200,7 @@ class EmbeddingModelImplTest {
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .headers(Map.of("X-Trace-Id", "trace-1"))

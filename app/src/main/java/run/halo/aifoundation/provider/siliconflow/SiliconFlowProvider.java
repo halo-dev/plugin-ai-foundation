@@ -208,15 +208,7 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("siliconflow",
-            SiliconFlowEmbeddingOptionsFactory::build);
-    }
-
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder()
-            .providerOptionsSupported(true)
-            .build();
+        return new EmbeddingModelProviderOptions(SiliconFlowEmbeddingOptionsFactory::build);
     }
 
     @Override

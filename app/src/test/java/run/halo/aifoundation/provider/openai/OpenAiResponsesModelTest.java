@@ -106,6 +106,27 @@ class OpenAiResponsesModelTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void extraBodyCannotReplaceCanonicalInvocationFields() {
+        var options = options("http://localhost/v1").mutate()
+            .extraBody(Map.of(
+                "model", "injected-model",
+                "input", List.of(Map.of("role", "user", "content", "injected")),
+                "stream", false))
+            .toolContext("openai-responses.messages", List.of(new UserMessage("Actual message")))
+            .build();
+        var model = new OpenAiResponsesModel(options, WebClient.builder());
+
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", options, true);
+
+        assertThat(body).containsEntry("model", "gpt-test").containsEntry("stream", true);
+        assertThat((List<Map<String, Object>>) body.get("input"))
+            .singleElement()
+            .satisfies(input -> assertThat(input).containsEntry("role", "user"));
+    }
+
+    @Test
     void normalizesNonStreamingAndFragmentedStreamingResponses() {
         var requestBody = new AtomicReference<String>();
         DisposableServer server = HttpServer.create().host("127.0.0.1").port(0)

@@ -9,7 +9,6 @@ import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -31,9 +30,9 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
     }
 
     @Override
-    public Map<String, Object> requestBody(GenerateImageRequest request) {
+    public Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         validateRequest(request);
-        var nativeOptions = nativeOptions(request);
         var body = forwardedOptions(nativeOptions);
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
@@ -47,10 +46,11 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
     }
 
     @Override
-    public GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    public GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "SiliconFlow");
         var files = new ArrayList<GeneratedFile>();
-        var mediaType = outputMediaType(outputFormat(request));
+        var mediaType = outputMediaType(outputFormat(nativeOptions));
         for (var item : root.path("images")) {
             var url = textOrNull(item.path("url"));
             if (hasText(url)) {
@@ -84,14 +84,8 @@ public final class SiliconFlowImageGenerationClient extends AbstractJsonImageGen
         }
     }
 
-    private Map<String, Object> nativeOptions(GenerateImageRequest request) {
-        var values = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "siliconflow");
-        return Map.copyOf(values);
-    }
-
-    private String outputFormat(GenerateImageRequest request) {
-        var value = nativeOptions(request).get("output_format");
+    private String outputFormat(Map<String, Object> nativeOptions) {
+        var value = nativeOptions.get("output_format");
         return value != null ? value.toString() : null;
     }
 

@@ -135,7 +135,7 @@ public class DouBaoProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("doubao", DouBaoEmbeddingOptionsFactory::build);
+        return new EmbeddingModelProviderOptions(DouBaoEmbeddingOptionsFactory::build);
     }
 
     @Override

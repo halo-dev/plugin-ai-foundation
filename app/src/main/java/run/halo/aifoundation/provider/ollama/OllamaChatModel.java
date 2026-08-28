@@ -42,7 +42,7 @@ import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 public final class OllamaChatModel implements ChatModel, ProviderStreamingChatModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final Set<String> TOP_LEVEL_PROVIDER_OPTIONS = Set.of(
+    private static final Set<String> TOP_LEVEL_MODEL_NATIVE_OPTIONS = Set.of(
         "options", "keep_alive", "think", "logprobs", "top_logprobs");
     private static final Set<String> NON_RUNTIME_OPTION_FIELDS = Set.of(
         "model", "format", "keep_alive", "truncate");
@@ -134,14 +134,14 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         var merged = builder.build();
         ToolCallingChatOptions.validateToolCallbacks(merged.getToolCallbacks());
         return new RuntimeOptions(merged, merged.nativeOptions(),
-            contextMap(merged, OllamaChatOptionsSupport.PROVIDER_OPTIONS_CONTEXT_KEY),
+            contextMap(merged, OllamaChatOptionsSupport.MODEL_NATIVE_OPTIONS_CONTEXT_KEY),
             stringMap(merged, OllamaChatOptionsSupport.REQUEST_HEADERS_CONTEXT_KEY));
     }
 
     private Map<String, Object> requestBody(List<Message> messages, RuntimeOptions runtime,
         boolean stream) {
-        var providerOptions = runtime.providerOptions();
-        rejectUnknownProviderOptions(providerOptions);
+        var modelNativeOptions = runtime.modelNativeOptions();
+        rejectUnknownModelNativeOptions(modelNativeOptions);
         var body = new LinkedHashMap<String, Object>();
         body.put("model", runtime.options().getModel());
         body.put("messages", messages.stream()
@@ -151,24 +151,24 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             && !runtime.options().getToolCallbacks().isEmpty()) {
             body.put("tools", tools(runtime.options().getToolCallbacks()));
         }
-        if (providerOptions.get("keep_alive") != null) {
-            body.put("keep_alive", providerOptions.get("keep_alive"));
-        } else if (runtime.options().getKeepAlive() != null) {
+        if (runtime.options().getKeepAlive() != null) {
             body.put("keep_alive", runtime.options().getKeepAlive());
+        } else if (modelNativeOptions.get("keep_alive") != null) {
+            body.put("keep_alive", modelNativeOptions.get("keep_alive"));
         }
-        if (providerOptions.get("think") != null) {
-            body.put("think", providerOptions.get("think"));
-        } else if (runtime.options().getThink() != null) {
+        if (runtime.options().getThink() != null) {
             body.put("think", runtime.options().getThink());
+        } else if (modelNativeOptions.get("think") != null) {
+            body.put("think", modelNativeOptions.get("think"));
         }
         validateThinking(body.get("think"));
-        put(body, "logprobs", providerOptions.get("logprobs"));
-        put(body, "top_logprobs", providerOptions.get("top_logprobs"));
+        put(body, "logprobs", modelNativeOptions.get("logprobs"));
+        put(body, "top_logprobs", modelNativeOptions.get("top_logprobs"));
         if (runtime.options().getFormat() != null) {
             body.put("format", runtime.options().getFormat());
         }
         var options = new LinkedHashMap<String, Object>();
-        if (providerOptions.get("options") instanceof Map<?, ?> values) {
+        if (modelNativeOptions.get("options") instanceof Map<?, ?> values) {
             values.forEach((key, value) -> {
                 if (key != null && value != null) {
                     options.put(key.toString(), value);
@@ -358,15 +358,16 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         runtime.requestHeaders().forEach(headers::set);
     }
 
-    private void rejectUnknownProviderOptions(Map<String, Object> values) {
+    private void rejectUnknownModelNativeOptions(Map<String, Object> values) {
         var unknown = new LinkedHashSet<>(values.keySet());
-        unknown.removeAll(TOP_LEVEL_PROVIDER_OPTIONS);
+        unknown.removeAll(TOP_LEVEL_MODEL_NATIVE_OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported Ollama provider option(s): "
+            throw new IllegalArgumentException("Unsupported Ollama model-native option(s): "
                 + String.join(", ", unknown));
         }
         if (values.get("options") != null && !(values.get("options") instanceof Map<?, ?>)) {
-            throw new IllegalArgumentException("Ollama provider option 'options' must be an object");
+            throw new IllegalArgumentException(
+                "Ollama model-native option 'options' must be an object");
         }
     }
 
@@ -513,7 +514,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
 
     private record RuntimeOptions(OllamaChatOptions options,
                                   Map<String, Object> nativeOptions,
-                                  Map<String, Object> providerOptions,
+                                  Map<String, Object> modelNativeOptions,
                                   Map<String, String> requestHeaders) {
     }
 

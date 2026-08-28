@@ -46,8 +46,15 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
         ParameterMappingTarget target) {
-        var url = endpointUrl(request);
-        var body = mappedRequestBody(request, target);
+        return generateImage(request, target, Map.of());
+    }
+
+    @Override
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
+        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+        var resolvedOptions = nativeOptions == null ? Map.<String, Object>of() : nativeOptions;
+        var url = endpointUrl(request, resolvedOptions);
+        var body = mappedRequestBody(request, target, resolvedOptions);
         var diagnostics = ProviderDiagnostics.create(options.providerType(), "image");
         diagnostics.request(url, body, false);
         return webClient.method(HttpMethod.POST)
@@ -69,26 +76,46 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
                         options.providerType(), "image", diagnostics);
                 }
                 return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> imageResponse(data, request));
+                    .map(data -> imageResponse(data, request, resolvedOptions));
             });
     }
 
-    protected abstract Map<String, Object> requestBody(GenerateImageRequest request);
+    protected abstract Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions);
+
+    public final Map<String, Object> requestBody(GenerateImageRequest request) {
+        return requestBody(request, Map.of());
+    }
 
     private Map<String, Object> mappedRequestBody(GenerateImageRequest request,
-        ParameterMappingTarget target) {
-        return ImageParameterMappingMerger.merge(requestBody(request), target);
+        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+        return ImageParameterMappingMerger.merge(requestBody(request, nativeOptions), target);
     }
 
     protected abstract GenerateImageResult imageResponse(String data,
-        GenerateImageRequest request);
+        GenerateImageRequest request, Map<String, Object> nativeOptions);
+
+    public final GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+        return imageResponse(data, request, Map.of());
+    }
 
     protected String endpointUrl(GenerateImageRequest request) {
         return ProviderUris.withoutTrailingSlashes(options.baseUrl()) + endpointPath(request);
     }
 
+    protected String endpointUrl(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
+        return ProviderUris.withoutTrailingSlashes(options.baseUrl())
+            + endpointPath(request, nativeOptions);
+    }
+
     protected String endpointPath(GenerateImageRequest request) {
         return endpointPath();
+    }
+
+    protected String endpointPath(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
+        return endpointPath(request);
     }
 
     protected abstract String endpointPath();

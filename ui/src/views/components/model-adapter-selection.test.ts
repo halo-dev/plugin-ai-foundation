@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 const formKitStub = {
@@ -26,46 +26,50 @@ const formKitStub = {
   `,
 }
 
+let ModelForm: (typeof import('./ModelForm.vue'))['default']
+
+beforeAll(async () => {
+  vi.doMock('@/composables/use-provider-types-fetch', () => ({
+    useProviderTypesFetch: () => ({
+      data: ref([
+        {
+          providerType: 'openai',
+          displayName: 'OpenAI',
+          supportedModelTypes: ['language', 'embedding'],
+          supportedFeatures: [],
+          supportedAdapterTypes: ['openai-responses', 'openai-chat', 'openai-embedding'],
+          adapters: [
+            {
+              adapterType: 'openai-responses',
+              modelType: 'language',
+              displayName: 'OpenAI · Responses API',
+              description: '统一的 Responses 协议。',
+              recommended: true,
+            },
+            {
+              adapterType: 'openai-chat',
+              modelType: 'language',
+              displayName: 'OpenAI · Chat Completions',
+              description: 'Chat Completions 协议。',
+              recommended: false,
+            },
+            {
+              adapterType: 'openai-embedding',
+              modelType: 'embedding',
+              displayName: 'OpenAI · 文本嵌入',
+              description: '原生嵌入接口。',
+              recommended: true,
+            },
+          ],
+        },
+      ]),
+    }),
+  }))
+  ModelForm = (await import('./ModelForm.vue')).default
+}, 30_000)
+
 describe('model adapter selection', () => {
   it('shows multiple interfaces and submits an auto-selected sole interface', async () => {
-    vi.doMock('@/composables/use-provider-types-fetch', () => ({
-      useProviderTypesFetch: () => ({
-        data: ref([
-          {
-            providerType: 'openai',
-            displayName: 'OpenAI',
-            supportedModelTypes: ['language', 'embedding'],
-            supportedFeatures: [],
-            supportedAdapterTypes: ['openai-responses', 'openai-chat', 'openai-embedding'],
-            adapters: [
-              {
-                adapterType: 'openai-responses',
-                modelType: 'language',
-                displayName: 'OpenAI · Responses API',
-                description: '统一的 Responses 协议。',
-                recommended: true,
-              },
-              {
-                adapterType: 'openai-chat',
-                modelType: 'language',
-                displayName: 'OpenAI · Chat Completions',
-                description: 'Chat Completions 协议。',
-                recommended: false,
-              },
-              {
-                adapterType: 'openai-embedding',
-                modelType: 'embedding',
-                displayName: 'OpenAI · 文本嵌入',
-                description: '原生嵌入接口。',
-                recommended: true,
-              },
-            ],
-          },
-        ]),
-      }),
-    }))
-
-    const { default: ModelForm } = await import('./ModelForm.vue')
     const wrapper = mount(ModelForm, {
       props: { providerType: 'openai' },
       global: { stubs: { FormKit: formKitStub } },

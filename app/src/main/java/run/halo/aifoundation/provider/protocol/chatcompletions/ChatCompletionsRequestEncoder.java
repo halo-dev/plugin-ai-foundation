@@ -33,15 +33,15 @@ final class ChatCompletionsRequestEncoder {
 
     Map<String, Object> encode(Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         var body = new LinkedHashMap<String, Object>();
+        if (options.getExtraBody() != null) {
+            body.putAll(options.getExtraBody());
+        }
         body.put(Fields.MESSAGES, prompt.getInstructions().stream()
             .flatMap(message -> messageBodies(message).stream())
             .toList());
         body.put(Fields.MODEL, model(options));
         putOptions(body, options);
         putTools(body, options);
-        if (options.getExtraBody() != null) {
-            body.putAll(options.getExtraBody());
-        }
         if (stream) {
             body.put(Fields.STREAM_OPTIONS, streamOptions(options.getStreamOptions()));
             body.put(Fields.STREAM, true);

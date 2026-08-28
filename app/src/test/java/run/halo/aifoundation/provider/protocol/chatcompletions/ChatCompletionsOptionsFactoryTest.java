@@ -22,12 +22,13 @@ class ChatCompletionsOptionsFactoryTest {
             .temperature(0.5)
             .topLogprobs(3)
             .headers(Map.of("X-Request", "value"))
-            .providerOptions(Map.of("example", Map.of("provider-field", "value")))
             .build();
 
-        var basic = factory.basic(request);
-        var structured = factory.structured(request);
-        var toolCalling = factory.toolCalling(request, java.util.List.of(), java.util.Set.of());
+        var nativeOptions = Map.<String, Object>of("provider-field", "value");
+        var basic = applyNativeOptions(factory.basic(request), nativeOptions);
+        var structured = applyNativeOptions(factory.structured(request), nativeOptions);
+        var toolCalling = applyNativeOptions(
+            factory.toolCalling(request, java.util.List.of(), java.util.Set.of()), nativeOptions);
 
         assertThat(basic.getTemperature()).isEqualTo(0.5);
         assertThat(basic.getLogprobs()).isTrue();
@@ -37,6 +38,11 @@ class ChatCompletionsOptionsFactoryTest {
             .containsEntry("customized", true);
         assertThat(structured.getExtraBody()).isEqualTo(basic.getExtraBody());
         assertThat(toolCalling.getExtraBody()).isEqualTo(basic.getExtraBody());
+    }
+
+    private ChatCompletionsOptions applyNativeOptions(ChatCompletionsOptions options,
+        Map<String, Object> nativeOptions) {
+        return (ChatCompletionsOptions) ChatCompletionsNativeOptions.apply(options, nativeOptions);
     }
 
     @Test

@@ -130,6 +130,9 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
     private Map<String, Object> requestBody(Prompt prompt, ChatCompletionsOptions options,
         boolean stream) {
         var body = new LinkedHashMap<String, Object>();
+        if (options.getExtraBody() != null) {
+            body.putAll(options.getExtraBody());
+        }
         body.put("model", options.getModel());
         var system = prompt.getInstructions().stream()
             .filter(message -> message instanceof SystemMessage)
@@ -156,9 +159,6 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             body.put("tools", tools(options.getToolCallbacks()));
         }
         put(body, "tool_choice", toolChoice(options.getToolChoice()));
-        if (options.getExtraBody() != null) {
-            body.putAll(options.getExtraBody());
-        }
         if (stream) {
             body.put("stream", true);
         }

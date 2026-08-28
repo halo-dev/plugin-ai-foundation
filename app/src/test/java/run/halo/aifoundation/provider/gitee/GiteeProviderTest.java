@@ -225,10 +225,9 @@ class GiteeProviderTest {
             "Qwen3-Reranker-4B", "test-key", WebClient.builder());
         var rerankRequest = RerankRequest.builder().query("Halo")
             .documents("first", "second").topN(1)
-            .providerOptions(Map.of("gitee-moark", Map.of("return_documents", false)))
             .build();
         var rerankBody = (Map<String, Object>) ReflectionTestUtils.invokeMethod(rerank,
-            "requestBody", rerankRequest);
+            "requestBody", rerankRequest, Map.of("return_documents", false));
         assertThat(rerankBody).containsEntry("model", "Qwen3-Reranker-4B")
             .containsEntry("documents", List.of("first", "second"))
             .containsEntry("top_n", 1)
@@ -244,7 +243,7 @@ class GiteeProviderTest {
         var multimodalEndpoint = (java.net.URI) ReflectionTestUtils.invokeMethod(rerank,
             "endpoint", multimodalRequest);
         var multimodalBody = (Map<String, Object>) ReflectionTestUtils.invokeMethod(rerank,
-            "requestBody", multimodalRequest);
+            "requestBody", multimodalRequest, Map.of());
         assertThat(multimodalEndpoint.getPath()).isEqualTo("/v1/rerank/multimodal");
         assertThat(multimodalBody.get("query")).isEqualTo(Map.of("text", "Halo"));
         assertThat((List<Map<String, Object>>) multimodalBody.get("documents"))
@@ -257,17 +256,17 @@ class GiteeProviderTest {
         var imageRequest = GenerateImageRequest.builder().prompt("A white cat")
             .images(List.of(DataContent.url("https://example.com/cat.png")))
             .size("1024x1024").n(2).responseFormat(ImageResponseFormat.BASE64)
-            .providerOptions(Map.of("gitee-moark", Map.of(
-                "num_inference_steps", 25, "guidance_scale", 7.5)))
             .build();
+        var imageOptions = Map.<String, Object>of(
+            "num_inference_steps", 25, "guidance_scale", 7.5);
         var imageBody = (Map<String, Object>) ReflectionTestUtils.invokeMethod(image,
-            "requestBody", imageRequest);
+            "requestBody", imageRequest, imageOptions);
         var result = (run.halo.aifoundation.image.GenerateImageResult)
             ReflectionTestUtils.invokeMethod(image, "imageResponse", """
                 {"created":123,"data":[{"b64_json":"abc123",
                   "revised_prompt":"A refined white cat"}],
                  "usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}
-                """, imageRequest);
+                """, imageRequest, imageOptions);
 
         assertThat(imageBody).containsEntry("image", "https://example.com/cat.png")
             .containsEntry("response_format", "b64_json")

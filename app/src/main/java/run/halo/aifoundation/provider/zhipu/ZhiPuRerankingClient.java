@@ -35,9 +35,10 @@ public final class ZhiPuRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
+    protected Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions) {
         validateRequest(request);
-        var values = namespacedOptions(request);
+        var values = nativeOptions;
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {

@@ -197,19 +197,18 @@ class MiMoProviderTest {
     @Test
     @SuppressWarnings("unchecked")
     void chatMapsAudioVideoWebSearchAndCitations() {
-        var providerOptions = Map.<String, Map<String, Object>>of("mimo", Map.of(
+        var nativeOptions = Map.<String, Object>of(
             "video", Map.of("fps", 4, "media_resolution", "max"),
             "builtinTools", List.of(Map.of(
                 "type", "web_search", "max_keyword", 3, "force_search", true,
                 "limit", 1)),
-            "thinking", Map.of("type", "disabled")));
+            "thinking", Map.of("type", "disabled"));
         var options = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder()
                 .prompt("Describe")
-                .providerOptions(providerOptions)
                 .build());
         options = options.mutate().baseUrl("https://example.com/v1")
-            .model("mimo-v2.5").build();
+            .model("mimo-v2.5").extraBody(nativeOptions).build();
         var user = UserMessage.builder().text("Describe")
             .media(List.of(
                 new Media(MimeType.valueOf("audio/wav"), URI.create("https://example.com/a.wav")),

@@ -112,6 +112,30 @@ class ChatCompletionsStructuredOutputRequestBodyTest {
                 error -> assertThat(error.getValidationPath()).isEqualTo("$.name"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void extraBodyCannotReplaceCanonicalInvocationFields() {
+        var options = ChatCompletionsOptions.builder()
+            .baseUrl("http://localhost/v1")
+            .apiKey("sk-test")
+            .model("gpt-test")
+            .extraBody(Map.of(
+                "model", "injected-model",
+                "messages", List.of(Map.of("role", "user", "content", "injected")),
+                "stream", false))
+            .build();
+        var model = new ChatCompletionsModel(options, WebClient.builder(), chatProfile());
+        var prompt = new Prompt(List.of(new UserMessage("Actual message")), options);
+
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, options, true);
+
+        assertThat(body).containsEntry("model", "gpt-test").containsEntry("stream", true);
+        assertThat((List<Map<String, Object>>) body.get("messages"))
+            .singleElement()
+            .satisfies(message -> assertThat(message).containsEntry("content", "Actual message"));
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> requestBody(OutputSpec output) {
         var request = GenerateTextRequest.builder().prompt("Generate output").output(output).build();

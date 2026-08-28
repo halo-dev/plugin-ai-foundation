@@ -8,7 +8,6 @@ import org.springframework.ai.embedding.EmbeddingOptions;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 
 /** Validates the documented request options accepted by OpenRouter's embeddings router. */
 final class OpenRouterEmbeddingOptionsFactory {
@@ -20,12 +19,11 @@ final class OpenRouterEmbeddingOptionsFactory {
     }
 
     static EmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions ignored, List<EmbeddingWarning> warnings) {
+        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
-        var values = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "openrouter");
+        var values = providerOptions.nativeOptions();
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(FIELDS);
         if (!unknown.isEmpty()) {

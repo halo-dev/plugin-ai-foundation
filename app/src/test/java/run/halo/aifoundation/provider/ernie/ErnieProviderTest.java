@@ -72,16 +72,17 @@ class ErnieProviderTest {
             .build());
         var builtin = Map.<String, Object>of(
             "type", "knowledge_search", "knowledgebase_ids", "kb-1");
+        var nativeOptions = Map.<String, Object>of(
+            "builtinTools", List.of(builtin),
+            "thinking", Map.of("type", "disabled"));
         var generated = languageOptions(GenerateTextRequest.builder()
             .prompt("Search product knowledge")
-            .providerOptions(Map.of("ernie", Map.of(
-                "builtinTools", List.of(builtin),
-                "thinking", Map.of("type", "disabled"))))
             .build());
         var options = generated.mutate()
             .baseUrl("https://example.com/v2")
             .apiKey("test-key")
             .model("qwen3-14b")
+            .extraBody(nativeOptions)
             .toolCallbacks(List.of(callback))
             .toolContext("ernie-responses.messages", List.of(new UserMessage("Halo")))
             .build();
@@ -101,15 +102,16 @@ class ErnieProviderTest {
     @Test
     @SuppressWarnings("unchecked")
     void chatConvertsThinkingAndKeepsSearchCacheAndBudgetOptions() {
+        var nativeOptions = Map.<String, Object>of(
+            "enable_thinking", false,
+            "web_search", Map.of("enable", true, "search_number", 6),
+            "cache_id", "cache-1",
+            "thinking_budget", 1024,
+            "reasoning_effort", "max");
         var generated = languageOptions(GenerateTextRequest.builder()
             .prompt("Search the web")
-            .providerOptions(Map.of("ernie", Map.of(
-                "enable_thinking", false,
-                "web_search", Map.of("enable", true, "search_number", 6),
-                "cache_id", "cache-1",
-                "thinking_budget", 1024,
-                "reasoning_effort", "max")))
             .build());
+        generated = generated.mutate().extraBody(nativeOptions).build();
         var model = new ErnieChatModel(generated, WebClient.builder());
         var prompt = new org.springframework.ai.chat.prompt.Prompt(
             List.of(new UserMessage("latest Halo release")), generated);
@@ -272,11 +274,10 @@ class ErnieProviderTest {
             .query("Halo")
             .documents("first", "second")
             .topN(1)
-            .providerOptions(Map.of("ernie", Map.of("return_documents", true)))
             .build();
 
         var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(client,
-            "requestBody", request);
+            "requestBody", request, Map.of("return_documents", true));
         assertThat(body).containsEntry("model", "bce-reranker-base_v1")
             .containsEntry("query", "Halo")
             .containsEntry("documents", List.of("first", "second"))
@@ -306,18 +307,18 @@ class ErnieProviderTest {
                 DataContent.url("https://example.com/two.png", "image/png")))
             .negativePrompt("blur")
             .seed(42)
-            .providerOptions(Map.of("ernie", Map.of("prompt_extend", true, "watermark", false)))
             .build();
+        var nativeOptions = Map.<String, Object>of("prompt_extend", true, "watermark", false);
 
         var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(client,
-            "requestBody", request);
+            "requestBody", request, nativeOptions);
         var endpoint = (String) ReflectionTestUtils.invokeMethod(client,
-            "endpointPath", request);
+            "endpointPath", request, nativeOptions);
         var result = (run.halo.aifoundation.image.GenerateImageResult)
             ReflectionTestUtils.invokeMethod(client, "imageResponse", """
                 {"created":123,"data":[{"url":"https://example.com/output.png",
                   "revised_prompt":"A refined prompt"}]}
-                """, request);
+                """, request, nativeOptions);
 
         assertThat(endpoint).isEqualTo("/images/edits");
         assertThat(body).containsEntry("image", List.of("https://example.com/one.png",

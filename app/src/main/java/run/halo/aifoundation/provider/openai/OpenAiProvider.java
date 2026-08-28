@@ -149,7 +149,7 @@ public class OpenAiProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
+        return new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build);
     }
 
     @Override

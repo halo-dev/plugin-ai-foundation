@@ -22,7 +22,8 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
     }
 
     @Override
-    public Map<String, Object> requestBody(GenerateImageRequest request) {
+    public Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.model());
 
@@ -50,7 +51,8 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
     }
 
     @Override
-    public GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    public GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "DashScope");
         var images = new ArrayList<GeneratedFile>();
         var choices = root.path("output").path("choices");
@@ -81,7 +83,8 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
     }
 
     @Override
-    protected String endpointUrl(GenerateImageRequest request) {
+    protected String endpointUrl(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         return new DashScopeEndpointResolver(options.baseUrl()).nativeBaseUrl() + ENDPOINT_PATH;
     }
 

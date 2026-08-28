@@ -1,6 +1,7 @@
 package run.halo.aifoundation.endpoint;
 
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -65,7 +66,8 @@ class ModelConsoleModelValidator {
         return normalizeAdapterType(model, type)
             .then(Mono.defer(() -> validateAdapterType(model, providerType, type)))
             .then(Mono.defer(() -> validateFeatures(model, providerType, type)))
-            .then(Mono.defer(() -> validateParameterMappings(model)));
+            .then(Mono.defer(() -> validateParameterMappings(model)))
+            .then(Mono.defer(() -> validateNativeOptions(model, type)));
     }
 
     private Mono<Void> validateFeatures(AiModel model, String providerType,
@@ -94,6 +96,15 @@ class ModelConsoleModelValidator {
         }
     }
 
+    private Mono<Void> validateNativeOptions(AiModel model, AiProviderType type) {
+        try {
+            type.validateNativeModelOptions(ProviderModelRef.from(model));
+            return Mono.empty();
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return badRequest(e.getMessage());
+        }
+    }
+
     private Mono<Void> validateAdapterType(AiModel model, String providerType,
         AiProviderType type) {
         var adapterType = model.getSpec().getAdapterType();
@@ -118,6 +129,9 @@ class ModelConsoleModelValidator {
         }
         if (spec.getDiscoveryConfidence() == null) {
             spec.setDiscoveryConfidence(DiscoveryConfidence.HIGH);
+        }
+        if (spec.getNativeOptions() == null) {
+            spec.setNativeOptions(Map.of());
         }
     }
 

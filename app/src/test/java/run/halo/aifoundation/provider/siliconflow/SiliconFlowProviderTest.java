@@ -89,17 +89,17 @@ class SiliconFlowProviderTest {
         assertThat(providerType.buildImageGenerationClient(provider, "key", "Qwen/Qwen-Image"))
             .isInstanceOf(SiliconFlowImageGenerationClient.class);
 
+        var nativeOptions = Map.<String, Object>of(
+            "enable_thinking", true,
+            "thinking_budget", 4096,
+            "min_p", 0.05,
+            "prefix", "public int sum(",
+            "suffix", ") { return a + b; }");
         var options = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder()
                 .prompt("complete")
-                .providerOptions(Map.of("siliconflow", Map.of(
-                    "enable_thinking", true,
-                    "thinking_budget", 4096,
-                    "min_p", 0.05,
-                    "prefix", "public int sum(",
-                    "suffix", ") { return a + b; }")))
                 .build());
-        options = options.mutate().model("Qwen/Qwen3-32B").build();
+        options = options.mutate().model("Qwen/Qwen3-32B").extraBody(nativeOptions).build();
         var body = requestBody(options, new UserMessage("complete"));
         assertThat(body).containsEntry("enable_thinking", true)
             .containsEntry("thinking_budget", 4096)
@@ -213,10 +213,10 @@ class SiliconFlowProviderTest {
         try {
             var model = providerType.buildEmbeddingModel(provider(baseUrl(server)), "sk-test",
                 "Qwen/Qwen3-Embedding-8B");
-            var options = providerType.embeddingModelProviderOptions().buildOptions(
+            var options = providerType.embeddingModelProviderOptions()
+                .withNativeOptions(Map.of("encoding_format", "base64"))
+                .buildOptions(
                 EmbeddingRequest.builder().inputs(List.of("Halo")).dimensions(1024)
-                    .providerOptions(Map.of("siliconflow", Map.of(
-                        "encoding_format", "base64")))
                     .build(), new java.util.ArrayList<>());
             var response = model.call(new org.springframework.ai.embedding.EmbeddingRequest(
                 List.of("Halo"), options));
@@ -225,13 +225,13 @@ class SiliconFlowProviderTest {
             assertThat(captured.get()).containsEntry("dimensions", 1024)
                 .containsEntry("encoding_format", "base64");
 
-            var vlOptions = providerType.embeddingModelProviderOptions().buildOptions(
+            var vlOptions = providerType.embeddingModelProviderOptions()
+                .withNativeOptions(Map.of("user", "halo-user", "truncate", "right"))
+                .buildOptions(
                 EmbeddingRequest.builder().contents(List.of(
                         EmbeddingContent.text("Halo"),
                         EmbeddingContent.image(DataContent.data(
                             new byte[] {1, 2, 3}, "image/png"))))
-                    .providerOptions(Map.of("siliconflow", Map.of(
-                        "user", "halo-user", "truncate", "right")))
                     .build(), new java.util.ArrayList<>());
             ((ProviderEmbeddingModel) model).call(new ProviderEmbeddingRequest(List.of(), List.of(
                 EmbeddingContent.text("Halo"),
@@ -269,13 +269,14 @@ class SiliconFlowProviderTest {
         try {
             var client = providerType.buildRerankingClient(provider(baseUrl(server)), "sk-test",
                 "BAAI/bge-reranker-v2-m3");
+            var nativeOptions = Map.<String, Object>of(
+                "max_chunks_per_doc", 4,
+                "overlap_tokens", 64,
+                "return_documents", false);
             var response = client.rerank(RerankRequest.builder().query("CMS")
                 .documents(List.of(RerankDocument.of("Other"), RerankDocument.of("Halo")))
                 .topN(1)
-                .providerOptions(Map.of("siliconflow", Map.of(
-                    "max_chunks_per_doc", 4, "overlap_tokens", 64,
-                    "return_documents", false)))
-                .build()).block();
+                .build(), null, nativeOptions).block();
             assertThat(response.getResults().getFirst().getIndex()).isEqualTo(1);
             assertThat(response.getUsage().getInputTokens()).isEqualTo(8);
             assertThat(response.getUsage().getTotalTokens()).isEqualTo(10);
@@ -298,9 +299,7 @@ class SiliconFlowProviderTest {
             .n(4)
             .size("1328x1328")
             .negativePrompt("blur")
-            .providerOptions(Map.of("siliconflow", Map.of(
-                "cfg", 4.0, "num_inference_steps", 50)))
-            .build());
+            .build(), Map.of("cfg", 4.0, "num_inference_steps", 50));
         assertThat(qwenBody).containsEntry("image", "https://example.com/input.png")
             .containsEntry("batch_size", 4)
             .containsEntry("image_size", "1328x1328")
@@ -308,14 +307,14 @@ class SiliconFlowProviderTest {
             .containsEntry("cfg", 4.0);
         var flux = new SiliconFlowImageGenerationClient(
             imageOptions("black-forest-labs/FLUX.2-pro"), WebClient.builder());
-        var responseRequest = GenerateImageRequest.builder().prompt("Draw")
-            .providerOptions(Map.of("siliconflow", Map.of("output_format", "jpeg")))
-            .build();
-        assertThat(flux.requestBody(responseRequest)).containsEntry("output_format", "jpeg");
+        var responseRequest = GenerateImageRequest.builder().prompt("Draw").build();
+        var responseNativeOptions = Map.<String, Object>of("output_format", "jpeg");
+        assertThat(flux.requestBody(responseRequest, responseNativeOptions))
+            .containsEntry("output_format", "jpeg");
         var response = flux.imageResponse("""
             {"images":[{"url":"https://example.com/result.jpg"}],
              "timings":{"inference":1.2},"seed":42}
-            """, responseRequest);
+            """, responseRequest, responseNativeOptions);
         assertThat(response.getImages().getFirst().getMediaType()).isEqualTo("image/jpeg");
         assertThat(((Map<?, ?>) response.getUsage().getRaw()).get("seed")).isEqualTo(42L);
 
@@ -324,8 +323,8 @@ class SiliconFlowProviderTest {
         assertThat(kontext.requestBody(GenerateImageRequest.builder().prompt("Restyle")
             .images(List.of(DataContent.data(new byte[] {1, 2, 3}, "image/png")))
             .aspectRatio("16:9")
-            .providerOptions(Map.of("siliconflow", Map.of("image_field", "input_image")))
-            .build())).containsKeys("input_image", "aspect_ratio").doesNotContainKey("image");
+            .build(), Map.of("image_field", "input_image")))
+            .containsKeys("input_image", "aspect_ratio").doesNotContainKey("image");
         assertThat(kontext.requestBody(GenerateImageRequest.builder()
             .prompt("Restyle").size("1024x576").build()))
             .containsEntry("image_size", "1024x576");

@@ -85,18 +85,19 @@ class DashScopeProviderTest {
             .doesNotContain(ModelFeature.AUDIO_INPUT);
 
         var enabled = (ChatCompletionsOptions) provider.languageModelProviderOptions()
-            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Think")
-                .providerOptions(Map.of("dashscope", Map.of("enable_thinking", true))).build());
+            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Think").build());
+        enabled = enabled.mutate().extraBody(Map.of("enable_thinking", true)).build();
         var disabled = (ChatCompletionsOptions) provider.languageModelProviderOptions()
-            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Answer")
-                .providerOptions(Map.of("dashscope", Map.of("enable_thinking", false))).build());
+            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Answer").build());
+        disabled = disabled.mutate().extraBody(Map.of("enable_thinking", false)).build();
 
         assertThat(enabled.getExtraBody()).containsEntry("enable_thinking", true);
         assertThat(disabled.getExtraBody()).containsEntry("enable_thinking", false);
 
         var effort = (ChatCompletionsOptions) provider.languageModelProviderOptions()
-            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Think harder")
-                .providerOptions(Map.of("dashscope", Map.of("reasoning_effort", "high"))).build());
+            .chatOptionsFactory().build(
+                GenerateTextRequest.builder().prompt("Think harder").build());
+        effort = effort.mutate().extraBody(Map.of("reasoning_effort", "high")).build();
         assertThat(effort.getExtraBody()).containsEntry("reasoning_effort", "high");
     }
 
@@ -107,13 +108,13 @@ class DashScopeProviderTest {
         var generated = (ChatCompletionsOptions) provider.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder()
                 .prompt("Search and reason")
-                .providerOptions(Map.of("dashscope", Map.of(
-                    "builtinTools", List.of(builtin),
-                    "reasoning", Map.of("effort", "medium"))))
                 .build());
         var options = generated.mutate()
             .baseUrl("https://example.com/compatible-mode/v1")
             .model("qwen3.8-max")
+            .extraBody(Map.of(
+                "builtinTools", List.of(builtin),
+                "reasoning", Map.of("effort", "medium")))
             .toolContext("dashscope-responses.messages", List.of(new UserMessage("Search")))
             .build();
         var model = new DashScopeResponsesModel(options, WebClient.builder());

@@ -105,6 +105,33 @@ class AnthropicMessagesModelTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void extraBodyCannotReplaceCanonicalInvocationFields() {
+        var options = ChatCompletionsOptions.builder()
+            .baseUrl("https://example.com/v1")
+            .apiKey("secret")
+            .model("model-1")
+            .maxTokens(512)
+            .extraBody(Map.of(
+                "model", "injected-model",
+                "messages", List.of(Map.of("role", "user", "content", "injected")),
+                "stream", false))
+            .build();
+        var prompt = new Prompt(List.of(new UserMessage("Actual message")), options);
+        var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
+
+        var body = (Map<String, Object>) org.springframework.test.util.ReflectionTestUtils
+            .invokeMethod(model, "requestBody", prompt, options, true);
+
+        assertThat(body).containsEntry("model", "model-1")
+            .containsEntry("max_tokens", 512)
+            .containsEntry("stream", true);
+        assertThat((List<Map<String, Object>>) body.get("messages"))
+            .singleElement()
+            .satisfies(message -> assertThat(message).containsEntry("content", "Actual message"));
+    }
+
+    @Test
     void streamsReasoningSignatureToolInputAndFinalUsageInWireOrder() throws Exception {
         var server = server("/v1/messages", exchange -> {
             var bytes = String.join("", List.of(

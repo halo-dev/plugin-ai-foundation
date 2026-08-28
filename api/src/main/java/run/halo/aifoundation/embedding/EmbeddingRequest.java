@@ -61,9 +61,6 @@ public class EmbeddingRequest {
      */
     private Integer dimensions;
 
-    /** Provider-namespaced embedding options sent only to the selected provider adapter. */
-    private Map<String, Map<String, Object>> providerOptions;
-
     /**
      * Caller-side maximum number of inputs per provider request. The implementation also applies
      * the provider's own maximum batch size.

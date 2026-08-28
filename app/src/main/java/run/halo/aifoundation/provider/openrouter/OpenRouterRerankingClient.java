@@ -37,7 +37,8 @@ public final class OpenRouterRerankingClient extends AbstractHttpRerankingClient
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
+    protected Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions) {
         if (request == null) {
             throw new IllegalArgumentException("OpenRouter rerank documents must not be empty");
         }
@@ -47,7 +48,7 @@ public final class OpenRouterRerankingClient extends AbstractHttpRerankingClient
         if (request.getDocuments().isEmpty()) {
             throw new IllegalArgumentException("OpenRouter rerank documents must not be empty");
         }
-        var values = namespacedOptions(request);
+        var values = nativeOptions;
         var unknown = new java.util.LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {

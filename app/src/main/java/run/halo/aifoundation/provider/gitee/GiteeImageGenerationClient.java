@@ -12,7 +12,6 @@ import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.image.ImageResponseFormat;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.media.GeneratedFile;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -30,12 +29,11 @@ public final class GiteeImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request) {
-        validate(request);
+    protected Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
+        validate(request, nativeOptions);
         var body = new LinkedHashMap<String, Object>();
-        var providerOptions = ProviderRequestOptions.get(
-            request.getProviderOptions(), "gitee-moark");
-        ProviderRequestOptions.copyNonNullValues(body, providerOptions);
+        copyNonNullValues(body, nativeOptions);
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
         putImages(body, request.getImages());
@@ -49,11 +47,12 @@ public final class GiteeImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "Gitee AI");
         var images = new ArrayList<GeneratedFile>();
         var warnings = new ArrayList<ImageGenerationWarning>();
-        var mediaType = outputMediaType(outputFormat(request));
+        var mediaType = outputMediaType(outputFormat(nativeOptions));
         for (var item : root.path("data")) {
             var url = textOrNull(item.path("url"));
             var base64 = textOrNull(item.path("b64_json"));
@@ -99,17 +98,15 @@ public final class GiteeImageGenerationClient extends AbstractJsonImageGeneratio
         return image.isUrl() ? image.getUrl() : image.getData();
     }
 
-    private String outputFormat(GenerateImageRequest request) {
-        var providerOptions = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "gitee-moark");
-        var value = providerOptions.get("output_format");
+    private String outputFormat(Map<String, Object> nativeOptions) {
+        var value = nativeOptions.get("output_format");
         if (value == null) {
             return null;
         }
         return value.toString();
     }
 
-    private void validate(GenerateImageRequest request) {
+    private void validate(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         requirePrompt(request, "Gitee AI image prompt must not be blank");
         if (request.getPrompt().length() > 2000) {
             throw new IllegalArgumentException(
@@ -122,11 +119,24 @@ public final class GiteeImageGenerationClient extends AbstractJsonImageGeneratio
         if (request.getN() != null && (request.getN() < 1 || request.getN() > 4)) {
             throw new IllegalArgumentException("Gitee AI image n must be between 1 and 4");
         }
-        var outputFormat = outputFormat(request);
+        var outputFormat = outputFormat(nativeOptions);
         if (hasText(outputFormat) && !List.of("png", "jpeg", "webp")
             .contains(outputFormat.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException(
                 "Gitee AI output_format must be png, jpeg, or webp");
         }
+    }
+
+    private void copyNonNullValues(Map<String, Object> target,
+        Map<String, Object> nativeOptions) {
+        nativeOptions.forEach((key, value) -> {
+            if (key == null) {
+                return;
+            }
+            if (value == null) {
+                return;
+            }
+            target.put(key, value);
+        });
     }
 }

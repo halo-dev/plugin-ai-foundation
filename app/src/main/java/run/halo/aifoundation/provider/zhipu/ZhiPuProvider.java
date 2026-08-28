@@ -197,14 +197,7 @@ public class ZhiPuProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("zhipuai", ZhiPuEmbeddingOptionsFactory::build);
-    }
-
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder()
-            .providerOptionsSupported(true)
-            .build();
+        return new EmbeddingModelProviderOptions(ZhiPuEmbeddingOptionsFactory::build);
     }
 
     @Override

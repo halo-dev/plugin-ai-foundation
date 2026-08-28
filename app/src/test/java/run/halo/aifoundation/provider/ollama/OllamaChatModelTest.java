@@ -61,13 +61,14 @@ class OllamaChatModelTest {
             var callback = toolCallback();
             var request = GenerateTextRequest.builder()
                 .headers(Map.of("X-Trace", "trace-1"))
-                .providerOptions(Map.of("ollama", Map.of(
-                    "think", "high", "keep_alive", "10m",
-                    "options", Map.of("num_ctx", 8192, "mirostat", 2))))
                 .output(run.halo.aifoundation.schema.OutputSpec.object(
                     Map.of("type", "object", "properties", Map.of())))
                 .build();
-            var options = OllamaChatOptionsSupport.structured(request).mutate()
+            var options = (OllamaChatOptions) OllamaChatOptionsSupport.applyNativeOptions(
+                OllamaChatOptionsSupport.structured(request), Map.of(
+                    "think", "high", "keep_alive", "10m",
+                    "options", Map.of("num_ctx", 8192, "mirostat", 2)));
+            options = options.mutate()
                 .model("qwen3").toolCallbacks(List.of(callback)).build();
             var model = new OllamaChatModel(baseUrl(server), "secret", options,
                 WebClient.builder());
@@ -162,12 +163,13 @@ class OllamaChatModelTest {
     @Test
     void acceptsProtocolLevelBooleanThinkingWithoutInspectingModelId() {
         var request = GenerateTextRequest.builder()
-            .providerOptions(Map.of("ollama", Map.of("think", false)))
             .build();
-        var options = OllamaChatOptionsSupport.basic(request).mutate()
+        var options = (OllamaChatOptions) OllamaChatOptionsSupport.applyNativeOptions(
+            OllamaChatOptionsSupport.basic(request), Map.of("think", false));
+        options = options.mutate()
             .model("gpt-oss:20b").build();
         assertThat(options.getToolContext()).containsEntry(
-            OllamaChatOptionsSupport.PROVIDER_OPTIONS_CONTEXT_KEY,
+            OllamaChatOptionsSupport.MODEL_NATIVE_OPTIONS_CONTEXT_KEY,
             Map.of("think", false));
     }
 

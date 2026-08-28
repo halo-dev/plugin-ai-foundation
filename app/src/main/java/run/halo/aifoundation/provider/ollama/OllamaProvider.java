@@ -192,6 +192,7 @@ public class OllamaProvider extends AbstractAiProviderType {
             .chatOptionsFactory(OllamaChatOptionsSupport::basic)
             .toolCallingChatOptionsFactory(OllamaChatOptionsSupport::tools)
             .structuredOutputChatOptionsFactory(OllamaChatOptionsSupport::structured)
+            .nativeOptionsApplicator(OllamaChatOptionsSupport::applyNativeOptions)
             .reasoningControlOptions(ReasoningControlOptions.unsupported())
             .reasoningContentExtractor(this::reasoningContent)
             .build();
@@ -235,7 +236,7 @@ public class OllamaProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("ollama", OllamaEmbeddingOptionsFactory::build);
+        return new EmbeddingModelProviderOptions(OllamaEmbeddingOptionsFactory::build);
     }
 
     @Override

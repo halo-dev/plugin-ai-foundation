@@ -168,13 +168,7 @@ public class GiteeProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions(getProviderType(),
-            GiteeEmbeddingOptionsFactory::build);
-    }
-
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder().providerOptionsSupported(true).build();
+        return new EmbeddingModelProviderOptions(GiteeEmbeddingOptionsFactory::build);
     }
 
     @Override

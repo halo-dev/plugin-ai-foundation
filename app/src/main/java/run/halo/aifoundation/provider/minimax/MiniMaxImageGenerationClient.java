@@ -13,7 +13,6 @@ import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.image.ImageResponseFormat;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 import run.halo.aifoundation.provider.transport.ProviderHttpException;
@@ -36,12 +35,19 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         validate(request);
         var body = new LinkedHashMap<String, Object>();
-        var providerOptions = ProviderRequestOptions.get(
-            request.getProviderOptions(), "minimax");
-        ProviderRequestOptions.copyNonNullValues(body, providerOptions);
+        nativeOptions.forEach((key, value) -> {
+            if (key == null) {
+                return;
+            }
+            if (value == null) {
+                return;
+            }
+            body.put(key, value);
+        });
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
         putIfHasText(body, "aspect_ratio", request.getAspectRatio());
@@ -66,7 +72,8 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "MiniMax");
         var status = root.path("base_resp").path("status_code");
         if (status.isNumber() && status.asInt() != 0) {

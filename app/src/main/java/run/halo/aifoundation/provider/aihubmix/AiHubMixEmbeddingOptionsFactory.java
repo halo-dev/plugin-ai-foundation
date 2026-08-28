@@ -6,7 +6,6 @@ import java.util.Set;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 
 /** Validates AIHubMix's documented Jina embedding fields. */
 final class AiHubMixEmbeddingOptionsFactory {
@@ -17,12 +16,11 @@ final class AiHubMixEmbeddingOptionsFactory {
     }
 
     static AiHubMixEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions ignored, List<EmbeddingWarning> warnings) {
+        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
-        var values = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "aihubmix");
+        var values = providerOptions.nativeOptions();
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(FIELDS);
         if (!unknown.isEmpty()) {

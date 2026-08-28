@@ -35,9 +35,6 @@ public class RerankRequest {
      */
     private Integer topN;
 
-    /** Provider-namespaced reranking options sent only to the selected provider adapter. */
-    private Map<String, Map<String, Object>> providerOptions;
-
     /** Request-scoped HTTP headers sent to providers when supported. */
     private Map<String, String> headers;
 

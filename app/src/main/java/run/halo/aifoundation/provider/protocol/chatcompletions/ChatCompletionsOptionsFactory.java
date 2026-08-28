@@ -61,8 +61,7 @@ public final class ChatCompletionsOptionsFactory {
     private void applyCommonOptions(ChatCompletionsOptions.Builder builder,
         GenerateTextRequest request) {
         reasoningControlOptions.validate(providerType, request);
-        ChatCompletionsExtraBodyOptions.apply(
-            builder, request, providerType, extraBodyCustomizer);
+        ChatCompletionsExtraBodyOptions.apply(builder, request, extraBodyCustomizer);
     }
 
     private static ChatCompletionsOptions.Builder baseBuilder(GenerateTextRequest request) {

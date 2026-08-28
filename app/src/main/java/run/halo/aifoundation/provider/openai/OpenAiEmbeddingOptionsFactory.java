@@ -7,7 +7,6 @@ import java.util.Set;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 
 final class OpenAiEmbeddingOptionsFactory {
 
@@ -17,11 +16,11 @@ final class OpenAiEmbeddingOptionsFactory {
     }
 
     static OpenAiEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions ignored, List<EmbeddingWarning> warnings) {
+        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
-        var values = ProviderRequestOptions.orEmpty(request.getProviderOptions(), "openai");
+        var values = providerOptions.nativeOptions();
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(FIELDS);
         if (!unknown.isEmpty()) {

@@ -29,7 +29,8 @@ public final class DashScopeRerankingClient extends AbstractHttpRerankingClient 
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
+    protected Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions) {
         return nativeBody(request);
     }
 

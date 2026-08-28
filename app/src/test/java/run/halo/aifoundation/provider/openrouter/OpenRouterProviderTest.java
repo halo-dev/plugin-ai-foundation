@@ -97,16 +97,17 @@ class OpenRouterProviderTest {
         assertThat(providerType.buildImageGenerationClient(provider, "key", "openai/image"))
             .isInstanceOf(OpenRouterImageGenerationClient.class);
 
+        var nativeOptions = Map.<String, Object>of(
+            "reasoning", Map.of("effort", "high"),
+            "models", List.of("anthropic/claude-sonnet", "google/gemini-pro"),
+            "provider", Map.of("order", List.of("anthropic", "google"),
+                "allow_fallbacks", false, "require_parameters", true, "zdr", true),
+            "plugins", List.of(Map.of("id", "response-healing")));
         var options = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder()
                 .prompt("Think")
-                .providerOptions(Map.of("openrouter", Map.of(
-                    "reasoning", Map.of("effort", "high"),
-                    "models", List.of("anthropic/claude-sonnet", "google/gemini-pro"),
-                    "provider", Map.of("order", List.of("anthropic", "google"),
-                        "allow_fallbacks", false, "require_parameters", true, "zdr", true),
-                    "plugins", List.of(Map.of("id", "response-healing")))))
                 .build());
+        options = options.mutate().extraBody(nativeOptions).build();
         var body = requestBody(options, new UserMessage("Think"));
 
         assertThat(body)
@@ -123,17 +124,17 @@ class OpenRouterProviderTest {
     @SuppressWarnings("unchecked")
     void responsesMapsRouterOptionsBuiltInToolsAndReasoningReplay() {
         var builtin = Map.<String, Object>of("type", "web_search");
+        var nativeOptions = Map.<String, Object>of(
+            "reasoning", Map.of("enabled", true, "effort", "high"),
+            "models", List.of("openai/gpt-5", "anthropic/claude-sonnet"),
+            "provider", Map.of("order", List.of("openai", "anthropic"), "zdr", true),
+            "plugins", List.of(Map.of("id", "web")),
+            "serverTools", List.of(builtin));
         var generated = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(GenerateTextRequest.builder()
                 .prompt("Research")
-                .providerOptions(Map.of("openrouter", Map.of(
-                    "reasoning", Map.of("enabled", true, "effort", "high"),
-                    "models", List.of("openai/gpt-5", "anthropic/claude-sonnet"),
-                    "provider", Map.of("order", List.of("openai", "anthropic"),
-                        "zdr", true),
-                    "plugins", List.of(Map.of("id", "web")),
-                    "serverTools", List.of(builtin))))
                 .build());
+        generated = generated.mutate().extraBody(nativeOptions).build();
         var options = generated.mutate()
             .baseUrl("https://example.com/api/v1")
             .model("openai/gpt-5")
@@ -363,11 +364,12 @@ class OpenRouterProviderTest {
             var baseUrl = baseUrl(server);
             var embeddingModel = providerType.buildEmbeddingModel(provider(baseUrl), "key",
                 "openai/text-embedding-3-small");
-            var embeddingOptions = providerType.embeddingModelProviderOptions().buildOptions(
+            var embeddingOptions = providerType.embeddingModelProviderOptions()
+                .withNativeOptions(Map.of(
+                    "input_type", "search_document",
+                    "provider", Map.of("only", List.of("openai"))))
+                .buildOptions(
                 EmbeddingRequest.builder().inputs(List.of("Halo")).dimensions(256)
-                    .providerOptions(Map.of("openrouter", Map.of(
-                        "input_type", "search_document",
-                        "provider", Map.of("only", List.of("openai")))))
                     .build(), new java.util.ArrayList<>());
             var embedding = ((ProviderEmbeddingModel) embeddingModel).call(
                 new ProviderEmbeddingRequest(List.of(), List.of(
@@ -392,14 +394,14 @@ class OpenRouterProviderTest {
 
             var reranker = providerType.buildRerankingClient(provider(baseUrl), "key",
                 "nvidia/rerank");
+            var nativeOptions = Map.<String, Object>of(
+                "provider", Map.of("zdr", true, "allow_fallbacks", false));
             var rerank = reranker.rerank(RerankRequest.builder()
                 .query("CMS")
                 .documents(List.of(RerankDocument.builder().text("Halo")
                     .image(DataContent.url("https://example.com/halo.png", "image/png")).build()))
                 .topN(1)
-                .providerOptions(Map.of("openrouter", Map.of(
-                    "provider", Map.of("zdr", true, "allow_fallbacks", false))))
-                .build()).block();
+                .build(), null, nativeOptions).block();
             assertThat(rerank.getProviderMetadata()).containsEntry("provider", "NVIDIA")
                 .containsKey("usage");
             var documents = (List<?>) rerankBody.get().get("documents");
@@ -450,16 +452,16 @@ class OpenRouterProviderTest {
             var baseUrl = baseUrl(server);
             var imageClient = providerType.buildImageGenerationClient(provider(baseUrl), "key",
                 "openai/gpt-image-2");
+            var nativeOptions = Map.<String, Object>of(
+                "quality", "high", "output_format", "webp",
+                "provider", Map.of("only", List.of("openai")));
             var result = imageClient.generateImage(GenerateImageRequest.builder()
                 .prompt("Halo")
                 .n(2)
                 .size("2K")
                 .aspectRatio("16:9")
                 .images(List.of(DataContent.url("https://example.com/ref.png", "image/png")))
-                .providerOptions(Map.of("openrouter", Map.of(
-                    "quality", "high", "output_format", "webp",
-                    "provider", Map.of("only", List.of("openai")))))
-                .build()).block();
+                .build(), null, nativeOptions).block();
             assertThat(result.getImage().getBase64()).isEqualTo("YWJj");
             assertThat(result.getImage().getMediaType()).isEqualTo("image/webp");
             assertThat(castMap(result.getUsage().getRaw())).containsEntry("cost", 0.04);

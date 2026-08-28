@@ -19,18 +19,26 @@ public final class LanguageModelChatOptionsBuilder {
     private final String providerType;
     private final String modelId;
     private final LanguageModelProviderOptions providerOptions;
+    private final Map<String, Object> nativeOptions;
     private final Function<Object, String> jsonWriter;
 
     public LanguageModelChatOptionsBuilder(String providerType,
         LanguageModelProviderOptions providerOptions, Function<Object, String> jsonWriter) {
-        this(providerType, null, providerOptions, jsonWriter);
+        this(providerType, null, providerOptions, Map.of(), jsonWriter);
     }
 
     public LanguageModelChatOptionsBuilder(String providerType, String modelId,
         LanguageModelProviderOptions providerOptions, Function<Object, String> jsonWriter) {
+        this(providerType, modelId, providerOptions, Map.of(), jsonWriter);
+    }
+
+    public LanguageModelChatOptionsBuilder(String providerType, String modelId,
+        LanguageModelProviderOptions providerOptions, Map<String, Object> nativeOptions,
+        Function<Object, String> jsonWriter) {
         this.providerType = providerType;
         this.modelId = modelId;
         this.providerOptions = providerOptions;
+        this.nativeOptions = nativeOptions == null ? Map.of() : Map.copyOf(nativeOptions);
         this.jsonWriter = jsonWriter;
     }
 
@@ -55,14 +63,22 @@ public final class LanguageModelChatOptionsBuilder {
             throw new IllegalArgumentException("seed is not supported by provider type: "
                 + providerType);
         }
-        if (usesTools(request)) {
-            var toolNames = toolNames(request);
-            var toolCallbacks = toolCallbacks(request, toolNames);
-            if (providerOptions.toolCallingChatOptionsFactory() != null) {
-                return withDefaultModel(providerOptions.toolCallingChatOptionsFactory()
-                    .build(request, toolCallbacks, toolNames));
-            }
-            var builder = DefaultToolCallingChatOptions.builder()
+        var options = buildPortableOptions(request);
+        options = withDefaultModel(options);
+        return applyNativeOptions(options);
+    }
+
+    private ChatOptions buildPortableOptions(GenerateTextRequest request) {
+        if (!usesTools(request)) {
+            return buildWithoutTools(request);
+        }
+        var toolNames = toolNames(request);
+        var toolCallbacks = toolCallbacks(request, toolNames);
+        if (providerOptions.toolCallingChatOptionsFactory() != null) {
+            return providerOptions.toolCallingChatOptionsFactory()
+                .build(request, toolCallbacks, toolNames);
+        }
+        return DefaultToolCallingChatOptions.builder()
                 .model(modelId)
                 .temperature(request.getTemperature())
                 .maxTokens(request.getMaxOutputTokens())
@@ -71,21 +87,25 @@ public final class LanguageModelChatOptionsBuilder {
                 .presencePenalty(request.getPresencePenalty())
                 .frequencyPenalty(request.getFrequencyPenalty())
                 .stopSequences(request.getStopSequences())
-                .toolCallbacks(toolCallbacks);
-            return builder.build();
+                .toolCallbacks(toolCallbacks)
+                .build();
+    }
+
+    private ChatOptions buildWithoutTools(GenerateTextRequest request) {
+        if (hasStructuredOutput(request)) {
+            var factory = providerOptions.structuredOutputChatOptionsFactory();
+            if (factory != null) {
+                return factory.build(request);
+            }
         }
-        if (hasStructuredOutput(request)
-            && providerOptions.structuredOutputChatOptionsFactory() != null) {
-            return withDefaultModel(providerOptions.structuredOutputChatOptionsFactory()
-                .build(request));
-        }
-        if (hasHeaders(request)
-            && providerOptions.structuredOutputChatOptionsFactory() != null) {
-            return withDefaultModel(providerOptions.structuredOutputChatOptionsFactory()
-                .build(request));
+        if (hasHeaders(request)) {
+            var factory = providerOptions.structuredOutputChatOptionsFactory();
+            if (factory != null) {
+                return factory.build(request);
+            }
         }
         if (providerOptions.chatOptionsFactory() != null) {
-            return withDefaultModel(providerOptions.chatOptionsFactory().build(request));
+            return providerOptions.chatOptionsFactory().build(request);
         }
         return ChatOptions.builder()
             .model(modelId)
@@ -97,6 +117,14 @@ public final class LanguageModelChatOptionsBuilder {
             .frequencyPenalty(request.getFrequencyPenalty())
             .stopSequences(request.getStopSequences())
             .build();
+    }
+
+    private ChatOptions applyNativeOptions(ChatOptions options) {
+        var applicator = providerOptions.nativeOptionsApplicator();
+        if (applicator == null) {
+            return options;
+        }
+        return applicator.apply(options, nativeOptions);
     }
 
     private ChatOptions withDefaultModel(ChatOptions options) {

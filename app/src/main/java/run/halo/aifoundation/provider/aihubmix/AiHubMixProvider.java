@@ -213,13 +213,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions(getProviderType(),
-            AiHubMixEmbeddingOptionsFactory::build);
-    }
-
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder().providerOptionsSupported(true).build();
+        return new EmbeddingModelProviderOptions(AiHubMixEmbeddingOptionsFactory::build);
     }
 
     @Override

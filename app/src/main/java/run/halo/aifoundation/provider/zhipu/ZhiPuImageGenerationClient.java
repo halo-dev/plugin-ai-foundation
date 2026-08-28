@@ -11,7 +11,6 @@ import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -32,9 +31,10 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         validateRequest(request);
-        var nativeOptions = nativeOptions(request);
+        nativeOptions = validatedNativeOptions(nativeOptions);
         validateNativeOptions(nativeOptions);
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.model());
@@ -49,7 +49,8 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "Zhipu");
         var images = new ArrayList<GeneratedFile>();
         for (var item : root.path("data")) {
@@ -106,9 +107,10 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
         return request.getResponseFormat() != null;
     }
 
-    private Map<String, Object> nativeOptions(GenerateImageRequest request) {
-        var values = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "zhipuai");
+    private Map<String, Object> validatedNativeOptions(Map<String, Object> values) {
+        if (values == null) {
+            return Map.of();
+        }
         if (values.isEmpty()) {
             return Map.of();
         }

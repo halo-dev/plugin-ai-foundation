@@ -19,7 +19,6 @@ import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
@@ -49,10 +48,16 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
         ParameterMappingTarget target) {
+        return generateImage(request, target, Map.of());
+    }
+
+    @Override
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
+        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         if (!isEditRequest(request)) {
-            return super.generateImage(request, target);
+            return super.generateImage(request, target, nativeOptions);
         }
-        return editImage(request, target);
+        return editImage(request, target, nativeOptions);
     }
 
     @Override
@@ -61,22 +66,22 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         validateCommon(request);
-        return requestFields(request, GENERATION_OPTIONS);
+        return requestFields(request, nativeOptions, GENERATION_OPTIONS);
     }
 
     private Map<String, Object> requestFields(GenerateImageRequest request,
-        Set<String> allowedOptions) {
+        Map<String, Object> nativeOptions, Set<String> allowedOptions) {
         var body = new LinkedHashMap<String, Object>();
-        var values = providerOptions(request);
-        var unknown = new LinkedHashSet<>(values.keySet());
+        var unknown = new LinkedHashSet<>(nativeOptions.keySet());
         unknown.removeAll(allowedOptions);
         if (!unknown.isEmpty()) {
             throw new IllegalArgumentException("Unsupported OpenAI image option(s): "
                 + String.join(", ", unknown));
         }
-        values.forEach((key, value) -> {
+        nativeOptions.forEach((key, value) -> {
             if (value == null) {
                 return;
             }
@@ -96,9 +101,9 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     private Mono<GenerateImageResult> editImage(GenerateImageRequest request,
-        ParameterMappingTarget target) {
+        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         validateEdit(request);
-        var fields = mappedEditFields(request, target);
+        var fields = mappedEditFields(request, target, nativeOptions);
         var multipart = multipartBody(fields, request);
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + "/images/edits";
         var diagnostics = ProviderDiagnostics.create(options.providerType(), "image-edit");
@@ -121,13 +126,13 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
                         options.providerType(), "image-edit", diagnostics);
                 }
                 return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> imageResponse(data, request));
+                    .map(data -> imageResponse(data, request, nativeOptions));
             });
     }
 
     private Map<String, Object> mappedEditFields(GenerateImageRequest request,
-        ParameterMappingTarget target) {
-        var fields = requestFields(request, EDIT_OPTIONS);
+        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+        var fields = requestFields(request, nativeOptions, EDIT_OPTIONS);
         if (target == null) {
             return fields;
         }
@@ -174,11 +179,12 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "OpenAI");
         var images = new ArrayList<GeneratedFile>();
         var warnings = new ArrayList<ImageGenerationWarning>();
-        var mediaType = configuredMediaType(request);
+        var mediaType = configuredMediaType(nativeOptions);
         for (var item : root.path("data")) {
             var metadata = new LinkedHashMap<String, Object>();
             var revised = textOrNull(item.path("revised_prompt"));
@@ -263,10 +269,6 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
         return !request.getImages().isEmpty();
     }
 
-    private Map<String, Object> providerOptions(GenerateImageRequest request) {
-        return ProviderRequestOptions.orEmpty(request.getProviderOptions(), "openai");
-    }
-
     private String extension(String mediaType) {
         return switch (mediaType.toLowerCase(Locale.ROOT)) {
             case "image/jpeg" -> ".jpg";
@@ -275,10 +277,9 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
         };
     }
 
-    private String configuredMediaType(GenerateImageRequest request) {
-        var values = providerOptions(request);
-        var format = values.get("output_format") != null
-            ? values.get("output_format").toString().toLowerCase(Locale.ROOT) : "png";
+    private String configuredMediaType(Map<String, Object> nativeOptions) {
+        var value = nativeOptions.get("output_format");
+        var format = value != null ? value.toString().toLowerCase(Locale.ROOT) : "png";
         return outputMediaType(format);
     }
 

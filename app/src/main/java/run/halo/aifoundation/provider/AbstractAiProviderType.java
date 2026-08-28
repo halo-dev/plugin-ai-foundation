@@ -14,8 +14,6 @@ import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptionsFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -23,6 +21,12 @@ import org.springframework.web.util.UriBuilder;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
+import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsNativeOptions;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptionsFactory;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
@@ -34,9 +38,6 @@ import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.transport.ProviderHttpClientFactory;
-import run.halo.aifoundation.provider.mapping.ModelParameter;
-import run.halo.aifoundation.provider.mapping.ProviderParameterMappingDefaults;
-import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 
 @Slf4j
 public abstract class AbstractAiProviderType implements AiProviderType {
@@ -151,6 +152,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             .chatOptionsFactory(optionsFactory::basic)
             .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
             .structuredOutputChatOptionsFactory(optionsFactory::structured)
+            .nativeOptionsApplicator(ChatCompletionsNativeOptions::apply)
             .reasoningControlOptions(reasoningControlOptions)
             .build();
     }

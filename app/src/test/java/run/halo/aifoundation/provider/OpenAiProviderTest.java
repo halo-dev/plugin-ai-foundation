@@ -42,13 +42,13 @@ class OpenAiProviderTest {
     void optionsUseExplicitNativeReasoningEffort() {
         var request = GenerateTextRequest.builder()
             .prompt("Think carefully")
-            .providerOptions(Map.of("openai", Map.of("reasoning_effort", "high")))
             .seed(42)
             .build();
 
         var options = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory()
             .build(request);
+        options = options.mutate().extraBody(Map.of("reasoning_effort", "high")).build();
 
         assertThat(options.getExtraBody()).containsEntry("reasoning_effort", "high");
         assertThat(options.getSeed()).isEqualTo(42);

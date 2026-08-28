@@ -1314,7 +1314,6 @@ public class LanguageModelImpl implements LanguageModel {
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
             .context(request.getContext())
-            .providerOptions(request.getProviderOptions())
             .output(request.getOutput())
             .tools(tools)
             .toolChoice(prepared.getToolChoice() != null
@@ -1482,7 +1481,6 @@ public class LanguageModelImpl implements LanguageModel {
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
             .context(request.getContext())
-            .providerOptions(request.getProviderOptions())
             .output(request.getOutput())
             .tools(request.getTools())
             .toolChoice(request.getToolChoice())

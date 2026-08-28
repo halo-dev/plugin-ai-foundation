@@ -67,7 +67,7 @@ public class RerankingModelImpl implements RerankingModel {
                 }
                 var warnings = requestWarnings(request);
                 var target = mappedTopN(request, warnings);
-                return client.rerank(request, target)
+                return client.rerank(request, target, providerOptions.getNativeOptions())
                     .map(response -> withRuntimeWarnings(response, warnings))
                     .doOnNext(response -> checkResultIndexes(request, response));
             })

@@ -12,7 +12,6 @@ import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.media.GeneratedFile;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -34,20 +33,19 @@ public final class OpenRouterImageGenerationClient extends AbstractJsonImageGene
     }
 
     @Override
-    public Map<String, Object> requestBody(GenerateImageRequest request) {
+    public Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         validate(request);
         var body = new LinkedHashMap<String, Object>();
-        var providerOptions = ProviderRequestOptions.get(
-            request.getProviderOptions(), "openrouter");
-        if (providerOptions != null) {
-            var unknown = new LinkedHashSet<>(providerOptions.keySet());
+        if (!nativeOptions.isEmpty()) {
+            var unknown = new LinkedHashSet<>(nativeOptions.keySet());
             unknown.removeAll(OPTIONS);
             if (!unknown.isEmpty()) {
                 throw new IllegalArgumentException("Unsupported OpenRouter image option(s): "
                     + String.join(", ", unknown));
             }
-            ProviderRequestOptions.copyNonNullValues(body, providerOptions);
-            OpenRouterRoutingOptions.validate(providerOptions.get("provider"), "image");
+            copyNonNullValues(body, nativeOptions);
+            OpenRouterRoutingOptions.validate(nativeOptions.get("provider"), "image");
         }
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
@@ -65,7 +63,8 @@ public final class OpenRouterImageGenerationClient extends AbstractJsonImageGene
     }
 
     @Override
-    public GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    public GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "OpenRouter");
         var images = new ArrayList<GeneratedFile>();
         for (var item : root.path("data")) {
@@ -75,7 +74,7 @@ public final class OpenRouterImageGenerationClient extends AbstractJsonImageGene
             }
             var mediaType = textOrNull(item.path("media_type"));
             if (!hasText(mediaType)) {
-                mediaType = configuredMediaType(request);
+                mediaType = configuredMediaType(nativeOptions);
             }
             var metadata = new LinkedHashMap<String, Object>();
             putIfHasText(metadata, "revisedPrompt", textOrNull(item.path("revised_prompt")));
@@ -113,10 +112,8 @@ public final class OpenRouterImageGenerationClient extends AbstractJsonImageGene
         }
     }
 
-    private String configuredMediaType(GenerateImageRequest request) {
-        var values = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), "openrouter");
-        var format = outputFormat(values);
+    private String configuredMediaType(Map<String, Object> nativeOptions) {
+        var format = outputFormat(nativeOptions);
         return switch (format) {
             case "jpeg", "jpg" -> "image/jpeg";
             case "webp" -> "image/webp";
@@ -131,5 +128,18 @@ public final class OpenRouterImageGenerationClient extends AbstractJsonImageGene
             return "png";
         }
         return value.toString().toLowerCase(Locale.ROOT);
+    }
+
+    private void copyNonNullValues(Map<String, Object> target,
+        Map<String, Object> nativeOptions) {
+        nativeOptions.forEach((key, value) -> {
+            if (key == null) {
+                return;
+            }
+            if (value == null) {
+                return;
+            }
+            target.put(key, value);
+        });
     }
 }

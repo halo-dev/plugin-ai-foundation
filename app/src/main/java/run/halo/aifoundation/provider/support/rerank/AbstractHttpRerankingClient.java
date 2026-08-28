@@ -10,7 +10,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
-import run.halo.aifoundation.provider.support.ProviderRequestOptions;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
@@ -55,8 +54,15 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
 
     @Override
     public Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target) {
+        return rerank(request, target, Map.of());
+    }
+
+    @Override
+    public Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target,
+        Map<String, Object> nativeOptions) {
         var uri = endpoint(request);
-        var body = requestBody(request);
+        var resolvedOptions = nativeOptions == null ? Map.<String, Object>of() : nativeOptions;
+        var body = requestBody(request, resolvedOptions);
         applyMappedParameters(body, target);
         var diagnostics = ProviderDiagnostics.create(providerType, "rerank");
         diagnostics.request(uri.toString(), body, false);
@@ -106,18 +112,10 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
 
     protected abstract URI endpoint(RerankRequest request);
 
-    protected abstract Map<String, Object> requestBody(RerankRequest request);
+    protected abstract Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions);
 
     protected void customizeHeaders(HttpHeaders headers) {
-    }
-
-    protected Map<String, Object> namespacedOptions(RerankRequest request) {
-        if (request == null) {
-            return Map.of();
-        }
-        var options = ProviderRequestOptions.orEmpty(
-            request.getProviderOptions(), providerType);
-        return Map.copyOf(options);
     }
 
     protected List<String> documentTexts(RerankRequest request) {

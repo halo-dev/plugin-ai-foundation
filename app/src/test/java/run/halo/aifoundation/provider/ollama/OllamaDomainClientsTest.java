@@ -35,14 +35,14 @@ class OllamaDomainClientsTest {
     @Test
     void embeddingOptionsExposeDocumentedNativeControls() {
         var warnings = new ArrayList<run.halo.aifoundation.embedding.EmbeddingWarning>();
-        var request = EmbeddingRequest.builder().dimensions(384)
-            .providerOptions(Map.of("ollama", Map.of(
-                "truncate", false,
-                "options", Map.of("num_gpu", 1, "num_thread", 8, "use_mmap", true))))
-            .build();
+        var request = EmbeddingRequest.builder().dimensions(384).build();
+        var nativeOptions = Map.<String, Object>of(
+            "truncate", false,
+            "options", Map.of("num_gpu", 1, "num_thread", 8, "use_mmap", true));
 
         var options = (OllamaEmbeddingOptions) OllamaEmbeddingOptionsFactory.build(request,
-            new EmbeddingModelProviderOptions("ollama", OllamaEmbeddingOptionsFactory::build),
+            new EmbeddingModelProviderOptions(OllamaEmbeddingOptionsFactory::build)
+                .withNativeOptions(nativeOptions),
             warnings);
 
         assertThat(options.getDimensions()).isEqualTo(384);

@@ -367,8 +367,6 @@ class DeepSeekProviderTest {
     void toolOptions_applyRequiredToolChoice() {
         var request = GenerateTextRequest.builder()
             .prompt("Use a tool")
-            .providerOptions(Map.of("deepseek", Map.of(
-                "thinking", Map.of("type", "disabled"))))
             .tools(List.of(ToolDefinition.builder()
                 .name("halo_test_info")
                 .inputSchema(Map.of("type", "object"))
@@ -379,6 +377,9 @@ class DeepSeekProviderTest {
         var options = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
+        options = options.mutate()
+            .extraBody(Map.of("thinking", Map.of("type", "disabled")))
+            .build();
 
         assertThat(options.getToolChoice()).isEqualTo("required");
     }
@@ -403,8 +404,6 @@ class DeepSeekProviderTest {
     void toolOptions_applyNativeStrictToolSchemaWhenRequested() {
         var request = GenerateTextRequest.builder()
             .prompt("Use a strict tool")
-            .providerOptions(Map.of("deepseek", Map.of(
-                "thinking", Map.of("type", "disabled"))))
             .tools(List.of(ToolDefinition.builder()
                 .name("halo_test_info")
                 .description("Read Halo test information")
@@ -421,6 +420,9 @@ class DeepSeekProviderTest {
         var options = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .toolCallingChatOptionsFactory()
             .build(request, List.of(), java.util.Set.of());
+        options = options.mutate()
+            .extraBody(Map.of("thinking", Map.of("type", "disabled")))
+            .build();
 
         assertThat(options.getToolStrict()).containsEntry("halo_test_info", true);
 
@@ -494,12 +496,13 @@ class DeepSeekProviderTest {
     void optionsUseExplicitNativeThinkingSwitch() {
         var request = GenerateTextRequest.builder()
             .prompt("Fast")
-            .providerOptions(Map.of("deepseek", Map.of(
-                "thinking", Map.of("type", "disabled"))))
             .build();
 
         var options = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(request);
+        options = options.mutate()
+            .extraBody(Map.of("thinking", Map.of("type", "disabled")))
+            .build();
         assertThat(options.getExtraBody()).containsEntry("thinking",
             Map.of("type", "disabled"));
     }
@@ -508,16 +511,16 @@ class DeepSeekProviderTest {
     void optionsUseExplicitNativeThinkingAndEffortValues() {
         var enabledRequest = GenerateTextRequest.builder()
             .prompt("Think")
-            .providerOptions(Map.of("deepseek", Map.of(
-                "thinking", Map.of("type", "enabled"))))
             .build();
 
         var enabled = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
             .chatOptionsFactory().build(enabledRequest);
+        enabled = enabled.mutate()
+            .extraBody(Map.of("thinking", Map.of("type", "enabled")))
+            .build();
         var low = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
-            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Think")
-                .providerOptions(Map.of("deepseek", Map.of("reasoning_effort", "low")))
-                .build());
+            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Think").build());
+        low = low.mutate().extraBody(Map.of("reasoning_effort", "low")).build();
 
         assertThat(enabled.getExtraBody()).containsEntry("thinking", Map.of("type", "enabled"));
         assertThat(low.getExtraBody()).containsEntry("reasoning_effort", "low");

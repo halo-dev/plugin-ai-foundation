@@ -26,7 +26,8 @@ public final class OllamaImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         requirePrompt(request, "Ollama image prompt must not be blank");
         validateResponseFormat(request.getResponseFormat());
         if (request.getImages() != null && !request.getImages().isEmpty()) {
@@ -47,7 +48,8 @@ public final class OllamaImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
+    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         var root = readTree(data, "Ollama");
         var images = new ArrayList<GeneratedFile>();
         var output = root.path("data");

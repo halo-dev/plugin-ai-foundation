@@ -1,5 +1,6 @@
 package run.halo.aifoundation.provider.support;
 
+import java.util.Map;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
@@ -15,5 +16,10 @@ public interface ProviderRerankingClient {
 
     default Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target) {
         return rerank(request);
+    }
+
+    default Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target,
+        Map<String, Object> nativeOptions) {
+        return rerank(request, target);
     }
 }

@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 const formKitStub = {
@@ -26,18 +26,17 @@ const formKitStub = {
   `,
 }
 
-afterEach(() => {
-  vi.resetModules()
-  vi.clearAllMocks()
-})
+let ModelForm: (typeof import('./ModelForm.vue'))['default']
+
+beforeAll(async () => {
+  vi.doMock('@/composables/use-provider-types-fetch', () => ({
+    useProviderTypesFetch: () => ({ data: ref([]) }),
+  }))
+  ModelForm = (await import('./ModelForm.vue')).default
+}, 30_000)
 
 describe('model group removal', () => {
   it('does not render a model group field in the model form', async () => {
-    vi.doMock('@/composables/use-provider-types-fetch', () => ({
-      useProviderTypesFetch: () => ({ data: ref([]) }),
-    }))
-
-    const { default: ModelForm } = await import('./ModelForm.vue')
     const wrapper = mount(ModelForm, {
       props: {
         providerType: 'openai',

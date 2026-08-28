@@ -135,14 +135,7 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
 
     @Override
     public EmbeddingModelProviderOptions embeddingModelProviderOptions() {
-        return new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build);
-    }
-
-    @Override
-    public RerankingModelProviderOptions rerankingModelProviderOptions() {
-        return RerankingModelProviderOptions.builder()
-            .providerOptionsSupported(true)
-            .build();
+        return new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build);
     }
 
     @Override
