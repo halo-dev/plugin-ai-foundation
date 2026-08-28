@@ -1,5 +1,5 @@
-import { describe, expect, it, rstest } from '@rstest/core'
 import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 const formKitStub = {
@@ -28,7 +28,7 @@ const formKitStub = {
 
 describe('model adapter selection', () => {
   it('shows multiple interfaces and submits an auto-selected sole interface', async () => {
-    rstest.doMock('@/composables/use-provider-types-fetch', () => ({
+    vi.doMock('@/composables/use-provider-types-fetch', () => ({
       useProviderTypesFetch: () => ({
         data: ref([
           {
