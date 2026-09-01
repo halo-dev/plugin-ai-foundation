@@ -352,7 +352,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
           :collision-padding="8"
           :body-lock="false"
           :disable-outside-pointer-events="false"
-          class=":uno: z-[9999] overflow-hidden border border-gray-200 rounded-md bg-white shadow-md"
+          class=":uno: ai-model-selector__content"
           :style="{
             width: 'min(var(--reka-select-trigger-width), 32rem)',
             maxHeight: 'min(26rem, var(--reka-select-content-available-height))',
@@ -446,3 +446,16 @@ function handleSearchKeydown(event: KeyboardEvent) {
     </p>
   </div>
 </template>
+
+<style scoped>
+:global(.ai-model-selector__content) {
+  z-index: 9999;
+  overflow: hidden;
+  border: 1px solid rgb(229 231 235);
+  border-radius: 0.375rem;
+  background-color: rgb(255 255 255);
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 10%),
+    0 2px 4px -2px rgb(0 0 0 / 10%);
+}
+</style>
