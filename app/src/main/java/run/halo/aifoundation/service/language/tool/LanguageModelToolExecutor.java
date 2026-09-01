@@ -74,27 +74,35 @@ public final class LanguageModelToolExecutor {
             }
             cancellationChecker.check(context.request());
             return repairIfNeeded(toolCall, tool, context)
-                .flatMap(repair -> {
-                    var currentCall = repair.toolCall();
-                    accumulator.addWarnings(repair.warnings());
-                    if (repair.error() != null) {
-                        accumulator.addError(repair.error());
-                        return executeNext(toolCalls, index + 1, context, accumulator);
-                    }
-                    return executeOne(currentCall, tool, context)
-                        .flatMap(outcome -> {
-                            if (outcome.error() != null) {
-                                accumulator.addError(outcome.error());
-                                return executeNext(toolCalls, index + 1, context, accumulator);
-                            }
-                            accumulator.addResult(outcome.result());
-                            return executeNext(toolCalls, index + 1, context, accumulator);
-                        });
-                });
+                .flatMap(repair -> executeRepairedCall(toolCalls, index, tool, context,
+                    accumulator, repair));
         } catch (RuntimeException e) {
             accumulator.addError(toolError(resolvedCall, e));
             return executeNext(toolCalls, index + 1, context, accumulator);
         }
+    }
+
+    private Mono<ToolExecutionBatch> executeRepairedCall(List<ToolCall> toolCalls, int index,
+        ToolDefinition tool, ToolStepContext context, ExecutionAccumulator accumulator,
+        RepairAttempt repair) {
+        accumulator.addWarnings(repair.warnings());
+        if (repair.error() != null) {
+            accumulator.addError(repair.error());
+            return executeNext(toolCalls, index + 1, context, accumulator);
+        }
+        return executeOne(repair.toolCall(), tool, context)
+            .flatMap(outcome -> continueAfterExecution(toolCalls, index, context, accumulator,
+                outcome));
+    }
+
+    private Mono<ToolExecutionBatch> continueAfterExecution(List<ToolCall> toolCalls, int index,
+        ToolStepContext context, ExecutionAccumulator accumulator, ToolExecutionOutcome outcome) {
+        if (outcome.error() != null) {
+            accumulator.addError(outcome.error());
+        } else {
+            accumulator.addResult(outcome.result());
+        }
+        return executeNext(toolCalls, index + 1, context, accumulator);
     }
 
     private Mono<ToolExecutionOutcome> executeOne(ToolCall resolvedCall, ToolDefinition tool,

@@ -14,7 +14,11 @@ public record RerankingModelRuntimeConfiguration(
     }
 
     public static RerankingModelRuntimeConfiguration from(ModelRuntimeContext context) {
+        var options = context.providerDefinition().rerankingModelProviderOptions();
+        if (options == null) {
+            options = RerankingModelProviderOptions.defaults();
+        }
         return new RerankingModelRuntimeConfiguration(context,
-            context.providerDefinition().rerankingModelProviderOptions());
+            options.withNativeOptions(context.nativeOptions()));
     }
 }

@@ -54,6 +54,7 @@ public final class UIMessageChatHandlers {
         var validation = UIMessageValidators.validate(messages,
             options.validationCustomizer());
         var validationResult = new UIMessageValidationResult<>(validation, List.of());
+        var continuationMessage = continuationMessage(options, validation);
         var conversion = UIMessageConverters.convertToModelMessages(validation,
             effectiveConversionCustomizer(options));
         if (conversion.messages().isEmpty()) {
@@ -69,7 +70,7 @@ public final class UIMessageChatHandlers {
         var stream = UIMessageStreams.<M>createWithOptions(streamOptions -> {
             streamOptions
                 .originalMessages(validation)
-                .message(options.message())
+                .message(continuationMessage)
                 .generateMessageId(options.messageIdGenerator())
                 .metadataSupplier(options.metadataSupplier())
                 .onError(options.errorHandler())
@@ -169,6 +170,68 @@ public final class UIMessageChatHandlers {
             return List.copyOf(messages.subList(0, index));
         }
         throw new IllegalArgumentException("regenerate-message target message not found");
+    }
+
+    private static <M> UIMessage<M> continuationMessage(UIMessageChatOptions<M> options,
+        List<UIMessage<M>> messages) {
+        if (options.messageConfigured()) {
+            return options.message();
+        }
+        if (!isSubmitRequest(options.chatRequest())) {
+            return null;
+        }
+        if (messages.isEmpty()) {
+            return null;
+        }
+        var lastMessage = messages.getLast();
+        if (lastMessage.role() != UIMessageRole.ASSISTANT) {
+            return null;
+        }
+        return latestStepCanContinue(lastMessage) ? lastMessage : null;
+    }
+
+    private static boolean isSubmitRequest(UIMessageChatRequest<?> request) {
+        if (request == null) {
+            return false;
+        }
+        return request.trigger() == UIMessageChatTrigger.SUBMIT_MESSAGE;
+    }
+
+    private static boolean latestStepCanContinue(UIMessage<?> message) {
+        var parts = latestStepParts(message.parts());
+        var toolFound = false;
+        for (var part : parts) {
+            if (!(part instanceof ToolPart tool)) {
+                continue;
+            }
+            toolFound = true;
+            if (!isContinuable(tool.state())) {
+                return false;
+            }
+        }
+        return toolFound;
+    }
+
+    private static List<UIMessagePart> latestStepParts(List<UIMessagePart> parts) {
+        for (var index = parts.size() - 1; index >= 0; index--) {
+            if (parts.get(index) instanceof StepStartPart) {
+                return parts.subList(index + 1, parts.size());
+            }
+        }
+        return parts;
+    }
+
+    private static boolean isContinuable(ToolPartState state) {
+        if (state == ToolPartState.OUTPUT_AVAILABLE) {
+            return true;
+        }
+        if (state == ToolPartState.OUTPUT_ERROR) {
+            return true;
+        }
+        if (state == ToolPartState.OUTPUT_DENIED) {
+            return true;
+        }
+        return state == ToolPartState.APPROVAL_RESPONDED;
     }
 
     private static <M> GenerateTextRequest baseRequest(UIMessageChatOptions<M> options) {

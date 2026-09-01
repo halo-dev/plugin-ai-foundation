@@ -1,6 +1,8 @@
 package run.halo.aifoundation.service.rerank;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.List;
@@ -14,10 +16,13 @@ import run.halo.aifoundation.exception.RerankCancelledException;
 import run.halo.aifoundation.exception.RerankTimeoutException;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankResult;
+import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 import org.junit.jupiter.api.Test;
@@ -47,6 +52,33 @@ class RerankingModelRuntimeFactoryTest {
                 .extracting(RerankResult::getIndex)
                 .containsExactly(2, 0))
             .verifyComplete();
+    }
+
+    @Test
+    void rerankAcceptsImageOnlyDocumentsAndRejectsEmptyDocuments() {
+        ProviderRerankingClient client = request -> Mono.just(RerankResponse.builder()
+            .query(request.getQuery())
+            .results(List.of(result(0, request.getDocuments().getFirst(), 0.9)))
+            .build());
+        var model = factory.create(client, configuration(null, null, null));
+        var image = RerankDocument.builder()
+            .image(DataContent.url("https://example.com/halo.png"))
+            .build();
+
+        StepVerifier.create(model.rerank(RerankRequest.builder()
+                .query("halo")
+                .documents(List.of(image))
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        StepVerifier.create(model.rerank(RerankRequest.builder()
+                .query("halo")
+                .documents(List.of(RerankDocument.builder().text(" ").build()))
+                .build()))
+            .expectErrorMatches(error -> error instanceof IllegalArgumentException
+                && error.getMessage().contains("text or an image"))
+            .verify();
     }
 
     @Test
@@ -118,6 +150,44 @@ class RerankingModelRuntimeFactoryTest {
             .verifyComplete();
         assertThat(target.get().root()).isEmpty();
         assertThat(target.get().parameters()).isEmpty();
+    }
+
+    @Test
+    void rerank_appliesAdministratorNativeOptionsFromModelContext() {
+        var capturedOptions = new AtomicReference<Map<String, Object>>();
+        var client = new ProviderRerankingClient() {
+            @Override
+            public Mono<RerankResponse> rerank(RerankRequest request) {
+                return response(request);
+            }
+
+            @Override
+            public Mono<RerankResponse> rerank(RerankRequest request,
+                run.halo.aifoundation.provider.mapping.ParameterMappingTarget target,
+                Map<String, Object> nativeOptions) {
+                capturedOptions.set(nativeOptions);
+                return response(request);
+            }
+
+            private Mono<RerankResponse> response(RerankRequest request) {
+                return Mono.just(RerankResponse.builder().query(request.getQuery())
+                    .results(List.of(result(0, request.getDocuments().getFirst(), 0.8))).build());
+            }
+        };
+        var provider = mock(AiProviderType.class);
+        when(provider.rerankingModelProviderOptions())
+            .thenReturn(RerankingModelProviderOptions.defaults());
+        var context = new ModelRuntimeContext("model-a", "rerank-a", "provider-a", "test-provider",
+            AdapterType.RERANK, provider, RuntimeParameterMappings.empty(),
+            Map.of("return_documents", true));
+        var model = factory.create(client, RerankingModelRuntimeConfiguration.from(context));
+
+        StepVerifier.create(model.rerank(RerankRequest.builder()
+                .query("halo").documents("alpha").build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        assertThat(capturedOptions.get()).isEqualTo(Map.of("return_documents", true));
     }
 
     private ProviderRerankingClient capturingClient(

@@ -34,15 +34,15 @@ public class StandardRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request) {
-        var options = namespacedOptions(request);
+    protected Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", modelId);
         body.put("query", request.getQuery());
         body.put("documents", documentTexts(request));
         putIfPresent(body, "top_n", topN(request));
         body.put("return_documents", true);
-        applyOptions(body, options, "model", "query", "documents", "top_n");
+        applyOptions(body, nativeOptions, "model", "query", "documents", "top_n");
         return body;
     }
 

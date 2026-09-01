@@ -1,6 +1,7 @@
 package run.halo.aifoundation.provider;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.netty.channel.ChannelOption;
 import java.io.BufferedReader;
@@ -59,9 +60,20 @@ class AbstractAiProviderTypeTest {
         }
 
         @Override
+        public List<ModelFeature> getSupportedFeatures() {
+            return List.of(ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
+        }
+
+        @Override
         public org.springframework.ai.chat.model.ChatModel buildChatModel(
             AiProvider provider, String apiKey, String modelId) {
             return null;
+        }
+
+        @Override
+        public reactor.core.publisher.Mono<List<DiscoveredModel>> discoverModels(
+            AiProvider provider, String apiKey) {
+            return discoverDataArrayModels(provider, apiKey);
         }
     }
 
@@ -129,6 +141,15 @@ class AbstractAiProviderTypeTest {
     }
 
     @Test
+    void httpClient_rejectsInvalidProxyPortBeforeOpeningAConnection() {
+        var provider = providerWithProxy("proxy.example.com", 0);
+
+        assertThatThrownBy(() -> new TestProviderType().httpClient(provider))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("proxyPort must be between 1 and 65535");
+    }
+
+    @Test
     void discoverModels_withProxyRoutesRequestThroughProxy() throws Exception {
         var proxyHit = new CompletableFuture<Boolean>();
         var proxyServer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
@@ -139,16 +160,14 @@ class AbstractAiProviderTypeTest {
             provider.getSpec().setBaseUrl("http://upstream.example.test");
 
             StepVerifier.create(new TestProviderType().discoverModels(provider, "key"))
-                .assertNext(models -> {
-                    assertThat(models).hasSize(1);
-                    var model = models.getFirst();
-                    assertThat(model.modelId()).isEqualTo("gpt-test");
-                    assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
-                    assertThat(model.features()).containsExactly(ModelFeature.STREAMING);
-                    assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
-                    assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
-                    assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
-                })
+                .assertNext(models -> assertThat(models).singleElement()
+                    .satisfies(model -> {
+                        assertThat(model.modelId()).isEqualTo("gpt-test");
+                        assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
+                        assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
+                        assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
+                        assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
+                    }))
                 .verifyComplete();
             assertThat(proxyHit).isCompletedWithValue(true);
         } finally {
@@ -158,11 +177,15 @@ class AbstractAiProviderTypeTest {
     }
 
     @Test
-    void inferModelProfile_detectsEmbeddingModel() {
-        var profile = new TestProviderType().inferModelProfile("text-embedding-3-small");
+    void modelProfile_usesProviderDefaultWithoutInspectingIdentifier() {
+        var profile = new TestProviderType().modelProfile(
+            Map.of("id", "identifier-with-embedding-word"),
+            "identifier-with-embedding-word");
 
-        assertThat(profile.modelType()).isEqualTo(ModelType.EMBEDDING);
-        assertThat(profile.adapterType()).isEqualTo(AdapterType.OPENAI_EMBEDDING);
+        assertThat(profile.modelType()).isEqualTo(ModelType.LANGUAGE);
+        assertThat(profile.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
+        assertThat(profile.features()).containsExactlyInAnyOrder(
+            ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
         assertThat(profile.source()).isEqualTo(DiscoverySource.RULE);
         assertThat(profile.confidence()).isEqualTo(DiscoveryConfidence.LOW);
     }
@@ -214,13 +237,15 @@ class AbstractAiProviderTypeTest {
             var provider = providerWithBaseUrl("http://127.0.0.1:" + server.getLocalPort());
 
             StepVerifier.create(new RerankTestProviderType().discoverModels(provider, "key"))
-                .assertNext(models -> {
-                    assertThat(models).singleElement()
-                        .extracting(DiscoveredModel::modelType, DiscoveredModel::adapterType,
-                            DiscoveredModel::source, DiscoveredModel::confidence)
-                        .containsExactly(ModelType.LANGUAGE, AdapterType.OPENAI_CHAT,
-                            DiscoverySource.RULE, DiscoveryConfidence.LOW);
-                })
+                .assertNext(models -> assertThat(models).singleElement()
+                    .satisfies(model -> {
+                        assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
+                        assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
+                        assertThat(model.features()).containsExactlyInAnyOrder(
+                            ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
+                        assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
+                        assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
+                    }))
                 .verifyComplete();
         } finally {
             server.close();
@@ -248,7 +273,7 @@ class AbstractAiProviderTypeTest {
             Map.of("id", "gpt-test"),
             Map.of("name", "missing-id"),
             "not-object"
-        ), "id", node -> type.inferModelProfile(type.stringValue(node, "id")));
+        ), "id", node -> type.modelProfile(node, type.stringValue(node, "id")));
 
         assertThat(models).singleElement()
             .extracting(DiscoveredModel::modelId)

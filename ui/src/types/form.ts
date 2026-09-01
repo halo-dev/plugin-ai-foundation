@@ -31,4 +31,5 @@ export interface ModelFormState {
   capabilities?: AiModel['spec']['capabilities']
   capabilitySources?: AiModel['spec']['capabilitySources']
   parameterMappings?: ModelParameterMappings
+  nativeOptions?: Record<string, unknown>
 }

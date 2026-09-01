@@ -15,7 +15,7 @@ public record EmbeddingModelRuntimeComposition(
         EmbeddingModelProviderOptions providerOptions) {
         var resolvedProviderOptions = providerOptions != null
             ? providerOptions
-            : EmbeddingModelProviderOptions.defaults(providerType);
+            : EmbeddingModelProviderOptions.defaults();
         return new EmbeddingModelRuntimeComposition(
             providerType,
             maxEmbeddingsPerCall,

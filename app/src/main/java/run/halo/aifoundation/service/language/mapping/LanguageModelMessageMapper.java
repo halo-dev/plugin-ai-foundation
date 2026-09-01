@@ -12,7 +12,6 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 import run.halo.aifoundation.exception.InvalidMediaContentException;
@@ -126,15 +125,6 @@ public final class LanguageModelMessageMapper {
             .map(part -> new AssistantMessage.ToolCall(part.getToolCallId(), "function",
                 part.getToolName(), writeJson(part.getInput())))
             .toList();
-        if ("deepseek".equals(providerType)) {
-            return DeepSeekAssistantMessage.builder()
-                .content(textContent(message))
-                .reasoningContent(reasoningContent(message.getContent()))
-                .properties(assistantProperties(message))
-                .toolCalls(toolCalls)
-                .media(mediaContent(message))
-                .build();
-        }
         return AssistantMessage.builder()
             .content(textContent(message))
             .properties(assistantProperties(message))
@@ -191,10 +181,22 @@ public final class LanguageModelMessageMapper {
 
     private Map<String, Object> assistantProperties(ModelMessage message) {
         var reasoningContent = reasoningContent(message.getContent());
-        if (!hasText(reasoningContent)) {
-            return Map.of();
+        var properties = new LinkedHashMap<String, Object>();
+        if (hasText(reasoningContent)) {
+            properties.put("reasoningContent", reasoningContent);
         }
-        return Map.of("reasoningContent", reasoningContent);
+        message.getContent().stream()
+            .filter(part -> PartType.isReasoning(part.getType()))
+            .forEach(part -> {
+                if (hasText(part.getSignature())) {
+                    properties.put("reasoningSignature", part.getSignature());
+                }
+                if (part.getProviderMetadata() != null
+                    && !part.getProviderMetadata().isEmpty()) {
+                    properties.put("reasoningProviderMetadata", part.getProviderMetadata());
+                }
+            });
+        return properties.isEmpty() ? Map.of() : Map.copyOf(properties);
     }
 
     private ToolResponseMessage toolResponseMessage(ModelMessage message) {

@@ -35,6 +35,23 @@ class ParameterMappingTemplateApplicatorTest {
     }
 
     @Test
+    void appliesResponsesReasoningEffortAsNestedObject() {
+        var target = apply("reasoning.responses-effort", "high");
+        assertThat(target.root()).containsEntry("reasoning", Map.of("effort", "high"));
+    }
+
+    @Test
+    void appliesMessagesThinkingAndEffortToTheirDistinctObjects() {
+        var thinking = apply("reasoning.deepseek-messages", "enabled");
+        assertThat(thinking.root()).containsEntry("thinking", Map.of("type", "enabled"));
+
+        var effort = new ParameterMappingTarget();
+        registry.get("reasoning.deepseek-messages").applicator()
+            .apply("low", "output_config.effort", effort);
+        assertThat(effort.root()).containsEntry("output_config", Map.of("effort", "low"));
+    }
+
+    @Test
     void appliesEveryLanguageScalarTemplateFamily() {
         assertRoot("chat.temperature", "temperature", 0.7);
         assertRoot("chat.top-p", "top_p", 0.9);

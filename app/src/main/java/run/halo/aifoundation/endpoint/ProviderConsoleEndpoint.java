@@ -26,6 +26,7 @@ import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.SecretResolver;
+import run.halo.aifoundation.provider.support.UriReferencePolicy;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
@@ -37,6 +38,9 @@ import run.halo.app.extension.router.selector.SelectorUtil;
 @Component
 @RequiredArgsConstructor
 public class ProviderConsoleEndpoint implements CustomEndpoint {
+
+    private static final UriReferencePolicy ABSOLUTE_ENDPOINT_REFERENCES =
+        UriReferencePolicy.allowing("http://", "https://", "//");
 
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
@@ -248,8 +252,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             return null;
         }
         var trimmed = value.trim();
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")
-            || trimmed.startsWith("//")) {
+        if (ABSOLUTE_ENDPOINT_REFERENCES.allows(trimmed)) {
             throw new IllegalArgumentException(fieldName + " must be a relative path");
         }
         return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
@@ -331,20 +334,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 var secretName = provider.getSpec().getApiKeySecretName();
                 return secretResolver.resolveApiKey(secretName)
                     .flatMap(apiKey -> performConnectivityCheck(provider, apiKey))
-                    .flatMap(result -> {
-                        if (provider.getStatus() == null) {
-                            provider.setStatus(new AiProvider.AiProviderStatus());
-                        }
-                        provider.getStatus().setLastCheckedAt(Instant.now());
-                        if (result.isSuccess()) {
-                            provider.getStatus().setPhase(AiProvider.AiProviderStatus.Phase.OK);
-                            provider.getStatus().setMessage("Connectivity check passed");
-                        } else {
-                            provider.getStatus().setPhase(AiProvider.AiProviderStatus.Phase.ERROR);
-                            provider.getStatus().setMessage(result.getMessage());
-                        }
-                        return client.update(provider);
-                    })
+                    .flatMap(result -> updateConnectivityStatus(provider, result))
                     .flatMap(updated -> ServerResponse.ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .bodyValue(Map.of(
@@ -354,6 +344,19 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                             "lastCheckedAt", updated.getStatus().getLastCheckedAt().toString()
                         )));
             });
+    }
+
+    private Mono<AiProvider> updateConnectivityStatus(AiProvider provider,
+        ConnectivityResult result) {
+        if (provider.getStatus() == null) {
+            provider.setStatus(new AiProvider.AiProviderStatus());
+        }
+        var status = provider.getStatus();
+        status.setLastCheckedAt(Instant.now());
+        status.setPhase(result.isSuccess()
+            ? AiProvider.AiProviderStatus.Phase.OK : AiProvider.AiProviderStatus.Phase.ERROR);
+        status.setMessage(result.isSuccess() ? "Connectivity check passed" : result.getMessage());
+        return client.update(provider);
     }
 
     private Mono<ConnectivityResult> performConnectivityCheck(AiProvider provider, String apiKey) {

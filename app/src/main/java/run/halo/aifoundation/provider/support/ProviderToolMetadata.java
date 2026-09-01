@@ -17,7 +17,13 @@ public record ProviderToolMetadata(
 ) {
 
     public static List<ProviderToolMetadata> from(GenerateTextRequest request) {
-        if (request == null || request.getTools() == null || request.getTools().isEmpty()) {
+        if (request == null) {
+            return List.of();
+        }
+        if (request.getTools() == null) {
+            return List.of();
+        }
+        if (request.getTools().isEmpty()) {
             return List.of();
         }
         return request.getTools().stream()

@@ -23,6 +23,7 @@ public final class UIMessageChatOptions<M> {
     private List<UIMessage<M>> messages;
     private UIMessageChatRequest<M> chatRequest;
     private UIMessage<M> message;
+    private boolean messageConfigured;
     private Supplier<M> metadataSupplier = () -> null;
     private Supplier<String> messageIdGenerator = () -> "msg_" + UUID.randomUUID();
     private Function<UIMessageChunk, String> serializer;
@@ -89,6 +90,7 @@ public final class UIMessageChatOptions<M> {
      */
     public UIMessageChatOptions<M> message(UIMessage<M> message) {
         this.message = message;
+        this.messageConfigured = true;
         return this;
     }
 
@@ -268,6 +270,10 @@ public final class UIMessageChatOptions<M> {
 
     UIMessage<M> message() {
         return message;
+    }
+
+    boolean messageConfigured() {
+        return messageConfigured;
     }
 
     Supplier<M> metadataSupplier() {

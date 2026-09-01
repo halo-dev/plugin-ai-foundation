@@ -1,3 +1,4 @@
+export * from './adapter-type-info';
 export * from './add-operation';
 export * from './ai-model';
 export * from './ai-model-list';

@@ -453,15 +453,33 @@ public final class LanguageModelStructuredOutputHandler {
     private String outputText(OutputSpec output, String text) {
         var trimmed = stripMarkdownFence(text);
         var objectText = structuredSlice(trimmed, '{', '}',
-            output.getType() == OutputType.OBJECT
-                || output.getType() == OutputType.JSON && trimmed.startsWith("{"));
+            expectsObject(output, trimmed));
         if (objectText != null) {
             return objectText;
         }
         var arrayText = structuredSlice(trimmed, '[', ']',
-            output.getType() == OutputType.ARRAY
-                || output.getType() == OutputType.JSON && trimmed.startsWith("["));
+            expectsArray(output, trimmed));
         return arrayText != null ? arrayText : trimmed;
+    }
+
+    private boolean expectsObject(OutputSpec output, String text) {
+        if (output.getType() == OutputType.OBJECT) {
+            return true;
+        }
+        if (output.getType() != OutputType.JSON) {
+            return false;
+        }
+        return text.startsWith("{");
+    }
+
+    private boolean expectsArray(OutputSpec output, String text) {
+        if (output.getType() == OutputType.ARRAY) {
+            return true;
+        }
+        if (output.getType() != OutputType.JSON) {
+            return false;
+        }
+        return text.startsWith("[");
     }
 
     private String stripMarkdownFence(String text) {

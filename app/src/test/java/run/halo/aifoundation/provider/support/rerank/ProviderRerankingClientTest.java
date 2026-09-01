@@ -1,5 +1,8 @@
 package run.halo.aifoundation.provider.support.rerank;
 
+import run.halo.aifoundation.provider.siliconflow.SiliconFlowRerankingClient;
+import run.halo.aifoundation.provider.zhipu.ZhiPuRerankingClient;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -15,7 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
-import run.halo.aifoundation.provider.OpenAiLikeProvider;
+import run.halo.aifoundation.provider.openailike.OpenAiLikeProvider;
+import run.halo.aifoundation.provider.dashscope.DashScopeRerankingClient;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.app.extension.Metadata;
@@ -29,6 +33,7 @@ class ProviderRerankingClientTest {
             capture.set(capture(exchange));
             respond(exchange, 200, """
                 {
+                  "id":"rerank-1",
                   "request_id":"req-1",
                   "results":[
                     {"index":1,"relevance_score":0.92,"document":"second"}
@@ -39,7 +44,7 @@ class ProviderRerankingClientTest {
         });
 
         try {
-            var client = new ZhiPuRerankingClient(baseUrl(server), "rerank-model", "sk-test",
+            var client = new ZhiPuRerankingClient(baseUrl(server), "rerank", "sk-test",
                 WebClient.builder());
 
             StepVerifier.create(client.rerank(request("zhipuai")))
@@ -52,8 +57,8 @@ class ProviderRerankingClientTest {
                         .isEqualTo("second");
                     assertThat(response.getUsage().getInputTokens()).isEqualTo(12);
                     assertThat(response.getUsage().getTotalTokens()).isEqualTo(16);
-                    assertThat(response.getResponse().getId()).isEqualTo("req-1");
-                    assertThat(response.getResponse().getModel()).isEqualTo("rerank-model");
+                    assertThat(response.getResponse().getId()).isEqualTo("rerank-1");
+                    assertThat(response.getResponse().getModel()).isEqualTo("rerank");
                     assertThat(response.getProviderMetadata()).containsEntry("requestId", "req-1");
                 })
                 .verifyComplete();
@@ -61,11 +66,11 @@ class ProviderRerankingClientTest {
             assertThat(capture.get().path()).isEqualTo("/rerank");
             assertThat(capture.get().authorization()).isEqualTo("Bearer sk-test");
             assertThat(capture.get().body())
-                .contains("\"model\":\"rerank-model\"")
+                .contains("\"model\":\"rerank\"")
                 .contains("\"query\":\"query\"")
                 .contains("\"documents\":[\"first\",\"second\"]")
                 .contains("\"top_n\":2")
-                .contains("\"return_documents\":true");
+                .doesNotContain("\"return_documents\"");
         } finally {
             server.stop(0);
         }
@@ -88,7 +93,8 @@ class ProviderRerankingClientTest {
         });
 
         try {
-            var client = new DashScopeRerankingClient(baseUrl(server), "dash-rerank", "sk-test",
+            var client = new DashScopeRerankingClient(baseUrl(server), "qwen3-vl-rerank",
+                "sk-test",
                 WebClient.builder());
 
             StepVerifier.create(client.rerank(request("dashscope")))
@@ -109,8 +115,9 @@ class ProviderRerankingClientTest {
             assertThat(capture.get().path())
                 .isEqualTo("/api/v1/services/rerank/text-rerank/text-rerank");
             assertThat(capture.get().body())
-                .contains("\"model\":\"dash-rerank\"")
-                .contains("\"input\":{\"query\":\"query\",\"documents\":[\"first\",\"second\"]}")
+                .contains("\"model\":\"qwen3-vl-rerank\"")
+                .contains("\"query\":\"query\"")
+                .contains("\"documents\":[\"first\",\"second\"]")
                 .contains("\"parameters\":{\"top_n\":2,\"return_documents\":true");
         } finally {
             server.stop(0);
@@ -118,12 +125,53 @@ class ProviderRerankingClientTest {
     }
 
     @Test
-    void siliconFlowClient_mapsMetaTokenUsage() throws Exception {
+    void dashScopeClient_usesNativeRerankWithoutInspectingModelId() throws Exception {
+        var capture = new AtomicReference<RequestCapture>();
+        var server = server(exchange -> {
+            capture.set(capture(exchange));
+            respond(exchange, 200, """
+                {
+                  "request_id":"dash-native-1",
+                  "output":{"results":[
+                    {"index":1,"relevance_score":0.93,"document":{"text":"second"}}
+                  ]},
+                  "usage":{"input_tokens":6,"total_tokens":6}
+                }
+                """);
+        });
+
+        try {
+            var client = new DashScopeRerankingClient(baseUrl(server), "qwen3-rerank",
+                "sk-test", WebClient.builder());
+
+            StepVerifier.create(client.rerank(request("dashscope")))
+                .assertNext(response -> {
+                    assertThat(response.getResults()).singleElement()
+                        .satisfies(result -> assertThat(result.getIndex()).isEqualTo(1));
+                    assertThat(response.getProviderMetadata().get("endpoint").toString())
+                        .endsWith("/api/v1/services/rerank/text-rerank/text-rerank");
+                })
+                .verifyComplete();
+
+            assertThat(capture.get().path())
+                .isEqualTo("/api/v1/services/rerank/text-rerank/text-rerank");
+            assertThat(capture.get().body())
+                .contains("\"query\":\"query\"")
+                .contains("\"documents\":[\"first\",\"second\"]")
+                .contains("\"parameters\":{")
+                .contains("\"return_documents\":true");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void siliconFlowClient_mapsTokenUsage() throws Exception {
         var server = server(exchange -> respond(exchange, 200, """
             {
               "id":"sf-1",
               "results":[{"index":0,"relevance_score":"0.77","document":"first"}],
-              "meta":{"tokens":{"input_tokens":5,"output_tokens":2}}
+              "tokens":{"input_tokens":5,"output_tokens":2}
             }
             """));
 
@@ -136,8 +184,8 @@ class ProviderRerankingClientTest {
                     assertThat(response.getResults().getFirst().getScore()).isEqualTo(0.77);
                     assertThat(response.getUsage().getInputTokens()).isEqualTo(5);
                     assertThat(response.getUsage().getTotalTokens()).isEqualTo(7);
-                    assertThat(response.getResponse().getMetadata()).containsKey("meta");
-                    assertThat(response.getProviderMetadata()).containsKey("rawMeta");
+                    assertThat(response.getResponse().getMetadata()).containsKey("tokens");
+                    assertThat(response.getProviderMetadata()).containsKey("tokens");
                 })
                 .verifyComplete();
         } finally {
@@ -228,7 +276,7 @@ class ProviderRerankingClientTest {
         var server = server(exchange -> respond(exchange, 429, "{\"error\":\"too many\"}"));
 
         try {
-            var client = new ZhiPuRerankingClient(baseUrl(server), "rerank-model", "sk-test",
+            var client = new ZhiPuRerankingClient(baseUrl(server), "rerank", "sk-test",
                 WebClient.builder());
 
             StepVerifier.create(client.rerank(request("zhipuai")))

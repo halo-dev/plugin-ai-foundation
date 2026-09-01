@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Mono;
@@ -17,6 +18,10 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.openai.OpenAiProvider;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
@@ -58,6 +63,28 @@ class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
         StepVerifier.create(model.generateText(request))
             .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
             .verifyComplete();
+    }
+
+    @Test
+    void create_appliesAdministratorNativeOptionsFromModelContext() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var context = new ModelRuntimeContext("model-a", "gpt-a", "provider-a", "openai",
+            AdapterType.OPENAI_CHAT, null, RuntimeParameterMappings.empty(),
+            Map.of("reasoning_effort", "high"));
+        var configuration = new LanguageModelRuntimeConfiguration(context,
+            new OpenAiProvider().languageModelProviderOptions(), null);
+        var model = factory.create(chatModel, configuration);
+
+        StepVerifier.create(model.generateText("Hello"))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var prompt = ArgumentCaptor.forClass(Prompt.class);
+        org.mockito.Mockito.verify(chatModel).call(prompt.capture());
+        assertThat((ChatCompletionsOptions) prompt.getValue().getOptions())
+            .extracting(ChatCompletionsOptions::getExtraBody)
+            .isEqualTo(Map.of("reasoning_effort", "high"));
     }
 
     @Test

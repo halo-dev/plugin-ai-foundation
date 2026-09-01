@@ -34,7 +34,7 @@ describe('useLanguageGenerationSettings', () => {
       logprobs: true,
       topLogprobs: 5,
       parallelToolCalls: false,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096,
       seed: 42,
       maxRetries: 2,
       reasoning: undefined,
