@@ -162,7 +162,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
         var reasoningControlOptions = ReasoningControlOptions.unsupported();
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoningControlOptions, nativeStrictToolSchemas, structuredOutput);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)

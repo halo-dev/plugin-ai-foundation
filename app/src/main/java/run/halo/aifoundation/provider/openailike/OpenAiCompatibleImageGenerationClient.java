@@ -25,6 +25,7 @@ import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.support.image.ImageParameterMappingMerger;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
@@ -50,18 +51,18 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
         ParameterMappingTarget target) {
+        return generateImage(request, target, Map.of());
+    }
+
+    @Override
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
+        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         if (hasInputImages(request)) {
             return Mono.error(new IllegalArgumentException(
                 "OpenAI-compatible image adapter currently supports text-to-image requests only"));
         }
-        var body = requestBody(request);
-        if (target != null) {
-            for (var field : List.of("n", "size", "aspect_ratio", "seed", "response_format",
-                "negative_prompt")) {
-                body.remove(field);
-            }
-            body.putAll(target.root());
-        }
+        var body = ImageParameterMappingMerger.merge(
+            requestBody(request, nativeOptions), target);
         var url = imagesGenerationsUrl();
         var diagnostics = ProviderDiagnostics.create(options.providerType(),
             "openai-compatible-image");
@@ -90,6 +91,11 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
     }
 
     Map<String, Object> requestBody(GenerateImageRequest request) {
+        return requestBody(request, Map.of());
+    }
+
+    Map<String, Object> requestBody(GenerateImageRequest request,
+        Map<String, Object> nativeOptions) {
         if (request == null) {
             throw new IllegalArgumentException(
                 "OpenAI-compatible image prompt must not be blank");
@@ -99,6 +105,9 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
                 "OpenAI-compatible image prompt must not be blank");
         }
         var body = new LinkedHashMap<String, Object>();
+        if (nativeOptions != null) {
+            body.putAll(nativeOptions);
+        }
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
         if (request.getN() != null) {

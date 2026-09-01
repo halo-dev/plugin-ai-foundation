@@ -13,6 +13,9 @@
  */
 
 
+// May contain unused imports in some cases
+// @ts-ignore
+import type { DefaultParameterMappingInfo } from './default-parameter-mapping-info';
 
 /**
  * Provider-owned invocation adapters available for model configuration
@@ -26,6 +29,12 @@ export interface AdapterTypeInfo {
      * @memberof AdapterTypeInfo
      */
     'adapterType'?: AdapterTypeInfoAdapterTypeEnum;
+    /**
+     * Adapter-specific parameter mapping defaults that override provider defaults
+     * @type {{ [key: string]: DefaultParameterMappingInfo; }}
+     * @memberof AdapterTypeInfo
+     */
+    'defaultParameterMappingOverrides'?: { [key: string]: DefaultParameterMappingInfo; };
     /**
      * 
      * @type {string}
@@ -70,6 +79,8 @@ export const AdapterTypeInfoAdapterTypeEnum = {
     DashscopeResponses: 'dashscope-responses',
     DashscopeMessages: 'dashscope-messages',
     DashscopeEmbedding: 'dashscope-embedding',
+    DashscopeCompatibleRerank: 'dashscope-compatible-rerank',
+    DashscopeNativeRerank: 'dashscope-native-rerank',
     DoubaoResponses: 'doubao-responses',
     DoubaoChat: 'doubao-chat',
     DoubaoEmbedding: 'doubao-embedding',

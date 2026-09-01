@@ -39,6 +39,9 @@ public final class OllamaImageGenerationClient extends AbstractJsonImageGenerati
                 "Ollama image masks are not documented by the experimental endpoint");
         }
         var body = new LinkedHashMap<String, Object>();
+        if (nativeOptions != null) {
+            body.putAll(nativeOptions);
+        }
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
         putIfNotNull(body, "n", request.getN());

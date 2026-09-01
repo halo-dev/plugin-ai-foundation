@@ -22,6 +22,7 @@ import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.image.AbstractJsonImageGenerationClient;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
+import run.halo.aifoundation.provider.support.image.ImageParameterMappingMerger;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
@@ -133,18 +134,12 @@ public final class OpenAiImageGenerationClient extends AbstractJsonImageGenerati
     private Map<String, Object> mappedEditFields(GenerateImageRequest request,
         ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         var fields = requestFields(request, nativeOptions, EDIT_OPTIONS);
-        if (target == null) {
-            return fields;
-        }
-        for (var field : List.of("n", "size", "response_format")) {
-            fields.remove(field);
-        }
-        fields.putAll(target.root());
-        if (!target.parameters().isEmpty()) {
+        var merged = ImageParameterMappingMerger.merge(fields, target);
+        if (target != null && !target.parameters().isEmpty()) {
             throw new IllegalArgumentException(
                 "OpenAI image edit parameter mappings must target root fields");
         }
-        return fields;
+        return merged;
     }
 
     private MultipartBodyBuilder multipartBody(Map<String, Object> fields,

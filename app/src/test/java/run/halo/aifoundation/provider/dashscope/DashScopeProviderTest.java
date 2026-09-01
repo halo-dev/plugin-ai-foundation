@@ -26,6 +26,7 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
@@ -41,7 +42,8 @@ import run.halo.app.extension.Metadata;
         + "https://help.aliyun.com/en/model-studio/qwen-api-via-openai-responses; "
         + "https://help.aliyun.com/zh/model-studio/anthropic-api-messages; "
         + "https://help.aliyun.com/zh/model-studio/getting-started/models; "
-        + "https://help.aliyun.com/en/model-studio/text-embedding-synchronous-api",
+        + "https://help.aliyun.com/en/model-studio/text-embedding-synchronous-api; "
+        + "https://help.aliyun.com/en/model-studio/text-rerank-api",
     retrievedAt = "2026-09-01"
 )
 class DashScopeProviderTest {
@@ -101,6 +103,23 @@ class DashScopeProviderTest {
                 GenerateTextRequest.builder().prompt("Think harder").build());
         effort = effort.mutate().extraBody(Map.of("reasoning_effort", "high")).build();
         assertThat(effort.getExtraBody()).containsEntry("reasoning_effort", "high");
+    }
+
+    @Test
+    void exposesSeparateCompatibleAndNativeRerankProtocols() {
+        assertThat(provider.getSupportedAdapterTypes())
+            .contains(AdapterType.DASHSCOPE_COMPATIBLE_RERANK,
+                AdapterType.DASHSCOPE_NATIVE_RERANK);
+        assertThat(provider.getSupportedFeatures(AdapterType.DASHSCOPE_COMPATIBLE_RERANK))
+            .isEmpty();
+        assertThat(provider.getSupportedFeatures(AdapterType.DASHSCOPE_NATIVE_RERANK))
+            .containsExactly(ModelFeature.VISION);
+        assertThat(provider.getDefaultParameterMappings(AdapterType.DASHSCOPE_COMPATIBLE_RERANK)
+            .get(ModelParameter.TOP_N).template())
+            .isEqualTo("rerank.top-n");
+        assertThat(provider.getDefaultParameterMappings(AdapterType.DASHSCOPE_NATIVE_RERANK)
+            .get(ModelParameter.TOP_N).template())
+            .isEqualTo("rerank.parameters.top-n");
     }
 
     @Test

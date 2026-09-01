@@ -180,7 +180,7 @@ public class ZhiPuProvider extends AbstractAiProviderType {
         ReasoningControlOptions reasoning, StructuredOutputSupport structuredOutput) {
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoning, false, structuredOutput);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)

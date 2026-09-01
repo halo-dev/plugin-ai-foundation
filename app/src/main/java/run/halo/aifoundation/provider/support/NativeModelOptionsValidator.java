@@ -9,10 +9,11 @@ public final class NativeModelOptionsValidator {
 
     private static final Set<String> INVOCATION_FIELDS = Set.of(
         "model", "messages", "input", "prompt", "image", "images", "mask", "tools",
-        "tool_choice", "documents", "query", "stream", "stream_options");
+        "toolchoice", "documents", "query", "stream", "streamoptions");
     private static final Set<String> CREDENTIAL_FIELDS = Set.of(
-        "api_key", "apikey", "authorization", "access_token", "token", "secret",
-        "password", "credential");
+        "apikey", "xapikey", "authorization", "accesstoken", "bearertoken",
+        "token", "secret", "secretkey", "clientsecret", "privatekey", "password",
+        "credential");
     private static final int MAX_NESTING_DEPTH = 32;
 
     private NativeModelOptionsValidator() {
@@ -33,7 +34,7 @@ public final class NativeModelOptionsValidator {
     private static void validateEntry(Map.Entry<String, Object> entry) {
         var name = entry.getKey();
         validateName(name, name);
-        if (INVOCATION_FIELDS.contains(name)) {
+        if (INVOCATION_FIELDS.contains(normalizeName(name))) {
             throw new IllegalArgumentException(
                 "Provider-native option '" + name + "' is owned by the model invocation");
         }
@@ -47,11 +48,22 @@ public final class NativeModelOptionsValidator {
         if (name.isBlank()) {
             throw new IllegalArgumentException("Provider-native option names must not be blank");
         }
-        var normalizedName = name.toLowerCase(Locale.ROOT).replace('-', '_');
+        var normalizedName = normalizeName(name);
         if (CREDENTIAL_FIELDS.contains(normalizedName)) {
             throw new IllegalArgumentException(
                 "Provider-native option '" + path + "' must use the provider Secret instead");
         }
+    }
+
+    private static String normalizeName(String name) {
+        var lowercase = name.toLowerCase(Locale.ROOT);
+        var normalized = new StringBuilder(lowercase.length());
+        for (var character : lowercase.toCharArray()) {
+            if (Character.isLetterOrDigit(character)) {
+                normalized.append(character);
+            }
+        }
+        return normalized.toString();
     }
 
     private static void validateValue(Object value, String path, int depth) {

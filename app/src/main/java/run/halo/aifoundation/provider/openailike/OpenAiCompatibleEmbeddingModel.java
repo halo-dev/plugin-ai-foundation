@@ -147,6 +147,9 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
 
     private Map<String, Object> requestBody(List<String> input, OpenAiCompatibleEmbeddingOptions options) {
         var body = new LinkedHashMap<String, Object>();
+        if (options.getExtraBody() != null) {
+            body.putAll(options.getExtraBody());
+        }
         body.put(Fields.INPUT, input != null ? input : List.of());
         body.put(Fields.MODEL, hasText(options.getDeploymentName())
             ? options.getDeploymentName()
@@ -156,9 +159,6 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
             body.put(Fields.ENCODING_FORMAT, options.getEncodingFormat().getValue());
         }
         putIfPresent(body, Fields.DIMENSIONS, options.getDimensions());
-        if (options.getExtraBody() != null) {
-            body.putAll(options.getExtraBody());
-        }
         return body;
     }
 

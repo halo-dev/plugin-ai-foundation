@@ -26,6 +26,7 @@ import {
 import {
   adapterOptionsForProviderType,
   defaultAdapterForProviderType,
+  defaultParameterMappingsForAdapter,
   defaultModelTypeForProviderType,
   modelFeatureOptionsForProviderType,
   modelTypeOptionsForProviderType,
@@ -85,6 +86,9 @@ const adapterOptions = computed(() =>
 const hasMultipleAdapterOptions = computed(() => adapterOptions.value.length > 1)
 const selectedAdapterType = shallowRef<AiModelSpecAdapterTypeEnum | undefined>(
   props.formState?.adapterType,
+)
+const defaultParameterMappings = computed(() =>
+  defaultParameterMappingsForAdapter(selectedProviderType.value, selectedAdapterType.value),
 )
 const featureOptions = computed(() => {
   return modelFeatureOptionsForProviderType(
@@ -497,7 +501,7 @@ function sameJson(a: unknown, b: unknown) {
         :adapter-type="selectedAdapterType"
         :definitions="selectedProviderType?.parameterDefinitions"
         :templates="selectedProviderType?.parameterMappingTemplates"
-        :defaults="selectedProviderType?.defaultParameterMappings"
+        :defaults="defaultParameterMappings"
         :inherited-mappings="inheritedMappings"
       />
     </AdvancedSettingsCollapsible>

@@ -22,6 +22,7 @@ class RuntimeParameterMappingsTest {
 
         assertThat(mappings.apply(ModelParameter.TOP_N, 3, target)).isTrue();
         assertThat(target.parameters()).containsEntry("top_n", 3);
+        assertThat(target.appliedParameters()).containsExactly(ModelParameter.TOP_N);
         assertThat(mappings.isUnsupported(ModelParameter.DIMENSIONS)).isTrue();
         assertThat(mappings.unsupportedDiagnostic(ModelParameter.DIMENSIONS).metadata())
             .containsEntry("modelName", "model-a")
@@ -67,6 +68,7 @@ class RuntimeParameterMappingsTest {
         assertThat(mappings.canApplyReasoning(ReasoningOptions.disabled())).isFalse();
         assertThat(mappings.applyReasoning(ReasoningOptions.enabled(), target)).isTrue();
         assertThat(target.root()).containsEntry("reasoning", Map.of("mode", "on"));
+        assertThat(target.appliedParameters()).containsExactly(ModelParameter.REASONING);
     }
 
     @Test

@@ -167,4 +167,25 @@ class OllamaDomainClientsTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("BASE64");
     }
+
+    @Test
+    void imageClientForwardsConfiguredNativeOptionsWithoutOverridingPortableFields() {
+        var client = new OllamaImageGenerationClient(new ImageGenerationClientOptions(
+            "ollama", "https://example.com/v1", "secret", "configured-model", null),
+            WebClient.builder());
+        var request = GenerateImageRequest.builder()
+            .prompt("Halo mascot")
+            .size("1024x1024")
+            .build();
+
+        var body = client.requestBody(request, Map.of(
+            "provider_extension", true,
+            "model", "ignored-model",
+            "size", "ignored-size"));
+
+        assertThat(body)
+            .containsEntry("provider_extension", true)
+            .containsEntry("model", "configured-model")
+            .containsEntry("size", "1024x1024");
+    }
 }

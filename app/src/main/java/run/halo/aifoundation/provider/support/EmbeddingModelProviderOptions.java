@@ -32,6 +32,10 @@ public record EmbeddingModelProviderOptions(
     public EmbeddingOptions buildOptions(EmbeddingRequest request,
         List<EmbeddingWarning> warnings) {
         if (embeddingOptionsFactory == null) {
+            if (!nativeOptions.isEmpty()) {
+                throw new IllegalStateException(
+                    "Embedding provider does not support configured native options");
+            }
             return defaultOptions(request);
         }
         return embeddingOptionsFactory.build(request, this, warnings);

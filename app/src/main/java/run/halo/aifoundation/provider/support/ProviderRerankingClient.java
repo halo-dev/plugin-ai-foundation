@@ -20,6 +20,13 @@ public interface ProviderRerankingClient {
 
     default Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target,
         Map<String, Object> nativeOptions) {
-        return rerank(request, target);
+        if (nativeOptions == null) {
+            return rerank(request, target);
+        }
+        if (nativeOptions.isEmpty()) {
+            return rerank(request, target);
+        }
+        return Mono.error(new IllegalStateException(
+            "Reranking provider does not support configured native options"));
     }
 }

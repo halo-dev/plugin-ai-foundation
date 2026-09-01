@@ -172,6 +172,8 @@ export const ProviderTypeInfoSupportedAdapterTypesEnum = {
     DashscopeResponses: 'dashscope-responses',
     DashscopeMessages: 'dashscope-messages',
     DashscopeEmbedding: 'dashscope-embedding',
+    DashscopeCompatibleRerank: 'dashscope-compatible-rerank',
+    DashscopeNativeRerank: 'dashscope-native-rerank',
     DoubaoResponses: 'doubao-responses',
     DoubaoChat: 'doubao-chat',
     DoubaoEmbedding: 'doubao-embedding',

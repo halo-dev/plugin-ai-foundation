@@ -4,7 +4,12 @@ import static org.springdoc.core.fn.builders.apiresponse.Builder.responseBuilder
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -13,6 +18,8 @@ import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ModelParameterCatalog;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -105,13 +112,7 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
                         .defaultReasoningMapping(template.defaultReasoningMapping())
                         .build())
                     .toList())
-                .defaultParameterMappings(type.getDefaultParameterMappings().entrySet()
-                    .stream().collect(java.util.stream.Collectors.toMap(
-                        entry -> entry.getKey().name(), entry ->
-                            DefaultParameterMappingInfo.builder()
-                                .mode(entry.getValue().mode().name())
-                                .template(entry.getValue().template())
-                                .build())))
+                .defaultParameterMappings(defaultMappings(type, null))
                 .build())
             .sorted(Comparator
                 .comparing((ProviderTypeInfo t) -> !t.isBuiltIn())
@@ -122,14 +123,50 @@ public class ProviderTypeConsoleEndpoint implements CustomEndpoint {
 
     private AdapterTypeInfo adapterInfo(AiProviderType providerType, AdapterType adapter,
         boolean recommended) {
-        var protocol = adapter.getProtocol();
         return AdapterTypeInfo.builder()
             .adapterType(adapter)
             .modelType(adapter.getModelType())
-            .displayName(protocol.getDisplayName())
-            .description(protocol.getDescription())
+            .displayName(adapter.getDisplayName())
+            .description(adapter.getDescription())
             .supportedFeatures(providerType.getSupportedFeatures(adapter))
+            .defaultParameterMappingOverrides(defaultMappingOverrides(providerType, adapter))
             .recommended(recommended)
             .build();
+    }
+
+    private Map<String, DefaultParameterMappingInfo> defaultMappings(
+        AiProviderType providerType, AdapterType adapter) {
+        return providerType.getDefaultParameterMappings(adapter).entrySet().stream()
+            .collect(Collectors.toMap(
+                entry -> entry.getKey().name(),
+                entry -> DefaultParameterMappingInfo.builder()
+                    .mode(entry.getValue().mode().name())
+                    .template(entry.getValue().template())
+                    .build()));
+    }
+
+    private Map<String, DefaultParameterMappingInfo> defaultMappingOverrides(
+        AiProviderType providerType, AdapterType adapter) {
+        var defaults = providerType.getDefaultParameterMappings();
+        var adapterDefaults = providerType.getDefaultParameterMappings(adapter);
+        var parameters = EnumSet.noneOf(ModelParameter.class);
+        parameters.addAll(defaults.keySet());
+        parameters.addAll(adapterDefaults.keySet());
+        var overrides = new LinkedHashMap<String, DefaultParameterMappingInfo>();
+        for (var parameter : parameters) {
+            var defaultMapping = defaults.get(parameter);
+            var adapterMapping = adapterDefaults.get(parameter);
+            if (Objects.equals(defaultMapping, adapterMapping)) {
+                continue;
+            }
+            if (adapterMapping == null) {
+                adapterMapping = DefaultParameterMapping.unsupported();
+            }
+            overrides.put(parameter.name(), DefaultParameterMappingInfo.builder()
+                .mode(adapterMapping.mode().name())
+                .template(adapterMapping.template())
+                .build());
+        }
+        return Map.copyOf(overrides);
     }
 }

@@ -95,7 +95,7 @@ class ProviderRerankingClientTest {
         try {
             var client = new DashScopeRerankingClient(baseUrl(server), "qwen3-vl-rerank",
                 "sk-test",
-                WebClient.builder());
+                WebClient.builder(), DashScopeRerankingClient.RequestFormat.NATIVE);
 
             StepVerifier.create(client.rerank(request("dashscope")))
                 .assertNext(response -> {
@@ -125,41 +125,79 @@ class ProviderRerankingClientTest {
     }
 
     @Test
-    void dashScopeClient_usesNativeRerankWithoutInspectingModelId() throws Exception {
+    void dashScopeClient_usesCompatibleProtocolWithoutInspectingModelId() throws Exception {
         var capture = new AtomicReference<RequestCapture>();
         var server = server(exchange -> {
             capture.set(capture(exchange));
             respond(exchange, 200, """
                 {
-                  "request_id":"dash-native-1",
-                  "output":{"results":[
+                  "id":"dash-text-1",
+                  "model":"configured-model",
+                  "results":[
                     {"index":1,"relevance_score":0.93,"document":{"text":"second"}}
-                  ]},
-                  "usage":{"input_tokens":6,"total_tokens":6}
+                  ],
+                  "usage":{"total_tokens":6}
                 }
                 """);
         });
 
         try {
-            var client = new DashScopeRerankingClient(baseUrl(server), "qwen3-rerank",
-                "sk-test", WebClient.builder());
+            var client = new DashScopeRerankingClient(baseUrl(server), "configured-model",
+                "sk-test", WebClient.builder(),
+                DashScopeRerankingClient.RequestFormat.COMPATIBLE);
 
             StepVerifier.create(client.rerank(request("dashscope")))
                 .assertNext(response -> {
                     assertThat(response.getResults()).singleElement()
                         .satisfies(result -> assertThat(result.getIndex()).isEqualTo(1));
                     assertThat(response.getProviderMetadata().get("endpoint").toString())
-                        .endsWith("/api/v1/services/rerank/text-rerank/text-rerank");
+                        .endsWith("/compatible-api/v1/reranks");
                 })
                 .verifyComplete();
 
             assertThat(capture.get().path())
-                .isEqualTo("/api/v1/services/rerank/text-rerank/text-rerank");
+                .isEqualTo("/compatible-api/v1/reranks");
             assertThat(capture.get().body())
                 .contains("\"query\":\"query\"")
                 .contains("\"documents\":[\"first\",\"second\"]")
-                .contains("\"parameters\":{")
-                .contains("\"return_documents\":true");
+                .contains("\"top_n\":2")
+                .doesNotContain("\"input\"")
+                .doesNotContain("\"parameters\"");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void dashScopeClient_appliesDocumentedNativeOptions() throws Exception {
+        var capture = new AtomicReference<RequestCapture>();
+        var server = server(exchange -> {
+            capture.set(capture(exchange));
+            respond(exchange, 200, """
+                {
+                  "request_id":"dash-native-options",
+                  "output":{"results":[]},
+                  "usage":{"input_tokens":1,"total_tokens":1}
+                }
+                """);
+        });
+
+        try {
+            var client = new DashScopeRerankingClient(baseUrl(server), "configured-model",
+                "sk-test", WebClient.builder(),
+                DashScopeRerankingClient.RequestFormat.NATIVE);
+
+            StepVerifier.create(client.rerank(request("dashscope"), null, Map.of(
+                    "return_documents", false,
+                    "instruct", "Rank for Halo documentation relevance",
+                    "fps", 1.0)))
+                .expectNextCount(1)
+                .verifyComplete();
+
+            assertThat(capture.get().body())
+                .contains("\"return_documents\":false")
+                .contains("\"fps\":1.0")
+                .contains("\"instruct\":\"Rank for Halo documentation relevance\"");
         } finally {
             server.stop(0);
         }

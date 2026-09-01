@@ -192,7 +192,7 @@ public class SiliconFlowProvider extends AbstractAiProviderType {
         var reasoning = ReasoningControlOptions.unsupported();
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoning, nativeStrictToolSchemas, structuredOutput);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)

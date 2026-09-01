@@ -192,7 +192,7 @@ public class OpenRouterProvider extends AbstractAiProviderType {
         var reasoning = ReasoningControlOptions.unsupported();
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoning, nativeStrictToolSchemas, StructuredOutputSupport.JSON_SCHEMA);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)

@@ -11,14 +11,15 @@ public final class ChatCompletionsNativeOptions {
     }
 
     public static ChatOptions apply(ChatOptions options, Map<String, Object> nativeOptions) {
-        if (!(options instanceof ChatCompletionsOptions chatOptions)) {
-            return options;
-        }
         if (nativeOptions == null) {
             return options;
         }
         if (nativeOptions.isEmpty()) {
             return options;
+        }
+        if (!(options instanceof ChatCompletionsOptions chatOptions)) {
+            throw new IllegalStateException(
+                "Chat Completions native options require ChatCompletionsOptions");
         }
         var extraBody = new LinkedHashMap<String, Object>(nativeOptions);
         if (chatOptions.getExtraBody() != null) {

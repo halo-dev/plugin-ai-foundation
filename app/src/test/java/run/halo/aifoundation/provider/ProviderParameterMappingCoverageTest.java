@@ -122,7 +122,15 @@ class ProviderParameterMappingCoverageTest {
 
     @Test
     void providerSpecificDefaultsFollowProviderWireProtocols() {
-        assertThat(new DashScopeProvider().getDefaultParameterMappings().get(ModelParameter.TOP_N))
+        var dashScope = new DashScopeProvider();
+        assertThat(dashScope.getDefaultParameterMappings(AdapterType.DASHSCOPE_COMPATIBLE_RERANK)
+            .get(ModelParameter.TOP_N))
+            .satisfies(mapping -> {
+                assertThat(mapping.mode()).isEqualTo(ModelParameterMappings.Mode.TEMPLATE);
+                assertThat(mapping.template()).isEqualTo("rerank.top-n");
+            });
+        assertThat(dashScope.getDefaultParameterMappings(AdapterType.DASHSCOPE_NATIVE_RERANK)
+            .get(ModelParameter.TOP_N))
             .satisfies(mapping -> {
                 assertThat(mapping.mode()).isEqualTo(ModelParameterMappings.Mode.TEMPLATE);
                 assertThat(mapping.template()).isEqualTo("rerank.parameters.top-n");

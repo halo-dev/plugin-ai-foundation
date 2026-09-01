@@ -20,7 +20,8 @@ public final class OpenAiEmbeddingOptionsFactory {
 
         var headers = request.getHeaders() != null ? request.getHeaders() : Map.<String, String>of();
         var builder = OpenAiCompatibleEmbeddingOptions.builder()
-            .dimensions(dimensions);
+            .dimensions(dimensions)
+            .extraBody(providerOptions.nativeOptions());
         builder.customHeaders(headers);
         return builder.build();
     }

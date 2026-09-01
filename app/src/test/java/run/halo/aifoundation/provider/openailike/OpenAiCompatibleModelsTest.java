@@ -17,6 +17,7 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,8 @@ import run.halo.aifoundation.provider.openailike.OpenAiCompatibleEmbeddingOption
 import run.halo.aifoundation.provider.transport.ProviderSseDecoder;
 import run.halo.aifoundation.provider.protocol.chatcompletions.CumulativeToolInputStreamDialect;
 import run.halo.aifoundation.provider.protocol.chatcompletions.StandardChatCompletionsProfile;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -507,6 +510,31 @@ class OpenAiCompatibleModelsTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void imageRequestBodyAppliesModelNativeDefaultsWithoutOverridingPortableFields()
+        throws NoSuchMethodException {
+        var model = new OpenAiCompatibleImageGenerationClient(imageOptions(), WebClient.builder());
+        var request = GenerateImageRequest.builder()
+            .prompt("Draw Halo")
+            .n(2)
+            .size("1024x1024")
+            .build();
+
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", request, Map.of(
+                "quality", "hd",
+                "n", 99,
+                "size", "256x256"));
+
+        assertThat(body).containsEntry("quality", "hd")
+            .containsEntry("n", 2)
+            .containsEntry("size", "1024x1024");
+        assertThat(OpenAiCompatibleImageGenerationClient.class.getMethod("generateImage",
+            GenerateImageRequest.class, ParameterMappingTarget.class, Map.class)
+            .getDeclaringClass()).isEqualTo(OpenAiCompatibleImageGenerationClient.class);
+    }
+
+    @Test
     void imageResponse_mapsGeneratedFilesWarningsAndUsage() {
         var model = new OpenAiCompatibleImageGenerationClient(imageOptions(), WebClient.builder());
         var json = """
@@ -579,6 +607,29 @@ class OpenAiCompatibleModelsTest {
             .containsEntry("model", "text-embedding-request")
             .containsEntry("dimensions", 256)
             .containsEntry("user", "user-1");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void embeddingRequestBodyAppliesModelNativeDefaultsWithoutOverridingPortableFields() {
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .inputs(List.of("hello"))
+            .dimensions(512)
+            .build();
+        var providerOptions = new EmbeddingModelProviderOptions(null, Map.of(
+            "vendor_extension", "configured",
+            "dimensions", 128));
+        var options = (OpenAiCompatibleEmbeddingOptions) OpenAiEmbeddingOptionsFactory.build(
+            request, providerOptions, new ArrayList<>());
+        options = options.mutate().model("text-embedding-request").build();
+        var model = new OpenAiCompatibleEmbeddingModel(embeddingOptions(), WebClient.builder());
+
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", request.getInputs(), options);
+
+        assertThat(body).containsEntry("vendor_extension", "configured")
+            .containsEntry("dimensions", 512)
+            .containsEntry("input", List.of("hello"));
     }
 
     @Test

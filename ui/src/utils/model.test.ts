@@ -21,6 +21,7 @@ import {
   adapterOptionsForProviderType,
   createModelFromDiscovered,
   defaultAdapterForProviderType,
+  defaultParameterMappingsForAdapter,
   defaultModelTypeForProviderType,
   discoveredModelProfileForProviderType,
   filterModelFeaturesForProviderType,
@@ -183,6 +184,35 @@ describe('createModelFromDiscovered', () => {
 })
 
 describe('provider type model options', () => {
+  it('uses adapter-specific parameter defaults when available', () => {
+    const providerType = providerTypeInfo('openai', 'OpenAI', {
+      defaultParameterMappings: {
+        REASONING: { mode: 'TEMPLATE', template: 'reasoning.effort' },
+      },
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          supportedFeatures: [],
+          recommended: true,
+          defaultParameterMappingOverrides: {
+            REASONING: { mode: 'TEMPLATE', template: 'reasoning.responses-effort' },
+          },
+        },
+      ],
+    })
+
+    expect(
+      defaultParameterMappingsForAdapter(
+        providerType,
+        AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
+      )?.REASONING?.template,
+    ).toBe('reasoning.responses-effort')
+    expect(defaultParameterMappingsForAdapter(providerType, 'missing')?.REASONING?.template).toBe(
+      'reasoning.effort',
+    )
+  })
+
   it('exposes vision when the DeepSeek provider declares it', () => {
     const providerType = providerTypeInfo('deepseek', 'DeepSeek', {
       supportedFeatures: [

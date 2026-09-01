@@ -21,7 +21,18 @@ class NativeModelOptionsValidatorTest {
         assertThatThrownBy(() -> NativeModelOptionsValidator.validate(Map.of("model", "other")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("owned by the model invocation");
+        assertThatThrownBy(() -> NativeModelOptionsValidator.validate(Map.of("Model", "other")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("owned by the model invocation");
+        assertThatThrownBy(() -> NativeModelOptionsValidator.validate(
+            Map.of("tool-choice", "required")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("owned by the model invocation");
         assertThatThrownBy(() -> NativeModelOptionsValidator.validate(Map.of("stream", true)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("owned by the model invocation");
+        assertThatThrownBy(() -> NativeModelOptionsValidator.validate(
+            Map.of("streamOptions", Map.of())))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("owned by the model invocation");
     }
@@ -49,5 +60,27 @@ class NativeModelOptionsValidatorTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("transport.access-token")
             .hasMessageContaining("provider Secret");
+        assertThatThrownBy(() -> NativeModelOptionsValidator.validate(
+            Map.of("x-api-key", "secret")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("provider Secret");
+        assertThatThrownBy(() -> NativeModelOptionsValidator.validate(
+            Map.of("oauth", Map.of("client_secret", "secret"))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("oauth.client_secret")
+            .hasMessageContaining("provider Secret");
+    }
+
+    @Test
+    void rejectsCredentialAliasesRegardlessOfCaseOrSeparatorStyle() {
+        for (var name : java.util.List.of(
+            "xApiKey", "accessToken", "bearerToken", "secretKey", "clientSecret",
+            "privateKey", "X.API.KEY")) {
+            assertThatThrownBy(() -> NativeModelOptionsValidator.validate(
+                Map.of(name, "secret")))
+                .as(name)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("provider Secret");
+        }
     }
 }

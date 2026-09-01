@@ -98,12 +98,6 @@ public final class LanguageModelChatOptionsBuilder {
                 return factory.build(request);
             }
         }
-        if (hasHeaders(request)) {
-            var factory = providerOptions.structuredOutputChatOptionsFactory();
-            if (factory != null) {
-                return factory.build(request);
-            }
-        }
         if (providerOptions.chatOptionsFactory() != null) {
             return providerOptions.chatOptionsFactory().build(request);
         }
@@ -122,6 +116,11 @@ public final class LanguageModelChatOptionsBuilder {
     private ChatOptions applyNativeOptions(ChatOptions options) {
         var applicator = providerOptions.nativeOptionsApplicator();
         if (applicator == null) {
+            if (!nativeOptions.isEmpty()) {
+                throw new IllegalStateException(
+                    "Language provider does not support configured native options: "
+                        + providerType);
+            }
             return options;
         }
         return applicator.apply(options, nativeOptions);

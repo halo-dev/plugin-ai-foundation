@@ -3,32 +3,47 @@ package run.halo.aifoundation.provider.support.image;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 
 /** Applies runtime image parameter mappings without leaking merge mechanics into HTTP clients. */
-final class ImageParameterMappingMerger {
+public final class ImageParameterMappingMerger {
 
-    private static final List<String> ROOT_FIELDS = List.of(
-        "n", "batch_size", "size", "image_size", "aspect_ratio", "seed",
-        "response_format", "negative_prompt", "width", "height");
-    private static final List<String> PARAMETER_FIELDS = List.of(
-        "n", "size", "aspect_ratio", "seed", "response_format", "negative_prompt");
+    private static final Map<ModelParameter, ImageFields> FIELDS = Map.of(
+        ModelParameter.IMAGE_COUNT,
+        new ImageFields(List.of("n", "batch_size"), List.of("n")),
+        ModelParameter.IMAGE_SIZE,
+        new ImageFields(List.of("size", "image_size", "width", "height"), List.of("size")),
+        ModelParameter.ASPECT_RATIO,
+        new ImageFields(List.of("aspect_ratio"), List.of("aspect_ratio")),
+        ModelParameter.IMAGE_SEED,
+        new ImageFields(List.of("seed"), List.of("seed")),
+        ModelParameter.RESPONSE_FORMAT,
+        new ImageFields(List.of("response_format"), List.of("response_format")),
+        ModelParameter.NEGATIVE_PROMPT,
+        new ImageFields(List.of("negative_prompt"), List.of("negative_prompt"))
+    );
 
     private ImageParameterMappingMerger() {
     }
 
-    static Map<String, Object> merge(Map<String, Object> body, ParameterMappingTarget target) {
+    public static Map<String, Object> merge(Map<String, Object> body,
+        ParameterMappingTarget target) {
         if (target == null) {
             return body;
         }
-        removeFields(body, ROOT_FIELDS);
         var parameters = parameters(body);
-        if (parameters != null) {
-            removeFields(parameters, PARAMETER_FIELDS);
-            if (parameters.isEmpty()) {
-                body.remove("parameters");
-                parameters = null;
+        for (var parameter : target.appliedParameters()) {
+            var fields = FIELDS.get(parameter);
+            if (fields == null) {
+                continue;
             }
+            removeFields(body, fields.root());
+            removeFields(parameters, fields.parameters());
+        }
+        if (parameters != null && parameters.isEmpty()) {
+            body.remove("parameters");
+            parameters = null;
         }
         body.putAll(target.root());
         if (target.parameters().isEmpty()) {
@@ -43,6 +58,9 @@ final class ImageParameterMappingMerger {
     }
 
     private static void removeFields(Map<String, Object> values, List<String> fields) {
+        if (values == null) {
+            return;
+        }
         fields.forEach(values::remove);
     }
 
@@ -50,8 +68,13 @@ final class ImageParameterMappingMerger {
     private static Map<String, Object> parameters(Map<String, Object> body) {
         var value = body.get("parameters");
         if (value instanceof Map<?, ?> map) {
-            return (Map<String, Object>) map;
+            var copy = new LinkedHashMap<>((Map<String, Object>) map);
+            body.put("parameters", copy);
+            return copy;
         }
         return null;
+    }
+
+    private record ImageFields(List<String> root, List<String> parameters) {
     }
 }
