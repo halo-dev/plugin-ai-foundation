@@ -59,6 +59,13 @@ public class RerankRequest {
      */
     private transient GenerationTimeouts timeouts;
 
+    /** Retains the constructor published before request-scoped headers were introduced. */
+    public RerankRequest(String query, List<RerankDocument> documents, Integer topN,
+        Map<String, Object> metadata, Map<String, Object> context,
+        CancellationToken cancellationToken, GenerationTimeouts timeouts) {
+        this(query, documents, topN, null, metadata, context, cancellationToken, timeouts);
+    }
+
     @Transient
     public CancellationToken getCancellationToken() {
         return cancellationToken;

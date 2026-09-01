@@ -93,6 +93,9 @@ public final class DashScopeEmbeddingModel
             parameters.put("text_type", options.textType().value());
         }
         parameters.put("output_type", options.outputType().value());
+        if (hasText(options.instruct())) {
+            parameters.put("instruct", options.instruct());
+        }
 
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.model());

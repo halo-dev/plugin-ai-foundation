@@ -13,6 +13,7 @@ public record DouBaoEmbeddingOptions(
     String apiKey,
     String model,
     Integer dimensions,
+    String encodingFormat,
     String instructions,
     boolean includeSparseEmbedding,
     boolean includeModalityEmbeddings,
@@ -23,6 +24,7 @@ public record DouBaoEmbeddingOptions(
     public DouBaoEmbeddingOptions {
         customHeaders = customHeaders == null ? Map.of() : Map.copyOf(customHeaders);
         timeout = timeout == null ? Duration.ofSeconds(60) : timeout;
+        encodingFormat = encodingFormat == null ? "float" : encodingFormat;
     }
 
     @Override
@@ -43,6 +45,8 @@ public record DouBaoEmbeddingOptions(
         var mergedApiKey = overrides.textOr(DouBaoEmbeddingOptions::apiKey, apiKey);
         var mergedModel = overrides.modelOr(model);
         var mergedDimensions = overrides.dimensionsOr(dimensions);
+        var mergedEncodingFormat = overrides.textOr(
+            DouBaoEmbeddingOptions::encodingFormat, encodingFormat);
         var mergedInstructions = overrides.textOr(
             DouBaoEmbeddingOptions::instructions, instructions);
         var includeSparse = overrides.booleanOr(
@@ -58,6 +62,7 @@ public record DouBaoEmbeddingOptions(
             .apiKey(mergedApiKey)
             .model(mergedModel)
             .dimensions(mergedDimensions)
+            .encodingFormat(mergedEncodingFormat)
             .instructions(mergedInstructions)
             .includeSparseEmbedding(includeSparse)
             .includeModalityEmbeddings(includeModalities)

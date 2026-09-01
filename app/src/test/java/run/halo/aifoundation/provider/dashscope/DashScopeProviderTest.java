@@ -28,6 +28,7 @@ import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
@@ -39,8 +40,9 @@ import run.halo.app.extension.Metadata;
     officialDocumentation = "https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions; "
         + "https://help.aliyun.com/en/model-studio/qwen-api-via-openai-responses; "
         + "https://help.aliyun.com/zh/model-studio/anthropic-api-messages; "
-        + "https://help.aliyun.com/zh/model-studio/getting-started/models",
-    retrievedAt = "2026-08-27"
+        + "https://help.aliyun.com/zh/model-studio/getting-started/models; "
+        + "https://help.aliyun.com/en/model-studio/text-embedding-synchronous-api",
+    retrievedAt = "2026-09-01"
 )
 class DashScopeProviderTest {
 
@@ -254,10 +256,15 @@ class DashScopeProviderTest {
     @Test
     @SuppressWarnings("unchecked")
     void nativeEmbeddingMapsDimensionsTextRoleAndSparseMetadataInInputOrder() {
-        var options = new DashScopeEmbeddingOptions(
-            "https://example.com/api/v1", "test-key", "text-embedding-v4", 256,
-            DashScopeEmbeddingOptions.TextType.QUERY,
-            DashScopeEmbeddingOptions.OutputType.DENSE_AND_SPARSE, Map.of(), null);
+        var options = DashScopeEmbeddingOptions.builder()
+            .baseUrl("https://example.com/api/v1")
+            .apiKey("test-key")
+            .model("text-embedding-v4")
+            .dimensions(256)
+            .textType(DashScopeEmbeddingOptions.TextType.QUERY)
+            .outputType(DashScopeEmbeddingOptions.OutputType.DENSE_AND_SPARSE)
+            .instruct("Represent the retrieval intent")
+            .build();
         var model = new DashScopeEmbeddingModel(options, WebClient.builder());
 
         var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
@@ -267,7 +274,8 @@ class DashScopeProviderTest {
             .containsEntry("input", Map.of("texts", List.of("first", "second")));
         assertThat(parameters).containsEntry("dimension", 256)
             .containsEntry("text_type", "query")
-            .containsEntry("output_type", "dense&sparse");
+            .containsEntry("output_type", "dense&sparse")
+            .containsEntry("instruct", "Represent the retrieval intent");
 
         var response = (org.springframework.ai.embedding.EmbeddingResponse)
             ReflectionTestUtils.invokeMethod(model, "embeddingResponse", """
@@ -294,14 +302,40 @@ class DashScopeProviderTest {
 
     @Test
     void nativeEmbeddingRejectsSparseOnlyOutputInsteadOfReturningFakeDenseVectors() {
-        var options = new DashScopeEmbeddingOptions(
-            "https://example.com/api/v1", "test-key", "text-embedding-v4", null, null,
-            DashScopeEmbeddingOptions.OutputType.SPARSE, Map.of(), null);
+        var options = DashScopeEmbeddingOptions.builder()
+            .baseUrl("https://example.com/api/v1")
+            .apiKey("test-key")
+            .model("text-embedding-v4")
+            .outputType(DashScopeEmbeddingOptions.OutputType.SPARSE)
+            .build();
         var model = new DashScopeEmbeddingModel(options, WebClient.builder());
 
         assertThatThrownBy(() -> model.call(new EmbeddingRequest(List.of("text"), options)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("sparse-only");
+    }
+
+    @Test
+    void nativeEmbeddingAppliesDocumentedModelOptionsAndRejectsUnknownOptions() {
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .inputs(List.of("Halo"))
+            .build();
+        var options = (DashScopeEmbeddingOptions) DashScopeEmbeddingOptionsFactory.build(request,
+            new EmbeddingModelProviderOptions(null, Map.of(
+                "text_type", "document",
+                "output_type", "dense&sparse",
+                "instruct", "Represent the document for retrieval")),
+            new java.util.ArrayList<>());
+
+        assertThat(options.textType()).isEqualTo(DashScopeEmbeddingOptions.TextType.DOCUMENT);
+        assertThat(options.outputType())
+            .isEqualTo(DashScopeEmbeddingOptions.OutputType.DENSE_AND_SPARSE);
+        assertThat(options.instruct()).isEqualTo("Represent the document for retrieval");
+        assertThatThrownBy(() -> DashScopeEmbeddingOptionsFactory.build(request,
+            new EmbeddingModelProviderOptions(null, Map.of("future_option", true)),
+            new java.util.ArrayList<>()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("future_option");
     }
 
     @Test

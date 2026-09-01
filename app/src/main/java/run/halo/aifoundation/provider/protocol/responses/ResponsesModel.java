@@ -302,7 +302,9 @@ public class ResponsesModel implements ChatModel, ProviderStreamingChatModel {
     private ChatResponse response(ResponsesResult result, String diagnosticId,
         boolean includeContent) {
         var properties = new LinkedHashMap<String, Object>();
-        put(properties, "reasoningContent", result.reasoning());
+        if (includeContent) {
+            put(properties, "reasoningContent", result.reasoning());
+        }
         put(properties, "sources", result.sources().isEmpty() ? null : result.sources());
         put(properties, "files", result.files().isEmpty() ? null : result.files());
         var reasoningItems = ResponsesOutputReplay.reasoningFromProviderMetadata(

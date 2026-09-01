@@ -109,6 +109,18 @@ public class EmbeddingRequest {
      */
     private transient GenerationTimeouts timeouts;
 
+    /**
+     * Retains the constructor published before multimodal embedding fields were introduced.
+     */
+    public EmbeddingRequest(List<String> inputs, Integer dimensions, Integer maxBatchSize,
+        Map<String, String> headers, Integer maxRetries, Integer maxParallelCalls,
+        Map<String, Object> metadata, Map<String, Object> context,
+        EmbeddingLifecycle lifecycle, CancellationToken cancellationToken,
+        GenerationTimeouts timeouts) {
+        this(inputs, null, null, null, null, dimensions, maxBatchSize, headers, maxRetries,
+            maxParallelCalls, metadata, context, lifecycle, cancellationToken, timeouts);
+    }
+
     @Transient
     public EmbeddingLifecycle getLifecycle() {
         return lifecycle;

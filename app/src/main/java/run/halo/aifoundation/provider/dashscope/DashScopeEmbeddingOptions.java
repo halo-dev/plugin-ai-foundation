@@ -15,6 +15,7 @@ public record DashScopeEmbeddingOptions(
     Integer dimensions,
     TextType textType,
     OutputType outputType,
+    String instruct,
     Map<String, String> customHeaders,
     Duration timeout
 ) implements EmbeddingOptions {
@@ -45,6 +46,7 @@ public record DashScopeEmbeddingOptions(
         var mergedDimensions = overrides.dimensionsOr(dimensions);
         var mergedTextType = overrides.valueOr(DashScopeEmbeddingOptions::textType, textType);
         var mergedOutputType = overrides.valueOr(DashScopeEmbeddingOptions::outputType, outputType);
+        var mergedInstruct = overrides.textOr(DashScopeEmbeddingOptions::instruct, instruct);
         var mergedHeaders = ProviderHeaders.merge(customHeaders,
             overrides.providerValue(DashScopeEmbeddingOptions::customHeaders), requestHeaders);
         var mergedTimeout = overrides.valueOr(DashScopeEmbeddingOptions::timeout, timeout);
@@ -56,6 +58,7 @@ public record DashScopeEmbeddingOptions(
             .dimensions(mergedDimensions)
             .textType(mergedTextType)
             .outputType(mergedOutputType)
+            .instruct(mergedInstruct)
             .customHeaders(mergedHeaders)
             .timeout(mergedTimeout)
             .build();

@@ -96,9 +96,17 @@ public class RerankingModelImpl implements RerankingModel {
         if (document == null) {
             throw new IllegalArgumentException("Rerank documents must not contain null");
         }
-        if (document.getText() == null) {
-            throw new IllegalArgumentException("Rerank document text must not be null");
+        if (hasContent(document)) {
+            return;
         }
+        throw new IllegalArgumentException("Rerank document must contain text or an image");
+    }
+
+    private boolean hasContent(RerankDocument document) {
+        if (document.getText() != null && !document.getText().isBlank()) {
+            return true;
+        }
+        return document.getImage() != null;
     }
 
     private RerankResponse emptyResponse(RerankRequest request) {

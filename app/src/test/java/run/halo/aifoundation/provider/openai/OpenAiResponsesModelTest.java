@@ -136,13 +136,18 @@ class OpenAiResponsesModelTest {
                     if (body.contains("\"stream\":true")) {
                         response.header("Content-Type", "text/event-stream");
                         return response.sendString(reactor.core.publisher.Flux.just(
+                            "data: {\"type\":\"response.reasoning_text.delta\",",
+                            "\"item_id\":\"rs_1\",\"delta\":\"check\"}\n\n",
                             "data: {\"type\":\"response.output_text.delta\",",
                             "\"item_id\":\"message_1\",\"delta\":\"Hel\"}\n\n",
                             "data: {\"type\":\"response.output_text.delta\",",
                             "\"item_id\":\"message_1\",\"delta\":\"lo\"}\n\n",
                             "data: {\"type\":\"response.completed\",\"response\":{",
                             "\"id\":\"resp_1\",\"model\":\"gpt-test\",\"status\":",
-                            "\"completed\",\"output\":[],\"usage\":{\"input_tokens\":1,",
+                            "\"completed\",\"output\":[{\"id\":\"rs_1\",",
+                            "\"type\":\"reasoning\",\"summary\":[],\"content\":[{",
+                            "\"type\":\"reasoning_text\",\"text\":\"check\"}]}],",
+                            "\"usage\":{\"input_tokens\":1,",
                             "\"output_tokens\":2,\"total_tokens\":3}}}\n\n"
                         )).then();
                     }
@@ -180,14 +185,28 @@ class OpenAiResponsesModelTest {
                 .startsWith("reasoning");
 
             var parts = model.streamParts(new Prompt("Hello")).collectList().block();
-            assertThat(parts.stream()
+            var streamedResponses = parts.stream()
                 .filter(ProviderStreamPart.ChatResponsePart.class::isInstance)
                 .map(ProviderStreamPart.ChatResponsePart.class::cast)
-                .map(part -> part.response().getResult())
+                .map(ProviderStreamPart.ChatResponsePart::response)
+                .toList();
+            assertThat(streamedResponses.stream()
+                .map(org.springframework.ai.chat.model.ChatResponse::getResult)
                 .filter(java.util.Objects::nonNull)
                 .map(result -> result.getOutput().getText())
                 .filter(text -> text != null && !text.isEmpty()))
                 .contains("Hel", "lo");
+            assertThat(streamedResponses.stream()
+                .map(org.springframework.ai.chat.model.ChatResponse::getResult)
+                .filter(java.util.Objects::nonNull)
+                .map(result -> result.getOutput().getMetadata().get("reasoningContent"))
+                .filter(java.util.Objects::nonNull))
+                .containsExactly("check");
+            var completed = streamedResponses.getLast();
+            assertThat(completed.getResult().getOutput().getMetadata())
+                .doesNotContainKey("reasoningContent")
+                .containsKey("responsesReasoningItems");
+            assertThat(completed.getMetadata().getUsage().getTotalTokens()).isEqualTo(3);
             assertThat(requestBody.get()).contains("\"stream\":true", "\"input\"");
         } finally {
             server.disposeNow();

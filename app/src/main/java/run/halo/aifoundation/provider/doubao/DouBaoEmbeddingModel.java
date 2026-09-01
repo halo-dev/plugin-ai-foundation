@@ -122,7 +122,7 @@ public final class DouBaoEmbeddingModel implements ProviderEmbeddingModel {
     private LinkedHashMap<String, Object> baseBody(DouBaoEmbeddingOptions options) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.model());
-        body.put("encoding_format", "float");
+        body.put("encoding_format", options.encodingFormat());
         if (options.dimensions() != null) {
             body.put("dimensions", options.dimensions());
         }

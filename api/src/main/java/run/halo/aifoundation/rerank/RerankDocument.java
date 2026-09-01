@@ -39,6 +39,11 @@ public class RerankDocument {
      */
     private Map<String, Object> metadata;
 
+    /** Retains the constructor published before image-backed reranking was introduced. */
+    public RerankDocument(String id, String text, Map<String, Object> metadata) {
+        this(id, text, null, metadata);
+    }
+
     public static RerankDocument of(String text) {
         return RerankDocument.builder().text(text).build();
     }

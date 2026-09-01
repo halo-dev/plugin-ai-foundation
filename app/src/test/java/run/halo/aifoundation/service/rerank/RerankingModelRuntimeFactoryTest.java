@@ -22,6 +22,7 @@ import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankResult;
+import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,33 @@ class RerankingModelRuntimeFactoryTest {
                 .extracting(RerankResult::getIndex)
                 .containsExactly(2, 0))
             .verifyComplete();
+    }
+
+    @Test
+    void rerankAcceptsImageOnlyDocumentsAndRejectsEmptyDocuments() {
+        ProviderRerankingClient client = request -> Mono.just(RerankResponse.builder()
+            .query(request.getQuery())
+            .results(List.of(result(0, request.getDocuments().getFirst(), 0.9)))
+            .build());
+        var model = factory.create(client, configuration(null, null, null));
+        var image = RerankDocument.builder()
+            .image(DataContent.url("https://example.com/halo.png"))
+            .build();
+
+        StepVerifier.create(model.rerank(RerankRequest.builder()
+                .query("halo")
+                .documents(List.of(image))
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        StepVerifier.create(model.rerank(RerankRequest.builder()
+                .query("halo")
+                .documents(List.of(RerankDocument.builder().text(" ").build()))
+                .build()))
+            .expectErrorMatches(error -> error instanceof IllegalArgumentException
+                && error.getMessage().contains("text or an image"))
+            .verify();
     }
 
     @Test

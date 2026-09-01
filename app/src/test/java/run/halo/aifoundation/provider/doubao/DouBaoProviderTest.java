@@ -33,6 +33,7 @@ import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.responses.ResponsesWireCodec;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
@@ -42,8 +43,12 @@ import run.halo.app.extension.Metadata;
 
 @ProviderContractSource(
     provider = "doubao",
-    officialDocumentation = "https://www.volcengine.com/docs/82379/1795150",
-    retrievedAt = "2026-08-26"
+    officialDocumentation = "https://www.volcengine.com/docs/82379/1795150; "
+        + "https://api.volcengine.com/api-docs/view?action=Embeddings&serviceCode=ark"
+        + "&version=2024-01-01; "
+        + "https://api.volcengine.com/api-docs/view?action=EmbeddingsMultimodal"
+        + "&serviceCode=ark&version=2024-01-01",
+    retrievedAt = "2026-09-01"
 )
 class DouBaoProviderTest {
 
@@ -223,11 +228,17 @@ class DouBaoProviderTest {
 
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/api/v3";
-            var model = new DouBaoEmbeddingModel(new DouBaoEmbeddingOptions(baseUrl,
-                "test-key", "doubao-embedding-vision", null, null, false, false,
-                Map.of(), null), WebClient.builder());
-            var requestOptions = new DouBaoEmbeddingOptions(null, null, null, 512,
-                "Represent the product and scene together", true, true, Map.of(), null);
+            var model = new DouBaoEmbeddingModel(DouBaoEmbeddingOptions.builder()
+                .baseUrl(baseUrl)
+                .apiKey("test-key")
+                .model("doubao-embedding-vision")
+                .build(), WebClient.builder());
+            var requestOptions = DouBaoEmbeddingOptions.builder()
+                .dimensions(512)
+                .instructions("Represent the product and scene together")
+                .includeSparseEmbedding(true)
+                .includeModalityEmbeddings(true)
+                .build();
 
             var response = model.call(new ProviderEmbeddingRequest(List.of(), List.of(
                 EmbeddingContent.text("Halo CMS"),
@@ -258,9 +269,12 @@ class DouBaoProviderTest {
     @Test
     @SuppressWarnings("unchecked")
     void textEmbeddingUsesStandardArkEndpointAndKeepsInputOrder() {
-        var model = new DouBaoEmbeddingModel(new DouBaoEmbeddingOptions(
-            "https://example.com/api/v3", "test-key", "doubao-embedding", 256,
-            null, false, false, Map.of(), null), WebClient.builder());
+        var model = new DouBaoEmbeddingModel(DouBaoEmbeddingOptions.builder()
+            .baseUrl("https://example.com/api/v3")
+            .apiKey("test-key")
+            .model("doubao-embedding")
+            .dimensions(256)
+            .build(), WebClient.builder());
         var options = model.getOptions();
 
         var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
@@ -282,6 +296,31 @@ class DouBaoProviderTest {
             .containsEntry("dimensions", 256);
         assertThat(response.getResults()).extracting(result -> result.getIndex())
             .containsExactly(0, 1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void embeddingAppliesDocumentedModelNativeEncodingFormatAndRejectsUnknownOptions() {
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .inputs(List.of("Halo"))
+            .build();
+        var options = DouBaoEmbeddingOptionsFactory.build(request,
+            new EmbeddingModelProviderOptions(null, Map.of("encoding_format", "base64")),
+            new java.util.ArrayList<>());
+        var model = new DouBaoEmbeddingModel(options.toBuilder()
+            .baseUrl("https://example.com/api/v3")
+            .model("configured-model")
+            .build(), WebClient.builder());
+
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "textRequestBody", request.getInputs(), model.getOptions());
+
+        assertThat(body).containsEntry("encoding_format", "base64");
+        assertThatThrownBy(() -> DouBaoEmbeddingOptionsFactory.build(request,
+            new EmbeddingModelProviderOptions(null, Map.of("future_option", true)),
+            new java.util.ArrayList<>()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("future_option");
     }
 
     @Test
@@ -318,9 +357,11 @@ class DouBaoProviderTest {
             .type(EmbeddingContent.Type.TEXT).media(DataContent.url("https://example.com/x"))
             .build()).isInstanceOf(IllegalArgumentException.class);
 
-        var model = new DouBaoEmbeddingModel(new DouBaoEmbeddingOptions(
-            "https://example.com/api/v3", "test-key", "doubao-embedding-vision", null,
-            null, false, false, Map.of(), null), WebClient.builder());
+        var model = new DouBaoEmbeddingModel(DouBaoEmbeddingOptions.builder()
+            .baseUrl("https://example.com/api/v3")
+            .apiKey("test-key")
+            .model("doubao-embedding-vision")
+            .build(), WebClient.builder());
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(model,
             "multimodalRequestBody", List.of(EmbeddingContent.image(
                 DataContent.data(new byte[] {1, 2}, "image/png"))), model.getOptions()))
