@@ -62,7 +62,7 @@ describe('useChatWorkbench', () => {
       body: expect.objectContaining({
         temperature: 0.7,
         topP: 1,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 4096,
         maxRetries: 2,
       }),
     })
@@ -146,7 +146,7 @@ describe('useRagTest', () => {
         query: 'AI Foundation 如何支持 RAG?',
         topN: 4,
         temperature: 0.7,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 4096,
         headers: { 'X-Trace': 'trace-1' },
         sources: expect.arrayContaining([
           expect.objectContaining({ id: 'source-1', title: 'AI Foundation' }),
