@@ -73,6 +73,17 @@ describe('AiModelSelector', () => {
     expect(document.querySelector('[role="listbox"]')).toBeNull()
   })
 
+  it('keeps a global styling hook on the teleported content', async () => {
+    const wrapper = mountSelector()
+
+    await openSelector(wrapper)
+    const listbox = document.querySelector<HTMLElement>('[role="listbox"]')
+
+    expect(listbox).not.toBeNull()
+    expect(listbox?.classList.contains('ai-model-selector__content')).toBe(true)
+    expect(wrapper.element.contains(listbox)).toBe(false)
+  })
+
   it('clears a selected model with undefined', async () => {
     const wrapper = mountSelector({ modelValue: 'deepseek-chat' })
 
