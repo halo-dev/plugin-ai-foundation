@@ -620,6 +620,20 @@ The SDK SHALL expose the existing UI message stream, conversion, validation, and
 - **WHEN** a caller supplies an existing assistant `UIMessage`
 - **THEN** finish aggregation can continue that message using existing continuation semantics
 
+#### Scenario: Handler infers assistant continuation from submitted history
+- **WHEN** a submit-message request ends with an assistant UI message containing a completed tool continuation or approval response
+- **THEN** the handler SHALL continue that assistant message without requiring a separate continuation option
+- **AND** the response start chunk SHALL reuse the existing assistant message id
+
+#### Scenario: Caller explicitly starts a new assistant response
+- **WHEN** a caller explicitly configures the continuation message as null
+- **THEN** the handler SHALL start a new assistant response even if submitted history ends with an assistant message
+
+#### Scenario: Completed model step does not trigger another continuation
+- **WHEN** an assistant UI message contains terminal tool state in an earlier step and final model output in a later step
+- **THEN** automatic continuation predicates SHALL evaluate only the latest step
+- **AND** the frontend SHALL NOT submit the completed conversation again
+
 #### Scenario: Handler supports static metadata and message id generation
 - **WHEN** a caller configures metadata supplier or message id generator
 - **THEN** the handler passes those options to UI stream creation
@@ -1071,6 +1085,11 @@ The SDK SHALL convert persisted assistant UI messages to provider-neutral model 
 - **THEN** conversion SHALL emit the original assistant tool call and approval request
 - **AND** conversion SHALL emit a matching tool approval response with `approved = false`
 - **AND** conversion SHALL NOT emit a tool execution error for the denial
+
+#### Scenario: Later tool output supersedes an approval snapshot
+- **WHEN** an approval-responded tool part is followed by a terminal tool part with the same `toolCallId` in later persisted assistant history
+- **THEN** conversion SHALL omit the superseded approval snapshot
+- **AND** conversion SHALL emit exactly one assistant tool call followed by its terminal tool response
 
 ### Requirement: UI Message Reasoning Continuation
 The SDK SHALL resolve UI reasoning continuation automatically when streaming from UI messages.

@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import reactor.core.publisher.Mono;
@@ -20,6 +22,8 @@ import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
@@ -30,14 +34,33 @@ class DefaultImageGenerationModelFactoryTest {
 
     @Test
     void create_returnsRuntimeWhenProviderClientExists() {
-        var client = (ProviderImageGenerationClient) request -> Mono.just(GenerateImageResult.builder()
-            .images(List.of(GeneratedFile.base64("img", "image/png")))
-            .build());
+        var capturedOptions = new AtomicReference<Map<String, Object>>();
+        var client = new ProviderImageGenerationClient() {
+            @Override
+            public Mono<GenerateImageResult> generateImage(
+                run.halo.aifoundation.image.GenerateImageRequest request) {
+                return result();
+            }
+
+            @Override
+            public Mono<GenerateImageResult> generateImage(
+                run.halo.aifoundation.image.GenerateImageRequest request,
+                ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+                capturedOptions.set(nativeOptions);
+                return result();
+            }
+
+            private Mono<GenerateImageResult> result() {
+                return Mono.just(GenerateImageResult.builder()
+                    .images(List.of(GeneratedFile.base64("img", "image/png")))
+                    .build());
+            }
+        };
         var providerClientCache = mock(ProviderClientCache.class);
         var provider = provider();
         var model = model();
         when(providerClientCache.getOrCreateImageGenerationClient(provider, "sk-test",
-            "image-model-id")).thenReturn(client);
+            ProviderModelRef.from(model))).thenReturn(client);
         var factory = new DefaultImageGenerationModelFactory(providerClientCache,
             new ModelCapabilityService(), new MediaResourcePolicy(), new ModelCapabilityMatcher());
 
@@ -48,8 +71,9 @@ class DefaultImageGenerationModelFactoryTest {
         StepVerifier.create(imageModel.generateImage("Draw"))
             .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("img"))
             .verifyComplete();
+        assertThat(capturedOptions.get()).isEqualTo(Map.of("quality", "hd"));
         verify(providerClientCache).getOrCreateImageGenerationClient(provider, "sk-test",
-            "image-model-id");
+            ProviderModelRef.from(model));
     }
 
     private AiModel model() {
@@ -62,6 +86,7 @@ class DefaultImageGenerationModelFactoryTest {
         spec.setDisplayName("Image Model");
         spec.setModelType(ModelType.IMAGE_GENERATION);
         spec.setAdapterType(AdapterType.OPENAI_IMAGE);
+        spec.setNativeOptions(Map.of("quality", "hd"));
         model.setSpec(spec);
         return model;
     }

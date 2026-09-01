@@ -32,10 +32,12 @@ public final class ReasoningContentExtractor {
         var reasoningText = hasText(metadataReasoning)
             ? metadataReasoning
             : tagged.reasoningText();
-        var reasoning = hasText(reasoningText)
+        var providerMetadata = reasoningProviderMetadata(metadata);
+        var reasoning = hasText(reasoningText) || !providerMetadata.isEmpty()
             ? List.of(ReasoningPart.builder()
                 .text(reasoningText)
-                .providerMetadata(reasoningProviderMetadata(metadata))
+                .signature(reasoningSignature(metadata))
+                .providerMetadata(providerMetadata)
                 .build())
             : List.<ReasoningPart>of();
         return new Extraction(tagged.text(), reasoning);
@@ -87,6 +89,19 @@ public final class ReasoningContentExtractor {
             }
         });
         return providerValues.isEmpty() ? Map.of() : Map.of(providerType, providerValues);
+    }
+
+    private String reasoningSignature(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        for (var key : List.of("reasoningSignature", "reasoning_signature", "signature")) {
+            var value = metadata.get(key);
+            if (value != null && hasText(value.toString())) {
+                return value.toString();
+            }
+        }
+        return null;
     }
 
     private boolean isPreservedReasoningMetadataKey(String key) {

@@ -37,7 +37,7 @@ const statusState = computed<StatusDotState>(() => {
     }"
     :aria-pressed="isSelected"
   >
-    <VAvatar class=":uno: flex-none" :src="providerType?.iconUrl" circle size="xs" />
+    <VAvatar class=":uno: flex-none" :src="providerType?.iconUrl ?? undefined" circle size="xs" />
     <div class=":uno: min-w-0 flex-1">
       <div class=":uno: min-w-0 flex items-center gap-1.5">
         <span class=":uno: min-w-0 truncate text-sm text-gray-950 font-semibold">

@@ -1,9 +1,11 @@
 package run.halo.aifoundation.provider.support;
 
 import java.util.Set;
+import lombok.Builder;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
 
+@Builder(toBuilder = true)
 public record DiscoveredModel(
     String modelId,
     String displayName,
@@ -23,9 +25,7 @@ public record DiscoveredModel(
     }
 
     public DiscoveredModel {
-        if (displayName == null || displayName.isBlank()) {
-            displayName = modelId;
-        }
+        displayName = displayNameOrModelId(displayName, modelId);
         if (features == null) {
             features = Set.of();
         }
@@ -38,5 +38,15 @@ public record DiscoveredModel(
         if (capabilitySources == null) {
             capabilitySources = ModelCapabilitySources.unknown();
         }
+    }
+
+    private static String displayNameOrModelId(String displayName, String modelId) {
+        if (displayName == null) {
+            return modelId;
+        }
+        if (displayName.isBlank()) {
+            return modelId;
+        }
+        return displayName;
     }
 }

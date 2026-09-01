@@ -42,6 +42,7 @@ const { mutate, isPending } = useMutation({
           capabilities: formState.capabilities,
           capabilitySources: formState.capabilitySources,
           parameterMappings: formState.parameterMappings,
+          nativeOptions: formState.nativeOptions,
           discoverySource: AiModelSpecDiscoverySourceEnum.Manual,
           discoveryConfidence: AiModelSpecDiscoveryConfidenceEnum.High,
           ...(formState.adapterType ? { adapterType: formState.adapterType } : {}),

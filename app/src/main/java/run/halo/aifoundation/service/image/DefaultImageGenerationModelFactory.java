@@ -6,6 +6,7 @@ import run.halo.aifoundation.image.ImageGenerationModel;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
@@ -62,7 +63,7 @@ public class DefaultImageGenerationModelFactory implements ImageGenerationModelF
         }
         var client = providerClientCache == null ? null
             : providerClientCache.getOrCreateImageGenerationClient(resolution.provider(),
-                resolution.apiKey(), resolution.modelId());
+                resolution.apiKey(), ProviderModelRef.from(resolution.model()));
         if (client == null) {
             return ImageGenerationModel.unsupported(
                 resolution.model().getMetadata().getName(),

@@ -1,7 +1,9 @@
 package run.halo.aifoundation.service.model;
 
+import java.util.Map;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.AdapterType;
 
 /**
  * Secret-free immutable configuration shared by capability-specific model runtimes.
@@ -11,13 +13,16 @@ public record ModelRuntimeContext(
     String modelId,
     String providerName,
     String providerType,
+    AdapterType adapterType,
     AiProviderType providerDefinition,
-    RuntimeParameterMappings parameterMappings
+    RuntimeParameterMappings parameterMappings,
+    Map<String, Object> nativeOptions
 ) {
 
     public ModelRuntimeContext {
         parameterMappings = parameterMappings != null
             ? parameterMappings : RuntimeParameterMappings.empty();
+        nativeOptions = nativeOptions == null ? Map.of() : Map.copyOf(nativeOptions);
     }
 
     public static ModelRuntimeContext unresolved(String providerType) {
@@ -31,7 +36,7 @@ public record ModelRuntimeContext(
 
     public static ModelRuntimeContext unresolved(String providerType, String modelId,
         String modelName, String providerName, RuntimeParameterMappings parameterMappings) {
-        return new ModelRuntimeContext(modelName, modelId, providerName, providerType, null,
-            parameterMappings);
+        return new ModelRuntimeContext(modelName, modelId, providerName, providerType, null, null,
+            parameterMappings, Map.of());
     }
 }

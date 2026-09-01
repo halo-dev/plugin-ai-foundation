@@ -1,5 +1,6 @@
 package run.halo.aifoundation.provider.support;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Map;
 import lombok.Builder;
@@ -37,6 +38,8 @@ public class ProviderTypeInfo {
     private List<ModelType> supportedModelTypes;
     private List<ModelFeature> supportedFeatures;
     private List<AdapterType> supportedAdapterTypes;
+    @Schema(description = "Provider-owned invocation adapters available for model configuration")
+    private List<AdapterTypeInfo> adapters;
     private List<ModelParameterDefinitionInfo> parameterDefinitions;
     private List<ParameterMappingTemplateInfo> parameterMappingTemplates;
     private Map<String, DefaultParameterMappingInfo> defaultParameterMappings;

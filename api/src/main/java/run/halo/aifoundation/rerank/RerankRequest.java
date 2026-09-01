@@ -35,6 +35,9 @@ public class RerankRequest {
      */
     private Integer topN;
 
+    /** Request-scoped HTTP headers sent to providers when supported. */
+    private Map<String, String> headers;
+
 
     /**
      * Caller metadata exposed to lifecycle callbacks. This data is not sent to providers.
@@ -55,6 +58,13 @@ public class RerankRequest {
      * Request-scoped timeout settings.
      */
     private transient GenerationTimeouts timeouts;
+
+    /** Retains the constructor published before request-scoped headers were introduced. */
+    public RerankRequest(String query, List<RerankDocument> documents, Integer topN,
+        Map<String, Object> metadata, Map<String, Object> context,
+        CancellationToken cancellationToken, GenerationTimeouts timeouts) {
+        this(query, documents, topN, null, metadata, context, cancellationToken, timeouts);
+    }
 
     @Transient
     public CancellationToken getCancellationToken() {

@@ -365,6 +365,81 @@ class UIMessageChatHandlerTest {
     }
 
     @Test
+    void submitRequestContinuesTerminalToolStepByDefault() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.textDelta("text-1", "answer"),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var assistant = new UIMessage<>("assistant-1", UIMessageRole.ASSISTANT, List.of(
+            UIMessageParts.stepStart(),
+            UIMessageParts.tool("call-1", "search", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("query", "Halo"), null, Map.of("result", "Halo"), null, null,
+                Map.of())
+        ), new Metadata("chat"));
+        var request = new UIMessageChatRequest<>("chat-1", List.of(assistant),
+            UIMessageChatTrigger.SUBMIT_MESSAGE, null);
+
+        var chat = UIMessageChatHandlers.streamText(model, request);
+        chat.response().stream().collectList().block();
+        var finish = chat.finish().block();
+
+        assertThat(finish.isContinuation()).isTrue();
+        assertThat(finish.responseMessage().id()).isEqualTo("assistant-1");
+        assertThat(finish.responseMessage().text()).isEqualTo("answer");
+        assertThat(finish.messages()).hasSize(1);
+    }
+
+    @Test
+    void explicitNullDisablesSubmitRequestContinuationInference() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.textDelta("text-1", "answer"),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var assistant = new UIMessage<>("assistant-1", UIMessageRole.ASSISTANT, List.of(
+            UIMessageParts.tool("call-1", "search", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("query", "Halo"), null, Map.of("result", "Halo"), null, null,
+                Map.of())
+        ), new Metadata("chat"));
+        var request = new UIMessageChatRequest<>("chat-1", List.of(assistant),
+            UIMessageChatTrigger.SUBMIT_MESSAGE, null);
+
+        var chat = UIMessageChatHandlers.streamText(model, request, options -> options
+            .message(null)
+            .generateMessageId(() -> "assistant-new"));
+        chat.response().stream().collectList().block();
+        var finish = chat.finish().block();
+
+        assertThat(finish.isContinuation()).isFalse();
+        assertThat(finish.responseMessage().id()).isEqualTo("assistant-new");
+        assertThat(finish.messages()).hasSize(2);
+    }
+
+    @Test
+    void submitRequestDoesNotContinueCompletedEarlierStep() {
+        var model = new FakeLanguageModel(List.of(
+            TextStreamPart.textDelta("text-1", "new answer"),
+            TextStreamPart.finish(null, null, null)
+        ));
+        var assistant = new UIMessage<>("assistant-1", UIMessageRole.ASSISTANT, List.of(
+            UIMessageParts.tool("call-1", "search", ToolPartState.OUTPUT_AVAILABLE,
+                Map.of("query", "Halo"), null, Map.of("result", "Halo"), null, null,
+                Map.of()),
+            UIMessageParts.stepStart(),
+            UIMessageParts.text("final", "final answer")
+        ), new Metadata("chat"));
+        var request = new UIMessageChatRequest<>("chat-1", List.of(assistant),
+            UIMessageChatTrigger.SUBMIT_MESSAGE, null);
+
+        var chat = UIMessageChatHandlers.streamText(model, request, options -> options
+            .generateMessageId(() -> "assistant-new"));
+        chat.response().stream().collectList().block();
+        var finish = chat.finish().block();
+
+        assertThat(finish.isContinuation()).isFalse();
+        assertThat(finish.responseMessage().id()).isEqualTo("assistant-new");
+    }
+
+    @Test
     void regenerateChatRequestRequiresMessageId() {
         var model = new FakeLanguageModel(List.of());
         var request = new UIMessageChatRequest<>("chat-1", List.of(

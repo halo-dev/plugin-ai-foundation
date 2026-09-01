@@ -14,7 +14,8 @@ public record LanguageModelProviderOptions(
     ToolCallingChatOptionsFactory toolCallingChatOptionsFactory,
     StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory,
     ReasoningControlOptions reasoningControlOptions,
-    AssistantReasoningContentExtractor reasoningContentExtractor
+    AssistantReasoningContentExtractor reasoningContentExtractor,
+    NativeChatOptionsApplicator nativeOptionsApplicator
 ) {
     public static LanguageModelProviderOptions defaults() {
         return builder().build();
@@ -37,6 +38,7 @@ public record LanguageModelProviderOptions(
         private StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory;
         private ReasoningControlOptions reasoningControlOptions = ReasoningControlOptions.unsupported();
         private AssistantReasoningContentExtractor reasoningContentExtractor;
+        private NativeChatOptionsApplicator nativeOptionsApplicator;
 
         private Builder() {
         }
@@ -104,6 +106,12 @@ public record LanguageModelProviderOptions(
             return this;
         }
 
+        public Builder nativeOptionsApplicator(
+            NativeChatOptionsApplicator nativeOptionsApplicator) {
+            this.nativeOptionsApplicator = nativeOptionsApplicator;
+            return this;
+        }
+
         public LanguageModelProviderOptions build() {
             return new LanguageModelProviderOptions(
                 reasoningHistorySupported,
@@ -116,7 +124,8 @@ public record LanguageModelProviderOptions(
                 toolCallingChatOptionsFactory,
                 structuredOutputChatOptionsFactory,
                 reasoningControlOptions,
-                reasoningContentExtractor
+                reasoningContentExtractor,
+                nativeOptionsApplicator
             );
         }
     }

@@ -76,7 +76,7 @@ public record LanguageModelRuntimeComposition(
             reasoningHistorySupported, messageMapper);
         var chatOptionsBuilder = new LanguageModelChatOptionsBuilder(context.providerType(),
             context.modelId(),
-            resolvedOptions, runtimeSupport::writeJson);
+            resolvedOptions, context.nativeOptions(), runtimeSupport::writeJson);
         var responseMapper = new LanguageModelResponseMapper(context.providerType(), messageMapper);
         var reasoningExtractor =
             new ReasoningContentExtractor(context.providerType(), responseMapper::sanitizeValue);

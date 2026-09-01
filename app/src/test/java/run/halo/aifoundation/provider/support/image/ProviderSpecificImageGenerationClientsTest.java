@@ -1,17 +1,53 @@
 package run.halo.aifoundation.provider.support.image;
 
+import run.halo.aifoundation.provider.siliconflow.SiliconFlowImageGenerationClient;
+
+import run.halo.aifoundation.provider.dashscope.DashScopeImageGenerationClient;
+import run.halo.aifoundation.provider.minimax.MiniMaxImageGenerationClient;
+import run.halo.aifoundation.provider.openrouter.OpenRouterImageGenerationClient;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.ClientRequest;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.test.util.ReflectionTestUtils;
+import reactor.core.publisher.Mono;
+import run.halo.aifoundation.provider.doubao.DouBaoImageGenerationClient;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageResponseFormat;
 import run.halo.aifoundation.media.DataContent;
 
 class ProviderSpecificImageGenerationClientsTest {
+
+    @Test
+    void dashScopeGenerateImage_usesNativeEndpoint() {
+        var capturedRequest = new AtomicReference<ClientRequest>();
+        var webClientBuilder = WebClient.builder().exchangeFunction(request -> {
+            capturedRequest.set(request);
+            return Mono.just(ClientResponse.create(HttpStatus.OK)
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .body("{\"output\":{\"choices\":[]}}")
+                .build());
+        });
+        var options = new ImageGenerationClientOptions("dashscope",
+            "https://dashscope.aliyuncs.com/compatible-mode/v1", "sk-test", "qwen-image",
+            Map.of());
+        var client = new DashScopeImageGenerationClient(options, webClientBuilder);
+
+        client.generateImage(GenerateImageRequest.builder().prompt("Draw Halo").build()).block();
+
+        assertThat(capturedRequest.get().url().toString()).isEqualTo(
+            "https://dashscope.aliyuncs.com/api/v1/services/aigc/"
+                + "multimodal-generation/generation");
+    }
 
     @Test
     void openRouterRequestBody_mapsReferencesAndOptions() {
@@ -24,7 +60,7 @@ class ProviderSpecificImageGenerationClientsTest {
                 DataContent.data(new byte[] {1, 2, 3}, "image/png")
             ))
             .n(2)
-            .size("1024x1024")
+            .size("2K")
             .aspectRatio("1:1")
             .seed(42)
             .build();
@@ -35,7 +71,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .containsEntry("model", "openrouter-image")
             .containsEntry("prompt", "Draw Halo")
             .containsEntry("n", 2)
-            .containsEntry("size", "1024x1024")
+            .containsEntry("size", "2K")
             .containsEntry("aspect_ratio", "1:1")
             .containsEntry("seed", 42);
         var references = listOfMaps(body.get("input_references"));
@@ -54,10 +90,9 @@ class ProviderSpecificImageGenerationClientsTest {
             {
               "id": "img-openrouter",
               "model": "openrouter-image",
-              "output_format": "webp",
               "data": [
-                {"b64_json": "abc123", "size": "1024x1024"},
-                {"url": "https://example.com/generated.webp", "size": "512x512"}
+                {"b64_json": "abc123", "media_type": "image/webp"},
+                {"b64_json": "def456", "media_type": "image/svg+xml"}
               ],
               "usage": {
                 "prompt_tokens": 1,
@@ -75,9 +110,8 @@ class ProviderSpecificImageGenerationClientsTest {
         assertThat(result.getImages()).hasSize(2);
         assertThat(result.getImages().get(0).getBase64()).isEqualTo("abc123");
         assertThat(result.getImages().get(0).getMediaType()).isEqualTo("image/webp");
-        assertThat(result.getImages().get(0).getMetadata()).containsEntry("size", "1024x1024");
-        assertThat(result.getImages().get(1).getUrl())
-            .isEqualTo("https://example.com/generated.webp");
+        assertThat(result.getImages().get(1).getBase64()).isEqualTo("def456");
+        assertThat(result.getImages().get(1).getMediaType()).isEqualTo("image/svg+xml");
         assertThat(result.getUsage().getInputTokens()).isEqualTo(1);
         assertThat(result.getUsage().getOutputTokens()).isEqualTo(2);
         assertThat(result.getUsage().getTotalTokens()).isEqualTo(3);
@@ -169,7 +203,7 @@ class ProviderSpecificImageGenerationClientsTest {
             .n(2)
             .build();
 
-        var body = client.requestBody(request);
+        Map<String, Object> body = ReflectionTestUtils.invokeMethod(client, "requestBody", request);
 
         assertThat(body)
             .containsEntry("model", "image-01")
@@ -201,9 +235,8 @@ class ProviderSpecificImageGenerationClientsTest {
             }
             """;
 
-        var result = client.imageResponse(json, GenerateImageRequest.builder()
-            .prompt("Draw")
-            .build());
+        GenerateImageResult result = ReflectionTestUtils.invokeMethod(client, "imageResponse",
+            json, GenerateImageRequest.builder().prompt("Draw").build());
 
         assertThat(result.getImages()).hasSize(2);
         assertThat(result.getImages().get(0).getUrl()).isEqualTo("https://example.com/minimax.png");
@@ -216,7 +249,7 @@ class ProviderSpecificImageGenerationClientsTest {
 
     @Test
     void modelArkRequestBody_mapsImagesAndResponseFormat() {
-        var client = new ModelArkImageGenerationClient(options("doubao", "seedream"),
+        var client = new DouBaoImageGenerationClient(options("doubao", "seedream"),
             WebClient.builder());
         var request = GenerateImageRequest.builder()
             .prompt("Edit the first image")
@@ -229,7 +262,9 @@ class ProviderSpecificImageGenerationClientsTest {
             .responseFormat(ImageResponseFormat.BASE64)
             .build();
 
-        var body = client.requestBody(request);
+        @SuppressWarnings("unchecked")
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(client,
+            "requestBody", request);
 
         assertThat(body)
             .containsEntry("model", "seedream")
@@ -245,7 +280,7 @@ class ProviderSpecificImageGenerationClientsTest {
 
     @Test
     void modelArkResponse_mapsDataUsageAndSize() {
-        var client = new ModelArkImageGenerationClient(options("doubao", "seedream"),
+        var client = new DouBaoImageGenerationClient(options("doubao", "seedream"),
             WebClient.builder());
         var request = GenerateImageRequest.builder()
             .prompt("Draw")
@@ -266,7 +301,8 @@ class ProviderSpecificImageGenerationClientsTest {
             }
             """;
 
-        var result = client.imageResponse(json, request);
+        var result = (run.halo.aifoundation.image.GenerateImageResult)
+            ReflectionTestUtils.invokeMethod(client, "imageResponse", json, request);
 
         assertThat(result.getImages()).hasSize(2);
         assertThat(result.getImages().get(0).getUrl()).isEqualTo("https://example.com/ark.jpg");
@@ -282,14 +318,11 @@ class ProviderSpecificImageGenerationClientsTest {
 
     @Test
     void siliconFlowRequestBody_mapsImageFields() {
-        var client = new SiliconFlowImageGenerationClient(options("siliconflow", "kolors"),
-            WebClient.builder());
+        var client = new SiliconFlowImageGenerationClient(
+            options("siliconflow", "Qwen/Qwen-Image-Edit"), WebClient.builder());
         var request = GenerateImageRequest.builder()
             .prompt("Create a variant")
-            .images(List.of(
-                DataContent.url("https://example.com/base.png", "image/png"),
-                DataContent.data(new byte[] {10, 11, 12}, "image/png")
-            ))
+            .images(List.of(DataContent.url("https://example.com/base.png", "image/png")))
             .n(2)
             .size("1024x1024")
             .seed(13)
@@ -298,13 +331,12 @@ class ProviderSpecificImageGenerationClientsTest {
         var body = client.requestBody(request);
 
         assertThat(body)
-            .containsEntry("model", "kolors")
+            .containsEntry("model", "Qwen/Qwen-Image-Edit")
             .containsEntry("prompt", "Create a variant")
             .containsEntry("image", "https://example.com/base.png")
             .containsEntry("image_size", "1024x1024")
             .containsEntry("batch_size", 2)
             .containsEntry("seed", 13);
-        assertThat((String) body.get("image2")).startsWith("data:image/png;base64,");
     }
 
     @Test
@@ -327,9 +359,11 @@ class ProviderSpecificImageGenerationClientsTest {
         assertThat(result.getImage().getUrl()).isEqualTo("https://example.com/siliconflow.png");
         assertThat(result.getImage().getMediaType()).isEqualTo("image/png");
         assertThat(result.getUsage().getImageCount()).isEqualTo(1);
-        assertThat(map(result.getUsage().getRaw())).containsEntry("inference", 123);
+        assertThat(map(map(result.getUsage().getRaw()).get("timings")))
+            .containsEntry("inference", 123);
+        assertThat(map(result.getUsage().getRaw())).containsEntry("seed", 4L);
         assertThat(result.getResponses()).singleElement()
-            .satisfies(metadata -> assertThat(metadata.getId()).isEqualTo("sf-response"));
+            .satisfies(metadata -> assertThat(metadata.getId()).isNull());
     }
 
     private ImageGenerationClientOptions options(String providerType, String model) {

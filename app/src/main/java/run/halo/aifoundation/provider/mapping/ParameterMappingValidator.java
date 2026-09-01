@@ -148,8 +148,16 @@ public class ParameterMappingValidator {
         if (value == null) {
             return 0;
         }
-        if (!StringUtils.hasText(value.getField()) || value.getValueType() == null
-            || value.getValue() == null || value.getValue().isBlank()) {
+        if (!StringUtils.hasText(value.getField())) {
+            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
+        }
+        if (value.getValueType() == null) {
+            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
+        }
+        if (value.getValue() == null) {
+            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
+        }
+        if (value.getValue().isBlank()) {
             throw invalid(entry, "Each reasoning intent requires field, value type, and value");
         }
         validateField(entry, value.getField());
@@ -165,8 +173,10 @@ public class ParameterMappingValidator {
         } catch (IllegalArgumentException error) {
             throw invalid(entry, "Reasoning value does not match " + value.getValueType());
         }
-        if (value.getValueType() == ModelParameterMappings.ValueType.BOOLEAN
-            && !"true".equals(value.getValue()) && !"false".equals(value.getValue())) {
+        if (value.getValueType() != ModelParameterMappings.ValueType.BOOLEAN) {
+            return 1;
+        }
+        if (!"true".equals(value.getValue()) && !"false".equals(value.getValue())) {
             throw invalid(entry, "Boolean reasoning values must be true or false");
         }
         return 1;

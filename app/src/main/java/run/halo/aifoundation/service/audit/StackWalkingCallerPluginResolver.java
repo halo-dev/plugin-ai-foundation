@@ -3,6 +3,7 @@ package run.halo.aifoundation.service.audit;
 import static java.lang.StackWalker.Option.RETAIN_CLASS_REFERENCE;
 
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,9 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     private static final StackWalker STACK_WALKER = StackWalker.getInstance(RETAIN_CLASS_REFERENCE);
     private static final String DETECTION_SOURCE = "stack-classloader";
+    private static final List<String> FRAMEWORK_PACKAGE_PREFIXES = List.of(
+        "java.", "jdk.", "reactor.", "org.springframework.", "org.pf4j.",
+        "run.halo.aifoundation.");
 
     private final ReactiveExtensionClient client;
     private final ObjectProvider<PluginWrapper> pluginWrapperProvider;
@@ -74,12 +78,12 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     private boolean isCandidateCallerClass(Class<?> type) {
         var name = type.getName();
-        return !name.startsWith("java.")
-            && !name.startsWith("jdk.")
-            && !name.startsWith("reactor.")
-            && !name.startsWith("org.springframework.")
-            && !name.startsWith("org.pf4j.")
-            && !name.startsWith("run.halo.aifoundation.");
+        for (var prefix : FRAMEWORK_PACKAGE_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Mono<CallerPluginInfo> fetchCallerPlugin(String pluginName) {

@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import run.halo.aifoundation.media.DataContent;
 
 /**
  * Candidate document submitted to a reranking model.
@@ -26,9 +27,22 @@ public class RerankDocument {
     private String text;
 
     /**
+     * Optional image content for providers that expose native multimodal reranking.
+     *
+     * <p>A document may contain text, an image, or both. Providers without a multimodal rerank
+     * contract reject image-backed documents instead of downloading or captioning them.
+     */
+    private DataContent image;
+
+    /**
      * Caller metadata. This data is not interpreted by AI Foundation.
      */
     private Map<String, Object> metadata;
+
+    /** Retains the constructor published before image-backed reranking was introduced. */
+    public RerankDocument(String id, String text, Map<String, Object> metadata) {
+        this(id, text, null, metadata);
+    }
 
     public static RerankDocument of(String text) {
         return RerankDocument.builder().text(text).build();

@@ -1,11 +1,14 @@
 package run.halo.aifoundation.service.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
@@ -14,6 +17,7 @@ import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.Metadata;
 
@@ -22,7 +26,9 @@ class ModelRuntimeContextResolverTest {
     @Test
     void resolvesSafeIdentityAndExecutableMappingsWithoutRetainingSecret() {
         var providerType = mock(AiProviderType.class);
-        when(providerType.getDefaultParameterMappings()).thenReturn(Map.of(
+        when(providerType.getSupportedAdapterTypes()).thenReturn(
+            java.util.List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES)).thenReturn(Map.of(
             ModelParameter.MAX_OUTPUT_TOKENS,
             DefaultParameterMapping.template("openai.max-completion-tokens")
         ));
@@ -35,13 +41,35 @@ class ModelRuntimeContextResolverTest {
         assertThat(context.modelId()).isEqualTo("gpt-a");
         assertThat(context.providerName()).isEqualTo("provider-a");
         assertThat(context.providerType()).isEqualTo("openai");
+        assertThat(context.adapterType()).isEqualTo(AdapterType.OPENAI_RESPONSES);
         assertThat(context.providerDefinition()).isSameAs(providerType);
+        assertThat(context.nativeOptions()).containsEntry("thinking_budget", 4096);
         assertThat(context.parameterMappings().get(ModelParameter.MAX_OUTPUT_TOKENS).template())
             .isEqualTo("openai.max-completion-tokens");
+        verify(providerType).validateNativeModelOptions(any());
         assertThat(Arrays.stream(ModelRuntimeContext.class.getRecordComponents())
             .map(component -> component.getName().toLowerCase()))
             .noneMatch(name -> name.contains("key") || name.contains("secret")
                 || name.equals("model") || name.equals("provider"));
+    }
+
+    @Test
+    void normalizesMissingAdapterBeforeCreatingRuntimeContext() {
+        var providerType = mock(AiProviderType.class);
+        when(providerType.getSupportedAdapterTypes()).thenReturn(
+            java.util.List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(
+            Optional.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
+            .thenReturn(Map.of());
+        var resolver = new ModelRuntimeContextResolver(new EffectiveParameterMappingResolver(),
+            new ParameterMappingTemplateRegistry());
+        var resolution = resolution(providerType);
+        resolution.model().getSpec().setAdapterType(null);
+
+        var context = resolver.resolve(resolution);
+
+        assertThat(context.adapterType()).isEqualTo(AdapterType.OPENAI_RESPONSES);
     }
 
     private ModelResolution resolution(AiProviderType providerType) {
@@ -57,6 +85,8 @@ class ModelRuntimeContextResolverTest {
         modelSpec.setProviderName("provider-a");
         modelSpec.setModelId("gpt-a");
         modelSpec.setModelType(ModelType.LANGUAGE);
+        modelSpec.setAdapterType(AdapterType.OPENAI_RESPONSES);
+        modelSpec.setNativeOptions(Map.of("thinking_budget", 4096));
         model.setSpec(modelSpec);
         return new ModelResolution(model, provider, providerType, "do-not-retain");
     }

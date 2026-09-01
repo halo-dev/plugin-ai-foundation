@@ -8,6 +8,7 @@ import type {
   ModelParameterMappings,
 } from '@/api/generated'
 import {
+  AiModelSpecAdapterTypeEnum,
   AiModelSpecModelTypeEnum,
   LanguageCapabilityInputSourcesEnum,
   ModelCapabilitySourcesImageGenerationEnum,
@@ -23,6 +24,8 @@ import {
   hasCapabilityDomain,
 } from '@/utils/capabilities'
 import {
+  adapterOptionsForProviderType,
+  defaultAdapterForProviderType,
   defaultModelTypeForProviderType,
   modelFeatureOptionsForProviderType,
   modelTypeOptionsForProviderType,
@@ -32,10 +35,14 @@ import {
   validateReasoningMappings,
   type MappingModelType,
 } from '@/utils/parameter-mappings'
+import {
+  formatProviderNativeOptions,
+  parseProviderNativeOptions,
+} from '@/utils/provider-native-options'
 import type { FormKitTypeDefinition } from '@formkit/core'
 import { submitForm } from '@formkit/core'
 import { Toast } from '@halo-dev/components'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import AdvancedSettingsCollapsible from './AdvancedSettingsCollapsible.vue'
 import ParameterMappingFields from './ParameterMappingFields.vue'
 
@@ -65,19 +72,33 @@ const modelTypeOptions = computed(() => {
   }))
 })
 
-const featureOptions = computed(() => {
-  return modelFeatureOptionsForProviderType(selectedProviderType.value).map((item) => ({
-    value: item.value,
-    label: item.label,
-  }))
-})
-
 const defaultModelType = computed(() => {
   return defaultModelTypeForProviderType(selectedProviderType.value, props.formState?.modelType)
 })
 
 const selectedModelType = ref<AiModelSpecModelTypeEnum>(
   props.formState?.modelType || defaultModelType.value,
+)
+const adapterOptions = computed(() =>
+  adapterOptionsForProviderType(selectedProviderType.value, selectedModelType.value),
+)
+const hasMultipleAdapterOptions = computed(() => adapterOptions.value.length > 1)
+const selectedAdapterType = shallowRef<AiModelSpecAdapterTypeEnum | undefined>(
+  props.formState?.adapterType,
+)
+const featureOptions = computed(() => {
+  return modelFeatureOptionsForProviderType(
+    selectedProviderType.value,
+    selectedAdapterType.value,
+  ).map((item) => ({
+    value: item.value,
+    label: item.label,
+  }))
+})
+const selectedAdapterDescription = computed(
+  () =>
+    adapterOptions.value.find((option) => option.value === selectedAdapterType.value)
+      ?.description || '选择此模型调用供应商时使用的原生 API 协议。',
 )
 const parameterMappings = ref(props.formState?.parameterMappings)
 
@@ -190,11 +211,30 @@ watch(
 )
 
 watch(
+  [adapterOptions, () => props.formState?.adapterType],
+  ([, formAdapter]) => {
+    selectedAdapterType.value = defaultAdapterForProviderType(
+      selectedProviderType.value,
+      selectedModelType.value,
+      formAdapter || selectedAdapterType.value,
+    )
+  },
+  { immediate: true },
+)
+
+watch(
   () => props.formState?.features,
   (value) => {
     selectedFeatures.value = value ? [...value] : []
   },
 )
+
+watch(featureOptions, (options) => {
+  const allowedFeatures = new Set(options.map((option) => option.value))
+  selectedFeatures.value = selectedFeatures.value.filter((feature) =>
+    allowedFeatures.has(feature as AiModelSpecFeaturesEnum),
+  )
+})
 
 watch(
   () => props.formState?.capabilities?.language?.fileInput,
@@ -204,6 +244,13 @@ watch(
 )
 
 function onSubmit(data: ModelFormRawState) {
+  let nativeOptions: Record<string, unknown> | undefined
+  try {
+    nativeOptions = parseProviderNativeOptions(data.nativeOptionsJson)
+  } catch (error) {
+    Toast.error(error instanceof Error ? error.message : '供应商原生参数不是有效的 JSON 对象。')
+    return
+  }
   const normalizedMappings = mappingsForModelType(
     parameterMappings.value,
     data.modelType as MappingModelType,
@@ -225,10 +272,11 @@ function onSubmit(data: ModelFormRawState) {
     enabled: data.enabled,
     modelType: data.modelType,
     features: data.features?.length ? data.features : undefined,
-    adapterType: data.adapterType,
+    adapterType: selectedAdapterType.value,
     capabilities,
     capabilitySources,
     parameterMappings: normalizedMappings,
+    nativeOptions,
   })
 }
 
@@ -237,6 +285,7 @@ defineExpose({
 })
 
 interface ModelFormRawState extends ModelFormState {
+  nativeOptionsJson?: string
   languageFileInput?: boolean | string
   languageReasoningHistory?: boolean | string
   languageInputMediaTypes?: string
@@ -419,6 +468,18 @@ function sameJson(a: unknown, b: unknown) {
     />
 
     <FormKit
+      v-if="hasMultipleAdapterOptions"
+      type="select"
+      name="adapterType"
+      label="调用接口"
+      :help="selectedAdapterDescription"
+      validation="required"
+      :options="adapterOptions"
+      :value="selectedAdapterType"
+      @input="selectedAdapterType = $event as AiModelSpecAdapterTypeEnum"
+    />
+
+    <FormKit
       :type="'switch' as unknown as FormKitTypeDefinition<boolean>"
       name="enabled"
       label="启用"
@@ -433,11 +494,23 @@ function sameJson(a: unknown, b: unknown) {
         v-model="parameterMappings"
         context="model"
         :model-type="selectedModelType as MappingModelType"
-        :adapter-type="formState?.adapterType"
+        :adapter-type="selectedAdapterType"
         :definitions="selectedProviderType?.parameterDefinitions"
         :templates="selectedProviderType?.parameterMappingTemplates"
         :defaults="selectedProviderType?.defaultParameterMappings"
         :inherited-mappings="inheritedMappings"
+      />
+    </AdvancedSettingsCollapsible>
+
+    <AdvancedSettingsCollapsible title="供应商原生参数" source-label="模型配置">
+      <FormKit
+        type="textarea"
+        name="nativeOptionsJson"
+        label="原生参数（JSON）"
+        help="仅用于这个模型的供应商专属参数，由对应 Provider 校验并发送。业务插件无法在请求中覆盖；密钥仍须通过供应商的 Secret 配置。"
+        placeholder='例如：{&#10;  "reasoning_effort": "high"&#10;}'
+        :rows="8"
+        :value="formatProviderNativeOptions(formState?.nativeOptions)"
       />
     </AdvancedSettingsCollapsible>
 
