@@ -108,8 +108,10 @@ class DashScopeProviderTest {
     @Test
     void exposesSeparateCompatibleAndNativeRerankProtocols() {
         assertThat(provider.getSupportedAdapterTypes())
-            .contains(AdapterType.DASHSCOPE_COMPATIBLE_RERANK,
-                AdapterType.DASHSCOPE_NATIVE_RERANK);
+            .containsSubsequence(AdapterType.DASHSCOPE_NATIVE_RERANK,
+                AdapterType.DASHSCOPE_COMPATIBLE_RERANK);
+        assertThat(provider.recommendAdapterType(ModelType.RERANK))
+            .contains(AdapterType.DASHSCOPE_NATIVE_RERANK);
         assertThat(provider.getSupportedFeatures(AdapterType.DASHSCOPE_COMPATIBLE_RERANK))
             .isEmpty();
         assertThat(provider.getSupportedFeatures(AdapterType.DASHSCOPE_NATIVE_RERANK))
@@ -120,6 +122,19 @@ class DashScopeProviderTest {
         assertThat(provider.getDefaultParameterMappings(AdapterType.DASHSCOPE_NATIVE_RERANK)
             .get(ModelParameter.TOP_N).template())
             .isEqualTo("rerank.parameters.top-n");
+    }
+
+    @Test
+    void discoveryUsesNativeRerankWithoutInspectingModelId() {
+        var discovered = (run.halo.aifoundation.provider.support.DiscoveredModel)
+            ReflectionTestUtils.invokeMethod(provider, "discoveredModel", Map.of(
+                "model", "opaque-rerank-model",
+                "name", "Rerank model",
+                "capabilities", List.of("Rerank"),
+                "features", List.of()));
+
+        assertThat(discovered.modelType()).isEqualTo(ModelType.RERANK);
+        assertThat(discovered.adapterType()).isEqualTo(AdapterType.DASHSCOPE_NATIVE_RERANK);
     }
 
     @Test

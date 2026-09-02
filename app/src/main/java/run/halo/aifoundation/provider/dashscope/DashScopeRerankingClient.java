@@ -220,7 +220,10 @@ public final class DashScopeRerankingClient extends AbstractHttpRerankingClient 
             if (usage == null) {
                 return null;
             }
-            var inputTokens = integerValue(usage.get("input_tokens"));
+            var inputTokens = integerValue(usage.get("prompt_tokens"));
+            if (inputTokens == null) {
+                inputTokens = integerValue(usage.get("input_tokens"));
+            }
             var totalTokens = integerValue(usage.get("total_tokens"));
             if (inputTokens == null && totalTokens == null) {
                 return null;

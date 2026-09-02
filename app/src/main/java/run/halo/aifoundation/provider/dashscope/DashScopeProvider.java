@@ -91,7 +91,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
         return List.of(AdapterType.DASHSCOPE_CHAT, AdapterType.DASHSCOPE_RESPONSES,
             AdapterType.DASHSCOPE_MESSAGES,
             AdapterType.DASHSCOPE_EMBEDDING,
-            AdapterType.DASHSCOPE_COMPATIBLE_RERANK, AdapterType.DASHSCOPE_NATIVE_RERANK,
+            AdapterType.DASHSCOPE_NATIVE_RERANK, AdapterType.DASHSCOPE_COMPATIBLE_RERANK,
             AdapterType.DASHSCOPE_IMAGE);
     }
 
@@ -181,7 +181,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
     public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
         String modelId) {
         return new DashScopeRerankingClient(resolveBaseUrl(provider), modelId, apiKey,
-            webClientBuilder(provider), DashScopeRerankingClient.RequestFormat.COMPATIBLE);
+            webClientBuilder(provider), DashScopeRerankingClient.RequestFormat.NATIVE);
     }
 
     @Override

@@ -40,6 +40,21 @@ class ChatCompletionsOptionsFactoryTest {
         assertThat(toolCalling.getExtraBody()).isEqualTo(basic.getExtraBody());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void providerDefaultsOverrideOnlyConflictingNativeOptionLeaves() {
+        var options = ChatCompletionsOptions.builder()
+            .extraBody(Map.of("reasoning", Map.of("effort", "high")))
+            .build();
+
+        var merged = applyNativeOptions(options,
+            Map.of("reasoning", Map.of("summary", "auto", "effort", "low")));
+
+        assertThat((Map<String, Object>) merged.getExtraBody().get("reasoning"))
+            .containsEntry("summary", "auto")
+            .containsEntry("effort", "high");
+    }
+
     private ChatCompletionsOptions applyNativeOptions(ChatCompletionsOptions options,
         Map<String, Object> nativeOptions) {
         return (ChatCompletionsOptions) ChatCompletionsNativeOptions.apply(options, nativeOptions);

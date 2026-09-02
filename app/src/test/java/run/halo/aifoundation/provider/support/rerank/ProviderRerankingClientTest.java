@@ -87,7 +87,7 @@ class ProviderRerankingClientTest {
                   "output":{"results":[
                     {"index":0,"relevance_score":0.88,"document":{"text":"first"}}
                   ]},
-                  "usage":{"input_tokens":7,"total_tokens":9}
+                  "usage":{"prompt_tokens":7,"input_tokens":6,"total_tokens":9}
                 }
                 """);
         });
@@ -191,7 +191,10 @@ class ProviderRerankingClientTest {
                     "return_documents", false,
                     "instruct", "Rank for Halo documentation relevance",
                     "fps", 1.0)))
-                .expectNextCount(1)
+                .assertNext(response -> {
+                    assertThat(response.getUsage().getInputTokens()).isEqualTo(1);
+                    assertThat(response.getUsage().getTotalTokens()).isEqualTo(1);
+                })
                 .verifyComplete();
 
             assertThat(capture.get().body())

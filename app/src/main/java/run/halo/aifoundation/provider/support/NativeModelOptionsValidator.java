@@ -10,10 +10,11 @@ public final class NativeModelOptionsValidator {
     private static final Set<String> INVOCATION_FIELDS = Set.of(
         "model", "messages", "input", "prompt", "image", "images", "mask", "tools",
         "toolchoice", "documents", "query", "stream", "streamoptions");
-    private static final Set<String> CREDENTIAL_FIELDS = Set.of(
+    private static final Set<String> EXACT_CREDENTIAL_FIELDS = Set.of("token", "secret");
+    private static final Set<String> CREDENTIAL_MARKERS = Set.of(
         "apikey", "xapikey", "authorization", "accesstoken", "bearertoken",
-        "token", "secret", "secretkey", "clientsecret", "privatekey", "password",
-        "credential");
+        "secretkey", "clientsecret", "privatekey", "password", "credential",
+        "accesskeysecret", "secretaccesskey");
     private static final int MAX_NESTING_DEPTH = 32;
 
     private NativeModelOptionsValidator() {
@@ -49,10 +50,22 @@ public final class NativeModelOptionsValidator {
             throw new IllegalArgumentException("Provider-native option names must not be blank");
         }
         var normalizedName = normalizeName(name);
-        if (CREDENTIAL_FIELDS.contains(normalizedName)) {
+        if (isCredentialName(normalizedName)) {
             throw new IllegalArgumentException(
                 "Provider-native option '" + path + "' must use the provider Secret instead");
         }
+    }
+
+    private static boolean isCredentialName(String normalizedName) {
+        if (EXACT_CREDENTIAL_FIELDS.contains(normalizedName)) {
+            return true;
+        }
+        for (var marker : CREDENTIAL_MARKERS) {
+            if (normalizedName.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String normalizeName(String name) {

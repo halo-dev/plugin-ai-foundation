@@ -65,6 +65,22 @@ class ImageParameterMappingMergerTest {
             .containsEntry("watermark", false);
     }
 
+    @Test
+    void acceptsImmutableBodyWithoutMutatingTheCallerValue() {
+        var body = Map.<String, Object>of(
+            "size", "1024x1024",
+            "parameters", Map.of("seed", 7));
+        var target = new ParameterMappingTarget();
+        target.root().put("size", "2048x2048");
+        target.recordAppliedParameter(ModelParameter.IMAGE_SIZE);
+
+        var result = ImageParameterMappingMerger.merge(body, target);
+
+        assertThat(result).containsEntry("size", "2048x2048");
+        assertThat(parameters(result)).containsEntry("seed", 7);
+        assertThat(body).containsEntry("size", "1024x1024");
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> parameters(Map<String, Object> body) {
         return (Map<String, Object>) body.get("parameters");

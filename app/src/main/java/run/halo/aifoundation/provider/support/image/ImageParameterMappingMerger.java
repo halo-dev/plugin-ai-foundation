@@ -29,32 +29,33 @@ public final class ImageParameterMappingMerger {
 
     public static Map<String, Object> merge(Map<String, Object> body,
         ParameterMappingTarget target) {
+        var mergedBody = new LinkedHashMap<>(body);
         if (target == null) {
-            return body;
+            return mergedBody;
         }
-        var parameters = parameters(body);
+        var parameters = parameters(mergedBody);
         for (var parameter : target.appliedParameters()) {
             var fields = FIELDS.get(parameter);
             if (fields == null) {
                 continue;
             }
-            removeFields(body, fields.root());
+            removeFields(mergedBody, fields.root());
             removeFields(parameters, fields.parameters());
         }
         if (parameters != null && parameters.isEmpty()) {
-            body.remove("parameters");
+            mergedBody.remove("parameters");
             parameters = null;
         }
-        body.putAll(target.root());
+        mergedBody.putAll(target.root());
         if (target.parameters().isEmpty()) {
-            return body;
+            return mergedBody;
         }
         if (parameters == null) {
             parameters = new LinkedHashMap<>();
-            body.put("parameters", parameters);
+            mergedBody.put("parameters", parameters);
         }
         parameters.putAll(target.parameters());
-        return body;
+        return mergedBody;
     }
 
     private static void removeFields(Map<String, Object> values, List<String> fields) {
