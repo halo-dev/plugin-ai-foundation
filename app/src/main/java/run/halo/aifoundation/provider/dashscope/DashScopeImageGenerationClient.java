@@ -2,8 +2,10 @@ package run.halo.aifoundation.provider.dashscope;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.web.reactive.function.client.WebClient;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
@@ -15,6 +17,8 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
 
     private static final String ENDPOINT_PATH =
         "/services/aigc/multimodal-generation/generation";
+    private static final Set<String> NATIVE_OPTIONS = Set.of(
+        "prompt_extend", "prompt_extend_mode", "enable_thinking", "watermark");
 
     public DashScopeImageGenerationClient(ImageGenerationClientOptions options,
         WebClient.Builder webClientBuilder) {
@@ -39,7 +43,7 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
             "content", content
         ))));
 
-        var parameters = new LinkedHashMap<String, Object>();
+        var parameters = nativeParameters(nativeOptions);
         putIfNotNull(parameters, "n", request.getN());
         putIfHasText(parameters, "size", dashScopeSize(request.getSize()));
         putIfNotNull(parameters, "seed", request.getSeed());
@@ -48,6 +52,48 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
             body.put("parameters", parameters);
         }
         return body;
+    }
+
+    private LinkedHashMap<String, Object> nativeParameters(Map<String, Object> nativeOptions) {
+        var values = nativeOptions != null ? nativeOptions : Map.<String, Object>of();
+        var unknown = new LinkedHashSet<>(values.keySet());
+        unknown.removeAll(NATIVE_OPTIONS);
+        if (!unknown.isEmpty()) {
+            throw new IllegalArgumentException("Unsupported DashScope image option(s): "
+                + String.join(", ", unknown));
+        }
+        var parameters = new LinkedHashMap<String, Object>();
+        putBoolean(parameters, values, "prompt_extend");
+        putBoolean(parameters, values, "enable_thinking");
+        putBoolean(parameters, values, "watermark");
+        putPromptExtendMode(parameters, values.get("prompt_extend_mode"));
+        return parameters;
+    }
+
+    private void putBoolean(Map<String, Object> target, Map<String, Object> values, String field) {
+        var value = values.get(field);
+        if (value == null) {
+            return;
+        }
+        if (!(value instanceof Boolean)) {
+            throw new IllegalArgumentException("DashScope image " + field + " must be boolean");
+        }
+        target.put(field, value);
+    }
+
+    private void putPromptExtendMode(Map<String, Object> target, Object value) {
+        if (value == null) {
+            return;
+        }
+        if (!(value instanceof String mode)) {
+            throw new IllegalArgumentException(
+                "DashScope image prompt_extend_mode must be direct or agent");
+        }
+        if (!Set.of("direct", "agent").contains(mode)) {
+            throw new IllegalArgumentException(
+                "DashScope image prompt_extend_mode must be direct or agent");
+        }
+        target.put("prompt_extend_mode", mode);
     }
 
     @Override

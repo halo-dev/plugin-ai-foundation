@@ -60,6 +60,7 @@ import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
@@ -1543,13 +1544,8 @@ public class LanguageModelImpl implements LanguageModel {
 
     private void mergeExtraBody(ChatCompletionsOptions.Builder builder,
         Map<String, Object> values) {
-        var merged = new LinkedHashMap<String, Object>();
         var existing = builder.build().getExtraBody();
-        if (existing != null) {
-            merged.putAll(existing);
-        }
-        merged.putAll(values);
-        builder.extraBody(merged);
+        builder.extraBody(ProviderOptionMapMerger.merge(existing, values));
     }
 
     private Object languageParameterValue(ModelParameter parameter, GenerateTextRequest request) {

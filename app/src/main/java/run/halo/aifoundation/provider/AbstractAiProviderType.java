@@ -157,6 +157,14 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             .build();
     }
 
+    /**
+     * Starts provider-owned Chat Completions options with model-native option support enabled.
+     */
+    protected LanguageModelProviderOptions.Builder chatCompletionsProviderOptionsBuilder() {
+        return LanguageModelProviderOptions.builder()
+            .nativeOptionsApplicator(ChatCompletionsNativeOptions::apply);
+    }
+
     protected ChatCompletionsOptionsFactory chatCompletionsOptionsFactory(
         ReasoningControlOptions reasoningControlOptions, boolean nativeStrictToolSchemas,
         StructuredOutputSupport structuredOutputSupport) {
@@ -321,6 +329,12 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         }
         if (fieldsContainAnyToken(node, MODEL_TYPE_FIELDS, "embedding")) {
             return ModelType.EMBEDDING;
+        }
+        if (fieldsContainAnyToken(node, MODEL_TYPE_FIELDS,
+            "image-generation", "image_generation", "imagegeneration",
+            "text-to-image", "text_to_image", "text2image",
+            "image-to-image", "image_to_image", "image2image")) {
+            return ModelType.IMAGE_GENERATION;
         }
         if (fieldsContainAnyToken(node, MODEL_TYPE_FIELDS, "chat", "language")) {
             return ModelType.LANGUAGE;

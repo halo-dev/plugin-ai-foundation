@@ -9,10 +9,11 @@ public final class NativeModelOptionsValidator {
 
     private static final Set<String> INVOCATION_FIELDS = Set.of(
         "model", "messages", "input", "prompt", "image", "images", "mask", "tools",
-        "tool_choice", "documents", "query", "stream", "stream_options");
-    private static final Set<String> CREDENTIAL_FIELDS = Set.of(
-        "api_key", "apikey", "authorization", "access_token", "token", "secret",
-        "password", "credential");
+        "toolchoice", "documents", "query", "stream", "streamoptions");
+    private static final Set<String> EXACT_CREDENTIAL_FIELDS = Set.of("token", "secret");
+    private static final Set<String> CREDENTIAL_MARKERS = Set.of(
+        "apikey", "authorization", "secretkey", "privatekey", "password", "credential",
+        "secretaccesskey", "accesskeyid");
     private static final int MAX_NESTING_DEPTH = 32;
 
     private NativeModelOptionsValidator() {
@@ -33,7 +34,7 @@ public final class NativeModelOptionsValidator {
     private static void validateEntry(Map.Entry<String, Object> entry) {
         var name = entry.getKey();
         validateName(name, name);
-        if (INVOCATION_FIELDS.contains(name)) {
+        if (INVOCATION_FIELDS.contains(normalizeName(name))) {
             throw new IllegalArgumentException(
                 "Provider-native option '" + name + "' is owned by the model invocation");
         }
@@ -47,11 +48,38 @@ public final class NativeModelOptionsValidator {
         if (name.isBlank()) {
             throw new IllegalArgumentException("Provider-native option names must not be blank");
         }
-        var normalizedName = name.toLowerCase(Locale.ROOT).replace('-', '_');
-        if (CREDENTIAL_FIELDS.contains(normalizedName)) {
+        var normalizedName = normalizeName(name);
+        if (isCredentialName(normalizedName)) {
             throw new IllegalArgumentException(
                 "Provider-native option '" + path + "' must use the provider Secret instead");
         }
+    }
+
+    private static boolean isCredentialName(String normalizedName) {
+        if (EXACT_CREDENTIAL_FIELDS.contains(normalizedName)) {
+            return true;
+        }
+        // Credential aliases vary by provider, so singular token/secret suffixes fail closed.
+        if (normalizedName.endsWith("token") || normalizedName.endsWith("secret")) {
+            return true;
+        }
+        for (var marker : CREDENTIAL_MARKERS) {
+            if (normalizedName.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String normalizeName(String name) {
+        var lowercase = name.toLowerCase(Locale.ROOT);
+        var normalized = new StringBuilder(lowercase.length());
+        for (var character : lowercase.toCharArray()) {
+            if (Character.isLetterOrDigit(character)) {
+                normalized.append(character);
+            }
+        }
+        return normalized.toString();
     }
 
     private static void validateValue(Object value, String path, int depth) {

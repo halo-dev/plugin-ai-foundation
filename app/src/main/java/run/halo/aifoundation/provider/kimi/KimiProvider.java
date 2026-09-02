@@ -122,7 +122,7 @@ public class KimiProvider extends AbstractAiProviderType {
         ReasoningControlOptions reasoning) {
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoning, true, StructuredOutputSupport.JSON_SCHEMA);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)

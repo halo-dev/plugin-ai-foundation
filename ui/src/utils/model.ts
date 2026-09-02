@@ -1,4 +1,9 @@
-import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
+import type {
+  AiModel,
+  AiProvider,
+  DefaultParameterMappingInfo,
+  ProviderTypeInfo,
+} from '@/api/generated'
 import {
   AiModelSpecAdapterTypeEnum,
   AiModelSpecDiscoveryConfidenceEnum,
@@ -86,6 +91,19 @@ export function defaultAdapterForProviderType(
   )
 }
 
+export function defaultParameterMappingsForAdapter(
+  providerType: ProviderTypeInfo | undefined,
+  adapterType?: string,
+): Record<string, DefaultParameterMappingInfo> | undefined {
+  const adapter = providerType?.adapters?.find((item) => item.adapterType === adapterType)
+  const defaults = providerType?.defaultParameterMappings
+  const overrides = adapter?.defaultParameterMappingOverrides
+  if (!overrides) {
+    return defaults
+  }
+  return { ...defaults, ...overrides }
+}
+
 export function filterModelFeaturesForProviderType(
   providerType: ProviderTypeInfo | undefined,
   features: string[] = [],
@@ -133,12 +151,14 @@ export function discoveredModelProfileForProviderType(
     providerType,
     existing?.modelType || model.modelType,
   )
+  const candidateAdapter = existing?.adapterType || model.adapterType
+  const adapterOptions = adapterOptionsForProviderType(providerType, modelType)
   const adapterType =
-    defaultAdapterForProviderType(
-      providerType,
-      modelType,
-      existing?.adapterType || model.adapterType,
-    ) || (modelType === model.modelType ? model.adapterType : undefined)
+    adapterOptions.find((option) => option.value === candidateAdapter)?.value ||
+    (adapterOptions.length === 0 && modelType === model.modelType
+      ? model.adapterType
+      : undefined) ||
+    (adapterOptions.length === 1 ? adapterOptions[0].value : undefined)
   return {
     modelType,
     ...(adapterType ? { adapterType } : {}),

@@ -677,6 +677,35 @@ class LanguageModelImplTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void generateText_preservesNativeReasoningFieldsWhenApplyingMappedEffort() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var composition = LanguageModelRuntimeComposition.create("openai", "reasoning-model",
+            LanguageModelProviderOptions.builder()
+                .chatOptionsFactory(request -> ChatCompletionsOptions.builder()
+                    .extraBody(Map.of("reasoning", Map.of("summary", "auto")))
+                    .build())
+                .build(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition,
+            builtInReasoningMapping("reasoning.responses-effort"));
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Think")
+                .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH))
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
+        assertThat((Map<String, Object>) options.getExtraBody().get("reasoning"))
+            .containsEntry("summary", "auto")
+            .containsEntry("effort", "high");
+    }
+
+    @Test
     void generateText_appliesExplicitReasoningMappingsWithoutModelInspection() {
         var kimi = builtInReasoningOptions("kimi", "kimi-k3",
             new KimiProvider().languageModelProviderOptions(), "reasoning.kimi",

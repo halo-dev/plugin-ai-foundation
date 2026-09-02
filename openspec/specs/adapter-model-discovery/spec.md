@@ -27,7 +27,8 @@ Provider model discovery SHALL include reranking models only when remote provide
 #### Scenario: Remote metadata declares rerank model
 - **WHEN** a rerank-supporting provider's model discovery receives a remote model item explicitly classified as rerank-capable
 - **THEN** the discovered model SHALL be normalized with model type `rerank`
-- **AND** the adapter type SHALL be the neutral rerank adapter type
+- **AND** discovery SHALL assign the matching provider-owned adapter when remote metadata identifies the protocol
+- **AND** when the provider supports multiple rerank protocols but metadata does not distinguish them, the adapter type SHALL remain unselected for administrator confirmation
 - **AND** the model profile SHALL use high-confidence remote metadata
 
 #### Scenario: Remote metadata does not classify model purpose

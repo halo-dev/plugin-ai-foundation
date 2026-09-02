@@ -22,6 +22,7 @@ import {
   createModelFromDiscovered,
   defaultAdapterForProviderType,
   defaultModelTypeForProviderType,
+  defaultParameterMappingsForAdapter,
   discoveredModelProfileForProviderType,
   filterModelFeaturesForProviderType,
   findProviderTypeForModel,
@@ -183,6 +184,35 @@ describe('createModelFromDiscovered', () => {
 })
 
 describe('provider type model options', () => {
+  it('uses adapter-specific parameter defaults when available', () => {
+    const providerType = providerTypeInfo('openai', 'OpenAI', {
+      defaultParameterMappings: {
+        REASONING: { mode: 'TEMPLATE', template: 'reasoning.effort' },
+      },
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          supportedFeatures: [],
+          recommended: true,
+          defaultParameterMappingOverrides: {
+            REASONING: { mode: 'TEMPLATE', template: 'reasoning.responses-effort' },
+          },
+        },
+      ],
+    })
+
+    expect(
+      defaultParameterMappingsForAdapter(
+        providerType,
+        AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
+      )?.REASONING?.template,
+    ).toBe('reasoning.responses-effort')
+    expect(defaultParameterMappingsForAdapter(providerType, 'missing')?.REASONING?.template).toBe(
+      'reasoning.effort',
+    )
+  })
+
   it('exposes vision when the DeepSeek provider declares it', () => {
     const providerType = providerTypeInfo('deepseek', 'DeepSeek', {
       supportedFeatures: [
@@ -346,6 +376,40 @@ describe('provider type model options', () => {
 })
 
 describe('discovered model profiles', () => {
+  it('requires an explicit adapter when discovery cannot choose between protocols', () => {
+    const providerType = providerTypeInfo('dashscope', 'DashScope', {
+      supportedModelTypes: [ProviderTypeInfoSupportedModelTypesEnum.Rerank],
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DashscopeNativeRerank,
+          modelType: AdapterTypeInfoModelTypeEnum.Rerank,
+          recommended: true,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DashscopeCompatibleRerank,
+          modelType: AdapterTypeInfoModelTypeEnum.Rerank,
+          recommended: false,
+        },
+      ],
+    })
+    const model = discoveredModel('rerank-model', AiModelSpecModelTypeEnum.Rerank)
+
+    expect(discoveredModelProfileForProviderType(providerType, model)).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Rerank,
+      features: [],
+    })
+    expect(
+      discoveredModelProfileForProviderType(providerType, model, {
+        modelType: AiModelSpecModelTypeEnum.Embedding,
+        adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+        features: [],
+      }),
+    ).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Rerank,
+      features: [],
+    })
+  })
+
   it('selects a compatible adapter when the model type changes', () => {
     const providerType = providerTypeInfo('openai', 'OpenAI', {
       supportedModelTypes: [

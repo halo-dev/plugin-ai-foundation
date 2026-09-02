@@ -29,6 +29,9 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
     protected Map<String, Object> requestBody(GenerateImageRequest request,
         Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
+        if (nativeOptions != null) {
+            body.putAll(nativeOptions);
+        }
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
         if (request.getImages() != null && !request.getImages().isEmpty()) {
@@ -46,7 +49,7 @@ public final class DouBaoImageGenerationClient extends AbstractJsonImageGenerati
             body.put("response_format", request.getResponseFormat() == ImageResponseFormat.BASE64
                 ? "b64_json" : "url");
         }
-        body.put("output_format", "png");
+        body.putIfAbsent("output_format", "png");
         body.put("stream", false);
         return body;
     }

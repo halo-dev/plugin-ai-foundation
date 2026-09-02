@@ -166,7 +166,7 @@ public class MiMoProvider extends AbstractAiProviderType {
         boolean nativeStrictToolSchemas) {
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoning, nativeStrictToolSchemas, structuredOutput);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)

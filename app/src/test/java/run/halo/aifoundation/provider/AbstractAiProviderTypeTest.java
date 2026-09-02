@@ -191,6 +191,17 @@ class AbstractAiProviderTypeTest {
     }
 
     @Test
+    void modelProfile_usesExplicitRemoteImageGenerationMetadata() {
+        var profile = new TestProviderType().modelProfile(
+            Map.of("id", "opaque-model", "type", "text-to-image"),
+            "opaque-model");
+
+        assertThat(profile.modelType()).isEqualTo(ModelType.IMAGE_GENERATION);
+        assertThat(profile.source()).isEqualTo(DiscoverySource.REMOTE);
+        assertThat(profile.confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+    }
+
+    @Test
     void discoverModels_mapsExplicitRemoteRerankMetadata() throws Exception {
         var body = """
             {"data":[

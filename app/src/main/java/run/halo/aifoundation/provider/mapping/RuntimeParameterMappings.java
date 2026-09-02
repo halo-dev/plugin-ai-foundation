@@ -60,6 +60,7 @@ public final class RuntimeParameterMappings {
             return false;
         }
         descriptor.applicator().apply(value, mapping.field(), target);
+        target.recordAppliedParameter(parameter);
         return true;
     }
 
@@ -78,6 +79,7 @@ public final class RuntimeParameterMappings {
             return false;
         }
         descriptor.applicator().apply(value.typedValue(), value.getField(), target);
+        target.recordAppliedParameter(ModelParameter.REASONING);
         return true;
     }
 

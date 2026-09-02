@@ -13,6 +13,7 @@ import run.halo.aifoundation.extension.ModelParameterMappings.ReasoningMapping;
 import run.halo.aifoundation.extension.ModelParameterMappings.ReasoningValueMapping;
 import run.halo.aifoundation.extension.ModelParameterMappings.ValueType;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ModelType;
 
 @Component
 public class ParameterMappingTemplateRegistry {
@@ -40,8 +41,7 @@ public class ParameterMappingTemplateRegistry {
         AdapterType.MINIMAX_RESPONSES, AdapterType.MIMO_RESPONSES,
         AdapterType.AIHUBMIX_RESPONSES);
     private static final Set<AdapterType> LANGUAGE = Set.copyOf(Arrays.stream(AdapterType.values())
-        .filter(adapter -> adapter.getModelType()
-            == run.halo.aifoundation.provider.support.ModelType.LANGUAGE)
+        .filter(adapter -> adapter.getModelType() == ModelType.LANGUAGE)
         .toList());
     private static final Set<AdapterType> EMBEDDING = Set.of(
         AdapterType.OPENAI_EMBEDDING, AdapterType.DASHSCOPE_EMBEDDING,
@@ -50,6 +50,9 @@ public class ParameterMappingTemplateRegistry {
         AdapterType.OPENROUTER_EMBEDDING, AdapterType.SILICONFLOW_EMBEDDING,
         AdapterType.ZHIPU_EMBEDDING, AdapterType.AIHUBMIX_EMBEDDING,
         AdapterType.OLLAMA_EMBEDDING, AdapterType.GEMINI_EMBED_CONTENT);
+    private static final Set<AdapterType> RERANK = Set.copyOf(Arrays.stream(AdapterType.values())
+        .filter(adapter -> adapter.getModelType() == ModelType.RERANK)
+        .toList());
     private static final Set<AdapterType> IMAGE = Set.of(AdapterType.OPENAI_IMAGE,
         AdapterType.OPENROUTER_IMAGE, AdapterType.DASHSCOPE_IMAGE, AdapterType.DOUBAO_IMAGE,
         AdapterType.ERNIE_IMAGE, AdapterType.GITEE_IMAGE, AdapterType.MINIMAX_IMAGE,
@@ -104,9 +107,9 @@ public class ParameterMappingTemplateRegistry {
             template("chat.parallel-tool-calls", "parallel_tool_calls",
                 ModelParameter.PARALLEL_TOOL_CALLS, LANGUAGE),
             template("embedding.dimensions", "dimensions", ModelParameter.DIMENSIONS, EMBEDDING),
-            template("rerank.top-n", "top_n", ModelParameter.TOP_N, Set.of(AdapterType.RERANK)),
+            template("rerank.top-n", "top_n", ModelParameter.TOP_N, RERANK),
             template("rerank.parameters.top-n", "parameters.top_n", ModelParameter.TOP_N,
-                Set.of(AdapterType.RERANK), ParameterMappingApplicator.parameters("top_n")),
+                RERANK, ParameterMappingApplicator.parameters("top_n")),
             template("image.n", "n", ModelParameter.IMAGE_COUNT,
                 Set.of(AdapterType.OPENAI_IMAGE, AdapterType.OPENROUTER_IMAGE,
                     AdapterType.ERNIE_IMAGE, AdapterType.GITEE_IMAGE,

@@ -158,7 +158,7 @@ public class MiniMaxProvider extends AbstractAiProviderType {
         var reasoning = ReasoningControlOptions.unsupported();
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoning, false, StructuredOutputSupport.PROMPT_ONLY);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(true)
             .streamToolCallsForReasoning(true)
             .requestHeadersSupported(true)

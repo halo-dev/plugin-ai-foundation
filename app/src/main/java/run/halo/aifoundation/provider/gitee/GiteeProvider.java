@@ -189,7 +189,7 @@ public class GiteeProvider extends AbstractAiProviderType {
         var reasoning = ReasoningControlOptions.unsupported();
         var optionsFactory = chatCompletionsOptionsFactory(
             reasoning, false, structuredOutput);
-        return LanguageModelProviderOptions.builder()
+        return chatCompletionsProviderOptionsBuilder()
             .reasoningHistorySupported(false)
             .streamToolCallsForReasoning(false)
             .requestHeadersSupported(true)

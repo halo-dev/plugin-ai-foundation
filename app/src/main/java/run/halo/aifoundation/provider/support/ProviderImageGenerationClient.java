@@ -20,6 +20,10 @@ public interface ProviderImageGenerationClient {
 
     default Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
         ParameterMappingTarget target, Map<String, Object> nativeOptions) {
-        return generateImage(request, target);
+        if (nativeOptions == null || nativeOptions.isEmpty()) {
+            return generateImage(request, target);
+        }
+        return Mono.error(new IllegalStateException(
+            "Image provider does not support configured native options"));
     }
 }

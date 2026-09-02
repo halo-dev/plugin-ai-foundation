@@ -155,6 +155,44 @@ class ProviderSpecificImageGenerationClientsTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void dashScopeRequestBody_appliesDocumentedNativeOptions() {
+        var client = new DashScopeImageGenerationClient(options("dashscope", "qwen-image"),
+            WebClient.builder());
+        var request = GenerateImageRequest.builder()
+            .prompt("Draw Halo")
+            .n(2)
+            .build();
+
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(client,
+            "requestBody", request, Map.of(
+                "prompt_extend", false,
+                "prompt_extend_mode", "agent",
+                "enable_thinking", true,
+                "watermark", false));
+
+        assertThat(map(body.get("parameters")))
+            .containsEntry("prompt_extend", false)
+            .containsEntry("prompt_extend_mode", "agent")
+            .containsEntry("enable_thinking", true)
+            .containsEntry("watermark", false)
+            .containsEntry("n", 2);
+    }
+
+    @Test
+    void dashScopeRequestBody_rejectsUnknownNativeOptions() {
+        var client = new DashScopeImageGenerationClient(options("dashscope", "qwen-image"),
+            WebClient.builder());
+        var request = GenerateImageRequest.builder().prompt("Draw Halo").build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                ReflectionTestUtils.invokeMethod(client, "requestBody", request,
+                    Map.of("future_option", true)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported DashScope image option(s): future_option");
+    }
+
+    @Test
     void dashScopeResponse_mapsChoicesImages() {
         var client = new DashScopeImageGenerationClient(options("dashscope", "qwen-image"),
             WebClient.builder());
@@ -276,6 +314,32 @@ class ProviderSpecificImageGenerationClientsTest {
         assertThat((List<?>) body.get("image")).hasSize(2);
         assertThat((String) ((List<?>) body.get("image")).get(1))
             .startsWith("data:image/png;base64,");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void modelArkRequestBody_appliesNativeOptionsWithoutOverridingPortableFields() {
+        var client = new DouBaoImageGenerationClient(options("doubao", "configured-model"),
+            WebClient.builder());
+        var request = GenerateImageRequest.builder()
+            .prompt("Draw Halo")
+            .size("1024x1024")
+            .build();
+
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(client,
+            "requestBody", request, Map.of(
+                "watermark", false,
+                "optimize_prompt_options", Map.of("mode", "standard"),
+                "output_format", "webp",
+                "model", "ignored-model",
+                "size", "ignored-size"));
+
+        assertThat(body)
+            .containsEntry("watermark", false)
+            .containsEntry("optimize_prompt_options", Map.of("mode", "standard"))
+            .containsEntry("output_format", "webp")
+            .containsEntry("model", "configured-model")
+            .containsEntry("size", "1024x1024");
     }
 
     @Test

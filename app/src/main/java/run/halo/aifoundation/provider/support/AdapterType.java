@@ -6,10 +6,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 @Getter
-@RequiredArgsConstructor
 public enum AdapterType {
     OPENAI_CHAT("openai-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     OPENAI_RESPONSES("openai-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
@@ -23,6 +21,12 @@ public enum AdapterType {
     DASHSCOPE_MESSAGES("dashscope-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
     DASHSCOPE_EMBEDDING("dashscope-embedding", ModelType.EMBEDDING,
         AdapterProtocol.EMBEDDING),
+    DASHSCOPE_COMPATIBLE_RERANK("dashscope-compatible-rerank", ModelType.RERANK,
+        AdapterProtocol.RERANK, "DashScope 兼容重排",
+        "使用兼容接口的扁平请求与响应结构"),
+    DASHSCOPE_NATIVE_RERANK("dashscope-native-rerank", ModelType.RERANK,
+        AdapterProtocol.RERANK, "DashScope 原生重排",
+        "使用原生接口的 input、parameters 与 output 结构，可承载文本或多模态输入"),
     DOUBAO_RESPONSES("doubao-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     DOUBAO_CHAT("doubao-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     DOUBAO_EMBEDDING("doubao-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
@@ -91,6 +95,21 @@ public enum AdapterType {
     private final String value;
     private final ModelType modelType;
     private final AdapterProtocol protocol;
+    private final String displayName;
+    private final String description;
+
+    AdapterType(String value, ModelType modelType, AdapterProtocol protocol) {
+        this(value, modelType, protocol, protocol.getDisplayName(), protocol.getDescription());
+    }
+
+    AdapterType(String value, ModelType modelType, AdapterProtocol protocol,
+        String displayName, String description) {
+        this.value = value;
+        this.modelType = modelType;
+        this.protocol = protocol;
+        this.displayName = displayName;
+        this.description = description;
+    }
 
     @JsonValue
     public String getValue() {

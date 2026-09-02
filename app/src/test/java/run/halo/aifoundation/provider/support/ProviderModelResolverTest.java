@@ -32,6 +32,18 @@ class ProviderModelResolverTest {
     }
 
     @Test
+    void builtInProviderNormalizesLegacyRerankAdapter() {
+        var providerType = new TestProviderType(true,
+            List.of(AdapterType.DASHSCOPE_NATIVE_RERANK,
+                AdapterType.DASHSCOPE_COMPATIBLE_RERANK));
+        var persisted = new ProviderModelRef("rerank-model", ModelType.RERANK,
+            AdapterType.RERANK);
+
+        assertThat(ProviderModelResolver.resolve(providerType, persisted).adapterType())
+            .isEqualTo(AdapterType.DASHSCOPE_NATIVE_RERANK);
+    }
+
+    @Test
     void unsupportedNonLegacyAdapterIsRejected() {
         var providerType = new TestProviderType(true, List.of(AdapterType.DEEPSEEK_CHAT));
         var model = new ProviderModelRef("deepseek-chat", ModelType.LANGUAGE,

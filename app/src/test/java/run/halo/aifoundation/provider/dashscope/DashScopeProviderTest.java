@@ -26,6 +26,7 @@ import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
@@ -41,7 +42,8 @@ import run.halo.app.extension.Metadata;
         + "https://help.aliyun.com/en/model-studio/qwen-api-via-openai-responses; "
         + "https://help.aliyun.com/zh/model-studio/anthropic-api-messages; "
         + "https://help.aliyun.com/zh/model-studio/getting-started/models; "
-        + "https://help.aliyun.com/en/model-studio/text-embedding-synchronous-api",
+        + "https://help.aliyun.com/en/model-studio/text-embedding-synchronous-api; "
+        + "https://help.aliyun.com/en/model-studio/text-rerank-api",
     retrievedAt = "2026-09-01"
 )
 class DashScopeProviderTest {
@@ -101,6 +103,39 @@ class DashScopeProviderTest {
                 GenerateTextRequest.builder().prompt("Think harder").build());
         effort = effort.mutate().extraBody(Map.of("reasoning_effort", "high")).build();
         assertThat(effort.getExtraBody()).containsEntry("reasoning_effort", "high");
+    }
+
+    @Test
+    void exposesSeparateCompatibleAndNativeRerankProtocols() {
+        assertThat(provider.getSupportedAdapterTypes())
+            .containsSubsequence(AdapterType.DASHSCOPE_NATIVE_RERANK,
+                AdapterType.DASHSCOPE_COMPATIBLE_RERANK);
+        assertThat(provider.recommendAdapterType(ModelType.RERANK))
+            .contains(AdapterType.DASHSCOPE_NATIVE_RERANK);
+        assertThat(provider.getSupportedFeatures(AdapterType.DASHSCOPE_COMPATIBLE_RERANK))
+            .isEmpty();
+        assertThat(provider.getSupportedFeatures(AdapterType.DASHSCOPE_NATIVE_RERANK))
+            .containsExactly(ModelFeature.VISION);
+        assertThat(provider.getDefaultParameterMappings(AdapterType.DASHSCOPE_COMPATIBLE_RERANK)
+            .get(ModelParameter.TOP_N).template())
+            .isEqualTo("rerank.top-n");
+        assertThat(provider.getDefaultParameterMappings(AdapterType.DASHSCOPE_NATIVE_RERANK)
+            .get(ModelParameter.TOP_N).template())
+            .isEqualTo("rerank.parameters.top-n");
+    }
+
+    @Test
+    void discoveryLeavesAmbiguousRerankProtocolUnselected() {
+        var compatible = discoveredModel("qwen3-rerank", "Rerank");
+        var nativeMultimodal = discoveredModel("qwen3-vl-rerank", "Rerank");
+        var unknown = discoveredModel("opaque-rerank-model", "Rerank");
+
+        assertThat(compatible.modelType()).isEqualTo(ModelType.RERANK);
+        assertThat(compatible.adapterType()).isNull();
+        assertThat(nativeMultimodal.adapterType()).isNull();
+        assertThat(unknown.adapterType()).isNull();
+        assertThat(provider.recommendAdapterType(compatible)).isEmpty();
+        assertThat(provider.recommendAdapterType(unknown)).isEmpty();
     }
 
     @Test
@@ -420,8 +455,13 @@ class DashScopeProviderTest {
 
     private run.halo.aifoundation.provider.support.DiscoveredModel discoveredModel(
         String capability) {
+        return discoveredModel("future-model", capability);
+    }
+
+    private run.halo.aifoundation.provider.support.DiscoveredModel discoveredModel(
+        String modelId, String capability) {
         return ReflectionTestUtils.invokeMethod(provider, "discoveredModel", Map.of(
-            "model", "future-model", "name", "Future Model",
+            "model", modelId, "name", "Future Model",
             "capabilities", List.of(capability), "features", List.of()));
     }
 

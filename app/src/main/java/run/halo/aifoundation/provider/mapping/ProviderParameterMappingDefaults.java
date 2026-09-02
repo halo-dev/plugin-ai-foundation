@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.AdapterProtocol;
 
 public final class ProviderParameterMappingDefaults {
 
@@ -35,7 +36,8 @@ public final class ProviderParameterMappingDefaults {
             defaults.put(ModelParameter.DIMENSIONS,
                 DefaultParameterMapping.template("embedding.dimensions"));
         }
-        if (adapters.contains(AdapterType.RERANK)) {
+        if (adapters.stream()
+            .anyMatch(adapter -> adapter.getProtocol() == AdapterProtocol.RERANK)) {
             defaults.put(ModelParameter.TOP_N, DefaultParameterMapping.template("rerank.top-n"));
         }
         adapters.stream().filter(ProviderParameterMappingDefaults::isImage).findFirst()
