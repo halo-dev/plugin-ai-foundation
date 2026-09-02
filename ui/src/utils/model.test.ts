@@ -21,8 +21,8 @@ import {
   adapterOptionsForProviderType,
   createModelFromDiscovered,
   defaultAdapterForProviderType,
-  defaultParameterMappingsForAdapter,
   defaultModelTypeForProviderType,
+  defaultParameterMappingsForAdapter,
   discoveredModelProfileForProviderType,
   filterModelFeaturesForProviderType,
   findProviderTypeForModel,
@@ -376,6 +376,40 @@ describe('provider type model options', () => {
 })
 
 describe('discovered model profiles', () => {
+  it('requires an explicit adapter when discovery cannot choose between protocols', () => {
+    const providerType = providerTypeInfo('dashscope', 'DashScope', {
+      supportedModelTypes: [ProviderTypeInfoSupportedModelTypesEnum.Rerank],
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DashscopeNativeRerank,
+          modelType: AdapterTypeInfoModelTypeEnum.Rerank,
+          recommended: true,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DashscopeCompatibleRerank,
+          modelType: AdapterTypeInfoModelTypeEnum.Rerank,
+          recommended: false,
+        },
+      ],
+    })
+    const model = discoveredModel('rerank-model', AiModelSpecModelTypeEnum.Rerank)
+
+    expect(discoveredModelProfileForProviderType(providerType, model)).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Rerank,
+      features: [],
+    })
+    expect(
+      discoveredModelProfileForProviderType(providerType, model, {
+        modelType: AiModelSpecModelTypeEnum.Embedding,
+        adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+        features: [],
+      }),
+    ).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Rerank,
+      features: [],
+    })
+  })
+
   it('selects a compatible adapter when the model type changes', () => {
     const providerType = providerTypeInfo('openai', 'OpenAI', {
       supportedModelTypes: [

@@ -20,10 +20,7 @@ public interface ProviderRerankingClient {
 
     default Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target,
         Map<String, Object> nativeOptions) {
-        if (nativeOptions == null) {
-            return rerank(request, target);
-        }
-        if (nativeOptions.isEmpty()) {
+        if (nativeOptions == null || nativeOptions.isEmpty()) {
             return rerank(request, target);
         }
         return Mono.error(new IllegalStateException(

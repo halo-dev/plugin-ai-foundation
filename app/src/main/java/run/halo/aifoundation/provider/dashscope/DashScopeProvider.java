@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -109,6 +110,11 @@ public class DashScopeProvider extends AbstractAiProviderType {
             case DASHSCOPE_NATIVE_RERANK -> List.of(ModelFeature.VISION);
             default -> List.of();
         };
+    }
+
+    @Override
+    public Optional<AdapterType> recommendAdapterType(DiscoveredModel model) {
+        return discoveredAdapterType(model.modelType());
     }
 
     @Override
@@ -285,10 +291,16 @@ public class DashScopeProvider extends AbstractAiProviderType {
             .displayName(stringValue(node, "name"))
             .modelType(modelType)
             .features(features)
-            .adapterType(recommendAdapterType(modelType).orElse(null))
+            .adapterType(discoveredAdapterType(modelType).orElse(null))
             .source(DiscoverySource.REMOTE)
             .confidence(DiscoveryConfidence.HIGH)
             .build();
+    }
+
+    private Optional<AdapterType> discoveredAdapterType(ModelType modelType) {
+        return modelType == ModelType.RERANK
+            ? Optional.empty()
+            : recommendAdapterType(modelType);
     }
 
     private ModelType dashScopeModelType(Map<?, ?> node) {

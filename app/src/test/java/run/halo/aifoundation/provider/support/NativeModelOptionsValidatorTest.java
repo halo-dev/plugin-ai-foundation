@@ -75,13 +75,19 @@ class NativeModelOptionsValidatorTest {
     void rejectsCredentialAliasesRegardlessOfCaseOrSeparatorStyle() {
         for (var name : java.util.List.of(
             "xApiKey", "accessToken", "bearerToken", "secretKey", "clientSecret",
-            "privateKey", "X.API.KEY", "access_key_secret", "aws_secret_access_key")) {
+            "privateKey", "X.API.KEY", "access_key_secret", "aws_secret_access_key",
+            "refresh_token", "session_token", "id_token", "access_key_id", "api_secret",
+            "api_token", "auth_token", "oauth_token", "consumer_secret", "private_token")) {
             assertThatThrownBy(() -> NativeModelOptionsValidator.validate(
                 Map.of(name, "secret")))
                 .as(name)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("provider Secret");
         }
+        assertThatThrownBy(() -> NativeModelOptionsValidator.validate(
+            Map.of("oauth", Map.of("refresh_token", "secret"))))
+            .hasMessageContaining("oauth.refresh_token")
+            .hasMessageContaining("provider Secret");
     }
 
     @Test

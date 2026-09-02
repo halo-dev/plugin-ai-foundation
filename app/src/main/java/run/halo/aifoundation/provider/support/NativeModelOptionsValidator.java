@@ -12,9 +12,8 @@ public final class NativeModelOptionsValidator {
         "toolchoice", "documents", "query", "stream", "streamoptions");
     private static final Set<String> EXACT_CREDENTIAL_FIELDS = Set.of("token", "secret");
     private static final Set<String> CREDENTIAL_MARKERS = Set.of(
-        "apikey", "xapikey", "authorization", "accesstoken", "bearertoken",
-        "secretkey", "clientsecret", "privatekey", "password", "credential",
-        "accesskeysecret", "secretaccesskey");
+        "apikey", "authorization", "secretkey", "privatekey", "password", "credential",
+        "secretaccesskey", "accesskeyid");
     private static final int MAX_NESTING_DEPTH = 32;
 
     private NativeModelOptionsValidator() {
@@ -58,6 +57,10 @@ public final class NativeModelOptionsValidator {
 
     private static boolean isCredentialName(String normalizedName) {
         if (EXACT_CREDENTIAL_FIELDS.contains(normalizedName)) {
+            return true;
+        }
+        // Credential aliases vary by provider, so singular token/secret suffixes fail closed.
+        if (normalizedName.endsWith("token") || normalizedName.endsWith("secret")) {
             return true;
         }
         for (var marker : CREDENTIAL_MARKERS) {

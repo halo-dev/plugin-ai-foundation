@@ -151,12 +151,14 @@ export function discoveredModelProfileForProviderType(
     providerType,
     existing?.modelType || model.modelType,
   )
+  const candidateAdapter = existing?.adapterType || model.adapterType
+  const adapterOptions = adapterOptionsForProviderType(providerType, modelType)
   const adapterType =
-    defaultAdapterForProviderType(
-      providerType,
-      modelType,
-      existing?.adapterType || model.adapterType,
-    ) || (modelType === model.modelType ? model.adapterType : undefined)
+    adapterOptions.find((option) => option.value === candidateAdapter)?.value ||
+    (adapterOptions.length === 0 && modelType === model.modelType
+      ? model.adapterType
+      : undefined) ||
+    (adapterOptions.length === 1 ? adapterOptions[0].value : undefined)
   return {
     modelType,
     ...(adapterType ? { adapterType } : {}),

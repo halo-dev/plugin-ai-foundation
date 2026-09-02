@@ -125,16 +125,17 @@ class DashScopeProviderTest {
     }
 
     @Test
-    void discoveryUsesNativeRerankWithoutInspectingModelId() {
-        var discovered = (run.halo.aifoundation.provider.support.DiscoveredModel)
-            ReflectionTestUtils.invokeMethod(provider, "discoveredModel", Map.of(
-                "model", "opaque-rerank-model",
-                "name", "Rerank model",
-                "capabilities", List.of("Rerank"),
-                "features", List.of()));
+    void discoveryLeavesAmbiguousRerankProtocolUnselected() {
+        var compatible = discoveredModel("qwen3-rerank", "Rerank");
+        var nativeMultimodal = discoveredModel("qwen3-vl-rerank", "Rerank");
+        var unknown = discoveredModel("opaque-rerank-model", "Rerank");
 
-        assertThat(discovered.modelType()).isEqualTo(ModelType.RERANK);
-        assertThat(discovered.adapterType()).isEqualTo(AdapterType.DASHSCOPE_NATIVE_RERANK);
+        assertThat(compatible.modelType()).isEqualTo(ModelType.RERANK);
+        assertThat(compatible.adapterType()).isNull();
+        assertThat(nativeMultimodal.adapterType()).isNull();
+        assertThat(unknown.adapterType()).isNull();
+        assertThat(provider.recommendAdapterType(compatible)).isEmpty();
+        assertThat(provider.recommendAdapterType(unknown)).isEmpty();
     }
 
     @Test
@@ -454,8 +455,13 @@ class DashScopeProviderTest {
 
     private run.halo.aifoundation.provider.support.DiscoveredModel discoveredModel(
         String capability) {
+        return discoveredModel("future-model", capability);
+    }
+
+    private run.halo.aifoundation.provider.support.DiscoveredModel discoveredModel(
+        String modelId, String capability) {
         return ReflectionTestUtils.invokeMethod(provider, "discoveredModel", Map.of(
-            "model", "future-model", "name", "Future Model",
+            "model", modelId, "name", "Future Model",
             "capabilities", List.of(capability), "features", List.of()));
     }
 

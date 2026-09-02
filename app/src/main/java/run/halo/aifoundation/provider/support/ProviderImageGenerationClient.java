@@ -20,10 +20,7 @@ public interface ProviderImageGenerationClient {
 
     default Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
         ParameterMappingTarget target, Map<String, Object> nativeOptions) {
-        if (nativeOptions == null) {
-            return generateImage(request, target);
-        }
-        if (nativeOptions.isEmpty()) {
+        if (nativeOptions == null || nativeOptions.isEmpty()) {
             return generateImage(request, target);
         }
         return Mono.error(new IllegalStateException(

@@ -1,12 +1,17 @@
 <script lang="ts" setup>
 import { aiConsoleApiClient } from '@/api'
-import type { AiModel, AiModelSpecFeaturesEnum, AiProvider } from '@/api/generated'
+import type {
+  AiModel,
+  AiModelSpecAdapterTypeEnum,
+  AiModelSpecFeaturesEnum,
+  AiProvider,
+} from '@/api/generated'
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
-import { useProviderType } from '@/composables/use-provider-types-fetch'
+import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import {
   capabilityDomainSource,
   capabilitySourceLabel,
@@ -14,6 +19,7 @@ import {
 } from '@/utils/capabilities'
 import { setFocus } from '@/utils/focus'
 import {
+  adapterOptionsForProviderType,
   createModelFromDiscovered,
   discoveredModelProfileForProviderType,
   groupDiscoveredModels,
@@ -38,7 +44,7 @@ import {
 } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
-import { computed, onMounted, ref, shallowRef, toRef, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import RiCheckLine from '~icons/ri/check-line'
 
 const props = defineProps<{
@@ -56,7 +62,15 @@ const modal = ref<InstanceType<typeof VModal> | null>(null)
 const providerName = computed(() => props.provider.metadata.name || '')
 
 const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
-const selectedProviderType = useProviderType(toRef(props, 'provider'))
+const {
+  data: providerTypes,
+  isLoading: isLoadingProviderTypes,
+  isError: isProviderTypesError,
+  refetch: refetchProviderTypes,
+} = useProviderTypesFetch()
+const selectedProviderType = computed(() =>
+  providerTypes.value?.find((type) => type.providerType === props.provider.spec.providerType),
+)
 
 const keyword = shallowRef('')
 
@@ -82,6 +96,11 @@ const selectedModels = ref<Set<string>>(new Set())
 const profileOverrides = ref<DiscoveredModelProfiles>({})
 const isImporting = shallowRef(false)
 const selectedModelCount = computed(() => selectedModels.value.size)
+const selectedModelsNeedAdapter = computed(() =>
+  allModels.value.some(
+    (model) => selectedModels.value.has(model.modelId) && !profileFor(model).adapterType,
+  ),
+)
 const selectedVisibleModelCount = computed(() => {
   return filteredModels.value.filter((model) => selectedModels.value.has(model.modelId)).length
 })
@@ -120,6 +139,10 @@ function featureOptionsFor(model: DiscoveredModel) {
   )
 }
 
+function adapterOptionsFor(model: DiscoveredModel) {
+  return adapterOptionsForProviderType(selectedProviderType.value, profileFor(model).modelType)
+}
+
 function setModelType(model: DiscoveredModel, event: Event) {
   const current = profileFor(model)
   const next = discoveredModelProfileForProviderType(selectedProviderType.value, model, {
@@ -129,6 +152,17 @@ function setModelType(model: DiscoveredModel, event: Event) {
   profileOverrides.value = {
     ...profileOverrides.value,
     [model.modelId]: next,
+  }
+}
+
+function setAdapterType(model: DiscoveredModel, event: Event) {
+  const current = profileFor(model)
+  profileOverrides.value = {
+    ...profileOverrides.value,
+    [model.modelId]: discoveredModelProfileForProviderType(selectedProviderType.value, model, {
+      ...current,
+      adapterType: (event.target as HTMLSelectElement).value as AiModelSpecAdapterTypeEnum,
+    }),
   }
 }
 
@@ -248,6 +282,7 @@ watch(
         return (
           existing &&
           existing.modelType === profile.modelType &&
+          existing.adapterType === profile.adapterType &&
           featuresEqual(existing.features, profile.features)
         )
       })
@@ -307,7 +342,14 @@ onMounted(() => {
         />
       </div>
       <div class=":uno: min-h-0 flex-1 overflow-y-auto">
-        <VLoading v-if="isLoading" />
+        <VLoading v-if="isLoading || isLoadingProviderTypes" />
+        <div
+          v-else-if="isProviderTypesError || !selectedProviderType"
+          class=":uno: flex flex-col items-center gap-3 px-4 py-12 text-sm text-gray-500"
+        >
+          <span>无法加载供应商接口信息</span>
+          <VButton size="sm" @click="refetchProviderTypes()">重试</VButton>
+        </div>
         <VEmpty v-else-if="allModels.length === 0" title="无数据" message="无法获取到模型列表" />
         <VEmpty
           v-else-if="filteredModels.length === 0"
@@ -374,6 +416,22 @@ onMounted(() => {
                           {{ item.label }}
                         </option>
                       </select>
+                      <select
+                        v-if="adapterOptionsFor(model).length > 1"
+                        :value="profileFor(model).adapterType || ''"
+                        :aria-label="`${model.displayName || model.modelId} 调用接口`"
+                        class=":uno: h-8 min-w-36 rounded-md bg-white text-xs text-gray-700 outline-none transition !border !border-gray-200 !border-solid !px-2 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
+                        @change="setAdapterType(model, $event)"
+                      >
+                        <option disabled value="">选择调用接口</option>
+                        <option
+                          v-for="item in adapterOptionsFor(model)"
+                          :key="item.value"
+                          :value="item.value"
+                        >
+                          {{ item.label }}
+                        </option>
+                      </select>
                     </div>
                     <div class=":uno: flex flex-wrap justify-end gap-1.5">
                       <button
@@ -427,13 +485,16 @@ onMounted(() => {
     </div>
     <template #footer>
       <div class=":uno: w-full flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class=":uno: text-sm text-gray-500">已选择 {{ selectedModelCount }} 个模型</div>
+        <div class=":uno: text-sm text-gray-500">
+          已选择 {{ selectedModelCount }} 个模型
+          <span v-if="selectedModelsNeedAdapter"> · 请选择调用接口</span>
+        </div>
         <VSpace>
           <VButton
             type="secondary"
             @click="handleImport"
             :loading="isImporting"
-            :disabled="selectedModelCount === 0 || isImporting"
+            :disabled="selectedModelCount === 0 || selectedModelsNeedAdapter || isImporting"
           >
             {{ selectedModelCount > 0 ? `导入 ${selectedModelCount} 个模型` : '导入' }}
           </VButton>
