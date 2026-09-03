@@ -44,6 +44,9 @@ import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
 import run.halo.aifoundation.service.rerank.DefaultRerankingModelFactory;
 import run.halo.aifoundation.service.rerank.RerankingModelRuntimeFactory;
+import run.halo.aifoundation.service.usage.UsageCallDescriptor;
+import run.halo.aifoundation.service.usage.UsageCallSession;
+import run.halo.aifoundation.service.usage.UsageStatisticsService;
 import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.Metadata;
@@ -70,6 +73,9 @@ class AiModelServiceImplTest {
     @Mock
     CallerPluginObservationRegistry callerPluginObservationRegistry;
 
+    @Mock
+    UsageStatisticsService usageStatisticsService;
+
     CallerPluginAuditRecorder callerPluginAuditRecorder;
 
     AiModelServiceImpl service;
@@ -81,6 +87,12 @@ class AiModelServiceImplTest {
                 .detected(false)
                 .detectionSource("none")
                 .build());
+        lenient().when(usageStatisticsService.describeCall(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.isNull()))
+            .thenAnswer(invocation -> mock(UsageCallDescriptor.class));
+        lenient().when(usageStatisticsService.beginCall(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mock(UsageCallSession.class));
         callerPluginAuditRecorder = new CallerPluginAuditRecorder(callerPluginResolver,
             callerPluginObservationRegistry);
         service = new AiModelServiceImpl(
@@ -92,7 +104,8 @@ class AiModelServiceImplTest {
             new DefaultRerankingModelFactory(providerClientCache,
                 new RerankingModelRuntimeFactory()),
             new DefaultImageGenerationModelFactory(),
-            callerPluginAuditRecorder
+            callerPluginAuditRecorder,
+            usageStatisticsService
         );
     }
 

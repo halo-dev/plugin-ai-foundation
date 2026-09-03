@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
@@ -19,9 +20,10 @@ import run.halo.aifoundation.service.audit.ModelCallContext;
 import run.halo.aifoundation.service.image.ImageGenerationModelFactory;
 import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.aifoundation.service.rerank.RerankingModelFactory;
+import run.halo.aifoundation.service.usage.UsageStatisticsService;
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class AiModelServiceImpl implements AiModelService {
 
     private final AiModelResolver modelResolver;
@@ -30,6 +32,7 @@ public class AiModelServiceImpl implements AiModelService {
     private final RerankingModelFactory rerankingModelFactory;
     private final ImageGenerationModelFactory imageGenerationModelFactory;
     private final CallerPluginAuditRecorder callerPluginAuditRecorder;
+    private final UsageStatisticsService usageStatisticsService;
 
     @Override
     public Mono<LanguageModel> languageModel() {
@@ -94,29 +97,33 @@ public class AiModelServiceImpl implements AiModelService {
     private LanguageModel createLanguageModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.LANGUAGE);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedLanguageModel(languageModelFactory.create(resolution), context,
-            callerPluginAuditRecorder);
+        var model = languageModelFactory.create(resolution);
+        return new AuditedLanguageModel(model, context, callerPluginAuditRecorder,
+            usageStatisticsService);
     }
 
     private EmbeddingModel createEmbeddingModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.EMBEDDING);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedEmbeddingModel(embeddingModelFactory.create(resolution), context,
-            callerPluginAuditRecorder);
+        var model = embeddingModelFactory.create(resolution);
+        return new AuditedEmbeddingModel(model, context, callerPluginAuditRecorder,
+            usageStatisticsService);
     }
 
     private RerankingModel createRerankingModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.RERANK);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedRerankingModel(rerankingModelFactory.create(resolution), context,
-            callerPluginAuditRecorder);
+        var model = rerankingModelFactory.create(resolution);
+        return new AuditedRerankingModel(model, context, callerPluginAuditRecorder,
+            usageStatisticsService);
     }
 
     private ImageGenerationModel createImageGenerationModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.IMAGE_GENERATION);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedImageGenerationModel(imageGenerationModelFactory.create(resolution),
-            context, callerPluginAuditRecorder);
+        var model = imageGenerationModelFactory.create(resolution);
+        return new AuditedImageGenerationModel(model, context, callerPluginAuditRecorder,
+            usageStatisticsService);
     }
 
 }

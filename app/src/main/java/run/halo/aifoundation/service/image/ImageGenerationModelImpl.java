@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -40,6 +41,9 @@ import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.usage.NormalizedUsage;
+import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.usage.UsageUnitKind;
 
 public class ImageGenerationModelImpl implements ImageGenerationModel {
 
@@ -54,16 +58,19 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     private final MediaResourcePolicy mediaResourcePolicy;
     private final ModelCapabilityMatcher capabilityMatcher;
     private final RuntimeParameterMappings parameterMappings;
+    private final UsageExecutionObserver usageExecutionObserver;
     private final Map<String, Object> nativeOptions;
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
         String modelName, String providerName, String providerType,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
         this(client, modelCapabilities, modelName, providerName, providerType, mediaResourcePolicy,
             capabilityMatcher, EffectiveParameterMappings.empty());
     }
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
         String modelName, String providerName, String providerType,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
         EffectiveParameterMappings parameterMappings) {
@@ -72,9 +79,17 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
                 new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
     }
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
         ModelRuntimeContext context) {
+        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher, context, null);
+    }
+
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
+        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
+        ModelRuntimeContext context, UsageExecutionObserver usageExecutionObserver) {
         this.client = client;
         this.modelCapabilities = modelCapabilities != null ? modelCapabilities
             : ModelCapabilities.empty();
@@ -86,6 +101,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher
             : new ModelCapabilityMatcher();
         this.parameterMappings = context.parameterMappings();
+        this.usageExecutionObserver = usageExecutionObserver;
         this.nativeOptions = context.nativeOptions();
     }
 
@@ -144,21 +160,32 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     }
 
     private Flux<GenerateImageResult> executeBatches(ImageInvocation invocation) {
-        return Flux.fromIterable(invocation.batchSizes())
-            .flatMapSequential(batchSize -> invokeBatch(copyForBatch(invocation.request(), batchSize)),
+        return Flux.range(0, invocation.batchSizes().size())
+            .flatMapSequential(index -> invokeBatch(
+                    copyForBatch(invocation.request(), invocation.batchSizes().get(index)), index),
                 invocation.concurrency(), 1);
     }
 
-    private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request) {
-        var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
-        var call = client.generateImage(request, target, nativeOptions)
-            .doOnSubscribe(ignored -> checkCancellation(request))
-            .doOnNext(ignored -> checkCancellation(request));
+    private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request, int batchIndex) {
+        var call = Mono.defer(() -> {
+            checkCancellation(request);
+            var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
+            Supplier<Mono<GenerateImageResult>> invocation =
+                () -> client.generateImage(request, target, nativeOptions);
+            var observed = (usageExecutionObserver == null ? invocation.get()
+                : usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex, invocation,
+                    result -> NormalizedUsage.from(result.getUsage()), this::responseModel))
+                .doOnNext(ignored -> checkCancellation(request));
+            return observed;
+        });
         var maxRetries = maxRetries(request);
-        if (maxRetries <= 0) {
-            return call;
-        }
-        return call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+        return maxRetries <= 0 ? call
+            : call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+    }
+
+    private String responseModel(GenerateImageResult result) {
+        return result.getResponses() == null || result.getResponses().isEmpty()
+            ? null : result.getResponses().get(result.getResponses().size() - 1).getModel();
     }
 
     private ParameterMappingTarget mappingTarget(GenerateImageRequest request) {
@@ -480,7 +507,9 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         }
         return mono.timeout(timeout)
             .onErrorMap(TimeoutException.class,
-                error -> new AiGenerationTimeoutException("image", timeout, error));
+                error -> new AiGenerationTimeoutException("image", timeout, error))
+            .contextWrite(context ->
+                UsageExecutionObserver.withTimeoutDeadline(context, timeout));
     }
 
     private Duration timeout(GenerateImageRequest request) {

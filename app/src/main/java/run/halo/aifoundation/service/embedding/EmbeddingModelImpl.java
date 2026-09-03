@@ -5,8 +5,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.EmbeddingOptions;
+import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -27,6 +29,9 @@ import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.usage.NormalizedUsage;
+import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.usage.UsageUnitKind;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingModel;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
@@ -43,6 +48,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     private final EmbeddingBatchPlanner batchPlanner;
     private final EmbeddingResponseAggregator responseAggregator;
     private final RuntimeParameterMappings parameterMappings;
+    private final UsageExecutionObserver usageExecutionObserver;
 
     EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
@@ -87,6 +93,13 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
         EmbeddingModelRuntimeComposition composition, ModelRuntimeContext context) {
+        this(springEmbeddingModel, composition, context, null);
+    }
+
+    EmbeddingModelImpl(
+        org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
+        EmbeddingModelRuntimeComposition composition, ModelRuntimeContext context,
+        UsageExecutionObserver usageExecutionObserver) {
         this.springEmbeddingModel = springEmbeddingModel;
         this.providerType = composition.providerType();
         this.maxEmbeddingsPerCall = composition.maxEmbeddingsPerCall();
@@ -95,6 +108,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         this.batchPlanner = composition.batchPlanner();
         this.responseAggregator = composition.responseAggregator();
         this.parameterMappings = context.parameterMappings();
+        this.usageExecutionObserver = usageExecutionObserver;
     }
 
     @Override
@@ -241,18 +255,30 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     private Mono<EmbeddingBatchResult> batchCall(EmbeddingRequest request,
         EmbeddingBatchPlanner.IndexedBatch batch,
         EmbeddingOptions options) {
-        var call = Mono.fromCallable(() -> {
-                checkCancellation(request);
-                return embedBatch(request, batch, options);
-            })
-            .subscribeOn(Schedulers.boundedElastic())
-            .transform(mono -> withEmbeddingTimeout(mono, request));
-
+        var call = Mono.defer(() -> {
+            checkCancellation(request);
+            Supplier<Mono<EmbeddingBatchResult>> invocation = () -> Mono.fromCallable(
+                    () -> embedBatch(request, batch, options))
+                .subscribeOn(Schedulers.boundedElastic())
+                .transform(mono -> withEmbeddingTimeout(mono, request));
+            var observed = usageExecutionObserver == null ? invocation.get()
+                : usageExecutionObserver.observe(UsageUnitKind.EMBEDDING_BATCH, batch.index(),
+                    invocation, this::batchUsage, this::batchModel);
+            return observed;
+        });
         var maxRetries = batchPlanner.maxRetries(request);
-        if (maxRetries <= 0) {
-            return call;
-        }
-        return call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+        return maxRetries <= 0 ? call
+            : call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+    }
+
+    private NormalizedUsage batchUsage(EmbeddingBatchResult result) {
+        return result.metadata() instanceof EmbeddingResponseMetadata metadata
+            ? NormalizedUsage.from(metadata.getUsage()) : NormalizedUsage.missing();
+    }
+
+    private String batchModel(EmbeddingBatchResult result) {
+        return result.metadata() instanceof EmbeddingResponseMetadata metadata
+            ? metadata.getModel() : null;
     }
 
     private EmbeddingBatchResult embedBatch(EmbeddingRequest request,
@@ -354,7 +380,9 @@ public class EmbeddingModelImpl implements EmbeddingModel {
             return mono;
         }
         return mono.timeout(timeout)
-            .onErrorMap(TimeoutException.class, error -> new EmbeddingTimeoutException(timeout, error));
+            .onErrorMap(TimeoutException.class,
+                error -> new EmbeddingTimeoutException(timeout, error))
+            .contextWrite(context -> UsageExecutionObserver.withTimeoutDeadline(context, timeout));
     }
 
     private Duration timeout(EmbeddingRequest request) {

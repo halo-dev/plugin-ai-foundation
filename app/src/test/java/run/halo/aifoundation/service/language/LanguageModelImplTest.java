@@ -5,6 +5,7 @@ import run.halo.aifoundation.provider.openai.OpenAiProvider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -85,8 +88,41 @@ import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.usage.NormalizedUsage;
+import run.halo.aifoundation.service.usage.UsageCallSession;
+import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.usage.UsageUnitKind;
 
 class LanguageModelImplTest {
+
+    @Test
+    void streamTextMarksErrorPartsAsLogicalCallFailureForFilteredProjections() {
+        var session = mock(UsageCallSession.class);
+        var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
+        var request = GenerateTextRequest.builder().prompt(" ").build();
+
+        StepVerifier.create(model.streamText(request).textStream()
+                .contextWrite(context ->
+                    context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session)))
+            .verifyComplete();
+
+        verify(session).fail(any(IllegalStateException.class), any(NormalizedUsage.class), eq(0));
+    }
+
+    @Test
+    void nonStructuredOutputProjectionDrivesTheSharedStreamBeforeCompletingEmpty() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class)))
+            .thenReturn(Flux.just(chatResponse("Done", "stop", 1, 1)));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.streamText(
+                GenerateTextRequest.builder().prompt("Hello").build()).output())
+            .verifyComplete();
+
+        verify(chatModel).stream(any(Prompt.class));
+    }
 
     @Test
     void generateText_mapsMessagesAndOptionsToSpringPrompt() {
@@ -2076,6 +2112,42 @@ class LanguageModelImplTest {
         StepVerifier.create(result.output())
             .expectNext(Map.of("name", "Halo"))
             .verifyComplete();
+    }
+
+    @Test
+    void streamTextObservesStructuredProviderExecution() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            chatResponse("{\"name\":\"Halo\"}", "stop", 2, 4)
+        ));
+        var observed = new AtomicBoolean();
+        var observer = new UsageExecutionObserver() {
+            @Override
+            public <T> Flux<T> observeFlux(UsageUnitKind kind, int unitIndex,
+                Supplier<Flux<T>> invocation, Function<T, NormalizedUsage> usage,
+                Function<T, String> responseModel) {
+                observed.set(true);
+                return invocation.get();
+            }
+        };
+        var composition = LanguageModelRuntimeComposition.create("openai",
+            LanguageModelProviderOptions.defaults(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition,
+            ModelRuntimeContext.unresolved("openai"), 1, observer);
+        var request = GenerateTextRequest.builder()
+            .prompt("Generate project")
+            .output(OutputSpec.object(Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string")),
+                "required", List.of("name")
+            )))
+            .build();
+
+        StepVerifier.create(model.streamText(request).fullStream())
+            .thenConsumeWhile(part -> true)
+            .verifyComplete();
+
+        assertThat(observed).isTrue();
     }
 
     @Test

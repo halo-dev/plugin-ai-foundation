@@ -56,6 +56,14 @@ const pluginModule = {
             component: () => import('./views/CallerPluginListView.vue'),
           },
           {
+            path: 'usage',
+            name: AI_FOUNDATION_ROUTE_NAMES.USAGE,
+            component: () =>
+              import(
+                /* webpackChunkName: "AiFoundationUsage" */ './views/UsageStatisticsView.vue'
+              ),
+          },
+          {
             path: 'test',
             name: AI_FOUNDATION_ROUTE_NAMES.TEST,
             component: () => import('./views/ModelTestWorkbenchView.vue'),
