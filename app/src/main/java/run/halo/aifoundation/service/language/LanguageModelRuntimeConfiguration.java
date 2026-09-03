@@ -20,6 +20,7 @@ public record LanguageModelRuntimeConfiguration(
     public static LanguageModelRuntimeConfiguration from(ModelRuntimeContext context,
         ModelCapabilities modelCapabilities) {
         return new LanguageModelRuntimeConfiguration(context,
-            context.providerDefinition().languageModelProviderOptions(), modelCapabilities);
+            context.providerDefinition().languageModelProviderOptions(context.adapterType()),
+            modelCapabilities);
     }
 }

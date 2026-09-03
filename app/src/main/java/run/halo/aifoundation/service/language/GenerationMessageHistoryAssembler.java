@@ -82,8 +82,16 @@ public final class GenerationMessageHistoryAssembler {
     }
 
     public GenerationResponseMetadata sanitize(GenerationResponseMetadata response) {
-        if (response == null || reasoningHistorySupported
-            || response.getMessages() == null || response.getMessages().isEmpty()) {
+        if (response == null) {
+            return null;
+        }
+        if (reasoningHistorySupported) {
+            return response;
+        }
+        if (response.getMessages() == null) {
+            return response;
+        }
+        if (response.getMessages().isEmpty()) {
             return response;
         }
         var messages = response.getMessages().stream()

@@ -1,10 +1,10 @@
 import type { UsageCallItem } from '@/api/generated'
-import { describe, expect, it, rstest } from '@rstest/core'
+import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import UsageCallTable from '../UsageCallTable.vue'
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   VLoading: defineComponent({
     template: '<div data-test="loading">loading</div>',
   }),

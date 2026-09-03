@@ -59,6 +59,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     private final ModelCapabilityMatcher capabilityMatcher;
     private final RuntimeParameterMappings parameterMappings;
     private final UsageExecutionObserver usageExecutionObserver;
+    private final Map<String, Object> nativeOptions;
 
     ImageGenerationModelImpl(ProviderImageGenerationClient client,
         ModelCapabilities modelCapabilities,
@@ -101,6 +102,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             : new ModelCapabilityMatcher();
         this.parameterMappings = context.parameterMappings();
         this.usageExecutionObserver = usageExecutionObserver;
+        this.nativeOptions = context.nativeOptions();
     }
 
     @Override
@@ -167,9 +169,9 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request, int batchIndex) {
         var call = Mono.defer(() -> {
             checkCancellation(request);
-            Supplier<Mono<GenerateImageResult>> invocation = () -> parameterMappings.isEmpty()
-                ? client.generateImage(request)
-                : client.generateImage(request, mappingTarget(request));
+            var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
+            Supplier<Mono<GenerateImageResult>> invocation =
+                () -> client.generateImage(request, target, nativeOptions);
             var observed = (usageExecutionObserver == null ? invocation.get()
                 : usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex, invocation,
                     result -> NormalizedUsage.from(result.getUsage()), this::responseModel))

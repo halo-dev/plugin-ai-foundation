@@ -1,6 +1,16 @@
 package run.halo.aifoundation.provider;
 
+import run.halo.aifoundation.provider.aihubmix.AiHubMixProvider;
+import run.halo.aifoundation.provider.aihubmix.AiHubMixImageGenerationClient;
+
+import run.halo.aifoundation.provider.openai.OpenAiProvider;
+import run.halo.aifoundation.provider.openai.OpenAiImageGenerationClient;
+
+import run.halo.aifoundation.provider.openailike.OpenAiLikeProvider;
+
 import static org.assertj.core.api.Assertions.assertThat;
+
+import run.halo.aifoundation.provider.ernie.ErnieProvider;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -18,12 +28,24 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.provider.support.image.DashScopeImageGenerationClient;
-import run.halo.aifoundation.provider.support.image.MiniMaxImageGenerationClient;
-import run.halo.aifoundation.provider.support.image.ModelArkImageGenerationClient;
-import run.halo.aifoundation.provider.support.image.OpenRouterImageGenerationClient;
-import run.halo.aifoundation.provider.support.image.SiliconFlowImageGenerationClient;
-import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleImageGenerationClient;
+import run.halo.aifoundation.provider.dashscope.DashScopeImageGenerationClient;
+import run.halo.aifoundation.provider.dashscope.DashScopeProvider;
+import run.halo.aifoundation.provider.doubao.DouBaoImageGenerationClient;
+import run.halo.aifoundation.provider.doubao.DouBaoProvider;
+import run.halo.aifoundation.provider.gitee.GiteeProvider;
+import run.halo.aifoundation.provider.gitee.GiteeImageGenerationClient;
+import run.halo.aifoundation.provider.ernie.ErnieImageGenerationClient;
+import run.halo.aifoundation.provider.minimax.MiniMaxImageGenerationClient;
+import run.halo.aifoundation.provider.minimax.MiniMaxProvider;
+import run.halo.aifoundation.provider.ollama.OllamaImageGenerationClient;
+import run.halo.aifoundation.provider.ollama.OllamaProvider;
+import run.halo.aifoundation.provider.openrouter.OpenRouterImageGenerationClient;
+import run.halo.aifoundation.provider.openrouter.OpenRouterProvider;
+import run.halo.aifoundation.provider.siliconflow.SiliconFlowImageGenerationClient;
+import run.halo.aifoundation.provider.siliconflow.SiliconFlowProvider;
+import run.halo.aifoundation.provider.zhipu.ZhiPuImageGenerationClient;
+import run.halo.aifoundation.provider.zhipu.ZhiPuProvider;
+import run.halo.aifoundation.provider.openailike.OpenAiCompatibleImageGenerationClient;
 import run.halo.app.extension.Metadata;
 
 class ProviderImageGenerationAdapterTest {
@@ -31,25 +53,25 @@ class ProviderImageGenerationAdapterTest {
     @Test
     void providersBuildConfiguredImageGenerationClients() {
         assertImageClient(new OpenAiProvider(), AdapterType.OPENAI_IMAGE,
-            OpenAiCompatibleImageGenerationClient.class);
+            OpenAiImageGenerationClient.class);
         assertImageClient(new OpenAiLikeProvider(), AdapterType.OPENAI_IMAGE,
             OpenAiCompatibleImageGenerationClient.class);
-        assertImageClient(new AiHubMixProvider(), AdapterType.OPENAI_IMAGE,
-            OpenAiCompatibleImageGenerationClient.class);
-        assertImageClient(new ErnieProvider(), AdapterType.OPENAI_IMAGE,
-            OpenAiCompatibleImageGenerationClient.class);
-        assertImageClient(new GiteeMoArkProvider(), AdapterType.OPENAI_IMAGE,
-            OpenAiCompatibleImageGenerationClient.class);
-        assertImageClient(new ZhiPuProvider(), AdapterType.OPENAI_IMAGE,
-            OpenAiCompatibleImageGenerationClient.class);
-        assertImageClient(new OllamaProvider(), AdapterType.OPENAI_IMAGE,
-            OpenAiCompatibleImageGenerationClient.class);
+        assertImageClient(new AiHubMixProvider(), AdapterType.AIHUBMIX_IMAGE,
+            AiHubMixImageGenerationClient.class);
+        assertImageClient(new ErnieProvider(), AdapterType.ERNIE_IMAGE,
+            ErnieImageGenerationClient.class);
+        assertImageClient(new GiteeProvider(), AdapterType.GITEE_IMAGE,
+            GiteeImageGenerationClient.class);
+        assertImageClient(new ZhiPuProvider(), AdapterType.ZHIPU_IMAGE,
+            ZhiPuImageGenerationClient.class);
+        assertImageClient(new OllamaProvider(), AdapterType.OLLAMA_IMAGE,
+            OllamaImageGenerationClient.class);
         assertImageClient(new OpenRouterProvider(), AdapterType.OPENROUTER_IMAGE,
             OpenRouterImageGenerationClient.class);
         assertImageClient(new DashScopeProvider(), AdapterType.DASHSCOPE_IMAGE,
             DashScopeImageGenerationClient.class);
         assertImageClient(new DouBaoProvider(), AdapterType.DOUBAO_IMAGE,
-            ModelArkImageGenerationClient.class);
+            DouBaoImageGenerationClient.class);
         assertImageClient(new MiniMaxProvider(), AdapterType.MINIMAX_IMAGE,
             MiniMaxImageGenerationClient.class);
         assertImageClient(new SiliconFlowProvider(), AdapterType.SILICONFLOW_IMAGE,
@@ -78,28 +100,35 @@ class ProviderImageGenerationAdapterTest {
 
                     var imageToImage = models.get(1);
                     assertThat(imageToImage.modelId()).isEqualTo("openrouter-image-edit");
-                    assertImageDiscovery(imageToImage);
+                    assertImageDiscovery(imageToImage, 4, List.of("image/png", "image/webp"));
                     assertThat(imageToImage.capabilities()
                         .getImageGeneration()
                         .getTextToImage()).isTrue();
                     assertThat(imageToImage.capabilities()
                         .getImageGeneration()
                         .getImageToImage()).isTrue();
+                    assertThat(imageToImage.capabilities()
+                        .getImageGeneration()
+                        .getMaskInput()).isTrue();
 
                     var textToImage = models.get(2);
                     assertThat(textToImage.modelId()).isEqualTo("openrouter-image-create");
-                    assertImageDiscovery(textToImage);
+                    assertImageDiscovery(textToImage, null, List.of());
                     assertThat(textToImage.capabilities()
                         .getImageGeneration()
                         .getTextToImage()).isTrue();
                     assertThat(textToImage.capabilities()
                         .getImageGeneration()
-                        .getImageToImage()).isNull();
+                        .getImageToImage()).isFalse();
+                    assertThat(textToImage.capabilities()
+                        .getImageGeneration()
+                        .getMaskInput()).isFalse();
                 })
                 .verifyComplete();
 
             assertThat(requests)
                 .containsExactlyInAnyOrder(
+                    new RequestCapture("/v1/models", "Bearer sk-test"),
                     new RequestCapture("/v1/models", "Bearer sk-test"),
                     new RequestCapture("/v1/images/models", "Bearer sk-test")
                 );
@@ -116,12 +145,15 @@ class ProviderImageGenerationAdapterTest {
             "image-model")).isInstanceOf(clientType);
     }
 
-    private void assertImageDiscovery(DiscoveredModel model) {
+    private void assertImageDiscovery(DiscoveredModel model, Integer maxImagesPerCall,
+        List<String> outputMediaTypes) {
         assertThat(model.modelType()).isEqualTo(ModelType.IMAGE_GENERATION);
         assertThat(model.adapterType()).isEqualTo(AdapterType.OPENROUTER_IMAGE);
         assertThat(model.source()).isEqualTo(DiscoverySource.REMOTE);
         assertThat(model.capabilities().getImageGeneration().getMaxImagesPerCall())
-            .isEqualTo(1);
+            .isEqualTo(maxImagesPerCall);
+        assertThat(model.capabilities().getImageGeneration().getOutputMediaTypes())
+            .isEqualTo(outputMediaTypes);
         assertThat(model.capabilitySources().getImageGeneration())
             .isEqualTo(CapabilitySource.REMOTE);
     }
@@ -154,6 +186,11 @@ class ProviderImageGenerationAdapterTest {
                   "architecture": {
                     "input_modalities": ["text", "image"],
                     "output_modalities": ["image"]
+                  },
+                  "supported_parameters": {
+                    "mask": true,
+                    "n": {"min": 1, "max": 4},
+                    "output_format": {"values": ["png", "webp", "future-format"]}
                   }
                 },
                 {

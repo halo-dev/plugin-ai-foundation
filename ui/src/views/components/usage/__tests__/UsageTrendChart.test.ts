@@ -1,11 +1,11 @@
 import type { UsageTrendPoint } from '@/api/generated'
-import { describe, expect, it, rstest } from '@rstest/core'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import UsageTrendChart from '../UsageTrendChart.vue'
 import type { UsageTrendResolution } from '@/utils/usage'
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   VLoading: defineComponent({
     template: '<div data-test="loading">loading</div>',
   }),

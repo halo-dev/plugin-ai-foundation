@@ -25,7 +25,7 @@ public class EffectiveParameterMappingResolver {
         var modelType = resolution.model().getSpec().getModelType();
         var values = new EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping>(
             ModelParameter.class);
-        resolution.providerType().getDefaultParameterMappings().forEach((parameter, mapping) -> {
+        defaultMappings(resolution, modelType).forEach((parameter, mapping) -> {
             if (catalog.definition(parameter).modelType() == modelType) {
                 values.put(parameter, new EffectiveParameterMappings.EffectiveMapping(
                     mapping.mode(), mapping.template(), null, null,
@@ -43,6 +43,33 @@ public class EffectiveParameterMappingResolver {
         overlay(values, resolution.model().getSpec().getParameterMappings(),
             EffectiveParameterMappings.Source.MODEL, modelType);
         return new EffectiveParameterMappings(values);
+    }
+
+    private java.util.Map<ModelParameter, DefaultParameterMapping> defaultMappings(
+        ModelResolution resolution, run.halo.aifoundation.provider.support.ModelType modelType) {
+        var providerType = resolution.providerType();
+        var adapterType = defaultMappingAdapter(resolution, modelType);
+        if (adapterType == null) {
+            return providerType.getDefaultParameterMappings();
+        }
+        return providerType.getDefaultParameterMappings(adapterType);
+    }
+
+    private run.halo.aifoundation.provider.support.AdapterType defaultMappingAdapter(
+        ModelResolution resolution, run.halo.aifoundation.provider.support.ModelType modelType) {
+        var providerType = resolution.providerType();
+        var configured = resolution.model().getSpec().getAdapterType();
+        if (configured == null) {
+            return providerType.recommendAdapterType(modelType).orElse(null);
+        }
+        var supported = providerType.getSupportedAdapterTypes();
+        if (supported == null) {
+            return configured;
+        }
+        if (supported.contains(configured)) {
+            return configured;
+        }
+        return providerType.recommendAdapterType(modelType).orElse(null);
     }
 
     private void overlay(

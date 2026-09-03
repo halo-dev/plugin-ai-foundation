@@ -91,7 +91,6 @@ public class GenerateImageRequest {
      */
     private ImageResponseFormat responseFormat;
 
-
     /**
      * Request-scoped HTTP headers sent to providers when supported.
      */

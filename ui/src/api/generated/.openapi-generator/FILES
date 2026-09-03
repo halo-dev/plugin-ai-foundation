@@ -16,6 +16,7 @@ common.ts
 configuration.ts
 git_push.sh
 index.ts
+models/adapter-type-info.ts
 models/add-operation.ts
 models/ai-model-list.ts
 models/ai-model-spec.ts

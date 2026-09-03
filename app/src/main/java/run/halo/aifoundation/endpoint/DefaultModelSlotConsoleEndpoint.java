@@ -107,15 +107,18 @@ public class DefaultModelSlotConsoleEndpoint implements CustomEndpoint {
                     .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Default slot '" + slotName + "' references model '" + modelName
                             + "' with missing provider: " + providerName)))
-                    .flatMap(provider -> {
-                        if (!provider.getSpec().isEnabled()) {
-                            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Default slot '" + slotName + "' references model '"
-                                    + modelName + "' with disabled provider: " + providerName));
-                        }
-                        return Mono.<Void>empty();
-                    });
+                    .flatMap(provider -> validateProviderEnabled(provider, slotName, modelName));
             });
+    }
+
+    private Mono<Void> validateProviderEnabled(AiProvider provider, String slotName,
+        String modelName) {
+        if (provider.getSpec().isEnabled()) {
+            return Mono.empty();
+        }
+        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Default slot '" + slotName + "' references model '" + modelName
+                + "' with disabled provider: " + provider.getMetadata().getName()));
     }
 
 }

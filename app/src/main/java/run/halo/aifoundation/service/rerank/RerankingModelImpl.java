@@ -80,7 +80,8 @@ public class RerankingModelImpl implements RerankingModel {
                 var warnings = requestWarnings(request);
                 var target = mappedTopN(request, warnings);
                 Supplier<Mono<RerankResponse>> invocation =
-                    () -> withRerankTimeout(client.rerank(request, target), request);
+                    () -> withRerankTimeout(client.rerank(request, target,
+                        providerOptions.getNativeOptions()), request);
                 var call = usageExecutionObserver == null ? invocation.get()
                     : usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
                         response -> NormalizedUsage.from(response.getUsage()),
@@ -113,9 +114,17 @@ public class RerankingModelImpl implements RerankingModel {
         if (document == null) {
             throw new IllegalArgumentException("Rerank documents must not contain null");
         }
-        if (document.getText() == null) {
-            throw new IllegalArgumentException("Rerank document text must not be null");
+        if (hasContent(document)) {
+            return;
         }
+        throw new IllegalArgumentException("Rerank document must contain text or an image");
+    }
+
+    private boolean hasContent(RerankDocument document) {
+        if (document.getText() != null && !document.getText().isBlank()) {
+            return true;
+        }
+        return document.getImage() != null;
     }
 
     private RerankResponse emptyResponse(RerankRequest request) {

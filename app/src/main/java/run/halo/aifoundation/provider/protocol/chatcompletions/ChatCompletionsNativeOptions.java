@@ -1,0 +1,27 @@
+package run.halo.aifoundation.provider.protocol.chatcompletions;
+
+import java.util.Map;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
+
+/** Applies administrator-owned model options to the shared Chat Completions option type. */
+public final class ChatCompletionsNativeOptions {
+
+    private ChatCompletionsNativeOptions() {
+    }
+
+    public static ChatOptions apply(ChatOptions options, Map<String, Object> nativeOptions) {
+        if (nativeOptions == null) {
+            return options;
+        }
+        if (nativeOptions.isEmpty()) {
+            return options;
+        }
+        if (!(options instanceof ChatCompletionsOptions chatOptions)) {
+            throw new IllegalStateException(
+                "Chat Completions native options require ChatCompletionsOptions");
+        }
+        var extraBody = ProviderOptionMapMerger.merge(nativeOptions, chatOptions.getExtraBody());
+        return chatOptions.mutate().extraBody(Map.copyOf(extraBody)).build();
+    }
+}

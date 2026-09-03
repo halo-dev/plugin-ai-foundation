@@ -61,14 +61,14 @@ import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
-import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleChatOptions;
-import run.halo.aifoundation.provider.support.ollama.MappedOllamaChatOptions;
-import org.springframework.ai.ollama.api.OllamaChatOptions;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.ollama.OllamaChatOptions;
 import run.halo.aifoundation.service.language.mapping.LanguageModelChatOptionsBuilder;
 import run.halo.aifoundation.service.language.mapping.LanguageModelMessageMapper;
 import run.halo.aifoundation.service.language.mapping.LanguageModelRequestValidator;
@@ -885,23 +885,31 @@ public class LanguageModelImpl implements LanguageModel {
                     .maxRetries(stepRequest.getMaxRetries())
                     .build());
                 return run.stepFinish(stepIndex, generationStep, List.copyOf(state.steps))
-                    .then(Mono.defer(() -> {
-                        if (!toolStep.canContinue() || !shouldContinue) {
-                            return finishGenerateText(baseRequest, run, state);
-                        }
-                        checkCancellation(stepRequest);
-                        var nextMessages = new ArrayList<>(prepared.messages());
-                        nextMessages.add(assistantOutput(step.text(), step.reasoning(),
-                            toolStep.recordedToolCalls()));
-                        nextMessages.add(messageMapper.toolResponseMessage(
-                            toolStep.recordedToolCalls(), toolStep.execution().results(),
-                            toolStep.execution().errors()));
-                        var nextExecutionMessages = new ArrayList<>(prepared.executionMessages());
-                        nextExecutionMessages.addAll(nullSafe(generationStep.getResponseMessages()));
-                        return generateTextStep(baseRequest, run, nextMessages, nextExecutionMessages,
-                            stopWhen, stepIndex + 1, state);
-                    }));
+                    .then(Mono.defer(() -> continueGenerateText(baseRequest, run, prepared,
+                        stopWhen, stepIndex, state, stepRequest, step, toolStep, generationStep,
+                        shouldContinue)));
             });
+    }
+
+    private Mono<GenerateTextResult> continueGenerateText(GenerateTextRequest baseRequest,
+        LanguageModelGenerationRun run, PreparedInvocation prepared, StopCondition stopWhen,
+        int stepIndex, NonStreamingGenerationState state, GenerateTextRequest stepRequest,
+        StepSnapshot step, ToolStepCoordinator.ToolStepResolution toolStep,
+        GenerationStep generationStep, boolean shouldContinue) {
+        if (!toolStep.canContinue() || !shouldContinue) {
+            return finishGenerateText(baseRequest, run, state);
+        }
+        checkCancellation(stepRequest);
+        var nextMessages = new ArrayList<>(prepared.messages());
+        nextMessages.add(assistantOutput(step.text(), step.reasoning(),
+            toolStep.recordedToolCalls()));
+        nextMessages.add(messageMapper.toolResponseMessage(
+            toolStep.recordedToolCalls(), toolStep.execution().results(),
+            toolStep.execution().errors()));
+        var nextExecutionMessages = new ArrayList<>(prepared.executionMessages());
+        nextExecutionMessages.addAll(nullSafe(generationStep.getResponseMessages()));
+        return generateTextStep(baseRequest, run, nextMessages, nextExecutionMessages,
+            stopWhen, stepIndex + 1, state);
     }
 
     private GenerationStep recordGenerateTextStep(GenerateTextRequest stepRequest,
@@ -1461,13 +1469,13 @@ public class LanguageModelImpl implements LanguageModel {
         if (options instanceof OllamaChatOptions ollamaOptions) {
             return applyOllamaMappedValues(ollamaOptions, target, request);
         }
-        if (!(options instanceof OpenAiCompatibleChatOptions openAiOptions)) {
+        if (!(options instanceof ChatCompletionsOptions openAiOptions)) {
             return options;
         }
         var builder = openAiOptions.mutate();
         applyOpenAiMappedValues(builder, target.root());
         applyOpenAiUnsupportedValues(builder);
-        applyOpenAiReasoning(builder, request);
+        applyMappedChatReasoning(builder, request);
         return builder.build();
     }
 
@@ -1475,9 +1483,7 @@ public class LanguageModelImpl implements LanguageModel {
         ParameterMappingTarget target, GenerateTextRequest request) {
         var builder = options.mutate();
         for (var entry : parameterMappings.values().entrySet()) {
-            if (entry.getValue() != null
-                && entry.getValue().mode()
-                == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+            if (shouldClearMappedParameter(entry.getKey(), entry.getValue())) {
                 clearOllamaNativeValue(builder, entry.getKey());
             }
         }
@@ -1485,7 +1491,7 @@ public class LanguageModelImpl implements LanguageModel {
         mappedOptions.putAll(target.root());
         mappedOptions.putAll(target.options());
         mappedOptions.remove("think");
-        var mapped = MappedOllamaChatOptions.from(builder.build(), mappedOptions);
+        var mapped = builder.mappedOptions(mappedOptions).build();
         return applyOllamaReasoning(mapped, request);
     }
 
@@ -1502,7 +1508,7 @@ public class LanguageModelImpl implements LanguageModel {
             case REPETITION_PENALTY -> builder.repeatPenalty(null);
             case STOP_SEQUENCES -> builder.stop(null);
             case SEED -> builder.seed(null);
-            case REASONING -> builder.thinkOption(null);
+            case REASONING -> builder.think(null);
             default -> {
                 // Unsupported Ollama parameters have no native option field to clear.
             }
@@ -1536,8 +1542,7 @@ public class LanguageModelImpl implements LanguageModel {
             .stopSequences(supported(ModelParameter.STOP_SEQUENCES, request.getStopSequences()))
             .seed(supported(ModelParameter.SEED, request.getSeed()))
             .maxRetries(request.getMaxRetries())
-            .reasoning(parameterMappings.get(ModelParameter.REASONING) == null
-                ? request.getReasoning() : null)
+            .reasoning(null)
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
             .context(request.getContext())
@@ -1561,7 +1566,7 @@ public class LanguageModelImpl implements LanguageModel {
         return parameterMappings.isUnsupported(parameter) ? null : value;
     }
 
-    private void applyOpenAiReasoning(OpenAiCompatibleChatOptions.Builder builder,
+    private void applyMappedChatReasoning(ChatCompletionsOptions.Builder builder,
         GenerateTextRequest request) {
         var reasoning = request.getReasoning();
         var target = new ParameterMappingTarget();
@@ -1601,15 +1606,10 @@ public class LanguageModelImpl implements LanguageModel {
         return builder.build();
     }
 
-    private void mergeExtraBody(OpenAiCompatibleChatOptions.Builder builder,
+    private void mergeExtraBody(ChatCompletionsOptions.Builder builder,
         Map<String, Object> values) {
-        var merged = new LinkedHashMap<String, Object>();
         var existing = builder.build().getExtraBody();
-        if (existing != null) {
-            merged.putAll(existing);
-        }
-        merged.putAll(values);
-        builder.extraBody(merged);
+        builder.extraBody(ProviderOptionMapMerger.merge(existing, values));
     }
 
     private Object languageParameterValue(ModelParameter parameter, GenerateTextRequest request) {
@@ -1632,12 +1632,10 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     @SuppressWarnings("unchecked")
-    private void applyOpenAiMappedValues(OpenAiCompatibleChatOptions.Builder builder,
+    private void applyOpenAiMappedValues(ChatCompletionsOptions.Builder builder,
         Map<String, Object> values) {
         for (var entry : parameterMappings.values().entrySet()) {
-            if (entry.getValue() != null
-                && entry.getValue().mode()
-                == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+            if (shouldClearMappedParameter(entry.getKey(), entry.getValue())) {
                 clearOpenAiNativeValue(builder, entry.getKey());
             }
         }
@@ -1678,7 +1676,19 @@ public class LanguageModelImpl implements LanguageModel {
         mergeExtraBody(builder, extra);
     }
 
-    private void clearOpenAiNativeValue(OpenAiCompatibleChatOptions.Builder builder,
+    private boolean shouldClearMappedParameter(ModelParameter parameter,
+        run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping mapping) {
+        if (mapping == null) {
+            return false;
+        }
+        if (mapping.mode()
+            != run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+            return false;
+        }
+        return true;
+    }
+
+    private void clearOpenAiNativeValue(ChatCompletionsOptions.Builder builder,
         ModelParameter parameter) {
         switch (parameter) {
             case MAX_OUTPUT_TOKENS -> builder.maxTokens(null).maxCompletionTokens(null);
@@ -1699,7 +1709,7 @@ public class LanguageModelImpl implements LanguageModel {
         }
     }
 
-    private void applyOpenAiUnsupportedValues(OpenAiCompatibleChatOptions.Builder builder) {
+    private void applyOpenAiUnsupportedValues(ChatCompletionsOptions.Builder builder) {
         parameterMappings.values().forEach((parameter, mapping) -> {
             if (mapping == null
                 || mapping.mode() != run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED) {
@@ -2284,28 +2294,8 @@ public class LanguageModelImpl implements LanguageModel {
     private List<GenerationWarning> requestWarnings(GenerateTextRequest request) {
         var warnings = new ArrayList<GenerationWarning>();
         if (request != null) {
-            parameterMappings.values().forEach((parameter, mapping) -> {
-                if (mapping != null
-                    && mapping.mode()
-                    == run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED
-                    && languageParameterValue(parameter, request) != null) {
-                    warnings.add(parameterMappings.unsupportedDiagnostic(parameter)
-                        .languageWarning());
-                }
-            });
-            var reasoningMapping = parameterMappings.get(ModelParameter.REASONING);
-            if (reasoningMapping != null
-                && request.getReasoning() != null && request.getReasoning().isExplicit()) {
-                var unsupported = reasoningMapping.mode()
-                    == run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED;
-                var cannotExpress = reasoningMapping.mode()
-                    == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE
-                    && !parameterMappings.canApplyReasoning(request.getReasoning());
-                if (unsupported || cannotExpress) {
-                    warnings.add(parameterMappings.unsupportedDiagnostic(ModelParameter.REASONING)
-                        .languageWarning());
-                }
-            }
+            addUnsupportedParameterWarnings(warnings, request);
+            addReasoningMappingWarning(warnings, request);
         }
         var structuredOutputSupport = providerOptions.structuredOutputSupport();
         var outputType = hasStructuredOutput(request) ? request.getOutput().getType() : null;
@@ -2345,6 +2335,42 @@ public class LanguageModelImpl implements LanguageModel {
                     + "applies."));
         }
         return warnings;
+    }
+
+    private void addUnsupportedParameterWarnings(List<GenerationWarning> warnings,
+        GenerateTextRequest request) {
+        parameterMappings.values().forEach((parameter, mapping) -> {
+            if (mapping == null) {
+                return;
+            }
+            if (mapping.mode()
+                != run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED) {
+                return;
+            }
+            if (languageParameterValue(parameter, request) == null) {
+                return;
+            }
+            warnings.add(parameterMappings.unsupportedDiagnostic(parameter).languageWarning());
+        });
+    }
+
+    private void addReasoningMappingWarning(List<GenerationWarning> warnings,
+        GenerateTextRequest request) {
+        var reasoning = request.getReasoning();
+        if (reasoning == null || !reasoning.isExplicit()) {
+            return;
+        }
+        var mapping = parameterMappings.get(ModelParameter.REASONING);
+        var unsupported = mapping == null || mapping.mode()
+            == run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED;
+        var cannotExpress = mapping != null && mapping.mode()
+            == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE
+            && !parameterMappings.canApplyReasoning(reasoning);
+        if (!unsupported && !cannotExpress) {
+            return;
+        }
+        warnings.add(parameterMappings.unsupportedDiagnostic(ModelParameter.REASONING)
+            .languageWarning());
     }
 
     private List<GenerationWarning> reasoningReturnedWhileDisabledWarnings(

@@ -1,23 +1,23 @@
 import { aiConsoleApiClient } from '@/api'
-import { describe, expect, it, rstest } from '@rstest/core'
+import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, ref, type PropType } from 'vue'
 import UsageResetModal from '../UsageResetModal.vue'
 
-const invalidateQueries = rstest.fn()
+const invalidateQueries = vi.fn()
 
-rstest.mock('@/api', () => ({
+vi.mock('@/api', () => ({
   aiConsoleApiClient: {
     usageStatistics: {
-      resetAiUsageStatistics: rstest.fn(),
+      resetAiUsageStatistics: vi.fn(),
     },
   },
 }))
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   Toast: {
-    success: rstest.fn(),
-    error: rstest.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
   },
   VModal: defineComponent({
     emits: ['close'],
@@ -53,7 +53,7 @@ rstest.mock('@halo-dev/components', () => ({
   }),
 }))
 
-rstest.mock('@tanstack/vue-query', () => ({
+vi.mock('@tanstack/vue-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
   useMutation: ({ mutationFn, onSuccess, onError }: Record<string, unknown>) => {
     const isPending = ref(false)
@@ -98,7 +98,7 @@ describe('UsageResetModal', () => {
   })
 
   it('resets statistics and invalidates usage queries after typing RESET', async () => {
-    rstest
+    vi
       .mocked(aiConsoleApiClient.usageStatistics.resetAiUsageStatistics)
       .mockResolvedValue({ data: { epoch: 2 } } as never)
 

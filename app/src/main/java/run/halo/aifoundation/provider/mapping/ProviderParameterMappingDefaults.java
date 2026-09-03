@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.AdapterProtocol;
 
 public final class ProviderParameterMappingDefaults {
 
@@ -22,19 +23,21 @@ public final class ProviderParameterMappingDefaults {
         for (var definition : CATALOG.definitionsFor(modelTypes)) {
             defaults.put(definition.parameter(), DefaultParameterMapping.unsupported());
         }
-        if (adapters.contains(AdapterType.OPENAI_CHAT)) {
+        if (adapters.stream().anyMatch(adapter -> adapter.getModelType()
+            == run.halo.aifoundation.provider.support.ModelType.LANGUAGE
+            && adapter != AdapterType.OLLAMA_CHAT)) {
             putLanguage(defaults, "openai.max-tokens");
         }
         if (adapters.contains(AdapterType.OLLAMA_CHAT)) {
             putOllamaLanguage(defaults);
-            defaults.put(ModelParameter.REASONING,
-                DefaultParameterMapping.template("reasoning.ollama-think"));
         }
-        if (adapters.contains(AdapterType.OPENAI_EMBEDDING)) {
+        if (adapters.stream().anyMatch(adapter -> adapter.getModelType()
+            == run.halo.aifoundation.provider.support.ModelType.EMBEDDING)) {
             defaults.put(ModelParameter.DIMENSIONS,
                 DefaultParameterMapping.template("embedding.dimensions"));
         }
-        if (adapters.contains(AdapterType.RERANK)) {
+        if (adapters.stream()
+            .anyMatch(adapter -> adapter.getProtocol() == AdapterProtocol.RERANK)) {
             defaults.put(ModelParameter.TOP_N, DefaultParameterMapping.template("rerank.top-n"));
         }
         adapters.stream().filter(ProviderParameterMappingDefaults::isImage).findFirst()
@@ -82,7 +85,8 @@ public final class ProviderParameterMappingDefaults {
     private static void putImage(Map<ModelParameter, DefaultParameterMapping> defaults,
         AdapterType adapter) {
         switch (adapter) {
-            case OPENAI_IMAGE -> {
+            case OPENAI_IMAGE, ERNIE_IMAGE, GITEE_IMAGE, ZHIPU_IMAGE, AIHUBMIX_IMAGE,
+                 OLLAMA_IMAGE -> {
                 put(defaults, ModelParameter.IMAGE_COUNT, "image.n");
                 put(defaults, ModelParameter.IMAGE_SIZE, "image.size");
                 put(defaults, ModelParameter.RESPONSE_FORMAT, "image.response-format.openai");

@@ -2,10 +2,11 @@ package run.halo.aifoundation.extension;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import io.swagger.v3.oas.annotations.media.Schema;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -51,5 +52,10 @@ public class AiModel extends AbstractExtension {
         private ModelCapabilitySources capabilitySources = ModelCapabilitySources.unknown();
         @Schema(description = "Model-specific parameter mapping overrides")
         private ModelParameterMappings parameterMappings;
+        @Schema(
+            description = "Provider-native non-secret options configured by the model administrator",
+            additionalProperties = Schema.AdditionalPropertiesValue.TRUE
+        )
+        private Map<String, Object> nativeOptions = Map.of();
     }
 }

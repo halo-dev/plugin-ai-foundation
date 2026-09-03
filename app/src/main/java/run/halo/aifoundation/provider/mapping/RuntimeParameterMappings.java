@@ -46,8 +46,13 @@ public final class RuntimeParameterMappings {
 
     public boolean apply(ModelParameter parameter, Object value, ParameterMappingTarget target) {
         var mapping = get(parameter);
-        if (value == null || mapping == null
-            || mapping.mode() != ModelParameterMappings.Mode.TEMPLATE) {
+        if (value == null) {
+            return false;
+        }
+        if (mapping == null) {
+            return false;
+        }
+        if (mapping.mode() != ModelParameterMappings.Mode.TEMPLATE) {
             return false;
         }
         var descriptor = templates.get(mapping.template());
@@ -55,6 +60,7 @@ public final class RuntimeParameterMappings {
             return false;
         }
         descriptor.applicator().apply(value, mapping.field(), target);
+        target.recordAppliedParameter(parameter);
         return true;
     }
 
@@ -73,6 +79,7 @@ public final class RuntimeParameterMappings {
             return false;
         }
         descriptor.applicator().apply(value.typedValue(), value.getField(), target);
+        target.recordAppliedParameter(ModelParameter.REASONING);
         return true;
     }
 

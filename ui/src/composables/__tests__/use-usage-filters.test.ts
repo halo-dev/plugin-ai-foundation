@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from '@rstest/core'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'

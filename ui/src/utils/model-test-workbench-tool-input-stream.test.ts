@@ -1,5 +1,5 @@
 import type { UIMessageChunk } from '@halo-dev/ai-foundation-sdk'
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import {
   classifyToolInputStream,
   recordToolInputStreamChunk,

@@ -63,7 +63,7 @@ const emit = defineEmits<{
           <span v-if="!isModelOptionSelectable(props.model)" class=":uno: ml-2 text-red-600">
             {{
               capabilityUnavailableDetailsLabel(props.model) ||
-              modelOptionUnavailableReasonLabel(props.model.unavailableReason)
+              modelOptionUnavailableReasonLabel(props.model.unavailableReason ?? undefined)
             }}
           </span>
         </span>

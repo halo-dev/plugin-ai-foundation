@@ -3,6 +3,7 @@ package run.halo.aifoundation.endpoint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,9 +12,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
@@ -41,6 +42,7 @@ import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
@@ -69,6 +71,8 @@ class ModelConsoleEndpointTest {
             .thenReturn(List.of(ModelFeature.STREAMING, ModelFeature.VISION,
                 ModelFeature.AUDIO_INPUT, ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
                 ModelFeature.REASONING));
+        when(mockType.getSupportedFeatures(any(AdapterType.class)))
+            .thenAnswer(invocation -> mockType.getSupportedFeatures());
         when(mockType.getSupportedAdapterTypes())
             .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
                 AdapterType.RERANK, AdapterType.OPENAI_IMAGE));
@@ -82,6 +86,12 @@ class ModelConsoleEndpointTest {
             .thenReturn(Optional.of(AdapterType.OPENAI_IMAGE));
         when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", mockType));
         when(providerClientCache.getProviderType("openai")).thenReturn(mockType);
+        doAnswer(invocation -> {
+            NativeModelOptionsValidator.validate(
+                ((run.halo.aifoundation.provider.support.ProviderModelRef)
+                    invocation.getArgument(0)).nativeOptions());
+            return null;
+        }).when(mockType).validateNativeModelOptions(any());
 
         var modelValidator = new ModelConsoleModelValidator(client, providerClientCache,
             new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
@@ -164,6 +174,20 @@ class ModelConsoleEndpointTest {
     }
 
     @Test
+    void create_rejectsNativeOptionsOwnedByEachInvocation() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setNativeOptions(Map.of("messages", List.of("not allowed")));
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
     void create_irrelevantModelParameterDomain_returns400() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
         var mappings = new ModelParameterMappings();
@@ -239,6 +263,20 @@ class ModelConsoleEndpointTest {
     void create_explicitUnsupportedAdapterType_returns400() {
         var m = model("gpt-4", "openai-prod", "gpt-4");
         m.getSpec().setAdapterType(AdapterType.OLLAMA_CHAT);
+        when(client.fetch(AiProvider.class, "openai-prod"))
+            .thenReturn(Mono.just(provider("openai-prod", "openai")));
+
+        webTestClient.post().uri("/models")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(m)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void create_adapterForDifferentModelType_returns400() {
+        var m = model("gpt-4", "openai-prod", "gpt-4");
+        m.getSpec().setAdapterType(AdapterType.OPENAI_EMBEDDING);
         when(client.fetch(AiProvider.class, "openai-prod"))
             .thenReturn(Mono.just(provider("openai-prod", "openai")));
 

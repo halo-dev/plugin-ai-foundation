@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
-import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
@@ -17,9 +16,10 @@ import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankResponseMetadata;
 import run.halo.aifoundation.rerank.RerankResult;
-import run.halo.aifoundation.rerank.RerankUsage;
+import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
+import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
-abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
+public abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
 
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
         new ParameterizedTypeReference<>() {
@@ -29,13 +29,22 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
     private final String modelId;
     private final String apiKey;
     private final WebClient webClient;
+    private final RerankResponseDecoder responseDecoder;
 
-    AbstractHttpRerankingClient(String providerType, String modelId, String apiKey,
+    protected AbstractHttpRerankingClient(String providerType, String modelId, String apiKey,
         WebClient.Builder webClientBuilder) {
+        this(providerType, modelId, apiKey, webClientBuilder,
+            new StandardRerankResponseDecoder());
+    }
+
+    protected AbstractHttpRerankingClient(String providerType, String modelId, String apiKey,
+        WebClient.Builder webClientBuilder, RerankResponseDecoder responseDecoder) {
         this.providerType = providerType;
         this.modelId = modelId;
         this.apiKey = apiKey;
         this.webClient = webClientBuilder.build();
+        this.responseDecoder = java.util.Objects.requireNonNull(responseDecoder,
+            "responseDecoder must not be null");
     }
 
     @Override
@@ -45,9 +54,18 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
 
     @Override
     public Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target) {
+        return rerank(request, target, Map.of());
+    }
+
+    @Override
+    public Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target,
+        Map<String, Object> nativeOptions) {
         var uri = endpoint(request);
-        var body = requestBody(request);
+        var resolvedOptions = nativeOptions == null ? Map.<String, Object>of() : nativeOptions;
+        var body = requestBody(request, resolvedOptions);
         applyMappedParameters(body, target);
+        var diagnostics = ProviderDiagnostics.create(providerType, "rerank");
+        diagnostics.request(uri.toString(), body, false);
         return webClient.post()
             .uri(uri)
             .headers(headers -> {
@@ -55,12 +73,17 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
                     headers.setBearerAuth(apiKey);
                 }
                 customizeHeaders(headers);
+                if (request.getHeaders() != null) {
+                    request.getHeaders().forEach(headers::set);
+                }
             })
             .bodyValue(body)
             .exchangeToMono(response -> {
                 if (!response.statusCode().is2xxSuccessful()) {
-                    return errorMono(response);
+                    return ProviderHttpResponseSupport.errorMono(response, providerType,
+                        "rerank", diagnostics);
                 }
+                diagnostics.responseStatus(response.statusCode().value());
                 return response.bodyToMono(MAP_TYPE)
                     .map(json -> response(json, request, uri));
             });
@@ -89,61 +112,10 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
 
     protected abstract URI endpoint(RerankRequest request);
 
-    protected abstract Map<String, Object> requestBody(RerankRequest request);
+    protected abstract Map<String, Object> requestBody(RerankRequest request,
+        Map<String, Object> nativeOptions);
 
     protected void customizeHeaders(HttpHeaders headers) {
-    }
-
-    protected List<?> resultNodes(Map<String, Object> root) {
-        var topLevel = listValue(root.get("results"));
-        if (topLevel != null) {
-            return topLevel;
-        }
-        var output = mapValue(root.get("output"));
-        return output != null ? listValue(output.get("results")) : List.of();
-    }
-
-    protected String responseId(Map<String, Object> root) {
-        var id = stringValue(root.get("id"));
-        return id != null ? id : stringValue(root.get("request_id"));
-    }
-
-    protected String responseModel(Map<String, Object> root) {
-        var model = stringValue(root.get("model"));
-        return model != null ? model : modelId;
-    }
-
-    protected RerankUsage usage(Map<String, Object> root) {
-        var usage = mapValue(root.get("usage"));
-        var promptTokens = integerValue(usage != null ? usage.get("prompt_tokens") : null);
-        var totalTokens = integerValue(usage != null ? usage.get("total_tokens") : null);
-        if (promptTokens == null) {
-            promptTokens = integerValue(usage != null ? usage.get("input_tokens") : null);
-        }
-        if (promptTokens == null || totalTokens == null) {
-            var meta = mapValue(root.get("meta"));
-            var tokens = mapValue(meta != null ? meta.get("tokens") : null);
-            if (promptTokens == null) {
-                promptTokens = integerValue(tokens != null ? tokens.get("input_tokens") : null);
-            }
-            if (totalTokens == null && tokens != null) {
-                var outputTokens = integerValue(tokens.get("output_tokens"));
-                if (promptTokens != null || outputTokens != null) {
-                    totalTokens = safe(promptTokens) + safe(outputTokens);
-                }
-            }
-        }
-        if (promptTokens == null && totalTokens == null) {
-            return null;
-        }
-        return RerankUsage.builder()
-            .inputTokens(promptTokens)
-            .totalTokens(totalTokens)
-            .build();
-    }
-
-    protected Map<String, Object> namespacedOptions(RerankRequest request) {
-        return Map.of();
     }
 
     protected List<String> documentTexts(RerankRequest request) {
@@ -177,39 +149,27 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
     }
 
     private RerankResponse response(Map<String, Object> root, RerankRequest request, URI uri) {
+        var payload = responseDecoder.decode(root, modelId);
         var results = new ArrayList<RerankResult>();
-        for (var item : resultNodes(root)) {
+        for (var item : payload.results()) {
             if (item instanceof Map<?, ?> node) {
                 results.add(result(node, request));
             }
         }
-        var metadata = new LinkedHashMap<String, Object>();
+        var metadata = new LinkedHashMap<>(payload.providerMetadata());
         metadata.put("providerType", providerType);
         metadata.put("endpoint", uri.toString());
-        putIfPresent(metadata, "requestId", stringValue(root.get("request_id")));
-        putIfPresent(metadata, "object", stringValue(root.get("object")));
-        putIfPresent(metadata, "rawMeta", root.get("meta"));
         return RerankResponse.builder()
             .query(request.getQuery())
             .results(List.copyOf(results))
-            .usage(usage(root))
+            .usage(payload.usage())
             .response(RerankResponseMetadata.builder()
-                .id(responseId(root))
-                .model(responseModel(root))
-                .metadata(responseMetadata(root))
+                .id(payload.id())
+                .model(payload.model())
+                .metadata(payload.responseMetadata())
                 .build())
             .providerMetadata(Map.copyOf(metadata))
             .build();
-    }
-
-    private Map<String, Object> responseMetadata(Map<String, Object> root) {
-        var metadata = new LinkedHashMap<String, Object>();
-        putIfPresent(metadata, "created", root.get("created"));
-        putIfPresent(metadata, "requestId", root.get("request_id"));
-        putIfPresent(metadata, "object", root.get("object"));
-        putIfPresent(metadata, "usage", root.get("usage"));
-        putIfPresent(metadata, "meta", root.get("meta"));
-        return Map.copyOf(metadata);
     }
 
     private RerankResult result(Map<?, ?> node, RerankRequest request) {
@@ -227,7 +187,7 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
     }
 
     private RerankDocument document(Map<?, ?> node, RerankRequest request, Integer index) {
-        if (index != null && index >= 0 && index < request.getDocuments().size()) {
+        if (isDocumentIndex(index, request)) {
             return request.getDocuments().get(index);
         }
         var value = node.get("document");
@@ -237,12 +197,14 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
         return RerankDocument.of(stringValue(value));
     }
 
-    private <T> Mono<T> errorMono(ClientResponse response) {
-        return response.bodyToMono(String.class)
-            .defaultIfEmpty("")
-            .flatMap(body -> Mono.error(new IllegalStateException(
-                providerType + " rerank request failed: status="
-                    + response.statusCode().value() + ", body=" + body)));
+    private boolean isDocumentIndex(Integer index, RerankRequest request) {
+        if (index == null) {
+            return false;
+        }
+        if (index < 0) {
+            return false;
+        }
+        return index < request.getDocuments().size();
     }
 
     @SuppressWarnings("unchecked")
@@ -278,7 +240,4 @@ abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
         return null;
     }
 
-    private int safe(Integer value) {
-        return value != null ? value : 0;
-    }
 }

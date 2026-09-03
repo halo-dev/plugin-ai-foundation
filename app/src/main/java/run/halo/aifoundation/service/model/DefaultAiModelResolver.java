@@ -41,19 +41,18 @@ public class DefaultAiModelResolver implements AiModelResolver {
                 }
                 var providerName = aiModel.getSpec().getProviderName();
                 return fetchProvider(providerName)
-                    .flatMap(provider -> {
-                        if (!provider.getSpec().isEnabled()) {
-                            return Mono.error(new ProviderDisabledException(providerName));
-                        }
-                        return secretResolver.resolveApiKey(provider.getSpec().getApiKeySecretName())
-                            .map(apiKey -> new ModelResolution(
-                                aiModel,
-                                provider,
-                                providerClientCache.getProviderType(provider.getSpec().getProviderType()),
-                                apiKey
-                            ));
-                    });
+                    .flatMap(provider -> resolveProvider(aiModel, provider, providerName));
             });
+    }
+
+    private Mono<ModelResolution> resolveProvider(AiModel model, AiProvider provider,
+        String providerName) {
+        if (!provider.getSpec().isEnabled()) {
+            return Mono.error(new ProviderDisabledException(providerName));
+        }
+        return secretResolver.resolveApiKey(provider.getSpec().getApiKeySecretName())
+            .map(apiKey -> new ModelResolution(model, provider,
+                providerClientCache.getProviderType(provider.getSpec().getProviderType()), apiKey));
     }
 
     @Override

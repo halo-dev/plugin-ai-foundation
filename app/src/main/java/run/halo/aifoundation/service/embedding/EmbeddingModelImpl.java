@@ -33,7 +33,9 @@ import run.halo.aifoundation.service.usage.NormalizedUsage;
 import run.halo.aifoundation.service.usage.UsageExecutionObserver;
 import run.halo.aifoundation.service.usage.UsageUnitKind;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
-import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
+import run.halo.aifoundation.provider.support.ProviderEmbeddingModel;
+import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
+import run.halo.aifoundation.provider.support.ParameterMappedEmbeddingOptions;
 
 @Slf4j
 public class EmbeddingModelImpl implements EmbeddingModel {
@@ -54,7 +56,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         int maxEmbeddingsPerCall,
         boolean supportsParallelCalls) {
         this(springEmbeddingModel, providerType, maxEmbeddingsPerCall, supportsParallelCalls,
-            EmbeddingModelProviderOptions.defaults(providerType));
+            EmbeddingModelProviderOptions.defaults());
     }
 
     EmbeddingModelImpl(
@@ -154,7 +156,9 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     }
 
     private boolean isEmptyRequest(EmbeddingRequest request) {
-        return request == null || request.getInputs() == null || request.getInputs().isEmpty();
+        return request == null
+            || ((request.getInputs() == null || request.getInputs().isEmpty())
+            && (request.getContents() == null || request.getContents().isEmpty()));
     }
 
     private Mono<EmbeddingResponse> emptyResponse(EmbeddingLifecycle lifecycle,
@@ -191,9 +195,23 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         if (parameterMappings.isUnsupported(ModelParameter.DIMENSIONS)) {
             warnings.add(parameterMappings.unsupportedDiagnostic(ModelParameter.DIMENSIONS)
                 .embeddingWarning());
+            return withoutDimensions(request);
         }
+        var target = new ParameterMappingTarget();
+        if (!parameterMappings.apply(ModelParameter.DIMENSIONS, request.getDimensions(), target)
+            || target.root().equals(Map.of("dimensions", request.getDimensions()))) {
+            return request;
+        }
+        return withoutDimensions(request);
+    }
+
+    private EmbeddingRequest withoutDimensions(EmbeddingRequest request) {
         return EmbeddingRequest.builder()
             .inputs(request.getInputs())
+            .contents(request.getContents())
+            .instructions(request.getInstructions())
+            .includeSparseEmbedding(request.getIncludeSparseEmbedding())
+            .includeModalityEmbeddings(request.getIncludeModalityEmbeddings())
             .maxBatchSize(request.getMaxBatchSize())
             .headers(request.getHeaders())
             .maxRetries(request.getMaxRetries())
@@ -214,20 +232,14 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         }
         var target = new ParameterMappingTarget();
         if (!parameterMappings.apply(ModelParameter.DIMENSIONS, request.getDimensions(), target)
-            || !"openai".equals(providerOptions.providerOptionsNamespace())) {
+            || target.root().equals(Map.of("dimensions", request.getDimensions()))) {
             return options;
         }
-        var openAiOptions = options instanceof OpenAiCompatibleEmbeddingOptions value
-            ? value : OpenAiCompatibleEmbeddingOptions.builder().build();
-        var extraBody = new java.util.LinkedHashMap<String, Object>();
-        if (openAiOptions.getExtraBody() != null) {
-            extraBody.putAll(openAiOptions.getExtraBody());
+        if (!(options instanceof ParameterMappedEmbeddingOptions mappedOptions)) {
+            throw new IllegalArgumentException("Embedding adapter '" + providerType
+                + "' does not support administrator-defined request body fields");
         }
-        extraBody.putAll(target.root());
-        return openAiOptions.mutate()
-            .dimensions(null)
-            .extraBody(extraBody)
-            .build();
+        return mappedOptions.withMappedBody(target.root());
     }
 
     private Flux<EmbeddingBatchResult> executeBatches(EmbeddingInvocation invocation) {
@@ -272,12 +284,22 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     private EmbeddingBatchResult embedBatch(EmbeddingRequest request,
         EmbeddingBatchPlanner.IndexedBatch batch,
         EmbeddingOptions options) {
-        var springRequest =
-            new org.springframework.ai.embedding.EmbeddingRequest(batch.inputs(), options);
-        var response = request.getHeaders() != null && !request.getHeaders().isEmpty()
-            && springEmbeddingModel instanceof RequestHeaderAwareEmbeddingModel headerAware
-            ? headerAware.call(springRequest, request.getHeaders())
-            : springEmbeddingModel.call(springRequest);
+        org.springframework.ai.embedding.EmbeddingResponse response;
+        if (springEmbeddingModel instanceof ProviderEmbeddingModel providerModel) {
+            response = providerModel.call(new ProviderEmbeddingRequest(batch.inputs(),
+                batch.contents(), options, request.getHeaders()));
+        } else {
+            if (!batch.contents().isEmpty()) {
+                throw new IllegalArgumentException(
+                    "Multimodal embeddings are not supported by provider type: " + providerType);
+            }
+            var springRequest =
+                new org.springframework.ai.embedding.EmbeddingRequest(batch.inputs(), options);
+            response = request.getHeaders() != null && !request.getHeaders().isEmpty()
+                && springEmbeddingModel instanceof RequestHeaderAwareEmbeddingModel headerAware
+                ? headerAware.call(springRequest, request.getHeaders())
+                : springEmbeddingModel.call(springRequest);
+        }
         var embeddings = response.getResults().stream()
             .map(org.springframework.ai.embedding.Embedding::getOutput)
             .toList();
@@ -295,6 +317,19 @@ public class EmbeddingModelImpl implements EmbeddingModel {
                 }
             }
         }
+        if (request.getInputs() != null && !request.getInputs().isEmpty()
+            && request.getContents() != null && !request.getContents().isEmpty()) {
+            throw new IllegalArgumentException(
+                "Embedding inputs and multimodal contents are mutually exclusive");
+        }
+        if (request.getContents() != null) {
+            for (var content : request.getContents()) {
+                if (content == null) {
+                    throw new IllegalArgumentException(
+                        "Embedding contents must not contain null");
+                }
+            }
+        }
         if (request.getDimensions() != null && request.getDimensions() <= 0) {
             throw new IllegalArgumentException("Embedding dimensions must be positive");
         }
@@ -308,7 +343,8 @@ public class EmbeddingModelImpl implements EmbeddingModel {
             throw new IllegalArgumentException("Embedding maxRetries must not be negative");
         }
         if (request.getHeaders() != null && !request.getHeaders().isEmpty()
-            && !(springEmbeddingModel instanceof RequestHeaderAwareEmbeddingModel)) {
+            && !(springEmbeddingModel instanceof RequestHeaderAwareEmbeddingModel)
+            && !(springEmbeddingModel instanceof ProviderEmbeddingModel)) {
             throw new IllegalArgumentException("Embedding request headers are not supported by provider type: "
                 + providerType);
         }

@@ -1,0 +1,29 @@
+package run.halo.aifoundation.provider.openailike;
+
+import java.util.List;
+import java.util.Map;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
+import run.halo.aifoundation.embedding.EmbeddingWarning;
+import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
+
+public final class OpenAiEmbeddingOptionsFactory {
+
+    private OpenAiEmbeddingOptionsFactory() {
+    }
+
+    public static org.springframework.ai.embedding.EmbeddingOptions build(EmbeddingRequest request,
+        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+        if (request == null) {
+            return null;
+        }
+        var dimensions = request.getDimensions();
+
+        var headers = request.getHeaders() != null ? request.getHeaders() : Map.<String, String>of();
+        var builder = OpenAiCompatibleEmbeddingOptions.builder()
+            .dimensions(dimensions)
+            .extraBody(providerOptions.nativeOptions());
+        builder.customHeaders(headers);
+        return builder.build();
+    }
+
+}

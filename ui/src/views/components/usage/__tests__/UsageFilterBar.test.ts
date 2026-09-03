@@ -1,5 +1,5 @@
 import type { UsageFilterState } from '@/composables/use-usage-filters'
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import UsageFilterBar from '../UsageFilterBar.vue'

@@ -1,5 +1,8 @@
 import type { AiModel, AiProvider, ProviderTypeInfo } from '@/api/generated'
 import {
+  AdapterTypeInfoAdapterTypeEnum,
+  AdapterTypeInfoModelTypeEnum,
+  AdapterTypeInfoSupportedFeaturesEnum,
   AiModelSpecAdapterTypeEnum,
   AiModelSpecDiscoveryConfidenceEnum,
   AiModelSpecDiscoverySourceEnum,
@@ -13,10 +16,14 @@ import {
   ProviderTypeInfoSupportedFeaturesEnum,
   ProviderTypeInfoSupportedModelTypesEnum,
 } from '@/api/generated'
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import {
+  adapterOptionsForProviderType,
   createModelFromDiscovered,
+  defaultAdapterForProviderType,
   defaultModelTypeForProviderType,
+  defaultParameterMappingsForAdapter,
+  discoveredModelProfileForProviderType,
   filterModelFeaturesForProviderType,
   findProviderTypeForModel,
   groupDiscoveredModels,
@@ -85,6 +92,21 @@ describe('createModelFromDiscovered', () => {
       modelType: AiModelSpecModelTypeEnum.ImageGeneration,
       features: [],
     })
+    expect(
+      createModelFromDiscovered(
+        'openai-prod',
+        discoveredModel(
+          'maybe-image',
+          AiModelSpecModelTypeEnum.Language,
+          [],
+          DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+        ),
+        {
+          modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+          features: [],
+        },
+      ).spec,
+    ).not.toHaveProperty('adapterType')
   })
 
   it('persists discovered capabilities when importing a model', () => {
@@ -162,6 +184,100 @@ describe('createModelFromDiscovered', () => {
 })
 
 describe('provider type model options', () => {
+  it('uses adapter-specific parameter defaults when available', () => {
+    const providerType = providerTypeInfo('openai', 'OpenAI', {
+      defaultParameterMappings: {
+        REASONING: { mode: 'TEMPLATE', template: 'reasoning.effort' },
+      },
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          supportedFeatures: [],
+          recommended: true,
+          defaultParameterMappingOverrides: {
+            REASONING: { mode: 'TEMPLATE', template: 'reasoning.responses-effort' },
+          },
+        },
+      ],
+    })
+
+    expect(
+      defaultParameterMappingsForAdapter(
+        providerType,
+        AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
+      )?.REASONING?.template,
+    ).toBe('reasoning.responses-effort')
+    expect(defaultParameterMappingsForAdapter(providerType, 'missing')?.REASONING?.template).toBe(
+      'reasoning.effort',
+    )
+  })
+
+  it('exposes vision when the DeepSeek provider declares it', () => {
+    const providerType = providerTypeInfo('deepseek', 'DeepSeek', {
+      supportedFeatures: [
+        ProviderTypeInfoSupportedFeaturesEnum.Streaming,
+        ProviderTypeInfoSupportedFeaturesEnum.Vision,
+        ProviderTypeInfoSupportedFeaturesEnum.Reasoning,
+      ],
+    })
+
+    expect(modelFeatureOptionsForProviderType(providerType).map((item) => item.value)).toContain(
+      AiModelSpecFeaturesEnum.Vision,
+    )
+  })
+
+  it('uses the selected DeepSeek adapter capabilities instead of the provider union', () => {
+    const providerType = providerTypeInfo('deepseek', 'DeepSeek', {
+      supportedFeatures: [
+        ProviderTypeInfoSupportedFeaturesEnum.Streaming,
+        ProviderTypeInfoSupportedFeaturesEnum.Vision,
+        ProviderTypeInfoSupportedFeaturesEnum.Reasoning,
+      ],
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DeepseekChat,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          supportedFeatures: [
+            AdapterTypeInfoSupportedFeaturesEnum.Streaming,
+            AdapterTypeInfoSupportedFeaturesEnum.Vision,
+            AdapterTypeInfoSupportedFeaturesEnum.Reasoning,
+          ],
+          recommended: true,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DeepseekResponses,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          supportedFeatures: [
+            AdapterTypeInfoSupportedFeaturesEnum.Streaming,
+            AdapterTypeInfoSupportedFeaturesEnum.Reasoning,
+          ],
+          recommended: false,
+        },
+      ],
+    })
+
+    const chatFeatures = modelFeatureOptionsForProviderType(
+      providerType,
+      AiModelSpecAdapterTypeEnum.DeepseekChat,
+    ).map((item) => item.value)
+    const responsesFeatures = modelFeatureOptionsForProviderType(
+      providerType,
+      AiModelSpecAdapterTypeEnum.DeepseekResponses,
+    ).map((item) => item.value)
+
+    expect(chatFeatures).toContain(AiModelSpecFeaturesEnum.Vision)
+    expect(responsesFeatures).toContain(AiModelSpecFeaturesEnum.Reasoning)
+    expect(responsesFeatures).not.toContain(AiModelSpecFeaturesEnum.Vision)
+    expect(
+      filterModelFeaturesForProviderType(
+        providerType,
+        [AiModelSpecFeaturesEnum.Vision, AiModelSpecFeaturesEnum.Reasoning],
+        AiModelSpecAdapterTypeEnum.DeepseekResponses,
+      ),
+    ).toEqual([AiModelSpecFeaturesEnum.Reasoning])
+  })
+
   it('limits model types and features to the selected provider type', () => {
     const providerType = providerTypeInfo('openailike', 'OpenAI 兼容', {
       supportedModelTypes: [
@@ -197,9 +313,148 @@ describe('provider type model options', () => {
       AiModelSpecFeaturesEnum.ToolCall,
     )
   })
+
+  it('uses backend adapter metadata and preserves a compatible explicit choice', () => {
+    const providerType = providerTypeInfo('openai', 'OpenAI', {
+      supportedModelTypes: [
+        ProviderTypeInfoSupportedModelTypesEnum.Language,
+        ProviderTypeInfoSupportedModelTypesEnum.Embedding,
+      ],
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiResponses,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          displayName: 'Responses API',
+          description: 'OpenAI 原生 Responses API。',
+          recommended: true,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiChat,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          displayName: 'Chat Completions',
+          description: 'OpenAI Chat Completions API。',
+          recommended: false,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiEmbedding,
+          modelType: AdapterTypeInfoModelTypeEnum.Embedding,
+          displayName: '文本嵌入',
+          recommended: true,
+        },
+      ],
+    })
+
+    expect(adapterOptionsForProviderType(providerType, AiModelSpecModelTypeEnum.Language)).toEqual([
+      {
+        value: AiModelSpecAdapterTypeEnum.OpenaiResponses,
+        label: 'Responses API（推荐）',
+        description: 'OpenAI 原生 Responses API。',
+        recommended: true,
+      },
+      {
+        value: AiModelSpecAdapterTypeEnum.OpenaiChat,
+        label: 'Chat Completions',
+        description: 'OpenAI Chat Completions API。',
+        recommended: false,
+      },
+    ])
+    expect(
+      defaultAdapterForProviderType(
+        providerType,
+        AiModelSpecModelTypeEnum.Language,
+        AiModelSpecAdapterTypeEnum.OpenaiChat,
+      ),
+    ).toBe(AiModelSpecAdapterTypeEnum.OpenaiChat)
+    expect(
+      defaultAdapterForProviderType(
+        providerType,
+        AiModelSpecModelTypeEnum.Embedding,
+        AiModelSpecAdapterTypeEnum.OpenaiChat,
+      ),
+    ).toBe(AiModelSpecAdapterTypeEnum.OpenaiEmbedding)
+  })
 })
 
 describe('discovered model profiles', () => {
+  it('requires an explicit adapter when discovery cannot choose between protocols', () => {
+    const providerType = providerTypeInfo('dashscope', 'DashScope', {
+      supportedModelTypes: [ProviderTypeInfoSupportedModelTypesEnum.Rerank],
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DashscopeNativeRerank,
+          modelType: AdapterTypeInfoModelTypeEnum.Rerank,
+          recommended: true,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.DashscopeCompatibleRerank,
+          modelType: AdapterTypeInfoModelTypeEnum.Rerank,
+          recommended: false,
+        },
+      ],
+    })
+    const model = discoveredModel('rerank-model', AiModelSpecModelTypeEnum.Rerank)
+
+    expect(discoveredModelProfileForProviderType(providerType, model)).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Rerank,
+      features: [],
+    })
+    expect(
+      discoveredModelProfileForProviderType(providerType, model, {
+        modelType: AiModelSpecModelTypeEnum.Embedding,
+        adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+        features: [],
+      }),
+    ).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Rerank,
+      features: [],
+    })
+  })
+
+  it('selects a compatible adapter when the model type changes', () => {
+    const providerType = providerTypeInfo('openai', 'OpenAI', {
+      supportedModelTypes: [
+        ProviderTypeInfoSupportedModelTypesEnum.Language,
+        ProviderTypeInfoSupportedModelTypesEnum.Embedding,
+      ],
+      adapters: [
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiChat,
+          modelType: AdapterTypeInfoModelTypeEnum.Language,
+          recommended: true,
+        },
+        {
+          adapterType: AdapterTypeInfoAdapterTypeEnum.OpenaiEmbedding,
+          modelType: AdapterTypeInfoModelTypeEnum.Embedding,
+          supportedFeatures: [],
+          recommended: true,
+        },
+      ],
+    })
+    const model = discoveredModel(
+      'candidate',
+      AiModelSpecModelTypeEnum.Language,
+      [AiModelSpecFeaturesEnum.Streaming],
+      DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+    )
+
+    const profile = discoveredModelProfileForProviderType(providerType, model, {
+      modelType: AiModelSpecModelTypeEnum.Embedding,
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiChat,
+      features: [AiModelSpecFeaturesEnum.Streaming],
+    })
+
+    expect(profile).toEqual({
+      modelType: AiModelSpecModelTypeEnum.Embedding,
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+      features: [],
+    })
+    expect(createModelFromDiscovered('openai-prod', model, profile).spec).toMatchObject({
+      modelType: AiModelSpecModelTypeEnum.Embedding,
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiEmbedding,
+      features: [],
+    })
+  })
+
   it('syncs discovered profiles without keeping stale entries', () => {
     const providerType = providerTypeInfo('openailike', 'OpenAI 兼容', {
       supportedModelTypes: [ProviderTypeInfoSupportedModelTypesEnum.Language],

@@ -34,10 +34,8 @@ dependencies {
     implementation platform("org.springframework.ai:spring-ai-bom:2.0.0")
     implementation project(':api')
 
-    implementation 'org.springframework.ai:spring-ai-client-chat'
-    implementation 'org.springframework.ai:spring-ai-deepseek'
-    implementation 'org.springframework.ai:spring-ai-ollama'
     implementation 'org.xerial:sqlite-jdbc:3.53.2.0'
+    implementation 'org.springframework.ai:spring-ai-model'
 
     compileOnly 'run.halo.app:api'
 
@@ -100,7 +98,7 @@ haloPlugin {
 }
 
 halo {
-    version = '2.25'
+    version = '2.26'
 }
 
 def generatedOpenApi = layout.projectDirectory.file(

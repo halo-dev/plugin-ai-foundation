@@ -1,5 +1,6 @@
 package run.halo.aifoundation.provider.support;
 
+import java.util.Map;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
@@ -15,5 +16,14 @@ public interface ProviderImageGenerationClient {
     default Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
         ParameterMappingTarget target) {
         return generateImage(request);
+    }
+
+    default Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
+        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+        if (nativeOptions == null || nativeOptions.isEmpty()) {
+            return generateImage(request, target);
+        }
+        return Mono.error(new IllegalStateException(
+            "Image provider does not support configured native options"));
     }
 }

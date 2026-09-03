@@ -1,5 +1,5 @@
 import { aiConsoleApiClient } from '@/api'
-import { describe, expect, it, rstest } from '@rstest/core'
+import { describe, expect, it, vi } from 'vitest'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { computed, defineComponent, h } from 'vue'
@@ -8,19 +8,19 @@ import {
   useUsageCalls,
 } from '../use-usage-statistics'
 
-rstest.mock('@/api', () => ({
+vi.mock('@/api', () => ({
   aiConsoleApiClient: {
     usageStatistics: {
-      listAiUsageCalls: rstest.fn(),
+      listAiUsageCalls: vi.fn(),
     },
   },
 }))
 
-const listAiUsageCalls = rstest.mocked(aiConsoleApiClient.usageStatistics.listAiUsageCalls)
+const listAiUsageCalls = vi.mocked(aiConsoleApiClient.usageStatistics.listAiUsageCalls)
 
 describe('reloadUsageQueries', () => {
   it('invalidates every usage query', () => {
-    const invalidateQueries = rstest.fn()
+    const invalidateQueries = vi.fn()
     const queryClient = { invalidateQueries } as unknown as QueryClient
 
     reloadUsageQueries(queryClient)

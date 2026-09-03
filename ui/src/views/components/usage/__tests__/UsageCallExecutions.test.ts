@@ -1,15 +1,15 @@
 import type { UsageCallDetail, UsageExecutionRecord } from '@/api/generated'
 import { useUsageCallDetail } from '@/composables/use-usage-statistics'
-import { beforeEach, describe, expect, it, rstest } from '@rstest/core'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, ref } from 'vue'
 import UsageCallExecutions from '../UsageCallExecutions.vue'
 
-rstest.mock('@/composables/use-usage-statistics', () => ({
-  useUsageCallDetail: rstest.fn(),
+vi.mock('@/composables/use-usage-statistics', () => ({
+  useUsageCallDetail: vi.fn(),
 }))
 
-rstest.mock('@halo-dev/components', () => ({
+vi.mock('@halo-dev/components', () => ({
   VLoading: defineComponent({
     template: '<div data-test="loading">loading</div>',
   }),
@@ -18,7 +18,7 @@ rstest.mock('@halo-dev/components', () => ({
   }),
 }))
 
-const useUsageCallDetailMock = rstest.mocked(useUsageCallDetail)
+const useUsageCallDetailMock = vi.mocked(useUsageCallDetail)
 
 beforeEach(() => {
   useUsageCallDetailMock.mockClear()

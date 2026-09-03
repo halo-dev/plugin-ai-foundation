@@ -1,12 +1,12 @@
-import { describe, expect, it, rstest } from '@rstest/core'
 import type { QueryClient } from '@tanstack/vue-query'
+import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { QK_PROVIDER, QK_PROVIDERS, reloadProviderQueries } from './use-providers-fetch'
 
 describe('reloadProviderQueries', () => {
   it('refreshes the provider list and selected provider detail', () => {
     const providerName = ref('openai')
-    const refetchQueries = rstest.fn()
+    const refetchQueries = vi.fn()
     const queryClient = { refetchQueries } as unknown as QueryClient
 
     reloadProviderQueries(queryClient, providerName)

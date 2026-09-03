@@ -56,42 +56,48 @@ public class ProviderClientCache {
         return type;
     }
 
-    public ChatModel getOrCreateChatModel(AiProvider provider, String apiKey, String modelId) {
+    public ChatModel getOrCreateChatModel(AiProvider provider, String apiKey,
+        ProviderModelRef model) {
         var name = provider.getMetadata().getName();
-        var key = name + "/" + modelId;
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var resolvedModel = ProviderModelResolver.resolve(type, model);
+        var key = cacheKey(name, resolvedModel);
         return chatModelCache.computeIfAbsent(key, k -> {
-            log.debug("Creating chat model for provider: {}, model: {}", name, modelId);
-            var type = getProviderType(provider.getSpec().getProviderType());
-            return type.buildChatModel(provider, apiKey, modelId);
+            log.debug("Creating chat model for provider: {}, model: {}, adapter: {}", name,
+                resolvedModel.modelId(), resolvedModel.adapterType());
+            return type.buildChatModel(provider, apiKey, resolvedModel);
         });
     }
 
-    public EmbeddingModel getOrCreateEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
+    public EmbeddingModel getOrCreateEmbeddingModel(AiProvider provider, String apiKey,
+        ProviderModelRef model) {
         var name = provider.getMetadata().getName();
-        var key = name + "/" + modelId;
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var resolvedModel = ProviderModelResolver.resolve(type, model);
+        var key = cacheKey(name, resolvedModel);
         var existing = embeddingModelCache.get(key);
         if (existing != null) {
             return existing;
         }
-        var type = getProviderType(provider.getSpec().getProviderType());
-        var model = type.buildEmbeddingModel(provider, apiKey, modelId);
-        if (model == null) {
+        var embeddingModel = type.buildEmbeddingModel(provider, apiKey, resolvedModel);
+        if (embeddingModel == null) {
             return null;
         }
-        var prev = embeddingModelCache.putIfAbsent(key, model);
-        return prev != null ? prev : model;
+        var prev = embeddingModelCache.putIfAbsent(key, embeddingModel);
+        return prev != null ? prev : embeddingModel;
     }
 
     public ProviderRerankingClient getOrCreateRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
+        ProviderModelRef model) {
         var name = provider.getMetadata().getName();
-        var key = name + "/" + modelId;
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var resolvedModel = ProviderModelResolver.resolve(type, model);
+        var key = cacheKey(name, resolvedModel);
         var existing = rerankingClientCache.get(key);
         if (existing != null) {
             return existing;
         }
-        var type = getProviderType(provider.getSpec().getProviderType());
-        var client = type.buildRerankingClient(provider, apiKey, modelId);
+        var client = type.buildRerankingClient(provider, apiKey, resolvedModel);
         if (client == null) {
             return null;
         }
@@ -100,15 +106,16 @@ public class ProviderClientCache {
     }
 
     public ProviderImageGenerationClient getOrCreateImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
+        String apiKey, ProviderModelRef model) {
         var name = provider.getMetadata().getName();
-        var key = name + "/" + modelId;
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var resolvedModel = ProviderModelResolver.resolve(type, model);
+        var key = cacheKey(name, resolvedModel);
         var existing = imageGenerationClientCache.get(key);
         if (existing != null) {
             return existing;
         }
-        var type = getProviderType(provider.getSpec().getProviderType());
-        var client = type.buildImageGenerationClient(provider, apiKey, modelId);
+        var client = type.buildImageGenerationClient(provider, apiKey, resolvedModel);
         if (client == null) {
             return null;
         }
@@ -131,5 +138,10 @@ public class ProviderClientCache {
         rerankingClientCache.clear();
         imageGenerationClientCache.clear();
         log.debug("Invalidated all cached provider models");
+    }
+
+    private String cacheKey(String providerName, ProviderModelRef model) {
+        return providerName + "/" + model.modelType().getValue() + "/" + model.modelId() + "/"
+            + model.cacheSegment();
     }
 }

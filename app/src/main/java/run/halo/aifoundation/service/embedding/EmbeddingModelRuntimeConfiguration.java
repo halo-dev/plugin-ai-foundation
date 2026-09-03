@@ -12,7 +12,11 @@ public record EmbeddingModelRuntimeConfiguration(
 
     public static EmbeddingModelRuntimeConfiguration from(ModelRuntimeContext context) {
         var provider = context.providerDefinition();
+        var options = provider.embeddingModelProviderOptions();
+        if (options == null) {
+            options = EmbeddingModelProviderOptions.defaults();
+        }
         return new EmbeddingModelRuntimeConfiguration(context, provider.maxEmbeddingsPerCall(),
-            provider.supportsParallelCalls(), provider.embeddingModelProviderOptions());
+            provider.supportsParallelCalls(), options.withNativeOptions(context.nativeOptions()));
     }
 }

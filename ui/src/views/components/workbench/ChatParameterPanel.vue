@@ -307,7 +307,7 @@ function updateNumberField(key: NumberField, value: string) {
           Token 概率
           <select
             :value="logprobs === undefined ? '' : String(logprobs)"
-            class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs"
+            class=":uno: mt-1 select-workbench w-full"
             @change="
               emit(
                 'update:logprobs',
@@ -327,7 +327,7 @@ function updateNumberField(key: NumberField, value: string) {
           并行工具调用
           <select
             :value="parallelToolCalls === undefined ? '' : String(parallelToolCalls)"
-            class=":uno: mt-1 w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs"
+            class=":uno: mt-1 select-workbench w-full"
             @change="
               emit(
                 'update:parallelToolCalls',
@@ -357,7 +357,7 @@ function updateNumberField(key: NumberField, value: string) {
           <label class=":uno: text-xs text-slate-600 font-medium">模式</label>
           <select
             :value="reasoningMode"
-            class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+            class=":uno: select-workbench w-full"
             @change="
               emit(
                 'update:reasoningMode',
@@ -379,7 +379,7 @@ function updateNumberField(key: NumberField, value: string) {
           <label class=":uno: text-xs text-slate-600 font-medium">Effort</label>
           <select
             :value="reasoningEffort"
-            class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+            class=":uno: select-workbench w-full"
             @change="
               emit(
                 'update:reasoningEffort',
@@ -407,7 +407,7 @@ function updateNumberField(key: NumberField, value: string) {
           <label class=":uno: text-xs text-slate-600 font-medium">输出格式</label>
           <select
             :value="outputMode"
-            class=":uno: w-full text-slate-700 outline-none !border !border-slate-200 !rounded-md !border-solid !bg-white !px-2 !py-1.5 !text-xs focus:!border-teal-400 focus:!ring-3 focus:!ring-teal-500/10"
+            class=":uno: select-workbench w-full"
             @change="
               emit('update:outputMode', ($event.target as HTMLSelectElement).value as OutputMode)
             "

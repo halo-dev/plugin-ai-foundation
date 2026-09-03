@@ -21,7 +21,7 @@ export function useLanguageGenerationSettings() {
   const logprobs = shallowRef<boolean | undefined>()
   const topLogprobs = shallowRef<number | undefined>()
   const parallelToolCalls = shallowRef<boolean | undefined>()
-  const maxTokens = shallowRef(1024)
+  const maxTokens = shallowRef(4096)
   const seed = shallowRef<number | undefined>()
   const maxRetries = shallowRef<number | undefined>(2)
   const reasoningMode = shallowRef<ReasoningMode>('DEFAULT')

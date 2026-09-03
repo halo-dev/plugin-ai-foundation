@@ -31,7 +31,7 @@ class ImageGenerationModelImplTest {
     @Test
     void generateImage_invokesProviderAndReturnsImages() {
         var client = mock(ProviderImageGenerationClient.class);
-        when(client.generateImage(any())).thenReturn(Mono.just(result("img-1")));
+        when(client.generateImage(any(), any(), any())).thenReturn(Mono.just(result("img-1")));
         var model = imageModel(client, ImageGenerationCapability.builder()
             .textToImage(true)
             .maxImagesPerCall(1)
@@ -46,7 +46,7 @@ class ImageGenerationModelImplTest {
             })
             .verifyComplete();
 
-        verify(client).generateImage(any());
+        verify(client).generateImage(any(), any(), any());
         assertThat(model.capabilities().getImageGeneration().getTextToImage()).isTrue();
     }
 
@@ -69,7 +69,7 @@ class ImageGenerationModelImplTest {
     @Test
     void generateImage_validatesImageToImageMaskAndMediaBeforeProviderCall() {
         var client = mock(ProviderImageGenerationClient.class);
-        when(client.generateImage(any())).thenReturn(Mono.just(result("img-1")));
+        when(client.generateImage(any(), any(), any())).thenReturn(Mono.just(result("img-1")));
         var model = imageModel(client, ImageGenerationCapability.builder()
             .imageToImage(true)
             .maskInput(true)
@@ -84,7 +84,7 @@ class ImageGenerationModelImplTest {
             .expectNextCount(1)
             .verifyComplete();
 
-        verify(client).generateImage(any());
+        verify(client).generateImage(any(), any(), any());
 
         StepVerifier.create(model.generateImage(GenerateImageRequest.builder()
                 .prompt("Edit")
@@ -237,7 +237,8 @@ class ImageGenerationModelImplTest {
     @Test
     void generateImage_failsWhenProviderReturnsNoImages() {
         var client = mock(ProviderImageGenerationClient.class);
-        when(client.generateImage(any())).thenReturn(Mono.just(GenerateImageResult.builder()
+        when(client.generateImage(any(), any(), any())).thenReturn(Mono.just(
+            GenerateImageResult.builder()
             .images(List.of())
             .build()));
         var model = imageModel(client, ImageGenerationCapability.builder()

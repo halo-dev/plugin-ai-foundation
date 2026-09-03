@@ -23,7 +23,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
-import run.halo.aifoundation.provider.support.openai.OpenAiCompatibleEmbeddingOptions;
+import run.halo.aifoundation.provider.openailike.OpenAiCompatibleEmbeddingOptions;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.control.CancellationSource;
@@ -31,8 +31,12 @@ import run.halo.aifoundation.exception.EmbeddingCancelledException;
 import run.halo.aifoundation.embedding.EmbeddingLifecycle;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
-import run.halo.aifoundation.provider.support.openai.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.openailike.OpenAiEmbeddingOptionsFactory;
+import run.halo.aifoundation.provider.support.ProviderEmbeddingModel;
+import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
+import run.halo.aifoundation.embedding.EmbeddingContent;
+import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 import run.halo.aifoundation.service.usage.NormalizedUsage;
 import run.halo.aifoundation.service.usage.UsageExecutionObserver;
@@ -76,7 +80,7 @@ class EmbeddingModelImplTest {
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .dimensions(512)
@@ -94,6 +98,44 @@ class EmbeddingModelImplTest {
     }
 
     @Test
+    void embed_keepsStandardDimensionsForProviderSpecificOptions() {
+        var springModel = mock(EmbeddingModel.class);
+        when(springModel.call(any(EmbeddingRequest.class)))
+            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
+        var mapping = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(
+            Map.of(run.halo.aifoundation.provider.mapping.ModelParameter.DIMENSIONS,
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE,
+                    "embedding.dimensions", null, null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.PROVIDER)));
+        var composition = EmbeddingModelRuntimeComposition.create("dashscope", 20, false,
+            new EmbeddingModelProviderOptions((request, ignored, warnings) ->
+                new org.springframework.ai.embedding.EmbeddingOptions() {
+                    @Override
+                    public String getModel() {
+                        return null;
+                    }
+
+                    @Override
+                    public Integer getDimensions() {
+                        return request.getDimensions();
+                    }
+                }));
+        var model = new EmbeddingModelImpl(springModel, composition, mapping);
+
+        StepVerifier.create(model.embed(run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+                .inputs(List.of("first"))
+                .dimensions(768)
+                .build()))
+            .expectNextCount(1)
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(EmbeddingRequest.class);
+        verify(springModel).call(captor.capture());
+        assertThat(captor.getValue().getOptions().getDimensions()).isEqualTo(768);
+    }
+
+    @Test
     void embed_omitsUnsupportedDimensionsAndReturnsMappedWarning() {
         var springModel = mock(EmbeddingModel.class);
         when(springModel.call(any(EmbeddingRequest.class)))
@@ -105,7 +147,7 @@ class EmbeddingModelImplTest {
                     null, null,
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var model = new EmbeddingModelImpl(springModel, composition, mapping,
             "embedding-model", "openai-provider");
 
@@ -125,7 +167,7 @@ class EmbeddingModelImplTest {
 
         var captor = ArgumentCaptor.forClass(EmbeddingRequest.class);
         verify(springModel).call(captor.capture());
-        assertThat(captor.getValue().getOptions()).isNull();
+        assertThat(captor.getValue().getOptions().getDimensions()).isNull();
     }
 
     @Test
@@ -140,7 +182,7 @@ class EmbeddingModelImplTest {
                     "embedding.dimensions", "output_dimension", null,
                     run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.MODEL)));
         var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var model = new EmbeddingModelImpl(springModel, composition, mapping,
             "embedding-model", "openai-provider");
 
@@ -165,7 +207,7 @@ class EmbeddingModelImplTest {
             .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
 
         var model = new EmbeddingModelImpl(springModel, "openai", 96, false,
-            new EmbeddingModelProviderOptions("openai", OpenAiEmbeddingOptionsFactory::build));
+            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build));
         var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
             .inputs(List.of("first"))
             .headers(Map.of("X-Trace-Id", "trace-1"))
@@ -179,6 +221,48 @@ class EmbeddingModelImplTest {
         verify(springModel).call(any(EmbeddingRequest.class), headersCaptor.capture());
         assertThat(headersCaptor.getValue().get("X-Trace-Id")).isEqualTo("trace-1");
         verify(springModel, org.mockito.Mockito.never()).call(any(EmbeddingRequest.class));
+    }
+
+    @Test
+    void embed_passesOneJointMultimodalRequestToProviderNativeModel() {
+        var providerModel = mock(ProviderEmbeddingModel.class);
+        when(providerModel.call(any(ProviderEmbeddingRequest.class)))
+            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {0.1f, 0.2f}, 0))));
+        var model = new EmbeddingModelImpl(providerModel, "doubao", 96, false);
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .contents(List.of(
+                EmbeddingContent.text("Halo CMS"),
+                EmbeddingContent.image(DataContent.url("https://example.com/halo.png"))))
+            .headers(Map.of("X-Trace-Id", "trace-mm"))
+            .build();
+
+        StepVerifier.create(model.embed(request))
+            .assertNext(response -> assertThat(response.getEmbeddings())
+                .singleElement().satisfies(vector -> assertThat(vector)
+                    .containsExactly(0.1f, 0.2f)))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(ProviderEmbeddingRequest.class);
+        verify(providerModel).call(captor.capture());
+        assertThat(captor.getValue().inputs()).isEmpty();
+        assertThat(captor.getValue().contents()).hasSize(2);
+        assertThat(captor.getValue().headers()).containsEntry("X-Trace-Id", "trace-mm");
+    }
+
+    @Test
+    void embed_rejectsMixedTextAndMultimodalInputsBeforeProviderCall() {
+        var providerModel = mock(ProviderEmbeddingModel.class);
+        var model = new EmbeddingModelImpl(providerModel, "doubao", 96, false);
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .inputs(List.of("text"))
+            .contents(List.of(EmbeddingContent.text("content")))
+            .build();
+
+        StepVerifier.create(model.embed(request))
+            .expectErrorMatches(error -> error instanceof IllegalArgumentException
+                && error.getMessage().contains("mutually exclusive"))
+            .verify();
+        verifyNoInteractions(providerModel);
     }
 
     @Test
@@ -383,7 +467,7 @@ class EmbeddingModelImplTest {
             }
         };
         var composition = EmbeddingModelRuntimeComposition.create("openai", 96, false,
-            EmbeddingModelProviderOptions.defaults("openai"));
+            EmbeddingModelProviderOptions.defaults());
         var model = new EmbeddingModelImpl(springModel, composition,
             ModelRuntimeContext.unresolved("openai"), observer);
         var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()

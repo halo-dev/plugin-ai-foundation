@@ -49,6 +49,7 @@ const { mutate, isPending } = useMutation({
           capabilities: formState.capabilities,
           capabilitySources: formState.capabilitySources,
           parameterMappings: formState.parameterMappings,
+          nativeOptions: formState.nativeOptions,
           adapterType: formState.adapterType || props.model.spec.adapterType,
           discoverySource:
             props.model.spec.discoverySource || AiModelSpecDiscoverySourceEnum.Manual,
@@ -94,6 +95,7 @@ function onSubmit(data: ModelFormState) {
         capabilities: model.spec.capabilities,
         capabilitySources: model.spec.capabilitySources,
         parameterMappings: model.spec.parameterMappings,
+        nativeOptions: model.spec.nativeOptions,
       }"
       @submit="onSubmit"
     />

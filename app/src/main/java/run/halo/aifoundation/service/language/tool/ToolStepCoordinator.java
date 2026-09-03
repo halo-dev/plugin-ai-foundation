@@ -46,26 +46,28 @@ public final class ToolStepCoordinator {
         return toolExecutor.evaluateApproval(normalized.executableToolCalls(),
                 request.generationRequest(), request.stepIndex(), request.executionMessages(),
                 request.stepProviderMetadata(), request.lifecycle(), request.approvalIdFactory())
-            .flatMap(approval -> executeApprovedTools(request, approval)
+            .flatMap(approval -> executeReadyTools(request, approval)
                 .map(execution -> resolution(approval,
                     withInputErrors(execution, normalized), normalized)));
     }
 
-    private Mono<ToolExecutionBatch> executeApprovedTools(ToolStepRequest request,
+    private Mono<ToolExecutionBatch> executeReadyTools(ToolStepRequest request,
         ToolApprovalBatch approval) {
-        if (!canExecuteApprovedTools(approval)) {
-            return Mono.just(new ToolExecutionBatch(List.of(), approval.errors(),
-                approval.warnings()));
-        }
         return toolExecutor.execute(approval.executableCalls(), request.generationRequest(),
             request.stepIndex(), request.executionMessages(), request.stepProviderMetadata(),
-            request.lifecycle());
+            request.lifecycle())
+            .map(execution -> withApprovalErrors(execution, approval));
     }
 
-    private boolean canExecuteApprovedTools(ToolApprovalBatch approval) {
-        return approval.approvalRequests().isEmpty()
-            && approval.errors().isEmpty()
-            && !approval.hasPendingExternalCalls();
+    private ToolExecutionBatch withApprovalErrors(ToolExecutionBatch execution,
+        ToolApprovalBatch approval) {
+        if (approval.errors().isEmpty()) {
+            return execution;
+        }
+        var errors = new ArrayList<>(approval.errors());
+        errors.addAll(execution.errors());
+        return new ToolExecutionBatch(execution.results(), List.copyOf(errors),
+            execution.warnings());
     }
 
     private ToolExecutionBatch withInputErrors(ToolExecutionBatch execution,

@@ -23,7 +23,8 @@ public final class AiFoundationDiagnostics {
         "(?i)(\\\"(?:authorization|api[_-]?key|access[_-]?token|bearer[_-]?token)"
             + "\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")");
     private static final Pattern HEADER_SECRET = Pattern.compile(
-        "(?im)(authorization|x-api-key|api-key)\\s*[:=]\\s*([^\\r\\n,}]+)");
+        "(?im)(authorization|x-api-key|api-key|api[_-]?key|access[_-]?token|bearer[_-]?token)"
+            + "\\s*[:=]\\s*([^\\r\\n,}]+)");
 
     private AiFoundationDiagnostics() {
     }

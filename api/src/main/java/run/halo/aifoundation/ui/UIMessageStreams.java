@@ -170,9 +170,13 @@ public final class UIMessageStreams {
         }
 
         private boolean isTerminal(UIMessageChunk chunk) {
-            return UIMessageChunkType.FINISH.equals(chunk.type())
-                || UIMessageChunkType.ERROR.equals(chunk.type())
-                || UIMessageChunkType.ABORT.equals(chunk.type());
+            if (UIMessageChunkType.FINISH.equals(chunk.type())) {
+                return true;
+            }
+            if (UIMessageChunkType.ERROR.equals(chunk.type())) {
+                return true;
+            }
+            return UIMessageChunkType.ABORT.equals(chunk.type());
         }
 
         private String nextTextId() {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@rstest/core'
+import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { useLanguageGenerationSettings } from './use-language-generation-settings'
 
@@ -34,7 +34,7 @@ describe('useLanguageGenerationSettings', () => {
       logprobs: true,
       topLogprobs: 5,
       parallelToolCalls: false,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096,
       seed: 42,
       maxRetries: 2,
       reasoning: undefined,

@@ -1,9 +1,11 @@
 package run.halo.aifoundation.ui;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.message.ModelMessage;
@@ -89,10 +91,12 @@ public final class UIMessageConverters {
         private final UIMessageConversionOptions<M> options;
         private final ArrayList<ModelMessage> modelMessages = new ArrayList<>();
         private final ArrayList<UIMessageConversionWarning> warnings = new ArrayList<>();
+        private final Set<PartLocation> supersededApprovals;
 
         State(List<UIMessage<M>> messages, UIMessageConversionOptions<M> options) {
             this.messages = messages;
             this.options = options;
+            this.supersededApprovals = findSupersededApprovals(messages);
         }
 
         UIMessageConversionResult convert() {
@@ -110,6 +114,7 @@ public final class UIMessageConverters {
             var assistantContent = new ArrayList<ModelMessagePart>();
             var toolContent = new ArrayList<ModelMessagePart>();
             var emitted = false;
+            var supersededApprovalSkipped = false;
             for (var partIndex = 0; partIndex < message.parts().size(); partIndex++) {
                 var part = message.parts().get(partIndex);
                 if (part instanceof StepStartPart) {
@@ -119,6 +124,10 @@ public final class UIMessageConverters {
                 var context = new UIMessageConversionContext<>(messages, message, messageIndex,
                     part, partIndex);
                 if (isToolApprovalResponse(part)) {
+                    if (supersededApprovals.contains(new PartLocation(messageIndex, partIndex))) {
+                        supersededApprovalSkipped = true;
+                        continue;
+                    }
                     assistantContent.addAll(convertToolCall((ToolPart) part));
                     assistantContent.add(convertToolApprovalRequest((ToolPart) part));
                     toolContent.add(convertToolApprovalResponse((ToolPart) part));
@@ -132,7 +141,7 @@ public final class UIMessageConverters {
                 assistantContent.addAll(convertPart(part, context));
             }
             emitted |= flushSegment(message, assistantContent, toolContent);
-            if (!emitted) {
+            if (!emitted && !supersededApprovalSkipped) {
                 empty(message);
             }
         }
@@ -156,17 +165,60 @@ public final class UIMessageConverters {
         }
 
         private boolean isToolApprovalResponse(UIMessagePart part) {
-            return part instanceof ToolPart tool
-                && (tool.state() == ToolPartState.APPROVAL_RESPONDED
-                    || tool.state() == ToolPartState.OUTPUT_DENIED)
-                && tool.approval() != null
-                && tool.approval().approved() != null;
+            if (!(part instanceof ToolPart tool)) {
+                return false;
+            }
+            if (!isApprovalResponseState(tool.state())) {
+                return false;
+            }
+            if (tool.approval() == null) {
+                return false;
+            }
+            return tool.approval().approved() != null;
+        }
+
+        private boolean isApprovalResponseState(ToolPartState state) {
+            if (state == ToolPartState.APPROVAL_RESPONDED) {
+                return true;
+            }
+            return state == ToolPartState.OUTPUT_DENIED;
         }
 
         private boolean isTerminalToolPart(UIMessagePart part) {
-            return part instanceof ToolPart tool
-                && (tool.state() == ToolPartState.OUTPUT_AVAILABLE
-                    || tool.state() == ToolPartState.OUTPUT_ERROR);
+            if (!(part instanceof ToolPart tool)) {
+                return false;
+            }
+            if (tool.state() == ToolPartState.OUTPUT_AVAILABLE) {
+                return true;
+            }
+            return tool.state() == ToolPartState.OUTPUT_ERROR;
+        }
+
+        private Set<PartLocation> findSupersededApprovals(List<UIMessage<M>> messages) {
+            var terminalToolCalls = new HashSet<String>();
+            var locations = new HashSet<PartLocation>();
+            for (var messageIndex = messages.size() - 1; messageIndex >= 0; messageIndex--) {
+                var message = messages.get(messageIndex);
+                if (message == null) {
+                    continue;
+                }
+                var parts = message.parts();
+                for (var partIndex = parts.size() - 1; partIndex >= 0; partIndex--) {
+                    var part = parts.get(partIndex);
+                    if (isTerminalToolPart(part)) {
+                        terminalToolCalls.add(((ToolPart) part).toolCallId());
+                        continue;
+                    }
+                    if (!isToolApprovalResponse(part)) {
+                        continue;
+                    }
+                    var tool = (ToolPart) part;
+                    if (terminalToolCalls.contains(tool.toolCallId())) {
+                        locations.add(new PartLocation(messageIndex, partIndex));
+                    }
+                }
+            }
+            return Set.copyOf(locations);
         }
 
         private List<ModelMessagePart> convertPart(UIMessagePart part,
@@ -522,5 +574,8 @@ public final class UIMessageConverters {
             return (Map<String, Object>) map;
         }
         return Map.of();
+    }
+
+    private record PartLocation(int messageIndex, int partIndex) {
     }
 }
