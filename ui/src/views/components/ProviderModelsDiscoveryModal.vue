@@ -405,7 +405,7 @@ onMounted(() => {
                     <div class=":uno: flex flex-wrap items-center justify-end gap-2">
                       <select
                         :value="profileFor(model).modelType"
-                        class=":uno: h-8 min-w-30 rounded-md bg-white text-xs text-gray-700 outline-none transition !border !border-gray-200 !border-solid !px-2 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
+                        class=":uno: min-w-30 select-default"
                         @change="setModelType(model, $event)"
                       >
                         <option
@@ -420,7 +420,7 @@ onMounted(() => {
                         v-if="adapterOptionsFor(model).length > 1"
                         :value="profileFor(model).adapterType || ''"
                         :aria-label="`${model.displayName || model.modelId} 调用接口`"
-                        class=":uno: h-8 min-w-36 rounded-md bg-white text-xs text-gray-700 outline-none transition !border !border-gray-200 !border-solid !px-2 !py-0 focus:ring-2 focus:ring-blue-500/10 focus:!border-blue-500"
+                        class=":uno: min-w-36 select-default"
                         @change="setAdapterType(model, $event)"
                       >
                         <option disabled value="">选择调用接口</option>
