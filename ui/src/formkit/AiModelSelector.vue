@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
+import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import type { RequiredModelCapabilitiesValue } from '@/utils/capabilities'
 import { groupModelOptionsByProvider } from '@/utils/model-options'
 import { VLoading } from '@halo-dev/components'
@@ -19,9 +20,11 @@ import {
   SelectViewport,
 } from 'reka-ui'
 import { computed, nextTick, shallowRef, useId, useTemplateRef, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import MingcuteCloseLine from '~icons/mingcute/close-line'
 import MingcuteDownLine from '~icons/mingcute/down-line'
 import MingcuteSearchLine from '~icons/mingcute/search-line'
+import MingcuteSettings3Line from '~icons/mingcute/settings-3-line'
 import RiBrainLine from '~icons/ri/brain-line'
 import {
   isModelOptionSelectable,
@@ -94,7 +97,6 @@ const { data: modelOptions, isLoading } = useModelOptionsFetch({
   providerType,
   enabled,
   available,
-  requiredFeatures,
   requiredCapabilities,
 })
 
@@ -136,7 +138,7 @@ const emptyText = computed(() => {
   if (keyword.value) {
     return '未找到匹配模型'
   }
-  if (requiredFeatures.value?.length || requiredCapabilities.value) {
+  if (requiredCapabilities.value) {
     return '没有满足能力要求的模型'
   }
   return '暂无匹配模型'
@@ -425,6 +427,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
                     :key="model.name"
                     :model="model"
                     :selected="model.name === selectedValue"
+                    :required-features="requiredFeatures"
                     @select="rememberSelection"
                   />
                 </div>
@@ -437,6 +440,17 @@ function handleSearchKeydown(event: KeyboardEvent) {
               <MingcuteDownLine class=":uno: size-4" aria-hidden="true" />
             </SelectScrollDownButton>
           </template>
+
+          <div class=":uno: border-t border-gray-100 p-1">
+            <RouterLink
+              :to="{ name: AI_FOUNDATION_ROUTE_NAMES.MODELS }"
+              class=":uno: flex select-none items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+              @click="isOpen = false"
+            >
+              <MingcuteSettings3Line class=":uno: size-4 flex-none" aria-hidden="true" />
+              管理模型
+            </RouterLink>
+          </div>
         </SelectContent>
       </SelectPortal>
     </SelectRoot>
