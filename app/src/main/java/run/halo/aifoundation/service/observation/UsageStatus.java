@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service.usage;
+package run.halo.aifoundation.service.observation;
 
 public enum UsageStatus {
     IN_PROGRESS,

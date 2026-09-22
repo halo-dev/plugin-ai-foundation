@@ -1,5 +1,11 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
+import run.halo.aifoundation.service.observation.UsageError;
+
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.Driver;
@@ -37,7 +43,12 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     private final UsageStatisticsQueryRepository queries;
     private final Semaphore readerPermits = new Semaphore(MAX_CONCURRENT_READERS, true);
     private final java.util.Set<Connection> activeReaders = ConcurrentHashMap.newKeySet();
+    private final Object readerLifecycle = new Object();
+    private final java.util.ArrayDeque<Connection> idleReaders = new java.util.ArrayDeque<>();
     private final AtomicBoolean closing = new AtomicBoolean();
+    // Snapshot publication must not overlap reset, but need not stop ordinary writes.
+    private final java.util.concurrent.locks.ReentrantReadWriteLock snapshotAccess =
+        new java.util.concurrent.locks.ReentrantReadWriteLock();
     private Connection writer;
     private volatile boolean initialized;
 
@@ -55,6 +66,9 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
 
     @Override
     public synchronized void initialize() {
+        if (closing.get()) {
+            throw new IllegalStateException("AI usage statistics store is closed");
+        }
         if (initialized) {
             return;
         }
@@ -88,7 +102,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             }
             initialized = true;
             LIVE_STORES.incrementAndGet();
-        } catch (Exception error) {
+        } catch (Exception | LinkageError error) {
             closeSilently();
             if (LIVE_STORES.get() == 0) {
                 deregisterPluginDrivers();
@@ -142,6 +156,28 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             statement.executeUpdate();
         } catch (SQLException error) {
             throw databaseError("write statistics health", error);
+        }
+    }
+
+    @Override
+    public synchronized void writeBatch(List<Runnable> writes) {
+        requireInitialized();
+        var restoreAutoCommit = true;
+        try {
+            writer.setAutoCommit(false);
+            writes.forEach(Runnable::run);
+            writer.commit();
+        } catch (RuntimeException | SQLException error) {
+            restoreAutoCommit = UsageSqliteTransactions.rollback(writer, error);
+            throw new IllegalStateException("Failed to write statistics batch", error);
+        } catch (Error error) {
+            // Roll back even fatal failures, then propagate them without retrying here.
+            restoreAutoCommit = UsageSqliteTransactions.rollback(writer, error);
+            throw error;
+        } finally {
+            if (restoreAutoCommit) {
+                setAutoCommit(writer, true);
+            }
         }
     }
 
@@ -200,6 +236,8 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             return;
         }
         insertStart(writer, terminal.start());
+        // A cache-only stream can finish its text projection before final result metadata is read.
+        // Only that missing, execution-free success may be enriched; known terminals stay immutable.
         var sql = """
             UPDATE ai_calls SET
               completed_at_ms = ?, duration_ms = ?, status = ?, error_type = ?, error_code = ?,
@@ -208,7 +246,12 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
               cache_read_input_tokens = ?, cache_creation_input_tokens = ?,
               reasoning_output_tokens = ?, provider_total_tokens = ?,
               accounted_total_tokens = ?, usage_quality = ?
-            WHERE id = ? AND epoch = ? AND status = 'IN_PROGRESS'
+            WHERE id = ? AND epoch = ? AND (
+              status = 'IN_PROGRESS' OR (
+                streaming = 1 AND attempt_count = 0 AND status = 'SUCCEEDED'
+                AND usage_quality = 'MISSING'
+              )
+            )
             """;
         try (var statement = writer.prepareStatement(sql)) {
             var index = 1;
@@ -228,6 +271,14 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             statement.setString(index++, terminal.callId());
             statement.setLong(index, terminal.epoch());
             statement.executeUpdate();
+            if (terminal.status() == run.halo.aifoundation.service.observation.UsageStatus.TIMED_OUT) {
+                try (var cancelled = writer.prepareStatement(
+                    "UPDATE ai_model_executions SET status = 'TIMED_OUT', error_type = 'TIMEOUT'"
+                        + " WHERE call_id = ? AND status = 'CANCELLED'")) {
+                    cancelled.setString(1, terminal.callId());
+                    cancelled.executeUpdate();
+                }
+            }
         } catch (SQLException error) {
             throw databaseError("finish call", error);
         }
@@ -263,13 +314,15 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     @Override
     public synchronized long reset() {
         requireInitialized();
+        var snapshotLock = snapshotAccess.writeLock();
+        snapshotLock.lock();
+        var restoreAutoCommit = true;
         try {
             writer.setAutoCommit(false);
             try (var statement = writer.createStatement()) {
                 statement.executeUpdate("DELETE FROM ai_model_executions");
                 statement.executeUpdate("DELETE FROM ai_calls");
                 statement.executeUpdate("DELETE FROM ai_usage_daily");
-                statement.executeUpdate("DELETE FROM ai_token_usage_daily");
                 statement.executeUpdate("""
                     UPDATE ai_statistics_health SET affected_since_ms = NULL,
                       affected_until_ms = NULL, last_write_error_at_ms = NULL,
@@ -278,15 +331,33 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                     WHERE id = 1
                     """);
             }
+            // Remove all recoverable pre-reset snapshots before committing the reset.
+            // A crash may lose backup availability, but cannot restore deleted history.
+            for (var snapshot : UsageSqliteFiles.listBackups(paths)) {
+                try {
+                    Files.delete(snapshot);
+                } catch (java.io.IOException error) {
+                    throw new IllegalStateException("Failed to retire pre-reset snapshot", error);
+                }
+            }
+            try (var statement = writer.createStatement()) {
+                statement.executeUpdate("DELETE FROM ai_statistics_meta WHERE key NOT IN ('statistics_epoch', 'schema_version')");
+            }
             var nextEpoch = currentEpoch() + 1;
             putMeta(writer, "statistics_epoch", Long.toString(nextEpoch));
             writer.commit();
             return nextEpoch;
-        } catch (SQLException error) {
-            rollback(writer);
-            throw databaseError("reset statistics", error);
+        } catch (RuntimeException | SQLException error) {
+            restoreAutoCommit = UsageSqliteTransactions.rollback(writer, error);
+            throw new IllegalStateException("Failed to reset statistics", error);
+        } catch (Error error) {
+            restoreAutoCommit = UsageSqliteTransactions.rollback(writer, error);
+            throw error;
         } finally {
-            setAutoCommit(writer, true);
+            if (restoreAutoCommit) {
+                setAutoCommit(writer, true);
+            }
+            snapshotLock.unlock();
         }
     }
 
@@ -294,8 +365,40 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     public synchronized void reconcileAbandoned(Instant now) {
         requireInitialized();
         var sql = """
+            WITH recovered AS MATERIALIZED (
+              SELECT call_id, COUNT(*) attempts,
+                MAX(CASE WHEN unit_kind = 'GENERATION_STEP' THEN unit_index + 1 ELSE 0 END) steps,
+                SUM(CASE WHEN usage_quality = 'MISSING' THEN 1 ELSE 0 END) missing,
+                SUM(input_tokens) input_tokens,
+                SUM(output_tokens) output_tokens,
+                SUM(cache_read_input_tokens) cache_read_input_tokens,
+                SUM(cache_creation_input_tokens) cache_creation_input_tokens,
+                SUM(reasoning_output_tokens) reasoning_output_tokens,
+                SUM(provider_total_tokens) provider_total_tokens,
+                SUM(accounted_total_tokens) accounted_total_tokens
+              FROM ai_model_executions
+              WHERE call_id IN (SELECT id FROM ai_calls WHERE status = 'IN_PROGRESS')
+              GROUP BY call_id
+            )
             UPDATE ai_calls SET status = 'ABANDONED', completed_at_ms = ?,
-              duration_ms = MAX(0, ? - started_at_ms), complete = 0
+              duration_ms = MAX(0, ? - started_at_ms), complete = 0,
+              attempt_count = COALESCE((SELECT attempts FROM recovered WHERE call_id = ai_calls.id), 0),
+              step_count = COALESCE((SELECT steps FROM recovered WHERE call_id = ai_calls.id), 0),
+              missing_execution_count = COALESCE((SELECT missing FROM recovered WHERE call_id = ai_calls.id), 0),
+              input_tokens = (SELECT input_tokens FROM recovered WHERE call_id = ai_calls.id),
+              output_tokens = (SELECT output_tokens FROM recovered WHERE call_id = ai_calls.id),
+              cache_read_input_tokens = (SELECT cache_read_input_tokens FROM recovered WHERE call_id = ai_calls.id),
+              cache_creation_input_tokens = (SELECT cache_creation_input_tokens FROM recovered WHERE call_id = ai_calls.id),
+              reasoning_output_tokens = (SELECT reasoning_output_tokens FROM recovered WHERE call_id = ai_calls.id),
+              provider_total_tokens = (SELECT provider_total_tokens FROM recovered WHERE call_id = ai_calls.id),
+              accounted_total_tokens = (SELECT accounted_total_tokens FROM recovered WHERE call_id = ai_calls.id),
+              usage_quality = CASE WHEN EXISTS (
+                SELECT 1 FROM ai_model_executions
+                WHERE call_id = ai_calls.id AND usage_quality <> 'MISSING'
+              ) THEN 'PARTIAL' ELSE 'MISSING' END,
+              response_model_id = (SELECT response_model_id FROM ai_model_executions
+                WHERE call_id = ai_calls.id AND response_model_id IS NOT NULL
+                ORDER BY completed_at_ms DESC, id DESC LIMIT 1)
             WHERE status = 'IN_PROGRESS'
             """;
         try (var statement = writer.prepareStatement(sql)) {
@@ -308,18 +411,31 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     }
 
     @Override
-    public synchronized void rollupAndRetain(Clock clock) {
+    public void rollupAndRetain(Clock clock) {
+        while (rollupAndRetainBatch(clock)) {
+            // Offline callers may finish maintenance synchronously; the service yields per batch.
+        }
+    }
+
+    @Override
+    public synchronized boolean rollupAndRetainBatch(Clock clock) {
         requireInitialized();
-        maintenance.rollupAndRetain(writer, clock);
+        return maintenance.rollupAndRetainBatch(writer, clock);
     }
 
     @Override
     public void backup() {
-        requireInitialized();
-        withConnection(connection -> {
-            UsageSqliteFiles.backup(connection, paths);
-            return null;
-        });
+        var snapshotLock = snapshotAccess.readLock();
+        snapshotLock.lock();
+        try {
+            requireInitialized();
+            withConnection(connection -> {
+                UsageSqliteFiles.backup(connection, paths);
+                return null;
+            });
+        } finally {
+            snapshotLock.unlock();
+        }
     }
 
     @Override
@@ -328,7 +444,17 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             return;
         }
         initialized = false;
-        activeReaders.forEach(SqliteUsageStatisticsStore::close);
+        final List<Connection> readers;
+        synchronized (readerLifecycle) {
+            var connections = new java.util.ArrayList<>(activeReaders);
+            connections.addAll(idleReaders);
+            idleReaders.clear();
+            readers = List.copyOf(connections);
+        }
+        // JDBC close waits for native statements; interrupt them before acquiring that lock.
+        readers.forEach(SqliteUsageStatisticsStore::interrupt);
+        interrupt(writer);
+        readers.forEach(SqliteUsageStatisticsStore::close);
         boolean acquired = false;
         try {
             acquired = readerPermits.tryAcquire(MAX_CONCURRENT_READERS, BUSY_TIMEOUT_MILLIS,
@@ -405,7 +531,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         }
     }
 
-
     private String quickCheck(Connection connection) throws SQLException {
         try (var statement = connection.createStatement();
             var rows = statement.executeQuery("PRAGMA quick_check")) {
@@ -416,32 +541,40 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     private <T> T withReader(SqlFunction<Connection, T> operation) {
         return withConnection(connection -> {
             connection.setAutoCommit(false);
+            var restoreAutoCommit = true;
             try {
                 var result = operation.apply(connection);
                 connection.commit();
                 return result;
-            } catch (SQLException error) {
-                rollback(connection);
+            } catch (SQLException | RuntimeException | LinkageError error) {
+                restoreAutoCommit = UsageSqliteTransactions.rollback(connection, error);
                 throw error;
+            } finally {
+                if (restoreAutoCommit) {
+                    connection.setAutoCommit(true);
+                }
             }
         });
     }
 
     private <T> T withConnection(SqlFunction<Connection, T> operation) {
         boolean acquired = false;
+        Connection connection = null;
         try {
             readerPermits.acquire();
             acquired = true;
             requireInitialized();
-            try (var connection = openConnection()) {
-                activeReaders.add(connection);
-                try {
-                    requireInitialized();
-                    return operation.apply(connection);
-                } finally {
-                    activeReaders.remove(connection);
-                }
+            synchronized (readerLifecycle) {
+                connection = idleReaders.pollFirst();
             }
+            if (connection == null) {
+                connection = openConnection();
+            }
+            synchronized (readerLifecycle) {
+                requireInitialized();
+                activeReaders.add(connection);
+            }
+            return operation.apply(connection);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(
@@ -449,10 +582,30 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         } catch (SQLException error) {
             throw databaseError("read statistics", error);
         } finally {
+            releaseReader(connection);
             if (acquired) {
                 readerPermits.release();
             }
         }
+    }
+
+    private void releaseReader(Connection connection) {
+        if (connection == null) {
+            return;
+        }
+        synchronized (readerLifecycle) {
+            activeReaders.remove(connection);
+            try {
+                if (initialized && !closing.get() && !connection.isClosed()
+                    && connection.getAutoCommit()) {
+                    idleReaders.addLast(connection);
+                    return;
+                }
+            } catch (SQLException ignored) {
+                // A failed connection must not be reused by another query.
+            }
+        }
+        close(connection);
     }
 
     private static int bindUsage(PreparedStatement statement, int index, NormalizedUsage usage)
@@ -553,6 +706,16 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         }
     }
 
+    private static void interrupt(Connection connection) {
+        if (connection instanceof org.sqlite.SQLiteConnection sqlite) {
+            try {
+                sqlite.getDatabase().interrupt();
+            } catch (SQLException error) {
+                log.warn("Failed to interrupt an AI usage statistics connection");
+            }
+        }
+    }
+
     private static void close(Connection connection) {
         if (connection != null) {
             try {
@@ -560,14 +723,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             } catch (SQLException ignored) {
                 // Best effort during shutdown.
             }
-        }
-    }
-
-    private static void rollback(Connection connection) {
-        try {
-            connection.rollback();
-        } catch (SQLException rollbackError) {
-            log.warn("Failed to roll back AI usage statistics transaction", rollbackError);
         }
     }
 
@@ -586,7 +741,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     private static <T, R> R value(T source, java.util.function.Function<T, R> mapper) {
         return source == null ? null : mapper.apply(source);
     }
-
 
     @FunctionalInterface
     private interface SqlFunction<T, R> {

@@ -70,6 +70,12 @@ export interface UsageTrendPoint {
     'outputTokens'?: number;
     /**
      * 
+     * @type {number}
+     * @memberof UsageTrendPoint
+     */
+    'partialUsageCalls'?: number;
+    /**
+     * 
      * @type {string}
      * @memberof UsageTrendPoint
      */

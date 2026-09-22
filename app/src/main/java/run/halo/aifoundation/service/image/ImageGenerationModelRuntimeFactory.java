@@ -6,7 +6,7 @@ import run.halo.aifoundation.image.ImageGenerationModel;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 @Component
 public class ImageGenerationModelRuntimeFactory {

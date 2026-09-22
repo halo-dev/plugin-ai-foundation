@@ -23,6 +23,9 @@ configurations.runtimeClasspath {
     exclude group: 'org.springdoc'
     exclude group: 'io.swagger.core.v3'
     exclude group: 'com.fasterxml.jackson.core'
+    // Halo 2.26 provides Jackson 3 as well. Bundling it splits class identity
+    // between the host and plugin classloaders, even when versions match.
+    exclude group: 'tools.jackson.core'
     exclude group: 'org.slf4j'
     exclude group: 'io.micrometer'
     exclude group: 'com.squareup.okhttp3'
@@ -47,6 +50,18 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+// Opt-in: exercises retained SQLite data rather than running during every plugin build.
+tasks.register('usageScaleValidation', Test) {
+    description = 'Validate usage statistics with one million calls and five million executions'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    environment 'AI_USAGE_BENCHMARK', 'true'
+    filter { includeTestsMatching '*UsageStatisticsScaleBenchmarkTest' }
+    testLogging { events 'passed', 'failed'; showStandardStreams = true }
 }
 
 tasks.register('processUiResources', Copy) {
@@ -133,4 +148,22 @@ afterEvaluate {
     tasks.named('generateApiClient') {
         dependsOn normalizeGeneratedOpenApiServers
     }
+}
+
+// Unit tests use one classloader and cannot detect host/plugin Jackson duplication.
+tasks.register('verifyHostProvidedJackson') {
+    group = 'verification'
+    description = 'Ensures Jackson core classes are supplied only by Halo at runtime.'
+    doLast {
+        def bundled = configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll {
+            it.moduleVersion.id.group in ['com.fasterxml.jackson.core', 'tools.jackson.core']
+        }
+        if (!bundled.empty) {
+            throw new GradleException("Host-provided Jackson must not be bundled: ${bundled*.moduleVersion*.id}")
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyHostProvidedJackson')
 }

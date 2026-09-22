@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service.usage;
+package run.halo.aifoundation.service.observation;
 
 import java.util.Map;
 import java.util.regex.Pattern;

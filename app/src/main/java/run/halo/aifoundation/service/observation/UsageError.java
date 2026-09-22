@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service.usage;
+package run.halo.aifoundation.service.observation;
 
 import java.util.Locale;
 import java.util.concurrent.CancellationException;
@@ -26,8 +26,8 @@ public record UsageError(String type, String code) {
         if (error == null) {
             return false;
         }
-        for (var current = Exceptions.unwrap(error); current != null;
-            current = current.getCause()) {
+        var current = Exceptions.unwrap(error);
+        for (int depth = 0; current != null && depth < 16; depth++, current = current.getCause()) {
             if (current instanceof TimeoutException
                 || current instanceof java.net.SocketTimeoutException
                 || current instanceof java.net.http.HttpTimeoutException) {
@@ -44,8 +44,8 @@ public record UsageError(String type, String code) {
         if (error == null) {
             return false;
         }
-        for (var current = Exceptions.unwrap(error); current != null;
-            current = current.getCause()) {
+        var current = Exceptions.unwrap(error);
+        for (int depth = 0; current != null && depth < 16; depth++, current = current.getCause()) {
             if (current instanceof CancellationException
                 || current instanceof AiGenerationCancelledException
                 || current instanceof EmbeddingCancelledException

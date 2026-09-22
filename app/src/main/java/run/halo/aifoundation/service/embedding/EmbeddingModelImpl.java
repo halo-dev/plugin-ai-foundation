@@ -29,9 +29,9 @@ import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
-import run.halo.aifoundation.service.usage.UsageUnitKind;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingModel;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
@@ -381,8 +381,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         }
         return mono.timeout(timeout)
             .onErrorMap(TimeoutException.class,
-                error -> new EmbeddingTimeoutException(timeout, error))
-            .contextWrite(context -> UsageExecutionObserver.withTimeoutDeadline(context, timeout));
+                error -> new EmbeddingTimeoutException(timeout, error));
     }
 
     private Duration timeout(EmbeddingRequest request) {

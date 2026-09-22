@@ -2,7 +2,7 @@ import { aiConsoleApiClient } from '@/api'
 import type { UsageCallPage, UsageSummary, UsageTrendPoint } from '@/api/generated'
 import type { UsageQueryParams } from '@/composables/use-usage-filters'
 import { useInfiniteQuery, useQuery, type QueryClient } from '@tanstack/vue-query'
-import type { ComputedRef } from 'vue'
+import { computed, type ComputedRef } from 'vue'
 
 const QK_USAGE_SUMMARY = 'plugin:ai-foundation:usage-summary'
 const QK_USAGE_TRENDS = 'plugin:ai-foundation:usage-trends'
@@ -86,12 +86,14 @@ export function useUsageCalls(
 
 export function useUsageCallDetail(id: () => string) {
   return useQuery({
-    queryKey: [QK_USAGE_CALL_DETAIL, id()],
+    queryKey: [QK_USAGE_CALL_DETAIL, computed(id)],
     queryFn: async () => {
       const { data } = await aiConsoleApiClient.usageStatistics.getAiUsageCall({ id: id() })
       return data
     },
-    staleTime: Number.POSITIVE_INFINITY,
+    // Reopening a detail must observe completion or late final-result metadata.
+    staleTime: 0,
+    refetchInterval: (data) => (data?.call?.status === 'IN_PROGRESS' ? 3000 : false),
   })
 }
 

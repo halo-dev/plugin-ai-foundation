@@ -6,10 +6,10 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.embedding.EmbeddingModel;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingResponse;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageCallSession;
-import run.halo.aifoundation.service.usage.UsageOperation;
-import run.halo.aifoundation.service.usage.UsageStatisticsService;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageOperation;
+import run.halo.aifoundation.service.observation.UsageObservation;
 
 public class AuditedEmbeddingModel implements EmbeddingModel {
 
@@ -19,10 +19,10 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
     private final EmbeddingModel delegate;
     private final ModelCallContext context;
     private final CallerPluginAuditRecorder auditRecorder;
-    private final UsageStatisticsService usageStatistics;
+    private final UsageObservation usageStatistics;
 
     public AuditedEmbeddingModel(EmbeddingModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageStatisticsService usageStatistics) {
+        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
         this.auditRecorder = Objects.requireNonNull(auditRecorder,
@@ -40,13 +40,14 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
     @Override
     public Mono<EmbeddingResponse> embed(EmbeddingRequest request) {
         auditRecorder.recordModelInvocation(context, EMBED);
-        return record(EMBED, request.getMetadata(), () -> delegate.embed(request));
+        return record(EMBED, request == null ? null : request.getMetadata(), () -> delegate.embed(request));
     }
 
     @Override
     public Mono<float[]> embedQuery(String text) {
         auditRecorder.recordModelInvocation(context, EMBED_QUERY);
-        var descriptor = usageStatistics.describeCall(context, EMBED_QUERY, false, null);
+        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
+            () -> usageStatistics.describeCall(context, EMBED_QUERY, false, null), null);
         return UsageCallRecorder.record(usageStatistics, descriptor,
             () -> delegate.embedQuery(text), 1, (session, result) -> session.succeed(
                 NormalizedUsage.missing(), null, result == null ? 0 : 1));
@@ -64,7 +65,8 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
 
     private Mono<EmbeddingResponse> record(String operation, java.util.Map<String, Object> metadata,
         java.util.function.Supplier<Mono<EmbeddingResponse>> invocation) {
-        var descriptor = usageStatistics.describeCall(context, operation, false, metadata);
+        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
+            () -> usageStatistics.describeCall(context, operation, false, metadata), null);
         return UsageCallRecorder.record(usageStatistics, descriptor, invocation, 1,
             AuditedEmbeddingModel::succeed);
     }

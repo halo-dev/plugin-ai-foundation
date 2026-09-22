@@ -1,5 +1,8 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageQuality;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
@@ -8,6 +11,18 @@ import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 
 class NormalizedUsageTest {
+
+    @Test
+    void retainsKnownSubsetsEvenWhenTopLevelCountersAreMissing() {
+        var cacheOnly = new NormalizedUsage(null, null, 7L, null, null, null, null, null);
+        var reasoningOnly = NormalizedUsage.from(LanguageModelUsage.builder()
+            .reasoningTokens(3).build());
+        var sum = NormalizedUsage.sum(List.of(cacheOnly, reasoningOnly));
+        assertThat(sum.cacheReadInputTokens()).isEqualTo(7L);
+        assertThat(sum.reasoningOutputTokens()).isEqualTo(3L);
+        assertThat(sum.accountedTotalTokens()).isNull();
+        assertThat(sum.quality()).isEqualTo(UsageQuality.PARTIAL);
+    }
 
     @Test
     void doesNotDoubleCountInclusiveTokenSubsets() {
@@ -45,41 +60,14 @@ class NormalizedUsageTest {
     }
 
     @Test
-    void extractsOpenAiCacheReadAndCreationSubsetsWithoutDoubleCounting() {
-        var raw = Map.of("prompt_tokens_details", Map.of(
-            "cached_tokens", 60,
-            "cache_creation_input_tokens", 10));
-        var providerUsage = LanguageModelUsage.builder()
-            .inputTokens(100)
-            .outputTokens(40)
-            .totalTokens(140)
-            .raw(raw)
-            .build();
-
-        var usage = NormalizedUsage.from(providerUsage);
-
-        assertThat(usage.cacheReadInputTokens()).isEqualTo(60L);
-        assertThat(usage.cacheCreationInputTokens()).isEqualTo(10L);
-        assertThat(usage.accountedTotalTokens()).isEqualTo(140L);
-    }
-
-    @Test
-    void extractsCacheSubsetsFromNativeRecordAccessors() {
-        var providerUsage = LanguageModelUsage.builder()
-            .inputTokens(100)
-            .outputTokens(40)
-            .raw(new NativeUsage(new PromptTokensDetails(60, 10)))
-            .build();
-
-        var usage = NormalizedUsage.from(providerUsage);
-
-        assertThat(usage.cacheReadInputTokens()).isEqualTo(60L);
-        assertThat(usage.cacheCreationInputTokens()).isEqualTo(10L);
-    }
-
-    public record NativeUsage(PromptTokensDetails promptTokensDetails) {
-    }
-
-    public record PromptTokensDetails(Integer cachedTokens, Integer cacheCreationInputTokens) {
+    void doesNotInspectRawObjectsOrInvokeProviderAccessors() {
+        var usage = NormalizedUsage.from(LanguageModelUsage.builder().inputTokens(10)
+            .outputTokens(5).raw(new Object() {
+                public Object cacheReadInputTokens() {
+                    throw new AssertionError("raw usage must never be inspected");
+                }
+            }).build());
+        assertThat(usage.cacheReadInputTokens()).isNull();
+        assertThat(usage.accountedTotalTokens()).isEqualTo(15);
     }
 }

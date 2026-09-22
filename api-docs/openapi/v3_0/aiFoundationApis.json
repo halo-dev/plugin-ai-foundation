@@ -4212,6 +4212,10 @@
           "complete" : {
             "type" : "boolean"
           },
+          "completeUsageCoverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
           "dataFrom" : {
             "type" : "string",
             "format" : "date-time"
@@ -4243,6 +4247,13 @@
           "outputTokens" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "partialUsageCalls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "preciseRange" : {
+            "type" : "boolean"
           },
           "reasoningOutputTokens" : {
             "type" : "integer",
@@ -4296,6 +4307,10 @@
             "format" : "int64"
           },
           "outputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "partialUsageCalls" : {
             "type" : "integer",
             "format" : "int64"
           },

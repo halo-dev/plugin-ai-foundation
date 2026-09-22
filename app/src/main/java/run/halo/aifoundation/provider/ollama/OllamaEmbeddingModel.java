@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.Embedding;
@@ -113,7 +113,8 @@ final class OllamaEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEm
                     nativeUsage.put(field, root.path(field).numberValue());
                 }
             }
-            var usage = new DefaultUsage(promptTokens, 0, promptTokens, Map.copyOf(nativeUsage));
+            var usage = ProviderUsage.embedding(root, "prompt_eval_count", "prompt_eval_count",
+                Map.copyOf(nativeUsage));
             var model = hasText(root.path("model").asText())
                 ? root.path("model").asText() : requestedModel;
             return new EmbeddingResponse(results,

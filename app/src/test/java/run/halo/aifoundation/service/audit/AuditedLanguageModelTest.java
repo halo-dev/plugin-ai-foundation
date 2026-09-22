@@ -18,8 +18,8 @@ import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.service.usage.UsageCallDescriptor;
-import run.halo.aifoundation.service.usage.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
 import run.halo.aifoundation.service.language.stream.CancellableStreamReplayCoordinator;
 
@@ -37,6 +37,35 @@ class AuditedLanguageModelTest {
     private final UsageStatisticsService statistics = mock(UsageStatisticsService.class);
     private final AuditedLanguageModel model = new AuditedLanguageModel(delegate, context,
         auditRecorder, statistics);
+
+    @Test
+    void telemetryLinkageFailureDoesNotChangeResultOrSubscribeTwice() {
+        var subscriptions = new java.util.concurrent.atomic.AtomicInteger();
+        var expected = GenerateTextResult.builder().text("ok").build();
+        when(delegate.generateText("hello")).thenReturn(Mono.defer(() -> {
+            subscriptions.incrementAndGet();
+            return Mono.just(expected);
+        }));
+        when(statistics.beginCall(org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new NoClassDefFoundError("unavailable telemetry dependency"));
+
+        StepVerifier.create(model.generateText("hello")).expectNext(expected).verifyComplete();
+        assertThat(subscriptions.get()).isEqualTo(1);
+    }
+
+    @Test
+    void failedTerminalObservationPreservesOriginalProviderError() {
+        var session = mock(UsageCallSession.class);
+        var providerError = new IllegalStateException("provider failure");
+        when(statistics.beginCall(org.mockito.ArgumentMatchers.any())).thenReturn(session);
+        org.mockito.Mockito.doThrow(new IllegalStateException("broken telemetry"))
+            .when(session).fail(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt());
+        when(delegate.generateText("hello")).thenReturn(Mono.error(providerError));
+
+        StepVerifier.create(model.generateText("hello"))
+            .expectErrorMatches(error -> error == providerError).verify();
+    }
 
     @Test
     void generateTextRecordsModelInvocation() {
@@ -210,7 +239,7 @@ class AuditedLanguageModelTest {
             .verifyComplete();
         StepVerifier.create(instrumented.streamText(request).elementStream()).verifyComplete();
 
-        verify(statistics, times(1)).beginCall(descriptor);
+        verify(statistics, never()).beginCall(descriptor);
         verify(session, never()).succeed(org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt());
     }

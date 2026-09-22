@@ -1,7 +1,7 @@
-package run.halo.aifoundation.service.usage;
+package run.halo.aifoundation.service.observation;
 
 import java.util.Collection;
-import java.util.Map;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.image.ImageUsage;
@@ -19,8 +19,13 @@ public record NormalizedUsage(
 ) {
 
     public NormalizedUsage {
-        quality = quality == null
-            ? quality(inputTokens, outputTokens, providerTotalTokens) : quality;
+        if (quality == null) {
+            quality = quality(inputTokens, outputTokens, providerTotalTokens);
+            if (quality == UsageQuality.MISSING && (cacheReadInputTokens != null
+                || cacheCreationInputTokens != null || reasoningOutputTokens != null)) {
+                quality = UsageQuality.PARTIAL;
+            }
+        }
         accountedTotalTokens = accountedTotalTokens != null
             ? accountedTotalTokens : accounted(inputTokens, outputTokens, providerTotalTokens);
     }
@@ -35,7 +40,7 @@ public record NormalizedUsage(
             return missing();
         }
         return new NormalizedUsage(value(usage.getInputTokens()), value(usage.getOutputTokens()),
-            cacheReadInputTokens(usage.getRaw()), cacheCreationInputTokens(usage.getRaw()),
+            null, null,
             value(usage.getReasoningTokens()), value(usage.getTotalTokens()), null, null);
     }
 
@@ -58,8 +63,14 @@ public record NormalizedUsage(
     }
 
     public static NormalizedUsage from(org.springframework.ai.chat.metadata.Usage usage) {
-        if (usage == null) {
+        if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage) {
             return missing();
+        }
+        if (usage instanceof ProviderUsage typed) {
+            var normalized = new NormalizedUsage(typed.inputTokens(), typed.outputTokens(),
+                typed.cacheReadTokens(), typed.cacheWriteTokens(), typed.reasoningTokens(),
+                typed.totalTokens(), null, null);
+            return typed.complete() ? normalized : normalized.partial();
         }
         return new NormalizedUsage(value(usage.getPromptTokens()),
             value(usage.getCompletionTokens()), null, null, null,
@@ -67,18 +78,46 @@ public record NormalizedUsage(
     }
 
     public static NormalizedUsage fromFailure(Throwable error) {
-        var current = error;
-        for (int depth = 0; current != null && depth < 8; depth++) {
-            var normalized = fromUnknown(property(current, "getUsage", "usage"));
-            if (normalized.quality() != UsageQuality.MISSING) {
-                return normalized;
+        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+            if (error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e) {
+                return from(e.getUsage());
             }
-            current = current.getCause();
+            if (error instanceof run.halo.aifoundation.exception.StructuredOutputTerminationException e) {
+                return from(e.getUsage());
+            }
         }
         return missing();
     }
 
+    public NormalizedUsage partial() {
+        return quality == UsageQuality.MISSING ? this
+            : new NormalizedUsage(inputTokens, outputTokens, cacheReadInputTokens,
+                cacheCreationInputTokens, reasoningOutputTokens, providerTotalTokens,
+                accountedTotalTokens, UsageQuality.PARTIAL);
+    }
+
+    public static NormalizedUsage fromLogicalFailure(Throwable error) {
+        var usage = fromFailure(error);
+        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+            if (error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e
+                && e.getStepIndex() != null && e.getStepIndex() > 0) {
+                // Exception usage describes the failing step, not any earlier unseen steps.
+                return usage.partial();
+            }
+        }
+        return usage;
+    }
+
     public static NormalizedUsage sum(Collection<NormalizedUsage> values) {
+        try {
+            return sumChecked(values);
+        } catch (ArithmeticException overflow) {
+            return new NormalizedUsage(null, null, null, null, null, null, null,
+                UsageQuality.PARTIAL);
+        }
+    }
+
+    private static NormalizedUsage sumChecked(Collection<NormalizedUsage> values) {
         if (values == null || values.isEmpty()) {
             return missing();
         }
@@ -144,74 +183,7 @@ public record NormalizedUsage(
     }
 
     private static Long value(Integer value) {
-        return value == null ? null : value.longValue();
+        return value == null || value < 0 ? null : value.longValue();
     }
 
-    private static Long cacheReadInputTokens(Object nativeUsage) {
-        var direct = number(property(nativeUsage, "cacheReadInputTokens",
-            "cache_read_input_tokens"));
-        if (direct != null) {
-            return direct;
-        }
-        var details = property(nativeUsage, "promptTokensDetails", "prompt_tokens_details",
-            "inputTokensDetails", "input_tokens_details");
-        return number(property(details, "cachedTokens", "cached_tokens",
-            "cacheReadInputTokens", "cache_read_input_tokens"));
-    }
-
-    private static Long cacheCreationInputTokens(Object nativeUsage) {
-        var direct = number(property(nativeUsage, "cacheCreationInputTokens",
-            "cache_creation_input_tokens"));
-        if (direct != null) {
-            return direct;
-        }
-        var details = property(nativeUsage, "promptTokensDetails", "prompt_tokens_details",
-            "inputTokensDetails", "input_tokens_details");
-        return number(property(details, "cacheCreationInputTokens",
-            "cache_creation_input_tokens"));
-    }
-
-    private static Object property(Object source, String... names) {
-        if (source == null) {
-            return null;
-        }
-        for (var name : names) {
-            if (source instanceof Map<?, ?> map && map.containsKey(name)) {
-                return map.get(name);
-            }
-            try {
-                var method = source.getClass().getMethod(name);
-                if (!method.canAccess(source)) {
-                    method.trySetAccessible();
-                }
-                return method.invoke(source);
-            } catch (ReflectiveOperationException ignored) {
-                // Try the next provider-specific spelling.
-            }
-        }
-        return null;
-    }
-
-    private static NormalizedUsage fromUnknown(Object usage) {
-        if (usage instanceof LanguageModelUsage value) {
-            return from(value);
-        }
-        if (usage instanceof EmbeddingUsage value) {
-            return from(value);
-        }
-        if (usage instanceof RerankUsage value) {
-            return from(value);
-        }
-        if (usage instanceof ImageUsage value) {
-            return from(value);
-        }
-        if (usage instanceof org.springframework.ai.chat.metadata.Usage value) {
-            return from(value);
-        }
-        return missing();
-    }
-
-    private static Long number(Object value) {
-        return value instanceof Number number ? number.longValue() : null;
-    }
 }

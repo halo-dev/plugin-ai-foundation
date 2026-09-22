@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.rerank.RerankingModel;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 @Component
 public class RerankingModelRuntimeFactory {

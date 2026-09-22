@@ -1,5 +1,8 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageOperation;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
@@ -50,28 +53,49 @@ class UsageStatisticsScaleBenchmarkTest {
             loadDataset(connection);
         }
         var loadMillis = elapsedMillis(loadStarted);
+        System.out.printf("Loaded benchmark dataset in %.2fms%n", loadMillis);
 
         store = new SqliteUsageStatisticsStore(paths);
         store.initialize();
         var activeStore = store;
         var enqueueP95 = enqueueP95();
         var rollupStarted = System.nanoTime();
-        store.rollupAndRetain(
-            Clock.fixed(Instant.parse("2026-08-12T02:00:00Z"), ZoneOffset.UTC));
+        var batchMillis = new ArrayList<Double>();
+        boolean more;
+        do {
+            var batchStarted = System.nanoTime();
+            more = store.rollupAndRetainBatch(
+                Clock.fixed(Instant.parse("2026-08-12T02:00:00Z"), ZoneOffset.UTC));
+            batchMillis.add(elapsedMillis(batchStarted));
+        } while (more);
+        Collections.sort(batchMillis);
+        var maintenanceP95 = batchMillis.get((int) Math.ceil(batchMillis.size() * 0.95) - 1);
+        System.out.printf("Maintenance batches=%d p95=%.2fms max=%.2fms%n",
+            batchMillis.size(), maintenanceP95, batchMillis.getLast());
         var rollupMillis = elapsedMillis(rollupStarted);
+        System.out.printf("Retention completed in %.2fms%n", rollupMillis);
 
         var query = query(null);
         var filtered = query("plugin-7");
         var listP95 = p95(25, () -> activeStore.listCalls(filtered, 50, null));
         var deepCursorP95 = deepCursorP95(activeStore, filtered);
+        var coldSummaryStarted = System.nanoTime();
+        activeStore.summary(query, true);
+        var coldSummaryMillis = elapsedMillis(coldSummaryStarted);
         var summaryP95 = p95(40, () -> activeStore.summary(query, true));
+        var filteredSummaryP95 = p95(25, () -> activeStore.summary(filtered, true));
+        System.out.printf("Summary first=%.2fms filteredP95=%.2fms%n",
+            coldSummaryMillis, filteredSummaryP95);
         var trendsP95 = p95(40, () -> activeStore.trends(query, true));
         var first = activeStore.listCalls(query, 1, null).items().getFirst();
         var detailP95 = p95(25, () -> activeStore.getCall(first.id()));
+        System.out.printf("Queries completed: summaryP95=%.2fms trendsP95=%.2fms%n",
+            summaryP95, trendsP95);
 
         var backupStarted = System.nanoTime();
         store.backup();
         var backupMillis = elapsedMillis(backupStarted);
+        store.close();
         Files.delete(paths.database());
         var restoreStarted = System.nanoTime();
         var restoredStore = new SqliteUsageStatisticsStore(paths);
@@ -103,12 +127,15 @@ class UsageStatisticsScaleBenchmarkTest {
         assertThat(listP95).isLessThanOrEqualTo(200D);
         assertThat(enqueueP95).isLessThanOrEqualTo(1D);
         assertThat(deepCursorP95).isLessThanOrEqualTo(200D);
+        assertThat(maintenanceP95).isLessThanOrEqualTo(200D);
+        assertThat(coldSummaryMillis).isLessThanOrEqualTo(500D);
+        assertThat(filteredSummaryP95).isLessThanOrEqualTo(500D);
         assertThat(summaryP95).isLessThanOrEqualTo(500D);
         assertThat(trendsP95).isLessThanOrEqualTo(500D);
     }
 
     private static double enqueueP95() throws Exception {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         var blocked = new CountDownLatch(1);
         org.mockito.Mockito.doAnswer(invocation -> {
@@ -272,6 +299,16 @@ class UsageStatisticsScaleBenchmarkTest {
     private static List<String> queryPlans(Path database) throws Exception {
         var plans = new ArrayList<String>();
         try (var connection = connection(database)) {
+            addPlan(connection, plans, "raw-summary", """
+                SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(accounted_total_tokens),
+                  SUM(cache_read_input_tokens), SUM(cache_creation_input_tokens),
+                  SUM(reasoning_output_tokens), SUM(CASE WHEN status = 'SUCCEEDED'
+                    AND usage_quality <> 'MISSING' AND complete = 1 THEN 1 ELSE 0 END)
+                FROM ai_calls INDEXED BY idx_calls_aggregate_hour
+                WHERE started_at_ms >= 0 AND started_at_ms < 9223372036854775807
+                  AND (started_at_ms / 3600000) >= 0
+                GROUP BY (started_at_ms / 3600000), status, usage_quality, complete
+                """);
             addPlan(connection, plans, "calls", """
                 SELECT * FROM ai_calls
                 WHERE caller_plugin_name = 'plugin-7' AND started_at_ms >= 0
@@ -279,13 +316,13 @@ class UsageStatisticsScaleBenchmarkTest {
                 """);
             addPlan(connection, plans, "executions", """
                 SELECT * FROM ai_model_executions
-                WHERE call_id = 'call-999999' ORDER BY started_at_ms, id
+                WHERE call_id = 'call-999999' ORDER BY started_at_ms, unit_index, attempt_index
                 """);
             addPlan(connection, plans, "daily-calls", """
                 SELECT * FROM ai_usage_daily WHERE day >= '2026-05-13' AND day < '2026-08-11'
                 """);
             addPlan(connection, plans, "daily-tokens", """
-                SELECT * FROM ai_token_usage_daily
+                SELECT * FROM ai_usage_daily
                 WHERE day >= '2026-05-13' AND day < '2026-08-11'
                 """);
         }

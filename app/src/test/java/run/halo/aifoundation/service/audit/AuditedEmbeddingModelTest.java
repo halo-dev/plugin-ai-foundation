@@ -11,8 +11,8 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.embedding.EmbeddingModel;
 import run.halo.aifoundation.embedding.EmbeddingResponse;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.service.usage.UsageCallDescriptor;
-import run.halo.aifoundation.service.usage.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
 
 class AuditedEmbeddingModelTest {

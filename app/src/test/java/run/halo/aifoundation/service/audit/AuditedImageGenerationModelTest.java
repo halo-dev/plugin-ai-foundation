@@ -20,8 +20,8 @@ import run.halo.aifoundation.image.middleware.ImageGenerationMiddleware;
 import run.halo.aifoundation.image.middleware.ImageGenerationMiddlewares;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.service.usage.UsageCallDescriptor;
-import run.halo.aifoundation.service.usage.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
 
 class AuditedImageGenerationModelTest {

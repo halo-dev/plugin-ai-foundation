@@ -1,11 +1,12 @@
 import type { UsageTrendPoint } from '@/api/generated'
-import { describe, expect, it, vi } from 'vitest'
+import type { UsageTrendResolution } from '@/utils/usage'
 import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import UsageTrendChart from '../UsageTrendChart.vue'
-import type { UsageTrendResolution } from '@/utils/usage'
 
 vi.mock('@halo-dev/components', () => ({
+  VButton: defineComponent({ template: '<button><slot /></button>' }),
   VLoading: defineComponent({
     template: '<div data-test="loading">loading</div>',
   }),
@@ -56,8 +57,8 @@ describe('UsageTrendChart', () => {
 
   it('discloses UTC day resolution next to the metric controls', () => {
     const wrapper = mountChart([point()])
-    expect(wrapper.text()).toContain('分辨率：按天（UTC）')
-    expect(wrapper.text()).toContain('计入 Token 总量')
+    expect(wrapper.text()).toContain('按天（UTC）')
+    expect(wrapper.find('[aria-label="已报告 Token 总量趋势"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('调用次数')
   })
 
@@ -66,21 +67,21 @@ describe('UsageTrendChart', () => {
       point({ bucketStart: '2026-08-01T00:00:00Z' }),
       point({ bucketStart: '2026-08-02T00:00:00Z', missingUsageCalls: 3 }),
     ])
-    const bars = wrapper.findAll('.group > div')
+    const bars = wrapper.findAll('[data-test="usage-bar"]')
     expect(bars).toHaveLength(2)
-    expect(bars[1]!.classes().join(' ')).toContain('bg-amber-300')
-    expect(bars[0]!.classes().join(' ')).not.toContain('bg-amber-300')
+    expect(bars[1]!.classes().join(' ')).toContain('is-partial')
+    expect(bars[0]!.classes().join(' ')).not.toContain('is-partial')
     // DAY 分辨率只展示日期，不暗示小时精度
-    expect(wrapper.text()).toContain('2026-08-01')
-    expect(wrapper.text()).toContain('2026-08-02')
+    expect(wrapper.text()).toContain('8/1')
+    expect(wrapper.text()).toContain('8/2')
   })
 
   it('visibly distinguishes incomplete buckets', () => {
     const wrapper = mountChart([point({ complete: false })])
-    const bar = wrapper.find('.group > div')
+    const bar = wrapper.find('[data-test="usage-bar"]')
 
-    expect(bar.classes().join(' ')).toContain('bg-rose-300')
-    expect(wrapper.text()).toContain('数据不完整')
+    expect(bar.classes().join(' ')).toContain('is-incomplete')
+    expect(wrapper.find('button[aria-label*="数据不完整"]').exists()).toBe(true)
   })
 
   it('scales bar heights relative to the maximum value', () => {
@@ -88,7 +89,7 @@ describe('UsageTrendChart', () => {
       point({ bucketStart: '2026-08-01T00:00:00Z', accountedTotalTokens: 1500 }),
       point({ bucketStart: '2026-08-02T00:00:00Z', accountedTotalTokens: 3000 }),
     ])
-    const bars = wrapper.findAll('.group > div')
+    const bars = wrapper.findAll('[data-test="usage-bar"]')
     expect(bars[0]!.attributes('style')).toContain('height: 50%')
     expect(bars[1]!.attributes('style')).toContain('height: 100%')
   })
@@ -102,13 +103,13 @@ describe('UsageTrendChart', () => {
         callCount: 30,
       }),
     ])
-    const barsBefore = wrapper.findAll('.group > div')
+    const barsBefore = wrapper.findAll('[data-test="usage-bar"]')
     expect(barsBefore[0]!.attributes('style')).toContain('height: 33.33333333333333%')
 
     const buttons = wrapper.findAll('button')
     const callsButton = buttons.find((button) => button.text() === '调用次数')!
     await callsButton.trigger('click')
-    const bars = wrapper.findAll('.group > div')
+    const bars = wrapper.findAll('[data-test="usage-bar"]')
     // 以调用次数为指标：15 / 30
     expect(bars[0]!.attributes('style')).toContain('height: 50%')
     expect(bars[1]!.attributes('style')).toContain('height: 100%')

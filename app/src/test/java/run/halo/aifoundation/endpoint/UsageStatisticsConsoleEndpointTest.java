@@ -18,8 +18,8 @@ import run.halo.aifoundation.service.usage.UsageHealth;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
 import run.halo.aifoundation.service.usage.UsageSummary;
 import run.halo.aifoundation.service.usage.UsageQuery;
-import run.halo.aifoundation.service.usage.UsageStatus;
-import run.halo.aifoundation.service.usage.UsageQuality;
+import run.halo.aifoundation.service.observation.UsageStatus;
+import run.halo.aifoundation.service.observation.UsageQuality;
 import run.halo.aifoundation.service.usage.UsageTrendPoint;
 import run.halo.aifoundation.service.usage.UsageTrendResolution;
 import org.mockito.ArgumentCaptor;
@@ -52,7 +52,7 @@ class UsageStatisticsConsoleEndpointTest {
     void acceptsHourlyTrendResolution() {
         when(service.trends(any())).thenReturn(Mono.just(java.util.List.of(
             new UsageTrendPoint(Instant.EPOCH, UsageTrendResolution.HOUR,
-                1, 2L, 3L, 5L, 1, 0, false))));
+                1, 2L, 3L, 5L, 1, 0, 0, false))));
 
         client.get().uri("/usage-statistics/trends?resolution=hour")
             .exchange().expectStatus().isOk().expectBody()
@@ -66,7 +66,7 @@ class UsageStatisticsConsoleEndpointTest {
     @Test
     void returnsSummaryAndCursorPage() {
         var summary = new UsageSummary(0, 0, 0, 0, 0, 0, 0, null, null, null, null, null,
-            null, 0, 0, 1D, true, "MILLISECOND", Instant.EPOCH, Instant.EPOCH.plusSeconds(1));
+            null, 0, 0, 0, 1D, true, 1D, true, "MILLISECOND", Instant.EPOCH, Instant.EPOCH.plusSeconds(1));
         when(service.summary(any())).thenReturn(Mono.just(summary));
         when(service.listCalls(any(), eq(50), eq(null)))
             .thenReturn(Mono.just(new UsageCallPage(java.util.List.of(), null)));
@@ -138,7 +138,7 @@ class UsageStatisticsConsoleEndpointTest {
     @Test
     void acceptsOffsetInstantsAcrossDaylightSavingBoundary() {
         var summary = new UsageSummary(0, 0, 0, 0, 0, 0, 0, null, null, null, null, null,
-            null, 0, 0, 1D, true, "MILLISECOND", Instant.EPOCH, Instant.EPOCH.plusSeconds(1));
+            null, 0, 0, 0, 1D, true, 1D, true, "MILLISECOND", Instant.EPOCH, Instant.EPOCH.plusSeconds(1));
         when(service.summary(any())).thenReturn(Mono.just(summary));
 
         client.get().uri("/usage-statistics/summary?from=2026-03-08T00:00:00-08:00"
@@ -149,7 +149,7 @@ class UsageStatisticsConsoleEndpointTest {
     @Test
     void mapsEveryConfirmedFilterAndDisclosesDegradedDailySummary() {
         var summary = new UsageSummary(2, 0, 1, 1, 0, 0, 0, null, 5L, null, null, 2L,
-            5L, 1, 1, 0.5D, false, "DAY", Instant.parse("2026-01-01T00:00:00Z"),
+            5L, 1, 1, 1, 0D, true, 0.5D, false, "DAY", Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-02T00:00:00Z"));
         when(service.summary(any())).thenReturn(Mono.just(summary));
 

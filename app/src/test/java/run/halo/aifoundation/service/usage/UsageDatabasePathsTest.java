@@ -15,8 +15,6 @@ class UsageDatabasePathsTest {
             .isEqualTo(Path.of("/var/lib/halo/plugins/ai-foundation/ai-foundation.sqlite"));
         assertThat(paths.backupDirectory())
             .isEqualTo(Path.of("/var/lib/halo/plugins/ai-foundation/backups"));
-        assertThat(paths.migrationBackup())
-            .isEqualTo(Path.of("/var/lib/halo/plugins/ai-foundation/backups/"
-                + "ai-foundation.sqlite.pre-migration"));
+
     }
 }

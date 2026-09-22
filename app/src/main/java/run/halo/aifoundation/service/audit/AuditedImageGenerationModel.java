@@ -12,10 +12,10 @@ import run.halo.aifoundation.image.middleware.ImageGenerationMiddlewareAware;
 import run.halo.aifoundation.image.middleware.ImageGenerationMiddlewares;
 import run.halo.aifoundation.model.ModelInfo;
 import run.halo.aifoundation.model.ProviderInfo;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageCallSession;
-import run.halo.aifoundation.service.usage.UsageOperation;
-import run.halo.aifoundation.service.usage.UsageStatisticsService;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageOperation;
+import run.halo.aifoundation.service.observation.UsageObservation;
 
 public class AuditedImageGenerationModel implements ImageGenerationModel,
     ImageGenerationMiddlewareAware {
@@ -25,10 +25,10 @@ public class AuditedImageGenerationModel implements ImageGenerationModel,
     private final ImageGenerationModel delegate;
     private final ModelCallContext context;
     private final CallerPluginAuditRecorder auditRecorder;
-    private final UsageStatisticsService usageStatistics;
+    private final UsageObservation usageStatistics;
 
     public AuditedImageGenerationModel(ImageGenerationModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageStatisticsService usageStatistics) {
+        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
         this.auditRecorder = Objects.requireNonNull(auditRecorder,
@@ -40,8 +40,9 @@ public class AuditedImageGenerationModel implements ImageGenerationModel,
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
         auditRecorder.recordModelInvocation(context, OPERATION);
-        var descriptor = usageStatistics.describeCall(context, OPERATION, false,
-            request.getMetadata());
+        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
+            () -> usageStatistics.describeCall(context, OPERATION, false,
+            request == null ? null : request.getMetadata()), null);
         return UsageCallRecorder.record(usageStatistics, descriptor,
             () -> delegate.generateImage(request), 1, AuditedImageGenerationModel::succeed);
     }

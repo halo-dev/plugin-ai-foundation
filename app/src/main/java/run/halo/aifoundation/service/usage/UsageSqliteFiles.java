@@ -56,24 +56,6 @@ final class UsageSqliteFiles {
         }
     }
 
-    static void migrationBackup(Connection connection, Path target) {
-        var temporary = target.resolveSibling(target.getFileName() + ".tmp");
-        try {
-            Files.createDirectories(target.getParent());
-            Files.deleteIfExists(temporary);
-            vacuumInto(connection, temporary);
-            move(temporary, target, true);
-        } catch (Exception error) {
-            throw new IllegalStateException("Failed to create SQLite migration snapshot", error);
-        } finally {
-            try {
-                Files.deleteIfExists(temporary);
-            } catch (IOException error) {
-                log.warn("Failed to delete SQLite migration temporary file {}", temporary, error);
-            }
-        }
-    }
-
     static Recovery recoverIfRequired(UsageDatabasePaths paths) {
         var live = paths.database();
         var backups = listBackups(paths);

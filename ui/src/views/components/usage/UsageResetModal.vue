@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { reloadUsageQueries } from '@/composables/use-usage-statistics'
 import { aiConsoleApiClient } from '@/api'
+import { reloadUsageQueries } from '@/composables/use-usage-statistics'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, shallowRef, useTemplateRef } from 'vue'
@@ -64,7 +64,7 @@ function onSubmit() {
         type="text"
         aria-label="确认重置"
         placeholder="RESET"
-        class=":uno: h-9 border border-gray-200 rounded-md px-2 text-sm"
+        class=":uno: h-9 border border-gray-200 rounded-md border-solid px-2 text-sm"
         @keyup.enter="onSubmit"
       />
     </div>

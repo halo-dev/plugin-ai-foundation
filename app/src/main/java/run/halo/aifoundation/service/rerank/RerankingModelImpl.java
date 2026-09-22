@@ -21,9 +21,9 @@ import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankWarning;
 import run.halo.aifoundation.rerank.RerankingModel;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
-import run.halo.aifoundation.service.usage.UsageUnitKind;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 public class RerankingModelImpl implements RerankingModel {
 
@@ -80,8 +80,7 @@ public class RerankingModelImpl implements RerankingModel {
                 var warnings = requestWarnings(request);
                 var target = mappedTopN(request, warnings);
                 Supplier<Mono<RerankResponse>> invocation =
-                    () -> withRerankTimeout(client.rerank(request, target,
-                        providerOptions.getNativeOptions()), request);
+                    () -> client.rerank(request, target, providerOptions.getNativeOptions());
                 var call = usageExecutionObserver == null ? invocation.get()
                     : usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
                         response -> NormalizedUsage.from(response.getUsage()),
@@ -90,7 +89,8 @@ public class RerankingModelImpl implements RerankingModel {
                     .map(response -> withRuntimeWarnings(response, warnings))
                     .doOnNext(response -> checkResultIndexes(request, response));
             })
-            .doOnNext(ignored -> checkCancellation(request));
+            .doOnNext(ignored -> checkCancellation(request))
+            .transform(call -> withRerankTimeout(call, request));
     }
 
     private void validateRequest(RerankRequest request) {
@@ -203,6 +203,6 @@ public class RerankingModelImpl implements RerankingModel {
     }
 
     private Duration timeout(RerankRequest request) {
-        return request.getTimeouts() != null ? request.getTimeouts().getTotalTimeout() : null;
+        return request != null && request.getTimeouts() != null ? request.getTimeouts().getTotalTimeout() : null;
     }
 }

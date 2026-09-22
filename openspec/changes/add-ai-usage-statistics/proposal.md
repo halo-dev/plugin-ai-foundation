@@ -4,10 +4,11 @@ AI Foundation currently knows which plugin resolves and invokes a model, but it 
 
 ## What Changes
 
+- Separate provider protocol normalization, runtime observations, and asynchronous statistics storage; observation failures do not fail model calls.
 - Record one logical call for each subscribed language, embedding, reranking, or image-generation SDK invocation.
 - Record underlying model executions for generation steps, batches, and provider retry attempts so token usage is explainable without double counting.
 - Normalize provider-reported token usage while preserving unknown, partial, and estimated quality instead of treating missing values as zero.
-- Persist recent call and execution facts in a plugin-owned SQLite database and maintain rebuildable UTC daily rollups for long-term statistics.
+- Persist recent call and execution facts in a plugin-owned SQLite database and archive expired call facts into UTC daily rollups for long-term statistics.
 - Add super-administrator APIs and Console UI for summaries, trends, filtered cursor-paginated call history, call details, storage health, and explicit statistics reset.
 - Infer the caller plugin from the existing classloader-aware stack inspection, record the audited SDK operation, and optionally accept a validated feature tag from the existing request metadata without changing public request shapes.
 - Bound detail retention and asynchronous persistence so statistics failures remain visible but do not fail model calls.

@@ -13,12 +13,12 @@ import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageCallDescriptor;
-import run.halo.aifoundation.service.usage.UsageCallSession;
-import run.halo.aifoundation.service.usage.UsageOperation;
-import run.halo.aifoundation.service.usage.UsageStatisticsService;
-import run.halo.aifoundation.service.usage.UsageTelemetry;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageOperation;
+import run.halo.aifoundation.service.observation.UsageObservation;
+import run.halo.aifoundation.service.observation.UsageTelemetry;
 import run.halo.aifoundation.schema.OutputType;
 
 public class AuditedLanguageModel implements LanguageModel {
@@ -29,10 +29,10 @@ public class AuditedLanguageModel implements LanguageModel {
     private final LanguageModel delegate;
     private final ModelCallContext context;
     private final CallerPluginAuditRecorder auditRecorder;
-    private final UsageStatisticsService usageStatistics;
+    private final UsageObservation usageStatistics;
 
     public AuditedLanguageModel(LanguageModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageStatisticsService usageStatistics) {
+        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
         this.auditRecorder = Objects.requireNonNull(auditRecorder,
@@ -50,7 +50,7 @@ public class AuditedLanguageModel implements LanguageModel {
     @Override
     public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
         auditRecorder.recordModelInvocation(context, GENERATE_TEXT);
-        return recordMono(GENERATE_TEXT, request.getMetadata(),
+        return recordMono(GENERATE_TEXT, request == null ? null : request.getMetadata(),
             () -> LanguageModelMiddlewares.applyRequestMiddleware(delegate, request));
     }
 
@@ -58,8 +58,9 @@ public class AuditedLanguageModel implements LanguageModel {
     public StreamTextResult streamText(GenerateTextRequest request) {
         auditRecorder.recordModelInvocation(context, STREAM_TEXT);
         var result = LanguageModelMiddlewares.applyRequestStreamMiddleware(delegate, request);
-        var descriptor = usageStatistics.describeCall(context, STREAM_TEXT, true,
-            request.getMetadata());
+        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
+            () -> usageStatistics.describeCall(context, STREAM_TEXT, true,
+            request == null ? null : request.getMetadata()), null);
         var lazy = new LazySession(usageStatistics, descriptor);
         var outputType = request.getOutput() == null ? null : request.getOutput().getType();
         var partialOutput = outputType == OutputType.OBJECT || outputType == OutputType.JSON
@@ -71,7 +72,7 @@ public class AuditedLanguageModel implements LanguageModel {
             recordFlux(result.textStream(), lazy),
             partialOutput,
             elements,
-            recordProjection(result.output(), lazy),
+            outputType == null || outputType == OutputType.TEXT ? result.output() : recordProjection(result.output(), lazy),
             recordResult(result.result(), lazy)
         );
     }
@@ -83,7 +84,8 @@ public class AuditedLanguageModel implements LanguageModel {
 
     private Mono<GenerateTextResult> recordMono(String operation, Map<String, Object> metadata,
         Supplier<Mono<GenerateTextResult>> invocation) {
-        var descriptor = usageStatistics.describeCall(context, operation, false, metadata);
+        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
+            () -> usageStatistics.describeCall(context, operation, false, metadata), null);
         return UsageCallRecorder.record(usageStatistics, descriptor, invocation, 0,
             AuditedLanguageModel::succeed);
     }
@@ -91,7 +93,10 @@ public class AuditedLanguageModel implements LanguageModel {
     private static Mono<GenerateTextResult> recordResult(Mono<GenerateTextResult> source,
         LazySession lazy) {
         return Mono.defer(() -> {
-            var session = lazy.start();
+            var session = UsageTelemetry.safely(lazy::start, null);
+            if (session == null) {
+                return source;
+            }
             return source.doOnSuccess(result ->
                     UsageTelemetry.safely(() -> succeed(session, result)))
                 .doOnError(error -> UsageTelemetry.safely(
@@ -103,7 +108,10 @@ public class AuditedLanguageModel implements LanguageModel {
 
     private static <T> Mono<T> recordProjection(Mono<T> source, LazySession lazy) {
         return Mono.defer(() -> {
-            var session = lazy.start();
+            var session = UsageTelemetry.safely(lazy::start, null);
+            if (session == null) {
+                return source;
+            }
             return source.doOnSuccess(ignored -> UsageTelemetry.safely(
                     () -> succeedProjection(session)))
                 .doOnError(error -> UsageTelemetry.safely(
@@ -115,7 +123,10 @@ public class AuditedLanguageModel implements LanguageModel {
 
     private static <T> Flux<T> recordFlux(Flux<T> source, LazySession lazy) {
         return Flux.defer(() -> {
-            var session = lazy.start();
+            var session = UsageTelemetry.safely(lazy::start, null);
+            if (session == null) {
+                return source;
+            }
             return source.doOnComplete(() -> UsageTelemetry.safely(
                     () -> succeedProjection(session)))
                 .doOnError(error -> UsageTelemetry.safely(
@@ -136,18 +147,16 @@ public class AuditedLanguageModel implements LanguageModel {
     }
 
     private static void succeedProjection(UsageCallSession session) {
-        if (session.hasExecutions()) {
-            session.succeed(NormalizedUsage.missing(), null, 0);
-        }
+        session.succeedProjection();
     }
 
     private static final class LazySession {
-        private final UsageStatisticsService service;
+        private final UsageObservation service;
         private final UsageCallDescriptor descriptor;
         private final AtomicInteger subscribers = new AtomicInteger();
         private UsageCallSession session;
 
-        private LazySession(UsageStatisticsService service, UsageCallDescriptor descriptor) {
+        private LazySession(UsageObservation service, UsageCallDescriptor descriptor) {
             this.service = service;
             this.descriptor = descriptor;
         }

@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -177,21 +177,9 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
         }
     }
 
-    private DefaultUsage usage(JsonNode node) {
-        if (JsonNodes.isAbsent(node)) {
-            return new DefaultUsage(0, 0, 0, null);
-        }
-        var raw = OBJECT_MAPPER.convertValue(node, Object.class);
-        return new DefaultUsage(
-            node.path(Fields.PROMPT_TOKENS).isNumber()
-                ? node.path(Fields.PROMPT_TOKENS).asInt()
-                : 0,
-            0,
-            node.path(Fields.TOTAL_TOKENS).isNumber()
-                ? node.path(Fields.TOTAL_TOKENS).asInt()
-                : 0,
-            raw
-        );
+    private ProviderUsage usage(JsonNode node) {
+        return ProviderUsage.embedding(node, Fields.PROMPT_TOKENS, Fields.TOTAL_TOKENS,
+            JsonNodes.isAbsent(node) ? null : OBJECT_MAPPER.convertValue(node, Object.class));
     }
 
     private String embeddingsUrl(OpenAiCompatibleEmbeddingOptions options) {

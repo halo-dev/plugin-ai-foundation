@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -171,8 +171,7 @@ public final class AiHubMixEmbeddingModel
             var model = hasText(text(root.path("model"))) ? text(root.path("model"))
                 : requestedModel;
             var metadata = new EmbeddingResponseMetadata(model,
-                new DefaultUsage(integer(usage.path("prompt_tokens")), 0,
-                    integer(usage.path("total_tokens")), rawUsage), metadataValues);
+                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), metadataValues);
             return new EmbeddingResponse(values, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse AIHubMix embedding response", e);

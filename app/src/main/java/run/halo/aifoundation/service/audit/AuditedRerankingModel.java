@@ -6,10 +6,10 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankingModel;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageCallSession;
-import run.halo.aifoundation.service.usage.UsageOperation;
-import run.halo.aifoundation.service.usage.UsageStatisticsService;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageOperation;
+import run.halo.aifoundation.service.observation.UsageObservation;
 
 public class AuditedRerankingModel implements RerankingModel {
 
@@ -18,10 +18,10 @@ public class AuditedRerankingModel implements RerankingModel {
     private final RerankingModel delegate;
     private final ModelCallContext context;
     private final CallerPluginAuditRecorder auditRecorder;
-    private final UsageStatisticsService usageStatistics;
+    private final UsageObservation usageStatistics;
 
     public AuditedRerankingModel(RerankingModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageStatisticsService usageStatistics) {
+        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
         this.auditRecorder = Objects.requireNonNull(auditRecorder,
@@ -39,12 +39,13 @@ public class AuditedRerankingModel implements RerankingModel {
     @Override
     public Mono<RerankResponse> rerank(RerankRequest request) {
         auditRecorder.recordModelInvocation(context, OPERATION);
-        return record(request.getMetadata(), () -> delegate.rerank(request));
+        return record(request == null ? null : request.getMetadata(), () -> delegate.rerank(request));
     }
 
     private Mono<RerankResponse> record(java.util.Map<String, Object> metadata,
         java.util.function.Supplier<Mono<RerankResponse>> invocation) {
-        var descriptor = usageStatistics.describeCall(context, OPERATION, false, metadata);
+        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
+            () -> usageStatistics.describeCall(context, OPERATION, false, metadata), null);
         return UsageCallRecorder.record(usageStatistics, descriptor, invocation, 1,
             AuditedRerankingModel::succeed);
     }

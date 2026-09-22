@@ -1,5 +1,12 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageFeature;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
@@ -31,7 +38,8 @@ import run.halo.aifoundation.service.audit.ModelCallContext;
 
 @Slf4j
 @Component
-public class UsageStatisticsService {
+public class UsageStatisticsService implements run.halo.aifoundation.service.observation.UsageObservation,
+    run.halo.aifoundation.service.observation.UsageEventSink {
 
     static final int WRITE_QUEUE_CAPACITY = 8_192;
     static final int MAX_WRITE_ATTEMPTS = 3;
@@ -40,6 +48,11 @@ public class UsageStatisticsService {
     private final CallerPluginResolver callerPluginResolver;
     private final Clock clock;
     private final ThreadPoolExecutor writer;
+    private final ArrayBlockingQueue<PendingWrite> pendingWrites =
+        new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
+    private final AtomicBoolean draining = new AtomicBoolean();
+    private final AtomicBoolean closing = new AtomicBoolean();
+    private final Object admissionLock = new Object();
     private final ScheduledExecutorService maintenance;
     private final Scheduler readerScheduler;
     private final ReentrantReadWriteLock storeAccess = new ReentrantReadWriteLock(true);
@@ -55,6 +68,7 @@ public class UsageStatisticsService {
     private volatile boolean available;
     private volatile boolean accepting;
     private volatile long epoch = 1;
+    private final AtomicBoolean maintenanceQueued = new AtomicBoolean();
 
     @Autowired
     public UsageStatisticsService(UsageStatisticsStore store,
@@ -85,7 +99,7 @@ public class UsageStatisticsService {
             available = true;
             accepting = true;
             maintenance.scheduleWithFixedDelay(this::enqueueMaintenance, 1, 24, TimeUnit.HOURS);
-        } catch (RuntimeException error) {
+        } catch (RuntimeException | LinkageError error) {
             if (hasCause(error, UsageDatabaseIntegrityException.class)) {
                 integrityError.set(safeMessage(error));
             } else {
@@ -93,7 +107,8 @@ public class UsageStatisticsService {
             }
             available = false;
             accepting = false;
-            log.error("AI usage statistics are disabled because initialization failed", error);
+            log.error("AI usage statistics are disabled because initialization failed ({})",
+                error.getClass().getSimpleName());
         }
     }
 
@@ -113,18 +128,18 @@ public class UsageStatisticsService {
             context.modelType().name(), context.modelName(), context.providerName(),
             context.providerType(), context.modelId(), descriptor.streaming());
         var session = new UsageCallSession(this, start, clock);
-        submit(() -> store.startCall(start), start.id(), () -> markIncomplete(session));
+        submit(() -> store.startCall(start), () -> markIncomplete(session));
         return session;
     }
 
-    void recordExecution(UsageCallSession session, UsageExecutionRecord execution) {
-        submit(() -> store.recordExecution(execution), execution.callId(),
+    public void recordExecution(UsageCallSession session, UsageExecutionRecord execution) {
+        submit(() -> store.recordExecution(execution),
             () -> markIncomplete(session));
     }
 
-    void finishCall(UsageCallSession session, UsageCallTerminal terminal) {
+    public void finishCall(UsageCallSession session, UsageCallTerminal terminal) {
         submit(() -> store.finishCall(withCurrentCompleteness(session, terminal)),
-            terminal.callId(), () -> markIncomplete(session));
+            () -> markIncomplete(session));
     }
 
     public Mono<UsageSummary> summary(UsageQuery query) {
@@ -167,7 +182,7 @@ public class UsageStatisticsService {
         return new UsageHealth(available, available && droppedEvents.get() == 0
             && incompleteCalls.get() == 0 && writeFailures.get() == 0
             && migrationError.get() == null && integrityError.get() == null,
-            writer.getQueue().size(), droppedEvents.get(), incompleteCalls.get(),
+            pendingWrites.size(), droppedEvents.get(), incompleteCalls.get(),
             writeFailures.get(), lastWriteErrorAt.get(), affectedSince.get(),
             affectedUntil.get(),
             migrationError.get(), integrityError.get());
@@ -175,24 +190,35 @@ public class UsageStatisticsService {
 
     @PreDestroy
     public void close() {
-        accepting = false;
+        synchronized (admissionLock) {
+            if (!closing.compareAndSet(false, true)) {
+                return;
+            }
+            accepting = false;
+        }
         maintenance.shutdownNow();
         var maintenanceStopped = awaitMaintenanceTermination();
+        // A final task handles a drain that yielded just before shutdown began.
+        // All accepted events were enqueued before admission was closed.
+        writer.execute(this::drainWrites);
         writer.shutdown();
+        var writerStopped = false;
         try {
-            if (!writer.awaitTermination(SHUTDOWN_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-                var discarded = writer.shutdownNow().size();
-                droppedEvents.addAndGet(discarded);
+            writerStopped = writer.awaitTermination(SHUTDOWN_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            if (!writerStopped) {
+                writer.shutdownNow();
+                discardPendingWrites();
                 markAffected();
             }
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            droppedEvents.addAndGet(writer.shutdownNow().size());
+            writer.shutdownNow();
+            discardPendingWrites();
             markAffected();
         }
-        if (!maintenanceStopped) {
+        if (!maintenanceStopped || !writerStopped) {
             available = false;
-            log.warn("Forcing the AI usage store closed to stop in-flight maintenance");
+            log.warn("Forcing the AI usage store closed to interrupt outstanding work");
             store.close();
             awaitMaintenanceTermination();
             readerScheduler.dispose();
@@ -204,8 +230,8 @@ public class UsageStatisticsService {
             locked = lock.tryLock(SHUTDOWN_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
             if (!locked) {
                 available = false;
-                log.warn("AI usage store remained busy during shutdown; maintenance will close "
-                    + "it after finishing");
+                log.warn("Closing the AI usage store to interrupt outstanding readers");
+                store.close();
                 return;
             }
             if (available) {
@@ -216,6 +242,7 @@ public class UsageStatisticsService {
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             available = false;
+            store.close();
         } finally {
             if (locked) {
                 lock.unlock();
@@ -238,42 +265,138 @@ public class UsageStatisticsService {
         }
     }
 
-    private void submit(Runnable action, String callId) {
-        submit(action, callId, () -> { });
+    private void submit(Runnable action, Runnable onPermanentFailure) {
+        synchronized (admissionLock) {
+            if (!accepting || !available
+                || !pendingWrites.offer(new PendingWrite(action, onPermanentFailure))) {
+                droppedEvents.incrementAndGet();
+                markAffected();
+                onPermanentFailure.run();
+                return;
+            }
+            scheduleDrain();
+        }
     }
 
-    private void submit(Runnable action, String callId, Runnable onPermanentFailure) {
-        if (!accepting || !available) {
+    private void discardPendingWrites() {
+        PendingWrite event;
+        while ((event = pendingWrites.poll()) != null) {
             droppedEvents.incrementAndGet();
-            markAffected();
-            onPermanentFailure.run();
+            event.onFailure().run();
+        }
+    }
+
+    private void scheduleDrain() {
+        if (!draining.compareAndSet(false, true)) {
             return;
         }
         try {
-            writer.execute(() -> {
-                RuntimeException failure = null;
-                for (int attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt++) {
-                    try {
-                        action.run();
-                        persistHealthIfDirty();
-                        return;
-                    } catch (RuntimeException error) {
-                        failure = error;
-                        if (attempt < MAX_WRITE_ATTEMPTS) {
-                            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L * attempt));
-                        }
-                    }
-                }
-                recordWriteFailure(failure);
-                onPermanentFailure.run();
-                persistHealthIfDirty();
-                log.warn("Failed to persist AI usage statistics for call {}", callId, failure);
-            });
+            writer.execute(this::drainWrites);
         } catch (RejectedExecutionException error) {
-            droppedEvents.incrementAndGet();
+            draining.set(false);
+            PendingWrite event;
+            while ((event = pendingWrites.poll()) != null) {
+                droppedEvents.incrementAndGet();
+                event.onFailure().run();
+            }
             markAffected();
-            onPermanentFailure.run();
         }
+    }
+
+    private void drainWrites() {
+        try {
+            var batch = new java.util.ArrayList<PendingWrite>(128);
+            // Yield periodically so queued maintenance is not starved by continuous traffic.
+            for (int batches = 0; (batches < 8 || closing.get())
+                && !Thread.currentThread().isInterrupted()
+                && pendingWrites.drainTo(batch, 128) > 0; batches++) {
+                var lock = storeAccess.readLock();
+                lock.lock();
+                try {
+                    var failure = writeBatchWithRetries(batch);
+                    if (failure instanceof LinkageError) {
+                        accepting = false;
+                        available = false;
+                        batch.forEach(event -> failedWrite(event, failure));
+                        discardPendingWrites();
+                    } else if (failure != null && !isStorageFailure(failure) && batch.size() > 1) {
+                        // Isolate a poison event after rolling back the microbatch so later
+                        // terminal events can still persist with complete=false.
+                        for (int index = 0; index < batch.size(); index++) {
+                            var eventFailure = writeBatchWithRetries(List.of(batch.get(index)));
+                            if (eventFailure instanceof LinkageError || isStorageFailure(eventFailure)) {
+                                for (var remaining : batch.subList(index, batch.size())) {
+                                    failedWrite(remaining, eventFailure);
+                                }
+                                if (eventFailure instanceof LinkageError) {
+                                    discardPendingWrites();
+                                }
+                                break;
+                            }
+                            if (eventFailure != null) {
+                                failedWrite(batch.get(index), eventFailure);
+                            }
+                        }
+                    } else if (failure != null) {
+                        batch.forEach(event -> failedWrite(event, failure));
+                    }
+                    if (failure != null) {
+                        log.warn("AI usage batch failed ({})", failure.getClass().getSimpleName());
+                    }
+                    persistHealthIfDirty();
+                } finally {
+                    lock.unlock();
+                }
+                batch.clear();
+            }
+        } finally {
+            draining.set(false);
+            if (!closing.get() && !pendingWrites.isEmpty()) {
+                scheduleDrain();
+            }
+        }
+    }
+
+    private Throwable writeBatchWithRetries(List<PendingWrite> batch) {
+        RuntimeException failure = null;
+        for (int attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt++) {
+            try {
+                store.writeBatch(batch.stream().map(PendingWrite::action).toList());
+                return null;
+            } catch (LinkageError error) {
+                return error;
+            } catch (RuntimeException error) {
+                failure = error;
+                if (attempt < MAX_WRITE_ATTEMPTS) {
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L * attempt));
+                }
+            }
+        }
+        return failure;
+    }
+
+    private void failedWrite(PendingWrite event, Throwable failure) {
+        recordWriteFailure(failure);
+        event.onFailure().run();
+        droppedEvents.incrementAndGet();
+    }
+
+    private static boolean isStorageFailure(Throwable error) {
+        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+            if (error instanceof java.sql.SQLException sql) {
+                // SQLite primary result codes: read-only, busy/locked, I/O, full, cannot open,
+                // corrupt/not-a-database. Retrying each event cannot isolate these failures.
+                var code = sql.getErrorCode() & 0xff;
+                if (code == 5 || code == 6 || code == 8 || code == 10 || code == 11
+                    || code == 13 || code == 14 || code == 26) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private record PendingWrite(Runnable action, Runnable onFailure) {
     }
 
     private void markIncomplete(UsageCallSession session) {
@@ -305,7 +428,7 @@ public class UsageStatisticsService {
         return Mono.fromCallable(() -> {
             lock.lock();
             try {
-                if (!available) {
+                if (!available || closing.get()) {
                     throw new IllegalStateException("AI usage statistics are unavailable");
                 }
                 return query.call();
@@ -322,23 +445,52 @@ public class UsageStatisticsService {
             if (!available) {
                 return;
             }
-            submit(() -> store.rollupAndRetain(clock), "maintenance-rollup");
+            synchronized (admissionLock) {
+                if (closing.get() || !maintenanceQueued.compareAndSet(false, true)) {
+                    return;
+                }
+                writer.execute(this::maintainOneBatch);
+            }
             try {
                 store.backup();
-            } catch (RuntimeException error) {
+            } catch (RuntimeException | LinkageError error) {
                 recordWriteFailure(error);
                 persistHealthIfDirty();
-                log.warn("Failed to back up AI usage statistics", error);
+                log.warn("Failed to back up AI usage statistics");
             }
         } finally {
             lock.unlock();
-            if (!accepting && maintenance.isShutdown()) {
-                store.close();
+        }
+    }
+
+    private void maintainOneBatch() {
+        var more = false;
+        var lock = storeAccess.readLock();
+        lock.lock();
+        try {
+            if (available && !closing.get()) {
+                more = store.rollupAndRetainBatch(clock);
+            }
+        } catch (RuntimeException | LinkageError error) {
+            recordWriteFailure(error);
+        } finally {
+            lock.unlock();
+        }
+        synchronized (admissionLock) {
+            if (more && available && !closing.get()) {
+                // Enqueue behind any pending drain. Never keep the writer for a full retention run.
+                writer.execute(this::maintainOneBatch);
+            } else {
+                maintenanceQueued.set(false);
             }
         }
     }
 
     private void recordWriteFailure(Throwable error) {
+        if (error instanceof LinkageError) {
+            accepting = false;
+            available = false;
+        }
         writeFailures.incrementAndGet();
         lastWriteErrorAt.set(clock.instant());
         markAffected();
@@ -404,9 +556,9 @@ public class UsageStatisticsService {
         }
         try {
             store.writeHealth(healthState());
-        } catch (RuntimeException error) {
+        } catch (RuntimeException | LinkageError error) {
             healthDirty.set(true);
-            log.warn("Failed to persist AI usage statistics health", error);
+            log.warn("Failed to persist AI usage statistics health");
         }
     }
 

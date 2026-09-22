@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 @Component
 public class LanguageModelRuntimeFactory {

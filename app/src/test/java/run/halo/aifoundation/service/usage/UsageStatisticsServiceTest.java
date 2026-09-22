@@ -1,5 +1,10 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.mock;
@@ -38,7 +43,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void snapshotsCallerSynchronouslyAndAcceptsOnlyValidatedFeature() {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         var callerResolver = mock(CallerPluginResolver.class);
         var caller = CallerPluginInfo.builder().detected(true).pluginName("plugin-search")
             .version("1.0.0").detectionSource("stack").build();
@@ -60,7 +65,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void retriesTransientWriterFailureWithoutFailingStatisticsHealth() throws Exception {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         doThrow(new IllegalStateException("database is busy"))
             .doThrow(new IllegalStateException("database is busy"))
@@ -82,9 +87,40 @@ class UsageStatisticsServiceTest {
     }
 
     @Test
+    void storageWideFailureDoesNotRetryEveryEventInTheBatch() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        when(store.currentEpoch()).thenReturn(1L);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            entered.countDown();
+            if (!release.await(3, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Test barrier timed out");
+            }
+            throw new IllegalStateException("Storage unavailable",
+                new java.sql.SQLException("Disk full", "", 13));
+        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+        try {
+            service.beginCall(descriptor());
+            assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
+            for (int i = 0; i < 32; i++) {
+                service.beginCall(descriptor());
+            }
+        } finally {
+            release.countDown();
+        }
+        await(() -> service.health().droppedEvents() == 33);
+        verify(store, times(2 * UsageStatisticsService.MAX_WRITE_ATTEMPTS))
+            .writeBatch(org.mockito.ArgumentMatchers.anyList());
+        assertThat(service.health().incompleteCalls()).isEqualTo(33);
+    }
+
+    @Test
     void reportsQueueSaturationWithoutBlockingModelThread()
         throws Exception {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         var blocked = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -112,7 +148,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void reportsPermanentWriterFailureAfterFiniteRetries() throws Exception {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         doThrow(new IllegalStateException("database is busy"))
             .when(store).startCall(org.mockito.ArgumentMatchers.any());
@@ -130,7 +166,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void permanentExecutionWriteFailureMarksThePersistedCallIncomplete() throws Exception {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         doThrow(new IllegalStateException("database is busy"))
             .when(store).recordExecution(any());
@@ -157,7 +193,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void initializationFailureDisablesOnlyStatisticsAndSurfacesRecoveryHealth() {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         doThrow(new IllegalStateException("corrupt database")).when(store).initialize();
         service = new UsageStatisticsService(store, callerResolver());
 
@@ -170,7 +206,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void restoresPersistedHealthDuringInitialization() {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         var affected = java.time.Instant.parse("2026-08-10T10:00:00Z");
         when(store.readHealth()).thenReturn(new UsageHealthState(3, 2, 1, affected, affected,
@@ -189,7 +225,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void marksOnlyQueriesThatIntersectPersistedAffectedIntervalIncomplete() {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         var since = Instant.parse("2026-08-10T10:00:00Z");
         var until = Instant.parse("2026-08-10T11:00:00Z");
@@ -212,7 +248,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void resetClearsPersistedAndInMemoryRecoveryErrors() {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         when(store.readHealth()).thenReturn(new UsageHealthState(0, 0, 0, null, null, null,
             "migration failed", "recovered from corrupt database"));
@@ -230,7 +266,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void closesStoreWithoutRunningAnUnboundedShutdownBackup() {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         service = new UsageStatisticsService(store, callerResolver());
         service.initialize();
@@ -244,7 +280,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void closesStoreToInterruptMaintenanceThatIgnoresThreadInterruption() throws Exception {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         var backupStarted = new CountDownLatch(1);
         var releaseBackup = new CountDownLatch(1);
@@ -279,7 +315,7 @@ class UsageStatisticsServiceTest {
 
     @Test
     void waitsForAnInFlightResetBeforeClosingTheStore() throws Exception {
-        var store = mock(UsageStatisticsStore.class);
+        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         var resetStarted = new CountDownLatch(1);
         var releaseReset = new CountDownLatch(1);
@@ -302,6 +338,78 @@ class UsageStatisticsServiceTest {
         close.get(2, TimeUnit.SECONDS);
         verify(store).close();
         service = null;
+    }
+
+    @Test
+    void interruptsBlockedWriterBeforeTryingToPersistShutdownHealth(
+        @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var paths = new UsageDatabasePaths(directory);
+        var store = new SqliteUsageStatisticsStore(paths) {
+            @Override
+            public synchronized boolean rollupAndRetainBatch(java.time.Clock clock) {
+                entered.countDown();
+                while (release.getCount() > 0) {
+                    try {
+                        release.await();
+                    } catch (InterruptedException ignored) {
+                        // Model a native operation which does not honor a Java interruption.
+                    }
+                }
+                return false;
+            }
+
+            @Override
+            public void backup() {
+            }
+
+            @Override
+            public void close() {
+                release.countDown();
+                super.close();
+            }
+        };
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+        invokeMaintenance(service);
+        assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+        try {
+            CompletableFuture.runAsync(service::close).get(7, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test
+    void drainsCallsBetweenMaintenanceBatches() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        when(store.currentEpoch()).thenReturn(1L);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var nextBatch = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            entered.countDown();
+            assertThat(release.await(3, TimeUnit.SECONDS)).isTrue();
+            return true;
+        }).doAnswer(invocation -> {
+            verify(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
+            nextBatch.countDown();
+            return false;
+        }).when(store).rollupAndRetainBatch(any());
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+        invokeMaintenance(service);
+        assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+        try {
+            for (int i = 0; i < 100; i++) {
+                service.beginCall(descriptor());
+            }
+        } finally {
+            release.countDown();
+        }
+        assertThat(nextBatch.await(3, TimeUnit.SECONDS)).isTrue();
+        assertThat(service.health().droppedEvents()).isZero();
     }
 
     private static CallerPluginResolver callerResolver() {

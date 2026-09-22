@@ -1,10 +1,11 @@
 import type { UsageCallItem } from '@/api/generated'
-import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import UsageCallTable from '../UsageCallTable.vue'
 
 vi.mock('@halo-dev/components', () => ({
+  VStatusDot: defineComponent({ props: ['text'], template: '<span>{{ text }}</span>' }),
   VLoading: defineComponent({
     template: '<div data-test="loading">loading</div>',
   }),
@@ -17,11 +18,7 @@ vi.mock('@halo-dev/components', () => ({
     emits: ['click'],
     setup(props, { emit, slots }) {
       return () =>
-        h(
-          'button',
-          { disabled: props.disabled, onClick: () => emit('click') },
-          slots.default?.(),
-        )
+        h('button', { disabled: props.disabled, onClick: () => emit('click') }, slots.default?.())
     },
   }),
   VTag: defineComponent({
@@ -34,9 +31,7 @@ const UsageCallExecutionsStub = defineComponent({
   template: '<div data-test="executions">executions:{{ callId }}</div>',
 })
 
-function mountTable(
-  props: Partial<InstanceType<typeof UsageCallTable>['$props']> = {},
-) {
+function mountTable(props: Partial<InstanceType<typeof UsageCallTable>['$props']> = {}) {
   return mount(UsageCallTable, {
     props: { items: [], ...props },
     global: {
@@ -109,7 +104,7 @@ describe('UsageCallTable', () => {
     expect(wrapper.text()).toContain('90 天')
   })
 
-  it('renders all terminal statuses and explicit unknown values', () => {
+  it('renders all terminal statuses and explicit unknown values', async () => {
     const wrapper = mountTable({
       items: [
         call({ id: 'c1', status: 'CANCELLED', usage: undefined }),
@@ -121,6 +116,7 @@ describe('UsageCallTable', () => {
           status: 'FAILED',
           callerPluginName: undefined,
           modelName: undefined,
+          requestModelId: undefined,
           providerName: undefined,
           errorType: 'PROVIDER_ERROR',
           errorCode: 'rate_limit',
@@ -136,7 +132,8 @@ describe('UsageCallTable', () => {
     // 未知调用方/模型/Token 显式展示为未知
     expect(text).toContain('未知调用方')
     expect(text).toContain('未知模型')
-    expect(text).toContain('PROVIDER_ERROR（rate_limit）')
+    await wrapper.findAll('[role="button"]')[4]!.trigger('click')
+    expect(wrapper.text()).toContain('PROVIDER_ERROR（rate_limit）')
     expect((text.match(/未知/g) || []).length).toBeGreaterThanOrEqual(3)
   })
 
@@ -157,20 +154,25 @@ describe('UsageCallTable', () => {
     expect(text).toContain('2 条执行用量缺失')
   })
 
-  it('marks streaming and incomplete calls', () => {
+  it('marks streaming and incomplete calls', async () => {
     const wrapper = mountTable({
       items: [call({ id: 'c1', streaming: true, complete: false })],
     })
+    await wrapper.find('[role="button"]').trigger('click')
     expect(wrapper.text()).toContain('流式')
     expect(wrapper.text()).toContain('不完整')
   })
 
-  it('uses historical snapshots without linking to live resources', () => {
+  it('uses historical snapshots without linking to live resources', async () => {
     const wrapper = mountTable({ items: [call()] })
     const text = wrapper.text()
-    expect(text).toContain('plugin-search（v1.2.0）')
-    expect(text).toContain('gpt-4o-prod · openai-main')
-    expect(text).toContain('gpt-4o → gpt-4o-2026-01-01')
+    expect(text).toContain('plugin-search')
+    await wrapper.find('[role="button"]').trigger('click')
+    expect(wrapper.text()).toContain('调用方版本')
+    expect(wrapper.text()).toContain('1.2.0')
+    expect(wrapper.text()).toContain('gpt-4o-prod')
+    expect(wrapper.text()).toContain('openai-main')
+    expect(wrapper.text()).toContain('gpt-4o → gpt-4o-2026-01-01')
     expect(wrapper.find('a').exists()).toBe(false)
   })
 
@@ -202,4 +204,23 @@ describe('UsageCallTable', () => {
     expect(wrapper.text()).toContain('共 1 条，已加载全部')
     expect(wrapper.text()).not.toContain('加载更多')
   })
+  it('keeps a single detail open and supports keyboard expansion', async () => {
+    const wrapper = mountTable({ items: [call({ id: 'c1' }), call({ id: 'c2' })] })
+    const rows = wrapper.findAll('[role="button"]')
+    await rows[0]!.trigger('keydown', { key: 'Enter' })
+    expect(rows[0]!.attributes('aria-expanded')).toBe('true')
+    await rows[1]!.trigger('keydown', { key: ' ' })
+    expect(rows[0]!.attributes('aria-expanded')).toBe('false')
+    expect(rows[1]!.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('[data-test="executions"]')).toHaveLength(1)
+  })
+  it('prioritizes consumption and keeps technical metadata collapsed', async () => {
+    const wrapper = mountTable({ items: [call()] })
+    await wrapper.get('[role="button"]').trigger('click')
+    expect(wrapper.get('[aria-label="本次消耗"]').text()).toContain('150')
+    expect(wrapper.get('details').attributes('open')).toBeUndefined()
+    expect(wrapper.get('details').text()).toContain('gpt-4o-prod')
+    expect(wrapper.get('[aria-label="本次消耗"]').text()).not.toContain('缓存读取')
+  })
+
 })

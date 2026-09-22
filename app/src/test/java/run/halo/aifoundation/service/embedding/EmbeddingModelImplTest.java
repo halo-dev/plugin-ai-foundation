@@ -38,9 +38,9 @@ import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.embedding.EmbeddingContent;
 import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
-import run.halo.aifoundation.service.usage.UsageUnitKind;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 class EmbeddingModelImplTest {
 

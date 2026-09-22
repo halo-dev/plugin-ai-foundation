@@ -1,29 +1,14 @@
-package run.halo.aifoundation.service.usage;
+package run.halo.aifoundation.service.observation;
 
-import java.time.Duration;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.util.context.Context;
-import reactor.util.context.ContextView;
 
 @Component
 public class UsageExecutionObserver {
-
-    private static final String TIMEOUT_DEADLINE_CONTEXT_KEY =
-        UsageExecutionObserver.class.getName() + ".timeoutDeadline";
-
-    public static Context withTimeoutDeadline(Context context, Duration timeout) {
-        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
-            return context;
-        }
-        return context.put(TIMEOUT_DEADLINE_CONTEXT_KEY,
-            System.nanoTime() + timeout.toNanos());
-    }
 
     public <T> Mono<T> observe(UsageUnitKind kind, int unitIndex, Supplier<Mono<T>> invocation,
         Function<T, NormalizedUsage> usage, Function<T, String> responseModel) {
@@ -32,19 +17,23 @@ public class UsageExecutionObserver {
             if (session == null) {
                 return invocation.get();
             }
-            var scope = session.beginExecution(kind, unitIndex);
+            var scope = UsageTelemetry.safely(() -> session.beginExecution(kind, unitIndex), null);
+            if (scope == null) {
+                return invocation.get();
+            }
             return Mono.defer(invocation)
                 .doOnSuccess(value -> UsageTelemetry.safely(() -> {
                     if (value == null) {
                         scope.succeed(NormalizedUsage.missing(), null);
                         return;
                     }
-                    scope.succeed(usage.apply(value), responseModel.apply(value));
+                    scope.succeed(UsageTelemetry.safely(() -> usage.apply(value), NormalizedUsage.missing()),
+                        UsageTelemetry.safely(() -> responseModel.apply(value), null));
                 }))
                 .doOnError(error -> UsageTelemetry.safely(
                     () -> scope.fail(error, NormalizedUsage.fromFailure(error), null)))
                 .doOnCancel(() -> UsageTelemetry.safely(
-                    () -> cancelOrTimeout(scope, context, NormalizedUsage.missing(), null)));
+                    () -> scope.cancel(NormalizedUsage.missing(), null)));
         });
     }
 
@@ -56,12 +45,19 @@ public class UsageExecutionObserver {
             if (session == null) {
                 return invocation.get();
             }
-            var scope = session.beginExecution(kind, unitIndex);
+            var scope = UsageTelemetry.safely(() -> session.beginExecution(kind, unitIndex), null);
+            if (scope == null) {
+                return invocation.get();
+            }
             var lastUsage = new AtomicReference<>(NormalizedUsage.missing());
             var lastModel = new AtomicReference<String>();
+            var extractionFailed = new java.util.concurrent.atomic.AtomicBoolean();
             return Flux.defer(invocation)
                 .doOnNext(value -> UsageTelemetry.safely(() -> {
-                    var observedUsage = usage.apply(value);
+                    var observedUsage = UsageTelemetry.safely(() -> usage.apply(value), null);
+                    if (observedUsage == null) {
+                        extractionFailed.set(true);
+                    }
                     if (observedUsage != null && observedUsage.quality() != UsageQuality.MISSING) {
                         lastUsage.set(observedUsage);
                     }
@@ -71,22 +67,27 @@ public class UsageExecutionObserver {
                     }
                 }))
                 .doOnComplete(() -> UsageTelemetry.safely(
-                    () -> scope.succeed(lastUsage.get(), lastModel.get())))
-                .doOnError(error -> UsageTelemetry.safely(
-                    () -> scope.fail(error, lastUsage.get(), lastModel.get())))
+                    () -> scope.succeed(observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get())))
+                .doOnError(error -> UsageTelemetry.safely(() -> {
+                    var failureUsage = NormalizedUsage.fromFailure(error);
+                    // An exception can carry the final snapshot even if no finish chunk arrived.
+                    // Prefer it over earlier cumulative snapshots; never add the two.
+                    scope.fail(error, failureUsage.quality() != UsageQuality.MISSING ? failureUsage
+                        : observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get());
+                }))
                 .doOnCancel(() -> UsageTelemetry.safely(() ->
-                    cancelOrTimeout(scope, context, lastUsage.get(), lastModel.get())));
+                    scope.cancel(observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get())));
         });
     }
 
-    private static void cancelOrTimeout(UsageExecutionScope scope, ContextView context,
-        NormalizedUsage usage, String responseModelId) {
-        var deadline = context.getOrDefault(TIMEOUT_DEADLINE_CONTEXT_KEY, Long.MAX_VALUE);
-        if (System.nanoTime() >= deadline) {
-            scope.fail(new TimeoutException("The logical call reached its total timeout"), usage,
-                responseModelId);
-            return;
+    private static NormalizedUsage observedUsage(NormalizedUsage usage, boolean extractionFailed) {
+        if (!extractionFailed || usage.quality() == UsageQuality.MISSING) {
+            return usage;
         }
-        scope.cancel(usage, responseModelId);
+        return new NormalizedUsage(usage.inputTokens(), usage.outputTokens(),
+            usage.cacheReadInputTokens(), usage.cacheCreationInputTokens(),
+            usage.reasoningOutputTokens(), usage.providerTotalTokens(),
+            usage.accountedTotalTokens(), UsageQuality.PARTIAL);
     }
+
 }

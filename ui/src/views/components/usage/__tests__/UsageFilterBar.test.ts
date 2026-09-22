@@ -1,8 +1,17 @@
 import type { UsageFilterState } from '@/composables/use-usage-filters'
-import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import UsageFilterBar from '../UsageFilterBar.vue'
+
+vi.mock('@halo-dev/components', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@halo-dev/components')>()),
+  VDropdown: defineComponent({ template: '<div><slot /><slot name="popper" /></div>' }),
+  VDropdownItem: defineComponent({
+    emits: ['click'],
+    template: '<button @click="$emit(\'click\')"><slot /></button>',
+  }),
+}))
 
 const FilterDropdownStub = defineComponent({
   props: ['modelValue', 'label', 'items'],
@@ -24,18 +33,21 @@ const FilterCleanButtonStub = defineComponent({
   template: '<button data-test="clear" @click="$emit(\'click\')">清除筛选</button>',
 })
 
-function mountBar(
-  props: Partial<InstanceType<typeof UsageFilterBar>['$props']> = {},
-) {
+function mountBar(props: Partial<InstanceType<typeof UsageFilterBar>['$props']> = {}) {
   const state: UsageFilterState = { range: '30d', ...props.state }
   return mount(UsageFilterBar, {
     props: { state, ...props },
     global: {
       stubs: {
-        FilterDropdown: FilterDropdownStub,
+        Dropdown: defineComponent({ template: '<div><slot /><slot name="popper" /></div>' }),
+        VDropdownItem: defineComponent({
+          emits: ['click'],
+          template: '<button @click="$emit(\'click\')"><slot /></button>',
+        }),
+        UsageSelect: FilterDropdownStub,
         FilterCleanButton: FilterCleanButtonStub,
       },
-      directives: { tooltip: () => {} },
+      directives: { tooltip: () => {}, 'close-popper': () => {} },
     },
   })
 }
@@ -49,12 +61,22 @@ describe('UsageFilterBar', () => {
       '调用插件',
       '供应商',
       '模型',
+      '状态',
       '模型类型',
       '操作',
-      '状态',
       '用量质量',
     ])
     expect(wrapper.find('input[aria-label="功能标识"]').exists()).toBe(true)
+  })
+
+  it('lets active advanced filters collapse and reopen', async () => {
+    const wrapper = mountBar({ state: { range: '30d', feature: 'semantic-search' } })
+    const toggle = wrapper.findAll('button').find((button) => button.text() === '更多筛选')!
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
   })
 
   it('emits change patches when a filter value is selected', async () => {
@@ -99,7 +121,10 @@ describe('UsageFilterBar', () => {
     expect(wrapper.emitted('change')).toContainEqual([{ feature: 'semantic-search' }])
     expect(wrapper.text()).not.toContain('当前值不会作为过滤条件')
 
-    const invalid = mountBar({ state: { range: '30d', feature: 'BAD VALUE' }, featureInvalid: true })
+    const invalid = mountBar({
+      state: { range: '30d', feature: 'BAD VALUE' },
+      featureInvalid: true,
+    })
     expect(invalid.text()).toContain('当前值不会作为过滤条件')
   })
 
@@ -116,13 +141,13 @@ describe('UsageFilterBar', () => {
 
   it('shows the clear button only with dimension filters and emits clear', async () => {
     const withoutFilters = mountBar({ hasDimensionFilters: false })
-    expect(withoutFilters.find('[data-test="clear"]').exists()).toBe(false)
+    expect(withoutFilters.find('button[aria-label="清除筛选"]').exists()).toBe(false)
 
     const withFilters = mountBar({
       state: { range: '30d', status: 'FAILED' },
       hasDimensionFilters: true,
     })
-    await withFilters.find('[data-test="clear"]').trigger('click')
+    await withFilters.find('button[aria-label="清除筛选"]').trigger('click')
     expect(withFilters.emitted('clear')).toHaveLength(1)
   })
 })

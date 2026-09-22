@@ -41,9 +41,9 @@ import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
-import run.halo.aifoundation.service.usage.UsageUnitKind;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 public class ImageGenerationModelImpl implements ImageGenerationModel {
 
@@ -507,9 +507,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         }
         return mono.timeout(timeout)
             .onErrorMap(TimeoutException.class,
-                error -> new AiGenerationTimeoutException("image", timeout, error))
-            .contextWrite(context ->
-                UsageExecutionObserver.withTimeoutDeadline(context, timeout));
+                error -> new AiGenerationTimeoutException("image", timeout, error));
     }
 
     private Duration timeout(GenerateImageRequest request) {

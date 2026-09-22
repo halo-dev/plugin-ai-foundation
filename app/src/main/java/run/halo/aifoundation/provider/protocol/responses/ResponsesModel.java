@@ -324,9 +324,8 @@ public class ResponsesModel implements ChatModel, ProviderStreamingChatModel {
         var metadata = ChatResponseMetadata.builder().id(result.id()).model(result.model())
             .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
         if (result.usage() != null) {
-            metadata.usage(new DefaultUsage(result.usage().inputTokens(),
-                result.usage().outputTokens(), result.usage().totalTokens(),
-                result.usage().details()));
+            metadata.usage(run.halo.aifoundation.provider.usage.ProviderUsage.responses(
+                OBJECT_MAPPER.valueToTree(result.usage().details()), result.usage().details()));
         }
         return new ChatResponse(List.of(generation), metadata.build());
     }

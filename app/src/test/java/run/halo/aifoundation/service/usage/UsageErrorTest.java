@@ -1,5 +1,7 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.UsageError;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;

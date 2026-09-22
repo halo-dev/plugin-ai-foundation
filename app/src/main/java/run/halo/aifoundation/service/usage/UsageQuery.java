@@ -1,5 +1,8 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.UsageQuality;
+import run.halo.aifoundation.service.observation.UsageStatus;
+
 import java.time.Instant;
 
 public record UsageQuery(

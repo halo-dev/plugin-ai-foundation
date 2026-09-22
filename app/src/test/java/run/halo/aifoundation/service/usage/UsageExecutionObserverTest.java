@@ -1,5 +1,15 @@
 package run.halo.aifoundation.service.usage;
 
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageQuality;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
+import run.halo.aifoundation.service.observation.UsageStatus;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -22,6 +32,75 @@ import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 
 class UsageExecutionObserverTest {
+
+    @Test
+    void repeatedCumulativeStreamUsageIsRecordedOnce() {
+        var service = mock(UsageStatisticsService.class);
+        var session = session(service);
+        var first = new NormalizedUsage(10L, 1L, null, null, null, null, null, UsageQuality.PARTIAL);
+        var last = new NormalizedUsage(10L, 5L, null, null, null, null, null, null);
+        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
+                () -> Flux.just(first, last, last), value -> value, ignored -> "actual")
+            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        StepVerifier.create(observed).expectNext(first, last, last).verifyComplete();
+        session.succeed(NormalizedUsage.missing(), "actual", 1);
+        var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
+        verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
+        assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(15L);
+        assertThat(terminal.getValue().attemptCount()).isEqualTo(1);
+    }
+
+    @Test
+    void failedStreamUsageSnapshotAndSuccessfulRetryAreEachCountedOnce() {
+        var service = mock(UsageStatisticsService.class);
+        var session = session(service);
+        var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
+            "invalid", null, null, null, null, 0, LanguageModelUsage.builder()
+                .inputTokens(7).outputTokens(3).totalTokens(10).build(), null);
+        var attempts = new AtomicInteger();
+        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
+                () -> attempts.getAndIncrement() == 0 ? Flux.error(failure)
+                    : Flux.just("success"),
+                ignored -> new NormalizedUsage(2L, 3L, null, null, null, null, null, null),
+                ignored -> "actual")
+            .retryWhen(Retry.max(1))
+            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        StepVerifier.create(observed).expectNext("success").verifyComplete();
+        session.succeed(new NormalizedUsage(2L, 3L, null, null, null, null, null, null), "actual", 1);
+        var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
+        verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
+        assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(15L);
+        assertThat(terminal.getValue().attemptCount()).isEqualTo(2);
+    }
+
+    @Test
+    void logicalFailureWithoutObservedExecutionsRetainsReportedUsage() {
+        var service = mock(UsageStatisticsService.class);
+        var session = session(service);
+        var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
+            "invalid", null, null, "private output must not be retained", null, 0,
+            LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(), null);
+        session.fail(failure, NormalizedUsage.missing(), 0);
+        var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
+        verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
+        assertThat(terminal.getValue().status()).isEqualTo(UsageStatus.FAILED);
+        assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(10L);
+        assertThat(terminal.getValue().toString()).doesNotContain("private output");
+    }
+
+    @Test
+    void failureWithOnlyALaterStepsUsageDoesNotClaimCompleteCallCoverage() {
+        var service = mock(UsageStatisticsService.class);
+        var session = session(service);
+        var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
+            "invalid", null, null, null, null, 2,
+            LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(), null);
+        session.fail(failure, NormalizedUsage.missing(), 0);
+        var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
+        verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
+        assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(10L);
+        assertThat(terminal.getValue().usage().quality()).isEqualTo(UsageQuality.PARTIAL);
+    }
 
     @Test
     void recordsFirstAttemptSuccess() {
@@ -176,8 +255,9 @@ class UsageExecutionObserverTest {
     void retainsUsageCarriedByAFailedProviderAttempt() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var failure = new UsageReportingException(LanguageModelUsage.builder()
-            .inputTokens(7).outputTokens(3).totalTokens(10).build());
+        var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
+            "invalid", null, null, null, null, 0, LanguageModelUsage.builder()
+                .inputTokens(7).outputTokens(3).totalTokens(10).build(), null);
         var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
                 () -> Mono.error(failure), ignored -> NormalizedUsage.missing(), ignored -> null)
             .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
@@ -246,25 +326,6 @@ class UsageExecutionObserverTest {
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
         assertThat(terminal.getValue().status()).isEqualTo(UsageStatus.CANCELLED);
-    }
-
-    @Test
-    void totalTimeoutCancellationRecordsTimedOutExecution() {
-        var service = mock(UsageStatisticsService.class);
-        var session = session(service);
-        var timeout = Duration.ofMillis(20);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
-                Mono::<String>never, ignored -> NormalizedUsage.missing(), ignored -> null)
-            .timeout(timeout)
-            .contextWrite(context -> UsageExecutionObserver.withTimeoutDeadline(context, timeout))
-            .onErrorResume(TimeoutException.class, ignored -> Mono.empty())
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
-
-        StepVerifier.create(observed).verifyComplete();
-
-        var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
-        verify(service).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
-        assertThat(execution.getValue().status()).isEqualTo(UsageStatus.TIMED_OUT);
     }
 
     @Test

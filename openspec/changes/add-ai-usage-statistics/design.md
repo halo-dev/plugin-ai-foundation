@@ -1,188 +1,61 @@
-## Context
+# AI 调用统计重设计
 
-AI Foundation wraps all four public model types with audited decorators, but the current recorder only discovers caller plugins in memory at method invocation. The runtime can perform more physical work than the consumer-visible call suggests: language generation can execute multiple model steps, embedding and image requests can split into batches, and provider calls can retry. Streaming also introduces subscription and cancellation semantics that a synchronous method-level recorder cannot represent.
+## 分层
 
-The feature is operational, high-accuracy observability for super administrators, not a billing ledger. It must explain known consumption without double counting, preserve uncertainty, remain safe for sensitive model traffic, and avoid adding blocking JDBC work to reactive model paths. Research and source comparisons are captured in `docs/research/ai-usage-metering-best-practices.md`.
+1. **协议归一化**：`provider.usage.ProviderUsage` 承接 Chat Completions、Responses、Messages 与各 embedding 协议。输入包含缓存读取和创建，输出包含推理。Messages 的输入原值不含缓存，需相加；其余协议的子项不能再次相加。内部使用 nullable Long；缺失、非法、负数及超出范围的值保持未知。公开 SDK 的 Integer 字段与构造器保持不变。
+2. **运行时观察**：`service.observation` 定义调用、执行、终止、用量事实及 `UsageObservation` / `UsageEventSink`。模型运行时只依赖观察契约，不依赖 SQL、查询、保留期或备份。Core 负责步骤、批次、重试和生命周期；适配器负责协议字段含义。
+3. **统计消费**：`UsageStatisticsService` 实现观察接口，将有限的安全事实投递到有界队列；SQLite 写入、重试、聚合、保留、健康和查询全部在独立线程执行。
 
-## Goals / Non-Goals
+这借鉴 Vercel AI SDK 6 的 provider usage → step/total usage → telemetry 分层，但不直接复制其 awaited callback、默认内容采集或缺失步骤的宽松求和。
 
-**Goals:**
+## 调用行为不变
 
-- Count caller-visible logical SDK invocations and explain their model steps, batches, and retry attempts.
-- Provide provider-neutral, coverage-aware token totals across language, embedding, reranking, and image generation.
-- Support current summaries, trends, filtered call history, execution details, and storage health from a local SQLite database.
-- Retain recent detail and long-lived daily aggregates with explicit temporal resolution.
-- Keep model calls available when operational statistics degrade.
-- Validate predictable behavior at 1 million logical calls and 5 million executions.
+- 未订阅不发起调用；无结构化输出时 `output()` 保持空 Mono，不触发底层请求。
+- 共享流各投影共用一次统计会话，文本或 full-stream 单独订阅、缓存中间件短路也能结束会话。
+- 统计描述、开始、执行与提取失败不得替换业务结果或异常。提取失败仍记录执行，标记未知或部分用量。
+- 原有超时作用域保持不变。取消不通过经过的时间猜测超时；逻辑调用确认为超时时，存储把其被取消的子执行归类为超时。
+- 调用结束不等待存储。并行批次取消时，统计会话等待已启动执行的终止事实到齐后发布最终事件；这是内存状态协调，不阻塞调用者。
+- 执行累加为常量空间，避免 CopyOnWriteArrayList 随步骤增长复制全部历史。
 
-**Non-Goals:**
+## 事实与完整性
 
-- Monetary cost, prices, quotas, billing durability, or exact provider invoice reconciliation.
-- Prompt/output/tool tracing, arbitrary metadata indexing, end-user or session analytics.
-- Multi-instance database sharing, CSV export, full-text search, or configurable retention in v1.
+逻辑调用是消费者订阅；执行是实际 provider 尝试（步骤、批次及重试）。两层标识与终止均幂等。执行用量优先，避免父子双计数；没有执行的缓存结果可以采用调用结果的 usage。文本投影先结束时提交未知的临时终态；消费者之后读取最终结果时，使用相同调用标识补全终态，保留首次完成时间。数据库只允许更新尚为 MISSING、无物理执行的流式成功记录，不覆盖已经明确的终态。不为统计额外订阅任何投影。
 
-## Decisions
+三个维度分别表达：
 
-### 1. Separate logical calls from physical executions
+- `complete`：统计事件是否完整送达、是否经历异常中断。
+- `partialUsageCalls`、`missingUsageCalls`、`completeUsageCoverage`：供应商报告是否足以完整解释用量；部分数据仍展示已知分项。
+- `preciseRange`、`resolution`、`dataFrom/dataTo`：查询时间精度和实际覆盖区间。
 
-Use two immutable-identity levels plus a derived aggregate:
+中断流、缺少最终 usage、失败重试、服务进程被杀与磁盘故障均不能凭空恢复供应商用量。本功能是运营统计，不能承诺财务计费的 exactly-once 持久账本。
 
-```text
-ai_call                         caller-visible SDK subscription
-  └─ ai_model_execution         generation step, batch, or rerank unit
-       └─ attempt_index         initial provider call or retry
+## 统一查询口径
 
-ai_usage_daily                 rebuildable UTC aggregate
-```
+汇总、趋势、历史均使用逻辑调用 `startedAt`、最终 `status` 与调用维度。成功重试的失败尝试消耗归入最终成功调用；跨午夜执行归入调用开始日。执行明细保留自身时间与状态，供解释总量使用。
 
-`ai_calls` drives call counts, history, and a denormalized terminal summary. `ai_model_executions` explains physical work and is the preferred token fact when execution usage exists. `ai_usage_daily` is derived and never overrides retained facts.
+90 天调用明细与 30 天执行明细使用 UTC 日期边界。近期数据直接查询原始调用，避免迟到完成等待 rollup。调用明细到期时才事务归档到一个日汇总表，随后删除明细；已归档日期不反复扫描。进行中的调用单独暂缓归档，其他已结束调用独立归档；迟到完成的调用幂等补入日汇总。
 
-Alternative: one flat request-log table, as used by a local proxy. Rejected because one Halo SDK call can contain many provider requests, and a flat table cannot simultaneously give intuitive call history and retry-accurate usage without query-time reconstruction.
+历史部分日期无法精确还原时扩展为 UTC 整天，并返回 `preciseRange=false` 与实际区间。UI 必须展示扩展提示，不能返回零并声称精确。统计查询在同一 SQLite 读事务中取得一致快照。
 
-### 2. Capture caller synchronously and create identity on subscription
+## 存储与性能
 
-The audited decorator snapshots caller-plugin identity while the external plugin classloader is still on the stack. The reactive wrapper uses `defer`/subscription hooks to create a fresh `call_id`, start time, and statistics epoch for each execution. An unconsumed publisher creates no row.
+- 8192 条有界队列，单写线程，最多 128 条事务微批；调用线程只做有限内存操作。
+- 批次失败有限重试；持续失败时隔离单条坏事件，后续终止事件仍能记录 `complete=false`。事件幂等保证重试不重复计数。
+- 有限读线程与连接数、WAL、有限 busy timeout。每次查询只扫描一次调用源；趋势采用整数毫秒分桶，避免逐行日期字符串转换。
+- 读连接最多四个并复用，每次查询提交或回滚后结束事务，再归还连接；失败连接淘汰，关闭同时清理活动和空闲连接，避免保留旧查询快照。
+- 调用表按 UTC 小时、状态、用量质量和完整性建立覆盖筛选维度与计数的聚合索引。汇总顺序扫描分组后分类计数，趋势顺序扫描小时桶再合并为日桶，避免宽行回表与百万行临时排序；时间边界仍以原始毫秒字段筛选。v1 数据库启动时幂等补建索引，其存储和异步写入开销纳入百万调用基准。
+- 队列溢出不阻塞模型调用，记录丢事件数、受影响区间与健康状态。关停关闭事件接收后提交最终排空任务，关闭期间不再受每轮八批公平性上限限制；只有达到等待上限才丢弃并报告剩余事件。存储由服务统一关闭，慢查询先使用 SQLite 原生 interrupt 中断，避免 JDBC close 等待原生语句。重启将遗留进行中调用标为 ABANDONED。
+- 重置以 epoch 隔离旧事件；提交重置前移除可恢复的旧快照，防止清空后恢复旧数据。备份发布与重置串行。
+- 未发布 PR 的多版本迁移与双日汇总表已删除，采用新的单一初始 schema；不迁移试验数据。
 
-Stream projections created from one `StreamTextResult` share a session object containing call identity and an atomic terminal guard. Completion, error, timeout, and Reactor cancellation compete to finalize the call once.
+## 隐私
 
-Alternative: record at method invocation. Rejected because it counts unconsumed publishers and cannot distinguish repeated cold subscriptions.
+队列和数据库只接收明确的计数、状态、资源标识及可选功能标识。禁止 prompt、output、工具参数、headers、任意 metadata、raw usage、错误消息和 provider body。统计核心不反射任意原始对象；错误只存分类，不打印原异常。功能标识必须是非敏感的有限业务名称，不应填用户标识或请求内容。
 
-### 3. Instrument real provider attempt boundaries
+## Console
 
-Logical decorators cannot infer retry or batch facts. Add internal observation hooks around the actual language provider call, embedding batch call, reranking call, and image batch call. Each attempt has a stable identity enforced by:
+中文页面沿用 Halo 组件。解释调用口径、Token 子项、完整覆盖率、事件丢失、历史精度。保留筛选、趋势、分页调用明细及执行子项；空、加载、错误和存储异常分别展示。重置需输入 RESET，刷新全部查询缓存。
 
-```text
-UNIQUE(call_id, unit_kind, unit_index, attempt_index)
-```
+## 验证
 
-The hook records only work that reaches the provider invocation boundary. A configured retry limit is never interpreted as an attempt count. Failed attempts without returned usage remain missing; the system does not guess whether the provider consumed tokens.
-
-### 4. Use inclusive normalized token semantics
-
-Stable nullable columns use 64-bit integers:
-
-```text
-input_tokens
-output_tokens
-cache_read_input_tokens
-cache_creation_input_tokens
-reasoning_output_tokens
-provider_total_tokens
-accounted_total_tokens
-usage_quality
-```
-
-Input includes cache subsets and output includes reasoning. When input and output are both known, `accounted_total_tokens = input + output`; otherwise provider total is the fallback. Quality is one of `REPORTED_COMPONENTS`, `REPORTED_TOTAL`, `PARTIAL`, `ESTIMATED`, or `MISSING`. V1 does not perform local estimation, but the quality vocabulary prevents a future estimate from being confused with provider reports.
-
-The parent call summary is denormalized from the selected authoritative child facts. Queries must choose one authoritative level per metric and interval; they never add parent and child token totals together.
-
-### 5. Keep attribution bounded and historical identity immutable
-
-Persist the detected caller plugin and detection source, audited operation, and an optional feature read from the existing `aifoundation.halo.run/feature` request metadata key. Validate feature as at most 64 lowercase ASCII letters, digits, `.`, `-`, or `_`; invalid values are ignored and reflected in diagnostics. Do not derive feature from class or method names because refactors and shared services make that dimension unstable.
-
-Snapshot `model_name`, `provider_name`, `provider_type`, `request_model_id`, and the provider-reported `response_model_id`. Resource names remain identifiers, while provider type remains a separate descriptive dimension. Historical queries do not require current Extension resources.
-
-### 6. Persist only approved operational metadata
-
-The database excludes prompts, responses, embedding vectors, images and URLs, tools, headers, request context, arbitrary metadata, raw usage objects, and raw error bodies. Errors are reduced to a bounded category and sanitized code. This is a statistics database, not a content-tracing system.
-
-### 7. Use SQLite WAL behind bounded blocking infrastructure
-
-Store the database in a fixed plugin-specific directory derived from the Halo work directory. Resolve and validate the exact path during implementation against `PluginsRootGetter`; do not expose a configurable filesystem path.
-
-Runtime shape:
-
-```text
-terminal/attempt events -> bounded queue -> one serialized writer
-Console requests        -> small read pool -> short read transactions
-                                      SQLite WAL
-```
-
-All JDBC runs on dedicated bounded threads, never Reactor event loops. Connections use a finite busy timeout. Transactions contain only SQL and precomputed values. Reader requests use one short transaction for a consistent response snapshot.
-
-Statistics enqueue and writes are best effort with bounded retries. Overload or permanent failure does not fail the AI operation, but updates in-memory and durable health where possible. An affected call is incomplete rather than silently complete. Queue capacity and timeouts are selected from benchmarks rather than embedded in the product contract.
-
-Alternative: one connection behind a global application lock. Rejected because server-side Console reads should not serialize behind every write and long shared critical sections increase model-path risk.
-
-### 8. Model persistence as idempotent start and terminal commands
-
-At subscription, enqueue a call-start command with all identity snapshots. At terminal signal, enqueue a command that conditionally transitions `IN_PROGRESS` once. The serialized writer normally preserves order; terminal persistence is still an upsert so a retried or delayed start cannot cause terminal loss.
-
-Every command carries `statistics_epoch`. Reset atomically clears facts and aggregates and advances the epoch. Commands from an earlier epoch are discarded. Plugin startup marks prior-runtime `IN_PROGRESS` rows `ABANDONED`.
-
-On shutdown, stop admission, drain for a finite timeout, record remaining loss, checkpoint as appropriate, and close the pool, writer, scheduler, and database. Never wait without a bound.
-
-### 9. Use three storage groups with schema versioning
-
-Conceptual `ai_calls` fields include identity/epoch, caller and model snapshots, operation/model type, start/completion/duration, streaming flag, terminal status, sanitized error, counts, normalized usage summary, missing-execution count, and completeness.
-
-Conceptual `ai_model_executions` fields include call identity, unit kind/index, attempt index, timestamps, status, request/response model, normalized usage, quality, and sanitized error.
-
-`ai_usage_daily` is keyed by UTC date plus caller, feature, provider resource, provider type, model, model type, operation, status, and usage quality. It stores call/status counts, token sums, usage-quality counts, duration aggregates, and completeness indicators.
-
-Additional metadata tables store schema version, statistics epoch, rollup watermark, and health/recovery information. Concrete DDL remains internal and is managed through ordered forward migrations.
-
-### 10. Retain detail with non-overlapping rollups
-
-- Logical calls: 90 days.
-- Execution detail: 30 days.
-- Daily rollups: indefinite in v1.
-
-A rollup job recomputes complete UTC days after a safety delay. Aggregate upsert and eligible source deletion commit in the same transaction. A failed transaction is safe to retry.
-
-Summary planning selects non-overlapping sources. Recent sub-day token trends use execution facts; call counts use call facts. Closed historical days use rollups. While call detail remains but execution detail has expired, call history remains available but token trends outside execution retention disclose day resolution. After call detail expires, list/detail endpoints do not synthesize records.
-
-Every date range is UTC and half-open: `[from, to)`. Console local dates are converted at the API boundary.
-
-### 11. Provide purpose-specific administrator APIs
-
-Expose separate Console operations for summary, trends, cursor-paginated calls, call detail, health, and reset. They accept only documented filters and do not expose SQL or a generic grouping DSL. An opaque list cursor binds the filter fingerprint and last `(started_at, id)` tuple. Default range is 30 days; the server enforces a bounded range appropriate to the selected resolution.
-
-Summary responses include status counts, normalized token totals and subsets, known/missing usage counts, coverage, resolution, authoritative interval, and completeness. Only super administrators can read, inspect health, or reset data.
-
-The Vue Console uses the generated OpenAPI client and Chinese copy. The primary history row is a logical call; its execution children are expandable.
-
-### 12. Treat backup and migration failures as visible degradation
-
-WAL databases are backed up through SQLite Online Backup or an equivalent consistent snapshot, not by copying only the main file. Validated timestamped snapshots live beside the plugin database under `backups/`, retain the newest two, and request a passive checkpoint after publication. Startup may restore the newest valid snapshot only after preserving an invalid live database and its sidecars under `backups/corrupted/`.
-
-Halo 2.25 has no backend extension point that lets a plugin participate atomically in a full-site backup; `backup:tabs:create` extends only the Console UI. The core backup copies the Halo work directory, including the plugin directory, so the plugin-owned validated snapshots are included as ordinary files. Recovery therefore treats those snapshots, rather than an uncoordinated copy of the live WAL database alone, as the portable restore source.
-
-Schema migration first obtains a recoverable snapshot. If migration or integrity validation fails without a validated recovery candidate, preserve or quarantine the original database, disable statistics, and expose health details while model services continue. Never silently replace failed history with an empty healthy database.
-
-### 13. Prove indexes and limits at target scale
-
-Begin with indexes supporting chronological keyset pagination and the confirmed caller/model filters. Add compound or partial indexes only after representative `EXPLAIN QUERY PLAN` and benchmark evidence. Validate at 1 million calls and 5 million executions, reporting database/WAL size, write queue behavior, retention and rollup duration, backup/restore duration, and p95 query latency against the spec thresholds.
-
-## Risks / Trade-offs
-
-- [SQLite is single-host and single-writer] -> Declare single-instance scope, keep writes short, use WAL locally, and revisit the storage engine before supporting HA.
-- [Provider failures may consume unreported tokens] -> Preserve missing/partial quality and coverage; never describe operational totals as billing-exact.
-- [Async telemetry can be lost] -> Bound retries, expose loss intervals and counts, and mark affected summaries incomplete.
-- [Streaming can emit competing terminal signals] -> Share one call session and guard terminal state atomically and in SQL.
-- [Long readers can delay WAL checkpoints] -> Use bounded ranges, cursor pagination, short read transactions, and monitor WAL/checkpoint health.
-- [Daily rollup can double-count raw data] -> Use explicit source intervals, transactional rollup/deletion, and boundary-focused tests.
-- [Feature metadata can become high-cardinality] -> Restrict it to one reserved validated value and omit invalid or absent features.
-- [Large deletes do not immediately shrink the file] -> Measure incremental vacuum/checkpoint policy under realistic churn before enabling maintenance.
-- [SQLite JDBC packaging and plugin reload can leak native/classloader resources] -> Add packaged-JAR and repeated reload tests that assert all threads and connections terminate.
-
-## Migration Plan
-
-1. Add the SQLite dependency, database-path resolver, schema versioning, initial DDL, health state, and lifecycle-managed connection infrastructure behind no Console route.
-2. Add call-session instrumentation and real provider-attempt hooks with focused lifecycle, retry, batch, stream-cancel, and privacy tests.
-3. Add repositories, retention, rollups, reset epoch, consistent backup integration, and recovery tests.
-4. Add administrator endpoints and regenerate the TypeScript API client.
-5. Add the Chinese Console statistics view and API/component tests.
-6. Run target-scale benchmarks, tune measured indexes and bounds, and record the reference environment and results.
-7. Exercise plugin reload, abrupt-stop recovery, migration failure, backup/restore, corruption handling, and data-loss health reporting before enabling the route by default.
-
-Rollback disables statistics endpoints and event admission before reverting application code. Existing database files are retained rather than downgraded or deleted automatically.
-
-## Open Questions
-
-There are no unresolved product decisions. Implementation must validate these technical facts before declaring the change complete:
-
-- Whether a future Halo release adds a backend backup hook that can request a fresh plugin snapshot before packaging the work directory.
-- The stream-result ownership mechanism needed to share one call session across every projection.
-- The complete set of provider-attempt interception points and which failed paths can return usage.
-- Queue capacity, busy timeout, read-pool size, checkpoint cadence, and any incremental-vacuum policy from benchmark evidence.
+后端覆盖正常/失败/取消/超时/重试/批次/缓存/投影/提取失败/部分数据/数据库故障/重置恢复/归档边界。另有真实 SQLite 混合读写测试、1M 调用 / 5M 执行基准，以及 Chrome 本地模拟供应商验收。测试不需要真实供应商凭据或付费调用。

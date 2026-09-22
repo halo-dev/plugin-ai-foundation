@@ -64,6 +64,12 @@ export interface UsageSummary {
     'complete'?: boolean;
     /**
      * 
+     * @type {number}
+     * @memberof UsageSummary
+     */
+    'completeUsageCoverage'?: number;
+    /**
+     * 
      * @type {string}
      * @memberof UsageSummary
      */
@@ -110,6 +116,18 @@ export interface UsageSummary {
      * @memberof UsageSummary
      */
     'outputTokens'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof UsageSummary
+     */
+    'partialUsageCalls'?: number;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof UsageSummary
+     */
+    'preciseRange'?: boolean;
     /**
      * 
      * @type {number}

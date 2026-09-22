@@ -3,7 +3,7 @@ package run.halo.aifoundation.service.embedding;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 import run.halo.aifoundation.embedding.EmbeddingModel;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 @Component
 public class EmbeddingModelRuntimeFactory {

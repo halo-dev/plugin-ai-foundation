@@ -78,7 +78,9 @@ public final class LanguageModelResponseMapper {
         return LanguageModelUsage.builder()
             .inputTokens(input)
             .outputTokens(output)
-            .reasoningTokens(reasoningTokens(usage.getNativeUsage()))
+            .reasoningTokens(usage instanceof run.halo.aifoundation.provider.usage.ProviderUsage typed
+                && typed.reasoningTokens() != null && typed.reasoningTokens() <= Integer.MAX_VALUE
+                ? typed.reasoningTokens().intValue() : reasoningTokens(usage.getNativeUsage()))
             .totalTokens(total)
             .raw(usage.getNativeUsage())
             .build();

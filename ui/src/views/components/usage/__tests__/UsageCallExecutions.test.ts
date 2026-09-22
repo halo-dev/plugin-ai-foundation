@@ -1,7 +1,7 @@
 import type { UsageCallDetail, UsageExecutionRecord } from '@/api/generated'
 import { useUsageCallDetail } from '@/composables/use-usage-statistics'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
 import UsageCallExecutions from '../UsageCallExecutions.vue'
 
@@ -13,6 +13,7 @@ vi.mock('@halo-dev/components', () => ({
   VLoading: defineComponent({
     template: '<div data-test="loading">loading</div>',
   }),
+  VButton: defineComponent({ template: '<button><slot /></button>' }),
   VTag: defineComponent({
     template: '<span><slot /></span>',
   }),
@@ -24,11 +25,7 @@ beforeEach(() => {
   useUsageCallDetailMock.mockClear()
 })
 
-function mockDetail(result: {
-  data?: UsageCallDetail
-  isLoading?: boolean
-  isError?: boolean
-}) {
+function mockDetail(result: { data?: UsageCallDetail; isLoading?: boolean; isError?: boolean }) {
   useUsageCallDetailMock.mockReturnValue({
     data: ref(result.data),
     isLoading: ref(result.isLoading ?? false),
@@ -99,7 +96,7 @@ describe('UsageCallExecutions', () => {
     const wrapper = mountExecutions()
     const text = wrapper.text()
     expect(text).toContain('嵌入批次')
-    expect(text).toContain('#1')
+    expect(text).toContain('#2')
     expect(text).toContain('成功')
     expect(text).toContain('失败')
     expect(text).toContain('部分用量')
@@ -113,4 +110,14 @@ describe('UsageCallExecutions', () => {
     mountExecutions()
     expect(useUsageCallDetailMock).toHaveBeenCalledOnce()
   })
+  it('distinguishes a first request from a retry and labels token dimensions', () => {
+    mockDetail({ data: { executions: [execution(), execution({id: 'retry', attemptIndex: 1})] } })
+    const wrapper = mountExecutions()
+    expect(wrapper.text()).toContain('首次请求')
+    expect(wrapper.text()).toContain('第 1 次重试')
+    expect(wrapper.text()).toContain('输入 Token')
+    expect(wrapper.text()).toContain('输出 Token')
+    expect(wrapper.text()).toContain('合计 Token')
+  })
+
 })

@@ -1,6 +1,6 @@
 import { aiConsoleApiClient } from '@/api'
-import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref, type PropType } from 'vue'
 import UsageResetModal from '../UsageResetModal.vue'
 
@@ -98,9 +98,9 @@ describe('UsageResetModal', () => {
   })
 
   it('resets statistics and invalidates usage queries after typing RESET', async () => {
-    vi
-      .mocked(aiConsoleApiClient.usageStatistics.resetAiUsageStatistics)
-      .mockResolvedValue({ data: { epoch: 2 } } as never)
+    vi.mocked(aiConsoleApiClient.usageStatistics.resetAiUsageStatistics).mockResolvedValue({
+      data: { epoch: 2 },
+    } as never)
 
     const wrapper = mountModal()
     await wrapper.find('input').setValue('RESET')

@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -117,9 +117,7 @@ public final class ZhiPuEmbeddingModel
             var model = root.path("model").isTextual()
                 ? root.path("model").asText() : requestedModel;
             var metadata = new EmbeddingResponseMetadata(model,
-                new DefaultUsage(integer(usage.path("prompt_tokens")),
-                    integer(usage.path("completion_tokens")),
-                    integer(usage.path("total_tokens")), rawUsage), Map.of());
+                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), Map.of());
             return new EmbeddingResponse(embeddings, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse Zhipu embedding response", e);

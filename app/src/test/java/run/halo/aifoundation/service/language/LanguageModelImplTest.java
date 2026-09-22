@@ -89,10 +89,10 @@ import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.language.stream.StreamProtocolNormalizer;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import run.halo.aifoundation.service.usage.NormalizedUsage;
-import run.halo.aifoundation.service.usage.UsageCallSession;
-import run.halo.aifoundation.service.usage.UsageExecutionObserver;
-import run.halo.aifoundation.service.usage.UsageUnitKind;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 class LanguageModelImplTest {
 
@@ -111,7 +111,7 @@ class LanguageModelImplTest {
     }
 
     @Test
-    void nonStructuredOutputProjectionDrivesTheSharedStreamBeforeCompletingEmpty() {
+    void nonStructuredOutputProjectionDoesNotInvokeProvider() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class)))
             .thenReturn(Flux.just(chatResponse("Done", "stop", 1, 1)));
@@ -121,7 +121,7 @@ class LanguageModelImplTest {
                 GenerateTextRequest.builder().prompt("Hello").build()).output())
             .verifyComplete();
 
-        verify(chatModel).stream(any(Prompt.class));
+        org.mockito.Mockito.verifyNoInteractions(chatModel);
     }
 
     @Test

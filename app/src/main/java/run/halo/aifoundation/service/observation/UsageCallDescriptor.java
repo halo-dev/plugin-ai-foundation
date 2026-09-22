@@ -1,4 +1,4 @@
-package run.halo.aifoundation.service.usage;
+package run.halo.aifoundation.service.observation;
 
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.ModelCallContext;
