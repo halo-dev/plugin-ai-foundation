@@ -17,9 +17,9 @@ AI Foundation registers the FormKit input type `aiModelSelector`. Its saved valu
 
 `modelType` accepts `language`, `embedding`, `rerank`, or `image-generation`.
 
-## Capability filters
+## Capability requirements
 
-Common feature filter:
+Common feature requirements:
 
 ```yaml
 - $formkit: aiModelSelector
@@ -31,6 +31,10 @@ Common feature filter:
 
 Other feature values include `streaming`, `vision`, `audio-input`, `structured-output`, and
 `reasoning`.
+
+`requiredFeatures` declares requirements rather than filtering: models missing the required
+features are still listed and selectable, with a warning hint on the option. Use
+`requiredCapabilities` when a hard filter is needed.
 
 Fine-grained language capability:
 
@@ -74,7 +78,7 @@ values do not count as support.
 | `providerType`         | Filter by provider type.                     |
 | `enabled`              | Filter by model enabled state.               |
 | `available`            | Show only usable models; defaults to `true`. |
-| `requiredFeatures`     | Require all common feature flags.            |
+| `requiredFeatures`     | Declare common feature requirements; non-matching models stay selectable with a warning. |
 | `requiredCapabilities` | Require all fine-grained capability fields.  |
 | `placeholder`          | Empty selection text.                        |
 | `searchPlaceholder`    | Search field placeholder.                    |

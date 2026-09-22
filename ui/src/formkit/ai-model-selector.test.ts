@@ -1,6 +1,7 @@
 import { ModelOptionFeaturesEnum, type ModelOption } from '@/api/generated'
 import { describe, expect, it } from 'vitest'
 import {
+  missingRequiredFeatureLabels,
   modelCapabilityLabels,
   modelDetailLabels,
   modelOptionDisplayName,
@@ -68,6 +69,19 @@ describe('ai model selector helpers', () => {
 
   it('labels capability mismatch as unavailable reason', () => {
     expect(modelOptionUnavailableReasonLabel('capability-unsupported')).toBe('能力不满足')
+  })
+
+  it('lists labels of required features the model does not provide', () => {
+    const visionOnly = model({ name: 'vision', features: [ModelOptionFeaturesEnum.Vision] })
+
+    expect(
+      missingRequiredFeatureLabels(visionOnly, [
+        ModelOptionFeaturesEnum.Vision,
+        ModelOptionFeaturesEnum.ToolCall,
+      ]),
+    ).toEqual(['工具调用'])
+    expect(missingRequiredFeatureLabels(visionOnly, [ModelOptionFeaturesEnum.Vision])).toEqual([])
+    expect(missingRequiredFeatureLabels(visionOnly, undefined)).toEqual([])
   })
 })
 

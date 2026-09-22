@@ -1087,15 +1087,17 @@ formSchema:
 | `providerType`         | 筛选指定供应方类型                                           |
 | `enabled`              | 按 `AiModel.spec.enabled` 筛选                               |
 | `available`            | 只显示可用模型，默认 `true`                                  |
-| `requiredFeatures`     | 只显示具备指定粗能力的模型                                   |
+| `requiredFeatures`     | 声明粗能力要求；不满足的模型显示警告但仍可选中             |
 | `requiredCapabilities` | 只显示满足细粒度能力要求的模型                               |
 | `placeholder`          | 未选择模型时的占位文本                                       |
 | `searchPlaceholder`    | 搜索框的占位文本                                             |
 | `clearable`            | 是否允许清空                                                 |
 | `fullWidth`            | 是否占满容器宽度                                             |
 
-`requiredFeatures` 适合筛选流式、图片识别、音频识别、工具调用等常用粗能力；`requiredCapabilities`
-适合在确实需要时筛选媒体输入来源、媒体类型、图生图、单次生成数量等细粒度能力。没有匹配模型通常表示供应方未配置、模型被禁用，或模型能力不满足筛选条件。
+`requiredFeatures` 适合声明流式、图片识别、音频识别、工具调用等常用粗能力要求（不满足的模型
+仍会列出，仅在选项上显示警告）；`requiredCapabilities`
+适合在确实需要时硬性筛选媒体输入来源、媒体类型、图生图、单次生成数量等细粒度能力。
+`requiredCapabilities` 没有匹配模型通常表示供应方未配置、模型被禁用，或模型能力不满足筛选条件。
 
 `requiredCapabilities` 支持两个顶层域：`language` 和 `imageGeneration`。所有填写的条件都是
 “全部满足”关系；未知能力不会被当作支持。

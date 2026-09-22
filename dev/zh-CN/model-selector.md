@@ -43,7 +43,7 @@ formSchema:
 
 `modelType` 支持 `language`、`embedding`、`rerank` 和 `image-generation`。
 
-## 按常用能力筛选
+## 按常用能力提醒
 
 图片理解：
 
@@ -67,8 +67,9 @@ formSchema:
       - audio-input
 ```
 
-`requiredFeatures` 适合筛选流式、图片输入、音频输入、工具等常用粗粒度能力。没有匹配结果通常
-表示模型未配置、已禁用或没有声明所需能力。
+`requiredFeatures` 适合声明流式、图片输入、音频输入、工具等常用粗粒度能力要求。不满足要求的
+模型仍会列出并可选中，仅在选项上显示警告提示（如"当前模型不支持工具调用，可能无法正常使用"）。
+如需硬性过滤，请使用 `requiredCapabilities`。
 
 ## 细粒度语言能力
 
@@ -143,7 +144,7 @@ AI Foundation 不会替模型下载 URL。要求 `url` 时，模型必须声明�
 | `providerType`         | 按 Provider 类型筛选                         |
 | `enabled`              | 按模型启用状态筛选                           |
 | `available`            | 只显示可用模型，默认 `true`                  |
-| `requiredFeatures`     | 按常用粗粒度能力全部匹配                     |
+| `requiredFeatures`     | 声明常用粗粒度能力要求，不满足的模型显示警告但仍可选中 |
 | `requiredCapabilities` | 按细粒度 capability 全部匹配                 |
 | `placeholder`          | 未选择时的占位文本                           |
 | `searchPlaceholder`    | 搜索框占位文本                               |

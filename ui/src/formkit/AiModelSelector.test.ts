@@ -1,8 +1,10 @@
 import type { ModelOption } from '@/api/generated'
 import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
+import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
+import { createMemoryHistory, createRouter, RouterLink } from 'vue-router'
 import AiModelSelector from './AiModelSelector.vue'
 
 vi.mock('@/composables/use-model-options-fetch', () => ({
@@ -35,6 +37,7 @@ describe('AiModelSelector', () => {
         providerName: 'openai',
         providerDisplayName: 'OpenAI Production',
         providerTypeDisplayName: 'OpenAI',
+        features: ['tool-call'],
       }),
       modelOption({
         name: 'disabled-model',
@@ -141,11 +144,56 @@ describe('AiModelSelector', () => {
     await wrapper.setProps({ modelValue: undefined })
     expect(wrapper.get('[role="combobox"]').text()).toContain('请选择模型')
   })
+
+  it('keeps models missing required features selectable with a warning', async () => {
+    const wrapper = mountSelector({ requiredFeatures: 'tool-call' })
+
+    expect(vi.mocked(useModelOptionsFetch).mock.calls[0]?.[0]).not.toHaveProperty(
+      'requiredFeatures',
+    )
+
+    await openSelector(wrapper)
+
+    expect(getOptions()).toHaveLength(3)
+    expect(getOption('DeepSeek Chat').textContent).toContain(
+      '当前模型不支持工具调用，可能无法正常使用',
+    )
+    expect(getOption('GPT-4o').textContent).not.toContain('当前模型不支持')
+    expect(getOption('Disabled Model').textContent).not.toContain('当前模型不支持')
+
+    await selectOption('DeepSeek Chat')
+
+    expect(wrapper.emitted('update:modelValue')).toContainEqual(['deepseek-chat'])
+  })
+
+  it('links to the model management page from the dropdown footer', async () => {
+    const wrapper = mountSelector()
+
+    await openSelector(wrapper)
+    const link = wrapper.findComponent(RouterLink)
+
+    expect(link.exists()).toBe(true)
+    expect(link.props('to')).toEqual({ name: AI_FOUNDATION_ROUTE_NAMES.MODELS })
+    expect(link.text()).toContain('管理模型')
+  })
 })
 
 function mountSelector(props: Record<string, unknown> = {}) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: '/ai-foundation/models',
+        name: AI_FOUNDATION_ROUTE_NAMES.MODELS,
+        component: { template: '<div />' },
+      },
+    ],
+  })
   const wrapper = mount(AiModelSelector, {
     attachTo: document.body,
+    global: {
+      plugins: [router],
+    },
     props: {
       ...props,
       'onUpdate:modelValue': (value: string | undefined) => {
@@ -225,6 +273,7 @@ function modelOption({
   providerDisplayName,
   providerTypeDisplayName,
   available = true,
+  features,
   unavailableReason,
 }: {
   name: string
@@ -234,6 +283,7 @@ function modelOption({
   providerDisplayName: string
   providerTypeDisplayName: string
   available?: boolean
+  features?: ModelOption['features']
   unavailableReason?: ModelOption['unavailableReason']
 }): ModelOption {
   return {
@@ -241,7 +291,7 @@ function modelOption({
     displayName,
     modelId,
     modelType: 'language',
-    features: [],
+    features: features ?? [],
     available,
     unavailableReason,
     provider: {
