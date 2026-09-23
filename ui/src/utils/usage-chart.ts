@@ -16,10 +16,18 @@ export function chartDomain(points: UsageTrendPoint[], from?: string, to?: strin
   const last = buckets.length
     ? Math.max(...buckets.map((point) => point.start + point.step))
     : first + step
-  const start =
-    from && Number.isFinite(Date.parse(from)) ? Math.min(Date.parse(from), first) : first
-  const end = to && Number.isFinite(Date.parse(to)) ? Math.max(Date.parse(to), last) : last
+  const requestedStart = parseBoundary(from, first)
+  const requestedEnd = parseBoundary(to, last)
+  const start = Math.min(requestedStart, first)
+  const end = Math.max(requestedEnd, last)
   return { start, end: Math.max(start + step, end), step }
+}
+
+function parseBoundary(value: string | undefined, fallback: number) {
+  if (!value) return fallback
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) return fallback
+  return timestamp
 }
 
 export function chartCeiling(value: number) {

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -124,6 +125,29 @@ class UsageObservationRegressionTest {
             .contextWrite(ctx -> ctx.put(UsageCallSession.REACTOR_CONTEXT_KEY,session));
         assertThat(observed.block()).isEqualTo("ok");
         verify(service).recordExecution(eq(session),any());
+    }
+
+    @Test
+    void cancellingAuditedCallIncludesUpstreamExecutionEvidence() {
+        var statistics = mock(UsageStatisticsService.class);
+        var session = new UsageCallSession(statistics, start(), Clock.systemUTC());
+        var descriptor = mock(UsageCallDescriptor.class);
+        when(statistics.describeCall(any(), anyString(), anyBoolean(), any())).thenReturn(descriptor);
+        when(statistics.beginCall(descriptor)).thenReturn(session);
+        var delegate = mock(LanguageModel.class);
+        var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
+            Mono::<GenerateTextResult>never, ignored -> NormalizedUsage.missing(), ignored -> null);
+        when(delegate.generateText("test")).thenReturn(observed);
+        var context = new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt");
+        var model = new AuditedLanguageModel(delegate, context,
+            mock(CallerPluginAuditRecorder.class), statistics);
+        var subscription = model.generateText("test").subscribe();
+        subscription.dispose();
+        var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
+        verify(statistics).finishCall(eq(session), terminal.capture());
+        assertThat(terminal.getValue().status()).isEqualTo(UsageStatus.CANCELLED);
+        assertThat(terminal.getValue().attemptCount()).isEqualTo(1);
+        assertThat(terminal.getValue().missingExecutionCount()).isEqualTo(1);
     }
 
     @Test

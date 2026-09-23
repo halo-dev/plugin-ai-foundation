@@ -15,19 +15,19 @@ const open = ref(false)
 const selected = computed(() => props.items.find((item) => item.value === props.modelValue))
 const filtered = computed(() => {
   const query = keyword.value.trim().toLocaleLowerCase()
-  return props.items.filter(
-    (item) =>
-      !query ||
-      `${item.label} ${item.description || ''} ${item.value || ''}`
-        .toLocaleLowerCase()
-        .includes(query),
+  if (!query) return props.items
+  return props.items.filter((item) =>
+    `${item.label} ${item.description || ''} ${item.value || ''}`
+      .toLocaleLowerCase()
+      .includes(query),
   )
 })
 const customValue = computed(() => {
   const value = keyword.value.trim()
-  return props.allowCustom && value && !props.items.some((item) => item.value === value)
-    ? value
-    : undefined
+  if (!props.allowCustom) return undefined
+  if (!value) return undefined
+  if (props.items.some((item) => item.value === value)) return undefined
+  return value
 })
 function closeMenu() {
   keyword.value = ''
@@ -37,11 +37,19 @@ function moveFocus(event: KeyboardEvent) {
   const container = event.currentTarget as HTMLElement
   const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-option]'))
   const index = buttons.indexOf(event.target as HTMLButtonElement)
-  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    event.preventDefault()
-    const next = event.key === 'ArrowDown' ? index + 1 : index < 0 ? buttons.length - 1 : index - 1
-    buttons[(next + buttons.length) % buttons.length]?.focus()
+  let next: number
+  switch (event.key) {
+    case 'ArrowDown':
+      next = index + 1
+      break
+    case 'ArrowUp':
+      next = index < 0 ? buttons.length - 1 : index - 1
+      break
+    default:
+      return
   }
+  event.preventDefault()
+  buttons[(next + buttons.length) % buttons.length]?.focus()
 }
 </script>
 

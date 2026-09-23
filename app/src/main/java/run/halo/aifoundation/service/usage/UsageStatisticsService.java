@@ -1,40 +1,40 @@
 package run.halo.aifoundation.service.usage;
 
-import run.halo.aifoundation.service.observation.UsageCallDescriptor;
-import run.halo.aifoundation.service.observation.UsageCallStart;
-import run.halo.aifoundation.service.observation.UsageCallTerminal;
-import run.halo.aifoundation.service.observation.UsageExecutionRecord;
-import run.halo.aifoundation.service.observation.UsageCallSession;
-import run.halo.aifoundation.service.observation.UsageFeature;
-
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import run.halo.aifoundation.service.audit.CallerPluginResolver;
 import run.halo.aifoundation.service.audit.ModelCallContext;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
+import run.halo.aifoundation.service.observation.UsageFeature;
 
 @Slf4j
 @Component
@@ -179,13 +179,30 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
     }
 
     public UsageHealth health() {
-        return new UsageHealth(available, available && droppedEvents.get() == 0
-            && incompleteCalls.get() == 0 && writeFailures.get() == 0
-            && migrationError.get() == null && integrityError.get() == null,
+        return new UsageHealth(available, hasCompleteHistory(),
             pendingWrites.size(), droppedEvents.get(), incompleteCalls.get(),
             writeFailures.get(), lastWriteErrorAt.get(), affectedSince.get(),
             affectedUntil.get(),
             migrationError.get(), integrityError.get());
+    }
+
+    private boolean hasCompleteHistory() {
+        if (!available) {
+            return false;
+        }
+        if (droppedEvents.get() != 0) {
+            return false;
+        }
+        if (incompleteCalls.get() != 0) {
+            return false;
+        }
+        if (writeFailures.get() != 0) {
+            return false;
+        }
+        if (migrationError.get() != null) {
+            return false;
+        }
+        return integrityError.get() == null;
     }
 
     @PreDestroy
@@ -216,12 +233,12 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
             discardPendingWrites();
             markAffected();
         }
-        if (!maintenanceStopped || !writerStopped) {
-            available = false;
-            log.warn("Forcing the AI usage store closed to interrupt outstanding work");
-            store.close();
-            awaitMaintenanceTermination();
-            readerScheduler.dispose();
+        if (!maintenanceStopped) {
+            forceCloseStore();
+            return;
+        }
+        if (!writerStopped) {
+            forceCloseStore();
             return;
         }
         var lock = storeAccess.writeLock();
@@ -251,6 +268,14 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         }
     }
 
+    private void forceCloseStore() {
+        available = false;
+        log.warn("Forcing the AI usage store closed to interrupt outstanding work");
+        store.close();
+        awaitMaintenanceTermination();
+        readerScheduler.dispose();
+    }
+
     private boolean awaitMaintenanceTermination() {
         try {
             if (!maintenance.awaitTermination(SHUTDOWN_TIMEOUT.toMillis(),
@@ -267,8 +292,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
 
     private void submit(Runnable action, Runnable onPermanentFailure) {
         synchronized (admissionLock) {
-            if (!accepting || !available
-                || !pendingWrites.offer(new PendingWrite(action, onPermanentFailure))) {
+            if (!enqueueWrite(new PendingWrite(action, onPermanentFailure))) {
                 droppedEvents.incrementAndGet();
                 markAffected();
                 onPermanentFailure.run();
@@ -276,6 +300,16 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
             }
             scheduleDrain();
         }
+    }
+
+    private boolean enqueueWrite(PendingWrite event) {
+        if (!accepting) {
+            return false;
+        }
+        if (!available) {
+            return false;
+        }
+        return pendingWrites.offer(event);
     }
 
     private void discardPendingWrites() {
@@ -307,39 +341,18 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         try {
             var batch = new java.util.ArrayList<PendingWrite>(128);
             // Yield periodically so queued maintenance is not starved by continuous traffic.
-            for (int batches = 0; (batches < 8 || closing.get())
-                && !Thread.currentThread().isInterrupted()
-                && pendingWrites.drainTo(batch, 128) > 0; batches++) {
+            for (int batches = 0; !Thread.currentThread().isInterrupted(); batches++) {
+                if (shouldYieldWriter(batches)) {
+                    break;
+                }
+                if (pendingWrites.drainTo(batch, 128) == 0) {
+                    break;
+                }
                 var lock = storeAccess.readLock();
                 lock.lock();
                 try {
                     var failure = writeBatchWithRetries(batch);
-                    if (failure instanceof LinkageError) {
-                        accepting = false;
-                        available = false;
-                        batch.forEach(event -> failedWrite(event, failure));
-                        discardPendingWrites();
-                    } else if (failure != null && !isStorageFailure(failure) && batch.size() > 1) {
-                        // Isolate a poison event after rolling back the microbatch so later
-                        // terminal events can still persist with complete=false.
-                        for (int index = 0; index < batch.size(); index++) {
-                            var eventFailure = writeBatchWithRetries(List.of(batch.get(index)));
-                            if (eventFailure instanceof LinkageError || isStorageFailure(eventFailure)) {
-                                for (var remaining : batch.subList(index, batch.size())) {
-                                    failedWrite(remaining, eventFailure);
-                                }
-                                if (eventFailure instanceof LinkageError) {
-                                    discardPendingWrites();
-                                }
-                                break;
-                            }
-                            if (eventFailure != null) {
-                                failedWrite(batch.get(index), eventFailure);
-                            }
-                        }
-                    } else if (failure != null) {
-                        batch.forEach(event -> failedWrite(event, failure));
-                    }
+                    handleBatchFailure(batch, failure);
                     if (failure != null) {
                         log.warn("AI usage batch failed ({})", failure.getClass().getSimpleName());
                     }
@@ -351,9 +364,72 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
             }
         } finally {
             draining.set(false);
-            if (!closing.get() && !pendingWrites.isEmpty()) {
-                scheduleDrain();
+            rescheduleDrain();
+        }
+    }
+
+    private boolean shouldYieldWriter(int batches) {
+        if (closing.get()) {
+            return false;
+        }
+        return batches >= 8;
+    }
+
+    private void rescheduleDrain() {
+        if (closing.get()) {
+            return;
+        }
+        if (pendingWrites.isEmpty()) {
+            return;
+        }
+        scheduleDrain();
+    }
+
+    private void handleBatchFailure(List<PendingWrite> batch, Throwable failure) {
+        if (failure == null) {
+            return;
+        }
+        if (failure instanceof LinkageError) {
+            accepting = false;
+            available = false;
+            batch.forEach(event -> failedWrite(event, failure));
+            discardPendingWrites();
+            return;
+        }
+        if (isStorageFailure(failure)) {
+            batch.forEach(event -> failedWrite(event, failure));
+            return;
+        }
+        if (batch.size() == 1) {
+            failedWrite(batch.getFirst(), failure);
+            return;
+        }
+        isolateFailedEvents(batch);
+    }
+
+    private void isolateFailedEvents(List<PendingWrite> batch) {
+        // Retry individual events only after rollback. A poison event must not hide later terminals.
+        for (int index = 0; index < batch.size(); index++) {
+            var failure = writeBatchWithRetries(List.of(batch.get(index)));
+            if (failure == null) {
+                continue;
             }
+            if (failure instanceof LinkageError) {
+                failRemainingEvents(batch, index, failure);
+                discardPendingWrites();
+                return;
+            }
+            if (isStorageFailure(failure)) {
+                failRemainingEvents(batch, index, failure);
+                return;
+            }
+            failedWrite(batch.get(index), failure);
+        }
+    }
+
+    private void failRemainingEvents(List<PendingWrite> batch, int from, Throwable failure) {
+        for (var event : batch.subList(from, batch.size())) {
+            failedWrite(event, failure);
         }
     }
 
@@ -382,13 +458,18 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
     }
 
     private static boolean isStorageFailure(Throwable error) {
-        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
-            if (error instanceof java.sql.SQLException sql) {
+        for (int depth = 0; depth < 8; depth++, error = error.getCause()) {
+            if (error == null) {
+                return false;
+            }
+            if (error instanceof SQLException sql) {
                 // SQLite primary result codes: read-only, busy/locked, I/O, full, cannot open,
                 // corrupt/not-a-database. Retrying each event cannot isolate these failures.
-                var code = sql.getErrorCode() & 0xff;
-                if (code == 5 || code == 6 || code == 8 || code == 10 || code == 11
-                    || code == 13 || code == 14 || code == 26) {
+                var storageFailure = switch (sql.getErrorCode() & 0xff) {
+                    case 5, 6, 8, 10, 11, 13, 14, 26 -> true;
+                    default -> false;
+                };
+                if (storageFailure) {
                     return true;
                 }
             }
@@ -408,7 +489,10 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
 
     private static UsageCallTerminal withCurrentCompleteness(UsageCallSession session,
         UsageCallTerminal terminal) {
-        if (!session.isIncomplete() || !terminal.complete()) {
+        if (!session.isIncomplete()) {
+            return terminal;
+        }
+        if (!terminal.complete()) {
             return terminal;
         }
         return new UsageCallTerminal(terminal.start(), terminal.completedAt(), terminal.status(),
@@ -428,7 +512,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         return Mono.fromCallable(() -> {
             lock.lock();
             try {
-                if (!available || closing.get()) {
+                if (!canAccessStore()) {
                     throw new IllegalStateException("AI usage statistics are unavailable");
                 }
                 return query.call();
@@ -436,6 +520,13 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
                 lock.unlock();
             }
         }).subscribeOn(readerScheduler);
+    }
+
+    private boolean canAccessStore() {
+        if (!available) {
+            return false;
+        }
+        return !closing.get();
     }
 
     private void enqueueMaintenance() {
@@ -446,7 +537,10 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
                 return;
             }
             synchronized (admissionLock) {
-                if (closing.get() || !maintenanceQueued.compareAndSet(false, true)) {
+                if (closing.get()) {
+                    return;
+                }
+                if (!maintenanceQueued.compareAndSet(false, true)) {
                     return;
                 }
                 writer.execute(this::maintainOneBatch);
@@ -468,7 +562,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         var lock = storeAccess.readLock();
         lock.lock();
         try {
-            if (available && !closing.get()) {
+            if (canAccessStore()) {
                 more = store.rollupAndRetainBatch(clock);
             }
         } catch (RuntimeException | LinkageError error) {
@@ -477,12 +571,16 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
             lock.unlock();
         }
         synchronized (admissionLock) {
-            if (more && available && !closing.get()) {
-                // Enqueue behind any pending drain. Never keep the writer for a full retention run.
-                writer.execute(this::maintainOneBatch);
-            } else {
+            if (!more) {
                 maintenanceQueued.set(false);
+                return;
             }
+            if (!canAccessStore()) {
+                maintenanceQueued.set(false);
+                return;
+            }
+            // Enqueue behind any pending drain. Never keep the writer for a full retention run.
+            writer.execute(this::maintainOneBatch);
         }
     }
 
@@ -503,13 +601,23 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
 
     private void markAffected(Instant affectedFrom) {
         var now = clock.instant();
-        affectedSince.accumulateAndGet(affectedFrom,
-            (current, candidate) -> current == null || candidate.isBefore(current)
-                ? candidate : current);
-        affectedUntil.accumulateAndGet(now,
-            (current, candidate) -> current == null || candidate.isAfter(current)
-                ? candidate : current);
+        affectedSince.accumulateAndGet(affectedFrom, UsageStatisticsService::earliest);
+        affectedUntil.accumulateAndGet(now, UsageStatisticsService::latest);
         healthDirty.set(true);
+    }
+
+    private static Instant earliest(Instant current, Instant candidate) {
+        if (current == null) {
+            return candidate;
+        }
+        return candidate.isBefore(current) ? candidate : current;
+    }
+
+    private static Instant latest(Instant current, Instant candidate) {
+        if (current == null) {
+            return candidate;
+        }
+        return candidate.isAfter(current) ? candidate : current;
     }
 
     private void restoreHealth(UsageHealthState health) {
@@ -535,8 +643,13 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
 
     private boolean isComplete(UsageQuery query) {
         var current = health();
-        if (!current.available() || current.migrationError() != null
-            || current.integrityError() != null) {
+        if (!current.available()) {
+            return false;
+        }
+        if (current.migrationError() != null) {
+            return false;
+        }
+        if (current.integrityError() != null) {
             return false;
         }
         if (current.complete()) {
@@ -544,10 +657,16 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         }
         var since = current.affectedSince();
         var until = current.affectedUntil();
-        if (since == null || until == null) {
+        if (since == null) {
             return false;
         }
-        return !query.to().isAfter(since) || query.from().isAfter(until);
+        if (until == null) {
+            return false;
+        }
+        if (!query.to().isAfter(since)) {
+            return true;
+        }
+        return query.from().isAfter(until);
     }
 
     private void persistHealthIfDirty() {

@@ -13,7 +13,10 @@ public final class UsageFeature {
     }
 
     public static boolean isValid(String value) {
-        return value != null && PATTERN.matcher(value).matches();
+        if (value == null) {
+            return false;
+        }
+        return PATTERN.matcher(value).matches();
     }
 
     public static String fromMetadata(Map<String, Object> metadata) {
@@ -21,6 +24,12 @@ public final class UsageFeature {
             return null;
         }
         var value = metadata.get(METADATA_KEY);
-        return value instanceof String text && isValid(text) ? text : null;
+        if (!(value instanceof String text)) {
+            return null;
+        }
+        if (!isValid(text)) {
+            return null;
+        }
+        return text;
     }
 }

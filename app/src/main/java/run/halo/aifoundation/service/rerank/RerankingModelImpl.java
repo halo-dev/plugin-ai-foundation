@@ -9,12 +9,12 @@ import java.util.function.Supplier;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.exception.RerankCancelledException;
 import run.halo.aifoundation.exception.RerankTimeoutException;
-import run.halo.aifoundation.provider.support.ProviderRerankingClient;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
@@ -81,16 +81,27 @@ public class RerankingModelImpl implements RerankingModel {
                 var target = mappedTopN(request, warnings);
                 Supplier<Mono<RerankResponse>> invocation =
                     () -> client.rerank(request, target, providerOptions.getNativeOptions());
-                var call = usageExecutionObserver == null ? invocation.get()
-                    : usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
+                Mono<RerankResponse> call;
+                if (usageExecutionObserver == null) {
+                    call = invocation.get();
+                } else {
+                    call = usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
                         response -> NormalizedUsage.from(response.getUsage()),
-                        response -> null);
+                        RerankingModelImpl::responseModel);
+                }
                 return call
                     .map(response -> withRuntimeWarnings(response, warnings))
                     .doOnNext(response -> checkResultIndexes(request, response));
             })
             .doOnNext(ignored -> checkCancellation(request))
             .transform(call -> withRerankTimeout(call, request));
+    }
+
+    private static String responseModel(RerankResponse response) {
+        if (response.getResponse() == null) {
+            return null;
+        }
+        return response.getResponse().getModel();
     }
 
     private void validateRequest(RerankRequest request) {

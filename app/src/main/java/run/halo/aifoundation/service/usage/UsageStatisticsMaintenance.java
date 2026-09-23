@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service.usage;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -39,8 +40,13 @@ final class UsageStatisticsMaintenance {
             putMeta(connection, "execution_detail_start", executionCutoff.toString());
             var executions = deleteExpiredExecutions(connection, executionCutoff);
             connection.commit();
-            return selected == CALL_BATCH_SIZE || children == EXECUTION_BATCH_SIZE
-                || executions == EXECUTION_BATCH_SIZE;
+            if (selected == CALL_BATCH_SIZE) {
+                return true;
+            }
+            if (children == EXECUTION_BATCH_SIZE) {
+                return true;
+            }
+            return executions == EXECUTION_BATCH_SIZE;
         } catch (RuntimeException | SQLException error) {
             restoreAutoCommit = UsageSqliteTransactions.rollback(connection, error);
             throw new IllegalStateException("Failed to roll up and retain statistics", error);
@@ -71,7 +77,7 @@ final class UsageStatisticsMaintenance {
         return days;
     }
 
-    private static void addDays(java.sql.ResultSet rows, List<LocalDate> days)
+    private static void addDays(ResultSet rows, List<LocalDate> days)
         throws SQLException {
         try (rows) {
             while (rows.next()) {

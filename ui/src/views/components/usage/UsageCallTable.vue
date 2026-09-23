@@ -4,9 +4,11 @@ import {
   formatDateTime,
   formatDuration,
   formatTokens,
+  usageNeedsAttention,
   usageOperationLabel,
   usageQualityLabel,
   usageStatusLabel,
+  usageStatusState,
 } from '@/utils/usage'
 import { VButton, VEmpty, VLoading, VStatusDot } from '@halo-dev/components'
 import { computed, ref } from 'vue'
@@ -63,12 +65,6 @@ function modelText(call: UsageCallItem) {
     '未知模型'
   )
 }
-function statusState(status?: string) {
-  if (status === 'SUCCEEDED') return 'success'
-  if (status === 'FAILED') return 'error'
-  if (status === 'TIMED_OUT' || status === 'ABANDONED') return 'warning'
-  return 'default'
-}
 </script>
 
 <template>
@@ -112,7 +108,7 @@ function statusState(status?: string) {
           />
           <span class=":uno: flex flex-wrap items-center gap-1"
             ><VStatusDot
-              :state="statusState(call.status)"
+              :state="usageStatusState(call.status)"
               :text="usageStatusLabel(call.status)"
             /><span v-if="call.complete === false" class=":uno: text-xs text-orange-600"
               >数据不完整</span
@@ -164,11 +160,7 @@ function statusState(status?: string) {
               {{ formatTokens(call.usage?.outputTokens) }} 输出</span
             >
             <span
-              v-if="
-                call.usage?.quality === 'PARTIAL' ||
-                call.usage?.quality === 'MISSING' ||
-                call.usage?.quality === 'ESTIMATED'
-              "
+              v-if="usageNeedsAttention(call.usage?.quality)"
               class=":uno: block text-xs text-orange-600"
               >{{ usageQualityLabel(call.usage?.quality) }}</span
             >

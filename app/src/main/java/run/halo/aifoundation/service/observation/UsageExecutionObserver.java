@@ -1,9 +1,10 @@
 package run.halo.aifoundation.service.observation;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -58,11 +59,11 @@ public class UsageExecutionObserver {
                     if (observedUsage == null) {
                         extractionFailed.set(true);
                     }
-                    if (observedUsage != null && observedUsage.quality() != UsageQuality.MISSING) {
+                    if (!NormalizedUsage.isMissing(observedUsage)) {
                         lastUsage.set(observedUsage);
                     }
                     var observedModel = responseModel.apply(value);
-                    if (observedModel != null && !observedModel.isBlank()) {
+                    if (StringUtils.hasText(observedModel)) {
                         lastModel.set(observedModel);
                     }
                 }))
@@ -72,8 +73,10 @@ public class UsageExecutionObserver {
                     var failureUsage = NormalizedUsage.fromFailure(error);
                     // An exception can carry the final snapshot even if no finish chunk arrived.
                     // Prefer it over earlier cumulative snapshots; never add the two.
-                    scope.fail(error, failureUsage.quality() != UsageQuality.MISSING ? failureUsage
-                        : observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get());
+                    if (NormalizedUsage.isMissing(failureUsage)) {
+                        failureUsage = observedUsage(lastUsage.get(), extractionFailed.get());
+                    }
+                    scope.fail(error, failureUsage, lastModel.get());
                 }))
                 .doOnCancel(() -> UsageTelemetry.safely(() ->
                     scope.cancel(observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get())));
@@ -81,7 +84,10 @@ public class UsageExecutionObserver {
     }
 
     private static NormalizedUsage observedUsage(NormalizedUsage usage, boolean extractionFailed) {
-        if (!extractionFailed || usage.quality() == UsageQuality.MISSING) {
+        if (!extractionFailed) {
+            return usage;
+        }
+        if (NormalizedUsage.isMissing(usage)) {
             return usage;
         }
         return new NormalizedUsage(usage.inputTokens(), usage.outputTokens(),

@@ -20,7 +20,10 @@ record UsageCursor(Instant startedAt, String id, String filterHash) {
             var decoded = new String(Base64.getUrlDecoder().decode(encoded),
                 StandardCharsets.UTF_8);
             var parts = decoded.split("\\n", -1);
-            if (parts.length != 3 || !parts[2].equals(hash(query))) {
+            if (parts.length != 3) {
+                throw new IllegalArgumentException("Cursor must contain timestamp, id and filter hash");
+            }
+            if (!parts[2].equals(hash(query))) {
                 throw new IllegalArgumentException("Cursor does not match the current filters");
             }
             return new UsageCursor(Instant.ofEpochMilli(Long.parseLong(parts[0])), parts[1],

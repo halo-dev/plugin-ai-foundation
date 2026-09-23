@@ -1,12 +1,18 @@
 package run.halo.aifoundation.service.observation;
 
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 import reactor.core.Exceptions;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.exception.AiGenerationTimeoutException;
 import run.halo.aifoundation.exception.EmbeddingCancelledException;
+import run.halo.aifoundation.exception.EmbeddingTimeoutException;
 import run.halo.aifoundation.exception.RerankCancelledException;
+import run.halo.aifoundation.exception.RerankTimeoutException;
 
 public record UsageError(String type, String code) {
 
@@ -16,45 +22,71 @@ public record UsageError(String type, String code) {
         if (error == null) {
             return null;
         }
+        if (isTimeout(error)) {
+            return new UsageError("TIMEOUT", null);
+        }
         var unwrapped = Exceptions.unwrap(error);
-        var type = isTimeout(unwrapped)
-            ? "TIMEOUT" : sanitize(unwrapped.getClass().getSimpleName()).toUpperCase(Locale.ROOT);
+        var type = sanitize(unwrapped.getClass().getSimpleName()).toUpperCase(Locale.ROOT);
         return new UsageError(type, null);
     }
 
+    static UsageStatus failureStatus(Throwable error) {
+        if (isTimeout(error)) {
+            return UsageStatus.TIMED_OUT;
+        }
+        if (isCancellation(error)) {
+            return UsageStatus.CANCELLED;
+        }
+        return UsageStatus.FAILED;
+    }
+
     static boolean isTimeout(Throwable error) {
-        if (error == null) {
-            return false;
-        }
-        var current = Exceptions.unwrap(error);
-        for (int depth = 0; current != null && depth < 16; depth++, current = current.getCause()) {
-            if (current instanceof TimeoutException
-                || current instanceof java.net.SocketTimeoutException
-                || current instanceof java.net.http.HttpTimeoutException) {
-                return true;
-            }
-            if (current == current.getCause()) {
-                break;
-            }
-        }
-        return false;
+        return matchesCause(error, UsageError::isTimeoutType);
+    }
+
+    private static boolean isTimeoutType(Throwable error) {
+        return switch (error) {
+            case AiGenerationTimeoutException ignored -> true;
+            case EmbeddingTimeoutException ignored -> true;
+            case RerankTimeoutException ignored -> true;
+            case TimeoutException ignored -> true;
+            case SocketTimeoutException ignored -> true;
+            case HttpTimeoutException ignored -> true;
+            default -> false;
+        };
     }
 
     static boolean isCancellation(Throwable error) {
+        return matchesCause(error, UsageError::isCancellationType);
+    }
+
+    private static boolean isCancellationType(Throwable error) {
+        return switch (error) {
+            case CancellationException ignored -> true;
+            case AiGenerationCancelledException ignored -> true;
+            case EmbeddingCancelledException ignored -> true;
+            case RerankCancelledException ignored -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean matchesCause(Throwable error, Predicate<Throwable> matches) {
         if (error == null) {
             return false;
         }
         var current = Exceptions.unwrap(error);
-        for (int depth = 0; current != null && depth < 16; depth++, current = current.getCause()) {
-            if (current instanceof CancellationException
-                || current instanceof AiGenerationCancelledException
-                || current instanceof EmbeddingCancelledException
-                || current instanceof RerankCancelledException) {
+        for (int depth = 0; depth < 16; depth++) {
+            if (current == null) {
+                return false;
+            }
+            if (matches.test(current)) {
                 return true;
             }
-            if (current == current.getCause()) {
-                break;
+            var cause = current.getCause();
+            if (cause == current) {
+                return false;
             }
+            current = cause;
         }
         return false;
     }

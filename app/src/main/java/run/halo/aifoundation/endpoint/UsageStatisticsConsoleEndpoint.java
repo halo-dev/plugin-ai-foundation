@@ -5,27 +5,27 @@ import static org.springdoc.core.fn.builders.parameter.Builder.parameterBuilder;
 import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuilder;
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.service.observation.UsageFeature;
+import run.halo.aifoundation.service.observation.UsageQuality;
+import run.halo.aifoundation.service.observation.UsageStatus;
 import run.halo.aifoundation.service.usage.UsageCallDetail;
 import run.halo.aifoundation.service.usage.UsageCallPage;
 import run.halo.aifoundation.service.usage.UsageHealth;
-import run.halo.aifoundation.service.observation.UsageFeature;
-import run.halo.aifoundation.service.observation.UsageQuality;
 import run.halo.aifoundation.service.usage.UsageQuery;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
-import run.halo.aifoundation.service.observation.UsageStatus;
 import run.halo.aifoundation.service.usage.UsageSummary;
 import run.halo.aifoundation.service.usage.UsageTrendPoint;
 import run.halo.aifoundation.service.usage.UsageTrendResolution;
@@ -147,9 +147,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                 throw new IllegalArgumentException("date range must not exceed 3660 days");
             }
             var feature = text(request, "feature");
-            if (feature != null && !UsageFeature.isValid(feature)) {
-                throw new IllegalArgumentException("feature must match " + UsageFeature.FORMAT);
-            }
+            validateFeature(feature);
             return new UsageQuery(from, to, text(request, "callerPlugin"),
                 feature, text(request, "providerName"),
                 text(request, "modelName"), text(request, "modelType"),
@@ -194,12 +192,24 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
         }
         try {
             var size = Integer.parseInt(value);
-            if (size < 1 || size > MAX_PAGE_SIZE) {
+            if (size < 1) {
+                throw new IllegalArgumentException("size must be between 1 and " + MAX_PAGE_SIZE);
+            }
+            if (size > MAX_PAGE_SIZE) {
                 throw new IllegalArgumentException("size must be between 1 and " + MAX_PAGE_SIZE);
             }
             return size;
         } catch (NumberFormatException error) {
             throw new IllegalArgumentException("size must be an integer", error);
+        }
+    }
+
+    private static void validateFeature(String feature) {
+        if (feature == null) {
+            return;
+        }
+        if (!UsageFeature.isValid(feature)) {
+            throw new IllegalArgumentException("feature must match " + UsageFeature.FORMAT);
         }
     }
 

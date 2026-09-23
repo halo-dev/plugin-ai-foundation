@@ -1,12 +1,5 @@
 package run.halo.aifoundation.service.usage;
 
-import run.halo.aifoundation.service.observation.NormalizedUsage;
-import run.halo.aifoundation.service.observation.UsageQuality;
-import run.halo.aifoundation.service.observation.UsageExecutionRecord;
-import run.halo.aifoundation.service.observation.UsageStatus;
-import run.halo.aifoundation.service.observation.UsageError;
-import run.halo.aifoundation.service.observation.UsageUnitKind;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -17,6 +10,13 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.util.StringUtils;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageError;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
+import run.halo.aifoundation.service.observation.UsageQuality;
+import run.halo.aifoundation.service.observation.UsageStatus;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 class UsageStatisticsQueryRepository {
 
@@ -33,6 +33,19 @@ class UsageStatisticsQueryRepository {
         var calls = raw.calls + daily.calls;
         var known = raw.known + daily.known;
         var missing = raw.missing + daily.missing;
+        var dataFrom = query.from();
+        var dataTo = query.to();
+        var resolution = "MILLISECOND";
+        var preciseRange = true;
+        if (plan.daily() != null) {
+            resolution = "DAY";
+            dataFrom = plan.daily().from();
+            preciseRange = dataFrom.equals(query.from());
+            if (plan.daily().to().isAfter(dataTo)) {
+                dataTo = plan.daily().to();
+                preciseRange = false;
+            }
+        }
         return new UsageSummary(calls, raw.inProgress + daily.inProgress,
             raw.succeeded + daily.succeeded,
             raw.failed + daily.failed, raw.timedOut + daily.timedOut,
@@ -40,14 +53,10 @@ class UsageStatisticsQueryRepository {
             tokens.input, tokens.output, tokens.cacheRead, tokens.cacheCreation,
             tokens.reasoning, tokens.total, known, missing, raw.partial + daily.partial,
             calls == 0 ? 1D : (double) (known - raw.partial - daily.partial) / calls,
-            plan.daily() == null || (plan.daily().from().equals(query.from())
-                && !plan.daily().to().isAfter(query.to())),
+            preciseRange,
             calls == 0 ? 1D : (double) known / calls,
             complete && raw.incomplete + daily.incomplete == 0,
-            plan.daily() != null ? "DAY" : "MILLISECOND",
-            plan.daily() == null ? query.from() : plan.daily().from(),
-            plan.daily() != null && plan.daily().to().isAfter(query.to())
-                ? plan.daily().to() : query.to());
+            resolution, dataFrom, dataTo);
     }
 
     private SummaryValues queryDailySummary(Connection connection, UsageQuery query)
@@ -216,7 +225,7 @@ class UsageStatisticsQueryRepository {
         var base = filter(query, "started_at_ms", false);
         var parameters = new ArrayList<>(base.parameters());
         var sql = new StringBuilder("SELECT * FROM ai_calls ").append(base.sql());
-        if (encodedCursor != null && !encodedCursor.isBlank()) {
+        if (StringUtils.hasText(encodedCursor)) {
             var cursor = UsageCursor.decode(encodedCursor, query);
             sql.append(" AND (started_at_ms < ? OR (started_at_ms = ? AND id < ?))");
             parameters.add(cursor.startedAt().toEpochMilli());
@@ -381,7 +390,7 @@ class UsageStatisticsQueryRepository {
         }
         var dimensions = java.util.stream.Stream.of(query.callerPlugin(), query.feature(),
                 query.providerName(), query.modelName(), query.modelType(), query.operation())
-            .anyMatch(value -> value != null && !value.isBlank());
+            .anyMatch(value -> StringUtils.hasText(value));
         return "ai_calls INDEXED BY "
             + (dimensions ? "idx_calls_filtered_hour" : "idx_calls_aggregate_hour");
     }
@@ -424,7 +433,7 @@ class UsageStatisticsQueryRepository {
 
     private static void addFilter(List<String> clauses, List<Object> parameters, String column,
         String value) {
-        if (value != null && !value.isBlank()) {
+        if (StringUtils.hasText(value)) {
             clauses.add(column + " = ?");
             parameters.add(value);
         }
@@ -450,7 +459,13 @@ class UsageStatisticsQueryRepository {
     private static UsageError error(ResultSet row) throws SQLException {
         var type = row.getString("error_type");
         var code = row.getString("error_code");
-        return type == null && code == null ? null : new UsageError(type, code);
+        if (type != null) {
+            return new UsageError(type, code);
+        }
+        if (code != null) {
+            return new UsageError(null, code);
+        }
+        return null;
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {

@@ -1,9 +1,9 @@
 package run.halo.aifoundation.service.audit;
 
-import java.util.Objects;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.SignalType;
@@ -13,13 +13,13 @@ import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
+import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageCallSession;
-import run.halo.aifoundation.service.observation.UsageOperation;
 import run.halo.aifoundation.service.observation.UsageObservation;
+import run.halo.aifoundation.service.observation.UsageOperation;
 import run.halo.aifoundation.service.observation.UsageTelemetry;
-import run.halo.aifoundation.schema.OutputType;
 
 public class AuditedLanguageModel implements LanguageModel {
 
@@ -63,16 +63,29 @@ public class AuditedLanguageModel implements LanguageModel {
             request == null ? null : request.getMetadata()), null);
         var lazy = new LazySession(usageStatistics, descriptor);
         var outputType = request.getOutput() == null ? null : request.getOutput().getType();
-        var partialOutput = outputType == OutputType.OBJECT || outputType == OutputType.JSON
-            ? recordFlux(result.partialOutputStream(), lazy) : result.partialOutputStream();
-        var elements = outputType == OutputType.ARRAY
-            ? recordFlux(result.elementStream(), lazy) : result.elementStream();
+        var partialOutput = result.partialOutputStream();
+        var elements = result.elementStream();
+        var output = result.output();
+        if (outputType != null) {
+            switch (outputType) {
+                case OBJECT, JSON -> {
+                    partialOutput = recordFlux(partialOutput, lazy);
+                    output = recordProjection(output, lazy);
+                }
+                case ARRAY -> {
+                    elements = recordFlux(elements, lazy);
+                    output = recordProjection(output, lazy);
+                }
+                case TEXT -> { }
+                default -> output = recordProjection(output, lazy);
+            }
+        }
         return new StreamTextResult(
             recordFlux(result.fullStream(), lazy),
             recordFlux(result.textStream(), lazy),
             partialOutput,
             elements,
-            outputType == null || outputType == OutputType.TEXT ? result.output() : recordProjection(result.output(), lazy),
+            output,
             recordResult(result.result(), lazy)
         );
     }
@@ -171,9 +184,13 @@ public class AuditedLanguageModel implements LanguageModel {
 
         private void finish(UsageCallSession current, SignalType signal) {
             var remaining = subscribers.decrementAndGet();
-            if (signal == SignalType.CANCEL && remaining == 0) {
-                UsageTelemetry.safely(current::cancel);
+            if (signal != SignalType.CANCEL) {
+                return;
             }
+            if (remaining != 0) {
+                return;
+            }
+            UsageTelemetry.safely(current::cancel);
         }
     }
 }

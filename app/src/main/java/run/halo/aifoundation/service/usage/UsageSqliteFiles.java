@@ -8,6 +8,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -59,11 +61,15 @@ final class UsageSqliteFiles {
     static Recovery recoverIfRequired(UsageDatabasePaths paths) {
         var live = paths.database();
         var backups = listBackups(paths);
-        if (Files.exists(live) && isUsableLiveDatabase(live)) {
-            return Recovery.none();
+        if (Files.exists(live)) {
+            if (isUsableLiveDatabase(live)) {
+                return Recovery.none();
+            }
         }
-        if (!hasStorageEvidence(live) && backups.isEmpty()) {
-            return Recovery.none();
+        if (!hasStorageEvidence(live)) {
+            if (backups.isEmpty()) {
+                return Recovery.none();
+            }
         }
         var selected = backups.reversed().stream()
             .filter(UsageSqliteFiles::isValidSnapshot)
@@ -149,7 +155,7 @@ final class UsageSqliteFiles {
             UsageSqliteSchema.validateRecognized(connection);
             try (var statement = connection.createStatement();
                 var rows = statement.executeQuery("PRAGMA quick_check")) {
-                return rows.next() && "ok".equalsIgnoreCase(rows.getString(1)) && !rows.next();
+                return passesQuickCheck(rows);
             }
         } catch (Exception error) {
             log.warn("AI usage SQLite snapshot {} is invalid: {}", path, error.getMessage());
@@ -166,14 +172,15 @@ final class UsageSqliteFiles {
             try (var statement = connection.prepareStatement(
                 "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'");
                 var row = statement.executeQuery()) {
-                if (row.next() && Integer.toString(UsageSqliteSchema.VERSION)
-                    .equals(row.getString(1))) {
-                    UsageSqliteSchema.validateRecognized(connection);
+                if (row.next()) {
+                    if (Integer.toString(UsageSqliteSchema.VERSION).equals(row.getString(1))) {
+                        UsageSqliteSchema.validateRecognized(connection);
+                    }
                 }
             }
             try (var statement = connection.createStatement();
                 var rows = statement.executeQuery("PRAGMA quick_check")) {
-                return rows.next() && "ok".equalsIgnoreCase(rows.getString(1)) && !rows.next();
+                return passesQuickCheck(rows);
             }
         } catch (Exception error) {
             log.warn("AI usage SQLite database {} is not usable: {}", path,
@@ -199,7 +206,7 @@ final class UsageSqliteFiles {
         Files.createDirectories(directory);
         var evidence = directory.resolve(live.getFileName() + ".corrupted-"
             + TIMESTAMP.format(Instant.now()) + "-" + UUID.randomUUID());
-        if (Files.isRegularFile(live) && !Files.isSymbolicLink(live)) {
+        if (Files.isRegularFile(live, LinkOption.NOFOLLOW_LINKS)) {
             Files.copy(live, evidence, StandardCopyOption.COPY_ATTRIBUTES);
         }
         copySidecar(live, evidence, "-wal");
@@ -209,7 +216,7 @@ final class UsageSqliteFiles {
 
     private static void copySidecar(Path live, Path evidence, String suffix) throws IOException {
         var source = sidecar(live, suffix);
-        if (Files.isRegularFile(source) && !Files.isSymbolicLink(source)) {
+        if (Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
             Files.copy(source, sidecar(evidence, suffix), StandardCopyOption.COPY_ATTRIBUTES);
         }
     }
@@ -261,19 +268,34 @@ final class UsageSqliteFiles {
             : candidate;
     }
 
+    private static boolean passesQuickCheck(ResultSet rows) throws SQLException {
+        if (!rows.next()) {
+            return false;
+        }
+        if (!"ok".equalsIgnoreCase(rows.getString(1))) {
+            return false;
+        }
+        return !rows.next();
+    }
+
     private static boolean isRegularNonEmpty(Path path) {
         try {
-            return Files.isRegularFile(path) && !Files.isSymbolicLink(path)
-                && Files.size(path) > 0;
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                return false;
+            }
+            return Files.size(path) > 0;
         } catch (IOException error) {
             return false;
         }
     }
 
     private static boolean hasStorageEvidence(Path live) {
-        return Files.exists(live, LinkOption.NOFOLLOW_LINKS)
-            || Files.exists(sidecar(live, "-wal"), LinkOption.NOFOLLOW_LINKS)
-            || Files.exists(sidecar(live, "-shm"), LinkOption.NOFOLLOW_LINKS);
+        for (var path : List.of(live, sidecar(live, "-wal"), sidecar(live, "-shm"))) {
+            if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Path sidecar(Path path, String suffix) {

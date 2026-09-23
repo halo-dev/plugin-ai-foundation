@@ -12,6 +12,17 @@ import {
 import { VButton, VLoading, VTag } from '@halo-dev/components'
 import { utils } from '@halo-dev/ui-shared'
 
+function attemptLabel(index?: number) {
+  if (index == null) return '尝试次数未知'
+  if (index === 0) return '首次请求'
+  return `第 ${index} 次重试`
+}
+function executionDuration(startedAt?: string, completedAt?: string) {
+  if (!startedAt) return '未知'
+  if (!completedAt) return '未知'
+  return formatDuration(utils.date.dayjs(completedAt).diff(startedAt))
+}
+
 const props = defineProps<{
   callId: string
 }>()
@@ -33,7 +44,11 @@ const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.cal
       暂无执行记录。执行明细仅保留 30 天；较早的调用或缓存命中的调用可能没有执行数据。
     </p>
     <div v-else class=":uno: usage-execution-list">
-      <article v-for="execution in data.executions" :key="execution.id" class=":uno: usage-execution">
+      <article
+        v-for="execution in data.executions"
+        :key="execution.id"
+        class=":uno: usage-execution"
+      >
         <div class=":uno: usage-execution-title">
           <strong
             >{{ usageUnitKindLabel(execution.unitKind)
@@ -41,13 +56,7 @@ const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.cal
               #{{ execution.unitIndex + 1 }}</template
             ></strong
           >
-          <span class=":uno: usage-attempt">{{
-            execution.attemptIndex == null
-              ? '尝试次数未知'
-              : execution.attemptIndex === 0
-                ? '首次请求'
-                : `第 ${execution.attemptIndex} 次重试`
-          }}</span>
+          <span class=":uno: usage-attempt">{{ attemptLabel(execution.attemptIndex) }}</span>
           <VTag size="sm" :theme="usageStatusTagTheme(execution.status)">{{
             usageStatusLabel(execution.status)
           }}</VTag>
@@ -68,13 +77,7 @@ const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.cal
           <div>
             <dt>耗时</dt>
             <dd>
-              {{
-                execution.startedAt && execution.completedAt
-                  ? formatDuration(
-                      utils.date.dayjs(execution.completedAt).diff(execution.startedAt),
-                    )
-                  : '未知'
-              }}
+              {{ executionDuration(execution.startedAt, execution.completedAt) }}
             </dd>
           </div>
         </dl>

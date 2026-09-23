@@ -36,9 +36,9 @@ const { mutate, isPending } = useMutation({
 })
 
 function onSubmit() {
-  if (confirmed.value && !isPending.value) {
-    mutate()
-  }
+  if (!confirmed.value) return
+  if (isPending.value) return
+  mutate()
 }
 </script>
 

@@ -1,11 +1,8 @@
-import { useRouteQuery } from '@vueuse/router'
+import { normalizeUsageTrendResolution, type UsageTrendResolution } from '@/utils/usage'
 import { utils } from '@halo-dev/ui-shared'
+import { useRouteQuery } from '@vueuse/router'
 import { computed, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  normalizeUsageTrendResolution,
-  type UsageTrendResolution,
-} from '@/utils/usage'
 
 export const USAGE_RANGE_OPTIONS = [
   { label: '最近 24 小时', value: '24h' },
@@ -65,16 +62,22 @@ export function toUsageQueryParams(
   state: UsageFilterState,
   now: Date,
 ): UsageQueryParams | undefined {
-  let from: Date | undefined
-  let to: Date | undefined
+  let from: Date
+  let to: Date
 
   if (state.range === 'custom') {
-    if (!state.fromDate || !state.toDate) {
+    if (!state.fromDate) {
+      return undefined
+    }
+    if (!state.toDate) {
       return undefined
     }
     const startDay = utils.date.dayjs(state.fromDate)
     const endDay = utils.date.dayjs(state.toDate)
-    if (!startDay.isValid() || !endDay.isValid()) {
+    if (!startDay.isValid()) {
+      return undefined
+    }
+    if (!endDay.isValid()) {
       return undefined
     }
     from = startDay.startOf('day').toDate()
@@ -90,7 +93,10 @@ export function toUsageQueryParams(
     from = end.subtract(duration, 'millisecond').toDate()
   }
 
-  if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+  if (Number.isNaN(from.getTime())) {
+    return undefined
+  }
+  if (Number.isNaN(to.getTime())) {
     return undefined
   }
   if (!utils.date.dayjs(from).isBefore(to)) {
@@ -105,7 +111,7 @@ export function toUsageQueryParams(
     from: from.toISOString(),
     to: to.toISOString(),
     callerPlugin: state.callerPlugin || undefined,
-    feature: feature && FEATURE_PATTERN.test(feature) ? feature : undefined,
+    feature: validFeature(feature),
     providerName: state.providerName || undefined,
     modelName: state.modelName || undefined,
     modelType: state.modelType || undefined,
@@ -114,6 +120,12 @@ export function toUsageQueryParams(
     usageQuality: state.usageQuality || undefined,
     resolution: state.resolution || undefined,
   }
+}
+
+function validFeature(value?: string) {
+  if (!value) return undefined
+  if (!FEATURE_PATTERN.test(value)) return undefined
+  return value
 }
 
 export function useUsageFilters(now: () => Date = () => new Date()) {
@@ -149,9 +161,13 @@ export function useUsageFilters(now: () => Date = () => new Date()) {
 
   const anchor = shallowRef(now())
 
-  watch(state, () => {
-    anchor.value = now()
-  }, { flush: 'sync' })
+  watch(
+    state,
+    () => {
+      anchor.value = now()
+    },
+    { flush: 'sync' },
+  )
 
   // 绝对时间属于一次查询会话；首屏、翻页和聚合必须共享同一个锚点
   const fingerprint = computed(() =>
@@ -170,21 +186,22 @@ export function useUsageFilters(now: () => Date = () => new Date()) {
 
   const featureInvalid = computed(() => {
     const value = state.value.feature?.trim()
-    return !!value && !FEATURE_PATTERN.test(value)
+    if (!value) return false
+    return !FEATURE_PATTERN.test(value)
   })
 
   const hasDimensionFilters = computed(() => {
     const value = state.value
-    return !!(
-      value.callerPlugin ||
-      value.feature ||
-      value.providerName ||
-      value.modelName ||
-      value.modelType ||
-      value.operation ||
-      value.status ||
-      value.usageQuality
-    )
+    return [
+      value.callerPlugin,
+      value.feature,
+      value.providerName,
+      value.modelName,
+      value.modelType,
+      value.operation,
+      value.status,
+      value.usageQuality,
+    ].some(Boolean)
   })
 
   function applyChange(patch: Partial<UsageFilterState>) {

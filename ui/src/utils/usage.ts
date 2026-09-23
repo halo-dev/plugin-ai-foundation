@@ -74,10 +74,7 @@ const QUALITY_TAG_THEMES = {
 
 type TagTheme = 'default' | 'primary' | 'secondary' | 'danger'
 
-function tagThemeOf(
-  themes: Record<string, TagTheme>,
-  value?: string | null,
-): TagTheme {
+function tagThemeOf(themes: Record<string, TagTheme>, value?: string | null): TagTheme {
   return themes[value || ''] || 'default'
 }
 
@@ -123,6 +120,31 @@ export function usageUnitKindLabel(value?: string | null) {
   return labelOf(UNIT_KIND_LABELS, value)
 }
 
+export function usageStatusState(value?: string): 'success' | 'error' | 'warning' | 'default' {
+  switch (value) {
+    case 'SUCCEEDED':
+      return 'success'
+    case 'FAILED':
+      return 'error'
+    case 'TIMED_OUT':
+    case 'ABANDONED':
+      return 'warning'
+    default:
+      return 'default'
+  }
+}
+
+export function usageNeedsAttention(quality?: string) {
+  switch (quality) {
+    case 'PARTIAL':
+    case 'MISSING':
+    case 'ESTIMATED':
+      return true
+    default:
+      return false
+  }
+}
+
 export function usageStatusTagTheme(value?: string | null) {
   return tagThemeOf(STATUS_TAG_THEMES, value)
 }
@@ -133,7 +155,7 @@ export function usageQualityTagTheme(value?: string | null) {
 
 /** Token 数值展示：null/undefined 一律显示「未知」，绝不显示 0。 */
 export function formatTokens(value?: number | null) {
-  if (value === null || value === undefined) {
+  if (value == null) {
     return UNKNOWN_TEXT
   }
   return INTEGER_FORMATTER.format(value)
@@ -141,11 +163,13 @@ export function formatTokens(value?: number | null) {
 
 /** 用量覆盖率（0~1）展示为百分比，缺失时显示「未知」。 */
 export function formatCoverage(value?: number | null) {
-  if (value === null || value === undefined) {
+  if (value == null) {
     return UNKNOWN_TEXT
   }
-  const displayValue = value >= 0.9995 && value < 1 ? 0.999 : value
-  return PERCENT_FORMATTER.format(displayValue)
+  if (value >= 1) return PERCENT_FORMATTER.format(value)
+  // Do not round partial coverage up to a misleading 100%.
+  if (value >= 0.9995) return PERCENT_FORMATTER.format(0.999)
+  return PERCENT_FORMATTER.format(value)
 }
 
 export function usageResolutionLabel(value?: UsageDisplayedResolution | null) {
@@ -162,7 +186,7 @@ export function usageResolutionLabel(value?: UsageDisplayedResolution | null) {
 }
 
 export function formatDuration(millis?: number | null) {
-  if (millis === null || millis === undefined) {
+  if (millis == null) {
     return UNKNOWN_TEXT
   }
   if (millis < 1000) {
@@ -175,7 +199,10 @@ export function formatDuration(millis?: number | null) {
 
 /** ISO instant 转本地时间字符串，缺失时显示「未知」。 */
 export function formatDateTime(iso?: string | null) {
-  if (!iso || !utils.date.dayjs(iso).isValid()) {
+  if (!iso) {
+    return UNKNOWN_TEXT
+  }
+  if (!utils.date.dayjs(iso).isValid()) {
     return UNKNOWN_TEXT
   }
   return utils.date.format(iso, 'YYYY-MM-DD HH:mm:ss')
@@ -190,9 +217,7 @@ export function formatBucketStart(
     return UNKNOWN_TEXT
   }
   if (resolution === 'DAY') {
-    return utils.date.dayjs(iso).isValid()
-      ? utils.date.toISOString(iso).slice(0, 10)
-      : UNKNOWN_TEXT
+    return utils.date.dayjs(iso).isValid() ? utils.date.toISOString(iso).slice(0, 10) : UNKNOWN_TEXT
   }
   return formatDateTime(iso)
 }

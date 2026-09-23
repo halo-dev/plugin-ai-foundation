@@ -1,37 +1,54 @@
 package run.halo.aifoundation.service.usage;
 
-import run.halo.aifoundation.service.observation.NormalizedUsage;
-import run.halo.aifoundation.service.observation.UsageQuality;
-import run.halo.aifoundation.service.observation.UsageCallStart;
-import run.halo.aifoundation.service.observation.UsageCallTerminal;
-import run.halo.aifoundation.service.observation.UsageExecutionRecord;
-import run.halo.aifoundation.service.observation.UsageStatus;
-import run.halo.aifoundation.service.observation.UsageUnitKind;
-import run.halo.aifoundation.service.observation.UsageCallSession;
-import run.halo.aifoundation.service.observation.UsageExecutionObserver;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import reactor.util.retry.Retry;
-import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.chat.LanguageModelUsage;
+import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
+import run.halo.aifoundation.service.observation.UsageQuality;
+import run.halo.aifoundation.service.observation.UsageStatus;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 class UsageExecutionObserverTest {
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("run.halo.aifoundation.service.usage.UsageErrorTest#timeouts")
+    void timeoutKeepsOriginalFailureAndMarksCallAndExecutionTimedOut(Throwable failure) {
+        var service = mock(UsageStatisticsService.class);
+        var session = session(service);
+        var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
+                () -> Mono.error(failure), ignored -> NormalizedUsage.missing(), ignored -> null)
+            .doOnError(error -> session.fail(error, NormalizedUsage.missing(), 1))
+            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        StepVerifier.create(observed).expectErrorMatches(error -> error == failure).verify();
+        var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
+        var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
+        verify(service).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
+        verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
+        assertThat(execution.getValue().status()).isEqualTo(UsageStatus.TIMED_OUT);
+        assertThat(terminal.getValue().status()).isEqualTo(UsageStatus.TIMED_OUT);
+    }
 
     @Test
     void repeatedCumulativeStreamUsageIsRecordedOnce() {

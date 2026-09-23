@@ -1,11 +1,5 @@
 package run.halo.aifoundation.service.usage;
 
-import run.halo.aifoundation.service.observation.NormalizedUsage;
-import run.halo.aifoundation.service.observation.UsageCallStart;
-import run.halo.aifoundation.service.observation.UsageCallTerminal;
-import run.halo.aifoundation.service.observation.UsageExecutionRecord;
-import run.halo.aifoundation.service.observation.UsageError;
-
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.Driver;
@@ -18,15 +12,20 @@ import java.time.Instant;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.sqlite.JDBC;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageCallTerminal;
+import run.halo.aifoundation.service.observation.UsageError;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
 
 @Slf4j
 @Component
@@ -299,7 +298,10 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     @Override
     public UsageCallPage listCalls(UsageQuery query, int size, String cursor) {
         requireInitialized();
-        if (size < 1 || size > 200) {
+        if (size < 1) {
+            throw new IllegalArgumentException("size must be between 1 and 200");
+        }
+        if (size > 200) {
             throw new IllegalArgumentException("size must be between 1 and 200");
         }
         return withReader(connection -> queries.listCalls(connection, query, size, cursor));
@@ -440,7 +442,10 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
 
     @Override
     public void close() {
-        if (!initialized || !closing.compareAndSet(false, true)) {
+        if (!initialized) {
+            return;
+        }
+        if (!closing.compareAndSet(false, true)) {
             return;
         }
         initialized = false;
@@ -494,7 +499,10 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     private void configureWriter(Connection connection) throws SQLException {
         try (var statement = connection.createStatement();
             var rows = statement.executeQuery("PRAGMA journal_mode = WAL")) {
-            if (!rows.next() || !"wal".equalsIgnoreCase(rows.getString(1))) {
+            if (!rows.next()) {
+                throw new SQLException("SQLite did not return a journal mode");
+            }
+            if (!"wal".equalsIgnoreCase(rows.getString(1))) {
                 throw new SQLException("SQLite did not enter WAL journal mode");
             }
         }
@@ -596,8 +604,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         synchronized (readerLifecycle) {
             activeReaders.remove(connection);
             try {
-                if (initialized && !closing.get() && !connection.isClosed()
-                    && connection.getAutoCommit()) {
+                if (canReuseReader(connection)) {
                     idleReaders.addLast(connection);
                     return;
                 }
@@ -606,6 +613,19 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             }
         }
         close(connection);
+    }
+
+    private boolean canReuseReader(Connection connection) throws SQLException {
+        if (!initialized) {
+            return false;
+        }
+        if (closing.get()) {
+            return false;
+        }
+        if (connection.isClosed()) {
+            return false;
+        }
+        return connection.getAutoCommit();
     }
 
     private static int bindUsage(PreparedStatement statement, int index, NormalizedUsage usage)

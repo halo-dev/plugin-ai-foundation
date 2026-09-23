@@ -28,8 +28,7 @@ public final class UsageExecutionScope {
     }
 
     public void fail(Throwable error, NormalizedUsage usage, String responseModelId) {
-        var status = UsageError.isTimeout(error) ? UsageStatus.TIMED_OUT
-            : UsageError.isCancellation(error) ? UsageStatus.CANCELLED : UsageStatus.FAILED;
+        var status = UsageError.failureStatus(error);
         finish(status, error, usage, responseModelId);
     }
 

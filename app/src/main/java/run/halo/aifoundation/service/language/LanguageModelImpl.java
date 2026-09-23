@@ -1,5 +1,6 @@
 package run.halo.aifoundation.service.language;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -8,7 +9,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.time.Duration;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
@@ -27,56 +27,51 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 import run.halo.aifoundation.chat.FinishReason;
-import run.halo.aifoundation.exception.AiGenerationCancelledException;
-import run.halo.aifoundation.exception.AiGenerationTimeoutException;
-import run.halo.aifoundation.part.GenerationContentPart;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.GenerationRequestMetadata;
 import run.halo.aifoundation.chat.GenerationResponseMetadata;
 import run.halo.aifoundation.chat.GenerationStep;
 import run.halo.aifoundation.chat.GenerationWarning;
-import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.LanguageModelUsage;
-import run.halo.aifoundation.chat.ReasoningOptions;
-import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
-import run.halo.aifoundation.message.ModelMessage;
-import run.halo.aifoundation.message.ModelMessagePart;
-import run.halo.aifoundation.message.ModelMessageRole;
-import run.halo.aifoundation.part.PartType;
-import run.halo.aifoundation.schema.OutputType;
-import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.chat.PreparedStep;
-import run.halo.aifoundation.exception.StructuredOutputTerminationException;
-import run.halo.aifoundation.exception.StructuredOutputValidationException;
-import run.halo.aifoundation.exception.StructuredOutputSchemaException;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.chat.StepContext;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.chat.StreamTextResult;
+import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
+import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.exception.AiGenerationTimeoutException;
+import run.halo.aifoundation.exception.StructuredOutputSchemaException;
+import run.halo.aifoundation.exception.StructuredOutputTerminationException;
+import run.halo.aifoundation.exception.StructuredOutputValidationException;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.message.ModelMessageRole;
+import run.halo.aifoundation.part.GenerationContentPart;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.part.TextStreamPart;
-import run.halo.aifoundation.tool.ToolCall;
-import run.halo.aifoundation.tool.ToolApprovalRequest;
-import run.halo.aifoundation.tool.ToolDefinition;
-import run.halo.aifoundation.tool.ToolError;
-import run.halo.aifoundation.tool.ToolResult;
-import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
-import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.ollama.OllamaChatOptions;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
+import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.service.language.mapping.LanguageModelChatOptionsBuilder;
 import run.halo.aifoundation.service.language.mapping.LanguageModelMessageMapper;
 import run.halo.aifoundation.service.language.mapping.LanguageModelRequestValidator;
 import run.halo.aifoundation.service.language.mapping.LanguageModelResponseMapper;
 import run.halo.aifoundation.service.language.mapping.LanguageModelToolCallMapper;
 import run.halo.aifoundation.service.language.reasoning.ReasoningContentExtractor;
-import run.halo.aifoundation.service.language.stream.LanguageModelStreamResultBuilder;
 import run.halo.aifoundation.service.language.stream.CancellableStreamReplayCoordinator;
+import run.halo.aifoundation.service.language.stream.LanguageModelStreamResultBuilder;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModels;
@@ -93,6 +88,11 @@ import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 import run.halo.aifoundation.service.observation.UsageTelemetry;
 import run.halo.aifoundation.service.observation.UsageUnitKind;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.tool.ToolError;
+import run.halo.aifoundation.tool.ToolResult;
 
 @Slf4j
 public class LanguageModelImpl implements LanguageModel {
@@ -292,13 +292,8 @@ public class LanguageModelImpl implements LanguageModel {
             var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
             var streamState = new SimpleStreamState();
 
-            var providerStream = usageExecutionObserver == null
-                ? withStepTimeout(chatModel.stream(prompt), request)
-                : usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                    () -> withStepTimeout(chatModel.stream(prompt), request),
-                    response -> NormalizedUsage.from(response.getMetadata().getUsage()),
-                    response -> response.getMetadata() == null
-                        ? null : response.getMetadata().getModel());
+            var providerStream = observeChatStream(0,
+                () -> withStepTimeout(chatModel.stream(prompt), request));
             var stream = providerStream
                 .<ChatResponse>handle((response, sink) -> {
                     try {
@@ -401,13 +396,8 @@ public class LanguageModelImpl implements LanguageModel {
             var totalUsage = new UsageAccumulator();
             var prompt = new Prompt(messages, buildChatOptions(request));
             var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
-            var providerStream = usageExecutionObserver == null
-                ? withStepTimeout(chatModel.stream(prompt), request)
-                : usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                    () -> withStepTimeout(chatModel.stream(prompt), request),
-                    response -> NormalizedUsage.from(response.getMetadata().getUsage()),
-                    response -> response.getMetadata() == null
-                        ? null : response.getMetadata().getModel());
+            var providerStream = observeChatStream(0,
+                () -> withStepTimeout(chatModel.stream(prompt), request));
             var stream = providerStream
                 .<ChatResponse>handle((response, sink) -> {
                     try {
@@ -491,11 +481,8 @@ public class LanguageModelImpl implements LanguageModel {
             }
             var accumulator = new StreamStepAccumulator(stepIndex);
             var prompt = new Prompt(prepared.messages(), buildChatOptions(prepared.request()));
-            var providerStream = usageExecutionObserver == null
-                ? providerStreamingChatModel.streamParts(prompt)
-                : usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
-                    () -> providerStreamingChatModel.streamParts(prompt),
-                    this::streamPartUsage, this::streamPartModel);
+            var providerStream = observeProviderStream(stepIndex,
+                () -> providerStreamingChatModel.streamParts(prompt));
             var stream = providerStream
                 .<ProviderStreamPart>handle((part, sink) -> {
                     try {
@@ -521,16 +508,44 @@ public class LanguageModelImpl implements LanguageModel {
         });
     }
 
+    private Flux<ChatResponse> observeChatStream(int stepIndex,
+        Supplier<Flux<ChatResponse>> invocation) {
+        if (usageExecutionObserver == null) {
+            return invocation.get();
+        }
+        return usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
+            invocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
+            this::responseModel);
+    }
+
+    private Flux<ProviderStreamPart> observeProviderStream(int stepIndex,
+        Supplier<Flux<ProviderStreamPart>> invocation) {
+        if (usageExecutionObserver == null) {
+            return invocation.get();
+        }
+        return usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
+            invocation, this::streamPartUsage, this::streamPartModel);
+    }
+
+    private String responseModel(ChatResponse response) {
+        if (response.getMetadata() == null) {
+            return null;
+        }
+        return response.getMetadata().getModel();
+    }
+
     private NormalizedUsage streamPartUsage(ProviderStreamPart part) {
-        return part instanceof ProviderStreamPart.ChatResponsePart response
-            ? NormalizedUsage.from(response.response().getMetadata().getUsage())
-            : NormalizedUsage.missing();
+        if (part instanceof ProviderStreamPart.ChatResponsePart response) {
+            return NormalizedUsage.from(response.response().getMetadata().getUsage());
+        }
+        return NormalizedUsage.missing();
     }
 
     private String streamPartModel(ProviderStreamPart part) {
-        return part instanceof ProviderStreamPart.ChatResponsePart response
-            && response.response().getMetadata() != null
-            ? response.response().getMetadata().getModel() : null;
+        if (part instanceof ProviderStreamPart.ChatResponsePart response) {
+            return responseModel(response.response());
+        }
+        return null;
     }
 
     private Flux<TextStreamPart> mapProviderToolStreamPart(PreparedInvocation prepared,
@@ -1740,10 +1755,7 @@ public class LanguageModelImpl implements LanguageModel {
             if (shouldUseReasoningAwareStreamCall(request)) {
                 Supplier<Flux<ChatResponse>> invocation =
                     () -> withStepTimeout(chatModel.stream(prompt), request);
-                var stream = usageExecutionObserver == null ? invocation.get()
-                    : usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
-                        invocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
-                        response -> response.getMetadata().getModel());
+                var stream = observeChatStream(stepIndex, invocation);
                 return stream.collectList().map(this::aggregateStreamResponses);
             }
             Supplier<Mono<ChatResponse>> invocation =
@@ -1751,14 +1763,12 @@ public class LanguageModelImpl implements LanguageModel {
                     .subscribeOn(Schedulers.boundedElastic());
             Supplier<Mono<ChatResponse>> timedInvocation =
                 () -> withStepTimeout(invocation.get(), request);
-            var observed = usageExecutionObserver == null
-                ? timedInvocation.get()
-                : usageExecutionObserver.observe(UsageUnitKind.GENERATION_STEP, stepIndex,
-                    timedInvocation,
-                    response -> NormalizedUsage.from(response.getMetadata().getUsage()),
-                    response -> response.getMetadata() == null
-                        ? null : response.getMetadata().getModel());
-            return observed;
+            if (usageExecutionObserver == null) {
+                return timedInvocation.get();
+            }
+            return usageExecutionObserver.observe(UsageUnitKind.GENERATION_STEP, stepIndex,
+                timedInvocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
+                this::responseModel);
         });
         var maxRetries = maxRetries(request);
         return maxRetries <= 0 ? call

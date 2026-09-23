@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -32,11 +33,11 @@ import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.model.ModelInfo;
 import run.halo.aifoundation.model.ProviderInfo;
-import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
@@ -172,11 +173,14 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
             Supplier<Mono<GenerateImageResult>> invocation =
                 () -> client.generateImage(request, target, nativeOptions);
-            var observed = (usageExecutionObserver == null ? invocation.get()
-                : usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex, invocation,
-                    result -> NormalizedUsage.from(result.getUsage()), this::responseModel))
-                .doOnNext(ignored -> checkCancellation(request));
-            return observed;
+            Mono<GenerateImageResult> observed;
+            if (usageExecutionObserver == null) {
+                observed = invocation.get();
+            } else {
+                observed = usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex,
+                    invocation, result -> NormalizedUsage.from(result.getUsage()), this::responseModel);
+            }
+            return observed.doOnNext(ignored -> checkCancellation(request));
         });
         var maxRetries = maxRetries(request);
         return maxRetries <= 0 ? call
@@ -184,8 +188,10 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     }
 
     private String responseModel(GenerateImageResult result) {
-        return result.getResponses() == null || result.getResponses().isEmpty()
-            ? null : result.getResponses().get(result.getResponses().size() - 1).getModel();
+        if (CollectionUtils.isEmpty(result.getResponses())) {
+            return null;
+        }
+        return result.getResponses().getLast().getModel();
     }
 
     private ParameterMappingTarget mappingTarget(GenerateImageRequest request) {

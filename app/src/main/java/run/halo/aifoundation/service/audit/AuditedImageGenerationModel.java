@@ -2,6 +2,7 @@ package run.halo.aifoundation.service.audit;
 
 import java.util.List;
 import java.util.Objects;
+import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.image.GenerateImageRequest;
@@ -14,8 +15,8 @@ import run.halo.aifoundation.model.ModelInfo;
 import run.halo.aifoundation.model.ProviderInfo;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
-import run.halo.aifoundation.service.observation.UsageOperation;
 import run.halo.aifoundation.service.observation.UsageObservation;
+import run.halo.aifoundation.service.observation.UsageOperation;
 
 public class AuditedImageGenerationModel implements ImageGenerationModel,
     ImageGenerationMiddlewareAware {
@@ -76,8 +77,10 @@ public class AuditedImageGenerationModel implements ImageGenerationModel,
             session.succeed(NormalizedUsage.missing(), null, 0);
             return;
         }
-        var responseModel = result.getResponses() == null || result.getResponses().isEmpty()
-            ? null : result.getResponses().getLast().getModel();
+        String responseModel = null;
+        if (!CollectionUtils.isEmpty(result.getResponses())) {
+            responseModel = result.getResponses().getLast().getModel();
+        }
         session.succeed(NormalizedUsage.from(result.getUsage()), responseModel, 1);
     }
 

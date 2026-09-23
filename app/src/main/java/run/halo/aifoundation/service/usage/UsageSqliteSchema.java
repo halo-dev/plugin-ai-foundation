@@ -157,14 +157,20 @@ final class UsageSqliteSchema {
     static void validateRecognized(Connection connection) throws SQLException {
         try (var statement = connection.createStatement();
             var rows = statement.executeQuery("PRAGMA user_version")) {
-            if (!rows.next() || rows.getInt(1) != VERSION) {
+            if (!rows.next()) {
+                throw new SQLException("Missing SQLite statistics schema version");
+            }
+            if (rows.getInt(1) != VERSION) {
                 throw new SQLException("Unsupported SQLite statistics schema version");
             }
         }
         try (var statement = connection.prepareStatement(
             "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'");
             var rows = statement.executeQuery()) {
-            if (!rows.next() || !Integer.toString(VERSION).equals(rows.getString(1))) {
+            if (!rows.next()) {
+                throw new SQLException("Missing statistics schema metadata");
+            }
+            if (!Integer.toString(VERSION).equals(rows.getString(1))) {
                 throw new SQLException("SQLite statistics schema marker is missing");
             }
         }
@@ -213,7 +219,10 @@ final class UsageSqliteSchema {
             } catch (NumberFormatException error) {
                 throw new SQLException("Invalid SQLite statistics schema marker", error);
             }
-            if (version < 1 || version > VERSION) {
+            if (version < 1) {
+                throw new SQLException("Unsupported SQLite statistics schema version " + version);
+            }
+            if (version > VERSION) {
                 throw new SQLException("Unsupported SQLite statistics schema version " + version);
             }
         }

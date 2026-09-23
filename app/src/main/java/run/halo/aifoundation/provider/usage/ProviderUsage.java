@@ -36,8 +36,10 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
         Object raw) {
         var input = count(node, inputField);
         var output = count(node, "completion_tokens");
-        if (output == null && input != null) {
-            output = 0L;
+        if (input != null) {
+            if (output == null) {
+                output = 0L;
+            }
         }
         var total = count(node, totalField);
         if (total == null) {
@@ -47,47 +49,68 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
     }
 
     public static ProviderUsage messages(JsonNode node, Object raw) {
-        var input = count(node, "input_tokens");
-        var output = count(node, "output_tokens");
+        var executor = messagesExecutorUsage(node);
+        var input = executor.input();
+        input = sum(input, cacheCount(node, "cache_read_input_tokens"));
+        input = sum(input, cacheCount(node, "cache_creation_input_tokens"));
+        return new ProviderUsage(input, executor.output(), sum(input, executor.output()),
+            count(node, "cache_read_input_tokens"), count(node, "cache_creation_input_tokens"),
+            count(node.path("output_tokens_details"), "thinking_tokens"), raw, executor.complete());
+    }
+
+    private static ExecutorUsage messagesExecutorUsage(JsonNode node) {
         var iterations = node.path("iterations");
         var fallback = false;
         var complete = true;
         for (var iteration : iterations) {
-            var type = iteration.path("type").asText();
-            fallback |= "fallback_message".equals(type);
-            // Advisor sub-inferences have their own model attribution. Keep known executor
-            // totals, but do not claim complete usage for unaccounted server-side work.
-            if (!"compaction".equals(type) && !"message".equals(type)
-                && !"fallback_message".equals(type)) {
-                complete = false;
+            switch (iteration.path("type").asText()) {
+                case "compaction", "message" -> { }
+                case "fallback_message" -> fallback = true;
+                // Advisor sub-inferences have their own model attribution. Keep known executor
+                // totals, but do not claim complete usage for unaccounted server-side work.
+                default -> complete = false;
             }
         }
-        if (iterations.isArray() && !fallback) {
-            var hasExecutor = false;
-            Long iterationInput = 0L;
-            Long iterationOutput = 0L;
-            for (var iteration : iterations) {
-                var type = iteration.path("type").asText();
-                if ("compaction".equals(type) || "message".equals(type)) {
-                    hasExecutor = true;
-                    iterationInput = sum(iterationInput, count(iteration, "input_tokens"));
-                    iterationOutput = sum(iterationOutput, count(iteration, "output_tokens"));
-                }
-            }
-            if (hasExecutor) {
-                input = iterationInput;
-                output = iterationOutput;
-            }
+        var topLevel = new ExecutorUsage(count(node, "input_tokens"),
+            count(node, "output_tokens"), complete);
+        if (!iterations.isArray()) {
+            return topLevel;
         }
-        var read = count(node, "cache_read_input_tokens");
-        var write = count(node, "cache_creation_input_tokens");
-        // Messages reports uncached input separately; omitted cache counters mean no cache use.
-        if (input != null) {
-            input = sum(input, node.has("cache_read_input_tokens") ? read : Long.valueOf(0));
-            input = sum(input, node.has("cache_creation_input_tokens") ? write : Long.valueOf(0));
+        if (fallback) {
+            return topLevel;
         }
-        return new ProviderUsage(input, output, sum(input, output), read, write,
-            count(node.path("output_tokens_details"), "thinking_tokens"), raw, complete);
+        var hasExecutor = false;
+        Long input = 0L;
+        Long output = 0L;
+        for (var iteration : iterations) {
+            if (!isExecutorIteration(iteration)) {
+                continue;
+            }
+            hasExecutor = true;
+            input = sum(input, count(iteration, "input_tokens"));
+            output = sum(output, count(iteration, "output_tokens"));
+        }
+        if (!hasExecutor) {
+            return topLevel;
+        }
+        return new ExecutorUsage(input, output, complete);
+    }
+
+    private static boolean isExecutorIteration(JsonNode iteration) {
+        return switch (iteration.path("type").asText()) {
+            case "compaction", "message" -> true;
+            default -> false;
+        };
+    }
+
+    private record ExecutorUsage(Long input, Long output, boolean complete) { }
+
+    private static Long cacheCount(JsonNode node, String field) {
+        // Omitted cache counters mean no cache use; explicitly invalid counters remain unknown.
+        if (!node.has(field)) {
+            return 0L;
+        }
+        return count(node, field);
     }
 
     public ProviderUsage partial() {
@@ -97,19 +120,39 @@ public record ProviderUsage(Long inputTokens, Long outputTokens, Long totalToken
 
     private static Long count(JsonNode node, String field) {
         var value = node.path(field);
-        return value.isIntegralNumber() && value.canConvertToLong() && value.longValue() >= 0
-            ? value.longValue() : null;
+        if (!value.isIntegralNumber()) {
+            return null;
+        }
+        if (!value.canConvertToLong()) {
+            return null;
+        }
+        if (value.longValue() < 0) {
+            return null;
+        }
+        return value.longValue();
     }
 
     private static Long sum(Long left, Long right) {
-        if (left == null || right == null || Long.MAX_VALUE - left < right) {
+        if (left == null) {
+            return null;
+        }
+        if (right == null) {
+            return null;
+        }
+        if (Long.MAX_VALUE - left < right) {
             return null;
         }
         return left + right;
     }
 
     private static Integer sdkCount(Long value) {
-        return value != null && value <= Integer.MAX_VALUE ? value.intValue() : null;
+        if (value == null) {
+            return null;
+        }
+        if (value > Integer.MAX_VALUE) {
+            return null;
+        }
+        return value.intValue();
     }
 
     @Override

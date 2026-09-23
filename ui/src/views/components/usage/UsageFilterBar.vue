@@ -60,14 +60,13 @@ const modelItems = computed(() => [
 ])
 
 const expanded = ref(false)
-const advancedActive = computed(
-  () =>
-    !!(
-      props.state.modelType ||
-      props.state.operation ||
-      props.state.usageQuality ||
-      props.state.feature
-    ),
+const advancedActive = computed(() =>
+  [
+    props.state.modelType,
+    props.state.operation,
+    props.state.usageQuality,
+    props.state.feature,
+  ].some(Boolean),
 )
 
 watch(

@@ -106,8 +106,9 @@ export function useUsageHealth() {
     },
     // 健康状态可能在页面停留期间劣化（写入丢失、存储不可用），因此正常时也保持低频轮询
     refetchInterval(data) {
-      const degraded = data?.available === false || data?.complete === false
-      return degraded ? 30_000 : 60_000
+      if (data?.available === false) return 30_000
+      if (data?.complete === false) return 30_000
+      return 60_000
     },
   })
 }

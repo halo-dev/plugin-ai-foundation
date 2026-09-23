@@ -52,15 +52,9 @@ const timeTicks = computed(() =>
 const bars = computed(() =>
   points.value.map((point) => {
     const value = valueOf(point)
-    const unknown = value === undefined || value === null
-    const input = point.inputTokens
-    const output = point.outputTokens
-    const split =
-      metric.value === 'tokens' &&
-      input != null &&
-      output != null &&
-      input + output === value &&
-      value > 0
+    const unknown = value == null
+    const inputShare = tokenInputShare(point, value)
+    const split = inputShare !== undefined
     const position =
       ((Date.parse(point.bucketStart || '') - domain.value.start) /
         (domain.value.end - domain.value.start)) *
@@ -70,19 +64,41 @@ const bars = computed(() =>
       point,
       unknown,
       split,
-      inputShare: split ? (input! / value!) * 100 : 0,
+      inputShare: inputShare ?? 0,
       left: `${position}%`,
       width: `${width}%`,
       height: unknown ? '6px' : `${((value ?? 0) / ceiling.value) * 100}%`,
-      warning: point.complete === false || !!point.missingUsageCalls || !!point.partialUsageCalls,
+      warning: hasUsageWarning(point),
     }
   }),
 )
 const active = computed(() =>
   points.value.find((point) => point.bucketStart === activeBucket.value),
 )
+function tokenInputShare(point: UsageTrendPoint, total?: number) {
+  if (metric.value !== 'tokens') return undefined
+  if (point.inputTokens == null) return undefined
+  if (point.outputTokens == null) return undefined
+  if (point.inputTokens + point.outputTokens !== total) return undefined
+  if (total <= 0) return undefined
+  return (point.inputTokens / total) * 100
+}
+function hasUsageWarning(point: UsageTrendPoint) {
+  if (point.complete === false) return true
+  if (point.missingUsageCalls) return true
+  return Boolean(point.partialUsageCalls)
+}
 function tooltip(point: UsageTrendPoint) {
-  return `${formatBucketStart(point.bucketStart, point.resolution)} · 调用 ${formatTokens(point.callCount)} · 已报告 Token ${formatTokens(point.accountedTotalTokens)} · 输入 ${formatTokens(point.inputTokens)} / 输出 ${formatTokens(point.outputTokens)}${point.complete === false ? ' · 数据不完整' : ''}${point.missingUsageCalls ? ` · 用量缺失 ${point.missingUsageCalls}` : ''}${point.partialUsageCalls ? ` · 部分用量 ${point.partialUsageCalls}` : ''}`
+  const parts = [
+    formatBucketStart(point.bucketStart, point.resolution),
+    `调用 ${formatTokens(point.callCount)}`,
+    `已报告 Token ${formatTokens(point.accountedTotalTokens)}`,
+    `输入 ${formatTokens(point.inputTokens)} / 输出 ${formatTokens(point.outputTokens)}`,
+  ]
+  if (point.complete === false) parts.push('数据不完整')
+  if (point.missingUsageCalls) parts.push(`用量缺失 ${point.missingUsageCalls}`)
+  if (point.partialUsageCalls) parts.push(`部分用量 ${point.partialUsageCalls}`)
+  return parts.join(' · ')
 }
 </script>
 

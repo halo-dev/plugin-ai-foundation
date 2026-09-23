@@ -1,35 +1,75 @@
 package run.halo.aifoundation.service.rerank;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.exception.RerankCancelledException;
 import run.halo.aifoundation.exception.RerankTimeoutException;
+import run.halo.aifoundation.media.DataContent;
+import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
+import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
-import run.halo.aifoundation.provider.AiProviderType;
-import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
+import run.halo.aifoundation.rerank.RerankResponseMetadata;
 import run.halo.aifoundation.rerank.RerankResult;
-import run.halo.aifoundation.media.DataContent;
-import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import org.junit.jupiter.api.Test;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageCallStart;
+import run.halo.aifoundation.service.observation.UsageEventSink;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
 
 class RerankingModelRuntimeFactoryTest {
 
     private final RerankingModelRuntimeFactory factory = new RerankingModelRuntimeFactory();
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @org.junit.jupiter.params.provider.ValueSource(strings = "served-model")
+    void recordsProviderResponseModelWithoutChangingTheResponse(String modelId) {
+        var sink = mock(UsageEventSink.class);
+        var start = new UsageCallStart("rerank", 1, Instant.now(), "caller", "1", "stack",
+            null, "rerank", "RERANK", "configured", "provider", "test", "requested", false);
+        var session = new UsageCallSession(sink, start, Clock.systemUTC());
+        var response = RerankResponse.builder().results(List.of()).build();
+        if (modelId != null) {
+            response.setResponse(RerankResponseMetadata.builder().model(modelId).build());
+        }
+        ProviderRerankingClient client = request -> Mono.just(response);
+        var context = ModelRuntimeContext.unresolved("test", "configured", "provider",
+            new RuntimeParameterMappings(EffectiveParameterMappings.empty(), null,
+                "configured", "provider"));
+        var model = new RerankingModelImpl(client, RerankingModelProviderOptions.defaults(),
+            context, new UsageExecutionObserver());
+        var request = RerankRequest.builder().query("query").documents("document").build();
+        StepVerifier.create(model.rerank(request).contextWrite(value ->
+                value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session)))
+            .assertNext(value -> assertThat(value).isSameAs(response))
+            .verifyComplete();
+        var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
+        verify(sink).recordExecution(any(), execution.capture());
+        assertThat(execution.getValue().responseModelId()).isEqualTo(modelId);
+    }
 
     @Test
     void rerank_preservesOriginalDocumentIndexes() {

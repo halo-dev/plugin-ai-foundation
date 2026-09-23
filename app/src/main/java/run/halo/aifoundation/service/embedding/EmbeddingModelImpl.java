@@ -261,10 +261,11 @@ public class EmbeddingModelImpl implements EmbeddingModel {
                     () -> embedBatch(request, batch, options))
                 .subscribeOn(Schedulers.boundedElastic())
                 .transform(mono -> withEmbeddingTimeout(mono, request));
-            var observed = usageExecutionObserver == null ? invocation.get()
-                : usageExecutionObserver.observe(UsageUnitKind.EMBEDDING_BATCH, batch.index(),
-                    invocation, this::batchUsage, this::batchModel);
-            return observed;
+            if (usageExecutionObserver == null) {
+                return invocation.get();
+            }
+            return usageExecutionObserver.observe(UsageUnitKind.EMBEDDING_BATCH, batch.index(),
+                invocation, this::batchUsage, this::batchModel);
         });
         var maxRetries = batchPlanner.maxRetries(request);
         return maxRetries <= 0 ? call

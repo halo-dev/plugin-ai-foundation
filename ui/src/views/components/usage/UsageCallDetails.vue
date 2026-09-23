@@ -1,25 +1,49 @@
 <script setup lang="ts">
 import type { UsageCallItem } from '@/api/generated'
-import { formatDuration, formatTokens, usageQualityLabel, usageStatusLabel } from '@/utils/usage'
+import {
+  formatDuration,
+  formatTokens,
+  usageQualityLabel,
+  usageStatusLabel,
+  usageStatusState,
+} from '@/utils/usage'
 import { VStatusDot } from '@halo-dev/components'
 import { computed } from 'vue'
 import UsageCallExecutions from './UsageCallExecutions.vue'
 const props = defineProps<{ call: UsageCallItem }>()
+const responseModel = computed(() => {
+  const request = props.call.requestModelId || '未知'
+  const response = props.call.responseModelId
+  if (!response) return request
+  if (response === props.call.requestModelId) return request
+  return `${request} → ${response}`
+})
+const responseMode = computed(() => {
+  if (props.call.streaming == null) return '未知'
+  if (props.call.streaming) return '流式响应'
+  return '非流式响应'
+})
+const showUnknownUsage = computed(() => {
+  if (!props.call.usage) return true
+  if (props.call.usage.quality === 'MISSING') return true
+  return props.call.usage.quality === 'PARTIAL'
+})
+const showIncompleteCall = computed(() => {
+  if (props.call.complete === false) return true
+  return Boolean(props.call.missingExecutionCount)
+})
 const fields = computed(() => [
   { label: '模型标识', value: props.call.modelName || '未知' },
   { label: '供应商标识', value: props.call.providerName || '未知' },
   {
     label: '请求 → 响应模型',
-    value:
-      props.call.responseModelId && props.call.responseModelId !== props.call.requestModelId
-        ? `${props.call.requestModelId || '未知'} → ${props.call.responseModelId}`
-        : props.call.requestModelId || '未知',
+    value: responseModel.value,
   },
   { label: '调用方', value: props.call.callerPluginName || '未知调用方' },
   { label: '调用方版本', value: props.call.callerPluginVersion || '未知' },
   {
     label: '响应方式',
-    value: props.call.streaming == null ? '未知' : props.call.streaming ? '流式响应' : '非流式响应',
+    value: responseMode.value,
   },
   ...(props.call.feature ? [{ label: '功能标识', value: props.call.feature }] : []),
   ...(props.call.modelType === 'LANGUAGE'
@@ -50,7 +74,10 @@ const breakdown = computed(() => [
             <dd>{{ formatTokens(call.usage?.outputTokens) }}</dd>
           </div>
         </dl>
-        <dl v-if="breakdown.some((item) => item.value != null)" class=":uno: usage-consumption-extra">
+        <dl
+          v-if="breakdown.some((item) => item.value != null)"
+          class=":uno: usage-consumption-extra"
+        >
           <template v-for="item in breakdown" :key="item.label"
             ><div v-if="item.value != null">
               <dt>{{ item.label }}</dt>
@@ -61,36 +88,20 @@ const breakdown = computed(() => [
         </dl>
         <p class=":uno: usage-consumption-note">
           {{ usageQualityLabel(call.usage?.quality)
-          }}<template
-            v-if="
-              !call.usage || call.usage.quality === 'MISSING' || call.usage.quality === 'PARTIAL'
-            "
-            >。未报告的消耗无法确定，不代表没有消耗。</template
-          >
+          }}<template v-if="showUnknownUsage">。未报告的消耗无法确定，不代表没有消耗。</template>
         </p>
       </section>
       <div class=":uno: usage-process">
         <div class=":uno: usage-process-summary">
           <VStatusDot
-            :state="
-              call.status === 'SUCCEEDED'
-                ? 'success'
-                : call.status === 'FAILED'
-                  ? 'error'
-                  : call.status === 'TIMED_OUT' || call.status === 'ABANDONED'
-                    ? 'warning'
-                    : 'default'
-            "
+            :state="usageStatusState(call.status)"
             :text="usageStatusLabel(call.status)"
           />
           <span>共 {{ call.attemptCount ?? '未知' }} 次执行</span
           ><span>总耗时 {{ formatDuration(call.durationMillis) }}</span>
           <span v-if="call.streaming">流式响应</span>
         </div>
-        <p
-          v-if="call.complete === false || call.missingExecutionCount"
-          class=":uno: usage-process-warning"
-        >
+        <p v-if="showIncompleteCall" class=":uno: usage-process-warning">
           {{ call.complete === false ? '统计数据不完整。' : ''
           }}<template v-if="call.missingExecutionCount"
             >{{ call.missingExecutionCount }} 条执行用量缺失，已报告 Token

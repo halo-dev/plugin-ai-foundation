@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UsageSummary } from '@/api/generated'
-import { formatCoverage, formatTokens, usageStatusLabel } from '@/utils/usage'
+import { formatCoverage, formatTokens, usageStatusLabel, usageStatusState } from '@/utils/usage'
 import { VLoading, VStatusDot } from '@halo-dev/components'
 import { computed } from 'vue'
 
@@ -18,20 +18,12 @@ const fields = {
   IN_PROGRESS: 'inProgressCount',
   ABANDONED: 'abandonedCount',
 } as const
-const states = {
-  SUCCEEDED: 'success',
-  FAILED: 'error',
-  TIMED_OUT: 'warning',
-  CANCELLED: 'default',
-  IN_PROGRESS: 'default',
-  ABANDONED: 'warning',
-} as const
 const items = computed(() =>
   Object.entries(fields).map(([status, field]) => ({
     status,
     label: usageStatusLabel(status),
     count: props.summary?.[field],
-    state: states[status as keyof typeof states],
+    state: usageStatusState(status),
   })),
 )
 const coverage = computed(() =>

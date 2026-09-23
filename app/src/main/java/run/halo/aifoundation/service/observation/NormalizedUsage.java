@@ -1,10 +1,12 @@
 package run.halo.aifoundation.service.observation;
 
 import java.util.Collection;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.util.CollectionUtils;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.image.ImageUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.rerank.RerankUsage;
 
 public record NormalizedUsage(
@@ -21,13 +23,32 @@ public record NormalizedUsage(
     public NormalizedUsage {
         if (quality == null) {
             quality = quality(inputTokens, outputTokens, providerTotalTokens);
-            if (quality == UsageQuality.MISSING && (cacheReadInputTokens != null
-                || cacheCreationInputTokens != null || reasoningOutputTokens != null)) {
-                quality = UsageQuality.PARTIAL;
+            if (quality == UsageQuality.MISSING) {
+                if (hasTokenDetails(cacheReadInputTokens, cacheCreationInputTokens,
+                    reasoningOutputTokens)) {
+                    quality = UsageQuality.PARTIAL;
+                }
             }
         }
         accountedTotalTokens = accountedTotalTokens != null
             ? accountedTotalTokens : accounted(inputTokens, outputTokens, providerTotalTokens);
+    }
+
+    public static boolean isMissing(NormalizedUsage usage) {
+        if (usage == null) {
+            return true;
+        }
+        return usage.quality() == UsageQuality.MISSING;
+    }
+
+    private static boolean hasTokenDetails(Long cacheRead, Long cacheCreation, Long reasoning) {
+        if (cacheRead != null) {
+            return true;
+        }
+        if (cacheCreation != null) {
+            return true;
+        }
+        return reasoning != null;
     }
 
     public static NormalizedUsage missing() {
@@ -62,8 +83,11 @@ public record NormalizedUsage(
                 null, null, null, value(usage.getTotalTokens()), null, null);
     }
 
-    public static NormalizedUsage from(org.springframework.ai.chat.metadata.Usage usage) {
-        if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage) {
+    public static NormalizedUsage from(Usage usage) {
+        if (usage == null) {
+            return missing();
+        }
+        if (usage instanceof org.springframework.ai.chat.metadata.EmptyUsage) {
             return missing();
         }
         if (usage instanceof ProviderUsage typed) {
@@ -78,7 +102,10 @@ public record NormalizedUsage(
     }
 
     public static NormalizedUsage fromFailure(Throwable error) {
-        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+        for (int depth = 0; depth < 8; depth++, error = error.getCause()) {
+            if (error == null) {
+                break;
+            }
             if (error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e) {
                 return from(e.getUsage());
             }
@@ -98,14 +125,26 @@ public record NormalizedUsage(
 
     public static NormalizedUsage fromLogicalFailure(Throwable error) {
         var usage = fromFailure(error);
-        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
-            if (error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e
-                && e.getStepIndex() != null && e.getStepIndex() > 0) {
+        for (int depth = 0; depth < 8; depth++, error = error.getCause()) {
+            if (error == null) {
+                break;
+            }
+            if (isLaterStepFailure(error)) {
                 // Exception usage describes the failing step, not any earlier unseen steps.
                 return usage.partial();
             }
         }
         return usage;
+    }
+
+    private static boolean isLaterStepFailure(Throwable error) {
+        if (!(error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e)) {
+            return false;
+        }
+        if (e.getStepIndex() == null) {
+            return false;
+        }
+        return e.getStepIndex() > 0;
     }
 
     public static NormalizedUsage sum(Collection<NormalizedUsage> values) {
@@ -118,7 +157,7 @@ public record NormalizedUsage(
     }
 
     private static NormalizedUsage sumChecked(Collection<NormalizedUsage> values) {
-        if (values == null || values.isEmpty()) {
+        if (CollectionUtils.isEmpty(values)) {
             return missing();
         }
         Long input = null;
@@ -132,7 +171,7 @@ public record NormalizedUsage(
         boolean anyKnown = false;
         boolean anyMissing = false;
         for (var value : values) {
-            if (value == null || value.quality() == UsageQuality.MISSING) {
+            if (isMissing(value)) {
                 anyMissing = true;
                 continue;
             }
@@ -144,8 +183,11 @@ public record NormalizedUsage(
             reasoning = addNullable(reasoning, value.reasoningOutputTokens());
             providerTotal = addNullable(providerTotal, value.providerTotalTokens());
             accountedTotal = addNullable(accountedTotal, value.accountedTotalTokens());
-            aggregateQuality = aggregateQuality == null ? value.quality()
-                : aggregateQuality == value.quality() ? aggregateQuality : UsageQuality.PARTIAL;
+            if (aggregateQuality == null) {
+                aggregateQuality = value.quality();
+            } else if (aggregateQuality != value.quality()) {
+                aggregateQuality = UsageQuality.PARTIAL;
+            }
         }
         if (!anyKnown) {
             return missing();
@@ -156,23 +198,31 @@ public record NormalizedUsage(
     }
 
     private static UsageQuality quality(Long input, Long output, Long providerTotal) {
-        if (input != null && output != null) {
-            return UsageQuality.REPORTED_COMPONENTS;
+        if (input != null) {
+            if (output != null) {
+                return UsageQuality.REPORTED_COMPONENTS;
+            }
         }
         if (providerTotal != null) {
             return UsageQuality.REPORTED_TOTAL;
         }
-        if (input != null || output != null) {
+        if (input != null) {
+            return UsageQuality.PARTIAL;
+        }
+        if (output != null) {
             return UsageQuality.PARTIAL;
         }
         return UsageQuality.MISSING;
     }
 
     private static Long accounted(Long input, Long output, Long providerTotal) {
-        if (input != null && output != null) {
-            return Math.addExact(input, output);
+        if (input == null) {
+            return providerTotal;
         }
-        return providerTotal;
+        if (output == null) {
+            return providerTotal;
+        }
+        return Math.addExact(input, output);
     }
 
     private static Long addNullable(Long left, Long right) {
@@ -183,7 +233,13 @@ public record NormalizedUsage(
     }
 
     private static Long value(Integer value) {
-        return value == null || value < 0 ? null : value.longValue();
+        if (value == null) {
+            return null;
+        }
+        if (value < 0) {
+            return null;
+        }
+        return value.longValue();
     }
 
 }

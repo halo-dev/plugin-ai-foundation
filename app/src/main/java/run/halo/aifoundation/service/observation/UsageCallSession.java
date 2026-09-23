@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.util.StringUtils;
 import reactor.util.context.ContextView;
 
 public final class UsageCallSession {
@@ -52,8 +53,7 @@ public final class UsageCallSession {
 
     public void succeed(NormalizedUsage usage, String responseModelId, int stepCount) {
         var executionStatus = latestExecutionStatus.get();
-        if (start.streaming() && executionStatus != null
-            && executionStatus != UsageStatus.SUCCEEDED) {
+        if (shouldPreserveExecutionStatus(executionStatus)) {
             finish(executionStatus, latestExecutionError.get(), usage, responseModelId, stepCount);
             return;
         }
@@ -68,10 +68,11 @@ public final class UsageCallSession {
     }
 
     public void fail(Throwable error, NormalizedUsage usage, int stepCount) {
-        var status = UsageError.isTimeout(error) ? UsageStatus.TIMED_OUT
-            : UsageError.isCancellation(error) ? UsageStatus.CANCELLED : UsageStatus.FAILED;
-        var fallback = usage == null || usage.quality() == UsageQuality.MISSING
-            ? NormalizedUsage.fromLogicalFailure(error) : usage;
+        var status = UsageError.failureStatus(error);
+        var fallback = usage;
+        if (NormalizedUsage.isMissing(fallback)) {
+            fallback = NormalizedUsage.fromLogicalFailure(error);
+        }
         finish(status, UsageError.from(error), fallback, null, stepCount);
     }
 
@@ -100,7 +101,7 @@ public final class UsageCallSession {
         }
         latestExecutionStatus.set(status);
         latestExecutionError.set(UsageError.from(error));
-        if (responseModelId != null && !responseModelId.isBlank()) {
+        if (StringUtils.hasText(responseModelId)) {
             latestResponseModelId.set(responseModelId);
         }
         if (kind == UsageUnitKind.GENERATION_STEP) {
@@ -126,8 +127,7 @@ public final class UsageCallSession {
 
     private synchronized void finish(UsageStatus status, UsageError error, NormalizedUsage usage,
         String responseModelId, int stepCount, boolean projection) {
-        if (!terminal.compareAndSet(false, true)
-            && !(provisionalTerminal && !projection && attempts.get() == 0)) {
+        if (!acceptTerminal(projection)) {
             return;
         }
         // Upsert the same logical call once final metadata arrives; never subscribe for it.
@@ -144,7 +144,7 @@ public final class UsageCallSession {
         var resolvedResponseModelId = responseModelId;
         var resolvedStepCount = stepCount;
         if (start.streaming()) {
-            if (resolvedResponseModelId == null || resolvedResponseModelId.isBlank()) {
+            if (!StringUtils.hasText(resolvedResponseModelId)) {
                 resolvedResponseModelId = latestResponseModelId.get();
             }
             resolvedStepCount = Math.max(resolvedStepCount, observedGenerationSteps.get());
@@ -155,8 +155,34 @@ public final class UsageCallSession {
         publishTerminalIfReady();
     }
 
+    private boolean shouldPreserveExecutionStatus(UsageStatus status) {
+        if (!start.streaming()) {
+            return false;
+        }
+        if (status == null) {
+            return false;
+        }
+        return status != UsageStatus.SUCCEEDED;
+    }
+
+    private boolean acceptTerminal(boolean projection) {
+        if (terminal.compareAndSet(false, true)) {
+            return true;
+        }
+        if (!provisionalTerminal) {
+            return false;
+        }
+        if (projection) {
+            return false;
+        }
+        return !hasExecutions();
+    }
+
     private void publishTerminalIfReady() {
-        if (pendingTerminal == null || completedExecutions < attempts.get()) {
+        if (pendingTerminal == null) {
+            return;
+        }
+        if (completedExecutions < attempts.get()) {
             return;
         }
         var value = pendingTerminal;
