@@ -5,21 +5,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.exception.RerankCancelledException;
 import run.halo.aifoundation.exception.RerankTimeoutException;
-import run.halo.aifoundation.provider.support.ProviderRerankingClient;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankWarning;
 import run.halo.aifoundation.rerank.RerankingModel;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 public class RerankingModelImpl implements RerankingModel {
 
@@ -27,6 +31,7 @@ public class RerankingModelImpl implements RerankingModel {
     private final String providerType;
     private final RerankingModelProviderOptions providerOptions;
     private final RuntimeParameterMappings parameterMappings;
+    private final UsageExecutionObserver usageExecutionObserver;
 
     RerankingModelImpl(ProviderRerankingClient client, String providerType,
         RerankingModelProviderOptions providerOptions) {
@@ -49,12 +54,19 @@ public class RerankingModelImpl implements RerankingModel {
 
     RerankingModelImpl(ProviderRerankingClient client,
         RerankingModelProviderOptions providerOptions, ModelRuntimeContext context) {
+        this(client, providerOptions, context, null);
+    }
+
+    RerankingModelImpl(ProviderRerankingClient client,
+        RerankingModelProviderOptions providerOptions, ModelRuntimeContext context,
+        UsageExecutionObserver usageExecutionObserver) {
         this.client = client;
         this.providerType = context.providerType();
         this.providerOptions = providerOptions != null
             ? providerOptions
             : RerankingModelProviderOptions.defaults();
         this.parameterMappings = context.parameterMappings();
+        this.usageExecutionObserver = usageExecutionObserver;
     }
 
     @Override
@@ -67,12 +79,29 @@ public class RerankingModelImpl implements RerankingModel {
                 }
                 var warnings = requestWarnings(request);
                 var target = mappedTopN(request, warnings);
-                return client.rerank(request, target, providerOptions.getNativeOptions())
+                Supplier<Mono<RerankResponse>> invocation =
+                    () -> client.rerank(request, target, providerOptions.getNativeOptions());
+                Mono<RerankResponse> call;
+                if (usageExecutionObserver == null) {
+                    call = invocation.get();
+                } else {
+                    call = usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
+                        response -> NormalizedUsage.from(response.getUsage()),
+                        RerankingModelImpl::responseModel);
+                }
+                return call
                     .map(response -> withRuntimeWarnings(response, warnings))
                     .doOnNext(response -> checkResultIndexes(request, response));
             })
-            .transform(mono -> withRerankTimeout(mono, request))
-            .doOnNext(ignored -> checkCancellation(request));
+            .doOnNext(ignored -> checkCancellation(request))
+            .transform(call -> withRerankTimeout(call, request));
+    }
+
+    private static String responseModel(RerankResponse response) {
+        if (response.getResponse() == null) {
+            return null;
+        }
+        return response.getResponse().getModel();
     }
 
     private void validateRequest(RerankRequest request) {
@@ -185,6 +214,6 @@ public class RerankingModelImpl implements RerankingModel {
     }
 
     private Duration timeout(RerankRequest request) {
-        return request.getTimeouts() != null ? request.getTimeouts().getTotalTimeout() : null;
+        return request != null && request.getTimeouts() != null ? request.getTimeouts().getTotalTimeout() : null;
     }
 }

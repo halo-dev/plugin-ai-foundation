@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -116,9 +116,7 @@ public final class OpenAiEmbeddingModel
             var model = root.path("model").isTextual() ? root.path("model").asText()
                 : requestedModel;
             return new EmbeddingResponse(values, new EmbeddingResponseMetadata(model,
-                new DefaultUsage(
-                    integer(usage.path("prompt_tokens")), 0,
-                    integer(usage.path("total_tokens")), raw), Map.of()));
+                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class)), Map.of()));
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse OpenAI embedding response", e);
         }

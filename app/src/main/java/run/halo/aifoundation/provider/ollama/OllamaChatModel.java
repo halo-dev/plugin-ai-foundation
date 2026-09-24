@@ -332,8 +332,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
                 nativeUsage.put(field, root.path(field).numberValue());
             }
         }
-        return new OllamaUsage(prompt, completion,
-            prompt != null && completion != null ? prompt + completion : null,
+        return run.halo.aifoundation.provider.usage.ProviderUsage.ollama(root,
             Map.copyOf(nativeUsage));
     }
 
@@ -518,26 +517,4 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
                                   Map<String, String> requestHeaders) {
     }
 
-    private record OllamaUsage(Integer promptTokens, Integer completionTokens,
-                               Integer totalTokens, Object nativeUsage) implements Usage {
-        @Override
-        public Integer getPromptTokens() {
-            return promptTokens;
-        }
-
-        @Override
-        public Integer getCompletionTokens() {
-            return completionTokens;
-        }
-
-        @Override
-        public Integer getTotalTokens() {
-            return totalTokens;
-        }
-
-        @Override
-        public Object getNativeUsage() {
-            return nativeUsage;
-        }
-    }
 }

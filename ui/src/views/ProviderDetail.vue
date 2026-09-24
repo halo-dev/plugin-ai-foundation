@@ -14,6 +14,7 @@ import {
   VStatusDot,
   type StatusDotState,
 } from '@halo-dev/components'
+import { utils } from '@halo-dev/ui-shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, shallowRef } from 'vue'
 import MingcuteDelete2Line from '~icons/mingcute/delete-2-line'
@@ -88,7 +89,7 @@ const statusDot = computed(() => {
 
 const lastCheckedAtText = computed(() => {
   return provider.value?.status?.lastCheckedAt
-    ? new Date(provider.value.status.lastCheckedAt).toLocaleString()
+    ? utils.date.format(provider.value.status.lastCheckedAt, 'YYYY-MM-DD HH:mm:ss')
     : '从未检查'
 })
 

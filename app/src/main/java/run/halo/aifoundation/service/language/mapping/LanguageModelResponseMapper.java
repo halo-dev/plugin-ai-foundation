@@ -5,16 +5,18 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import run.halo.aifoundation.chat.FinishReason;
-import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.chat.GenerationRequestMetadata;
 import run.halo.aifoundation.chat.GenerationResponseMetadata;
 import run.halo.aifoundation.chat.GenerationWarning;
 import run.halo.aifoundation.chat.LanguageModelUsage;
+import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.part.TextStreamPart;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.tool.ToolCall;
 
 public final class LanguageModelResponseMapper {
@@ -78,10 +80,22 @@ public final class LanguageModelResponseMapper {
         return LanguageModelUsage.builder()
             .inputTokens(input)
             .outputTokens(output)
-            .reasoningTokens(reasoningTokens(usage.getNativeUsage()))
+            .reasoningTokens(usageReasoningTokens(usage))
             .totalTokens(total)
             .raw(usage.getNativeUsage())
             .build();
+    }
+
+    private Integer usageReasoningTokens(Usage usage) {
+        if (usage instanceof ProviderUsage typed) {
+            var reasoning = typed.reasoningTokens();
+            if (reasoning != null) {
+                if (reasoning <= Integer.MAX_VALUE) {
+                    return reasoning.intValue();
+                }
+            }
+        }
+        return reasoningTokens(usage.getNativeUsage());
     }
 
     public Map<String, Object> mapMetadata(ChatResponse response) {

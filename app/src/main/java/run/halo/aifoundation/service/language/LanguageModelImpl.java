@@ -1,5 +1,6 @@
 package run.halo.aifoundation.service.language;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -8,9 +9,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.time.Duration;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -26,56 +27,51 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 import run.halo.aifoundation.chat.FinishReason;
-import run.halo.aifoundation.exception.AiGenerationCancelledException;
-import run.halo.aifoundation.exception.AiGenerationTimeoutException;
-import run.halo.aifoundation.part.GenerationContentPart;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.GenerationRequestMetadata;
 import run.halo.aifoundation.chat.GenerationResponseMetadata;
 import run.halo.aifoundation.chat.GenerationStep;
 import run.halo.aifoundation.chat.GenerationWarning;
-import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.chat.GenerateTextResult;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.LanguageModelUsage;
-import run.halo.aifoundation.chat.ReasoningOptions;
-import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
-import run.halo.aifoundation.message.ModelMessage;
-import run.halo.aifoundation.message.ModelMessagePart;
-import run.halo.aifoundation.message.ModelMessageRole;
-import run.halo.aifoundation.part.PartType;
-import run.halo.aifoundation.schema.OutputType;
-import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.chat.PreparedStep;
-import run.halo.aifoundation.exception.StructuredOutputTerminationException;
-import run.halo.aifoundation.exception.StructuredOutputValidationException;
-import run.halo.aifoundation.exception.StructuredOutputSchemaException;
+import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.chat.StepContext;
 import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.chat.StreamTextResult;
+import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
+import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.exception.AiGenerationTimeoutException;
+import run.halo.aifoundation.exception.StructuredOutputSchemaException;
+import run.halo.aifoundation.exception.StructuredOutputTerminationException;
+import run.halo.aifoundation.exception.StructuredOutputValidationException;
+import run.halo.aifoundation.message.ModelMessage;
+import run.halo.aifoundation.message.ModelMessagePart;
+import run.halo.aifoundation.message.ModelMessageRole;
+import run.halo.aifoundation.part.GenerationContentPart;
+import run.halo.aifoundation.part.PartType;
+import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.part.TextStreamPart;
-import run.halo.aifoundation.tool.ToolCall;
-import run.halo.aifoundation.tool.ToolApprovalRequest;
-import run.halo.aifoundation.tool.ToolDefinition;
-import run.halo.aifoundation.tool.ToolError;
-import run.halo.aifoundation.tool.ToolResult;
-import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
-import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.ollama.OllamaChatOptions;
+import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
+import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.service.language.mapping.LanguageModelChatOptionsBuilder;
 import run.halo.aifoundation.service.language.mapping.LanguageModelMessageMapper;
 import run.halo.aifoundation.service.language.mapping.LanguageModelRequestValidator;
 import run.halo.aifoundation.service.language.mapping.LanguageModelResponseMapper;
 import run.halo.aifoundation.service.language.mapping.LanguageModelToolCallMapper;
 import run.halo.aifoundation.service.language.reasoning.ReasoningContentExtractor;
-import run.halo.aifoundation.service.language.stream.LanguageModelStreamResultBuilder;
 import run.halo.aifoundation.service.language.stream.CancellableStreamReplayCoordinator;
+import run.halo.aifoundation.service.language.stream.LanguageModelStreamResultBuilder;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModels;
@@ -87,6 +83,16 @@ import run.halo.aifoundation.service.language.tool.ToolApprovalResolver;
 import run.halo.aifoundation.service.language.tool.ToolExecutionBatch;
 import run.halo.aifoundation.service.language.tool.ToolStepCoordinator;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageTelemetry;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
+import run.halo.aifoundation.tool.ToolApprovalRequest;
+import run.halo.aifoundation.tool.ToolCall;
+import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.tool.ToolError;
+import run.halo.aifoundation.tool.ToolResult;
 
 @Slf4j
 public class LanguageModelImpl implements LanguageModel {
@@ -125,6 +131,7 @@ public class LanguageModelImpl implements LanguageModel {
     private final String modelName;
     private final String providerName;
     private final int maxMultiStepLimit;
+    private final UsageExecutionObserver usageExecutionObserver;
 
     LanguageModelImpl(ChatModel chatModel, String providerType) {
         this(chatModel, providerType, LanguageModelProviderOptions.defaults());
@@ -159,6 +166,12 @@ public class LanguageModelImpl implements LanguageModel {
 
     LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
         ModelRuntimeContext context, int maxMultiStepLimit) {
+        this(chatModel, composition, context, maxMultiStepLimit, null);
+    }
+
+    LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
+        ModelRuntimeContext context, int maxMultiStepLimit,
+        UsageExecutionObserver usageExecutionObserver) {
         this.chatModel = chatModel;
         this.providerStreamingChatModel = ProviderStreamingChatModels.adapt(chatModel);
         this.providerType = composition.providerType();
@@ -181,6 +194,7 @@ public class LanguageModelImpl implements LanguageModel {
         this.modelName = context.modelName();
         this.providerName = context.providerName();
         this.maxMultiStepLimit = maxMultiStepLimit;
+        this.usageExecutionObserver = usageExecutionObserver;
     }
 
     @Override
@@ -204,9 +218,24 @@ public class LanguageModelImpl implements LanguageModel {
         var source = StreamProtocolNormalizer.normalize(
             streamTextParts(request, run)
                 .transform(stream -> withTotalTimeout(stream, request))
-                .onErrorResume(error -> run.error(error, null, List.of())
+                .onErrorResume(error -> recordUsageFailure(error)
+                    .then(run.error(error, null, List.of()))
                     .thenMany(Flux.just(terminalErrorPart(error))))
-        );
+        ).transformDeferredContextual((parts, contextView) -> {
+            var session = UsageCallSession.from(contextView);
+            if (session == null) {
+                return parts;
+            }
+            return parts.doOnNext(part -> {
+                if (PartType.ERROR.equals(part.getType())) {
+                    UsageTelemetry.safely(() -> session.fail(
+                        new IllegalStateException("Language stream ended with an error"),
+                        NormalizedUsage.missing(), 0));
+                } else if (PartType.ABORT.equals(part.getType())) {
+                    UsageTelemetry.safely(session::cancel);
+                }
+            });
+        });
         var replay = new CancellableStreamReplayCoordinator<>(source, () -> {
             var error = new AiGenerationCancelledException(
                 "Generation cancelled because all stream subscribers cancelled");
@@ -256,15 +285,16 @@ public class LanguageModelImpl implements LanguageModel {
                 run.stepStart(0, request, initialExecutionMessages(request), List.of(),
                     resolvedStopCondition(request));
             } catch (RuntimeException e) {
-                return run.error(e, 0, List.of())
-                    .thenMany(Flux.just(TextStreamPart.error(e.getMessage())));
+                return recordUsageFailure(e).then(run.error(e, 0, List.of()))
+                    .thenMany(Flux.just(terminalErrorPart(e)));
             }
 
             var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
             var streamState = new SimpleStreamState();
 
-            var stream = chatModel.stream(prompt)
-                .transform(flux -> withStepTimeout(flux, request))
+            var providerStream = observeChatStream(0,
+                () -> withStepTimeout(chatModel.stream(prompt), request));
+            var stream = providerStream
                 .<ChatResponse>handle((response, sink) -> {
                     try {
                         checkCancellation(request);
@@ -308,7 +338,8 @@ public class LanguageModelImpl implements LanguageModel {
                 }))
                 .onErrorResume(e -> {
                     log.error("[{}] Streaming error", providerType, e);
-                    return run.error(e, 0, List.of()).thenMany(Flux.just(terminalErrorPart(e)));
+                    return recordUsageFailure(e).then(run.error(e, 0, List.of()))
+                        .thenMany(Flux.just(terminalErrorPart(e)));
                 });
 
             return run.start()
@@ -329,7 +360,8 @@ public class LanguageModelImpl implements LanguageModel {
                 assertToolCallingSupported(request);
                 messages = buildMessages(request);
             } catch (RuntimeException e) {
-                return run.error(e, null, List.of()).thenMany(Flux.just(terminalErrorPart(e)));
+                return recordUsageFailure(e).then(run.error(e, null, List.of()))
+                    .thenMany(Flux.just(terminalErrorPart(e)));
             }
             var executionMessages = initialExecutionMessages(request);
             var totalUsage = new UsageAccumulator();
@@ -357,14 +389,16 @@ public class LanguageModelImpl implements LanguageModel {
                 validateRequest(request);
                 messages = buildMessages(request);
             } catch (RuntimeException e) {
-                return run.error(e, 0, List.of()).thenMany(Flux.just(terminalErrorPart(e)));
+                return recordUsageFailure(e).then(run.error(e, 0, List.of()))
+                    .thenMany(Flux.just(terminalErrorPart(e)));
             }
             var accumulator = new StreamStepAccumulator(0);
             var totalUsage = new UsageAccumulator();
             var prompt = new Prompt(messages, buildChatOptions(request));
             var messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
-            var stream = chatModel.stream(prompt)
-                .transform(flux -> withStepTimeout(flux, request))
+            var providerStream = observeChatStream(0,
+                () -> withStepTimeout(chatModel.stream(prompt), request));
+            var stream = providerStream
                 .<ChatResponse>handle((response, sink) -> {
                     try {
                         checkCancellation(request);
@@ -377,7 +411,7 @@ public class LanguageModelImpl implements LanguageModel {
                 .onErrorResume(e -> {
                     log.error("[{}] Structured streaming error", providerType, e);
                     accumulator.failed = true;
-                    return run.error(e, 0, List.of())
+                    return recordUsageFailure(e).then(run.error(e, 0, List.of()))
                         .thenMany(Flux.just(terminalErrorPart(e)));
                 });
             return run.start()
@@ -441,12 +475,15 @@ public class LanguageModelImpl implements LanguageModel {
                 prepared = prepareInvocation(loop.request(), loop.messages(), loop.executionMessages(),
                     loop.completedSteps(), null, stepIndex, loop.stopWhen());
             } catch (RuntimeException e) {
-                return loop.run().error(e, stepIndex, loop.completedSteps())
+                return recordUsageFailure(e)
+                    .then(loop.run().error(e, stepIndex, loop.completedSteps()))
                     .thenMany(Flux.just(terminalErrorPart(e)));
             }
             var accumulator = new StreamStepAccumulator(stepIndex);
             var prompt = new Prompt(prepared.messages(), buildChatOptions(prepared.request()));
-            var stream = providerStreamingChatModel.streamParts(prompt)
+            var providerStream = observeProviderStream(stepIndex,
+                () -> providerStreamingChatModel.streamParts(prompt));
+            var stream = providerStream
                 .<ProviderStreamPart>handle((part, sink) -> {
                     try {
                         checkCancellation(prepared.request());
@@ -460,7 +497,8 @@ public class LanguageModelImpl implements LanguageModel {
                 .onErrorResume(e -> {
                     log.error("[{}] Tool streaming error", providerType, e);
                     accumulator.failed = true;
-                    return loop.run().error(e, stepIndex, loop.completedSteps())
+                    return recordUsageFailure(e)
+                        .then(loop.run().error(e, stepIndex, loop.completedSteps()))
                         .thenMany(Flux.just(terminalErrorPart(e)));
                 });
             return loop.run().stepStart(stepIndex, prepared.request(), prepared.executionMessages(),
@@ -468,6 +506,46 @@ public class LanguageModelImpl implements LanguageModel {
                 .thenMany(Flux.concat(Flux.just(TextStreamPart.startStep(stepIndex)), stream,
                     Flux.defer(() -> completeToolStreamStep(prepared, accumulator, loop))));
         });
+    }
+
+    private Flux<ChatResponse> observeChatStream(int stepIndex,
+        Supplier<Flux<ChatResponse>> invocation) {
+        if (usageExecutionObserver == null) {
+            return invocation.get();
+        }
+        return usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
+            invocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
+            this::responseModel);
+    }
+
+    private Flux<ProviderStreamPart> observeProviderStream(int stepIndex,
+        Supplier<Flux<ProviderStreamPart>> invocation) {
+        if (usageExecutionObserver == null) {
+            return invocation.get();
+        }
+        return usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
+            invocation, this::streamPartUsage, this::streamPartModel);
+    }
+
+    private String responseModel(ChatResponse response) {
+        if (response.getMetadata() == null) {
+            return null;
+        }
+        return response.getMetadata().getModel();
+    }
+
+    private NormalizedUsage streamPartUsage(ProviderStreamPart part) {
+        if (part instanceof ProviderStreamPart.ChatResponsePart response) {
+            return NormalizedUsage.from(response.response().getMetadata().getUsage());
+        }
+        return NormalizedUsage.missing();
+    }
+
+    private String streamPartModel(ProviderStreamPart part) {
+        if (part instanceof ProviderStreamPart.ChatResponsePart response) {
+            return responseModel(response.response());
+        }
+        return null;
     }
 
     private Flux<TextStreamPart> mapProviderToolStreamPart(PreparedInvocation prepared,
@@ -779,7 +857,7 @@ public class LanguageModelImpl implements LanguageModel {
                     preparedStopWhen)
                 .then(Mono.defer(() -> {
                     checkCancellation(stepRequest);
-                    return callProvider(stepRequest, prepared.messages());
+                    return callProvider(stepRequest, prepared.messages(), stepIndex);
                 }))
                 .flatMap(response -> completeGenerateTextStep(baseRequest, run, prepared,
                     preparedStopWhen, stepIndex, response, state));
@@ -1670,24 +1748,31 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private Mono<ChatResponse> callProvider(GenerateTextRequest request,
-        List<org.springframework.ai.chat.messages.Message> messages) {
+        List<org.springframework.ai.chat.messages.Message> messages, int stepIndex) {
         var call = Mono.defer(() -> {
             checkCancellation(request);
             var prompt = new Prompt(messages, buildChatOptions(request));
             if (shouldUseReasoningAwareStreamCall(request)) {
-                return chatModel.stream(prompt)
-                    .collectList()
-                    .map(this::aggregateStreamResponses);
+                Supplier<Flux<ChatResponse>> invocation =
+                    () -> withStepTimeout(chatModel.stream(prompt), request);
+                var stream = observeChatStream(stepIndex, invocation);
+                return stream.collectList().map(this::aggregateStreamResponses);
             }
-            return Mono.fromCallable(() -> chatModel.call(prompt))
-                .subscribeOn(Schedulers.boundedElastic());
+            Supplier<Mono<ChatResponse>> invocation =
+                () -> Mono.fromCallable(() -> chatModel.call(prompt))
+                    .subscribeOn(Schedulers.boundedElastic());
+            Supplier<Mono<ChatResponse>> timedInvocation =
+                () -> withStepTimeout(invocation.get(), request);
+            if (usageExecutionObserver == null) {
+                return timedInvocation.get();
+            }
+            return usageExecutionObserver.observe(UsageUnitKind.GENERATION_STEP, stepIndex,
+                timedInvocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
+                this::responseModel);
         });
-        call = withStepTimeout(call, request);
         var maxRetries = maxRetries(request);
-        if (maxRetries > 0) {
-            call = call.retryWhen(Retry.max(maxRetries).filter(this::isRetryableProviderFailure));
-        }
-        return call;
+        return maxRetries <= 0 ? call
+            : call.retryWhen(Retry.max(maxRetries).filter(this::isRetryableProviderFailure));
     }
 
     private int maxRetries(GenerateTextRequest request) {
@@ -2007,6 +2092,17 @@ public class LanguageModelImpl implements LanguageModel {
         return flux.timeout(timeout)
             .onErrorMap(TimeoutException.class,
                 error -> new AiGenerationTimeoutException("step", timeout, error));
+    }
+
+    private Mono<Void> recordUsageFailure(Throwable error) {
+        return Mono.deferContextual(contextView -> {
+            var session = UsageCallSession.from(contextView);
+            if (session != null) {
+                UsageTelemetry.safely(
+                    () -> session.fail(error, NormalizedUsage.missing(), 0));
+            }
+            return Mono.empty();
+        });
     }
 
     private Duration totalTimeout(GenerateTextRequest request) {
@@ -2356,9 +2452,14 @@ public class LanguageModelImpl implements LanguageModel {
         private final StringBuilder reasoning = new StringBuilder();
         private final List<AssistantMessage.ToolCall> toolCalls = new ArrayList<>();
         private ChatResponse lastResponse;
+        private ChatResponse usageResponse;
         private String finishReason;
 
         void accept(ChatResponse response) {
+            if (UsageTelemetry.safely(() -> NormalizedUsage.from(response.getMetadata().getUsage()).quality()
+                != run.halo.aifoundation.service.observation.UsageQuality.MISSING, false)) {
+                usageResponse = response;
+            }
             var result = response.getResult();
             if (result == null || result.getOutput() == null) {
                 return;
@@ -2386,7 +2487,7 @@ public class LanguageModelImpl implements LanguageModel {
                 .finishReason(finishReason)
                 .build();
             return new ChatResponse(List.of(new Generation(output, generationMetadata)),
-                lastResponse.getMetadata());
+                usageResponse != null ? usageResponse.getMetadata() : lastResponse.getMetadata());
         }
 
         private void appendText(AssistantMessage output) {

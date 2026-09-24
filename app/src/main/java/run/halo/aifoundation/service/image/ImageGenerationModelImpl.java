@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
+import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -31,15 +33,18 @@ import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.model.ModelInfo;
 import run.halo.aifoundation.model.ProviderInfo;
-import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 public class ImageGenerationModelImpl implements ImageGenerationModel {
 
@@ -54,16 +59,19 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     private final MediaResourcePolicy mediaResourcePolicy;
     private final ModelCapabilityMatcher capabilityMatcher;
     private final RuntimeParameterMappings parameterMappings;
+    private final UsageExecutionObserver usageExecutionObserver;
     private final Map<String, Object> nativeOptions;
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
         String modelName, String providerName, String providerType,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
         this(client, modelCapabilities, modelName, providerName, providerType, mediaResourcePolicy,
             capabilityMatcher, EffectiveParameterMappings.empty());
     }
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
         String modelName, String providerName, String providerType,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
         EffectiveParameterMappings parameterMappings) {
@@ -72,9 +80,17 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
                 new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
     }
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client, ModelCapabilities modelCapabilities,
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
         ModelRuntimeContext context) {
+        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher, context, null);
+    }
+
+    ImageGenerationModelImpl(ProviderImageGenerationClient client,
+        ModelCapabilities modelCapabilities,
+        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
+        ModelRuntimeContext context, UsageExecutionObserver usageExecutionObserver) {
         this.client = client;
         this.modelCapabilities = modelCapabilities != null ? modelCapabilities
             : ModelCapabilities.empty();
@@ -86,6 +102,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher
             : new ModelCapabilityMatcher();
         this.parameterMappings = context.parameterMappings();
+        this.usageExecutionObserver = usageExecutionObserver;
         this.nativeOptions = context.nativeOptions();
     }
 
@@ -144,21 +161,37 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     }
 
     private Flux<GenerateImageResult> executeBatches(ImageInvocation invocation) {
-        return Flux.fromIterable(invocation.batchSizes())
-            .flatMapSequential(batchSize -> invokeBatch(copyForBatch(invocation.request(), batchSize)),
+        return Flux.range(0, invocation.batchSizes().size())
+            .flatMapSequential(index -> invokeBatch(
+                    copyForBatch(invocation.request(), invocation.batchSizes().get(index)), index),
                 invocation.concurrency(), 1);
     }
 
-    private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request) {
-        var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
-        var call = client.generateImage(request, target, nativeOptions)
-            .doOnSubscribe(ignored -> checkCancellation(request))
-            .doOnNext(ignored -> checkCancellation(request));
+    private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request, int batchIndex) {
+        var call = Mono.defer(() -> {
+            checkCancellation(request);
+            var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
+            Supplier<Mono<GenerateImageResult>> invocation =
+                () -> client.generateImage(request, target, nativeOptions);
+            Mono<GenerateImageResult> observed;
+            if (usageExecutionObserver == null) {
+                observed = invocation.get();
+            } else {
+                observed = usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex,
+                    invocation, result -> NormalizedUsage.from(result.getUsage()), this::responseModel);
+            }
+            return observed.doOnNext(ignored -> checkCancellation(request));
+        });
         var maxRetries = maxRetries(request);
-        if (maxRetries <= 0) {
-            return call;
+        return maxRetries <= 0 ? call
+            : call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+    }
+
+    private String responseModel(GenerateImageResult result) {
+        if (CollectionUtils.isEmpty(result.getResponses())) {
+            return null;
         }
-        return call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+        return result.getResponses().getLast().getModel();
     }
 
     private ParameterMappingTarget mappingTarget(GenerateImageRequest request) {

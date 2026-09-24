@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -176,7 +176,7 @@ public final class OpenRouterEmbeddingModel
             }
             var metadata = new EmbeddingResponseMetadata(
                 hasText(text(root.path("model"))) ? text(root.path("model")) : requestedModel,
-                new DefaultUsage(promptTokens, 0, totalTokens, rawUsage), metadataValues);
+                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), metadataValues);
             return new EmbeddingResponse(embeddings, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse OpenRouter embedding response", e);
