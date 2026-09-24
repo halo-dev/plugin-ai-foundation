@@ -8,7 +8,7 @@ on:
 jobs:
   cd:
     if: github.event.release.tag_name != 'nightly'
-    uses: halo-sigs/reusable-workflows/.github/workflows/plugin-cd.yaml@v4
+    uses: halo-sigs/reusable-workflows/.github/workflows/plugin-cd.yaml@v5
     secrets:
       halo-pat: ${{ secrets.HALO_PAT }}
     permissions:
@@ -20,3 +20,4 @@ jobs:
       java-version: 21
       artifacts-path: "app/build/libs"
       app-id: app-acslk9nu
+      sync-github-readme: true
