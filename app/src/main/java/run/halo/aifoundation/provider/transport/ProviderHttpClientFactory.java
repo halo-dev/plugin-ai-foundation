@@ -20,6 +20,16 @@ public final class ProviderHttpClientFactory {
     public static final int CONNECT_TIMEOUT_MILLIS = 10_000;
     public static final int DISCOVERY_MAX_IN_MEMORY_SIZE = 8 * 1024 * 1024;
 
+    /**
+     * Default in-memory buffer for image generation response bodies.
+     *
+     * <p>Image generation responses inline base64 images, and a single request can return up to
+     * 10 images, so the default leaves generous headroom above a single large image. Providers
+     * returning larger payloads can raise the limit through
+     * {@code AiProvider.spec.maxInMemorySize}.
+     */
+    public static final int IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE = 64 * 1024 * 1024;
+
     private ProviderHttpClientFactory() {
     }
 
@@ -48,6 +58,30 @@ public final class ProviderHttpClientFactory {
                 .codecs(configurer -> configurer.defaultCodecs()
                     .maxInMemorySize(DISCOVERY_MAX_IN_MEMORY_SIZE))
                 .build());
+    }
+
+    /**
+     * Creates a client builder for image generation endpoints, whose responses inline base64
+     * images and routinely exceed the default codec buffer.
+     */
+    public static WebClient.Builder imageWebClientBuilder(AiProvider provider) {
+        return webClientBuilder(provider)
+            .exchangeStrategies(ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs()
+                    .maxInMemorySize(imageMaxInMemorySize(provider)))
+                .build());
+    }
+
+    /**
+     * Resolves the image response buffer limit configured on the provider. A missing or
+     * non-positive {@code spec.maxInMemorySize} falls back to
+     * {@link #IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE}.
+     */
+    static int imageMaxInMemorySize(AiProvider provider) {
+        var spec = provider != null ? provider.getSpec() : null;
+        var configured = spec != null ? spec.getMaxInMemorySize() : null;
+        return configured != null && configured > 0
+            ? configured : IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE;
     }
 
     public static RestClient.Builder restClientBuilder(AiProvider provider) {

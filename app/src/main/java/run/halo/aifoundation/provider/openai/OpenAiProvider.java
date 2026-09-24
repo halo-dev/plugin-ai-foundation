@@ -133,7 +133,7 @@ public class OpenAiProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new OpenAiImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+            imageWebClientBuilder(provider));
     }
 
     @Override

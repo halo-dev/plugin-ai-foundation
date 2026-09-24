@@ -25,13 +25,14 @@ import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.support.image.ImageJson;
 import run.halo.aifoundation.provider.support.image.ImageParameterMappingMerger;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
 public class OpenAiCompatibleImageGenerationClient implements ProviderImageGenerationClient {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = ImageJson.MAPPER;
     private static final String IMAGES_GENERATIONS_PATH = "/images/generations";
 
     private final OpenAiCompatibleImageOptions options;

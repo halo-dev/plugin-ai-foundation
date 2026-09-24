@@ -210,7 +210,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new DashScopeImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            webClientBuilder(provider));
+            imageWebClientBuilder(provider));
     }
 
     @Override

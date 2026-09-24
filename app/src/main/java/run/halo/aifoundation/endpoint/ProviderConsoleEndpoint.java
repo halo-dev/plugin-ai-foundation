@@ -190,6 +190,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
         }
         try {
             validateProxyConfig(provider.getSpec());
+            validateMaxInMemorySize(provider.getSpec());
             normalizeEndpointPaths(provider.getSpec());
             parameterMappingValidator.validateProvider(
                 provider.getSpec().getParameterMappings(), type);
@@ -233,6 +234,17 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
         }
         if (proxyPort < 1 || proxyPort > 65535) {
             throw new IllegalArgumentException("proxyPort must be between 1 and 65535");
+        }
+    }
+
+    private void validateMaxInMemorySize(AiProvider.AiProviderSpec spec) {
+        var maxInMemorySize = spec.getMaxInMemorySize();
+        if (maxInMemorySize == null) {
+            return;
+        }
+        if (maxInMemorySize < 1024 || maxInMemorySize > 1024 * 1024 * 1024) {
+            throw new IllegalArgumentException(
+                "maxInMemorySize must be between 1024 and 1073741824 bytes");
         }
     }
 

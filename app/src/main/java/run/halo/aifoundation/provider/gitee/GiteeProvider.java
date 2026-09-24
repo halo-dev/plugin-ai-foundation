@@ -163,7 +163,7 @@ public class GiteeProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new GiteeImageGenerationClient(new ImageGenerationClientOptions(getProviderType(),
             resolveBaseUrl(provider), apiKey, modelId, failoverHeaders()),
-            webClientBuilder(provider));
+            imageWebClientBuilder(provider));
     }
 
     @Override

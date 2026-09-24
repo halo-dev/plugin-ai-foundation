@@ -150,7 +150,7 @@ public class MiniMaxProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new MiniMaxImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            webClientBuilder(provider));
+            imageWebClientBuilder(provider));
     }
 
     @Override

@@ -27,7 +27,7 @@ import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
 public abstract class AbstractJsonImageGenerationClient implements ProviderImageGenerationClient {
 
-    protected static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    protected static final ObjectMapper OBJECT_MAPPER = ImageJson.MAPPER;
 
     protected final ImageGenerationClientOptions options;
     private final WebClient webClient;

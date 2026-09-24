@@ -1515,6 +1515,11 @@
             "type" : "string",
             "description" : "Image generation endpoint path relative to baseUrl. OpenAI-compatible providers only."
           },
+          "maxInMemorySize" : {
+            "type" : "integer",
+            "description" : "In-memory buffer limit in bytes for image generation responses (optional, defaults to 64 MB)",
+            "format" : "int32"
+          },
           "parameterMappings" : {
             "$ref" : "#/components/schemas/ModelParameterMappings"
           },
