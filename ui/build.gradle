@@ -6,7 +6,7 @@ plugins {
 group 'run.halo.aifoundation.ui'
 
 node {
-    pnpmVersion = '10'
+    pnpmVersion = '12.6.0'
 }
 
 tasks.register('pnpmBuild', PnpmTask) {
