@@ -25,12 +25,6 @@ export interface UsageSummary {
      * @type {number}
      * @memberof UsageSummary
      */
-    'abandonedCount'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageSummary
-     */
     'accountedTotalTokens'?: number;
     /**
      * 
@@ -52,34 +46,10 @@ export interface UsageSummary {
     'callCount'?: number;
     /**
      * 
-     * @type {number}
-     * @memberof UsageSummary
-     */
-    'cancelledCount'?: number;
-    /**
-     * 
      * @type {boolean}
      * @memberof UsageSummary
      */
     'complete'?: boolean;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageSummary
-     */
-    'completeUsageCoverage'?: number;
-    /**
-     * 
-     * @type {string}
-     * @memberof UsageSummary
-     */
-    'dataFrom'?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof UsageSummary
-     */
-    'dataTo'?: string;
     /**
      * 
      * @type {number}
@@ -103,12 +73,6 @@ export interface UsageSummary {
      * @type {number}
      * @memberof UsageSummary
      */
-    'knownUsageCalls'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageSummary
-     */
     'missingUsageCalls'?: number;
     /**
      * 
@@ -124,34 +88,16 @@ export interface UsageSummary {
     'partialUsageCalls'?: number;
     /**
      * 
-     * @type {boolean}
-     * @memberof UsageSummary
-     */
-    'preciseRange'?: boolean;
-    /**
-     * 
      * @type {number}
      * @memberof UsageSummary
      */
     'reasoningOutputTokens'?: number;
     /**
      * 
-     * @type {string}
-     * @memberof UsageSummary
-     */
-    'resolution'?: string;
-    /**
-     * 
      * @type {number}
      * @memberof UsageSummary
      */
     'successCount'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageSummary
-     */
-    'timedOutCount'?: number;
     /**
      * 
      * @type {number}

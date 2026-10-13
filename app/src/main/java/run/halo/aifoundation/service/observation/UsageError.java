@@ -14,7 +14,7 @@ import run.halo.aifoundation.exception.EmbeddingTimeoutException;
 import run.halo.aifoundation.exception.RerankCancelledException;
 import run.halo.aifoundation.exception.RerankTimeoutException;
 
-public record UsageError(String type, String code) {
+public record UsageError(String type) {
 
     private static final int MAX_VALUE_LENGTH = 96;
 
@@ -23,11 +23,11 @@ public record UsageError(String type, String code) {
             return null;
         }
         if (isTimeout(error)) {
-            return new UsageError("TIMEOUT", null);
+            return new UsageError("TIMEOUT");
         }
         var unwrapped = Exceptions.unwrap(error);
         var type = sanitize(unwrapped.getClass().getSimpleName()).toUpperCase(Locale.ROOT);
-        return new UsageError(type, null);
+        return new UsageError(type);
     }
 
     static UsageStatus failureStatus(Throwable error) {
@@ -92,9 +92,6 @@ public record UsageError(String type, String code) {
     }
 
     private static String sanitize(String value) {
-        if (value == null) {
-            return null;
-        }
         var sanitized = value.replaceAll("[^A-Za-z0-9_.-]", "_");
         return sanitized.substring(0, Math.min(sanitized.length(), MAX_VALUE_LENGTH));
     }

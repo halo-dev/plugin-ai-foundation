@@ -6,8 +6,6 @@ package run.halo.aifoundation.service.usage;
  */
 public record UsageTrendDimensionValue(
     long callCount,
-    Long inputTokens,
-    Long outputTokens,
     Long accountedTotalTokens
 ) {
 }

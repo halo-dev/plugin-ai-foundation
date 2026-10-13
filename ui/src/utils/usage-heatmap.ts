@@ -1,4 +1,4 @@
-export interface UsageHeatmapDay {
+interface UsageHeatmapDay {
   /** YYYY-MM-DD (UTC) */
   date: string
   /** Column index 0..52, each column starting on a Monday */
@@ -7,7 +7,7 @@ export interface UsageHeatmapDay {
   weekday: number
 }
 
-export const USAGE_HEATMAP_WEEKS = 53
+const USAGE_HEATMAP_WEEKS = 53
 
 /**
  * Builds a 53-week × 7-day grid (UTC, Monday on the first row) ending at today.

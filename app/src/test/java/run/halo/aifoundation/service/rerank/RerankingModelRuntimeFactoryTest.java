@@ -35,19 +35,19 @@ import run.halo.aifoundation.rerank.RerankResult;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageCallStart;
-import run.halo.aifoundation.service.observation.UsageEventSink;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageObservation;
 import run.halo.aifoundation.service.observation.UsageExecutionRecord;
 
 class RerankingModelRuntimeFactoryTest {
 
-    private final RerankingModelRuntimeFactory factory = new RerankingModelRuntimeFactory();
+    private final RerankingModelRuntimeFactory factory = new RerankingModelRuntimeFactory(new UsageExecutionObserver());
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.NullSource
     @org.junit.jupiter.params.provider.ValueSource(strings = "served-model")
     void recordsProviderResponseModelWithoutChangingTheResponse(String modelId) {
-        var sink = mock(UsageEventSink.class);
+        var sink = mock(UsageObservation.class);
         var start = new UsageCallStart("rerank", 1, Instant.now(), "caller", "1", "stack",
             null, "rerank", "RERANK", "configured", "provider", "test", "requested", false);
         var session = new UsageCallSession(sink, start, Clock.systemUTC());

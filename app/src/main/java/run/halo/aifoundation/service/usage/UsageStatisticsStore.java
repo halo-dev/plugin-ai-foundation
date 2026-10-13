@@ -11,10 +11,8 @@ import java.util.Optional;
 
 public interface UsageStatisticsStore extends AutoCloseable {
 
-    /** Execute an ordered group atomically where the storage engine supports transactions. */
-    default void writeBatch(List<Runnable> writes) {
-        writes.forEach(Runnable::run);
-    }
+    /** Execute an ordered group atomically. */
+    void writeBatch(List<Runnable> writes);
 
     void initialize();
 

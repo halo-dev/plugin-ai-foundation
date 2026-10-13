@@ -111,13 +111,7 @@ describe('UsageResetModal', () => {
       resetRequest: { confirmation: 'RESET' },
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['plugin:ai-foundation:usage-summary'],
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['plugin:ai-foundation:usage-calls'],
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['plugin:ai-foundation:usage-health'],
+      queryKey: ['plugin:ai-foundation:usage'],
     })
   })
 })

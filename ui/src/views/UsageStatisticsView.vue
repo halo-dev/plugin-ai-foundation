@@ -40,7 +40,7 @@ const callItems = computed(
   () => callsQuery.data.value?.pages.flatMap((page) => page.items || []) || [],
 )
 
-const hasNextPage = computed(() => !!callsQuery.hasNextPage?.value)
+const hasNextPage = computed(() => callsQuery.hasNextPage?.value ?? false)
 
 const fetching = computed(
   () =>

@@ -20,7 +20,7 @@ final class UsageSqliteSchema {
                 ) STRICT
                 """);
         }
-        var version = longMeta(connection, "schema_version", 0);
+        var version = UsageSqliteJdbc.longMeta(connection, "schema_version", 0);
         if (version == VERSION) {
             return;
         }
@@ -32,9 +32,8 @@ final class UsageSqliteSchema {
         try (var statement = connection.createStatement()) {
             createTables(statement);
             createHealthTable(statement);
-            putMeta(connection, "schema_version", Integer.toString(VERSION));
-            putMeta(connection, "statistics_epoch", "1");
-            statement.execute("PRAGMA user_version = " + VERSION);
+            UsageSqliteJdbc.putMeta(connection, "schema_version", Integer.toString(VERSION));
+            UsageSqliteJdbc.putMeta(connection, "statistics_epoch", "1");
             connection.commit();
         } catch (SQLException | RuntimeException | LinkageError error) {
             restoreAutoCommit = UsageSqliteTransactions.rollback(connection, error);
@@ -54,7 +53,7 @@ final class UsageSqliteSchema {
               dropped_events INTEGER NOT NULL DEFAULT 0,
               incomplete_calls INTEGER NOT NULL DEFAULT 0,
               write_failures INTEGER NOT NULL DEFAULT 0,
-              migration_error TEXT, integrity_error TEXT
+              initialization_error TEXT, integrity_error TEXT
             ) STRICT
             """);
         statement.execute("INSERT INTO ai_statistics_health(id) VALUES (1)");
@@ -70,7 +69,7 @@ final class UsageSqliteSchema {
               model_type TEXT NOT NULL, model_name TEXT NOT NULL, provider_name TEXT NOT NULL,
               provider_type TEXT NOT NULL, request_model_id TEXT NOT NULL,
               response_model_id TEXT, streaming INTEGER NOT NULL,
-              status TEXT NOT NULL, error_type TEXT, error_code TEXT,
+              status TEXT NOT NULL, error_type TEXT,
               step_count INTEGER NOT NULL DEFAULT 0,
               attempt_count INTEGER NOT NULL DEFAULT 0,
               missing_execution_count INTEGER NOT NULL DEFAULT 0,
@@ -87,7 +86,7 @@ final class UsageSqliteSchema {
               unit_kind TEXT NOT NULL, unit_index INTEGER NOT NULL,
               attempt_index INTEGER NOT NULL, started_at_ms INTEGER NOT NULL,
               completed_at_ms INTEGER, status TEXT NOT NULL,
-              error_type TEXT, error_code TEXT, request_model_id TEXT,
+              error_type TEXT, request_model_id TEXT,
               response_model_id TEXT, input_tokens INTEGER, output_tokens INTEGER,
               cache_read_input_tokens INTEGER, cache_creation_input_tokens INTEGER,
               reasoning_output_tokens INTEGER, provider_total_tokens INTEGER,
@@ -129,13 +128,6 @@ final class UsageSqliteSchema {
             """);
         statement.execute("CREATE INDEX idx_daily_day ON ai_usage_daily(day)");
         statement.execute("""
-            CREATE INDEX idx_calls_aggregate_hour ON ai_calls(
-              (started_at_ms / 3600000), status, usage_quality, complete, started_at_ms, input_tokens,
-              output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
-              reasoning_output_tokens, accounted_total_tokens
-            )
-            """);
-        statement.execute("""
             CREATE INDEX idx_calls_filtered_hour ON ai_calls(
               (started_at_ms / 3600000), status, usage_quality, complete, started_at_ms, input_tokens,
               output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
@@ -154,15 +146,6 @@ final class UsageSqliteSchema {
     }
 
     static void validateRecognized(Connection connection) throws SQLException {
-        try (var statement = connection.createStatement();
-            var rows = statement.executeQuery("PRAGMA user_version")) {
-            if (!rows.next()) {
-                throw new SQLException("Missing SQLite statistics schema version");
-            }
-            if (rows.getInt(1) != VERSION) {
-                throw new SQLException("Unsupported SQLite statistics schema version");
-            }
-        }
         try (var statement = connection.prepareStatement(
             "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'");
             var rows = statement.executeQuery()) {
@@ -170,69 +153,14 @@ final class UsageSqliteSchema {
                 throw new SQLException("Missing statistics schema metadata");
             }
             if (!Integer.toString(VERSION).equals(rows.getString(1))) {
-                throw new SQLException("SQLite statistics schema marker is missing");
+                throw new SQLException("Unsupported statistics schema version");
             }
         }
-        validateColumns(connection, "ai_calls",
-            "id", "epoch", "started_at_ms", "completed_at_ms", "duration_ms",
-            "caller_plugin_name", "caller_plugin_version", "caller_detection_source", "feature",
-            "operation", "model_type", "model_name", "provider_name", "provider_type",
-            "request_model_id", "response_model_id", "streaming", "status", "error_type",
-            "error_code", "step_count", "attempt_count", "missing_execution_count", "complete",
-            "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
-            "reasoning_output_tokens", "provider_total_tokens", "accounted_total_tokens", "usage_quality");
-        validateColumns(connection, "ai_model_executions",
-            "id", "call_id", "epoch", "unit_kind", "unit_index", "attempt_index", "started_at_ms",
-            "completed_at_ms", "status", "error_type", "error_code", "request_model_id",
-            "response_model_id", "input_tokens", "output_tokens", "cache_read_input_tokens",
-            "cache_creation_input_tokens", "reasoning_output_tokens", "provider_total_tokens",
-            "accounted_total_tokens", "usage_quality");
-        validateColumns(connection, "ai_usage_daily",
-            "day", "caller_plugin_name", "feature", "provider_name", "provider_type", "model_name",
-            "model_type", "operation", "status", "usage_quality", "call_count", "input_tokens",
-            "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
-            "reasoning_output_tokens", "accounted_total_tokens", "known_usage_calls",
-            "missing_usage_calls", "incomplete_call_count");
-        validateColumns(connection, "ai_statistics_health",
-            "id", "dropped_events", "incomplete_calls", "write_failures", "last_write_error_at_ms",
-            "affected_since_ms", "affected_until_ms", "migration_error", "integrity_error");
         try (var statement = connection.createStatement();
             var rows = statement.executeQuery("SELECT id FROM ai_statistics_health WHERE id = 1")) {
             if (!rows.next()) {
                 throw new SQLException("SQLite statistics health row is missing");
             }
-        }
-
-    }
-
-    private static void validateColumns(Connection connection, String table, String... columns)
-        throws SQLException {
-        var sql = "SELECT " + String.join(", ", columns) + " FROM " + table + " WHERE 0";
-        try (var statement = connection.createStatement()) {
-            statement.executeQuery(sql).close();
-        }
-    }
-
-    private static long longMeta(Connection connection, String key, long fallback)
-        throws SQLException {
-        try (var statement = connection.prepareStatement(
-            "SELECT value FROM ai_statistics_meta WHERE key = ?")) {
-            statement.setString(1, key);
-            try (var rows = statement.executeQuery()) {
-                return rows.next() ? Long.parseLong(rows.getString(1)) : fallback;
-            }
-        }
-    }
-
-    private static void putMeta(Connection connection, String key, String value)
-        throws SQLException {
-        try (var statement = connection.prepareStatement("""
-            INSERT INTO ai_statistics_meta(key, value) VALUES (?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-            """)) {
-            statement.setString(1, key);
-            statement.setString(2, value);
-            statement.executeUpdate();
         }
     }
 }

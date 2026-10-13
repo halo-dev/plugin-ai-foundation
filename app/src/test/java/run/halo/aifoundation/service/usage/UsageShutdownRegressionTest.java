@@ -28,6 +28,12 @@ class UsageShutdownRegressionTest {
     void orderlyShutdownDrainsAllAcceptedEvents() throws Exception {
         var store = mock(UsageStatisticsStore.class, CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
+        // writeBatch is abstract; replicate the former default implementation.
+        doAnswer(invocation -> {
+            invocation.getArgument(0, java.util.List.class).forEach(action ->
+                ((Runnable) action).run());
+            return null;
+        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var count = new AtomicInteger();

@@ -43,7 +43,6 @@ function mountStrip(summary: Record<string, unknown> = {}) {
         partialUsageCalls: 2,
         usageCoverage: 0.99,
         complete: true,
-        preciseRange: true,
         ...summary,
       } as never,
     },

@@ -53,7 +53,6 @@ export * from './rerank-response-metadata';
 export * from './rerank-usage';
 export * from './rerank-warning';
 export * from './reset-request';
-export * from './reset-response';
 export * from './selection';
 export * from './test-completion-stream-request';
 export * from './test-embedding-request';

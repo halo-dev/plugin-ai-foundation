@@ -11,7 +11,6 @@ public record UsageTrendPoint(
     Long inputTokens,
     Long outputTokens,
     Long accountedTotalTokens,
-    long knownUsageCalls,
     long missingUsageCalls,
     long partialUsageCalls,
     boolean complete,
@@ -22,7 +21,6 @@ public record UsageTrendPoint(
 
     UsageTrendPoint withComplete(boolean value) {
         return new UsageTrendPoint(bucketStart, resolution, callCount, inputTokens, outputTokens,
-            accountedTotalTokens, knownUsageCalls, missingUsageCalls, partialUsageCalls, value,
-            byDimension);
+            accountedTotalTokens, missingUsageCalls, partialUsageCalls, value, byDimension);
     }
 }

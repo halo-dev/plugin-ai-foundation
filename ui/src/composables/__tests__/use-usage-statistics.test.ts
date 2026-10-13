@@ -25,15 +25,9 @@ describe('reloadUsageQueries', () => {
 
     reloadUsageQueries(queryClient)
 
-    for (const key of [
-      'plugin:ai-foundation:usage-summary',
-      'plugin:ai-foundation:usage-trends',
-      'plugin:ai-foundation:usage-calls',
-      'plugin:ai-foundation:usage-call-detail',
-      'plugin:ai-foundation:usage-health',
-    ]) {
-      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: [key] })
-    }
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['plugin:ai-foundation:usage'],
+    })
   })
 })
 

@@ -23,8 +23,8 @@ import run.halo.aifoundation.service.observation.UsageTelemetry;
 
 public class AuditedLanguageModel implements LanguageModel {
 
-    private static final String GENERATE_TEXT = UsageOperation.LANGUAGE_GENERATE_TEXT.value();
-    private static final String STREAM_TEXT = UsageOperation.LANGUAGE_STREAM_TEXT.value();
+    private static final String GENERATE_TEXT = UsageOperation.LANGUAGE_GENERATE_TEXT;
+    private static final String STREAM_TEXT = UsageOperation.LANGUAGE_STREAM_TEXT;
 
     private final LanguageModel delegate;
     private final ModelCallContext context;
@@ -58,7 +58,7 @@ public class AuditedLanguageModel implements LanguageModel {
     public StreamTextResult streamText(GenerateTextRequest request) {
         auditRecorder.recordModelInvocation(context, STREAM_TEXT);
         var result = LanguageModelMiddlewares.applyRequestStreamMiddleware(delegate, request);
-        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
+        var descriptor = UsageTelemetry.safely(
             () -> usageStatistics.describeCall(context, STREAM_TEXT, true,
             request == null ? null : request.getMetadata()), null);
         var lazy = new LazySession(usageStatistics, descriptor);
@@ -97,10 +97,8 @@ public class AuditedLanguageModel implements LanguageModel {
 
     private Mono<GenerateTextResult> recordMono(String operation, Map<String, Object> metadata,
         Supplier<Mono<GenerateTextResult>> invocation) {
-        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
-            () -> usageStatistics.describeCall(context, operation, false, metadata), null);
-        return UsageCallRecorder.record(usageStatistics, descriptor, invocation, 0,
-            AuditedLanguageModel::succeed);
+        return UsageCallRecorder.record(usageStatistics, context, operation, false, metadata,
+            invocation, 0, AuditedLanguageModel::succeed);
     }
 
     private static Mono<GenerateTextResult> recordResult(Mono<GenerateTextResult> source,
@@ -126,7 +124,7 @@ public class AuditedLanguageModel implements LanguageModel {
                 return source;
             }
             return source.doOnSuccess(ignored -> UsageTelemetry.safely(
-                    () -> succeedProjection(session)))
+                    session::succeedProjection))
                 .doOnError(error -> UsageTelemetry.safely(
                     () -> session.fail(error, NormalizedUsage.missing(), 0)))
                 .doFinally(signal -> lazy.finish(session, signal))
@@ -141,7 +139,7 @@ public class AuditedLanguageModel implements LanguageModel {
                 return source;
             }
             return source.doOnComplete(() -> UsageTelemetry.safely(
-                    () -> succeedProjection(session)))
+                    session::succeedProjection))
                 .doOnError(error -> UsageTelemetry.safely(
                     () -> session.fail(error, NormalizedUsage.missing(), 0)))
                 .doFinally(signal -> lazy.finish(session, signal))
@@ -157,10 +155,6 @@ public class AuditedLanguageModel implements LanguageModel {
         var responseModel = result.getResponse() == null ? null : result.getResponse().getModel();
         var steps = result.getSteps() == null ? 1 : result.getSteps().size();
         session.succeed(NormalizedUsage.from(result.getTotalUsage()), responseModel, steps);
-    }
-
-    private static void succeedProjection(UsageCallSession session) {
-        session.succeedProjection();
     }
 
     private static final class LazySession {

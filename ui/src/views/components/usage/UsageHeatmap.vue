@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UsageTrendPoint } from '@/api/generated'
-import { formatTokens } from '@/utils/usage'
+import { formatTokens, usageMetricValue, type UsageMetric } from '@/utils/usage'
 import { heatmapGrid, heatmapLeveler, heatmapMonthLabels } from '@/utils/usage-heatmap'
 import { computed, nextTick, onMounted, shallowRef, watch } from 'vue'
 import UsageSegmented from './UsageSegmented.vue'
@@ -9,7 +9,7 @@ const props = defineProps<{
   points?: UsageTrendPoint[]
 }>()
 
-const metric = shallowRef<'tokens' | 'calls'>('tokens')
+const metric = shallowRef<UsageMetric>('tokens')
 
 const scroller = shallowRef<HTMLElement>()
 
@@ -18,8 +18,8 @@ const valuesByDate = computed(() => {
   for (const point of props.points || []) {
     const date = (point.bucketStart || '').slice(0, 10)
     if (!date) continue
-    const value = metric.value === 'tokens' ? point.accountedTotalTokens : point.callCount
-    map.set(date, (map.get(date) || 0) + (value ?? 0))
+    const value = usageMetricValue(point, metric.value)
+    map.set(date, (map.get(date) || 0) + value)
   }
   return map
 })
@@ -66,7 +66,7 @@ watch(() => props.points, scrollToLatest)
           { label: 'Token', value: 'tokens' },
           { label: '调用次数', value: 'calls' },
         ]"
-        @update:model-value="metric = $event as 'tokens' | 'calls'"
+        @update:model-value="metric = $event as UsageMetric"
       />
     </div>
     <!-- The grid depends only on local dates: render all-gray until data arrives -->

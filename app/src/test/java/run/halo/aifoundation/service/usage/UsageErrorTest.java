@@ -19,7 +19,6 @@ class UsageErrorTest {
         var error = UsageError.from(new SecretBearingException("sk-secret prompt content"));
 
         assertThat(error.type()).isEqualTo("SECRETBEARINGEXCEPTION");
-        assertThat(error.code()).isNull();
         assertThat(error.toString()).doesNotContain("sk-secret", "prompt content");
     }
 

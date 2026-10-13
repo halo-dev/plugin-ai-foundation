@@ -6,7 +6,13 @@ import {
   type UsageBreakdownDimensionParam,
 } from '@/composables/use-usage-statistics'
 import type { useUsageFilters } from '@/composables/use-usage-filters'
-import type { UsageTrendResolution } from '@/utils/usage'
+import {
+  usageDimensionLabel,
+  usageDisplayNames,
+  usageMetricValue,
+  type UsageMetric,
+  type UsageTrendResolution,
+} from '@/utils/usage'
 import { USAGE_CHART_TOP_N } from '@/utils/usage-chart'
 import { VButton } from '@halo-dev/components'
 import { computed, shallowRef } from 'vue'
@@ -21,7 +27,7 @@ const props = defineProps<{
   callers?: CallerPluginInfo[]
 }>()
 
-const metric = shallowRef<'tokens' | 'calls'>('tokens')
+const metric = shallowRef<UsageMetric>('tokens')
 const dimension = shallowRef<UsageBreakdownDimensionParam>('model')
 const highlightKey = shallowRef<string | null>(null)
 
@@ -38,34 +44,25 @@ const trendsQuery = useUsageTrends(
   props.filters.valid,
 )
 
-const displayNames = computed(() => {
-  if (dimension.value === 'model') {
-    return new Map(props.models?.map((model) => [model.metadata.name, model.spec.displayName]))
-  }
-  if (dimension.value === 'provider') {
-    return new Map(
-      props.providers?.map((provider) => [provider.metadata.name, provider.spec.displayName]),
-    )
-  }
-  return new Map(props.callers?.map((caller) => [caller.pluginName, caller.displayName]))
-})
+const displayNames = computed(() =>
+  usageDisplayNames(dimension.value, {
+    models: props.models,
+    providers: props.providers,
+    callers: props.callers,
+  }),
+)
 
 function labelOf(key: string) {
-  if (!key) return '未知'
-  return displayNames.value.get(key) || key
+  return usageDimensionLabel(displayNames.value, key)
 }
 
 const categories = computed(() => {
   const items = breakdownQuery.data.value?.items || []
   return [...items]
-    .sort((a, b) => metricValue(b) - metricValue(a))
+    .sort((a, b) => usageMetricValue(b, metric.value) - usageMetricValue(a, metric.value))
     .slice(0, USAGE_CHART_TOP_N)
     .map((item) => item.value ?? '')
 })
-
-function metricValue(item: { accountedTotalTokens?: number; callCount?: number }) {
-  return metric.value === 'tokens' ? (item.accountedTotalTokens ?? 0) : (item.callCount ?? 0)
-}
 
 const failed = computed(() => breakdownQuery.isError.value || trendsQuery.isError.value)
 
@@ -98,7 +95,7 @@ function selectCategory(key: string) {
           { label: 'Token', value: 'tokens' },
           { label: '调用次数', value: 'calls' },
         ]"
-        @update:model-value="metric = $event as 'tokens' | 'calls'"
+        @update:model-value="metric = $event as UsageMetric"
       />
       <UsageSegmented
         :model-value="dimension"

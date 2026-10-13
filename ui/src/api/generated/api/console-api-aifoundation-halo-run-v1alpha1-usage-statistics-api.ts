@@ -24,8 +24,6 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { ResetRequest } from '../models';
 // @ts-ignore
-import type { ResetResponse } from '../models';
-// @ts-ignore
 import type { UsageBreakdown } from '../models';
 // @ts-ignore
 import type { UsageCallDetail } from '../models';
@@ -683,7 +681,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async resetAiUsageStatistics(resetRequest: ResetRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResetResponse>> {
+        async resetAiUsageStatistics(resetRequest: ResetRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.resetAiUsageStatistics(resetRequest, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.resetAiUsageStatistics']?.[localVarOperationServerIndex]?.url;
@@ -758,7 +756,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFactory = fu
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        resetAiUsageStatistics(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiResetAiUsageStatisticsRequest, options?: RawAxiosRequestConfig): AxiosPromise<ResetResponse> {
+        resetAiUsageStatistics(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiResetAiUsageStatisticsRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
             return localVarFp.resetAiUsageStatistics(requestParameters.resetRequest, options).then((request) => request(axios, basePath));
         },
     };

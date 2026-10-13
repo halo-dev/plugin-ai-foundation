@@ -54,7 +54,7 @@ public class RerankingModelImpl implements RerankingModel {
 
     RerankingModelImpl(ProviderRerankingClient client,
         RerankingModelProviderOptions providerOptions, ModelRuntimeContext context) {
-        this(client, providerOptions, context, null);
+        this(client, providerOptions, context, new UsageExecutionObserver());
     }
 
     RerankingModelImpl(ProviderRerankingClient client,
@@ -81,14 +81,9 @@ public class RerankingModelImpl implements RerankingModel {
                 var target = mappedTopN(request, warnings);
                 Supplier<Mono<RerankResponse>> invocation =
                     () -> client.rerank(request, target, providerOptions.getNativeOptions());
-                Mono<RerankResponse> call;
-                if (usageExecutionObserver == null) {
-                    call = invocation.get();
-                } else {
-                    call = usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
-                        response -> NormalizedUsage.from(response.getUsage()),
-                        RerankingModelImpl::responseModel);
-                }
+                var call = usageExecutionObserver.observe(UsageUnitKind.RERANK, 0, invocation,
+                    response -> NormalizedUsage.from(response.getUsage()),
+                    RerankingModelImpl::responseModel);
                 return call
                     .map(response -> withRuntimeWarnings(response, warnings))
                     .doOnNext(response -> checkResultIndexes(request, response));

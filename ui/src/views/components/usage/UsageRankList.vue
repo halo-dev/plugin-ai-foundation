@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import type { AiModel, AiProvider, CallerPluginInfo, UsageBreakdownItem } from '@/api/generated'
 import type { UsageBreakdownDimensionParam } from '@/composables/use-usage-statistics'
-import { formatTokens } from '@/utils/usage'
-import { usageCategoryColor, USAGE_CHART_TOP_N } from '@/utils/usage-chart'
+import {
+  formatTokens,
+  usageDimensionLabel,
+  usageDisplayNames,
+  usageMetricValue,
+  type UsageMetric,
+} from '@/utils/usage'
+import { usageCategoryColor, USAGE_CHART_OTHER_COLOR, USAGE_CHART_TOP_N } from '@/utils/usage-chart'
 import { computed } from 'vue'
 
-export interface UsageRankEntry {
+interface UsageRankEntry {
   key: string
   label: string
   calls: number
@@ -17,7 +23,7 @@ export interface UsageRankEntry {
 const props = defineProps<{
   items?: UsageBreakdownItem[]
   dimension: UsageBreakdownDimensionParam
-  metric: 'tokens' | 'calls'
+  metric: UsageMetric
   models?: AiModel[]
   providers?: AiProvider[]
   callers?: CallerPluginInfo[]
@@ -29,25 +35,19 @@ const emit = defineEmits<{
   (event: 'highlight', value: string | null): void
 }>()
 
-const displayNames = computed(() => {
-  if (props.dimension === 'model') {
-    return new Map(props.models?.map((model) => [model.metadata.name, model.spec.displayName]))
-  }
-  if (props.dimension === 'provider') {
-    return new Map(
-      props.providers?.map((provider) => [provider.metadata.name, provider.spec.displayName]),
-    )
-  }
-  return new Map(props.callers?.map((caller) => [caller.pluginName, caller.displayName]))
-})
-
-function metricValue(item: UsageBreakdownItem) {
-  return props.metric === 'tokens' ? (item.accountedTotalTokens ?? 0) : (item.callCount ?? 0)
-}
+const displayNames = computed(() =>
+  usageDisplayNames(props.dimension, {
+    models: props.models,
+    providers: props.providers,
+    callers: props.callers,
+  }),
+)
 
 const entries = computed<UsageRankEntry[]>(() => {
   const items = props.items || []
-  const sorted = [...items].sort((a, b) => metricValue(b) - metricValue(a))
+  const sorted = [...items].sort(
+    (a, b) => usageMetricValue(b, props.metric) - usageMetricValue(a, props.metric),
+  )
   const top = sorted.slice(0, USAGE_CHART_TOP_N)
   const rest = sorted.slice(USAGE_CHART_TOP_N)
   const entries = top.map(toEntry)
@@ -68,7 +68,7 @@ function toEntry(item: UsageBreakdownItem): UsageRankEntry {
   const key = item.value ?? ''
   return {
     key,
-    label: key ? displayNames.value.get(key) || key : '未知',
+    label: usageDimensionLabel(displayNames.value, key),
     calls: item.callCount ?? 0,
     failed: item.failedCount ?? 0,
     tokens: item.accountedTotalTokens ?? undefined,
@@ -87,7 +87,10 @@ const totalValue = computed(() =>
 )
 
 function entryValue(entry: UsageRankEntry) {
-  return props.metric === 'tokens' ? (entry.tokens ?? 0) : entry.calls
+  return usageMetricValue(
+    { accountedTotalTokens: entry.tokens, callCount: entry.calls },
+    props.metric,
+  )
 }
 
 function formatEntryValue(entry: UsageRankEntry) {
@@ -126,7 +129,7 @@ function entryShare(entry: UsageRankEntry) {
           class=":uno: usage-rank-swatch"
           :style="{
             background: entry.other
-              ? '#cbd5e1'
+              ? USAGE_CHART_OTHER_COLOR
               : usageCategoryColor(entry.key, categories),
           }"
         ></i>
@@ -138,7 +141,7 @@ function entryShare(entry: UsageRankEntry) {
           :style="{
             width: `${Math.max(1.5, (entryValue(entry) / maxValue) * 100)}%`,
             background: entry.other
-              ? '#cbd5e1'
+              ? USAGE_CHART_OTHER_COLOR
               : usageCategoryColor(entry.key, categories),
           }"
         ></i

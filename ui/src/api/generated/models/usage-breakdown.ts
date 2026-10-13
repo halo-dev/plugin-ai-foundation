@@ -25,24 +25,9 @@ import type { UsageBreakdownItem } from './usage-breakdown-item';
 export interface UsageBreakdown {
     /**
      * 
-     * @type {string}
-     * @memberof UsageBreakdown
-     */
-    'dimension'?: UsageBreakdownDimensionEnum;
-    /**
-     * 
      * @type {Array<UsageBreakdownItem>}
      * @memberof UsageBreakdown
      */
     'items'?: Array<UsageBreakdownItem>;
 }
-
-export const UsageBreakdownDimensionEnum = {
-    Model: 'MODEL',
-    Provider: 'PROVIDER',
-    CallerPlugin: 'CALLER_PLUGIN'
-} as const;
-
-export type UsageBreakdownDimensionEnum = typeof UsageBreakdownDimensionEnum[keyof typeof UsageBreakdownDimensionEnum];
-
 

@@ -8,12 +8,10 @@ import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankingModel;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
-import run.halo.aifoundation.service.observation.UsageOperation;
 import run.halo.aifoundation.service.observation.UsageObservation;
+import run.halo.aifoundation.service.observation.UsageOperation;
 
 public class AuditedRerankingModel implements RerankingModel {
-
-    private static final String OPERATION = UsageOperation.RERANK.value();
 
     private final RerankingModel delegate;
     private final ModelCallContext context;
@@ -32,21 +30,16 @@ public class AuditedRerankingModel implements RerankingModel {
 
     @Override
     public Mono<RerankResponse> rerank(String query, List<String> documents) {
-        auditRecorder.recordModelInvocation(context, OPERATION);
-        return record(null, () -> delegate.rerank(query, documents));
+        auditRecorder.recordModelInvocation(context, UsageOperation.RERANK);
+        return UsageCallRecorder.record(usageStatistics, context, UsageOperation.RERANK, false,
+            null, () -> delegate.rerank(query, documents), 1, AuditedRerankingModel::succeed);
     }
 
     @Override
     public Mono<RerankResponse> rerank(RerankRequest request) {
-        auditRecorder.recordModelInvocation(context, OPERATION);
-        return record(request == null ? null : request.getMetadata(), () -> delegate.rerank(request));
-    }
-
-    private Mono<RerankResponse> record(java.util.Map<String, Object> metadata,
-        java.util.function.Supplier<Mono<RerankResponse>> invocation) {
-        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
-            () -> usageStatistics.describeCall(context, OPERATION, false, metadata), null);
-        return UsageCallRecorder.record(usageStatistics, descriptor, invocation, 1,
+        auditRecorder.recordModelInvocation(context, UsageOperation.RERANK);
+        return UsageCallRecorder.record(usageStatistics, context, UsageOperation.RERANK, false,
+            request == null ? null : request.getMetadata(), () -> delegate.rerank(request), 1,
             AuditedRerankingModel::succeed);
     }
 

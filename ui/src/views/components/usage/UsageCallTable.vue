@@ -134,10 +134,7 @@ function durationClass(call: UsageCallItem) {
               <td class=":uno: n tabular-nums">{{ formatTokens(call.usage?.outputTokens) }}</td>
               <td class=":uno: n tabular-nums">
                 <span
-                  :class="[
-                    ':uno: usage-duration',
-                    durationClass(call) && `:uno: usage-duration-${durationClass(call)}`,
-                  ]"
+                  :class="durationClass(call) && `:uno: usage-duration-${durationClass(call)}`"
                   >{{ formatDuration(call.durationMillis) }}</span
                 >
               </td>

@@ -124,9 +124,7 @@ const breakdown = computed(() => [
         </div>
         <div v-if="call.errorType">
           <dt>错误类型</dt>
-          <dd>
-            {{ call.errorType }}<template v-if="call.errorCode">（{{ call.errorCode }}）</template>
-          </dd>
+          <dd>{{ call.errorType }}</dd>
         </div>
       </dl>
     </details>

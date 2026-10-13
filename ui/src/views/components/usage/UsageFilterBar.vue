@@ -104,14 +104,14 @@ function update(patch: Partial<UsageFilterState>) {
           aria-label="刷新"
           size="sm"
           ghost
-          class=":uno: usage-toolbar-button"
+         
           circle
           @click="emit('refresh')"
         >
           <IconRefreshLine :class="{ ':uno: animate-spin': fetching }" />
         </VButton>
         <VDropdown placement="bottom-end" :distance="6">
-          <VButton aria-label="更多操作" circle ghost size="sm" class=":uno: usage-toolbar-button">
+          <VButton aria-label="更多操作" circle ghost size="sm">
             <MingcuteMore2Line />
           </VButton>
           <template #popper>

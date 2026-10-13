@@ -66,9 +66,8 @@ class UsageObservationRegressionTest {
                 new NormalizedUsage(10L,5L,null,null,null,null,null,null)));
             rollupAndRetain(store, Clock.fixed(Instant.parse("2026-09-10T02:00:00Z"),ZoneOffset.UTC));
             var summary = store.summary(query("2026-06-01T08:00:00Z","2026-06-01T20:00:00Z"),true);
-            assertThat(summary.preciseRange()).as("expired sub-day facts must be disclosed").isFalse();
-            assertThat(summary.callCount()).isEqualTo(1);
-            assertThat(summary.dataFrom()).isEqualTo(Instant.parse("2026-06-01T00:00:00Z"));
+            assertThat(summary.callCount()).as("expired sub-day facts must not disappear")
+                .isEqualTo(1);
         } finally {
             store.close();
         }
@@ -269,7 +268,7 @@ class UsageObservationRegressionTest {
             var summary = store.summary(range, true);
             assertThat(summary.complete()).isTrue();
             assertThat(summary.partialUsageCalls()).isEqualTo(1);
-            assertThat(summary.completeUsageCoverage()).isZero();
+            assertThat(summary.usageCoverage()).isEqualTo(1D);
             assertThat(summary.accountedTotalTokens()).isEqualTo(15L);
             assertThat(store.trends(range, true, null).getFirst().partialUsageCalls()).isEqualTo(1);
         } finally {

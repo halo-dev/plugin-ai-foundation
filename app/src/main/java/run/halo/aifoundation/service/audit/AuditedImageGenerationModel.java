@@ -21,8 +21,6 @@ import run.halo.aifoundation.service.observation.UsageOperation;
 public class AuditedImageGenerationModel implements ImageGenerationModel,
     ImageGenerationMiddlewareAware {
 
-    private static final String OPERATION = UsageOperation.IMAGE_GENERATE_IMAGE.value();
-
     private final ImageGenerationModel delegate;
     private final ModelCallContext context;
     private final CallerPluginAuditRecorder auditRecorder;
@@ -40,11 +38,10 @@ public class AuditedImageGenerationModel implements ImageGenerationModel,
 
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
-        auditRecorder.recordModelInvocation(context, OPERATION);
-        var descriptor = run.halo.aifoundation.service.observation.UsageTelemetry.safely(
-            () -> usageStatistics.describeCall(context, OPERATION, false,
-            request == null ? null : request.getMetadata()), null);
-        return UsageCallRecorder.record(usageStatistics, descriptor,
+        auditRecorder.recordModelInvocation(context, UsageOperation.IMAGE_GENERATE_IMAGE);
+        return UsageCallRecorder.record(usageStatistics, context,
+            UsageOperation.IMAGE_GENERATE_IMAGE, false,
+            request == null ? null : request.getMetadata(),
             () -> delegate.generateImage(request), 1, AuditedImageGenerationModel::succeed);
     }
 

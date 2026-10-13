@@ -137,6 +137,11 @@ class UsageStatisticsScaleBenchmarkTest {
     private static double enqueueP95() throws Exception {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
+        // writeBatch is abstract; replicate the former default implementation.
+        org.mockito.Mockito.doAnswer(invocation -> {
+            invocation.getArgument(0, List.class).forEach(action -> ((Runnable) action).run());
+            return null;
+        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
         var blocked = new CountDownLatch(1);
         org.mockito.Mockito.doAnswer(invocation -> {
             blocked.await();
@@ -150,7 +155,7 @@ class UsageStatisticsScaleBenchmarkTest {
         var samples = new ArrayList<Double>(UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100);
         var descriptor = new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
             "model", "provider", "openai", "gpt"),
-            UsageOperation.LANGUAGE_GENERATE_TEXT.value(), false, null,
+            UsageOperation.LANGUAGE_GENERATE_TEXT, false, null,
             resolver.resolveCurrentCallerSnapshot());
         for (int index = 0; index < UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100; index++) {
             var started = System.nanoTime();
@@ -216,8 +221,8 @@ class UsageStatisticsScaleBenchmarkTest {
         statement.setString(parameter++, "plugin-" + index % 20);
         statement.setString(parameter++, index % 2 == 0 ? "semantic-search" : "editor");
         statement.setString(parameter++, index % 2 == 0
-            ? UsageOperation.LANGUAGE_GENERATE_TEXT.value()
-            : UsageOperation.EMBEDDING_EMBED.value());
+            ? UsageOperation.LANGUAGE_GENERATE_TEXT
+            : UsageOperation.EMBEDDING_EMBED);
         statement.setString(parameter++, index % 2 == 0 ? "LANGUAGE" : "EMBEDDING");
         statement.setString(parameter++, "model-" + index % 50);
         statement.setString(parameter++, "provider-" + index % 10);
@@ -304,7 +309,7 @@ class UsageStatisticsScaleBenchmarkTest {
                   SUM(cache_read_input_tokens), SUM(cache_creation_input_tokens),
                   SUM(reasoning_output_tokens), SUM(CASE WHEN status = 'SUCCEEDED'
                     AND usage_quality <> 'MISSING' AND complete = 1 THEN 1 ELSE 0 END)
-                FROM ai_calls INDEXED BY idx_calls_aggregate_hour
+                FROM ai_calls INDEXED BY idx_calls_filtered_hour
                 WHERE started_at_ms >= 0 AND started_at_ms < 9223372036854775807
                   AND (started_at_ms / 3600000) >= 0
                 GROUP BY (started_at_ms / 3600000), status, usage_quality, complete

@@ -61,6 +61,12 @@ export interface UsageHealth {
      * @type {string}
      * @memberof UsageHealth
      */
+    'initializationError'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof UsageHealth
+     */
     'integrityError'?: string;
     /**
      * 
@@ -68,12 +74,6 @@ export interface UsageHealth {
      * @memberof UsageHealth
      */
     'lastWriteErrorAt'?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof UsageHealth
-     */
-    'migrationError'?: string;
     /**
      * 
      * @type {number}

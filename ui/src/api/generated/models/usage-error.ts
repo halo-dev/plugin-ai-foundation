@@ -25,12 +25,6 @@ export interface UsageError {
      * @type {string}
      * @memberof UsageError
      */
-    'code'?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof UsageError
-     */
     'type'?: string;
 }
 

@@ -36,8 +36,7 @@ final class UsageStatisticsMaintenance {
                     statement.executeUpdate("DELETE FROM ai_calls WHERE id IN (SELECT id FROM usage_retention_batch)");
                 }
             }
-            putMeta(connection, "call_detail_start", callCutoff.toString());
-            var executions = deleteExpiredExecutions(connection, executionCutoff);
+            UsageSqliteJdbc.putMeta(connection, "call_detail_start", callCutoff.toString());            var executions = deleteExpiredExecutions(connection, executionCutoff);
             connection.commit();
             if (selected == CALL_BATCH_SIZE) {
                 return true;
@@ -54,7 +53,7 @@ final class UsageStatisticsMaintenance {
             throw error;
         } finally {
             if (restoreAutoCommit) {
-                setAutoCommit(connection, true);
+                UsageSqliteJdbc.setAutoCommit(connection, true);
             }
         }
     }
@@ -186,25 +185,5 @@ final class UsageStatisticsMaintenance {
 
     private static long startOfDay(LocalDate day) {
         return day.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli();
-    }
-
-    private static void putMeta(Connection connection, String key, String value)
-        throws SQLException {
-        try (var statement = connection.prepareStatement("""
-            INSERT INTO ai_statistics_meta(key, value) VALUES (?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-            """)) {
-            statement.setString(1, key);
-            statement.setString(2, value);
-            statement.executeUpdate();
-        }
-    }
-
-    private static void setAutoCommit(Connection connection, boolean value) {
-        try {
-            connection.setAutoCommit(value);
-        } catch (SQLException ignored) {
-            // The connection is no longer usable and the caller will surface the failure.
-        }
     }
 }

@@ -95,8 +95,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                 builder -> builder.operationId("ResetAiUsageStatistics").tag(tag)
                     .description("Delete all usage statistics. Requires confirmation RESET.")
                     .requestBody(requestBodyBuilder().required(true)
-                        .implementation(ResetRequest.class))
-                    .response(responseBuilder().implementation(ResetResponse.class)))
+                        .implementation(ResetRequest.class)))
             .build();
     }
 
@@ -164,7 +163,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
         return request.bodyToMono(ResetRequest.class)
             .switchIfEmpty(Mono.error(new IllegalArgumentException("request body is required")))
             .flatMap(body -> service.reset(body.confirmation()))
-            .flatMap(epoch -> ServerResponse.ok().bodyValue(new ResetResponse(epoch)))
+            .flatMap(ignored -> ServerResponse.ok().build())
             .onErrorResume(IllegalArgumentException.class, this::badRequest)
             .onErrorResume(IllegalStateException.class, this::unavailable);
     }
@@ -227,10 +226,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
         }
         try {
             var size = Integer.parseInt(value);
-            if (size < 1) {
-                throw new IllegalArgumentException("size must be between 1 and " + MAX_PAGE_SIZE);
-            }
-            if (size > MAX_PAGE_SIZE) {
+            if (size < 1 || size > MAX_PAGE_SIZE) {
                 throw new IllegalArgumentException("size must be between 1 and " + MAX_PAGE_SIZE);
             }
             return size;
@@ -285,9 +281,6 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
     }
 
     public record ResetRequest(String confirmation) {
-    }
-
-    public record ResetResponse(long epoch) {
     }
 
     public record ErrorResponse(String message) {

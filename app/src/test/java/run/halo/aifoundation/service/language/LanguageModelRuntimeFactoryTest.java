@@ -26,12 +26,15 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 import run.halo.aifoundation.tool.ToolDefinition;
 
 class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
 
     private final LanguageModelRuntimeFactory factory =
-        new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport());
+        new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport(),
+            new MediaResourcePolicy(), new ModelCapabilityMatcher(),
+            new LanguageModelRuntimeProperties(), new UsageExecutionObserver());
 
     @Test
     void create_passesProviderTypeIntoRuntimeMetadata() {
@@ -95,7 +98,8 @@ class LanguageModelRuntimeFactoryTest extends LanguageModelTestSupport {
             new LanguageModelRuntimeSupport(),
             new MediaResourcePolicy(),
             new ModelCapabilityMatcher(),
-            properties
+            properties,
+            new UsageExecutionObserver()
         );
         var chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(

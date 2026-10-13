@@ -84,7 +84,8 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         ModelCapabilities modelCapabilities,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
         ModelRuntimeContext context) {
-        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher, context, null);
+        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher, context,
+            new UsageExecutionObserver());
     }
 
     ImageGenerationModelImpl(ProviderImageGenerationClient client,
@@ -173,14 +174,9 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
             Supplier<Mono<GenerateImageResult>> invocation =
                 () -> client.generateImage(request, target, nativeOptions);
-            Mono<GenerateImageResult> observed;
-            if (usageExecutionObserver == null) {
-                observed = invocation.get();
-            } else {
-                observed = usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex,
-                    invocation, result -> NormalizedUsage.from(result.getUsage()), this::responseModel);
-            }
-            return observed.doOnNext(ignored -> checkCancellation(request));
+            return usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex,
+                    invocation, result -> NormalizedUsage.from(result.getUsage()), this::responseModel)
+                .doOnNext(ignored -> checkCancellation(request));
         });
         var maxRetries = maxRetries(request);
         return maxRetries <= 0 ? call

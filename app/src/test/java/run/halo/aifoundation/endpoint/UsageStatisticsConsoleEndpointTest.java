@@ -58,7 +58,7 @@ class UsageStatisticsConsoleEndpointTest {
         when(service.trends(any(), nullable(UsageBreakdownDimension.class)))
             .thenReturn(Mono.just(java.util.List.of(
                 new UsageTrendPoint(Instant.EPOCH, UsageTrendResolution.HOUR,
-                    1, 2L, 3L, 5L, 1, 0, 0, false, null))));
+                    1, 2L, 3L, 5L, 0, 0, false, null))));
 
         client.get().uri("/usage-statistics/trends?resolution=hour")
             .exchange().expectStatus().isOk().expectBody()
@@ -75,8 +75,8 @@ class UsageStatisticsConsoleEndpointTest {
         when(service.trends(any(), eq(UsageBreakdownDimension.MODEL)))
             .thenReturn(Mono.just(java.util.List.of(
                 new UsageTrendPoint(Instant.EPOCH, UsageTrendResolution.DAY,
-                    1, 2L, 3L, 5L, 1, 0, 0, true,
-                    java.util.Map.of("m1", new UsageTrendDimensionValue(1, 2L, 3L, 5L))))));
+                    1, 2L, 3L, 5L, 0, 0, true,
+                    java.util.Map.of("m1", new UsageTrendDimensionValue(1, 5L))))));
 
         client.get().uri("/usage-statistics/trends?dimension=model")
             .exchange().expectStatus().isOk().expectBody()
@@ -90,9 +90,8 @@ class UsageStatisticsConsoleEndpointTest {
 
     @Test
     void breakdownRequiresDimensionAndMapsFilters() {
-        var breakdown = new UsageBreakdown(UsageBreakdownDimension.CALLER_PLUGIN,
-            java.util.List.of(new UsageBreakdownItem("search", 3, 1, 4L, 5L, null, null,
-                null, 9L)));
+        var breakdown = new UsageBreakdown(
+            java.util.List.of(new UsageBreakdownItem("search", 3, 1, 9L)));
         when(service.breakdown(any(), eq(UsageBreakdownDimension.CALLER_PLUGIN)))
             .thenReturn(Mono.just(breakdown));
 
@@ -104,7 +103,7 @@ class UsageStatisticsConsoleEndpointTest {
         client.get().uri("/usage-statistics/breakdown?dimension=callerPlugin"
                 + "&from=2026-01-01T00:00:00Z&to=2026-01-02T00:00:00Z&providerName=provider")
             .exchange().expectStatus().isOk().expectBody()
-            .jsonPath("$.dimension").isEqualTo("CALLER_PLUGIN")
+            .jsonPath("$.dimension").doesNotExist()
             .jsonPath("$.items[0].value").isEqualTo("search")
             .jsonPath("$.items[0].failedCount").isEqualTo(1);
 
@@ -115,8 +114,8 @@ class UsageStatisticsConsoleEndpointTest {
 
     @Test
     void returnsSummaryAndCursorPage() {
-        var summary = new UsageSummary(0, 0, 0, 0, 0, 0, 0, null, null, null, null, null,
-            null, 0, 0, 0, 1D, true, 1D, true, "MILLISECOND", Instant.EPOCH, Instant.EPOCH.plusSeconds(1));
+        var summary = new UsageSummary(0, 0, 0, 0, null, null, null, null, null,
+            null, 0, 0, 1D, true);
         when(service.summary(any())).thenReturn(Mono.just(summary));
         when(service.listCalls(any(), eq(50), eq(null)))
             .thenReturn(Mono.just(new UsageCallPage(java.util.List.of(), null)));
@@ -176,19 +175,18 @@ class UsageStatisticsConsoleEndpointTest {
 
     @Test
     void resetRequiresExactConfirmation() {
-        when(service.reset("RESET")).thenReturn(Mono.just(2L));
+        when(service.reset("RESET")).thenReturn(Mono.empty());
 
         client.post().uri("/usage-statistics/reset")
             .bodyValue("{\"confirmation\":\"RESET\"}")
             .header("Content-Type", "application/json")
-            .exchange().expectStatus().isOk().expectBody()
-            .jsonPath("$.epoch").isEqualTo(2);
+            .exchange().expectStatus().isOk().expectBody().isEmpty();
     }
 
     @Test
     void acceptsOffsetInstantsAcrossDaylightSavingBoundary() {
-        var summary = new UsageSummary(0, 0, 0, 0, 0, 0, 0, null, null, null, null, null,
-            null, 0, 0, 0, 1D, true, 1D, true, "MILLISECOND", Instant.EPOCH, Instant.EPOCH.plusSeconds(1));
+        var summary = new UsageSummary(0, 0, 0, 0, null, null, null, null, null,
+            null, 0, 0, 1D, true);
         when(service.summary(any())).thenReturn(Mono.just(summary));
 
         client.get().uri("/usage-statistics/summary?from=2026-03-08T00:00:00-08:00"
@@ -198,9 +196,8 @@ class UsageStatisticsConsoleEndpointTest {
 
     @Test
     void mapsEveryConfirmedFilterAndDisclosesDegradedDailySummary() {
-        var summary = new UsageSummary(2, 0, 1, 1, 0, 0, 0, null, 5L, null, null, 2L,
-            5L, 1, 1, 1, 0D, true, 0.5D, false, "DAY", Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-02T00:00:00Z"));
+        var summary = new UsageSummary(2, 0, 1, 1, null, 5L, null, null, 2L,
+            5L, 1, 1, 0.5D, false);
         when(service.summary(any())).thenReturn(Mono.just(summary));
 
         client.get().uri("/usage-statistics/summary?from=2026-01-01T00:00:00Z"
@@ -210,8 +207,7 @@ class UsageStatisticsConsoleEndpointTest {
             .exchange().expectStatus().isOk().expectBody()
             .jsonPath("$.inputTokens").doesNotExist()
             .jsonPath("$.usageCoverage").isEqualTo(0.5)
-            .jsonPath("$.complete").isEqualTo(false)
-            .jsonPath("$.resolution").isEqualTo("DAY");
+            .jsonPath("$.complete").isEqualTo(false);
 
         var query = ArgumentCaptor.forClass(UsageQuery.class);
         verify(service).summary(query.capture());

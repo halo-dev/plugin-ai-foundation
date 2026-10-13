@@ -74,7 +74,6 @@ export const NormalizedUsageQualityEnum = {
     ReportedComponents: 'REPORTED_COMPONENTS',
     ReportedTotal: 'REPORTED_TOTAL',
     Partial: 'PARTIAL',
-    Estimated: 'ESTIMATED',
     Missing: 'MISSING'
 } as const;
 

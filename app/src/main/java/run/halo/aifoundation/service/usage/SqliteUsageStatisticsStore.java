@@ -5,7 +5,6 @@ import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
@@ -16,9 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.sqlite.JDBC;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
@@ -35,11 +32,9 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     static final long WAL_SIZE_LIMIT_BYTES = 16L * 1024 * 1024;
     private static final int MAX_CONCURRENT_READERS = 4;
 
-    private static final AtomicInteger LIVE_STORES = new AtomicInteger();
-
     private final UsageDatabasePaths paths;
-    private final UsageStatisticsMaintenance maintenance;
-    private final UsageStatisticsQueryRepository queries;
+    private final UsageStatisticsMaintenance maintenance = new UsageStatisticsMaintenance();
+    private final UsageStatisticsQueryRepository queries = new UsageStatisticsQueryRepository();
     private final Semaphore readerPermits = new Semaphore(MAX_CONCURRENT_READERS, true);
     private final java.util.Set<Connection> activeReaders = ConcurrentHashMap.newKeySet();
     private final Object readerLifecycle = new Object();
@@ -51,16 +46,8 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     private Connection writer;
     private volatile boolean initialized;
 
-    @Autowired
     public SqliteUsageStatisticsStore(UsageDatabasePaths paths) {
-        this(paths, new UsageStatisticsMaintenance(), new UsageStatisticsQueryRepository());
-    }
-
-    SqliteUsageStatisticsStore(UsageDatabasePaths paths, UsageStatisticsMaintenance maintenance,
-        UsageStatisticsQueryRepository queries) {
         this.paths = paths;
-        this.maintenance = maintenance;
-        this.queries = queries;
     }
 
     @Override
@@ -100,12 +87,9 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                 }
             }
             initialized = true;
-            LIVE_STORES.incrementAndGet();
         } catch (Exception | LinkageError error) {
             closeSilently();
-            if (LIVE_STORES.get() == 0) {
-                deregisterPluginDrivers();
-            }
+            deregisterPluginDrivers();
             throw new IllegalStateException("Failed to initialize AI usage statistics", error);
         }
     }
@@ -113,7 +97,11 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     @Override
     public synchronized long currentEpoch() {
         requireInitialized();
-        return longMeta(writer, "statistics_epoch", 1L);
+        try {
+            return UsageSqliteJdbc.longMeta(writer, "statistics_epoch", 1L);
+        } catch (SQLException error) {
+            throw databaseError("read metadata", error);
+        }
     }
 
     @Override
@@ -122,14 +110,13 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         try (var statement = writer.prepareStatement(
             "SELECT * FROM ai_statistics_health WHERE id = 1");
             var row = statement.executeQuery()) {
-            if (!row.next()) {
-                return UsageHealthState.empty();
-            }
+            row.next();
             return new UsageHealthState(row.getLong("dropped_events"),
                 row.getLong("incomplete_calls"), row.getLong("write_failures"),
-                instant(row, "last_write_error_at_ms"), instant(row, "affected_since_ms"),
-                instant(row, "affected_until_ms"),
-                row.getString("migration_error"), row.getString("integrity_error"));
+                UsageSqliteJdbc.instant(row, "last_write_error_at_ms"),
+                UsageSqliteJdbc.instant(row, "affected_since_ms"),
+                UsageSqliteJdbc.instant(row, "affected_until_ms"),
+                row.getString("initialization_error"), row.getString("integrity_error"));
         } catch (SQLException error) {
             throw databaseError("read statistics health", error);
         }
@@ -141,7 +128,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         var sql = """
             UPDATE ai_statistics_health SET affected_since_ms = ?, affected_until_ms = ?,
               last_write_error_at_ms = ?, dropped_events = ?, incomplete_calls = ?,
-              write_failures = ?, migration_error = ?, integrity_error = ? WHERE id = 1
+              write_failures = ?, initialization_error = ?, integrity_error = ? WHERE id = 1
             """;
         try (var statement = writer.prepareStatement(sql)) {
             setInstant(statement, 1, health.affectedSince());
@@ -150,7 +137,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             statement.setLong(4, health.droppedEvents());
             statement.setLong(5, health.incompleteCalls());
             statement.setLong(6, health.writeFailures());
-            statement.setString(7, health.migrationError());
+            statement.setString(7, health.initializationError());
             statement.setString(8, health.integrityError());
             statement.executeUpdate();
         } catch (SQLException error) {
@@ -175,7 +162,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             throw error;
         } finally {
             if (restoreAutoCommit) {
-                setAutoCommit(writer, true);
+                UsageSqliteJdbc.setAutoCommit(writer, true);
             }
         }
     }
@@ -198,12 +185,12 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         var sql = """
             INSERT INTO ai_model_executions (
               id, call_id, epoch, unit_kind, unit_index, attempt_index,
-              started_at_ms, completed_at_ms, status, error_type, error_code,
+              started_at_ms, completed_at_ms, status, error_type,
               request_model_id, response_model_id,
               input_tokens, output_tokens, cache_read_input_tokens,
               cache_creation_input_tokens, reasoning_output_tokens,
               provider_total_tokens, accounted_total_tokens, usage_quality
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(call_id, unit_kind, unit_index, attempt_index) DO NOTHING
             """;
         try (var statement = writer.prepareStatement(sql)) {
@@ -218,7 +205,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             setInstant(statement, index++, execution.completedAt());
             statement.setString(index++, execution.status().name());
             statement.setString(index++, value(execution.error(), UsageError::type));
-            statement.setString(index++, value(execution.error(), UsageError::code));
             statement.setString(index++, execution.requestModelId());
             statement.setString(index++, execution.responseModelId());
             index = bindUsage(statement, index, execution.usage());
@@ -239,7 +225,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         // Only that missing, execution-free success may be enriched; known terminals stay immutable.
         var sql = """
             UPDATE ai_calls SET
-              completed_at_ms = ?, duration_ms = ?, status = ?, error_type = ?, error_code = ?,
+              completed_at_ms = ?, duration_ms = ?, status = ?, error_type = ?,
               response_model_id = ?, step_count = ?, attempt_count = ?,
               missing_execution_count = ?, complete = ?, input_tokens = ?, output_tokens = ?,
               cache_read_input_tokens = ?, cache_creation_input_tokens = ?,
@@ -260,7 +246,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             statement.setLong(index++, Math.max(0, duration));
             statement.setString(index++, terminal.status().name());
             statement.setString(index++, value(terminal.error(), UsageError::type));
-            statement.setString(index++, value(terminal.error(), UsageError::code));
             statement.setString(index++, terminal.responseModelId());
             statement.setInt(index++, terminal.stepCount());
             statement.setInt(index++, terminal.attemptCount());
@@ -305,12 +290,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     @Override
     public UsageCallPage listCalls(UsageQuery query, int size, String cursor) {
         requireInitialized();
-        if (size < 1) {
-            throw new IllegalArgumentException("size must be between 1 and 200");
-        }
-        if (size > 200) {
-            throw new IllegalArgumentException("size must be between 1 and 200");
-        }
         return withReader(connection -> queries.listCalls(connection, query, size, cursor));
     }
 
@@ -336,7 +315,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                     UPDATE ai_statistics_health SET affected_since_ms = NULL,
                       affected_until_ms = NULL, last_write_error_at_ms = NULL,
                       dropped_events = 0, incomplete_calls = 0, write_failures = 0,
-                      migration_error = NULL, integrity_error = NULL
+                      initialization_error = NULL, integrity_error = NULL
                     WHERE id = 1
                     """);
             }
@@ -353,7 +332,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                 statement.executeUpdate("DELETE FROM ai_statistics_meta WHERE key NOT IN ('statistics_epoch', 'schema_version')");
             }
             var nextEpoch = currentEpoch() + 1;
-            putMeta(writer, "statistics_epoch", Long.toString(nextEpoch));
+            UsageSqliteJdbc.putMeta(writer, "statistics_epoch", Long.toString(nextEpoch));
             writer.commit();
             return nextEpoch;
         } catch (RuntimeException | SQLException error) {
@@ -364,7 +343,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             throw error;
         } finally {
             if (restoreAutoCommit) {
-                setAutoCommit(writer, true);
+                UsageSqliteJdbc.setAutoCommit(writer, true);
             }
             snapshotLock.unlock();
         }
@@ -474,9 +453,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         if (acquired) {
             readerPermits.release(MAX_CONCURRENT_READERS);
         }
-        if (LIVE_STORES.decrementAndGet() == 0) {
-            deregisterPluginDrivers();
-        }
+        deregisterPluginDrivers();
     }
 
     private Connection openConnection() throws SQLException {
@@ -631,63 +608,20 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     private static int bindUsage(PreparedStatement statement, int index, NormalizedUsage usage)
         throws SQLException {
         var value = usage == null ? NormalizedUsage.missing() : usage;
-        setLong(statement, index++, value.inputTokens());
-        setLong(statement, index++, value.outputTokens());
-        setLong(statement, index++, value.cacheReadInputTokens());
-        setLong(statement, index++, value.cacheCreationInputTokens());
-        setLong(statement, index++, value.reasoningOutputTokens());
-        setLong(statement, index++, value.providerTotalTokens());
-        setLong(statement, index++, value.accountedTotalTokens());
+        UsageSqliteJdbc.setLong(statement, index++, value.inputTokens());
+        UsageSqliteJdbc.setLong(statement, index++, value.outputTokens());
+        UsageSqliteJdbc.setLong(statement, index++, value.cacheReadInputTokens());
+        UsageSqliteJdbc.setLong(statement, index++, value.cacheCreationInputTokens());
+        UsageSqliteJdbc.setLong(statement, index++, value.reasoningOutputTokens());
+        UsageSqliteJdbc.setLong(statement, index++, value.providerTotalTokens());
+        UsageSqliteJdbc.setLong(statement, index++, value.accountedTotalTokens());
         statement.setString(index++, value.quality().name());
         return index;
     }
 
-    private static Instant instant(ResultSet row, String column) throws SQLException {
-        var value = nullableLong(row, column);
-        return value == null ? null : Instant.ofEpochMilli(value);
-    }
-
-    private static Long nullableLong(ResultSet row, String column) throws SQLException {
-        var value = row.getLong(column);
-        return row.wasNull() ? null : value;
-    }
-
-    private static void setLong(PreparedStatement statement, int index, Long value)
-        throws SQLException {
-        if (value == null) {
-            statement.setObject(index, null);
-        } else {
-            statement.setLong(index, value);
-        }
-    }
-
     private static void setInstant(PreparedStatement statement, int index, Instant value)
         throws SQLException {
-        setLong(statement, index, value == null ? null : value.toEpochMilli());
-    }
-
-    private static long longMeta(Connection connection, String key, long fallback) {
-        try (var statement = connection.prepareStatement(
-            "SELECT value FROM ai_statistics_meta WHERE key = ?")) {
-            statement.setString(1, key);
-            try (var rows = statement.executeQuery()) {
-                return rows.next() ? Long.parseLong(rows.getString(1)) : fallback;
-            }
-        } catch (SQLException error) {
-            throw databaseError("read metadata", error);
-        }
-    }
-
-    private static void putMeta(Connection connection, String key, String value)
-        throws SQLException {
-        try (var statement = connection.prepareStatement("""
-            INSERT INTO ai_statistics_meta(key, value) VALUES (?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-            """)) {
-            statement.setString(1, key);
-            statement.setString(2, value);
-            statement.executeUpdate();
-        }
+        UsageSqliteJdbc.setLong(statement, index, value == null ? null : value.toEpochMilli());
     }
 
     private void requireInitialized() {
@@ -743,14 +677,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             } catch (SQLException ignored) {
                 // Best effort during shutdown.
             }
-        }
-    }
-
-    private static void setAutoCommit(Connection connection, boolean value) {
-        try {
-            connection.setAutoCommit(value);
-        } catch (SQLException error) {
-            log.warn("Failed to restore AI usage statistics auto-commit", error);
         }
     }
 

@@ -1,7 +1,6 @@
 package run.halo.aifoundation.service.language;
 
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
@@ -17,18 +16,6 @@ public class LanguageModelRuntimeFactory {
     private final LanguageModelRuntimeProperties runtimeProperties;
     private final UsageExecutionObserver usageExecutionObserver;
 
-    public LanguageModelRuntimeFactory(LanguageModelRuntimeSupport runtimeSupport) {
-        this(runtimeSupport, new MediaResourcePolicy(), new ModelCapabilityMatcher(),
-            new LanguageModelRuntimeProperties(), null);
-    }
-
-    public LanguageModelRuntimeFactory(LanguageModelRuntimeSupport runtimeSupport,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
-        LanguageModelRuntimeProperties runtimeProperties) {
-        this(runtimeSupport, mediaResourcePolicy, capabilityMatcher, runtimeProperties, null);
-    }
-
-    @Autowired
     public LanguageModelRuntimeFactory(LanguageModelRuntimeSupport runtimeSupport,
         MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
         LanguageModelRuntimeProperties runtimeProperties,

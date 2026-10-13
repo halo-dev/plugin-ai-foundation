@@ -32,17 +32,5 @@ export interface UsageTrendDimensionValue {
      * @memberof UsageTrendDimensionValue
      */
     'callCount'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageTrendDimensionValue
-     */
-    'inputTokens'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageTrendDimensionValue
-     */
-    'outputTokens'?: number;
 }
 

@@ -23,7 +23,6 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageCallStart;
 import run.halo.aifoundation.service.observation.UsageCallTerminal;
-import run.halo.aifoundation.service.observation.UsageEventSink;
 import run.halo.aifoundation.service.observation.UsageObservation;
 
 class UsageProjectionRegressionTest {
@@ -35,7 +34,7 @@ class UsageProjectionRegressionTest {
     }
 
     private UsageCallTerminal run(boolean textFirst) {
-        var sink = mock(UsageEventSink.class);
+        var sink = mock(UsageObservation.class);
         var start = new UsageCallStart("id", 1, Instant.now(), "plugin", "1", "stack", null,
             "language.streamText", "LANGUAGE", "m", "p", "openai", "gpt", true);
         var session = new UsageCallSession(sink, start, Clock.systemUTC());

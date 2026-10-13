@@ -31,18 +31,6 @@ export interface UsageBreakdownItem {
      * @type {number}
      * @memberof UsageBreakdownItem
      */
-    'cacheCreationInputTokens'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageBreakdownItem
-     */
-    'cacheReadInputTokens'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageBreakdownItem
-     */
     'callCount'?: number;
     /**
      * 
@@ -50,24 +38,6 @@ export interface UsageBreakdownItem {
      * @memberof UsageBreakdownItem
      */
     'failedCount'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageBreakdownItem
-     */
-    'inputTokens'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageBreakdownItem
-     */
-    'outputTokens'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageBreakdownItem
-     */
-    'reasoningOutputTokens'?: number;
     /**
      * 
      * @type {string}

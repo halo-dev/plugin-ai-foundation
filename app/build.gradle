@@ -114,7 +114,6 @@ haloPlugin {
 
 halo {
     version = '2.26'
-    port = 8099
 }
 
 def generatedOpenApi = layout.projectDirectory.file(

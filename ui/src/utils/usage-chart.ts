@@ -36,14 +36,17 @@ export function chartCeiling(value: number) {
   return Math.ceil(value / power) * power
 }
 
+const COMPACT_FORMATTER = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+
 export function compactChartNumber(value: number) {
-  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(
-    value,
-  )
+  return COMPACT_FORMATTER.format(value)
 }
 
 // Dimension breakdown palette (primary #4CCBA0); categories beyond Top N merge into a gray Other
-export const USAGE_CHART_PALETTE = [
+const USAGE_CHART_PALETTE = [
   '#4CCBA0',
   '#0ea5e9',
   '#10b981',

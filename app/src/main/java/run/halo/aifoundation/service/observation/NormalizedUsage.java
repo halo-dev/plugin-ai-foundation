@@ -198,18 +198,13 @@ public record NormalizedUsage(
     }
 
     private static UsageQuality quality(Long input, Long output, Long providerTotal) {
-        if (input != null) {
-            if (output != null) {
-                return UsageQuality.REPORTED_COMPONENTS;
-            }
+        if (input != null && output != null) {
+            return UsageQuality.REPORTED_COMPONENTS;
         }
         if (providerTotal != null) {
             return UsageQuality.REPORTED_TOTAL;
         }
-        if (input != null) {
-            return UsageQuality.PARTIAL;
-        }
-        if (output != null) {
+        if (input != null || output != null) {
             return UsageQuality.PARTIAL;
         }
         return UsageQuality.MISSING;

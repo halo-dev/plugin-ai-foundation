@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UsageTrendPoint } from '@/api/generated'
-import { formatBucketStart, formatTokens } from '@/utils/usage'
+import { formatBucketStart, formatTokens, formatUsageMetric, usageMetricValue, type UsageMetric } from '@/utils/usage'
 import {
   bucketDuration,
   chartCeiling,
@@ -26,7 +26,7 @@ const props = defineProps<{
   points?: UsageTrendPoint[]
   /** Ordered Top N dimension keys; falls back to input/output stacking when empty */
   categories?: string[]
-  metric: 'tokens' | 'calls'
+  metric: UsageMetric
   labelOf: (key: string) => string
   from?: string
   to?: string
@@ -58,7 +58,7 @@ const resolution = computed(() =>
 const stacked = computed(() => Boolean(props.categories?.length))
 
 function metricTotal(point: UsageTrendPoint) {
-  return props.metric === 'tokens' ? point.accountedTotalTokens : point.callCount
+  return usageMetricValue(point, props.metric)
 }
 
 function segmentsOf(point: UsageTrendPoint): StackSegment[] {
@@ -69,8 +69,10 @@ function segmentsOf(point: UsageTrendPoint): StackSegment[] {
       return {
         key,
         color: usageCategoryColor(key, categories),
-        value:
-          props.metric === 'tokens' ? (value?.accountedTotalTokens ?? 0) : (value?.callCount ?? 0),
+        value: usageMetricValue(
+          { accountedTotalTokens: value?.accountedTotalTokens, callCount: value?.callCount },
+          props.metric,
+        ),
       }
     })
     const known = segments.reduce((sum, segment) => sum + segment.value, 0)
@@ -198,7 +200,7 @@ function segmentLabel(key: string) {
 }
 
 function formatValue(value: number) {
-  return props.metric === 'tokens' ? formatTokens(value) : value.toLocaleString()
+  return formatUsageMetric(value, props.metric)
 }
 
 function segmentOpacity(key: string) {

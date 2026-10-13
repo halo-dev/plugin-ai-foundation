@@ -23,11 +23,15 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.ModelResolution;
+import run.halo.aifoundation.service.model.ModelRuntimeContextResolver;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 import run.halo.app.extension.Metadata;
 
 class DefaultImageGenerationModelFactoryTest {
@@ -62,7 +66,11 @@ class DefaultImageGenerationModelFactoryTest {
         when(providerClientCache.getOrCreateImageGenerationClient(provider, "sk-test",
             ProviderModelRef.from(model))).thenReturn(client);
         var factory = new DefaultImageGenerationModelFactory(providerClientCache,
-            new ModelCapabilityService(), new MediaResourcePolicy(), new ModelCapabilityMatcher());
+            new ModelCapabilityService(),
+            new ImageGenerationModelRuntimeFactory(new MediaResourcePolicy(),
+                new ModelCapabilityMatcher(), new UsageExecutionObserver()),
+            new ModelRuntimeContextResolver(new EffectiveParameterMappingResolver(),
+                new ParameterMappingTemplateRegistry()));
 
         var imageModel = factory.create(new ModelResolution(model, provider,
             new ImageProviderType(), "sk-test"));

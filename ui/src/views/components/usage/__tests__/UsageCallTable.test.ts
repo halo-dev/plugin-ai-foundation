@@ -50,13 +50,11 @@ function call(partial: Partial<UsageCallItem> = {}): UsageCallItem {
     id: 'call-1',
     status: 'SUCCEEDED',
     startedAt: '2026-08-10T08:00:00Z',
-    completedAt: '2026-08-10T08:00:01Z',
     durationMillis: 1000,
     callerPluginName: 'plugin-search',
     callerPluginVersion: '1.2.0',
     modelName: 'gpt-4o-prod',
     providerName: 'openai-main',
-    providerType: 'openai',
     requestModelId: 'gpt-4o',
     responseModelId: 'gpt-4o-2026-01-01',
     modelType: 'LANGUAGE',
@@ -122,7 +120,6 @@ describe('UsageCallTable', () => {
           requestModelId: undefined,
           providerName: undefined,
           errorType: 'PROVIDER_ERROR',
-          errorCode: 'rate_limit',
         }),
       ],
     })
@@ -136,7 +133,7 @@ describe('UsageCallTable', () => {
     expect(text).toContain('未知插件')
     expect(text).toContain('未知模型')
     await wrapper.findAll('[role="button"]')[4]!.trigger('click')
-    expect(wrapper.text()).toContain('PROVIDER_ERROR（rate_limit）')
+    expect(wrapper.text()).toContain('PROVIDER_ERROR')
     expect((text.match(/未知/g) || []).length).toBeGreaterThanOrEqual(3)
   })
 

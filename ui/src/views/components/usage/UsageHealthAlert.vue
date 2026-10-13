@@ -24,7 +24,7 @@ const title = computed(() => {
 })
 
 const storageErrors = computed(() => {
-  return [props.health?.migrationError, props.health?.integrityError].filter(
+  return [props.health?.initializationError, props.health?.integrityError].filter(
     (item): item is string => !!item,
   )
 })

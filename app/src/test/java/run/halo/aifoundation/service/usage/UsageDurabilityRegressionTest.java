@@ -3,6 +3,7 @@ package run.halo.aifoundation.service.usage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.storeWithQueries;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
@@ -48,8 +49,7 @@ class UsageDurabilityRegressionTest {
                 return super.summary(connection, query, complete);
             }
         };
-        try (var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(directory),
-            new UsageStatisticsMaintenance(), queries)) {
+        try (var store = storeWithQueries(new UsageDatabasePaths(directory), queries)) {
             store.initialize();
             var query = new UsageQuery(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60),
                 null, null, null, null, null, null, null, null, null);
@@ -79,8 +79,7 @@ class UsageDurabilityRegressionTest {
                 return super.summary(connection, query, complete);
             }
         };
-        try (var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(directory),
-            new UsageStatisticsMaintenance(), queries)) {
+        try (var store = storeWithQueries(new UsageDatabasePaths(directory), queries)) {
             store.initialize();
             var query = new UsageQuery(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60),
                 null, null, null, null, null, null, null, null, null);
@@ -109,14 +108,14 @@ class UsageDurabilityRegressionTest {
                     SUM(reasoning_output_tokens), SUM(accounted_total_tokens),
                     SUM(CASE WHEN status = 'SUCCEEDED' AND complete = 1
                         AND usage_quality <> 'MISSING' THEN 1 ELSE 0 END)
-                    FROM ai_calls INDEXED BY idx_calls_aggregate_hour
+                    FROM ai_calls INDEXED BY idx_calls_filtered_hour
                     WHERE started_at_ms >= 0 AND started_at_ms < 9223372036854775807
                       AND (started_at_ms / 3600000) >= 0
                     GROUP BY (started_at_ms / 3600000), status, usage_quality, complete
                     """)) {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getString("detail"))
-                    .contains("COVERING INDEX idx_calls_aggregate_hour");
+                    .contains("COVERING INDEX idx_calls_filtered_hour");
                 while (rows.next()) {
                     assertThat(rows.getString("detail")).doesNotContain("TEMP B-TREE");
                 }
@@ -143,8 +142,7 @@ class UsageDurabilityRegressionTest {
             return null;
         }).when(queries).summary(org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
-        var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(directory),
-            new UsageStatisticsMaintenance(), queries);
+        var store = storeWithQueries(new UsageDatabasePaths(directory), queries);
         store.initialize();
         var query = new UsageQuery(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60),
             null, null, null, null, null, null, null, null, null);

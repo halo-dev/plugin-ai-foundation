@@ -38,8 +38,8 @@ import run.halo.aifoundation.service.observation.UsageFeature;
 
 @Slf4j
 @Component
-public class UsageStatisticsService implements run.halo.aifoundation.service.observation.UsageObservation,
-    run.halo.aifoundation.service.observation.UsageEventSink {
+public class UsageStatisticsService
+    implements run.halo.aifoundation.service.observation.UsageObservation {
 
     static final int WRITE_QUEUE_CAPACITY = 8_192;
     static final int MAX_WRITE_ATTEMPTS = 3;
@@ -62,7 +62,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
     private final AtomicReference<Instant> lastWriteErrorAt = new AtomicReference<>();
     private final AtomicReference<Instant> affectedSince = new AtomicReference<>();
     private final AtomicReference<Instant> affectedUntil = new AtomicReference<>();
-    private final AtomicReference<String> migrationError = new AtomicReference<>();
+    private final AtomicReference<String> initializationError = new AtomicReference<>();
     private final AtomicReference<String> integrityError = new AtomicReference<>();
     private final AtomicBoolean healthDirty = new AtomicBoolean();
     private volatile boolean available;
@@ -103,7 +103,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
             if (hasCause(error, UsageDatabaseIntegrityException.class)) {
                 integrityError.set(safeMessage(error));
             } else {
-                migrationError.set(safeMessage(error));
+                initializationError.set(safeMessage(error));
             }
             available = false;
             accepting = false;
@@ -163,23 +163,22 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         return read(() -> store.getCall(id));
     }
 
-    public Mono<Long> reset(String confirmation) {
+    public Mono<Void> reset(String confirmation) {
         if (!"RESET".equals(confirmation)) {
             return Mono.error(new IllegalArgumentException("confirmation must equal RESET"));
         }
         return write(() -> {
-            var nextEpoch = store.reset();
-            epoch = nextEpoch;
+            epoch = store.reset();
             droppedEvents.set(0);
             incompleteCalls.set(0);
             writeFailures.set(0);
             lastWriteErrorAt.set(null);
             affectedSince.set(null);
             affectedUntil.set(null);
-            migrationError.set(null);
+            initializationError.set(null);
             integrityError.set(null);
             healthDirty.set(false);
-            return nextEpoch;
+            return null;
         });
     }
 
@@ -188,7 +187,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
             pendingWrites.size(), droppedEvents.get(), incompleteCalls.get(),
             writeFailures.get(), lastWriteErrorAt.get(), affectedSince.get(),
             affectedUntil.get(),
-            migrationError.get(), integrityError.get());
+            initializationError.get(), integrityError.get());
     }
 
     private boolean hasCompleteHistory() {
@@ -204,7 +203,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         if (writeFailures.get() != 0) {
             return false;
         }
-        if (migrationError.get() != null) {
+        if (initializationError.get() != null) {
             return false;
         }
         return integrityError.get() == null;
@@ -635,7 +634,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         lastWriteErrorAt.set(health.lastWriteErrorAt());
         affectedSince.set(health.affectedSince());
         affectedUntil.set(health.affectedUntil());
-        migrationError.set(health.migrationError());
+        initializationError.set(health.initializationError());
         integrityError.set(health.integrityError());
     }
 
@@ -643,7 +642,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         return new UsageHealthState(droppedEvents.get(), incompleteCalls.get(),
             writeFailures.get(), lastWriteErrorAt.get(), affectedSince.get(),
             affectedUntil.get(),
-            migrationError.get(), integrityError.get());
+            initializationError.get(), integrityError.get());
     }
 
     private boolean isComplete(UsageQuery query) {
@@ -651,7 +650,7 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         if (!current.available()) {
             return false;
         }
-        if (current.migrationError() != null) {
+        if (current.initializationError() != null) {
             return false;
         }
         if (current.integrityError() != null) {

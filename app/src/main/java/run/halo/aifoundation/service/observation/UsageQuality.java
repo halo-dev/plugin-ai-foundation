@@ -4,6 +4,5 @@ public enum UsageQuality {
     REPORTED_COMPONENTS,
     REPORTED_TOTAL,
     PARTIAL,
-    ESTIMATED,
     MISSING
 }

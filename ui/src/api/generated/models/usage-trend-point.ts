@@ -64,12 +64,6 @@ export interface UsageTrendPoint {
      * @type {number}
      * @memberof UsageTrendPoint
      */
-    'knownUsageCalls'?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof UsageTrendPoint
-     */
     'missingUsageCalls'?: number;
     /**
      * 

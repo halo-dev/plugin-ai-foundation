@@ -1,7 +1,6 @@
 package run.halo.aifoundation.service.embedding;
 
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Autowired;
 import run.halo.aifoundation.embedding.EmbeddingModel;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
@@ -10,11 +9,6 @@ public class EmbeddingModelRuntimeFactory {
 
     private final UsageExecutionObserver usageExecutionObserver;
 
-    public EmbeddingModelRuntimeFactory() {
-        this(null);
-    }
-
-    @Autowired
     public EmbeddingModelRuntimeFactory(UsageExecutionObserver usageExecutionObserver) {
         this.usageExecutionObserver = usageExecutionObserver;
     }

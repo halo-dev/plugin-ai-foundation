@@ -31,7 +31,7 @@ const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.cal
 </script>
 
 <template>
-  <section class=":uno: usage-executions" aria-label="执行记录">
+  <section aria-label="执行记录">
     <div class=":uno: usage-executions-heading">
       <h4>执行过程</h4>
       <span>每次请求的实际消耗</span>
@@ -86,8 +86,7 @@ const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.cal
           <time :datetime="execution.startedAt">{{ formatDateTime(execution.startedAt) }}</time>
         </div>
         <p v-if="execution.error?.type" class=":uno: usage-execution-error">
-          错误：{{ execution.error.type
-          }}<template v-if="execution.error.code">（{{ execution.error.code }}）</template>
+          错误：{{ execution.error.type }}
         </p>
       </article>
     </div>

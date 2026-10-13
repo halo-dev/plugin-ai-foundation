@@ -93,7 +93,7 @@ public class EmbeddingModelImpl implements EmbeddingModel {
     EmbeddingModelImpl(
         org.springframework.ai.embedding.EmbeddingModel springEmbeddingModel,
         EmbeddingModelRuntimeComposition composition, ModelRuntimeContext context) {
-        this(springEmbeddingModel, composition, context, null);
+        this(springEmbeddingModel, composition, context, new UsageExecutionObserver());
     }
 
     EmbeddingModelImpl(
@@ -261,9 +261,6 @@ public class EmbeddingModelImpl implements EmbeddingModel {
                     () -> embedBatch(request, batch, options))
                 .subscribeOn(Schedulers.boundedElastic())
                 .transform(mono -> withEmbeddingTimeout(mono, request));
-            if (usageExecutionObserver == null) {
-                return invocation.get();
-            }
             return usageExecutionObserver.observe(UsageUnitKind.EMBEDDING_BATCH, batch.index(),
                 invocation, this::batchUsage, this::batchModel);
         });

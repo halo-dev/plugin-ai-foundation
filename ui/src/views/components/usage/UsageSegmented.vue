@@ -3,7 +3,7 @@ import { ToggleGroupItem, ToggleGroupRoot, type AcceptableValue } from 'reka-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 
-export interface UsageSegmentedOption {
+interface UsageSegmentedOption {
   label: string
   value: string
 }

@@ -14,7 +14,7 @@ public final class UsageCallSession {
 
     public static final String REACTOR_CONTEXT_KEY = UsageCallSession.class.getName();
 
-    private final UsageEventSink service;
+    private final UsageObservation service;
     private final UsageCallStart start;
     private final Clock clock;
     private final AtomicBoolean terminal = new AtomicBoolean();
@@ -32,7 +32,7 @@ public final class UsageCallSession {
     private final AtomicReference<String> latestResponseModelId = new AtomicReference<>();
     private final AtomicInteger observedGenerationSteps = new AtomicInteger();
 
-    public UsageCallSession(UsageEventSink service, UsageCallStart start, Clock clock) {
+    public UsageCallSession(UsageObservation service, UsageCallStart start, Clock clock) {
         this.service = service;
         this.start = start;
         this.clock = clock;
@@ -88,7 +88,7 @@ public final class UsageCallSession {
         return incomplete.get();
     }
 
-    public boolean hasExecutions() {
+    private boolean hasExecutions() {
         return attempts.get() > 0;
     }
 

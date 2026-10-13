@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UsageSummary } from '@/api/generated'
-import { formatCoverage, formatTokens } from '@/utils/usage'
+import { cappedUsageCoverage, formatCoverage, formatTokens } from '@/utils/usage'
 import { VAlert } from '@halo-dev/components'
 import NumberFlow from '@number-flow/vue'
 import { computed } from 'vue'
@@ -24,17 +24,9 @@ const cacheHitRate = computed(() => {
   return cacheRead / input
 })
 
-// Partial coverage must not round up to a misleading 100% (same guard as formatCoverage)
-function cappedCoverage(value?: number | null) {
-  if (value == null) return undefined
-  if (value >= 1) return 1
-  if (value >= 0.9995) return 0.999
-  return value
-}
-
 const coverage = computed(() => {
   if (!props.summary) return 0
-  return cappedCoverage(props.summary.usageCoverage)
+  return cappedUsageCoverage(props.summary.usageCoverage)
 })
 
 // Missing fields render as unknown only after the summary arrives; everything is a 0 placeholder before that

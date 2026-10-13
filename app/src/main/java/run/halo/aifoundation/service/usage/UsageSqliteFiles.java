@@ -75,7 +75,12 @@ final class UsageSqliteFiles {
             .filter(UsageSqliteFiles::isValidDatabase)
             .findFirst();
         if (selected.isEmpty()) {
-            preserveInvalidLiveOrThrow(paths);
+            try {
+                preserveInvalidLive(paths);
+            } catch (IOException error) {
+                throw new IllegalStateException("Failed to preserve invalid SQLite statistics",
+                    error);
+            }
             throw new UsageDatabaseIntegrityException(
                 "SQLite statistics evidence exists but no validated recovery snapshot is "
                     + "available");
@@ -113,7 +118,7 @@ final class UsageSqliteFiles {
                 return Instant.from(TIMESTAMP.parse(name.substring(timestampStart
                     + marker.length())));
             } catch (RuntimeException ignored) {
-                // Fall through to the filesystem timestamp for an older backup name.
+                // A collision-suffixed name does not parse; use the filesystem timestamp.
             }
         }
         try {
@@ -160,14 +165,6 @@ final class UsageSqliteFiles {
         } catch (Exception error) {
             log.warn("AI usage SQLite database {} is invalid: {}", path, error.getMessage());
             return false;
-        }
-    }
-
-    private static void preserveInvalidLiveOrThrow(UsageDatabasePaths paths) {
-        try {
-            preserveInvalidLive(paths);
-        } catch (IOException error) {
-            throw new IllegalStateException("Failed to preserve invalid SQLite statistics", error);
         }
     }
 

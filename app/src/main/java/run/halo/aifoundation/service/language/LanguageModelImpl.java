@@ -166,7 +166,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
         ModelRuntimeContext context, int maxMultiStepLimit) {
-        this(chatModel, composition, context, maxMultiStepLimit, null);
+        this(chatModel, composition, context, maxMultiStepLimit, new UsageExecutionObserver());
     }
 
     LanguageModelImpl(ChatModel chatModel, LanguageModelRuntimeComposition composition,
@@ -510,9 +510,6 @@ public class LanguageModelImpl implements LanguageModel {
 
     private Flux<ChatResponse> observeChatStream(int stepIndex,
         Supplier<Flux<ChatResponse>> invocation) {
-        if (usageExecutionObserver == null) {
-            return invocation.get();
-        }
         return usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
             invocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
             this::responseModel);
@@ -520,9 +517,6 @@ public class LanguageModelImpl implements LanguageModel {
 
     private Flux<ProviderStreamPart> observeProviderStream(int stepIndex,
         Supplier<Flux<ProviderStreamPart>> invocation) {
-        if (usageExecutionObserver == null) {
-            return invocation.get();
-        }
         return usageExecutionObserver.observeFlux(UsageUnitKind.GENERATION_STEP, stepIndex,
             invocation, this::streamPartUsage, this::streamPartModel);
     }
@@ -1763,9 +1757,6 @@ public class LanguageModelImpl implements LanguageModel {
                     .subscribeOn(Schedulers.boundedElastic());
             Supplier<Mono<ChatResponse>> timedInvocation =
                 () -> withStepTimeout(invocation.get(), request);
-            if (usageExecutionObserver == null) {
-                return timedInvocation.get();
-            }
             return usageExecutionObserver.observe(UsageUnitKind.GENERATION_STEP, stepIndex,
                 timedInvocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
                 this::responseModel);

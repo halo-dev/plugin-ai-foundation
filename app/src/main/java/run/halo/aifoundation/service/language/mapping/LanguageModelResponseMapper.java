@@ -87,13 +87,10 @@ public final class LanguageModelResponseMapper {
     }
 
     private Integer usageReasoningTokens(Usage usage) {
-        if (usage instanceof ProviderUsage typed) {
-            var reasoning = typed.reasoningTokens();
-            if (reasoning != null) {
-                if (reasoning <= Integer.MAX_VALUE) {
-                    return reasoning.intValue();
-                }
-            }
+        if (usage instanceof ProviderUsage typed
+            && typed.reasoningTokens() != null
+            && typed.reasoningTokens() <= Integer.MAX_VALUE) {
+            return typed.reasoningTokens().intValue();
         }
         return reasoningTokens(usage.getNativeUsage());
     }

@@ -1473,18 +1473,7 @@
           },
           "required" : true
         },
-        "responses" : {
-          "default" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ResetResponse"
-                }
-              }
-            },
-            "description" : "default response"
-          }
-        },
+        "responses" : { },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
       }
     },
@@ -2854,7 +2843,7 @@
           },
           "quality" : {
             "type" : "string",
-            "enum" : [ "REPORTED_COMPONENTS", "REPORTED_TOTAL", "PARTIAL", "ESTIMATED", "MISSING" ]
+            "enum" : [ "REPORTED_COMPONENTS", "REPORTED_TOTAL", "PARTIAL", "MISSING" ]
           },
           "reasoningOutputTokens" : {
             "type" : "integer",
@@ -3228,15 +3217,6 @@
         "properties" : {
           "confirmation" : {
             "type" : "string"
-          }
-        }
-      },
-      "ResetResponse" : {
-        "type" : "object",
-        "properties" : {
-          "epoch" : {
-            "type" : "integer",
-            "format" : "int64"
           }
         }
       },
@@ -4065,10 +4045,6 @@
       "UsageBreakdown" : {
         "type" : "object",
         "properties" : {
-          "dimension" : {
-            "type" : "string",
-            "enum" : [ "MODEL", "PROVIDER", "CALLER_PLUGIN" ]
-          },
           "items" : {
             "type" : "array",
             "items" : {
@@ -4084,31 +4060,11 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "cacheCreationInputTokens" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "cacheReadInputTokens" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
           "callCount" : {
             "type" : "integer",
             "format" : "int64"
           },
           "failedCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "inputTokens" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "outputTokens" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "reasoningOutputTokens" : {
             "type" : "integer",
             "format" : "int64"
           },
@@ -4138,9 +4094,6 @@
             "type" : "integer",
             "format" : "int32"
           },
-          "callerDetectionSource" : {
-            "type" : "string"
-          },
           "callerPluginName" : {
             "type" : "string"
           },
@@ -4150,16 +4103,9 @@
           "complete" : {
             "type" : "boolean"
           },
-          "completedAt" : {
-            "type" : "string",
-            "format" : "date-time"
-          },
           "durationMillis" : {
             "type" : "integer",
             "format" : "int64"
-          },
-          "errorCode" : {
-            "type" : "string"
           },
           "errorType" : {
             "type" : "string"
@@ -4184,9 +4130,6 @@
             "type" : "string"
           },
           "providerName" : {
-            "type" : "string"
-          },
-          "providerType" : {
             "type" : "string"
           },
           "requestModelId" : {
@@ -4232,9 +4175,6 @@
       "UsageError" : {
         "type" : "object",
         "properties" : {
-          "code" : {
-            "type" : "string"
-          },
           "type" : {
             "type" : "string"
           }
@@ -4316,15 +4256,15 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "initializationError" : {
+            "type" : "string"
+          },
           "integrityError" : {
             "type" : "string"
           },
           "lastWriteErrorAt" : {
             "type" : "string",
             "format" : "date-time"
-          },
-          "migrationError" : {
-            "type" : "string"
           },
           "queueDepth" : {
             "type" : "integer",
@@ -4339,10 +4279,6 @@
       "UsageSummary" : {
         "type" : "object",
         "properties" : {
-          "abandonedCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
           "accountedTotalTokens" : {
             "type" : "integer",
             "format" : "int64"
@@ -4359,24 +4295,8 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "cancelledCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
           "complete" : {
             "type" : "boolean"
-          },
-          "completeUsageCoverage" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "dataFrom" : {
-            "type" : "string",
-            "format" : "date-time"
-          },
-          "dataTo" : {
-            "type" : "string",
-            "format" : "date-time"
           },
           "failedCount" : {
             "type" : "integer",
@@ -4387,10 +4307,6 @@
             "format" : "int64"
           },
           "inputTokens" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "knownUsageCalls" : {
             "type" : "integer",
             "format" : "int64"
           },
@@ -4406,21 +4322,11 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "preciseRange" : {
-            "type" : "boolean"
-          },
           "reasoningOutputTokens" : {
             "type" : "integer",
             "format" : "int64"
           },
-          "resolution" : {
-            "type" : "string"
-          },
           "successCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "timedOutCount" : {
             "type" : "integer",
             "format" : "int64"
           },
@@ -4438,14 +4344,6 @@
             "format" : "int64"
           },
           "callCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "inputTokens" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "outputTokens" : {
             "type" : "integer",
             "format" : "int64"
           }
@@ -4476,10 +4374,6 @@
             "type" : "boolean"
           },
           "inputTokens" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "knownUsageCalls" : {
             "type" : "integer",
             "format" : "int64"
           },

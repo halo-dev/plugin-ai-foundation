@@ -34,12 +34,6 @@ export interface UsageCallItem {
      * @type {string}
      * @memberof UsageCallItem
      */
-    'callerDetectionSource'?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof UsageCallItem
-     */
     'callerPluginName'?: string;
     /**
      * 
@@ -55,22 +49,10 @@ export interface UsageCallItem {
     'complete'?: boolean;
     /**
      * 
-     * @type {string}
-     * @memberof UsageCallItem
-     */
-    'completedAt'?: string;
-    /**
-     * 
      * @type {number}
      * @memberof UsageCallItem
      */
     'durationMillis'?: number;
-    /**
-     * 
-     * @type {string}
-     * @memberof UsageCallItem
-     */
-    'errorCode'?: string;
     /**
      * 
      * @type {string}
@@ -119,12 +101,6 @@ export interface UsageCallItem {
      * @memberof UsageCallItem
      */
     'providerName'?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof UsageCallItem
-     */
-    'providerType'?: string;
     /**
      * 
      * @type {string}

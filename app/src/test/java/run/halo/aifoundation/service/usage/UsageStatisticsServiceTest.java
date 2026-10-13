@@ -67,6 +67,7 @@ class UsageStatisticsServiceTest {
     void retriesTransientWriterFailureWithoutFailingStatisticsHealth() throws Exception {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
+        runWritesInBatch(store);
         doThrow(new IllegalStateException("database is busy"))
             .doThrow(new IllegalStateException("database is busy"))
             .doNothing().when(store).startCall(org.mockito.ArgumentMatchers.any());
@@ -122,6 +123,7 @@ class UsageStatisticsServiceTest {
         throws Exception {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
+        runWritesInBatch(store);
         var blocked = new CountDownLatch(1);
         doAnswer(invocation -> {
             blocked.await();
@@ -150,6 +152,7 @@ class UsageStatisticsServiceTest {
     void reportsPermanentWriterFailureAfterFiniteRetries() throws Exception {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
+        runWritesInBatch(store);
         doThrow(new IllegalStateException("database is busy"))
             .when(store).startCall(org.mockito.ArgumentMatchers.any());
         service = new UsageStatisticsService(store, callerResolver());
@@ -168,6 +171,7 @@ class UsageStatisticsServiceTest {
     void permanentExecutionWriteFailureMarksThePersistedCallIncomplete() throws Exception {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
+        runWritesInBatch(store);
         doThrow(new IllegalStateException("database is busy"))
             .when(store).recordExecution(any());
         service = new UsageStatisticsService(store, callerResolver());
@@ -201,7 +205,7 @@ class UsageStatisticsServiceTest {
 
         assertThat(service.health().available()).isFalse();
         assertThat(service.health().complete()).isFalse();
-        assertThat(service.health().migrationError()).isEqualTo("IllegalStateException");
+        assertThat(service.health().initializationError()).isEqualTo("IllegalStateException");
     }
 
     @Test
@@ -258,8 +262,9 @@ class UsageStatisticsServiceTest {
 
         assertThat(service.health().complete()).isFalse();
 
-        assertThat(service.reset("RESET").block()).isEqualTo(2L);
-        assertThat(service.health().migrationError()).isNull();
+        service.reset("RESET").block();
+        verify(store).reset();
+        assertThat(service.health().initializationError()).isNull();
         assertThat(service.health().integrityError()).isNull();
         assertThat(service.health().complete()).isTrue();
     }
@@ -334,7 +339,7 @@ class UsageStatisticsServiceTest {
         Thread.sleep(50);
         verify(store, org.mockito.Mockito.never()).close();
         releaseReset.countDown();
-        assertThat(reset.get(2, TimeUnit.SECONDS)).isEqualTo(2L);
+        assertThat(reset.get(2, TimeUnit.SECONDS)).isNull();
         close.get(2, TimeUnit.SECONDS);
         verify(store).close();
         service = null;
@@ -417,6 +422,16 @@ class UsageStatisticsServiceTest {
         when(resolver.resolveCurrentCallerSnapshot()).thenReturn(CallerPluginInfo.builder()
             .pluginName("plugin").version("1").detectionSource("stack").build());
         return resolver;
+    }
+
+    // UsageStatisticsStore.writeBatch is abstract; replicate the former default
+    // implementation for CALLS_REAL_METHODS mocks.
+    private static void runWritesInBatch(UsageStatisticsStore store) {
+        doAnswer(invocation -> {
+            invocation.getArgument(0, java.util.List.class).forEach(action ->
+                ((Runnable) action).run());
+            return null;
+        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
     }
 
     private static UsageCallDescriptor descriptor() {

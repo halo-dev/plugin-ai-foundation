@@ -88,7 +88,7 @@ describe('UsageCallExecutions', () => {
             id: 'exec-2',
             status: 'FAILED',
             usage: undefined,
-            error: { type: 'PROVIDER_ERROR', code: 'rate_limit' },
+            error: { type: 'PROVIDER_ERROR' },
           }),
         ],
       },
@@ -102,7 +102,7 @@ describe('UsageCallExecutions', () => {
     expect(text).toContain('部分用量')
     // null usage 显示「未知」而非 0
     expect(text).toContain('未知')
-    expect(text).toContain('PROVIDER_ERROR（rate_limit）')
+    expect(text).toContain('PROVIDER_ERROR')
   })
 
   it('loads detail lazily by callId', () => {

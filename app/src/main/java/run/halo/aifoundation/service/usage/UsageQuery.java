@@ -20,10 +20,10 @@ public record UsageQuery(
 
     public UsageQuery {
         if (from == null) {
-            throw new IllegalArgumentException("from must be before to");
+            throw new IllegalArgumentException("from must not be null");
         }
         if (to == null) {
-            throw new IllegalArgumentException("from must be before to");
+            throw new IllegalArgumentException("to must not be null");
         }
         if (!from.isBefore(to)) {
             throw new IllegalArgumentException("from must be before to");

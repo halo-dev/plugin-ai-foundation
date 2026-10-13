@@ -25,17 +25,17 @@ describe('UsageHealthAlert', () => {
     expect(mountAlert(undefined).find('[role="alert"]').exists()).toBe(false)
   })
 
-  it('shows persistent unavailable warning with migration and integrity errors', () => {
+  it('shows persistent unavailable warning with initialization and integrity errors', () => {
     const wrapper = mountAlert({
       available: false,
       complete: false,
-      migrationError: 'schema migration failed',
+      initializationError: 'schema initialization failed',
       integrityError: 'integrity check failed',
     })
     const text = wrapper.text()
     expect(text).toContain('统计存储不可用')
     expect(text).toContain('模型调用不受影响')
-    expect(text).toContain('schema migration failed')
+    expect(text).toContain('schema initialization failed')
     expect(text).toContain('integrity check failed')
   })
 

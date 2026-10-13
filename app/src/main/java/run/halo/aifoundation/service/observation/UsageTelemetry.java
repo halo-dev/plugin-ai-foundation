@@ -12,6 +12,7 @@ public final class UsageTelemetry {
         try {
             return action.get();
         } catch (RuntimeException | LinkageError error) {
+            log.warn("Failed to observe AI usage; model execution is unaffected");
             return fallback;
         }
     }

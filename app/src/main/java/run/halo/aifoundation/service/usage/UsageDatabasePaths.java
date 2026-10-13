@@ -1,18 +1,18 @@
 package run.halo.aifoundation.service.usage;
 
 import java.nio.file.Path;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import run.halo.app.plugin.PluginsRootGetter;
 
 @Component
-public class UsageDatabasePaths {
+class UsageDatabasePaths {
 
     private final Path database;
     private final Path backupDirectory;
 
     @Autowired
-    public UsageDatabasePaths(PluginsRootGetter pluginsRootGetter) {
+    UsageDatabasePaths(PluginsRootGetter pluginsRootGetter) {
         this(pluginsRootGetter.get());
     }
 
@@ -22,11 +22,11 @@ public class UsageDatabasePaths {
         this.backupDirectory = pluginDirectory.resolve("backups");
     }
 
-    public Path database() {
+    Path database() {
         return database;
     }
 
-    public Path backupDirectory() {
+    Path backupDirectory() {
         return backupDirectory;
     }
 

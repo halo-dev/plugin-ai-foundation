@@ -12,7 +12,7 @@ public record UsageHealth(
     Instant lastWriteErrorAt,
     Instant affectedSince,
     Instant affectedUntil,
-    String migrationError,
+    String initializationError,
     String integrityError
 ) {
 }
