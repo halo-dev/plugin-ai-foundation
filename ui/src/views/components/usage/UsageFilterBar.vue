@@ -11,6 +11,8 @@ import { IconRefreshLine, VButton, VDropdown, VDropdownItem, VSpace } from '@hal
 import { computed, ref, watch } from 'vue'
 import MingcuteFilterLine from '~icons/mingcute/filter-line'
 import MingcuteMore2Line from '~icons/mingcute/more-2-line'
+import UsageDateRangePicker from './UsageDateRangePicker.vue'
+import UsageSegmented from './UsageSegmented.vue'
 import UsageSelect from './UsageSelect.vue'
 
 const props = defineProps<{
@@ -88,63 +90,45 @@ function update(patch: Partial<UsageFilterState>) {
   <div class=":uno: flex flex-col gap-4">
     <div class=":uno: flex flex-wrap items-center gap-3">
       <div class=":uno: mr-auto min-w-0">
-        <h2 class=":uno: text-base text-gray-950 font-semibold">用量概览</h2>
-        <p class=":uno: mt-1 text-xs text-gray-500">查看 AI 消耗与调用活动</p>
+        <h2 class=":uno: text-sm text-gray-950 font-semibold">用量统计</h2>
       </div>
-      <div class=":uno: usage-toolbar">
-        <VSpace class=":uno: flex-wrap" align="center">
-          <UsageSelect
-            :model-value="state.range"
-            label="时间范围"
-            :items="[...USAGE_RANGE_OPTIONS]"
-            @update:model-value="update({ range: $event || '30d' })"
-          />
-        </VSpace>
-
-        <VSpace class=":uno: ml-auto shrink-0" align="center">
-          <VButton
-            v-tooltip="'刷新'"
-            aria-label="刷新"
-            size="sm"
-            class=":uno: usage-toolbar-button"
-            :loading="fetching"
-            @click="emit('refresh')"
-          >
-            <template #icon><IconRefreshLine /></template>
+      <UsageSegmented
+        :model-value="state.range"
+        aria-label="时间范围"
+        :options="[...USAGE_RANGE_OPTIONS]"
+        @update:model-value="update({ range: $event || '30d' })"
+      />
+      <VSpace class=":uno: shrink-0" spacing="xs" align="center">
+        <VButton
+          v-tooltip="'刷新'"
+          aria-label="刷新"
+          size="sm"
+          ghost
+          class=":uno: usage-toolbar-button"
+          circle
+          @click="emit('refresh')"
+        >
+          <IconRefreshLine :class="{ ':uno: animate-spin': fetching }" />
+        </VButton>
+        <VDropdown placement="bottom-end" :distance="6">
+          <VButton aria-label="更多操作" circle ghost size="sm" class=":uno: usage-toolbar-button">
+            <MingcuteMore2Line />
           </VButton>
-          <VDropdown placement="bottom-end" :distance="6">
-            <VButton aria-label="更多操作" size="sm" class=":uno: usage-toolbar-button"
-              ><template #icon><MingcuteMore2Line /></template
-            ></VButton>
-            <template #popper
-              ><VDropdownItem v-close-popper type="danger" @click="emit('reset')"
-                >重置统计</VDropdownItem
-              ></template
-            >
-          </VDropdown>
-        </VSpace>
-      </div>
+          <template #popper>
+            <VDropdownItem v-close-popper type="danger" @click="emit('reset')">
+              重置统计
+            </VDropdownItem>
+          </template>
+        </VDropdown>
+      </VSpace>
     </div>
 
     <div class=":uno: flex flex-wrap items-center gap-2" v-if="state.range === 'custom'">
-      <input
-        type="date"
-        aria-label="开始日期"
-        class=":uno: usage-date-input"
-        :value="state.fromDate"
-        @input="update({ fromDate: ($event.target as HTMLInputElement).value || undefined })"
+      <UsageDateRangePicker
+        :from-date="state.fromDate"
+        :to-date="state.toDate"
+        @update="update($event)"
       />
-      <span class=":uno: text-xs text-gray-400">至</span>
-      <input
-        type="date"
-        aria-label="结束日期"
-        class=":uno: usage-date-input"
-        :value="state.toDate"
-        @input="update({ toDate: ($event.target as HTMLInputElement).value || undefined })"
-      />
-    </div>
-    <div v-if="state.range === 'custom'" class=":uno: text-xs text-gray-400">
-      起止日期均包含在所选范围内。
     </div>
 
     <div class=":uno: flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
@@ -230,40 +214,17 @@ function update(patch: Partial<UsageFilterState>) {
       </div>
     </div>
     <div v-if="featureInvalid" class=":uno: text-xs text-red-600">
-      功能标识需匹配 [a-z0-9._-]，长度 1-64；当前值不会作为过滤条件。
+      仅支持小写字母、数字和 . _ -，长度 1-64；当前输入不会生效。
     </div>
   </div>
 </template>
 
 <style scoped>
-.usage-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-@media (max-width: 639px) {
-  .usage-toolbar {
-    width: 100%;
-  }
-}
-.usage-toolbar-button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-}
-.usage-toolbar-button :deep(.btn-icon) {
-  margin: 0;
-  width: 16px;
-  height: 16px;
-}
-.usage-toolbar-button :deep(.btn-content) {
-  display: none;
-}
 .usage-filter-more {
   height: 32px;
 }
-.usage-date-input,
 .usage-feature-input {
+  width: 180px;
   height: 32px;
   min-width: 0;
   border: 1px solid #e5e7eb;
@@ -273,13 +234,6 @@ function update(patch: Partial<UsageFilterState>) {
   font-size: 12px;
   color: #374151;
 }
-.usage-date-input {
-  width: 150px;
-}
-.usage-feature-input {
-  width: 180px;
-}
-.usage-date-input:focus,
 .usage-feature-input:focus {
   border-color: #9ca3af;
   outline: none;

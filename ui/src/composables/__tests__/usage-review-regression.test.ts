@@ -1,5 +1,5 @@
 import { aiConsoleApiClient } from '@/api'
-import UsageTrendChart from '@/views/components/usage/UsageTrendChart.vue'
+import UsageStackedChart from '@/views/components/usage/UsageStackedChart.vue'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
@@ -40,40 +40,64 @@ describe('Usage statistics regression tests', () => {
     reopened.unmount()
     client.clear()
   })
-  it('renders each bucket at its own resolution', () => {
-    const wrapper = mount(UsageTrendChart, {
-      props: {
-        selectedResolution: 'HOUR',
-        from: '2026-06-01T00:00:00Z',
-        to: '2026-09-11T00:00:00Z',
-        points: [
-          {
-            bucketStart: '2026-06-01T00:00:00Z',
-            resolution: 'DAY',
-            callCount: 1,
-            accountedTotalTokens: 15,
-          },
-          {
-            bucketStart: '2026-09-10T01:00:00Z',
-            resolution: 'HOUR',
-            callCount: 1,
-            accountedTotalTokens: 15,
-          },
-          {
-            bucketStart: '2026-09-10T02:00:00Z',
-            resolution: 'HOUR',
-            callCount: 1,
-            accountedTotalTokens: 15,
-          },
-        ],
+  it('renders each bucket at its own resolution', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
       },
-      global: { directives: { tooltip: {} } },
+    )
+    const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      value: 1000,
     })
-    const bars = wrapper.findAll('.usage-bucket').map((x) => x.element as HTMLElement)
-    expect(bars).toHaveLength(3)
-    expect(parseFloat(bars[0]!.style.width) / parseFloat(bars[1]!.style.width)).toBeCloseTo(24)
-    const hourlyGap = parseFloat(bars[2]!.style.left) - parseFloat(bars[1]!.style.left)
-    expect(parseFloat(bars[1]!.style.width) / hourlyGap).toBeCloseTo(1)
-    wrapper.unmount()
+    try {
+      const wrapper = mount(UsageStackedChart, {
+        props: {
+          metric: 'tokens',
+          labelOf: (key: string) => key,
+          categories: [],
+          from: '2026-06-01T00:00:00Z',
+          to: '2026-09-11T00:00:00Z',
+          points: [
+            {
+              bucketStart: '2026-06-01T00:00:00Z',
+              resolution: 'DAY',
+              callCount: 1,
+              accountedTotalTokens: 15,
+            },
+            {
+              bucketStart: '2026-09-10T01:00:00Z',
+              resolution: 'HOUR',
+              callCount: 1,
+              accountedTotalTokens: 15,
+            },
+            {
+              bucketStart: '2026-09-10T02:00:00Z',
+              resolution: 'HOUR',
+              callCount: 1,
+              accountedTotalTokens: 15,
+            },
+          ],
+        },
+        global: { directives: { tooltip: {} } },
+      })
+      await flushPromises()
+      const hits = wrapper.findAll('rect[role=button]')
+      expect(hits).toHaveLength(3)
+      const widths = hits.map((hit) => parseFloat(hit.attributes('width') || '0'))
+      expect(widths[0]! / widths[1]!).toBeCloseTo(24)
+      const xs = hits.map((hit) => parseFloat(hit.attributes('x') || '0'))
+      expect(widths[1]! / (xs[2]! - xs[1]!)).toBeCloseTo(1)
+      wrapper.unmount()
+    } finally {
+      if (clientWidth) {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidth)
+      }
+      vi.unstubAllGlobals()
+    }
   })
 })

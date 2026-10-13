@@ -26,6 +26,8 @@ import type { ResetRequest } from '../models';
 // @ts-ignore
 import type { ResetResponse } from '../models';
 // @ts-ignore
+import type { UsageBreakdown } from '../models';
+// @ts-ignore
 import type { UsageCallDetail } from '../models';
 // @ts-ignore
 import type { UsageCallPage } from '../models';
@@ -41,6 +43,104 @@ import type { UsageTrendPoint } from '../models';
  */
 export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
+        /**
+         * Get usage totals grouped by a dimension.
+         * @param {string} dimension Group by: model, provider, or callerPlugin.
+         * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [callerPlugin] 
+         * @param {string} [feature] 
+         * @param {string} [providerName] 
+         * @param {string} [modelName] 
+         * @param {string} [modelType] 
+         * @param {string} [operation] 
+         * @param {string} [status] 
+         * @param {string} [usageQuality] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getAiUsageBreakdown: async (dimension: string, from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'dimension' is not null or undefined
+            assertParamExists('getAiUsageBreakdown', 'dimension', dimension)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/breakdown`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (from !== undefined) {
+                localVarQueryParameter['from'] = (from as any instanceof Date) ?
+                    (from as any).toISOString() :
+                    from;
+            }
+
+            if (to !== undefined) {
+                localVarQueryParameter['to'] = (to as any instanceof Date) ?
+                    (to as any).toISOString() :
+                    to;
+            }
+
+            if (callerPlugin !== undefined) {
+                localVarQueryParameter['callerPlugin'] = callerPlugin;
+            }
+
+            if (feature !== undefined) {
+                localVarQueryParameter['feature'] = feature;
+            }
+
+            if (providerName !== undefined) {
+                localVarQueryParameter['providerName'] = providerName;
+            }
+
+            if (modelName !== undefined) {
+                localVarQueryParameter['modelName'] = modelName;
+            }
+
+            if (modelType !== undefined) {
+                localVarQueryParameter['modelType'] = modelType;
+            }
+
+            if (operation !== undefined) {
+                localVarQueryParameter['operation'] = operation;
+            }
+
+            if (status !== undefined) {
+                localVarQueryParameter['status'] = status;
+            }
+
+            if (usageQuality !== undefined) {
+                localVarQueryParameter['usageQuality'] = usageQuality;
+            }
+
+            if (dimension !== undefined) {
+                localVarQueryParameter['dimension'] = dimension;
+            }
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
         /**
          * Get a logical AI call and its physical executions.
          * @param {string} id 
@@ -324,10 +424,11 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
          * @param {string} [status] 
          * @param {string} [usageQuality] 
          * @param {string} [resolution] Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.
+         * @param {string} [dimension] Optional per-bucket grouping: model, provider, or callerPlugin. Adds byDimension to each bucket.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listAiUsageTrends: async (from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listAiUsageTrends: async (from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, dimension?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/trends`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -396,6 +497,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
                 localVarQueryParameter['resolution'] = resolution;
             }
 
+            if (dimension !== undefined) {
+                localVarQueryParameter['dimension'] = dimension;
+            }
+
 
     
             setSearchParams(localVarUrlObj, localVarQueryParameter);
@@ -460,6 +565,28 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
 export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCreator(configuration)
     return {
+        /**
+         * Get usage totals grouped by a dimension.
+         * @param {string} dimension Group by: model, provider, or callerPlugin.
+         * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [callerPlugin] 
+         * @param {string} [feature] 
+         * @param {string} [providerName] 
+         * @param {string} [modelName] 
+         * @param {string} [modelType] 
+         * @param {string} [operation] 
+         * @param {string} [status] 
+         * @param {string} [usageQuality] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getAiUsageBreakdown(dimension: string, from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsageBreakdown>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getAiUsageBreakdown(dimension, from, to, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.getAiUsageBreakdown']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
         /**
          * Get a logical AI call and its physical executions.
          * @param {string} id 
@@ -540,11 +667,12 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
          * @param {string} [status] 
          * @param {string} [usageQuality] 
          * @param {string} [resolution] Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.
+         * @param {string} [dimension] Optional per-bucket grouping: model, provider, or callerPlugin. Adds byDimension to each bucket.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listAiUsageTrends(from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<UsageTrendPoint>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listAiUsageTrends(from, to, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, resolution, options);
+        async listAiUsageTrends(from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, dimension?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<UsageTrendPoint>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listAiUsageTrends(from, to, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, resolution, dimension, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.listAiUsageTrends']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -571,6 +699,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
 export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
     const localVarFp = ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(configuration)
     return {
+        /**
+         * Get usage totals grouped by a dimension.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getAiUsageBreakdown(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest, options?: RawAxiosRequestConfig): AxiosPromise<UsageBreakdown> {
+            return localVarFp.getAiUsageBreakdown(requestParameters.dimension, requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(axios, basePath));
+        },
         /**
          * Get a logical AI call and its physical executions.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageCallRequest} requestParameters Request parameters.
@@ -613,7 +750,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFactory = fu
          * @throws {RequiredError}
          */
         listAiUsageTrends(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrendsRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<Array<UsageTrendPoint>> {
-            return localVarFp.listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, options).then((request) => request(axios, basePath));
+            return localVarFp.listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, requestParameters.dimension, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete all usage statistics. Requires confirmation RESET.
@@ -626,6 +763,90 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFactory = fu
         },
     };
 };
+
+/**
+ * Request parameters for getAiUsageBreakdown operation in ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest {
+    /**
+     * Group by: model, provider, or callerPlugin.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly dimension: string
+
+    /**
+     * Inclusive ISO-8601 instant; defaults to 30 days before to.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly from?: string
+
+    /**
+     * Exclusive ISO-8601 instant; defaults to now.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly to?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly callerPlugin?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly feature?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly providerName?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly modelName?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly modelType?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly operation?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly status?: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly usageQuality?: string
+}
 
 /**
  * Request parameters for getAiUsageCall operation in ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.
@@ -891,6 +1112,13 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUs
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrends
      */
     readonly resolution?: string
+
+    /**
+     * Optional per-bucket grouping: model, provider, or callerPlugin. Adds byDimension to each bucket.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrends
+     */
+    readonly dimension?: string
 }
 
 /**
@@ -914,6 +1142,17 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiResetAiU
  * @extends {BaseAPI}
  */
 export class ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi extends BaseAPI {
+    /**
+     * Get usage totals grouped by a dimension.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi
+     */
+    public getAiUsageBreakdown(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).getAiUsageBreakdown(requestParameters.dimension, requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * Get a logical AI call and its physical executions.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageCallRequest} requestParameters Request parameters.
@@ -965,7 +1204,7 @@ export class ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi extends Bas
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi
      */
     public listAiUsageTrends(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrendsRequest = {}, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, requestParameters.dimension, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

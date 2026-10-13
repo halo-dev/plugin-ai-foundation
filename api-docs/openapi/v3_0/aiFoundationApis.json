@@ -1222,6 +1222,98 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/breakdown" : {
+      "get" : {
+        "description" : "Get usage totals grouped by a dimension.",
+        "operationId" : "GetAiUsageBreakdown",
+        "parameters" : [ {
+          "description" : "Inclusive ISO-8601 instant; defaults to 30 days before to.",
+          "in" : "query",
+          "name" : "from",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "in" : "query",
+          "name" : "to",
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "in" : "query",
+          "name" : "callerPlugin",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "feature",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "providerName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "modelType",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "operation",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "usageQuality",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Group by: model, provider, or callerPlugin.",
+          "in" : "query",
+          "name" : "dimension",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsageBreakdown"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/calls" : {
       "get" : {
         "description" : "List logical AI calls using cursor pagination.",
@@ -1552,6 +1644,13 @@
           "description" : "Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.",
           "in" : "query",
           "name" : "resolution",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Optional per-bucket grouping: model, provider, or callerPlugin. Adds byDimension to each bucket.",
+          "in" : "query",
+          "name" : "dimension",
           "schema" : {
             "type" : "string"
           }
@@ -3963,6 +4062,61 @@
           }
         }
       },
+      "UsageBreakdown" : {
+        "type" : "object",
+        "properties" : {
+          "dimension" : {
+            "type" : "string",
+            "enum" : [ "MODEL", "PROVIDER", "CALLER_PLUGIN" ]
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UsageBreakdownItem"
+            }
+          }
+        }
+      },
+      "UsageBreakdownItem" : {
+        "type" : "object",
+        "properties" : {
+          "accountedTotalTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cacheCreationInputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cacheReadInputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "callCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "failedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "reasoningOutputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        }
+      },
       "UsageCallDetail" : {
         "type" : "object",
         "properties" : {
@@ -4276,6 +4430,27 @@
           }
         }
       },
+      "UsageTrendDimensionValue" : {
+        "type" : "object",
+        "properties" : {
+          "accountedTotalTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "callCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "UsageTrendPoint" : {
         "type" : "object",
         "properties" : {
@@ -4286,6 +4461,12 @@
           "bucketStart" : {
             "type" : "string",
             "format" : "date-time"
+          },
+          "byDimension" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/UsageTrendDimensionValue"
+            }
           },
           "callCount" : {
             "type" : "integer",

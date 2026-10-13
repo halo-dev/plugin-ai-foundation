@@ -39,8 +39,8 @@ const fields = computed(() => [
     label: '请求 → 响应模型',
     value: responseModel.value,
   },
-  { label: '调用方', value: props.call.callerPluginName || '未知调用方' },
-  { label: '调用方版本', value: props.call.callerPluginVersion || '未知' },
+  { label: '调用插件', value: props.call.callerPluginName || '未知插件' },
+  { label: '插件版本', value: props.call.callerPluginVersion || '未知' },
   {
     label: '响应方式',
     value: responseMode.value,
@@ -84,11 +84,11 @@ const breakdown = computed(() => [
               <dd>{{ formatTokens(item.value) }}</dd>
             </div></template
           >
-          <p>已包含在输入或输出中，不重复计入。</p>
+          <p>已计入输入/输出，不重复统计。</p>
         </dl>
         <p class=":uno: usage-consumption-note">
           {{ usageQualityLabel(call.usage?.quality)
-          }}<template v-if="showUnknownUsage">。未报告的消耗无法确定，不代表没有消耗。</template>
+          }}<template v-if="showUnknownUsage">。未上报的消耗无法统计，不代表没有消耗。</template>
         </p>
       </section>
       <div class=":uno: usage-process">
@@ -104,8 +104,8 @@ const breakdown = computed(() => [
         <p v-if="showIncompleteCall" class=":uno: usage-process-warning">
           {{ call.complete === false ? '统计数据不完整。' : ''
           }}<template v-if="call.missingExecutionCount"
-            >{{ call.missingExecutionCount }} 条执行用量缺失，已报告 Token
-            可能低于实际消耗。</template
+            >{{ call.missingExecutionCount }} 条执行记录缺少用量，Token
+            统计可能低于实际消耗。</template
           >
         </p>
         <UsageCallExecutions v-if="call.id" :call-id="call.id" />

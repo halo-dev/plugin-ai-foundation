@@ -75,9 +75,12 @@ function call(partial: Partial<UsageCallItem> = {}): UsageCallItem {
 }
 
 describe('UsageCallTable', () => {
-  it('shows loading state', () => {
+  it('renders skeleton rows while loading instead of a spinner', () => {
     const wrapper = mountTable({ loading: true })
-    expect(wrapper.find('[data-test="loading"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="loading"]').exists()).toBe(false)
+    expect(wrapper.findAll('.usage-skel-bar')).toHaveLength(5)
+    expect(wrapper.find('thead').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('暂无调用记录')
   })
 
   it('shows error state and emits retry', async () => {
@@ -129,15 +132,15 @@ describe('UsageCallTable', () => {
     expect(text).toContain('已废弃')
     expect(text).toContain('进行中')
     expect(text).toContain('失败')
-    // 未知调用方/模型/Token 显式展示为未知
-    expect(text).toContain('未知调用方')
+    // Unknown caller/model/token render explicitly as unknown
+    expect(text).toContain('未知插件')
     expect(text).toContain('未知模型')
     await wrapper.findAll('[role="button"]')[4]!.trigger('click')
     expect(wrapper.text()).toContain('PROVIDER_ERROR（rate_limit）')
     expect((text.match(/未知/g) || []).length).toBeGreaterThanOrEqual(3)
   })
 
-  it('renders partial and missing usage qualities distinctly', () => {
+  it('renders partial and missing usage qualities distinctly', async () => {
     const wrapper = mountTable({
       items: [
         call({
@@ -148,10 +151,16 @@ describe('UsageCallTable', () => {
         call({ id: 'c2', usage: { quality: 'MISSING' } }),
       ],
     })
-    const text = wrapper.text()
-    expect(text).toContain('部分用量')
-    expect(text).toContain('用量缺失')
-    expect(text).toContain('2 条执行用量缺失')
+    // Rows show a warning marker; quality details live in the expanded detail
+    const rows = wrapper.findAll('[role="button"]')
+    expect(rows[0]!.text()).toContain('!')
+    expect(rows[1]!.text()).toContain('!')
+    await rows[0]!.trigger('click')
+    expect(wrapper.text()).toContain('部分用量')
+    expect(wrapper.text()).toContain('2 条执行记录缺少用量')
+    await rows[0]!.trigger('click')
+    await rows[1]!.trigger('click')
+    expect(wrapper.text()).toContain('用量缺失')
   })
 
   it('marks streaming and incomplete calls', async () => {
@@ -168,7 +177,7 @@ describe('UsageCallTable', () => {
     const text = wrapper.text()
     expect(text).toContain('plugin-search')
     await wrapper.find('[role="button"]').trigger('click')
-    expect(wrapper.text()).toContain('调用方版本')
+    expect(wrapper.text()).toContain('插件版本')
     expect(wrapper.text()).toContain('1.2.0')
     expect(wrapper.text()).toContain('gpt-4o-prod')
     expect(wrapper.text()).toContain('openai-main')

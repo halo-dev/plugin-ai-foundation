@@ -1,5 +1,5 @@
 import type { UsageFilterState } from '@/composables/use-usage-filters'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import UsageFilterBar from '../UsageFilterBar.vue'
@@ -33,6 +33,34 @@ const FilterCleanButtonStub = defineComponent({
   template: '<button data-test="clear" @click="$emit(\'click\')">清除筛选</button>',
 })
 
+const UsageSegmentedStub = defineComponent({
+  props: ['modelValue', 'options'],
+  emits: ['update:modelValue'],
+  template: `
+    <div class="usage-segmented-stub">
+      <button
+        v-for="option in options"
+        :key="option.value"
+        :data-value="option.value"
+        @click="$emit('update:modelValue', option.value)"
+      >{{ option.label }}</button>
+    </div>
+  `,
+})
+
+const UsageDateRangePickerStub = defineComponent({
+  props: ['fromDate', 'toDate'],
+  emits: ['update'],
+  template: `
+    <button
+      data-test="date-range-picker"
+      :data-from="fromDate ?? ''"
+      :data-to="toDate ?? ''"
+      @click="$emit('update', { fromDate: '2026-08-02', toDate: '2026-08-10' })"
+    >日期范围</button>
+  `,
+})
+
 function mountBar(props: Partial<InstanceType<typeof UsageFilterBar>['$props']> = {}) {
   const state: UsageFilterState = { range: '30d', ...props.state }
   return mount(UsageFilterBar, {
@@ -45,6 +73,8 @@ function mountBar(props: Partial<InstanceType<typeof UsageFilterBar>['$props']> 
           template: '<button @click="$emit(\'click\')"><slot /></button>',
         }),
         UsageSelect: FilterDropdownStub,
+        UsageSegmented: UsageSegmentedStub,
+        UsageDateRangePicker: UsageDateRangePickerStub,
         FilterCleanButton: FilterCleanButtonStub,
       },
       directives: { tooltip: () => {}, 'close-popper': () => {} },
@@ -56,17 +86,17 @@ describe('UsageFilterBar', () => {
   it('renders all filter dimensions', () => {
     const wrapper = mountBar()
     const labels = wrapper.findAll('.filter-dropdown').map((item) => item.attributes('data-label'))
-    expect(labels).toEqual([
-      '时间范围',
-      '调用插件',
-      '供应商',
-      '模型',
-      '状态',
-      '模型类型',
-      '操作',
-      '用量质量',
-    ])
+    expect(labels).toEqual(['调用插件', '供应商', '模型', '状态', '模型类型', '操作', '用量质量'])
     expect(wrapper.find('input[aria-label="功能标识"]').exists()).toBe(true)
+  })
+
+  it('emits range changes from the segmented control', async () => {
+    const wrapper = mountBar()
+    const option = wrapper
+      .findAll('.usage-segmented-stub button')
+      .find((button) => button.attributes('data-value') === '7d')
+    await option!.trigger('click')
+    expect(wrapper.emitted('change')).toContainEqual([{ range: '7d' }])
   })
 
   it('lets active advanced filters collapse and reopen', async () => {
@@ -103,29 +133,31 @@ describe('UsageFilterBar', () => {
     expect(wrapper.emitted('change')).toContainEqual([{ status: undefined }])
   })
 
-  it('shows custom date inputs only for the custom range and emits date changes', async () => {
+  it('shows the date range picker only for the custom range and emits date changes', async () => {
     const preset = mountBar({ state: { range: '30d' } })
-    expect(preset.find('input[type="date"]').exists()).toBe(false)
+    expect(preset.find('[data-test="date-range-picker"]').exists()).toBe(false)
 
     const custom = mountBar({ state: { range: 'custom', fromDate: '2026-08-01' } })
-    const inputs = custom.findAll('input[type="date"]')
-    expect(inputs).toHaveLength(2)
-    await inputs[0]!.setValue('2026-08-02')
-    await flushPromises()
-    expect(custom.emitted('change')).toContainEqual([{ fromDate: '2026-08-02' }])
+    const picker = custom.find('[data-test="date-range-picker"]')
+    expect(picker.exists()).toBe(true)
+    expect(picker.attributes('data-from')).toBe('2026-08-01')
+    await picker.trigger('click')
+    expect(custom.emitted('change')).toContainEqual([
+      { fromDate: '2026-08-02', toDate: '2026-08-10' },
+    ])
   })
 
   it('emits feature text changes and shows the invalid hint', async () => {
     const wrapper = mountBar({ featureInvalid: false })
     await wrapper.find('input[aria-label="功能标识"]').setValue('semantic-search')
     expect(wrapper.emitted('change')).toContainEqual([{ feature: 'semantic-search' }])
-    expect(wrapper.text()).not.toContain('当前值不会作为过滤条件')
+    expect(wrapper.text()).not.toContain('当前输入不会生效')
 
     const invalid = mountBar({
       state: { range: '30d', feature: 'BAD VALUE' },
       featureInvalid: true,
     })
-    expect(invalid.text()).toContain('当前值不会作为过滤条件')
+    expect(invalid.text()).toContain('当前输入不会生效')
   })
 
   it('emits refresh and reset actions', async () => {

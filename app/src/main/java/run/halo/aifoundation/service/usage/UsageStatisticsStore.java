@@ -32,7 +32,14 @@ public interface UsageStatisticsStore extends AutoCloseable {
 
     UsageSummary summary(UsageQuery query, boolean complete);
 
-    List<UsageTrendPoint> trends(UsageQuery query, boolean complete);
+    default List<UsageTrendPoint> trends(UsageQuery query, boolean complete) {
+        return trends(query, complete, null);
+    }
+
+    List<UsageTrendPoint> trends(UsageQuery query, boolean complete,
+        UsageBreakdownDimension dimension);
+
+    UsageBreakdown breakdown(UsageQuery query, UsageBreakdownDimension dimension);
 
     UsageCallPage listCalls(UsageQuery query, int size, String cursor);
 

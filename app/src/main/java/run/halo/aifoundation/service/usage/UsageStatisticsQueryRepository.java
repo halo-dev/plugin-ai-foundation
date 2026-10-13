@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.util.StringUtils;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
@@ -154,17 +155,17 @@ class UsageStatisticsQueryRepository {
     }
 
     List<UsageTrendPoint> trends(Connection connection, UsageQuery query,
-        boolean complete)
+        boolean complete, UsageBreakdownDimension dimension)
         throws SQLException {
         var points = new java.util.TreeMap<Instant, UsageTrendPoint>();
         var plan = sourcePlan(connection, query);
         for (var interval : plan.raw()) {
-            queryTrendSource(connection, interval, false).forEach(point ->
+            queryTrendSource(connection, interval, false, dimension).forEach(point ->
                 points.merge(point.bucketStart(), point,
                     UsageStatisticsQueryRepository::mergePoint));
         }
         if (plan.daily() != null) {
-            queryTrendSource(connection, plan.daily(), true).forEach(point ->
+            queryTrendSource(connection, plan.daily(), true, dimension).forEach(point ->
                 points.merge(point.bucketStart(), point,
                     UsageStatisticsQueryRepository::mergePoint));
         }
@@ -174,7 +175,7 @@ class UsageStatisticsQueryRepository {
     }
 
     private List<UsageTrendPoint> queryTrendSource(Connection connection, UsageQuery query,
-        boolean daily) throws SQLException {
+        boolean daily, UsageBreakdownDimension dimension) throws SQLException {
         var filter = aggregateFilter(query, daily);
         var bucket = daily ? "day || 'T00:00:00Z'"
             : trendBucket("started_at_ms", UsageTrendResolution.HOUR);
@@ -189,13 +190,17 @@ class UsageStatisticsQueryRepository {
             : "COUNT(*) FILTER (WHERE complete = 0)";
         var table = aggregateTable(query, daily);
         var resolution = daily ? UsageTrendResolution.DAY : query.effectiveResolution();
-        var sql = "SELECT " + bucket + " bucket, " + count
+        var dimensionColumn = dimension == null ? null : dimension.column();
+        var sql = "SELECT " + (dimensionColumn == null ? "" : dimensionColumn + " group_value, ")
+            + bucket + " bucket, " + count
             + " call_count, SUM(input_tokens) input_tokens, SUM(output_tokens) output_tokens,"
             + " SUM(accounted_total_tokens) accounted_total_tokens, " + known
             + " known_usage_calls, " + missing + " missing_usage_calls, " + partial
             + " partial_usage_calls, " + incomplete
             + " incomplete_calls FROM " + table + " " + filter.sql()
-            + " GROUP BY " + grouping + " ORDER BY " + grouping;
+            + " GROUP BY " + grouping
+            + (dimensionColumn == null ? "" : ", " + dimensionColumn)
+            + " ORDER BY " + grouping;
         try (var statement = connection.prepareStatement(sql)) {
             bind(statement, filter.parameters());
             try (var rows = statement.executeQuery()) {
@@ -206,18 +211,83 @@ class UsageStatisticsQueryRepository {
                     if (resolution == UsageTrendResolution.DAY) {
                         startedAt = startedAt.truncatedTo(java.time.temporal.ChronoUnit.DAYS);
                     }
+                    Map<String, UsageTrendDimensionValue> byDimension = null;
+                    if (dimensionColumn != null) {
+                        byDimension = Map.of(groupValue(rows.getString("group_value")),
+                            new UsageTrendDimensionValue(rows.getLong("call_count"),
+                                nullableLong(rows, "input_tokens"),
+                                nullableLong(rows, "output_tokens"),
+                                nullableLong(rows, "accounted_total_tokens")));
+                    }
                     var point = new UsageTrendPoint(startedAt,
                         resolution,
                         rows.getLong("call_count"), nullableLong(rows, "input_tokens"),
                         nullableLong(rows, "output_tokens"),
                         nullableLong(rows, "accounted_total_tokens"),
                         rows.getLong("known_usage_calls"), rows.getLong("missing_usage_calls"),
-                        rows.getLong("partial_usage_calls"), rows.getLong("incomplete_calls") == 0);
+                        rows.getLong("partial_usage_calls"), rows.getLong("incomplete_calls") == 0,
+                        byDimension);
                     points.merge(startedAt, point, UsageStatisticsQueryRepository::mergePoint);
                 }
                 return List.copyOf(points.values());
             }
         }
+    }
+
+    UsageBreakdown breakdown(Connection connection, UsageQuery query,
+        UsageBreakdownDimension dimension) throws SQLException {
+        var groups = new java.util.HashMap<String, BreakdownValues>();
+        var plan = sourcePlan(connection, query);
+        for (var interval : plan.raw()) {
+            queryBreakdownSource(connection, interval, false, dimension, groups);
+        }
+        if (plan.daily() != null) {
+            queryBreakdownSource(connection, plan.daily(), true, dimension, groups);
+        }
+        var items = groups.entrySet().stream()
+            .map(entry -> entry.getValue().toItem(entry.getKey()))
+            .sorted(java.util.Comparator.comparing(UsageBreakdownItem::accountedTotalTokens,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+            .toList();
+        return new UsageBreakdown(dimension, items);
+    }
+
+    private void queryBreakdownSource(Connection connection, UsageQuery query, boolean daily,
+        UsageBreakdownDimension dimension, java.util.Map<String, BreakdownValues> groups)
+        throws SQLException {
+        var filter = aggregateFilter(query, daily);
+        var count = daily ? "SUM(call_count)" : "COUNT(*)";
+        var table = aggregateTable(query, daily);
+        var sql = "SELECT " + dimension.column() + " group_value, " + count + " call_count, "
+            + count + " FILTER (WHERE status = 'FAILED') failed_count,"
+            + " SUM(input_tokens) input_tokens, SUM(output_tokens) output_tokens,"
+            + " SUM(cache_read_input_tokens) cache_read_input_tokens,"
+            + " SUM(cache_creation_input_tokens) cache_creation_input_tokens,"
+            + " SUM(reasoning_output_tokens) reasoning_output_tokens,"
+            + " SUM(accounted_total_tokens) accounted_total_tokens FROM " + table + " "
+            + filter.sql() + " GROUP BY " + dimension.column();
+        try (var statement = connection.prepareStatement(sql)) {
+            bind(statement, filter.parameters());
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    var values = new BreakdownValues(rows.getLong("call_count"),
+                        rows.getLong("failed_count"), nullableLong(rows, "input_tokens"),
+                        nullableLong(rows, "output_tokens"),
+                        nullableLong(rows, "cache_read_input_tokens"),
+                        nullableLong(rows, "cache_creation_input_tokens"),
+                        nullableLong(rows, "reasoning_output_tokens"),
+                        nullableLong(rows, "accounted_total_tokens"));
+                    groups.merge(groupValue(rows.getString("group_value")), values,
+                        BreakdownValues::add);
+                }
+            }
+        }
+    }
+
+    // Null dimension values (e.g. an unresolved caller plugin) group under the empty key;
+    // the client renders it as "unknown".
+    private static String groupValue(String value) {
+        return value == null ? "" : value;
     }
 
     UsageCallPage listCalls(Connection connection, UsageQuery query, int size,
@@ -418,7 +488,30 @@ class UsageStatisticsQueryRepository {
             left.knownUsageCalls() + right.knownUsageCalls(),
             left.missingUsageCalls() + right.missingUsageCalls(),
             left.partialUsageCalls() + right.partialUsageCalls(),
-            left.complete() && right.complete());
+            left.complete() && right.complete(),
+            mergeDimensions(left.byDimension(), right.byDimension()));
+    }
+
+    private static Map<String, UsageTrendDimensionValue> mergeDimensions(
+        Map<String, UsageTrendDimensionValue> left, Map<String, UsageTrendDimensionValue> right) {
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        var merged = new java.util.HashMap<>(left);
+        right.forEach((key, value) -> merged.merge(key, value,
+            UsageStatisticsQueryRepository::mergeDimensionValue));
+        return java.util.Collections.unmodifiableMap(merged);
+    }
+
+    private static UsageTrendDimensionValue mergeDimensionValue(UsageTrendDimensionValue left,
+        UsageTrendDimensionValue right) {
+        return new UsageTrendDimensionValue(left.callCount() + right.callCount(),
+            add(left.inputTokens(), right.inputTokens()),
+            add(left.outputTokens(), right.outputTokens()),
+            add(left.accountedTotalTokens(), right.accountedTotalTokens()));
     }
 
     private static Long add(Long left, Long right) {
@@ -510,6 +603,26 @@ class UsageStatisticsQueryRepository {
     }
 
     private record SourcePlan(List<UsageQuery> raw, UsageQuery daily) {
+    }
+
+    private record BreakdownValues(long calls, long failed, Long input, Long output,
+                                   Long cacheRead, Long cacheCreation, Long reasoning,
+                                   Long total) {
+
+        private BreakdownValues add(BreakdownValues other) {
+            return new BreakdownValues(calls + other.calls, failed + other.failed,
+                UsageStatisticsQueryRepository.add(input, other.input),
+                UsageStatisticsQueryRepository.add(output, other.output),
+                UsageStatisticsQueryRepository.add(cacheRead, other.cacheRead),
+                UsageStatisticsQueryRepository.add(cacheCreation, other.cacheCreation),
+                UsageStatisticsQueryRepository.add(reasoning, other.reasoning),
+                UsageStatisticsQueryRepository.add(total, other.total));
+        }
+
+        private UsageBreakdownItem toItem(String value) {
+            return new UsageBreakdownItem(value, calls, failed, input, output, cacheRead,
+                cacheCreation, reasoning, total);
+        }
     }
 
     private record TokenValues(Long input, Long output, Long cacheRead, Long cacheCreation,

@@ -7,16 +7,16 @@ import {
   reloadUsageQueries,
   useUsageCalls,
   useUsageHealth,
+  useUsageHeatmapTrends,
   useUsageSummary,
-  useUsageTrends,
 } from '@/composables/use-usage-statistics'
 import UsageCallTable from '@/views/components/usage/UsageCallTable.vue'
 import UsageFilterBar from '@/views/components/usage/UsageFilterBar.vue'
 import UsageHealthAlert from '@/views/components/usage/UsageHealthAlert.vue'
+import UsageHeatmap from '@/views/components/usage/UsageHeatmap.vue'
+import UsageKpiStrip from '@/views/components/usage/UsageKpiStrip.vue'
 import UsageResetModal from '@/views/components/usage/UsageResetModal.vue'
-import UsageStatusPanel from '@/views/components/usage/UsageStatusPanel.vue'
-import UsageSummaryCards from '@/views/components/usage/UsageSummaryCards.vue'
-import UsageTrendChart from '@/views/components/usage/UsageTrendChart.vue'
+import UsageTrendSection from '@/views/components/usage/UsageTrendSection.vue'
 import { VAlert, VButton, VCard } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, nextTick, shallowRef } from 'vue'
@@ -26,7 +26,7 @@ const queryClient = useQueryClient()
 
 const healthQuery = useUsageHealth()
 const summaryQuery = useUsageSummary(filters.buildParams, filters.fingerprint, filters.valid)
-const trendsQuery = useUsageTrends(filters.buildParams, filters.fingerprint, filters.valid)
+const heatmapQuery = useUsageHeatmapTrends(filters.buildParams, filters.fingerprint, filters.valid)
 const callsQuery = useUsageCalls(filters.buildParams, filters.fingerprint, filters.valid)
 
 const { data: callers } = useCallerPluginsFetch()
@@ -44,7 +44,7 @@ const hasNextPage = computed(() => !!callsQuery.hasNextPage?.value)
 
 const fetching = computed(
   () =>
-    summaryQuery.isFetching.value || trendsQuery.isFetching.value || callsQuery.isFetching.value,
+    summaryQuery.isFetching.value || heatmapQuery.isFetching.value || callsQuery.isFetching.value,
 )
 
 async function refresh() {
@@ -55,11 +55,11 @@ async function refresh() {
 </script>
 
 <template>
-  <div class=":uno: usage-page :uno: flex flex-col gap-4 p-2 md:p-4">
+  <div class=":uno: usage-page :uno: flex flex-col gap-3 p-2">
     <UsageHealthAlert :health="healthQuery.data.value" :error="healthQuery.isError.value" />
 
     <VCard :body-class="['!p-0']">
-      <div class=":uno: px-5 py-4">
+      <div class=":uno: px-4 py-3">
         <UsageFilterBar
           :state="filters.state.value"
           :callers="callers"
@@ -74,21 +74,19 @@ async function refresh() {
           @reset="resetModalVisible = true"
         />
       </div>
-      <div v-if="filters.valid.value" class=":uno: border-t border-gray-100">
-        <div>
-          <div
-            v-if="summaryQuery.isError.value"
-            class=":uno: flex items-center gap-3 py-4 text-sm text-gray-500"
-          >
-            汇总数据加载失败
-            <VButton size="sm" @click="summaryQuery.refetch()">重试</VButton>
-          </div>
-          <UsageSummaryCards
-            v-else
-            :summary="summaryQuery.data.value"
-            :loading="summaryQuery.isLoading.value"
-          />
+      <div class=":uno: border-t border-gray-100">
+        <div
+          v-if="summaryQuery.isError.value"
+          class=":uno: flex items-center gap-3 px-4 py-4 text-sm text-gray-500"
+        >
+          汇总数据加载失败
+          <VButton size="sm" @click="summaryQuery.refetch()">重试</VButton>
         </div>
+        <UsageKpiStrip
+          v-else
+          :summary="summaryQuery.data.value"
+          @filter-failed="filters.applyChange({ status: 'FAILED' })"
+        />
       </div>
     </VCard>
 
@@ -96,68 +94,52 @@ async function refresh() {
       v-if="!filters.valid.value"
       :closable="false"
       type="warning"
-      description="请选择有效的起止日期（开始日期需早于结束日期，且跨度不超过 3660 天）。"
+      title="提示"
+      description="开始日期需早于结束日期。"
       role="status"
     />
 
-    <template v-else>
-      <div class=":uno: grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <VCard :body-class="['!p-0']" class=":uno: min-w-0">
-          <div
-            v-if="trendsQuery.isError.value"
-            class=":uno: flex items-center gap-3 p-5 text-sm text-gray-500"
-          >
-            趋势数据加载失败 <VButton size="sm" @click="trendsQuery.refetch()">重试</VButton>
-          </div>
-          <UsageTrendChart
-            v-else
-            :points="trendsQuery.data.value"
-            :loading="trendsQuery.isLoading.value"
-            :selected-resolution="filters.state.value.resolution"
-            :from="filters.buildParams()?.from"
-            :to="filters.buildParams()?.to"
-            @change-resolution="filters.applyChange({ resolution: $event })"
-          />
-        </VCard>
-        <VCard :body-class="['!p-0']">
-          <div v-if="summaryQuery.isError.value" class=":uno: p-5 text-sm text-gray-500">
-            调用状态暂不可用
-          </div>
-          <UsageStatusPanel
-            v-else
-            :summary="summaryQuery.data.value"
-            :loading="summaryQuery.isLoading.value"
-            :selected-status="filters.state.value.status"
-            @select="filters.applyChange({ status: $event })"
-          />
-        </VCard>
-      </div>
+    <VCard :body-class="['!p-0']" class=":uno: min-w-0">
+      <UsageTrendSection
+        :filters="filters"
+        :models="models"
+        :providers="providers"
+        :callers="callers"
+      />
+    </VCard>
 
-      <VCard :body-class="['!p-0']">
-        <template #header>
-          <div class=":uno: w-full flex flex-wrap items-center justify-between gap-2 px-5 py-4">
-            <div class=":uno: flex items-center gap-2">
-              <span class=":uno: text-sm text-gray-950 font-semibold">调用明细</span
-              ><span class=":uno: text-xs text-gray-400">{{ callItems.length }} 条已加载</span>
-            </div>
-            <span class=":uno: text-xs text-gray-400">明细保留 90 天 · 点击查看执行过程</span>
-          </div>
-        </template>
-        <UsageCallTable
-          :items="callItems"
-          :models="models"
-          :providers="providers"
-          :callers="callers"
-          :loading="callsQuery.isLoading.value"
-          :error="callsQuery.isError.value && callItems.length === 0"
-          :load-more-error="callsQuery.isError.value && callItems.length > 0"
-          :has-next-page="hasNextPage"
-          :fetching-next-page="callsQuery.isFetchingNextPage.value"
-          @load-more="callsQuery.fetchNextPage()"
-          @retry="callsQuery.refetch()"
-        />
-      </VCard>
-    </template>
+    <VCard :body-class="['!p-0']">
+      <div
+        v-if="heatmapQuery.isError.value"
+        class=":uno: flex items-center gap-3 px-4 py-4 text-sm text-gray-500"
+      >
+        热力图数据加载失败
+        <VButton size="sm" @click="heatmapQuery.refetch()">重试</VButton>
+      </div>
+      <UsageHeatmap v-else :points="heatmapQuery.data.value" />
+    </VCard>
+
+    <VCard :body-class="['!p-0']">
+      <div class=":uno: flex flex-wrap items-center gap-2 px-4 py-3">
+        <h3 class=":uno: text-sm text-gray-950 font-semibold">调用明细</h3>
+        <span v-if="!callsQuery.isLoading.value" class=":uno: text-xs text-gray-400"
+          >{{ callItems.length }} 条已加载</span
+        >
+      </div>
+      <UsageCallTable
+        :items="callItems"
+        :models="models"
+        :providers="providers"
+        :callers="callers"
+        :loading="callsQuery.isLoading.value && callItems.length === 0"
+        :error="callsQuery.isError.value && callItems.length === 0"
+        :load-more-error="callsQuery.isError.value && callItems.length > 0"
+        :has-next-page="hasNextPage"
+        :fetching-next-page="callsQuery.isFetchingNextPage.value"
+        @load-more="callsQuery.fetchNextPage()"
+        @retry="callsQuery.refetch()"
+      />
+    </VCard>
 
     <UsageResetModal v-if="resetModalVisible" @close="resetModalVisible = false" />
   </div>

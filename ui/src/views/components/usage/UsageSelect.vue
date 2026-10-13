@@ -54,7 +54,7 @@ function moveFocus(event: KeyboardEvent) {
 </script>
 
 <template>
-  <VDropdown placement="bottom-start" :distance="6" @show="open = true" @hide="closeMenu">
+  <VDropdown placement="bottom-start" popper-class="af-dropdown-popper" :distance="6" @show="open = true" @hide="closeMenu">
     <button
       type="button"
       class=":uno: usage-select-trigger"

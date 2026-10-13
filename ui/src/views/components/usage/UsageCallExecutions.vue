@@ -41,7 +41,7 @@ const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.cal
       执行详情加载失败 <VButton size="sm" @click="refetch()">重试</VButton>
     </div>
     <p v-else-if="!data?.executions?.length" class=":uno: usage-executions-message">
-      暂无执行记录。执行明细仅保留 30 天；较早的调用或缓存命中的调用可能没有执行数据。
+      暂无执行记录。明细仅保留 30 天，较早或缓存命中的调用可能没有数据。
     </p>
     <div v-else class=":uno: usage-execution-list">
       <article

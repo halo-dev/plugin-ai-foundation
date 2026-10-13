@@ -3,6 +3,7 @@ package run.halo.aifoundation.endpoint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
@@ -13,6 +14,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.service.usage.UsageBreakdown;
+import run.halo.aifoundation.service.usage.UsageBreakdownDimension;
+import run.halo.aifoundation.service.usage.UsageBreakdownItem;
 import run.halo.aifoundation.service.usage.UsageCallPage;
 import run.halo.aifoundation.service.usage.UsageHealth;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
@@ -20,6 +24,7 @@ import run.halo.aifoundation.service.usage.UsageSummary;
 import run.halo.aifoundation.service.usage.UsageQuery;
 import run.halo.aifoundation.service.observation.UsageStatus;
 import run.halo.aifoundation.service.observation.UsageQuality;
+import run.halo.aifoundation.service.usage.UsageTrendDimensionValue;
 import run.halo.aifoundation.service.usage.UsageTrendPoint;
 import run.halo.aifoundation.service.usage.UsageTrendResolution;
 import org.mockito.ArgumentCaptor;
@@ -50,17 +55,62 @@ class UsageStatisticsConsoleEndpointTest {
 
     @Test
     void acceptsHourlyTrendResolution() {
-        when(service.trends(any())).thenReturn(Mono.just(java.util.List.of(
-            new UsageTrendPoint(Instant.EPOCH, UsageTrendResolution.HOUR,
-                1, 2L, 3L, 5L, 1, 0, 0, false))));
+        when(service.trends(any(), nullable(UsageBreakdownDimension.class)))
+            .thenReturn(Mono.just(java.util.List.of(
+                new UsageTrendPoint(Instant.EPOCH, UsageTrendResolution.HOUR,
+                    1, 2L, 3L, 5L, 1, 0, 0, false, null))));
 
         client.get().uri("/usage-statistics/trends?resolution=hour")
             .exchange().expectStatus().isOk().expectBody()
-            .jsonPath("$[0].complete").isEqualTo(false);
+            .jsonPath("$[0].complete").isEqualTo(false)
+            .jsonPath("$[0].byDimension").doesNotExist();
 
         var query = ArgumentCaptor.forClass(UsageQuery.class);
-        verify(service).trends(query.capture());
+        verify(service).trends(query.capture(), nullable(UsageBreakdownDimension.class));
         assertThat(query.getValue().resolution()).isEqualTo(UsageTrendResolution.HOUR);
+    }
+
+    @Test
+    void passesTrendDimensionAndRejectsUnknownDimension() {
+        when(service.trends(any(), eq(UsageBreakdownDimension.MODEL)))
+            .thenReturn(Mono.just(java.util.List.of(
+                new UsageTrendPoint(Instant.EPOCH, UsageTrendResolution.DAY,
+                    1, 2L, 3L, 5L, 1, 0, 0, true,
+                    java.util.Map.of("m1", new UsageTrendDimensionValue(1, 2L, 3L, 5L))))));
+
+        client.get().uri("/usage-statistics/trends?dimension=model")
+            .exchange().expectStatus().isOk().expectBody()
+            .jsonPath("$[0].byDimension.m1.callCount").isEqualTo(1);
+
+        verify(service).trends(any(), eq(UsageBreakdownDimension.MODEL));
+
+        client.get().uri("/usage-statistics/trends?dimension=bogus")
+            .exchange().expectStatus().isBadRequest();
+    }
+
+    @Test
+    void breakdownRequiresDimensionAndMapsFilters() {
+        var breakdown = new UsageBreakdown(UsageBreakdownDimension.CALLER_PLUGIN,
+            java.util.List.of(new UsageBreakdownItem("search", 3, 1, 4L, 5L, null, null,
+                null, 9L)));
+        when(service.breakdown(any(), eq(UsageBreakdownDimension.CALLER_PLUGIN)))
+            .thenReturn(Mono.just(breakdown));
+
+        client.get().uri("/usage-statistics/breakdown")
+            .exchange().expectStatus().isBadRequest();
+        client.get().uri("/usage-statistics/breakdown?dimension=bogus")
+            .exchange().expectStatus().isBadRequest();
+
+        client.get().uri("/usage-statistics/breakdown?dimension=callerPlugin"
+                + "&from=2026-01-01T00:00:00Z&to=2026-01-02T00:00:00Z&providerName=provider")
+            .exchange().expectStatus().isOk().expectBody()
+            .jsonPath("$.dimension").isEqualTo("CALLER_PLUGIN")
+            .jsonPath("$.items[0].value").isEqualTo("search")
+            .jsonPath("$.items[0].failedCount").isEqualTo(1);
+
+        var query = ArgumentCaptor.forClass(UsageQuery.class);
+        verify(service).breakdown(query.capture(), eq(UsageBreakdownDimension.CALLER_PLUGIN));
+        assertThat(query.getValue().providerName()).isEqualTo("provider");
     }
 
     @Test

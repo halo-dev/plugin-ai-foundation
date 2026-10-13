@@ -21,6 +21,8 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.service.observation.UsageFeature;
 import run.halo.aifoundation.service.observation.UsageQuality;
 import run.halo.aifoundation.service.observation.UsageStatus;
+import run.halo.aifoundation.service.usage.UsageBreakdown;
+import run.halo.aifoundation.service.usage.UsageBreakdownDimension;
 import run.halo.aifoundation.service.usage.UsageCallDetail;
 import run.halo.aifoundation.service.usage.UsageCallPage;
 import run.halo.aifoundation.service.usage.UsageHealth;
@@ -57,7 +59,19 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                         .description("Optional trend bucket resolution: DAY or HOUR. HOUR applies "
                             + "only to detail-backed intervals; archived intervals remain DAY.")
                         .implementation(String.class))
+                    .parameter(parameterBuilder().name("dimension").in(ParameterIn.QUERY)
+                        .description("Optional per-bucket grouping: model, provider, or "
+                            + "callerPlugin. Adds byDimension to each bucket.")
+                        .implementation(String.class))
                     .response(responseBuilder().implementationArray(UsageTrendPoint.class)))
+            .GET("usage-statistics/breakdown", this::breakdown,
+                builder -> filters(builder.operationId("GetAiUsageBreakdown").tag(tag))
+                    .description("Get usage totals grouped by a dimension.")
+                    .parameter(parameterBuilder().name("dimension").in(ParameterIn.QUERY)
+                        .required(true)
+                        .description("Group by: model, provider, or callerPlugin.")
+                        .implementation(String.class))
+                    .response(responseBuilder().implementation(UsageBreakdown.class)))
             .GET("usage-statistics/calls", this::calls,
                 builder -> filters(builder.operationId("ListAiUsageCalls").tag(tag))
                     .description("List logical AI calls using cursor pagination.")
@@ -100,9 +114,30 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> trends(ServerRequest request) {
         return query(request, text(request, "resolution"))
-            .flatMap(service::trends).flatMap(ServerResponse.ok()::bodyValue)
+            .flatMap(value -> service.trends(value, dimension(request)))
+            .flatMap(ServerResponse.ok()::bodyValue)
             .onErrorResume(IllegalArgumentException.class, this::badRequest)
             .onErrorResume(IllegalStateException.class, this::unavailable);
+    }
+
+    private Mono<ServerResponse> breakdown(ServerRequest request) {
+        return Mono.fromCallable(() -> {
+                var dimension = dimension(request);
+                if (dimension == null) {
+                    throw new IllegalArgumentException("dimension is required");
+                }
+                return dimension;
+            })
+            .flatMap(dimension -> query(request, null)
+                .flatMap(value -> service.breakdown(value, dimension)))
+            .flatMap(ServerResponse.ok()::bodyValue)
+            .onErrorResume(IllegalArgumentException.class, this::badRequest)
+            .onErrorResume(IllegalStateException.class, this::unavailable);
+    }
+
+    private static UsageBreakdownDimension dimension(ServerRequest request) {
+        var value = text(request, "dimension");
+        return value == null ? null : UsageBreakdownDimension.fromText(value);
     }
 
     private Mono<ServerResponse> calls(ServerRequest request) {

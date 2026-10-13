@@ -41,3 +41,25 @@ export function compactChartNumber(value: number) {
     value,
   )
 }
+
+// Dimension breakdown palette (primary #4CCBA0); categories beyond Top N merge into a gray Other
+export const USAGE_CHART_PALETTE = [
+  '#4CCBA0',
+  '#0ea5e9',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#8b5cf6',
+  '#64748b',
+] as const
+
+export const USAGE_CHART_OTHER_COLOR = '#cbd5e1'
+
+export const USAGE_CHART_TOP_N = USAGE_CHART_PALETTE.length
+
+export function usageCategoryColor(key: string, categories: string[]) {
+  const index = categories.indexOf(key)
+  return index >= 0 && index < USAGE_CHART_PALETTE.length
+    ? USAGE_CHART_PALETTE[index]
+    : USAGE_CHART_OTHER_COLOR
+}

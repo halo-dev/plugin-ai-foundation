@@ -290,9 +290,16 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     }
 
     @Override
-    public List<UsageTrendPoint> trends(UsageQuery query, boolean complete) {
+    public List<UsageTrendPoint> trends(UsageQuery query, boolean complete,
+        UsageBreakdownDimension dimension) {
         requireInitialized();
-        return withReader(connection -> queries.trends(connection, query, complete));
+        return withReader(connection -> queries.trends(connection, query, complete, dimension));
+    }
+
+    @Override
+    public UsageBreakdown breakdown(UsageQuery query, UsageBreakdownDimension dimension) {
+        requireInitialized();
+        return withReader(connection -> queries.breakdown(connection, query, dimension));
     }
 
     @Override

@@ -92,6 +92,8 @@ models/test-ui-message-chat-request.ts
 models/test-ui-message.ts
 models/tool-choice.ts
 models/uimessage-chunk.ts
+models/usage-breakdown-item.ts
+models/usage-breakdown.ts
 models/usage-call-detail.ts
 models/usage-call-item.ts
 models/usage-call-page.ts
@@ -99,4 +101,5 @@ models/usage-error.ts
 models/usage-execution-record.ts
 models/usage-health.ts
 models/usage-summary.ts
+models/usage-trend-dimension-value.ts
 models/usage-trend-point.ts

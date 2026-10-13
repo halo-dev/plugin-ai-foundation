@@ -6,6 +6,7 @@ import {
   aiModelSelectorInput,
 } from './formkit/ai-model-selector-input'
 import { AI_FOUNDATION_ROUTE_NAMES } from './routes'
+import "./styles/index.css"
 
 const pluginModule = {
   formkit: {

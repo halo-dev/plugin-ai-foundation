@@ -5,10 +5,10 @@ import { computed, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 export const USAGE_RANGE_OPTIONS = [
-  { label: '最近 24 小时', value: '24h' },
-  { label: '最近 7 天', value: '7d' },
-  { label: '最近 30 天', value: '30d' },
-  { label: '最近 90 天', value: '90d' },
+  { label: '24 小时', value: '24h' },
+  { label: '7 天', value: '7d' },
+  { label: '30 天', value: '30d' },
+  { label: '90 天', value: '90d' },
   { label: '自定义', value: 'custom' },
 ] as const
 
@@ -50,13 +50,13 @@ export interface UsageQueryParams {
 
 const FEATURE_PATTERN = /^[a-z0-9._-]{1,64}$/
 
-// 与后端 UsageStatisticsConsoleEndpoint 的最大查询跨度一致
+// Matches the maximum query span enforced by UsageStatisticsConsoleEndpoint
 const USAGE_MAX_RANGE_DAYS = 3660
 
 /**
- * 将筛选状态转换为半开区间 [from, to) 的 UTC instant 查询参数。
- * 预设范围相对 now 滑动；自定义本地日期在 API 边界转换为 UTC instant。
- * 自定义范围无效（缺失、无法解析或 from 不早于 to）时返回 undefined。
+ * Converts filter state to half-open [from, to) UTC instant query params.
+ * Preset ranges slide relative to now; custom local dates are converted to UTC instants at the API boundary.
+ * Returns undefined when the custom range is invalid (missing, unparseable, or from is not before to).
  */
 export function toUsageQueryParams(
   state: UsageFilterState,
@@ -81,7 +81,7 @@ export function toUsageQueryParams(
       return undefined
     }
     from = startDay.startOf('day').toDate()
-    // 结束日期按本地次日零点作为半开区间上界（日历推进，DST 安全）
+    // The end date uses the next local midnight as the exclusive upper bound (calendar arithmetic, DST-safe)
     to = endDay.startOf('day').add(1, 'day').toDate()
   } else {
     const duration = RANGE_DURATIONS[state.range]
@@ -169,7 +169,7 @@ export function useUsageFilters(now: () => Date = () => new Date()) {
     { flush: 'sync' },
   )
 
-  // 绝对时间属于一次查询会话；首屏、翻页和聚合必须共享同一个锚点
+  // Absolute times belong to one query session; first paint, pagination and aggregations share the same anchor
   const fingerprint = computed(() =>
     JSON.stringify({ state: state.value, anchor: anchor.value.toISOString() }),
   )
@@ -218,7 +218,7 @@ export function useUsageFilters(now: () => Date = () => new Date()) {
     if ('feature' in patch) feature.value = patch.feature
     if ('providerName' in patch) {
       providerName.value = patch.providerName
-      // 切换供应商后清空模型筛选，避免保留不相关模型的过滤条件
+      // Clear the model filter after switching providers so unrelated models are not kept
       modelName.value = undefined
     }
     if ('modelName' in patch) modelName.value = patch.modelName
@@ -230,7 +230,7 @@ export function useUsageFilters(now: () => Date = () => new Date()) {
   }
 
   function clearDimensionFilters() {
-    // 单次导航清空全部维度筛选，避免逐个 setter 触发多次路由替换
+    // Clear all dimension filters in a single navigation instead of one route replace per setter
     void router.replace({
       query: {
         range: range.value === '30d' ? undefined : range.value,

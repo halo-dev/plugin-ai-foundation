@@ -426,6 +426,82 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
+    void breakdownGroupsAcrossRawAndArchivedSources() {
+        store = createStore();
+        var old = new UsageCallStart("breakdown-old", 1, Instant.parse("2026-04-01T10:00:00Z"),
+            "plugin-search", "1.0.0", "stack", "semantic-search", "language.generateText",
+            "LANGUAGE", "model-a", "provider-a", "openai", "requested", false);
+        store.finishCall(terminal(old, usage(10, 5)));
+        store.rollupAndRetain(Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
+            ZoneOffset.UTC));
+
+        var recent = new UsageCallStart("breakdown-recent", 1,
+            Instant.parse("2026-08-10T10:00:00Z"), "plugin-search", "1.0.0", "stack",
+            "semantic-search", "language.generateText", "LANGUAGE", "model-b", "provider-a",
+            "openai", "requested", false);
+        store.finishCall(terminal(recent, usage(2, 1)));
+        var failed = new UsageCallStart("breakdown-failed", 1,
+            Instant.parse("2026-08-10T11:00:00Z"), "plugin-search", "1.0.0", "stack",
+            "semantic-search", "language.generateText", "LANGUAGE", "model-b", "provider-a",
+            "openai", "requested", false);
+        store.finishCall(new UsageCallTerminal(failed, failed.startedAt().plusMillis(100),
+            UsageStatus.FAILED, null, null, 1, 1, 0, true, usage(1, 1)));
+
+        var breakdown = store.breakdown(
+            query("2026-04-01T00:00:00Z", "2026-08-11T00:00:00Z"),
+            UsageBreakdownDimension.MODEL);
+
+        assertThat(breakdown.dimension()).isEqualTo(UsageBreakdownDimension.MODEL);
+        assertThat(breakdown.items()).extracting(UsageBreakdownItem::value)
+            .containsExactly("model-a", "model-b");
+        assertThat(breakdown.items().get(0).callCount()).isEqualTo(1);
+        assertThat(breakdown.items().get(0).accountedTotalTokens()).isEqualTo(15L);
+        assertThat(breakdown.items().get(1).callCount()).isEqualTo(2);
+        assertThat(breakdown.items().get(1).failedCount()).isEqualTo(1);
+        assertThat(breakdown.items().get(1).accountedTotalTokens()).isEqualTo(5L);
+
+        var filtered = store.breakdown(new UsageQuery(Instant.parse("2026-04-01T00:00:00Z"),
+                Instant.parse("2026-08-11T00:00:00Z"), null, null, null, "model-a", null, null,
+                null, null, null),
+            UsageBreakdownDimension.PROVIDER);
+        assertThat(filtered.items()).singleElement().satisfies(item -> {
+            assertThat(item.value()).isEqualTo("provider-a");
+            assertThat(item.accountedTotalTokens()).isEqualTo(15L);
+        });
+    }
+
+    @Test
+    void trendsSplitBucketsByDimensionAcrossRawAndArchivedSources() {
+        store = createStore();
+        var old = new UsageCallStart("trend-dim-old", 1, Instant.parse("2026-04-01T10:00:00Z"),
+            "plugin-search", "1.0.0", "stack", "semantic-search", "language.generateText",
+            "LANGUAGE", "model-a", "provider-a", "openai", "requested", false);
+        store.finishCall(terminal(old, usage(10, 5)));
+        store.rollupAndRetain(Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
+            ZoneOffset.UTC));
+        var recent = new UsageCallStart("trend-dim-recent", 1,
+            Instant.parse("2026-08-10T10:00:00Z"), "plugin-search", "1.0.0", "stack",
+            "semantic-search", "language.generateText", "LANGUAGE", "model-b", "provider-a",
+            "openai", "requested", false);
+        store.finishCall(terminal(recent, usage(2, 1)));
+
+        var points = store.trends(query("2026-04-01T00:00:00Z", "2026-08-11T00:00:00Z"), true,
+            UsageBreakdownDimension.MODEL);
+
+        assertThat(points).hasSize(2);
+        assertThat(points.get(0).byDimension()).containsOnlyKeys("model-a");
+        assertThat(points.get(0).byDimension().get("model-a").accountedTotalTokens())
+            .isEqualTo(15L);
+        assertThat(points.get(1).byDimension()).containsOnlyKeys("model-b");
+        assertThat(points.get(1).byDimension().get("model-b").callCount()).isEqualTo(1);
+        assertThat(points.get(1).byDimension().get("model-b").accountedTotalTokens())
+            .isEqualTo(3L);
+
+        assertThat(store.trends(query("2026-04-01T00:00:00Z", "2026-08-11T00:00:00Z"), true))
+            .allMatch(point -> point.byDimension() == null);
+    }
+
+    @Test
     void resetRejectsLateEventsFromPreviousEpoch() {
         store = createStore();
         var start = start("late-call", Instant.parse("2026-08-10T10:00:00Z"));

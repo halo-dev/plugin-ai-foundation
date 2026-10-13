@@ -13,6 +13,9 @@
  */
 
 
+// May contain unused imports in some cases
+// @ts-ignore
+import type { UsageTrendDimensionValue } from './usage-trend-dimension-value';
 
 /**
  * 
@@ -32,6 +35,12 @@ export interface UsageTrendPoint {
      * @memberof UsageTrendPoint
      */
     'bucketStart'?: string;
+    /**
+     * 
+     * @type {{ [key: string]: UsageTrendDimensionValue; }}
+     * @memberof UsageTrendPoint
+     */
+    'byDimension'?: { [key: string]: UsageTrendDimensionValue; };
     /**
      * 
      * @type {number}

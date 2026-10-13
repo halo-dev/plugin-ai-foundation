@@ -66,7 +66,7 @@ describe('UsageHealthAlert', () => {
     const wrapper = mountAlert(undefined, true)
     const text = wrapper.text()
     expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-    expect(text).toContain('健康状态检查失败')
+    expect(text).toContain('统计状态检查失败')
     expect(text).toContain('无法获取统计健康状态')
   })
 })

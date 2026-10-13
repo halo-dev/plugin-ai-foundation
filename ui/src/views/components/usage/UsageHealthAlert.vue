@@ -20,7 +20,7 @@ const title = computed(() => {
   if (incomplete.value) {
     return '统计数据可能不完整'
   }
-  return '健康状态检查失败'
+  return '统计状态检查失败'
 })
 
 const storageErrors = computed(() => {
@@ -83,7 +83,7 @@ const timeDetails = computed(() => {
             模型调用不受影响，但用量数据可能正在丢失。历史数据未被清除，请检查存储状态后再解读统计结果。
           </template>
           <template v-else-if="incomplete">
-            部分统计事件未能持久化，当前汇总与历史可能低于实际用量。
+            部分统计事件未能保存，统计结果可能低于实际用量。
           </template>
           <template v-else>
             无法获取统计健康状态，当前页面展示的汇总与历史可能低于实际用量，请稍后刷新重试。
