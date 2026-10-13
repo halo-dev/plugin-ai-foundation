@@ -483,6 +483,8 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                 "SQLite statistics files exist without a non-empty database; "
                     + "manual intervention is required: " + database);
         }
+        // This gate currently accepts only the current version. When adding migrations, adapt
+        // it before opening the writer; see UsageSqliteSchema's schema evolution contract.
         try (var connection = DriverManager.getConnection(
             "jdbc:sqlite:" + database.toUri() + "?mode=ro")) {
             UsageSqliteSchema.validateRecognized(connection);
