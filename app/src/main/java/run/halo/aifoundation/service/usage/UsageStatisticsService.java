@@ -146,10 +146,6 @@ public class UsageStatisticsService implements run.halo.aifoundation.service.obs
         return read(() -> store.summary(query, isComplete(query)));
     }
 
-    public Mono<List<UsageTrendPoint>> trends(UsageQuery query) {
-        return read(() -> store.trends(query, isComplete(query)));
-    }
-
     public Mono<List<UsageTrendPoint>> trends(UsageQuery query,
         UsageBreakdownDimension dimension) {
         return read(() -> store.trends(query, isComplete(query), dimension));

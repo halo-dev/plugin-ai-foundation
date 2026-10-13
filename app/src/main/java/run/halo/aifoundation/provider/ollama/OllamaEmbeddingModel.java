@@ -106,7 +106,6 @@ final class OllamaEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEm
             if (results.isEmpty()) {
                 throw new IllegalStateException("Ollama embedding response contains no vectors");
             }
-            var promptTokens = integer(root, "prompt_eval_count");
             var nativeUsage = new LinkedHashMap<String, Object>();
             for (var field : List.of("prompt_eval_count", "total_duration", "load_duration")) {
                 if (root.path(field).isNumber()) {
@@ -124,10 +123,6 @@ final class OllamaEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEm
         } catch (Exception error) {
             throw new IllegalStateException("Failed to parse Ollama embedding response", error);
         }
-    }
-
-    private Integer integer(com.fasterxml.jackson.databind.JsonNode root, String field) {
-        return root.path(field).isNumber() ? root.path(field).asInt() : 0;
     }
 
     private void put(Map<String, Object> values, String key, Object value) {

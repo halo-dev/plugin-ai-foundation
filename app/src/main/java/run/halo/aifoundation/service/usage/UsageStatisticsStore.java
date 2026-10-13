@@ -32,10 +32,6 @@ public interface UsageStatisticsStore extends AutoCloseable {
 
     UsageSummary summary(UsageQuery query, boolean complete);
 
-    default List<UsageTrendPoint> trends(UsageQuery query, boolean complete) {
-        return trends(query, complete, null);
-    }
-
     List<UsageTrendPoint> trends(UsageQuery query, boolean complete,
         UsageBreakdownDimension dimension);
 
@@ -49,17 +45,10 @@ public interface UsageStatisticsStore extends AutoCloseable {
 
     void reconcileAbandoned(Instant now);
 
-    void rollupAndRetain(Clock clock);
-
     /**
      * Perform bounded maintenance work; return true to yield and continue in another task.
-     * The default preserves legacy stores; stores used by the service should override it
-     * to bound each transaction instead of retaining the entire dataset in one task.
      */
-    default boolean rollupAndRetainBatch(Clock clock) {
-        rollupAndRetain(clock);
-        return false;
-    }
+    boolean rollupAndRetainBatch(Clock clock);
 
     void backup();
 

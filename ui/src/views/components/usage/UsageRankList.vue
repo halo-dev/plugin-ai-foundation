@@ -11,8 +11,6 @@ export interface UsageRankEntry {
   calls: number
   failed: number
   tokens?: number
-  input?: number
-  output?: number
   other: boolean
 }
 
@@ -52,7 +50,7 @@ const entries = computed<UsageRankEntry[]>(() => {
   const sorted = [...items].sort((a, b) => metricValue(b) - metricValue(a))
   const top = sorted.slice(0, USAGE_CHART_TOP_N)
   const rest = sorted.slice(USAGE_CHART_TOP_N)
-  const entries = top.map((item) => toEntry(item, false))
+  const entries = top.map(toEntry)
   if (rest.length) {
     entries.push({
       key: '__other__',
@@ -60,15 +58,13 @@ const entries = computed<UsageRankEntry[]>(() => {
       calls: rest.reduce((sum, item) => sum + (item.callCount ?? 0), 0),
       failed: rest.reduce((sum, item) => sum + (item.failedCount ?? 0), 0),
       tokens: rest.reduce((sum, item) => sum + (item.accountedTotalTokens ?? 0), 0),
-      input: rest.reduce((sum, item) => sum + (item.inputTokens ?? 0), 0),
-      output: rest.reduce((sum, item) => sum + (item.outputTokens ?? 0), 0),
       other: true,
     })
   }
   return entries
 })
 
-function toEntry(item: UsageBreakdownItem, other: boolean): UsageRankEntry {
+function toEntry(item: UsageBreakdownItem): UsageRankEntry {
   const key = item.value ?? ''
   return {
     key,
@@ -76,9 +72,7 @@ function toEntry(item: UsageBreakdownItem, other: boolean): UsageRankEntry {
     calls: item.callCount ?? 0,
     failed: item.failedCount ?? 0,
     tokens: item.accountedTotalTokens ?? undefined,
-    input: item.inputTokens ?? undefined,
-    output: item.outputTokens ?? undefined,
-    other,
+    other: false,
   }
 }
 

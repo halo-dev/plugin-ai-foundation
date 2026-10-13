@@ -185,8 +185,6 @@ public final class ErnieEmbeddingModel implements ProviderEmbeddingModel {
                 IndexedEmbeddingDecoder.floatArray(value,
                     "Qianfan embedding vector must be an array"));
             var usage = root.path("usage");
-            var promptTokens = integer(usage, "prompt_tokens");
-            var totalTokens = integer(usage, "total_tokens");
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadataValues = new LinkedHashMap<String, Object>();
@@ -202,10 +200,6 @@ public final class ErnieEmbeddingModel implements ProviderEmbeddingModel {
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse Qianfan embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node, String field) {
-        return node.path(field).isNumber() ? node.path(field).asInt() : 0;
     }
 
     private String text(JsonNode node, String field) {

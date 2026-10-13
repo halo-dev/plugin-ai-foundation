@@ -32,7 +32,7 @@ export function heatmapGrid(today: Date): UsageHeatmapDay[] {
 
 /** Month label for the first cell of each column (week); undefined when the month matches the previous column. */
 export function heatmapMonthLabels(days: UsageHeatmapDay[]): (string | undefined)[] {
-  const labels: (string | undefined)[] = new Array(USAGE_HEATMAP_WEEKS).fill(undefined)
+  const labels: (string | undefined)[] = Array.from({ length: USAGE_HEATMAP_WEEKS }, () => undefined)
   let lastMonth: string | undefined
   for (const day of days) {
     if (day.weekday !== 0) continue

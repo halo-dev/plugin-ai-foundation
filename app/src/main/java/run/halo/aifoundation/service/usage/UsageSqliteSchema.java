@@ -11,7 +11,7 @@ final class UsageSqliteSchema {
     private UsageSqliteSchema() {
     }
 
-    static void migrate(Connection connection, UsageDatabasePaths paths) throws SQLException {
+    static void initialize(Connection connection) throws SQLException {
         try (var statement = connection.createStatement()) {
             statement.execute("""
                 CREATE TABLE IF NOT EXISTS ai_statistics_meta (
@@ -20,44 +20,20 @@ final class UsageSqliteSchema {
                 ) STRICT
                 """);
         }
-        var version = (int) longMeta(connection, "schema_version", 0);
-        if (version > VERSION) {
+        var version = longMeta(connection, "schema_version", 0);
+        if (version == VERSION) {
+            return;
+        }
+        if (version != 0) {
             throw new SQLException("Unsupported statistics schema version " + version);
         }
         connection.setAutoCommit(false);
         var restoreAutoCommit = true;
         try (var statement = connection.createStatement()) {
-            if (version == 0) {
-                createTables(statement);
-                createHealthTable(statement);
-                putMeta(connection, "schema_version", "1");
-                putMeta(connection, "statistics_epoch", "1");
-            }
-            // Keep dashboard aggregates off the wide call rows. Existing v1 databases can
-            // acquire this additive index without changing their persisted data contract.
-            statement.execute("""
-                CREATE INDEX IF NOT EXISTS idx_calls_aggregate_hour ON ai_calls(
-                  (started_at_ms / 3600000), status, usage_quality, complete, started_at_ms, input_tokens,
-                  output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
-                  reasoning_output_tokens, accounted_total_tokens
-                )
-                """);
-            statement.execute("""
-                CREATE INDEX IF NOT EXISTS idx_calls_filtered_hour ON ai_calls(
-                  (started_at_ms / 3600000), status, usage_quality, complete, started_at_ms, input_tokens,
-                  output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
-                  reasoning_output_tokens, accounted_total_tokens, caller_plugin_name, feature,
-                  provider_name, model_name, model_type, operation
-                )
-                """);
-            statement.execute("""
-                CREATE INDEX IF NOT EXISTS idx_executions_retention
-                ON ai_model_executions(started_at_ms, call_id)
-                """);
-            statement.execute("""
-                CREATE INDEX IF NOT EXISTS idx_calls_retention
-                ON ai_calls(started_at_ms, id) WHERE status <> 'IN_PROGRESS'
-                """);
+            createTables(statement);
+            createHealthTable(statement);
+            putMeta(connection, "schema_version", Integer.toString(VERSION));
+            putMeta(connection, "statistics_epoch", "1");
             statement.execute("PRAGMA user_version = " + VERSION);
             connection.commit();
         } catch (SQLException | RuntimeException | LinkageError error) {
@@ -131,7 +107,7 @@ final class UsageSqliteSchema {
               output_tokens INTEGER, cache_read_input_tokens INTEGER,
               cache_creation_input_tokens INTEGER, reasoning_output_tokens INTEGER,
               accounted_total_tokens INTEGER, known_usage_calls INTEGER NOT NULL,
-              missing_usage_calls INTEGER NOT NULL, duration_sum_ms INTEGER NOT NULL,
+              missing_usage_calls INTEGER NOT NULL,
               incomplete_call_count INTEGER NOT NULL,
               PRIMARY KEY(day, caller_plugin_name, feature, provider_name, provider_type,
                 model_name, model_type, operation, status, usage_quality)
@@ -152,6 +128,29 @@ final class UsageSqliteSchema {
             ON ai_model_executions(call_id, started_at_ms, unit_index, attempt_index)
             """);
         statement.execute("CREATE INDEX idx_daily_day ON ai_usage_daily(day)");
+        statement.execute("""
+            CREATE INDEX idx_calls_aggregate_hour ON ai_calls(
+              (started_at_ms / 3600000), status, usage_quality, complete, started_at_ms, input_tokens,
+              output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
+              reasoning_output_tokens, accounted_total_tokens
+            )
+            """);
+        statement.execute("""
+            CREATE INDEX idx_calls_filtered_hour ON ai_calls(
+              (started_at_ms / 3600000), status, usage_quality, complete, started_at_ms, input_tokens,
+              output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
+              reasoning_output_tokens, accounted_total_tokens, caller_plugin_name, feature,
+              provider_name, model_name, model_type, operation
+            )
+            """);
+        statement.execute("""
+            CREATE INDEX idx_executions_retention
+            ON ai_model_executions(started_at_ms, call_id)
+            """);
+        statement.execute("""
+            CREATE INDEX idx_calls_retention
+            ON ai_calls(started_at_ms, id) WHERE status <> 'IN_PROGRESS'
+            """);
     }
 
     static void validateRecognized(Connection connection) throws SQLException {
@@ -193,7 +192,7 @@ final class UsageSqliteSchema {
             "model_type", "operation", "status", "usage_quality", "call_count", "input_tokens",
             "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
             "reasoning_output_tokens", "accounted_total_tokens", "known_usage_calls",
-            "missing_usage_calls", "duration_sum_ms", "incomplete_call_count");
+            "missing_usage_calls", "incomplete_call_count");
         validateColumns(connection, "ai_statistics_health",
             "id", "dropped_events", "incomplete_calls", "write_failures", "last_write_error_at_ms",
             "affected_since_ms", "affected_until_ms", "migration_error", "integrity_error");
@@ -204,28 +203,6 @@ final class UsageSqliteSchema {
             }
         }
 
-    }
-
-    static void validateMigratable(Connection connection) throws SQLException {
-        try (var statement = connection.prepareStatement(
-            "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'");
-            var rows = statement.executeQuery()) {
-            if (!rows.next()) {
-                throw new SQLException("SQLite statistics schema marker is missing");
-            }
-            int version;
-            try {
-                version = Integer.parseInt(rows.getString(1));
-            } catch (NumberFormatException error) {
-                throw new SQLException("Invalid SQLite statistics schema marker", error);
-            }
-            if (version < 1) {
-                throw new SQLException("Unsupported SQLite statistics schema version " + version);
-            }
-            if (version > VERSION) {
-                throw new SQLException("Unsupported SQLite statistics schema version " + version);
-            }
-        }
     }
 
     private static void validateColumns(Connection connection, String table, String... columns)

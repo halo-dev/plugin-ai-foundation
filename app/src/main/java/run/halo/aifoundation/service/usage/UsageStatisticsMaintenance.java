@@ -37,7 +37,6 @@ final class UsageStatisticsMaintenance {
                 }
             }
             putMeta(connection, "call_detail_start", callCutoff.toString());
-            putMeta(connection, "execution_detail_start", executionCutoff.toString());
             var executions = deleteExpiredExecutions(connection, executionCutoff);
             connection.commit();
             if (selected == CALL_BATCH_SIZE) {
@@ -96,7 +95,7 @@ final class UsageStatisticsMaintenance {
               model_type, operation, status, usage_quality, call_count, input_tokens,
               output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
               reasoning_output_tokens, accounted_total_tokens, known_usage_calls,
-              missing_usage_calls, duration_sum_ms, incomplete_call_count
+              missing_usage_calls, incomplete_call_count
             )
             SELECT ?, COALESCE(caller_plugin_name, ''), COALESCE(feature, ''),
               provider_name, provider_type, model_name, model_type, operation, status,
@@ -105,7 +104,7 @@ final class UsageStatisticsMaintenance {
               SUM(reasoning_output_tokens), SUM(accounted_total_tokens),
               SUM(CASE WHEN usage_quality <> 'MISSING' THEN 1 ELSE 0 END),
               SUM(CASE WHEN usage_quality = 'MISSING' THEN 1 ELSE 0 END),
-              COALESCE(SUM(duration_ms), 0), SUM(CASE WHEN complete = 0 THEN 1 ELSE 0 END)
+              SUM(CASE WHEN complete = 0 THEN 1 ELSE 0 END)
             FROM ai_calls WHERE id IN (SELECT id FROM usage_retention_batch)
               AND started_at_ms >= ? AND started_at_ms < ?
               AND status <> 'IN_PROGRESS'
@@ -116,7 +115,6 @@ final class UsageStatisticsMaintenance {
               call_count = ai_usage_daily.call_count + excluded.call_count,
               known_usage_calls = ai_usage_daily.known_usage_calls + excluded.known_usage_calls,
               missing_usage_calls = ai_usage_daily.missing_usage_calls + excluded.missing_usage_calls,
-              duration_sum_ms = ai_usage_daily.duration_sum_ms + excluded.duration_sum_ms,
               incomplete_call_count = ai_usage_daily.incomplete_call_count + excluded.incomplete_call_count,
               input_tokens = CASE
                 WHEN ai_usage_daily.input_tokens IS NULL AND excluded.input_tokens IS NULL THEN NULL

@@ -1,5 +1,7 @@
 package run.halo.aifoundation.service.usage;
 
+import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.rollupAndRetain;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -62,7 +64,7 @@ class UsageObservationRegressionTest {
             store.finishCall(new UsageCallTerminal(start,start.startedAt().plusSeconds(1),
                 UsageStatus.SUCCEEDED,null,"actual",1,0,0,true,
                 new NormalizedUsage(10L,5L,null,null,null,null,null,null)));
-            store.rollupAndRetain(Clock.fixed(Instant.parse("2026-09-10T02:00:00Z"),ZoneOffset.UTC));
+            rollupAndRetain(store, Clock.fixed(Instant.parse("2026-09-10T02:00:00Z"),ZoneOffset.UTC));
             var summary = store.summary(query("2026-06-01T08:00:00Z","2026-06-01T20:00:00Z"),true);
             assertThat(summary.preciseRange()).as("expired sub-day facts must be disclosed").isFalse();
             assertThat(summary.callCount()).isEqualTo(1);
@@ -78,7 +80,7 @@ class UsageObservationRegressionTest {
         try {
             var start = start();
             store.startCall(start);
-            store.rollupAndRetain(Clock.fixed(Instant.parse("2026-06-02T02:00:00Z"),ZoneOffset.UTC));
+            rollupAndRetain(store, Clock.fixed(Instant.parse("2026-06-02T02:00:00Z"),ZoneOffset.UTC));
             store.finishCall(new UsageCallTerminal(start,Instant.parse("2026-06-02T03:00:00Z"),
                 UsageStatus.SUCCEEDED,null,"actual",1,0,0,true,
                 new NormalizedUsage(10L,5L,null,null,null,null,null,null)));
@@ -222,7 +224,7 @@ class UsageObservationRegressionTest {
             var reading = reader.submit(() -> {
                 for (int i = 0; i < 50; i++) {
                     service.summary(range).block();
-                    service.trends(range).block();
+                    service.trends(range, null).block();
                 }
             });
             for (int i = 0; i < samples.length; i++) {
@@ -269,7 +271,7 @@ class UsageObservationRegressionTest {
             assertThat(summary.partialUsageCalls()).isEqualTo(1);
             assertThat(summary.completeUsageCoverage()).isZero();
             assertThat(summary.accountedTotalTokens()).isEqualTo(15L);
-            assertThat(store.trends(range, true).getFirst().partialUsageCalls()).isEqualTo(1);
+            assertThat(store.trends(range, true, null).getFirst().partialUsageCalls()).isEqualTo(1);
         } finally {
             store.close();
         }

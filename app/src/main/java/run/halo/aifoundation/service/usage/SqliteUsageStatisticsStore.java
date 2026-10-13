@@ -78,7 +78,7 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             var recovery = UsageSqliteFiles.recoverIfRequired(paths);
             writer = openConnection();
             configureWriter(writer);
-            UsageSqliteSchema.migrate(writer, paths);
+            UsageSqliteSchema.initialize(writer);
             UsageSqliteSchema.validateRecognized(writer);
             var integrity = quickCheck(writer);
             if (!"ok".equalsIgnoreCase(integrity)) {
@@ -416,13 +416,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             statement.executeUpdate();
         } catch (SQLException error) {
             throw databaseError("reconcile abandoned calls", error);
-        }
-    }
-
-    @Override
-    public void rollupAndRetain(Clock clock) {
-        while (rollupAndRetainBatch(clock)) {
-            // Offline callers may finish maintenance synchronously; the service yields per batch.
         }
     }
 

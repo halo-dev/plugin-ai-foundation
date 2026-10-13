@@ -1,6 +1,5 @@
 package run.halo.aifoundation.provider.zhipu;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -122,10 +121,6 @@ public final class ZhiPuEmbeddingModel
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse Zhipu embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node) {
-        return node != null && node.isNumber() ? node.asInt() : 0;
     }
 
     private boolean hasText(String value) {

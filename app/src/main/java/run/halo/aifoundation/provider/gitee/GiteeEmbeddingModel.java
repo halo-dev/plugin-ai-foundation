@@ -142,8 +142,6 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
                 IndexedEmbeddingDecoder.floatArrayOrBase64(value,
                     "Gitee AI embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var promptTokens = integer(usage, "prompt_tokens");
-            var totalTokens = integer(usage, "total_tokens");
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadata = new EmbeddingResponseMetadata(
@@ -153,10 +151,6 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse Gitee AI embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node, String field) {
-        return node.path(field).isNumber() ? node.path(field).asInt() : 0;
     }
 
     private String text(JsonNode node, String field) {

@@ -86,7 +86,7 @@ class UsageStatisticsScaleBenchmarkTest {
         var filteredSummaryP95 = p95(25, () -> activeStore.summary(filtered, true));
         System.out.printf("Summary first=%.2fms filteredP95=%.2fms%n",
             coldSummaryMillis, filteredSummaryP95);
-        var trendsP95 = p95(40, () -> activeStore.trends(query, true));
+        var trendsP95 = p95(40, () -> activeStore.trends(query, true, null));
         var first = activeStore.listCalls(query, 1, null).items().getFirst();
         var detailP95 = p95(25, () -> activeStore.getCall(first.id()));
         System.out.printf("Queries completed: summaryP95=%.2fms trendsP95=%.2fms%n",

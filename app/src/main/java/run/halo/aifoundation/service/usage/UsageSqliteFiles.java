@@ -38,7 +38,7 @@ final class UsageSqliteFiles {
         try {
             Files.createDirectories(directory);
             vacuumInto(connection, temporary);
-            if (!isValidSnapshot(temporary)) {
+            if (!isValidDatabase(temporary)) {
                 throw new IllegalStateException("SQLite backup snapshot failed validation: "
                     + temporary);
             }
@@ -62,7 +62,7 @@ final class UsageSqliteFiles {
         var live = paths.database();
         var backups = listBackups(paths);
         if (Files.exists(live)) {
-            if (isUsableLiveDatabase(live)) {
+            if (isValidDatabase(live)) {
                 return Recovery.none();
             }
         }
@@ -72,7 +72,7 @@ final class UsageSqliteFiles {
             }
         }
         var selected = backups.reversed().stream()
-            .filter(UsageSqliteFiles::isValidSnapshot)
+            .filter(UsageSqliteFiles::isValidDatabase)
             .findFirst();
         if (selected.isEmpty()) {
             preserveInvalidLiveOrThrow(paths);
@@ -84,7 +84,7 @@ final class UsageSqliteFiles {
             + UUID.randomUUID() + ".tmp");
         try {
             Files.copy(selected.get(), temporary, StandardCopyOption.COPY_ATTRIBUTES);
-            if (!isValidSnapshot(temporary)) {
+            if (!isValidDatabase(temporary)) {
                 throw new IOException("copied recovery snapshot failed validation");
             }
             preserveInvalidLive(paths);
@@ -147,7 +147,7 @@ final class UsageSqliteFiles {
         }
     }
 
-    static boolean isValidSnapshot(Path path) {
+    private static boolean isValidDatabase(Path path) {
         if (!isRegularNonEmpty(path)) {
             return false;
         }
@@ -158,33 +158,7 @@ final class UsageSqliteFiles {
                 return passesQuickCheck(rows);
             }
         } catch (Exception error) {
-            log.warn("AI usage SQLite snapshot {} is invalid: {}", path, error.getMessage());
-            return false;
-        }
-    }
-
-    private static boolean isUsableLiveDatabase(Path path) {
-        if (!isRegularNonEmpty(path)) {
-            return false;
-        }
-        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + path)) {
-            UsageSqliteSchema.validateMigratable(connection);
-            try (var statement = connection.prepareStatement(
-                "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'");
-                var row = statement.executeQuery()) {
-                if (row.next()) {
-                    if (Integer.toString(UsageSqliteSchema.VERSION).equals(row.getString(1))) {
-                        UsageSqliteSchema.validateRecognized(connection);
-                    }
-                }
-            }
-            try (var statement = connection.createStatement();
-                var rows = statement.executeQuery("PRAGMA quick_check")) {
-                return passesQuickCheck(rows);
-            }
-        } catch (Exception error) {
-            log.warn("AI usage SQLite database {} is not usable: {}", path,
-                error.getMessage());
+            log.warn("AI usage SQLite database {} is invalid: {}", path, error.getMessage());
             return false;
         }
     }

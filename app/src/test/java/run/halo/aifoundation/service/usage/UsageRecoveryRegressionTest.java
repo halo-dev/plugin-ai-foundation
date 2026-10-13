@@ -1,5 +1,7 @@
 package run.halo.aifoundation.service.usage;
 
+import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.rollupAndRetain;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
@@ -81,7 +83,7 @@ class UsageRecoveryRegressionTest {
             assertThat(detail.call().complete()).isFalse();
             assertThat(detail.call().attemptCount()).isEqualTo(1);
             assertThat(store.summary(range(), true).accountedTotalTokens()).isEqualTo(15);
-            store.rollupAndRetain(Clock.fixed(Instant.parse("2027-01-01T00:00:00Z"), ZoneOffset.UTC));
+            rollupAndRetain(store, Clock.fixed(Instant.parse("2027-01-01T00:00:00Z"), ZoneOffset.UTC));
             assertThat(store.getCall(call.id())).isEmpty();
             assertThat(store.summary(range(), true).accountedTotalTokens()).isEqualTo(15);
             assertThat(store.summary(range(), true).complete()).isFalse();
@@ -100,18 +102,18 @@ class UsageRecoveryRegressionTest {
             store.finishCall(new UsageCallTerminal(completed, completed.startedAt().plusSeconds(1),
                 UsageStatus.SUCCEEDED, null, "gpt", 1, 0, 0, true,
                 new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
-            store.rollupAndRetain(Clock.fixed(Instant.parse("2026-09-11T00:00:00Z"), ZoneOffset.UTC));
+            rollupAndRetain(store, Clock.fixed(Instant.parse("2026-09-11T00:00:00Z"), ZoneOffset.UTC));
             assertThat(store.getCall(completed.id())).isEmpty();
             assertThat(store.getCall("terminal-event-lost")).isPresent();
             assertThat(store.summary(range(), true).callCount()).isEqualTo(2);
-            assertThat(store.trends(range(), true).stream().mapToLong(UsageTrendPoint::callCount).sum()).isEqualTo(2);
+            assertThat(store.trends(range(), true, null).stream().mapToLong(UsageTrendPoint::callCount).sum()).isEqualTo(2);
             var late = start("terminal-event-lost", "2025-01-01T00:00:00Z");
             store.finishCall(new UsageCallTerminal(late, Instant.parse("2026-09-11T00:00:00Z"),
                 UsageStatus.SUCCEEDED, null, "gpt", 1, 0, 0, true,
                 new NormalizedUsage(10L, 5L,null, null, null, null, null, null)));
             var maintenanceClock = Clock.fixed(Instant.parse("2026-09-12T00:00:00Z"), ZoneOffset.UTC);
-            store.rollupAndRetain(maintenanceClock);
-            store.rollupAndRetain(maintenanceClock);
+            rollupAndRetain(store, maintenanceClock);
+            rollupAndRetain(store, maintenanceClock);
             assertThat(store.summary(range(), true).callCount()).isEqualTo(2);
             assertThat(store.summary(range(), true).accountedTotalTokens()).isEqualTo(30);
             assertThat(store.getCall(late.id())).isEmpty();

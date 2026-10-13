@@ -5,11 +5,8 @@ import {
   formatDateTime,
   formatDuration,
   formatTokens,
-  usageModelTypeLabel,
   usageOperationLabel,
-  usageQualityTagTheme,
   usageQualityLabel,
-  usageResolutionLabel,
   usageStatusTagTheme,
   usageStatusLabel,
   usageUnitKindLabel,
@@ -58,23 +55,12 @@ describe('usage utils', () => {
     expect(usageQualityLabel('ESTIMATED')).toBe('估算用量')
     expect(usageQualityLabel('MISSING')).toBe('用量缺失')
     expect(usageQualityLabel(undefined)).toBe('未知')
-    expect(usageQualityTagTheme('MISSING')).toBe('danger')
-    expect(usageQualityTagTheme('REPORTED_TOTAL')).toBe('primary')
   })
 
-  it('renders model type, operation, and unit kind labels', () => {
-    expect(usageModelTypeLabel('LANGUAGE')).toBe('语言模型')
-    expect(usageModelTypeLabel('IMAGE_GENERATION')).toBe('图像生成')
+  it('renders operation and unit kind labels', () => {
     expect(usageOperationLabel('language.streamText')).toBe('流式文本生成')
     expect(usageUnitKindLabel('GENERATION_STEP')).toBe('生成步骤')
     expect(usageUnitKindLabel('IMAGE_BATCH')).toBe('图像批次')
-  })
-
-  it('discloses resolution in Chinese', () => {
-    expect(usageResolutionLabel('DAY')).toBe('按天（UTC）')
-    expect(usageResolutionLabel('HOUR')).toBe('按小时（UTC）')
-    expect(usageResolutionLabel('MILLISECOND')).toBe('精确')
-    expect(usageResolutionLabel(undefined)).toBe('未知')
   })
 
   it('formats durations', () => {

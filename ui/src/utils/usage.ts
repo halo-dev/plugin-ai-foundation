@@ -45,7 +45,6 @@ export const USAGE_OPERATION_OPTIONS = [
 
 const STATUS_LABELS = toLabelMap(USAGE_STATUS_OPTIONS)
 const QUALITY_LABELS = toLabelMap(USAGE_QUALITY_OPTIONS)
-const MODEL_TYPE_LABELS = toLabelMap(USAGE_MODEL_TYPE_OPTIONS)
 const OPERATION_LABELS = toLabelMap(USAGE_OPERATION_OPTIONS)
 
 const UNIT_KIND_LABELS: Record<string, string> = {
@@ -62,14 +61,6 @@ const STATUS_TAG_THEMES = {
   CANCELLED: 'default',
   ABANDONED: 'default',
   IN_PROGRESS: 'secondary',
-} as const
-
-const QUALITY_TAG_THEMES = {
-  REPORTED_COMPONENTS: 'primary',
-  REPORTED_TOTAL: 'primary',
-  PARTIAL: 'secondary',
-  ESTIMATED: 'secondary',
-  MISSING: 'danger',
 } as const
 
 type TagTheme = 'default' | 'primary' | 'secondary' | 'danger'
@@ -106,10 +97,6 @@ export function usageStatusLabel(value?: string | null) {
 
 export function usageQualityLabel(value?: string | null) {
   return labelOf(QUALITY_LABELS, value)
-}
-
-export function usageModelTypeLabel(value?: string | null) {
-  return labelOf(MODEL_TYPE_LABELS, value)
 }
 
 export function usageOperationLabel(value?: string | null) {
@@ -149,10 +136,6 @@ export function usageStatusTagTheme(value?: string | null) {
   return tagThemeOf(STATUS_TAG_THEMES, value)
 }
 
-export function usageQualityTagTheme(value?: string | null) {
-  return tagThemeOf(QUALITY_TAG_THEMES, value)
-}
-
 /** Token 数值展示：null/undefined 一律显示「未知」，绝不显示 0。 */
 export function formatTokens(value?: number | null) {
   if (value == null) {
@@ -170,19 +153,6 @@ export function formatCoverage(value?: number | null) {
   // Do not round partial coverage up to a misleading 100%.
   if (value >= 0.9995) return PERCENT_FORMATTER.format(0.999)
   return PERCENT_FORMATTER.format(value)
-}
-
-export function usageResolutionLabel(value?: UsageDisplayedResolution | null) {
-  if (value === 'DAY') {
-    return '按天（UTC）'
-  }
-  if (value === 'HOUR') {
-    return '按小时（UTC）'
-  }
-  if (value === 'MILLISECOND') {
-    return '精确'
-  }
-  return value || UNKNOWN_TEXT
 }
 
 export function formatDuration(millis?: number | null) {

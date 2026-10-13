@@ -455,10 +455,6 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         return ProviderUsage.chatCompletions(node, raw);
     }
 
-    private Integer integer(JsonNode node) {
-        return node != null && node.isNumber() ? node.asInt() : null;
-    }
-
     private String chatCompletionsUrl(ChatCompletionsOptions options) {
         var baseUrl = options.getBaseUrl();
         while (baseUrl.endsWith("/")) {

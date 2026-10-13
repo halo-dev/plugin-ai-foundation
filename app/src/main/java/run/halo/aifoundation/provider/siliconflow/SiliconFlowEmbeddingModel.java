@@ -189,9 +189,6 @@ public final class SiliconFlowEmbeddingModel
             var usage = root.path("usage");
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
-            var promptTokens = integer(usage.path("prompt_tokens"));
-            var completionTokens = integer(usage.path("completion_tokens"));
-            var totalTokens = integer(usage.path("total_tokens"));
             var metadata = new EmbeddingResponseMetadata(
                 hasText(text(root.path("model"))) ? text(root.path("model")) : requestedModel,
                 ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), Map.of());
@@ -199,10 +196,6 @@ public final class SiliconFlowEmbeddingModel
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse SiliconFlow embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node) {
-        return node != null && node.isNumber() ? node.asInt() : 0;
     }
 
     private String text(JsonNode node) {

@@ -20,9 +20,8 @@ const cacheHitRate = computed(() => {
   const input = props.summary.inputTokens
   const cacheRead = props.summary.cacheReadInputTokens
   if (input == null || cacheRead == null) return undefined
-  const total = input + cacheRead
-  if (total <= 0) return undefined
-  return cacheRead / total
+  if (input <= 0) return undefined
+  return cacheRead / input
 })
 
 // Partial coverage must not round up to a misleading 100% (same guard as formatCoverage)

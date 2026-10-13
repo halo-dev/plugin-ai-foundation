@@ -91,16 +91,12 @@ class UsageDurabilityRegressionTest {
     }
 
     @Test
-    void existingDatabaseAcquiresCoveringIndexWithoutChangingStatistics() throws Exception {
+    void initialSchemaKeepsCoveringIndexAndStatisticsAfterReopening() throws Exception {
         var paths = new UsageDatabasePaths(directory);
         try (var store = new SqliteUsageStatisticsStore(paths)) {
             store.initialize();
             store.startCall(new UsageCallStart("existing", 1, Instant.now(), "plugin", "1", "test",
                 null, "language.generateText", "LANGUAGE", "model", "provider", "openai", "gpt", false));
-        }
-        try (var connection = new org.sqlite.JDBC().connect("jdbc:sqlite:" + paths.database(),
-            new java.util.Properties()); var statement = connection.createStatement()) {
-            statement.execute("DROP INDEX idx_calls_aggregate_hour");
         }
         try (var reopened = new SqliteUsageStatisticsStore(paths)) {
             reopened.initialize();

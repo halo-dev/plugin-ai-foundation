@@ -164,8 +164,6 @@ public final class OpenRouterEmbeddingModel
                 IndexedEmbeddingDecoder.floatArrayOrBase64(value,
                     "OpenRouter embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var promptTokens = integer(usage.path("prompt_tokens"));
-            var totalTokens = integer(usage.path("total_tokens"));
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadataValues = new LinkedHashMap<String, Object>();
@@ -181,10 +179,6 @@ public final class OpenRouterEmbeddingModel
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse OpenRouter embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node) {
-        return node != null && node.isNumber() ? node.asInt() : 0;
     }
 
     private String text(JsonNode node) {

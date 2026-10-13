@@ -1,6 +1,5 @@
 package run.halo.aifoundation.provider.openai;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -116,14 +115,10 @@ public final class OpenAiEmbeddingModel
             var model = root.path("model").isTextual() ? root.path("model").asText()
                 : requestedModel;
             return new EmbeddingResponse(values, new EmbeddingResponseMetadata(model,
-                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class)), Map.of()));
+                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", raw), Map.of()));
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse OpenAI embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node) {
-        return node != null && node.isNumber() ? node.asInt() : 0;
     }
 
     private void put(Map<String, Object> body, String field, Object value) {

@@ -25,10 +25,4 @@ public record UsageTrendPoint(
             accountedTotalTokens, knownUsageCalls, missingUsageCalls, partialUsageCalls, value,
             byDimension);
     }
-
-    UsageTrendPoint withByDimension(Map<String, UsageTrendDimensionValue> value) {
-        return new UsageTrendPoint(bucketStart, resolution, callCount, inputTokens, outputTokens,
-            accountedTotalTokens, knownUsageCalls, missingUsageCalls, partialUsageCalls, complete,
-            value);
-    }
 }

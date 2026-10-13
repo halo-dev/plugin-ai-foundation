@@ -33,7 +33,7 @@ function mountStrip(summary: Record<string, unknown> = {}) {
         inProgressCount: 2,
         successCount: 95,
         failedCount: 5,
-        inputTokens: 1000,
+        inputTokens: 4000,
         outputTokens: 500,
         cacheReadInputTokens: 3000,
         cacheCreationInputTokens: 200,
@@ -66,7 +66,7 @@ describe('UsageKpiStrip', () => {
     const text = wrapper.text()
     expect(text).toContain('Token 总量')
     expect(text).toContain('4,500')
-    expect(text).toContain('输入 1,000 · 输出 500')
+    expect(text).toContain('输入 4,000 · 输出 500')
     expect(text).toContain('调用次数')
     expect(text).toContain('5 次失败')
     expect(text).toContain('成功率 95%')
@@ -76,9 +76,9 @@ describe('UsageKpiStrip', () => {
     expect(wrapper.findAll('.usage-kpi')).toHaveLength(5)
   })
 
-  it('computes the cache hit rate from input and cache-read tokens', () => {
+  it('computes the cache hit rate from inclusive input tokens', () => {
     const wrapper = mountStrip()
-    // 3000 / (1000 + 3000) = 75%
+    // The 4000 input tokens already include the 3000 cache-read tokens.
     expect(wrapper.text()).toContain('75%')
     const meter = wrapper.find('.usage-kpi-meter i')
     expect(meter.attributes('style')).toContain('width: 75%')
@@ -97,8 +97,8 @@ describe('UsageKpiStrip', () => {
     expect(wrapper.emitted('filterFailed')).toHaveLength(1)
   })
 
-  it('shows degradation alerts for incomplete or imprecise data', () => {
-    const wrapper = mountStrip({ complete: false, preciseRange: false })
+  it('shows a degradation alert for incomplete data', () => {
+    const wrapper = mountStrip({ complete: false })
     expect(wrapper.text()).toContain('部分统计数据丢失')
     expect(wrapper.text()).toContain('部分上报')
   })

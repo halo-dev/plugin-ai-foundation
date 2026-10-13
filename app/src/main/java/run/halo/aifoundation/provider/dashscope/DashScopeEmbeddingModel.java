@@ -132,8 +132,6 @@ public final class DashScopeEmbeddingModel
             var usage = root.path("usage");
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
-            var totalTokens = usage.path("total_tokens").isNumber()
-                ? usage.path("total_tokens").asInt() : 0;
             var metadataValues = new LinkedHashMap<String, Object>();
             if (hasText(root.path("request_id").asText(null))) {
                 metadataValues.put("id", root.path("request_id").asText());

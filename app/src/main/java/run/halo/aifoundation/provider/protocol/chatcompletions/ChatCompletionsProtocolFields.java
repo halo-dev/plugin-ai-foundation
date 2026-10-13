@@ -6,7 +6,6 @@ final class Fields {
     static final String AUDIO_EXPIRES_AT = "audioExpiresAt";
     static final String AUDIO_ID = "audioId";
     static final String CHOICES = "choices";
-    static final String COMPLETION_TOKENS = "completion_tokens";
     static final String CONTENT = "content";
     static final String CREATED = "created";
     static final String DATA = "data";
@@ -39,7 +38,6 @@ final class Fields {
     static final String PARALLEL_TOOL_CALLS = "parallel_tool_calls";
     static final String PARAMETERS = "parameters";
     static final String PRESENCE_PENALTY = "presence_penalty";
-    static final String PROMPT_TOKENS = "prompt_tokens";
     static final String PROPERTIES = "properties";
     static final String REASONING = "reasoning";
     static final String REASONING_CONTENT = "reasoning_content";
@@ -63,7 +61,6 @@ final class Fields {
     static final String TOOLS = "tools";
     static final String TOP_LOGPROBS = "top_logprobs";
     static final String TOP_P = "top_p";
-    static final String TOTAL_TOKENS = "total_tokens";
     static final String TRANSCRIPT = "transcript";
     static final String TYPE = "type";
     static final String URL = "url";

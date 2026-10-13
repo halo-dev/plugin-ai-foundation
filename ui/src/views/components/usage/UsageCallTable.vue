@@ -11,7 +11,7 @@ import {
   usageStatusState,
 } from '@/utils/usage'
 import { VButton, VEmpty, VStatusDot } from '@halo-dev/components'
-import { computed, ref } from 'vue'
+import { computed, shallowRef } from 'vue'
 import UsageCallDetails from './UsageCallDetails.vue'
 
 const props = defineProps<{
@@ -26,7 +26,7 @@ const props = defineProps<{
   loadMoreError?: boolean
 }>()
 const emit = defineEmits<{ (event: 'loadMore'): void; (event: 'retry'): void }>()
-const expandedIds = ref(new Set<string>())
+const expandedId = shallowRef<string>()
 const modelNames = computed(
   () => new Map(props.models?.map((model) => [model.metadata.name, model.spec.displayName])),
 )
@@ -41,16 +41,10 @@ const callerNames = computed(
 )
 function toggle(call: UsageCallItem) {
   if (!call.id) return
-  const next = new Set(expandedIds.value)
-  if (next.has(call.id)) next.delete(call.id)
-  else {
-    next.clear()
-    next.add(call.id)
-  }
-  expandedIds.value = next
+  expandedId.value = expandedId.value === call.id ? undefined : call.id
 }
 function isExpanded(call: UsageCallItem) {
-  return !!call.id && expandedIds.value.has(call.id)
+  return !!call.id && expandedId.value === call.id
 }
 function callerText(call: UsageCallItem) {
   if (!call.callerPluginName) return '未知插件'

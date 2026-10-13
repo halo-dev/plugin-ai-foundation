@@ -166,10 +166,6 @@ public final class DouBaoEmbeddingModel implements ProviderEmbeddingModel {
                         "Doubao embedding vector has an invalid shape")));
             }
             var usage = root.path("usage");
-            var promptTokens = usage.path("prompt_tokens").isNumber()
-                ? usage.path("prompt_tokens").asInt() : 0;
-            var totalTokens = usage.path("total_tokens").isNumber()
-                ? usage.path("total_tokens").asInt() : promptTokens;
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var model = hasText(root.path("model").asText(null))

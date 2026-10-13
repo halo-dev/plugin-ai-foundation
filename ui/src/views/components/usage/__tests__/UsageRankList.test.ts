@@ -9,8 +9,6 @@ function item(value: string, tokens: number, calls = 10, failed = 0): UsageBreak
     accountedTotalTokens: tokens,
     callCount: calls,
     failedCount: failed,
-    inputTokens: tokens / 2,
-    outputTokens: tokens / 2,
   }
 }
 

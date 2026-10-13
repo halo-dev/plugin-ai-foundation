@@ -178,10 +178,6 @@ public final class AiHubMixEmbeddingModel
         }
     }
 
-    private Integer integer(JsonNode node) {
-        return node != null && node.isNumber() ? node.asInt() : 0;
-    }
-
     private String text(JsonNode node) {
         return node != null && node.isTextual() ? node.asText() : null;
     }
