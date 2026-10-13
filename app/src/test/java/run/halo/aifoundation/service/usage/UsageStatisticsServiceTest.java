@@ -125,27 +125,37 @@ class UsageStatisticsServiceTest {
         when(store.currentEpoch()).thenReturn(1L);
         runWritesInBatch(store);
         var blocked = new CountDownLatch(1);
+        var parked = new CountDownLatch(1);
         doAnswer(invocation -> {
+            parked.countDown();
             blocked.await();
             return null;
         }).when(store).startCall(org.mockito.ArgumentMatchers.any());
         service = new UsageStatisticsService(store, callerResolver());
         service.initialize();
 
-        var enqueueNanos = new long[UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100];
-        for (int i = 0; i < UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100; i++) {
-            var started = System.nanoTime();
+        try {
+            // The writer takes up to one batch out of the queue before it blocks inside storage.
+            // Park it first, then saturate the queue, so no enqueue race can free capacity.
             service.beginCall(descriptor());
-            enqueueNanos[i] = System.nanoTime() - started;
-        }
-        java.util.Arrays.sort(enqueueNanos);
-        var enqueueP95 = Duration.ofNanos(enqueueNanos[(int) Math.ceil(enqueueNanos.length * 0.95)
-            - 1]);
+            assertThat(parked.await(5, TimeUnit.SECONDS)).isTrue();
 
-        assertThat(service.health().droppedEvents()).isPositive();
-        assertThat(enqueueP95).isLessThanOrEqualTo(Duration.ofMillis(1));
-        System.out.println("AI usage enqueue p95: " + enqueueP95.toNanos() / 1_000D + " us");
-        blocked.countDown();
+            var enqueueNanos = new long[UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100];
+            for (int i = 0; i < UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100; i++) {
+                var started = System.nanoTime();
+                service.beginCall(descriptor());
+                enqueueNanos[i] = System.nanoTime() - started;
+            }
+            java.util.Arrays.sort(enqueueNanos);
+            var enqueueP95 =
+                Duration.ofNanos(enqueueNanos[(int) Math.ceil(enqueueNanos.length * 0.95) - 1]);
+
+            assertThat(service.health().droppedEvents()).isPositive();
+            assertThat(enqueueP95).isLessThanOrEqualTo(Duration.ofMillis(1));
+            System.out.println("AI usage enqueue p95: " + enqueueP95.toNanos() / 1_000D + " us");
+        } finally {
+            blocked.countDown();
+        }
     }
 
     @Test
