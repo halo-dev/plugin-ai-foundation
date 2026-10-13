@@ -21,6 +21,14 @@ export function isModelOptionSelectable(model: ModelOption) {
   return model.available !== false
 }
 
+export function missingRequiredFeatureLabels(model: ModelOption, requiredFeatures?: string[]) {
+  if (!requiredFeatures?.length) {
+    return []
+  }
+  const features = new Set<string>(model.features ?? [])
+  return requiredFeatures.filter((feature) => !features.has(feature)).map(modelFeatureLabel)
+}
+
 export function modelOptionDisplayName(model: ModelOption) {
   return model.displayName || model.modelId || model.name
 }
