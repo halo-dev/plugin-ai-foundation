@@ -12,24 +12,15 @@ final class UsageSqliteSchema {
     }
 
     static void initialize(Connection connection) throws SQLException {
+        connection.setAutoCommit(false);
+        var restoreAutoCommit = true;
         try (var statement = connection.createStatement()) {
             statement.execute("""
-                CREATE TABLE IF NOT EXISTS ai_statistics_meta (
+                CREATE TABLE ai_statistics_meta (
                   key TEXT PRIMARY KEY,
                   value TEXT NOT NULL
                 ) STRICT
                 """);
-        }
-        var version = UsageSqliteJdbc.longMeta(connection, "schema_version", 0);
-        if (version == VERSION) {
-            return;
-        }
-        if (version != 0) {
-            throw new SQLException("Unsupported statistics schema version " + version);
-        }
-        connection.setAutoCommit(false);
-        var restoreAutoCommit = true;
-        try (var statement = connection.createStatement()) {
             createTables(statement);
             createHealthTable(statement);
             UsageSqliteJdbc.putMeta(connection, "schema_version", Integer.toString(VERSION));
@@ -160,6 +151,12 @@ final class UsageSqliteSchema {
             var rows = statement.executeQuery("SELECT id FROM ai_statistics_health WHERE id = 1")) {
             if (!rows.next()) {
                 throw new SQLException("SQLite statistics health row is missing");
+            }
+        }
+        try (var statement = connection.createStatement();
+            var rows = statement.executeQuery("PRAGMA quick_check")) {
+            if (!rows.next() || !"ok".equalsIgnoreCase(rows.getString(1)) || rows.next()) {
+                throw new UsageDatabaseIntegrityException("SQLite statistics quick_check failed");
             }
         }
     }

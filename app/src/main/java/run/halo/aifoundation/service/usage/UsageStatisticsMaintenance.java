@@ -36,7 +36,8 @@ final class UsageStatisticsMaintenance {
                     statement.executeUpdate("DELETE FROM ai_calls WHERE id IN (SELECT id FROM usage_retention_batch)");
                 }
             }
-            UsageSqliteJdbc.putMeta(connection, "call_detail_start", callCutoff.toString());            var executions = deleteExpiredExecutions(connection, executionCutoff);
+            UsageSqliteJdbc.putMeta(connection, "call_detail_start", callCutoff.toString());
+            var executions = deleteExpiredExecutions(connection, executionCutoff);
             connection.commit();
             if (selected == CALL_BATCH_SIZE) {
                 return true;

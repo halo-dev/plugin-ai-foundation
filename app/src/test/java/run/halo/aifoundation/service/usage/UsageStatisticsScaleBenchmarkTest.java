@@ -92,18 +92,7 @@ class UsageStatisticsScaleBenchmarkTest {
         System.out.printf("Queries completed: summaryP95=%.2fms trendsP95=%.2fms%n",
             summaryP95, trendsP95);
 
-        var backupStarted = System.nanoTime();
-        store.backup();
-        var backupMillis = elapsedMillis(backupStarted);
         store.close();
-        Files.delete(paths.database());
-        var restoreStarted = System.nanoTime();
-        var restoredStore = new SqliteUsageStatisticsStore(paths);
-        restoredStore.initialize();
-        var restoreMillis = elapsedMillis(restoreStarted);
-        assertThat(restoredStore.readHealth().integrityError())
-            .isEqualTo("RECOVERED_FROM_SNAPSHOT");
-        restoredStore.close();
         var quickCheckStarted = System.nanoTime();
         assertThat(quickCheck(paths.database())).isEqualTo("ok");
         var quickCheckMillis = elapsedMillis(quickCheckStarted);
@@ -118,11 +107,11 @@ class UsageStatisticsScaleBenchmarkTest {
             enqueueP95=%.5fms
             listP95=%.2fms deepCursorP95=%.2fms detailP95=%.2fms
             summaryP95=%.2fms trendsP95=%.2fms
-            backup=%.2fms restore=%.2fms quickCheck=%.2fms databaseBytes=%d walBytes=%d
+            quickCheck=%.2fms databaseBytes=%d walBytes=%d
             plans=%s%n
             """, CALL_COUNT, CALL_COUNT * EXECUTIONS_PER_CALL, loadMillis, rollupMillis,
-            enqueueP95, listP95, deepCursorP95, detailP95, summaryP95, trendsP95, backupMillis,
-            restoreMillis, quickCheckMillis, databaseBytes, walBytes, plans);
+            enqueueP95, listP95, deepCursorP95, detailP95, summaryP95, trendsP95,
+            quickCheckMillis, databaseBytes, walBytes, plans);
 
         assertThat(listP95).isLessThanOrEqualTo(200D);
         assertThat(enqueueP95).isLessThanOrEqualTo(1D);

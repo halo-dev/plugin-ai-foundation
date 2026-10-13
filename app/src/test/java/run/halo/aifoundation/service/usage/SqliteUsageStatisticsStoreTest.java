@@ -26,6 +26,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SqliteUsageStatisticsStoreTest {
 
@@ -94,61 +96,6 @@ class SqliteUsageStatisticsStoreTest {
         rollupAndRetain(store, clock);
         assertThat(store.summary(query, true).callCount()).isEqualTo(count);
         assertThat(store.summary(query, true).accountedTotalTokens()).isEqualTo(count * 3L);
-    }
-
-    @Test
-    void backupWaitingForReaderCapacityDoesNotBlockWriter() throws Exception {
-        var entered = new CountDownLatch(4);
-        var release = new CountDownLatch(1);
-        var queries = new UsageStatisticsQueryRepository() {
-            @Override
-            UsageSummary summary(Connection connection, UsageQuery query, boolean complete)
-                throws SQLException {
-                entered.countDown();
-                try {
-                    if (!release.await(10, TimeUnit.SECONDS)) {
-                        throw new SQLException("Reader test barrier timed out");
-                    }
-                } catch (InterruptedException error) {
-                    Thread.currentThread().interrupt();
-                    throw new SQLException(error);
-                }
-                return super.summary(connection, query, complete);
-            }
-        };
-        store = storeWithQueries(paths(), queries);
-        store.initialize();
-        var backupFailure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
-        var backup = new Thread(() -> {
-            try {
-                store.backup();
-            } catch (Throwable error) {
-                backupFailure.set(error);
-            }
-        });
-        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(5)) {
-            for (int i = 0; i < 4; i++) {
-                executor.submit(() -> store.summary(
-                    query("2026-08-10T00:00:00Z", "2026-08-11T00:00:00Z"), true));
-            }
-            try {
-                assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
-                backup.start();
-                var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-                while (backup.getState() != Thread.State.WAITING && System.nanoTime() < deadline) {
-                    Thread.sleep(5);
-                }
-                assertThat(backup.getState()).isEqualTo(Thread.State.WAITING);
-                executor.submit(() -> store.startCall(start("during-backup",
-                    Instant.parse("2026-08-10T10:00:00Z")))).get(2, TimeUnit.SECONDS);
-            } finally {
-                release.countDown();
-                backup.join(5000);
-            }
-        }
-        assertThat(backup.isAlive()).isFalse();
-        assertThat(backupFailure.get()).isNull();
-        assertThat(store.getCall("during-backup")).isPresent();
     }
 
     @Test
@@ -534,66 +481,12 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void createsConsistentSnapshotAndRestoresWhenRuntimeDatabaseIsMissing() throws Exception {
-        var paths = paths();
-        store = new SqliteUsageStatisticsStore(paths);
-        store.initialize();
-        var start = start("backup-call", Instant.parse("2026-08-10T10:00:00Z"));
-        store.finishCall(terminal(start, usage(2, 2)));
-        store.backup();
-        store.backup();
-        store.backup();
-        assertThat(UsageSqliteFiles.listBackups(paths)).hasSize(2);
-        store.close();
-        store = null;
-        Files.delete(paths.database());
-
-        store = new SqliteUsageStatisticsStore(paths);
-        store.initialize();
-
-        assertThat(store.getCall(start.id())).isPresent();
-        assertThat(quickCheck(paths.database())).isEqualTo("ok");
-        assertThat(store.readHealth().integrityError())
-            .isEqualTo("RECOVERED_FROM_SNAPSHOT");
-        assertThat(store.readHealth().affectedSince()).isNotNull();
-        assertThat(store.readHealth().affectedUntil()).isNotNull();
-    }
-
-    @Test
-    void restoresValidatedBackupAndPreservesInvalidLiveDatabase() throws Exception {
-        var paths = paths();
-        store = new SqliteUsageStatisticsStore(paths);
-        store.initialize();
-        var start = start("recovered-call", Instant.parse("2026-08-10T10:00:00Z"));
-        store.finishCall(terminal(start, usage(2, 2)));
-        store.backup();
-        store.close();
-        store = null;
-        Files.writeString(paths.database(), "invalid-live-database");
-
-        store = new SqliteUsageStatisticsStore(paths);
-        store.initialize();
-
-        assertThat(store.getCall(start.id())).isPresent();
-        assertThat(store.readHealth().integrityError())
-            .isEqualTo("RECOVERED_FROM_SNAPSHOT");
-        assertThat(store.readHealth().affectedSince()).isBefore(
-            store.readHealth().affectedUntil());
-        try (var files = Files.list(paths.backupDirectory().resolve("corrupted"))) {
-            var evidence = files.filter(Files::isRegularFile).toList();
-            assertThat(evidence).hasSize(1);
-            assertThat(Files.readString(evidence.getFirst())).isEqualTo("invalid-live-database");
-        }
-    }
-
-    @Test
     void missingTableIsNotDetectedWhileSchemaMarkerIsCurrent() throws Exception {
         var paths = paths();
         store = new SqliteUsageStatisticsStore(paths);
         store.initialize();
         var start = start("schema-recovered-call", Instant.parse("2026-08-10T10:00:00Z"));
         store.finishCall(terminal(start, usage(2, 2)));
-        store.backup();
         store.close();
         store = null;
         try (var connection = new org.sqlite.JDBC().connect(
@@ -607,6 +500,10 @@ class SqliteUsageStatisticsStoreTest {
         // Schema validation trusts the schema_version marker; the damage surfaces on reads.
         assertThatThrownBy(() -> store.getCall(start.id()))
             .isInstanceOf(IllegalStateException.class);
+        try (var connection = new org.sqlite.JDBC().connect(
+            "jdbc:sqlite:" + paths.database(), new java.util.Properties())) {
+            assertThat(UsageSqliteJdbc.longMeta(connection, "schema_version", 0)).isEqualTo(1);
+        }
     }
 
     @Test
@@ -616,7 +513,6 @@ class SqliteUsageStatisticsStoreTest {
         store.initialize();
         var start = start("schema-recovered-call", Instant.parse("2026-08-10T10:00:00Z"));
         store.finishCall(terminal(start, usage(2, 2)));
-        store.backup();
         store.close();
         store = null;
         try (var connection = new org.sqlite.JDBC().connect(
@@ -631,31 +527,6 @@ class SqliteUsageStatisticsStoreTest {
         // Schema validation trusts the schema_version marker; the damage surfaces on reads.
         assertThatThrownBy(() -> store.getCall(start.id()))
             .isInstanceOf(IllegalStateException.class);
-    }
-
-    @Test
-    void incompleteCurrentSchemaOpensWithoutReplacement() throws Exception {
-        var paths = paths();
-        store = new SqliteUsageStatisticsStore(paths);
-        store.initialize();
-        store.close();
-        store = null;
-        try (var connection = new org.sqlite.JDBC().connect(
-            "jdbc:sqlite:" + paths.database(), new java.util.Properties())) {
-            connection.createStatement().execute("DROP TABLE ai_model_executions");
-        }
-
-        store = new SqliteUsageStatisticsStore(paths);
-
-        // The schema_version marker is trusted; no restore, no empty replacement.
-        store.initialize();
-        try (var connection = new org.sqlite.JDBC().connect(
-            "jdbc:sqlite:" + paths.database(), new java.util.Properties());
-            var rows = connection.createStatement().executeQuery(
-                "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'")) {
-            assertThat(rows.next()).isTrue();
-            assertThat(rows.getString(1)).isEqualTo("1");
-        }
     }
 
     @Test
@@ -695,8 +566,15 @@ class SqliteUsageStatisticsStoreTest {
         Files.write(paths.database(), corrupt);
         store = new SqliteUsageStatisticsStore(paths);
 
-        assertThatThrownBy(store::initialize).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(store::initialize)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining(paths.database().toString())
+            .hasCauseInstanceOf(SQLException.class);
+        store.close();
         assertThat(Files.readAllBytes(paths.database())).isEqualTo(corrupt);
+        try (var files = Files.list(paths.database().getParent())) {
+            assertThat(files).containsExactly(paths.database());
+        }
     }
 
     @Test
@@ -706,26 +584,143 @@ class SqliteUsageStatisticsStoreTest {
         Files.createFile(paths.database());
         store = new SqliteUsageStatisticsStore(paths);
 
-        assertThatThrownBy(store::initialize).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(store::initialize)
+            .hasCauseInstanceOf(UsageDatabaseIntegrityException.class);
+        store.close();
         assertThat(Files.size(paths.database())).isZero();
-        try (var files = Files.list(paths.backupDirectory().resolve("corrupted"))) {
-            assertThat(files).hasSize(1);
+        try (var files = Files.list(paths.database().getParent())) {
+            assertThat(files).containsExactly(paths.database());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-wal", "-shm"})
+    void orphanedSidecarIsPreservedWithoutCreatingDatabase(String suffix) throws Exception {
+        var paths = paths();
+        Files.createDirectories(paths.database().getParent());
+        var sidecar = paths.database().resolveSibling(paths.database().getFileName() + suffix);
+        Files.writeString(sidecar, "orphaned-sidecar-evidence");
+        store = new SqliteUsageStatisticsStore(paths);
+
+        assertThatThrownBy(store::initialize)
+            .hasCauseInstanceOf(UsageDatabaseIntegrityException.class);
+        store.close();
+        assertThat(Files.readString(sidecar)).isEqualTo("orphaned-sidecar-evidence");
+        assertThat(paths.database()).doesNotExist();
+        try (var files = Files.list(paths.database().getParent())) {
+            assertThat(files).containsExactly(sidecar);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "999", "missing"})
+    void unrecognizedSchemaIsRejectedBeforeAnyWrites(String version) throws Exception {
+        var paths = paths();
+        store = createStore();
+        store.close();
+        try (var connection = new org.sqlite.JDBC().connect(
+            "jdbc:sqlite:" + paths.database(), new java.util.Properties());
+            var statement = connection.createStatement()) {
+            try (var rows = statement.executeQuery("PRAGMA journal_mode = DELETE")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("delete");
+            }
+            if ("missing".equals(version)) {
+                statement.executeUpdate("DELETE FROM ai_statistics_meta WHERE key = 'schema_version'");
+            } else {
+                UsageSqliteJdbc.putMeta(connection, "schema_version", version);
+            }
+        }
+        var original = Files.readAllBytes(paths.database());
+        store = new SqliteUsageStatisticsStore(paths);
+
+        assertThatThrownBy(store::initialize).hasCauseInstanceOf(SQLException.class);
+        store.close();
+        assertThat(Files.readAllBytes(paths.database())).isEqualTo(original);
+        try (var files = Files.list(paths.database().getParent())) {
+            assertThat(files).containsExactly(paths.database());
         }
     }
 
     @Test
-    void orphanedWalIsEvidenceAndIsNotSilentlyDiscarded() throws Exception {
+    void failedQuickCheckRejectsRecognizedDatabaseWithoutModifyingIt() throws Exception {
         var paths = paths();
-        Files.createDirectories(paths.database().getParent());
-        var wal = paths.database().resolveSibling(paths.database().getFileName() + "-wal");
-        Files.writeString(wal, "orphaned-wal-evidence");
+        store = createStore();
+        store.close();
+        try (var connection = new org.sqlite.JDBC().connect(
+            "jdbc:sqlite:" + paths.database(), new java.util.Properties());
+            var statement = connection.createStatement()) {
+            try (var rows = statement.executeQuery("PRAGMA journal_mode = DELETE")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("delete");
+            }
+        }
+        var original = Files.readAllBytes(paths.database());
+        // Claim one free page while the database has no freelist.
+        java.nio.ByteBuffer.wrap(original).putInt(36, 1);
+        Files.write(paths.database(), original);
+        assertThat(quickCheck(paths.database())).isNotEqualTo("ok");
         store = new SqliteUsageStatisticsStore(paths);
 
-        assertThatThrownBy(store::initialize).isInstanceOf(IllegalStateException.class);
-        assertThat(Files.readString(wal)).isEqualTo("orphaned-wal-evidence");
-        try (var files = Files.list(paths.backupDirectory().resolve("corrupted"))) {
-            assertThat(files.map(path -> path.getFileName().toString()))
-                .anyMatch(name -> name.endsWith("-wal"));
+        assertThatThrownBy(store::initialize)
+            .hasCauseInstanceOf(UsageDatabaseIntegrityException.class)
+            .hasRootCauseMessage("SQLite statistics quick_check failed");
+        store.close();
+        assertThat(Files.readAllBytes(paths.database())).isEqualTo(original);
+        try (var files = Files.list(paths.database().getParent())) {
+            assertThat(files).containsExactly(paths.database());
+        }
+    }
+
+    @Test
+    void initializesNewDatabaseWithoutRestoringOrDeletingLegacySnapshots() throws Exception {
+        var paths = paths();
+        store = createStore();
+        var call = start("legacy-call", Instant.parse("2026-08-10T10:00:00Z"));
+        store.finishCall(terminal(call, usage(2, 2)));
+        store.close();
+        try (var connection = new org.sqlite.JDBC().connect(
+            "jdbc:sqlite:" + paths.database(), new java.util.Properties());
+            var statement = connection.createStatement();
+            var rows = statement.executeQuery("PRAGMA journal_mode = DELETE")) {
+            assertThat(rows.next()).isTrue();
+            assertThat(rows.getString(1)).isEqualTo("delete");
+        }
+        var backupDirectory = paths.database().getParent().resolve("backups");
+        Files.createDirectory(backupDirectory);
+        var snapshot = backupDirectory.resolve("ai-foundation.sqlite.bak-20260810100000000");
+        Files.move(paths.database(), snapshot);
+        var original = Files.readAllBytes(snapshot);
+        store = new SqliteUsageStatisticsStore(paths);
+
+        store.initialize();
+
+        assertThat(store.currentEpoch()).isEqualTo(1);
+        assertThat(store.getCall(call.id())).isEmpty();
+        assertThat(quickCheck(paths.database())).isEqualTo("ok");
+        store.reset();
+        assertThat(Files.readAllBytes(snapshot)).isEqualTo(original);
+    }
+
+    @Test
+    void validatesExistingDatabaseIncludingUncheckpointedWal() throws Exception {
+        var paths = paths();
+        Files.createDirectories(paths.database().getParent());
+        try (var connection = new org.sqlite.JDBC().connect(
+            "jdbc:sqlite:" + paths.database(), new java.util.Properties());
+            var statement = connection.createStatement()) {
+            statement.execute("PRAGMA journal_mode = WAL");
+            statement.execute("PRAGMA wal_autocheckpoint = 0");
+            UsageSqliteSchema.initialize(connection);
+            UsageSqliteJdbc.putMeta(connection, "statistics_epoch", "7");
+            assertThat(Files.size(paths.database().resolveSibling(
+                paths.database().getFileName() + "-wal"))).isPositive();
+            store = new SqliteUsageStatisticsStore(paths);
+
+            store.initialize();
+
+            assertThat(store.currentEpoch()).isEqualTo(7);
+            assertThat(quickCheck(paths.database())).isEqualTo("ok");
         }
     }
 

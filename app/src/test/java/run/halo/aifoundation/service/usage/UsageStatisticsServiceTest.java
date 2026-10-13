@@ -2,6 +2,7 @@ package run.halo.aifoundation.service.usage;
 
 import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageCallTerminal;
 import run.halo.aifoundation.service.observation.UsageUnitKind;
 
@@ -206,7 +207,7 @@ class UsageStatisticsServiceTest {
     }
 
     @Test
-    void initializationFailureDisablesOnlyStatisticsAndSurfacesRecoveryHealth() {
+    void initializationFailureDisablesOnlyStatisticsAndSurfacesStorageHealth() {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         doThrow(new IllegalStateException("corrupt database")).when(store).initialize();
         service = new UsageStatisticsService(store, callerResolver());
@@ -216,6 +217,182 @@ class UsageStatisticsServiceTest {
         assertThat(service.health().available()).isFalse();
         assertThat(service.health().complete()).isFalse();
         assertThat(service.health().initializationError()).isEqualTo("IllegalStateException");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {11, 26, 267})
+    void classifiesWrappedSqliteIntegrityFailuresWithoutExposingMessages(int code) {
+        var store = mock(UsageStatisticsStore.class);
+        doThrow(storageFailure(code)).when(store).initialize();
+        service = new UsageStatisticsService(store, callerResolver());
+
+        service.initialize();
+
+        assertThat(service.health().available()).isFalse();
+        assertThat(service.health().initializationError()).isNull();
+        assertThat(service.health().integrityError())
+            .isEqualTo("SQLException (SQLite errorCode=" + code + ")");
+    }
+
+    @Test
+    void reportsRootInitializationCauseWithoutExposingMessagesOrSqlState() {
+        var store = mock(UsageStatisticsStore.class);
+        doThrow(storageFailure(14)).when(store).initialize();
+        service = new UsageStatisticsService(store, callerResolver());
+
+        service.initialize();
+
+        assertThat(service.health().initializationError())
+            .isEqualTo("SQLException (SQLite errorCode=14)");
+        assertThat(service.health().integrityError()).isNull();
+    }
+
+    @Test
+    void runtimeReadCorruptionDisablesFurtherStoreAccess() {
+        var store = mock(UsageStatisticsStore.class);
+        var query = query("2026-08-10T08:00:00Z", "2026-08-10T10:00:00Z");
+        when(store.summary(query, true)).thenThrow(storageFailure(26));
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.summary(query).block())
+            .isInstanceOf(IllegalStateException.class);
+
+        assertThat(service.health().available()).isFalse();
+        assertThat(service.health().integrityError())
+            .isEqualTo("SQLException (SQLite errorCode=26)");
+        assertThat(service.beginCall(descriptor()).isIncomplete()).isTrue();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.summary(query).block())
+            .hasMessage("AI usage statistics are unavailable");
+        verify(store).summary(query, true);
+        verify(store, org.mockito.Mockito.never()).writeBatch(any());
+    }
+
+    @Test
+    void runtimeWriteCorruptionStopsRetriesAndDiscardsQueuedEvents() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            entered.countDown();
+            assertThat(release.await(3, TimeUnit.SECONDS)).isTrue();
+            throw storageFailure(11);
+        }).when(store).writeBatch(any());
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+
+        var first = service.beginCall(descriptor());
+        UsageCallSession second;
+        try {
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+            second = service.beginCall(descriptor());
+        } finally {
+            release.countDown();
+        }
+        await(() -> service.health().droppedEvents() == 2);
+
+        assertThat(first.isIncomplete()).isTrue();
+        assertThat(second.isIncomplete()).isTrue();
+        assertThat(service.health().available()).isFalse();
+        assertThat(service.health().integrityError())
+            .isEqualTo("SQLException (SQLite errorCode=11)");
+        assertThat(service.health().queueDepth()).isZero();
+        verify(store).writeBatch(any());
+        verify(store, org.mockito.Mockito.never()).writeHealth(any());
+    }
+
+    @Test
+    void readCorruptionDiscardsOnlyPendingEventsWhileInFlightBatchFinishes() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            entered.countDown();
+            assertThat(release.await(3, TimeUnit.SECONDS)).isTrue();
+            invocation.getArgument(0, java.util.List.class).forEach(action ->
+                ((Runnable) action).run());
+            return null;
+        }).when(store).writeBatch(any());
+        var query = query("2026-08-10T08:00:00Z", "2026-08-10T10:00:00Z");
+        when(store.summary(query, true)).thenThrow(storageFailure(11));
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+
+        var first = service.beginCall(descriptor());
+        UsageCallSession second;
+        try {
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+            second = service.beginCall(descriptor());
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.summary(query).block())
+                .isInstanceOf(IllegalStateException.class);
+        } finally {
+            release.countDown();
+        }
+        service.close();
+
+        assertThat(first.isIncomplete()).isFalse();
+        assertThat(second.isIncomplete()).isTrue();
+        assertThat(service.health().droppedEvents()).isEqualTo(1);
+        assertThat(service.health().writeFailures()).isZero();
+        verify(store).writeBatch(any());
+        verify(store).startCall(first.start());
+        verify(store, org.mockito.Mockito.never()).startCall(second.start());
+        verify(store, org.mockito.Mockito.never()).writeHealth(any());
+    }
+
+    @Test
+    void runtimeMaintenanceIntegrityFailureDisablesStatistics() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        when(store.rollupAndRetainBatch(any())).thenThrow(new IllegalStateException(
+            "private wrapper", new UsageDatabaseIntegrityException("private database path")));
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+
+        invokeMaintenance(service);
+        await(() -> service.health().writeFailures() == 1);
+
+        assertThat(service.health().available()).isFalse();
+        assertThat(service.health().integrityError())
+            .isEqualTo("UsageDatabaseIntegrityException");
+        invokeMaintenance(service);
+        verify(store).rollupAndRetainBatch(any());
+    }
+
+    @Test
+    void runtimeHealthWriteCorruptionDisablesStatistics() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        doThrow(new IllegalStateException("transient write failure"))
+            .when(store).writeBatch(any());
+        doThrow(storageFailure(11)).when(store).writeHealth(any());
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+
+        service.beginCall(descriptor());
+        await(() -> !service.health().available());
+
+        assertThat(service.health().integrityError())
+            .isEqualTo("SQLException (SQLite errorCode=11)");
+        verify(store).writeHealth(any());
+    }
+
+    @Test
+    void retriesWrappedSqliteBusyWithoutDisablingStatistics() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        doThrow(storageFailure(5)).doNothing().when(store).writeBatch(any());
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+
+        service.beginCall(descriptor());
+        service.close();
+
+        verify(store, times(2)).writeBatch(any());
+        assertThat(service.health().writeFailures()).isZero();
+        assertThat(service.health().integrityError()).isNull();
+    }
+
+    private static IllegalStateException storageFailure(int code) {
+        return new IllegalStateException("private wrapper", new java.sql.SQLException(
+            "private database path or credential", "private SQLState", code));
     }
 
     @Test
@@ -261,11 +438,11 @@ class UsageStatisticsServiceTest {
     }
 
     @Test
-    void resetClearsPersistedAndInMemoryRecoveryErrors() {
+    void resetClearsPersistedAndInMemoryStorageErrors() {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         when(store.readHealth()).thenReturn(new UsageHealthState(0, 0, 0, null, null, null,
-            "migration failed", "recovered from corrupt database"));
+            "initialization failed", "integrity check failed"));
         when(store.reset()).thenReturn(2L);
         service = new UsageStatisticsService(store, callerResolver());
         service.initialize();
@@ -280,7 +457,54 @@ class UsageStatisticsServiceTest {
     }
 
     @Test
-    void closesStoreWithoutRunningAnUnboundedShutdownBackup() {
+    void resetDiscardsQueuedAndLateOldEpochEventsWithoutAffectingNewHealth() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        when(store.currentEpoch()).thenReturn(1L);
+        runWritesInBatch(store);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            entered.countDown();
+            assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+            return 2L;
+        }).when(store).reset();
+        service = new UsageStatisticsService(store, callerResolver());
+        service.initialize();
+
+        var reset = CompletableFuture.runAsync(() -> service.reset("RESET").block());
+        UsageCallSession oldCall;
+        try {
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+            oldCall = service.beginCall(descriptor());
+            for (int i = 0; i < UsageStatisticsService.WRITE_QUEUE_CAPACITY * 2; i++) {
+                service.beginCall(descriptor());
+            }
+            assertThat(service.health().droppedEvents()).isPositive();
+        } finally {
+            release.countDown();
+        }
+        reset.get(3, TimeUnit.SECONDS);
+        assertThat(service.health().queueDepth()).isZero();
+        assertThat(service.health().complete()).isTrue();
+
+        oldCall.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
+            .succeed(NormalizedUsage.missing(), "gpt");
+        oldCall.succeed(NormalizedUsage.missing(), "gpt", 1);
+        var newCall = service.beginCall(descriptor());
+        assertThat(newCall.start().epoch()).isEqualTo(2);
+        service.close();
+
+        verify(store).writeBatch(any());
+        verify(store).startCall(newCall.start());
+        verify(store, org.mockito.Mockito.never()).recordExecution(any());
+        verify(store, org.mockito.Mockito.never()).finishCall(any());
+        assertThat(service.health().droppedEvents()).isZero();
+        assertThat(service.health().incompleteCalls()).isZero();
+        assertThat(service.health().writeFailures()).isZero();
+    }
+
+    @Test
+    void closesStore() {
         var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         when(store.currentEpoch()).thenReturn(1L);
         service = new UsageStatisticsService(store, callerResolver());
@@ -289,42 +513,6 @@ class UsageStatisticsServiceTest {
         assertThatCode(service::close).doesNotThrowAnyException();
 
         verify(store).close();
-        verify(store, org.mockito.Mockito.never()).backup();
-        service = null;
-    }
-
-    @Test
-    void closesStoreToInterruptMaintenanceThatIgnoresThreadInterruption() throws Exception {
-        var store = mock(UsageStatisticsStore.class, org.mockito.Mockito.CALLS_REAL_METHODS);
-        when(store.currentEpoch()).thenReturn(1L);
-        var backupStarted = new CountDownLatch(1);
-        var releaseBackup = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            backupStarted.countDown();
-            while (releaseBackup.getCount() > 0) {
-                try {
-                    releaseBackup.await();
-                } catch (InterruptedException ignored) {
-                    // Simulate a JDBC operation that does not respond to thread interruption.
-                }
-            }
-            return null;
-        }).when(store).backup();
-        doAnswer(invocation -> {
-            releaseBackup.countDown();
-            return null;
-        }).when(store).close();
-        service = new UsageStatisticsService(store, callerResolver());
-        service.initialize();
-
-        var maintenance = maintenanceExecutor(service);
-        maintenance.execute(() -> invokeMaintenance(service));
-        assertThat(backupStarted.await(2, TimeUnit.SECONDS)).isTrue();
-
-        var close = CompletableFuture.runAsync(service::close);
-        close.get(7, TimeUnit.SECONDS);
-        assertThat(maintenance.awaitTermination(2, TimeUnit.SECONDS)).isTrue();
-        verify(store, org.mockito.Mockito.atLeastOnce()).close();
         service = null;
     }
 
@@ -373,10 +561,6 @@ class UsageStatisticsServiceTest {
                     }
                 }
                 return false;
-            }
-
-            @Override
-            public void backup() {
             }
 
             @Override
@@ -474,14 +658,4 @@ class UsageStatisticsServiceTest {
         }
     }
 
-    private static java.util.concurrent.ScheduledExecutorService maintenanceExecutor(
-        UsageStatisticsService service) {
-        try {
-            var field = UsageStatisticsService.class.getDeclaredField("maintenance");
-            field.setAccessible(true);
-            return (java.util.concurrent.ScheduledExecutorService) field.get(service);
-        } catch (ReflectiveOperationException error) {
-            throw new IllegalStateException(error);
-        }
-    }
 }

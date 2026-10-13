@@ -170,15 +170,12 @@ class UsageObservationRegressionTest {
     }
 
     @Test
-    void resetRetiresRecoverySnapshotsAndKeepsSchemaValid() throws Exception {
+    void resetKeepsSchemaAndEpochValidAfterReopening() {
         var paths = new UsageDatabasePaths(temp);
         var store = new SqliteUsageStatisticsStore(paths);
         store.initialize();
         store.startCall(start());
-        store.backup();
-        assertThat(UsageSqliteFiles.listBackups(paths)).isNotEmpty();
         store.reset();
-        assertThat(UsageSqliteFiles.listBackups(paths)).isEmpty();
         store.close();
         store = new SqliteUsageStatisticsStore(paths);
         store.initialize();

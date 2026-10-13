@@ -9,7 +9,6 @@ import run.halo.app.plugin.PluginsRootGetter;
 class UsageDatabasePaths {
 
     private final Path database;
-    private final Path backupDirectory;
 
     @Autowired
     UsageDatabasePaths(PluginsRootGetter pluginsRootGetter) {
@@ -19,15 +18,10 @@ class UsageDatabasePaths {
     UsageDatabasePaths(Path pluginsRoot) {
         var pluginDirectory = pluginsRoot.toAbsolutePath().normalize().resolve("ai-foundation");
         this.database = pluginDirectory.resolve("ai-foundation.sqlite");
-        this.backupDirectory = pluginDirectory.resolve("backups");
     }
 
     Path database() {
         return database;
-    }
-
-    Path backupDirectory() {
-        return backupDirectory;
     }
 
 }

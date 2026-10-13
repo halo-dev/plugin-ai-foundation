@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service.usage;
 
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -40,9 +41,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     private final Object readerLifecycle = new Object();
     private final java.util.ArrayDeque<Connection> idleReaders = new java.util.ArrayDeque<>();
     private final AtomicBoolean closing = new AtomicBoolean();
-    // Snapshot publication must not overlap reset, but need not stop ordinary writes.
-    private final java.util.concurrent.locks.ReentrantReadWriteLock snapshotAccess =
-        new java.util.concurrent.locks.ReentrantReadWriteLock();
     private Connection writer;
     private volatile boolean initialized;
 
@@ -60,37 +58,19 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         }
         try {
             Files.createDirectories(paths.database().getParent());
-            Files.createDirectories(paths.backupDirectory());
             ensureDriverRegistered();
-            var recovery = UsageSqliteFiles.recoverIfRequired(paths);
+            var newDatabase = validateExistingDatabase();
             writer = openConnection();
             configureWriter(writer);
-            UsageSqliteSchema.initialize(writer);
-            UsageSqliteSchema.validateRecognized(writer);
-            var integrity = quickCheck(writer);
-            if (!"ok".equalsIgnoreCase(integrity)) {
-                throw new UsageDatabaseIntegrityException(
-                    "SQLite quick_check failed: " + integrity);
-            }
-            if (recovery.restored()) {
-                var recoveredAt = System.currentTimeMillis();
-                try (var statement = writer.prepareStatement("""
-                    UPDATE ai_statistics_health SET integrity_error = ?,
-                      affected_since_ms = COALESCE(affected_since_ms, ?),
-                      affected_until_ms = MAX(COALESCE(affected_until_ms, 0), ?)
-                    WHERE id = 1
-                    """)) {
-                    statement.setString(1, "RECOVERED_FROM_SNAPSHOT");
-                    statement.setLong(2, recovery.snapshotAt().toEpochMilli());
-                    statement.setLong(3, recoveredAt);
-                    statement.executeUpdate();
-                }
+            if (newDatabase) {
+                UsageSqliteSchema.initialize(writer);
             }
             initialized = true;
         } catch (Exception | LinkageError error) {
             closeSilently();
             deregisterPluginDrivers();
-            throw new IllegalStateException("Failed to initialize AI usage statistics", error);
+            throw new IllegalStateException(
+                "Failed to initialize AI usage statistics at " + paths.database(), error);
         }
     }
 
@@ -302,8 +282,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     @Override
     public synchronized long reset() {
         requireInitialized();
-        var snapshotLock = snapshotAccess.writeLock();
-        snapshotLock.lock();
         var restoreAutoCommit = true;
         try {
             writer.setAutoCommit(false);
@@ -318,15 +296,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                       initialization_error = NULL, integrity_error = NULL
                     WHERE id = 1
                     """);
-            }
-            // Remove all recoverable pre-reset snapshots before committing the reset.
-            // A crash may lose backup availability, but cannot restore deleted history.
-            for (var snapshot : UsageSqliteFiles.listBackups(paths)) {
-                try {
-                    Files.delete(snapshot);
-                } catch (java.io.IOException error) {
-                    throw new IllegalStateException("Failed to retire pre-reset snapshot", error);
-                }
             }
             try (var statement = writer.createStatement()) {
                 statement.executeUpdate("DELETE FROM ai_statistics_meta WHERE key NOT IN ('statistics_epoch', 'schema_version')");
@@ -345,7 +314,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             if (restoreAutoCommit) {
                 UsageSqliteJdbc.setAutoCommit(writer, true);
             }
-            snapshotLock.unlock();
         }
     }
 
@@ -402,21 +370,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     public synchronized boolean rollupAndRetainBatch(Clock clock) {
         requireInitialized();
         return maintenance.rollupAndRetainBatch(writer, clock);
-    }
-
-    @Override
-    public void backup() {
-        var snapshotLock = snapshotAccess.readLock();
-        snapshotLock.lock();
-        try {
-            requireInitialized();
-            withConnection(connection -> {
-                UsageSqliteFiles.backup(connection, paths);
-                return null;
-            });
-        } finally {
-            snapshotLock.unlock();
-        }
     }
 
     @Override
@@ -516,11 +469,25 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
         }
     }
 
-    private String quickCheck(Connection connection) throws SQLException {
-        try (var statement = connection.createStatement();
-            var rows = statement.executeQuery("PRAGMA quick_check")) {
-            return rows.next() ? rows.getString(1) : "no-result";
+    private boolean validateExistingDatabase() throws java.io.IOException, SQLException {
+        var database = paths.database();
+        var files = List.of(database,
+            database.resolveSibling(database.getFileName() + "-wal"),
+            database.resolveSibling(database.getFileName() + "-shm"));
+        if (files.stream().allMatch(path -> Files.notExists(path, LinkOption.NOFOLLOW_LINKS))) {
+            return true;
         }
+        if (!Files.isRegularFile(database, LinkOption.NOFOLLOW_LINKS)
+            || Files.size(database) == 0) {
+            throw new UsageDatabaseIntegrityException(
+                "SQLite statistics files exist without a non-empty database; "
+                    + "manual intervention is required: " + database);
+        }
+        try (var connection = DriverManager.getConnection(
+            "jdbc:sqlite:" + database.toUri() + "?mode=ro")) {
+            UsageSqliteSchema.validateRecognized(connection);
+        }
+        return false;
     }
 
     private <T> T withReader(SqlFunction<Connection, T> operation) {

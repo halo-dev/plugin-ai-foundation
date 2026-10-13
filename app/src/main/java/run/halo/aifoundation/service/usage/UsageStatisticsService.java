@@ -100,7 +100,7 @@ public class UsageStatisticsService
             accepting = true;
             maintenance.scheduleWithFixedDelay(this::enqueueMaintenance, 1, 24, TimeUnit.HOURS);
         } catch (RuntimeException | LinkageError error) {
-            if (hasCause(error, UsageDatabaseIntegrityException.class)) {
+            if (isIntegrityFailure(error)) {
                 integrityError.set(safeMessage(error));
             } else {
                 initializationError.set(safeMessage(error));
@@ -108,7 +108,7 @@ public class UsageStatisticsService
             available = false;
             accepting = false;
             log.error("AI usage statistics are disabled because initialization failed ({})",
-                error.getClass().getSimpleName());
+                safeMessage(error), error);
         }
     }
 
@@ -128,17 +128,18 @@ public class UsageStatisticsService
             context.modelType().name(), context.modelName(), context.providerName(),
             context.providerType(), context.modelId(), descriptor.streaming());
         var session = new UsageCallSession(this, start, clock);
-        submit(() -> store.startCall(start), () -> markIncomplete(session));
+        submit(start.epoch(), () -> store.startCall(start), () -> markIncomplete(session));
         return session;
     }
 
     public void recordExecution(UsageCallSession session, UsageExecutionRecord execution) {
-        submit(() -> store.recordExecution(execution),
+        submit(session.start().epoch(), () -> store.recordExecution(execution),
             () -> markIncomplete(session));
     }
 
     public void finishCall(UsageCallSession session, UsageCallTerminal terminal) {
-        submit(() -> store.finishCall(withCurrentCompleteness(session, terminal)),
+        submit(session.start().epoch(),
+            () -> store.finishCall(withCurrentCompleteness(session, terminal)),
             () -> markIncomplete(session));
     }
 
@@ -168,16 +169,21 @@ public class UsageStatisticsService
             return Mono.error(new IllegalArgumentException("confirmation must equal RESET"));
         }
         return write(() -> {
-            epoch = store.reset();
-            droppedEvents.set(0);
-            incompleteCalls.set(0);
-            writeFailures.set(0);
-            lastWriteErrorAt.set(null);
-            affectedSince.set(null);
-            affectedUntil.set(null);
-            initializationError.set(null);
-            integrityError.set(null);
-            healthDirty.set(false);
+            var nextEpoch = store.reset();
+            synchronized (admissionLock) {
+                droppedEvents.set(0);
+                incompleteCalls.set(0);
+                writeFailures.set(0);
+                lastWriteErrorAt.set(null);
+                affectedSince.set(null);
+                affectedUntil.set(null);
+                initializationError.set(null);
+                integrityError.set(null);
+                healthDirty.set(false);
+                // Reset retires queued events as well as persisted history.
+                pendingWrites.clear();
+                epoch = nextEpoch;
+            }
             return null;
         });
     }
@@ -218,7 +224,6 @@ public class UsageStatisticsService
             accepting = false;
         }
         maintenance.shutdownNow();
-        var maintenanceStopped = awaitMaintenanceTermination();
         // A final task handles a drain that yielded just before shutdown began.
         // All accepted events were enqueued before admission was closed.
         writer.execute(this::drainWrites);
@@ -236,10 +241,6 @@ public class UsageStatisticsService
             writer.shutdownNow();
             discardPendingWrites();
             markAffected();
-        }
-        if (!maintenanceStopped) {
-            forceCloseStore();
-            return;
         }
         if (!writerStopped) {
             forceCloseStore();
@@ -276,27 +277,15 @@ public class UsageStatisticsService
         available = false;
         log.warn("Forcing the AI usage store closed to interrupt outstanding work");
         store.close();
-        awaitMaintenanceTermination();
         readerScheduler.dispose();
     }
 
-    private boolean awaitMaintenanceTermination() {
-        try {
-            if (!maintenance.awaitTermination(SHUTDOWN_TIMEOUT.toMillis(),
-                TimeUnit.MILLISECONDS)) {
-                log.warn("AI usage maintenance did not stop within {}", SHUTDOWN_TIMEOUT);
-                return false;
-            }
-            return true;
-        } catch (InterruptedException error) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-    }
-
-    private void submit(Runnable action, Runnable onPermanentFailure) {
+    private void submit(long eventEpoch, Runnable action, Runnable onPermanentFailure) {
         synchronized (admissionLock) {
-            if (!enqueueWrite(new PendingWrite(action, onPermanentFailure))) {
+            if (eventEpoch != epoch) {
+                return;
+            }
+            if (!enqueueWrite(new PendingWrite(eventEpoch, action, onPermanentFailure))) {
                 droppedEvents.incrementAndGet();
                 markAffected();
                 onPermanentFailure.run();
@@ -355,6 +344,18 @@ public class UsageStatisticsService
                 var lock = storeAccess.readLock();
                 lock.lock();
                 try {
+                    batch.removeIf(event -> event.epoch() != epoch);
+                    if (batch.isEmpty()) {
+                        continue;
+                    }
+                    if (!available) {
+                        for (var event : batch) {
+                            droppedEvents.incrementAndGet();
+                            event.onFailure().run();
+                        }
+                        discardPendingWrites();
+                        break;
+                    }
                     var failure = writeBatchWithRetries(batch);
                     handleBatchFailure(batch, failure);
                     if (failure != null) {
@@ -393,7 +394,7 @@ public class UsageStatisticsService
         if (failure == null) {
             return;
         }
-        if (failure instanceof LinkageError) {
+        if (!available || failure instanceof LinkageError || isIntegrityFailure(failure)) {
             accepting = false;
             available = false;
             batch.forEach(event -> failedWrite(event, failure));
@@ -418,7 +419,7 @@ public class UsageStatisticsService
             if (failure == null) {
                 continue;
             }
-            if (failure instanceof LinkageError) {
+            if (!available || failure instanceof LinkageError || isIntegrityFailure(failure)) {
                 failRemainingEvents(batch, index, failure);
                 discardPendingWrites();
                 return;
@@ -440,6 +441,10 @@ public class UsageStatisticsService
     private Throwable writeBatchWithRetries(List<PendingWrite> batch) {
         RuntimeException failure = null;
         for (int attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt++) {
+            if (!available) {
+                return failure == null
+                    ? new IllegalStateException("AI usage statistics are unavailable") : failure;
+            }
             try {
                 store.writeBatch(batch.stream().map(PendingWrite::action).toList());
                 return null;
@@ -447,6 +452,9 @@ public class UsageStatisticsService
                 return error;
             } catch (RuntimeException error) {
                 failure = error;
+                if (isIntegrityFailure(error) || !available) {
+                    return error;
+                }
                 if (attempt < MAX_WRITE_ATTEMPTS) {
                     LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L * attempt));
                 }
@@ -481,7 +489,7 @@ public class UsageStatisticsService
         return false;
     }
 
-    private record PendingWrite(Runnable action, Runnable onFailure) {
+    private record PendingWrite(long epoch, Runnable action, Runnable onFailure) {
     }
 
     private void markIncomplete(UsageCallSession session) {
@@ -520,6 +528,9 @@ public class UsageStatisticsService
                     throw new IllegalStateException("AI usage statistics are unavailable");
                 }
                 return query.call();
+            } catch (Exception | LinkageError error) {
+                disableIfCorrupt(error);
+                throw error;
             } finally {
                 lock.unlock();
             }
@@ -534,30 +545,14 @@ public class UsageStatisticsService
     }
 
     private void enqueueMaintenance() {
-        var lock = storeAccess.readLock();
-        lock.lock();
-        try {
-            if (!available) {
+        synchronized (admissionLock) {
+            if (!canAccessStore()) {
                 return;
             }
-            synchronized (admissionLock) {
-                if (closing.get()) {
-                    return;
-                }
-                if (!maintenanceQueued.compareAndSet(false, true)) {
-                    return;
-                }
-                writer.execute(this::maintainOneBatch);
+            if (!maintenanceQueued.compareAndSet(false, true)) {
+                return;
             }
-            try {
-                store.backup();
-            } catch (RuntimeException | LinkageError error) {
-                recordWriteFailure(error);
-                persistHealthIfDirty();
-                log.warn("Failed to back up AI usage statistics");
-            }
-        } finally {
-            lock.unlock();
+            writer.execute(this::maintainOneBatch);
         }
     }
 
@@ -589,6 +584,7 @@ public class UsageStatisticsService
     }
 
     private void recordWriteFailure(Throwable error) {
+        disableIfCorrupt(error);
         if (error instanceof LinkageError) {
             accepting = false;
             available = false;
@@ -674,12 +670,13 @@ public class UsageStatisticsService
     }
 
     private void persistHealthIfDirty() {
-        if (!healthDirty.compareAndSet(true, false)) {
+        if (!available || !healthDirty.compareAndSet(true, false)) {
             return;
         }
         try {
             store.writeHealth(healthState());
         } catch (RuntimeException | LinkageError error) {
+            disableIfCorrupt(error);
             healthDirty.set(true);
             log.warn("Failed to persist AI usage statistics health");
         }
@@ -695,17 +692,42 @@ public class UsageStatisticsService
         };
     }
 
-    private static String safeMessage(Throwable error) {
-        return error.getClass().getSimpleName();
+    private void disableIfCorrupt(Throwable error) {
+        if (!isIntegrityFailure(error)) {
+            return;
+        }
+        synchronized (admissionLock) {
+            integrityError.compareAndSet(null, safeMessage(error));
+            accepting = false;
+            available = false;
+            markAffected();
+            discardPendingWrites();
+        }
     }
 
-    private static boolean hasCause(Throwable error, Class<? extends Throwable> type) {
-        for (var current = error; current != null; current = current.getCause()) {
-            if (type.isInstance(current)) {
+    private static String safeMessage(Throwable error) {
+        var root = error;
+        SQLException sql = null;
+        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+            root = error;
+            if (error instanceof SQLException cause) {
+                sql = cause;
+            }
+        }
+        return root.getClass().getSimpleName()
+            + (sql == null ? "" : " (SQLite errorCode=" + sql.getErrorCode() + ")");
+    }
+
+    private static boolean isIntegrityFailure(Throwable error) {
+        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+            if (error instanceof UsageDatabaseIntegrityException) {
                 return true;
             }
-            if (current == current.getCause()) {
-                break;
+            if (error instanceof SQLException sql) {
+                var code = sql.getErrorCode() & 0xff;
+                if (code == 11 || code == 26) {
+                    return true;
+                }
             }
         }
         return false;

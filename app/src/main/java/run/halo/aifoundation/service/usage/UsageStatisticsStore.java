@@ -48,8 +48,6 @@ public interface UsageStatisticsStore extends AutoCloseable {
      */
     boolean rollupAndRetainBatch(Clock clock);
 
-    void backup();
-
     @Override
     void close();
 }

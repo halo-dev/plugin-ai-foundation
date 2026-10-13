@@ -80,7 +80,8 @@ const timeDetails = computed(() => {
       <div class=":uno: min-w-0 text-sm">
         <div class=":uno: mt-1 text-xs leading-5">
           <template v-if="unavailable">
-            模型调用不受影响，但用量数据可能正在丢失。历史数据未被清除，请检查存储状态后再解读统计结果。
+            模型调用不受影响，用量统计已停止记录。插件不会自动恢复或清空数据库，请查看 Halo
+            日志排查原因。
           </template>
           <template v-else-if="incomplete">
             部分统计事件未能保存，统计结果可能低于实际用量。
@@ -89,6 +90,15 @@ const timeDetails = computed(() => {
             无法获取统计健康状态，当前页面展示的汇总与历史可能低于实际用量，请稍后刷新重试。
           </template>
         </div>
+        <details v-if="unavailable" class=":uno: mt-2 text-xs leading-5">
+          <summary class=":uno: cursor-pointer">如何处理统计存储故障</summary>
+          <p class=":uno: mt-1">
+            数据库位于 Halo 工作目录的 plugins/ai-foundation/ai-foundation.sqlite。 操作文件前请停止
+            Halo，并保留数据库及同名 -wal、-shm 文件的副本。
+            可自行恢复有效备份；若接受丢弃全部统计数据，可移走这三个文件，再启动 Halo 创建新库。
+            页面中的「重置统计」仅适用于可用的数据库，不能修复存储故障。
+          </p>
+        </details>
         <ul v-if="storageErrors.length" class=":uno: mt-1 list-disc pl-4 text-xs leading-5">
           <li v-for="error in storageErrors" :key="error">{{ error }}</li>
         </ul>

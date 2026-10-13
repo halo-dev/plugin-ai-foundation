@@ -8,13 +8,10 @@ import org.junit.jupiter.api.Test;
 class UsageDatabasePathsTest {
 
     @Test
-    void resolvesFixedRuntimeAndBackupLocationsFromPluginsRoot() {
+    void resolvesFixedRuntimeLocationFromPluginsRoot() {
         var paths = new UsageDatabasePaths(Path.of("/var/lib/halo/plugins"));
 
         assertThat(paths.database())
             .isEqualTo(Path.of("/var/lib/halo/plugins/ai-foundation/ai-foundation.sqlite"));
-        assertThat(paths.backupDirectory())
-            .isEqualTo(Path.of("/var/lib/halo/plugins/ai-foundation/backups"));
-
     }
 }
