@@ -4,39 +4,40 @@ AI Foundation currently knows which plugin resolves and invokes a model, but it 
 
 ## What Changes
 
-- Separate provider protocol normalization, runtime observations, and asynchronous statistics storage; observation failures do not fail model calls.
-- Record one logical call for each subscribed language, embedding, reranking, or image-generation SDK invocation.
-- Record underlying model executions for generation steps, batches, and provider retry attempts so token usage is explainable without double counting.
-- Normalize provider-reported token usage while preserving unknown, partial, and estimated quality instead of treating missing values as zero.
-- Persist recent call and execution facts in a plugin-owned SQLite database and archive expired call facts into UTC daily rollups for long-term statistics.
-- Add super-administrator APIs and Console UI for summaries, trends, filtered cursor-paginated call history, call details, storage health, and explicit statistics reset.
-- Infer the caller plugin from the existing classloader-aware stack inspection, record the audited SDK operation, and optionally accept a validated feature tag from the existing request metadata without changing public request shapes.
-- Bound detail retention and asynchronous persistence so statistics failures remain visible but do not fail model calls.
+- Separate provider protocol normalization, runtime observations, and asynchronous statistics storage. Observation callback and storage failures must not replace model results or make calls wait for persistence.
+- Record one logical call per subscribed language, embedding, reranking, or image-generation invocation, with underlying steps, batches, and provider retry attempts counted without duplication.
+- Preserve unknown and partial usage rather than fabricating zero values; distinguish provider usage coverage from event-delivery completeness. Do not estimate missing token counts.
+- Retain per-call statistical facts in a plugin-owned SQLite database for precise historical queries. Remove UTC daily rollups and automatic expansion of requested time ranges.
+- Store UTC instants; use the browser's IANA time zone for Console date selection, trend grouping, heatmap days, and display. APIs default to UTC when no time zone is supplied.
+- Keep public call history and details within the last 90 days; clean up execution details older than the 30-day UTC-date cutoff, except those belonging to ongoing calls. The 90-day access window does not delete call statistics.
+- Add super-administrator APIs and a Chinese Console view for summaries, trends, breakdowns, cursor-paginated history, details, health, and confirmed reset. Do not add a historical-range warning banner.
+- Keep database ownership simple: initialize or validate, use bounded asynchronous writes, clean up execution details, and close resources. Corruption disables statistics for manual handling; no automatic backup, restore, file replacement, or reconstruction.
+- **BREAKING (behavioral, not API signatures):** normalized usage is also returned through existing SDK responses. Messages input includes cache reads and creation; some previously zero-filled missing counters become unknown. Non-streaming delegate/middleware assembly runs on subscription, so repeated subscriptions can invoke middleware again.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `ai-usage-statistics`: Provider-neutral call metering, token accounting, retained history, aggregate queries, administrative health/reset operations, and Console presentation.
+- `ai-usage-statistics`: Provider-neutral operational metering, precise time-zone-aware historical queries, retained call facts, administrative health/reset operations, and Console presentation.
 
 ### Modified Capabilities
 
-None.
+None. The compatibility effects on existing SDK consumers are documented under Impact and in the design; this change introduces only the statistics capability spec.
 
 ## Non-goals
 
-- Calculating prices or monetary cost.
-- Storing prompts, outputs, tool arguments, request headers, arbitrary metadata, or raw provider payloads.
-- Tracking end users or sessions.
-- Enforcing quotas, billing-grade durability, or exact reconciliation with provider invoices.
+- Calculating prices, enforcing quotas, or providing a billing-grade, lossless ledger or exact provider-invoice reconciliation.
+- Storing prompts, outputs, tool arguments, headers, arbitrary metadata, raw provider payloads, or error messages; tracking end users or sessions.
 - Sharing one SQLite database across multiple Halo instances.
-- CSV export, full-text search, or administrator-configurable retention in the first release.
+- Automatic backup/restore, corruption repair, daily rollup storage, or a historical-range warning banner.
+- CSV export, full-text search, administrator-configurable retention, or a hard bound on the lifetime size of the database in the first release.
 
 ## Impact
 
-- **Backend and UI:** this is a full-stack Console feature, not a backend-only or UI-only change.
-- `api`: no public method or request shape changes; one reserved metadata key may be read when present.
-- `app`: audited model decorators, internal provider execution boundaries, SQLite lifecycle/storage, retention and rollup jobs, Console endpoints, OpenAPI generation, health reporting, and super-administrator authorization.
-- `ui`: a new Chinese-language statistics view using the generated API client.
-- Build/runtime: adds an embedded SQLite JDBC dependency and plugin-owned persistent files under the Halo work directory.
-- Operations: Halo backup/restore must use a SQLite-consistent snapshot; plugin stop/reload must drain bounded work and close all database resources.
+- **Backend and Console UI:** this is a full-stack feature. Existing model selection, provider configuration, Secret references, and cross-plugin service discovery remain in place.
+- **Java/npm SDK:** public types and method/request shapes remain unchanged and provider-neutral. An optional validated feature tag is read from existing metadata. However, consumers using the pre-change usage semantics or middleware assembly timing can observe the behavioral changes above; signature compatibility is not a claim of complete behavioral compatibility.
+- **Compatibility and release handling:** existing consumers of the released Java SDK (the project has shipped since v1.0.0) need review if they manually add Messages cache counters, treat absent usage as zero, or rely on middleware assembly occurring once before subscription. The release first containing this change must document these changes and the consumer adjustments; its release number has not yet been assigned here. No persisted Halo Extension migration is required.
+- **app:** provider usage normalization, audited decorators, execution observation, SQLite storage/lifecycle, execution retention, and Console endpoints. Only new statistics paths and schemas are added; existing endpoint contracts remain unchanged.
+- **Generated contracts:** regenerate OpenAPI and the TypeScript client after endpoint changes; never edit generated files manually.
+- **Build/runtime:** adds SQLite JDBC and plugin-owned persistent files under the Halo work directory. Statistics schema v1 is new and unreleased; development databases are not migrated. Future released schema changes require explicit transactional migrations.
+- **Operations and performance:** bounded queues protect model calls from waiting on database writes, but retained call facts and indexes grow over time. Startup integrity checks and analytical queries have size-dependent costs. Reset clears logical data without promising immediate file shrinkage. The opt-in million-call benchmark has not met its existing 500 ms aggregate P95 target; passing normal CI does not imply that performance target passed.
