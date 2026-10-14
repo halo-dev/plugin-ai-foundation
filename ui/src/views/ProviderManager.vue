@@ -21,6 +21,10 @@ const tabs: Tab[] = [
     value: AI_FOUNDATION_ROUTE_NAMES.DEFAULTS,
   },
   {
+    label: '共享工具',
+    value: AI_FOUNDATION_ROUTE_NAMES.TOOLS,
+  },
+  {
     label: '调用插件',
     value: AI_FOUNDATION_ROUTE_NAMES.CALLERS,
   },
@@ -56,11 +60,7 @@ const activeRouteName = computed({
   </VPageHeader>
 
   <div class=":uno: flex p-2 pb-0">
-    <SegmentedTabs
-      v-model="activeRouteName"
-      :tabs="tabs"
-      aria-label="AI Foundation 页面导航"
-    />
+    <SegmentedTabs v-model="activeRouteName" :tabs="tabs" aria-label="AI Foundation 页面导航" />
   </div>
 
   <RouterView />

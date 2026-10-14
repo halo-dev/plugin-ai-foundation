@@ -23,6 +23,7 @@ configurations.runtimeClasspath {
     exclude group: 'org.springdoc'
     exclude group: 'io.swagger.core.v3'
     exclude group: 'com.fasterxml.jackson.core'
+    exclude group: 'tools.jackson.core'
     exclude group: 'org.slf4j'
     exclude group: 'io.micrometer'
     exclude group: 'com.squareup.okhttp3'
@@ -37,10 +38,13 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-model'
 
     compileOnly 'run.halo.app:api'
+    compileOnly 'io.projectreactor.netty:reactor-netty-http'
+    implementation 'org.jsoup:jsoup:1.23.1'
 
     testImplementation 'run.halo.app:api'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'io.projectreactor.netty:reactor-netty-http'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

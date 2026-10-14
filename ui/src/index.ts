@@ -5,12 +5,17 @@ import {
   AI_MODEL_SELECTOR_FORMKIT_TYPE,
   aiModelSelectorInput,
 } from './formkit/ai-model-selector-input'
+import {
+  AI_TOOL_SELECTOR_FORMKIT_TYPE,
+  aiToolSelectorInput,
+} from './formkit/ai-tool-selector-input'
 import { AI_FOUNDATION_ROUTE_NAMES } from './routes'
 
 const pluginModule = {
   formkit: {
     inputs: {
       [AI_MODEL_SELECTOR_FORMKIT_TYPE]: aiModelSelectorInput,
+      [AI_TOOL_SELECTOR_FORMKIT_TYPE]: aiToolSelectorInput,
     },
   },
   routes: [
@@ -49,6 +54,11 @@ const pluginModule = {
             path: 'defaults',
             name: AI_FOUNDATION_ROUTE_NAMES.DEFAULTS,
             component: () => import('./views/DefaultModelSlotsView.vue'),
+          },
+          {
+            path: 'tools',
+            name: AI_FOUNDATION_ROUTE_NAMES.TOOLS,
+            component: () => import('./views/ToolListView.vue'),
           },
           {
             path: 'callers',

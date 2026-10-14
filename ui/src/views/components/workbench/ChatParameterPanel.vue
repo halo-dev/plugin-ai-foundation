@@ -24,6 +24,7 @@ const props = defineProps<{
   reasoningMode?: ReasoningMode
   reasoningEffort?: ReasoningEffort
   testToolEnabled?: boolean
+  toolIds?: string[]
   testToolApprovalEnabled?: boolean
   externalTestToolEnabled?: boolean
   agentTestToolsEnabled?: boolean
@@ -56,6 +57,7 @@ const emit = defineEmits<{
   (e: 'update:reasoningMode', value: ReasoningMode): void
   (e: 'update:reasoningEffort', value: ReasoningEffort): void
   (e: 'update:testToolEnabled', value: boolean): void
+  (e: 'update:toolIds', value: string[]): void
   (e: 'update:testToolApprovalEnabled', value: boolean): void
   (e: 'update:externalTestToolEnabled', value: boolean): void
   (e: 'update:agentTestToolsEnabled', value: boolean): void
@@ -469,6 +471,23 @@ function updateNumberField(key: NumberField, value: string) {
         class=":uno: flex cursor-pointer select-none items-center gap-1.5 py-2 text-sm text-slate-800 font-semibold"
       >
         <RiArrowRightSLine class=":uno: size-4 transition-transform group-open:rotate-90" />
+        共享工具
+      </summary>
+      <div class=":uno: pb-4">
+        <FormKit
+          type="aiToolSelector"
+          label="选择共享工具"
+          :model-value="toolIds ?? []"
+          help="仅向模型提供所选工具，最多运行 5 个模型步骤。"
+          @input="emit('update:toolIds', $event as string[])"
+        />
+      </div>
+    </details>
+
+    <details class=":uno: group border-b border-slate-200 last:border-b-0">
+      <summary
+        class=":uno: flex cursor-pointer list-none items-center justify-between py-3 text-xs text-slate-500 font-semibold tracking-wider uppercase [&::-webkit-details-marker]:hidden"
+      >
         工具测试
       </summary>
       <div class=":uno: pb-3 pl-5">

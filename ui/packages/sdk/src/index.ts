@@ -15,6 +15,7 @@ export { applyUIMessageChunk, createUIMessageReducer, messageText } from './mess
 export type { CreateReducerOptions, UIMessageReducerState } from './message-reducer'
 export { fromOpenAPIRequestArgs } from './openapi'
 export type { OpenAPIRequestArgs } from './openapi'
+export { fixJson } from './partial-json'
 export {
   AIUIMessageValidationError,
   assertValidUIMessages,
@@ -27,7 +28,6 @@ export type {
   ValidateUIMessagesOptions,
 } from './persistence'
 export { parsePartialJson, toJsonSchema, validateFinalValue, validateRuntimeSchema } from './schema'
-export { fixJson } from './partial-json'
 export type {
   DataPartSchemas,
   MessageMetadataSchema,
@@ -53,6 +53,8 @@ export type {
   UIMessageStreamReadResult,
   UIMessageStreamReadStatus,
 } from './stream-reader'
+export { AI_TOOL_SELECTOR_FORMKIT_TYPE, listTools } from './tools'
+export type { AiToolSelectorOptions, ListToolsOptions, ToolDescriptor } from './tools'
 export {
   DefaultChatTransport,
   HttpChatTransport,

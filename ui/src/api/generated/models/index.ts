@@ -69,4 +69,7 @@ export * from './test-rerank-response';
 export * from './test-ui-message';
 export * from './test-ui-message-chat-request';
 export * from './tool-choice';
+export * from './tool-config';
+export * from './tool-descriptor';
+export * from './tool-enabled-request';
 export * from './uimessage-chunk';

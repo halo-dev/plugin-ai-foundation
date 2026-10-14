@@ -10,6 +10,7 @@ api/console-api-aifoundation-halo-run-v1alpha1-model-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-model-option-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-provider-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-provider-type-api.ts
+api/console-api-aifoundation-halo-run-v1alpha1-tool-api.ts
 base.ts
 common.ts
 configuration.ts
@@ -87,4 +88,7 @@ models/test-rerank-response.ts
 models/test-ui-message-chat-request.ts
 models/test-ui-message.ts
 models/tool-choice.ts
+models/tool-config.ts
+models/tool-descriptor.ts
+models/tool-enabled-request.ts
 models/uimessage-chunk.ts

@@ -1,0 +1,17 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: tool-clock-example
+spec:
+  enabled: true
+  requires: ">=2.26.0"
+  author:
+    name: Halo
+  displayName: "共享工具测试示例"
+  description: "测试共享工具注册、卡片配置和插件设置中的工具选择"
+  settingName: tool-clock-example-settings
+  configMapName: tool-clock-example-configmap
+  pluginDependencies:
+    ai-foundation?: ">=1.0.0"
+  license:
+    - name: GPL-3.0

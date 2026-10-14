@@ -446,6 +446,7 @@ export function useChatWorkbench(options: UseChatWorkbenchOptions) {
   function uiMessageRequestBody(parameters: ReturnType<typeof settings.buildParameters>) {
     return {
       system: parameters.systemPrompt?.trim() || undefined,
+      toolIds: parameters.toolIds,
       temperature: parameters.temperature,
       topP: parameters.topP,
       topK: parameters.topK,
