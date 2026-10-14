@@ -54,7 +54,7 @@ function onSubmit() {
     <div class=":uno: flex flex-col gap-3 text-sm text-gray-700">
       <p>
         此操作将<span class=":uno: text-red-600 font-semibold">永久删除</span
-        >全部调用历史、执行明细与每日汇总，并开始新的统计周期。该操作不可撤销。
+        >全部调用统计与执行明细，并开始新的统计周期。该操作不可撤销。
       </p>
       <p class=":uno: text-xs text-gray-500">
         请输入 <span class=":uno: font-semibold font-mono">RESET</span> 以确认操作。
