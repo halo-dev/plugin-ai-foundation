@@ -3,9 +3,8 @@ package run.halo.aifoundation.service.usage;
 import java.util.Locale;
 
 /**
- * Grouping dimension for usage breakdown and dimension-split trend queries. The enum name
- * maps to a column shared by ai_calls and ai_usage_daily, so both raw and archived sources
- * can answer grouped queries.
+ * Grouping dimension for usage breakdown and dimension-split trend queries.
+ * Each dimension maps to a column in the retained call facts.
  */
 public enum UsageBreakdownDimension {
     MODEL("model_name"),

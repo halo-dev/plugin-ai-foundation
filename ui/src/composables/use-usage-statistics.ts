@@ -6,6 +6,7 @@ import type {
   UsageTrendPoint,
 } from '@/api/generated'
 import type { UsageQueryParams } from '@/composables/use-usage-filters'
+import { heatmapRange } from '@/utils/usage-heatmap'
 import { useInfiniteQuery, useQuery, type QueryClient } from '@tanstack/vue-query'
 import { computed, type ComputedRef, type Ref } from 'vue'
 
@@ -19,8 +20,6 @@ const QK_USAGE_BREAKDOWN = [QK_USAGE, 'breakdown']
 const QK_USAGE_HEATMAP = [QK_USAGE, 'heatmap']
 
 const USAGE_CALLS_PAGE_SIZE = 50
-// The heatmap always shows the last 53 weeks (371 days), decoupled from the page time filter
-const USAGE_HEATMAP_DAYS = 371
 
 export type UsageBreakdownDimensionParam = 'model' | 'provider' | 'callerPlugin'
 
@@ -103,9 +102,10 @@ export function useUsageHeatmapTrends(
   buildParams: UsageParamsBuilder,
   fingerprint: ComputedRef<string>,
   enabled: ComputedRef<boolean>,
+  anchor: Readonly<Ref<Date>>,
 ) {
   return useQuery<UsageTrendPoint[]>({
-    queryKey: [...QK_USAGE_HEATMAP, fingerprint],
+    queryKey: [...QK_USAGE_HEATMAP, fingerprint, anchor],
     queryFn: async () => {
       const params = buildParams()
       if (!params) {
@@ -114,7 +114,7 @@ export function useUsageHeatmapTrends(
       const { resolution: _resolution, ...rest } = params
       const { data } = await aiConsoleApiClient.usageStatistics.listAiUsageTrends({
         ...rest,
-        from: new Date(Date.parse(params.to) - USAGE_HEATMAP_DAYS * 86400000).toISOString(),
+        ...heatmapRange(anchor.value, params.timeZone),
         resolution: 'DAY',
       })
       return data
@@ -152,6 +152,7 @@ export function useUsageCalls(
 export function useUsageCallDetail(id: () => string) {
   return useQuery({
     queryKey: [...QK_USAGE_CALL_DETAIL, computed(id)],
+    enabled: computed(() => Boolean(id())),
     queryFn: async () => {
       const { data } = await aiConsoleApiClient.usageStatistics.getAiUsageCall({ id: id() })
       return data

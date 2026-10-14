@@ -98,23 +98,6 @@ final class UsageSqliteSchema {
               UNIQUE(call_id, unit_kind, unit_index, attempt_index)
             ) STRICT
             """);
-        statement.execute("""
-            CREATE TABLE ai_usage_daily (
-              day TEXT NOT NULL, caller_plugin_name TEXT NOT NULL,
-              feature TEXT NOT NULL, provider_name TEXT NOT NULL,
-              provider_type TEXT NOT NULL, model_name TEXT NOT NULL,
-              model_type TEXT NOT NULL, operation TEXT NOT NULL,
-              status TEXT NOT NULL, usage_quality TEXT NOT NULL,
-              call_count INTEGER NOT NULL, input_tokens INTEGER,
-              output_tokens INTEGER, cache_read_input_tokens INTEGER,
-              cache_creation_input_tokens INTEGER, reasoning_output_tokens INTEGER,
-              accounted_total_tokens INTEGER, known_usage_calls INTEGER NOT NULL,
-              missing_usage_calls INTEGER NOT NULL,
-              incomplete_call_count INTEGER NOT NULL,
-              PRIMARY KEY(day, caller_plugin_name, feature, provider_name, provider_type,
-                model_name, model_type, operation, status, usage_quality)
-            ) STRICT
-            """);
         statement.execute(
             "CREATE INDEX idx_calls_started ON ai_calls(started_at_ms DESC, id DESC)");
         statement.execute("""
@@ -129,7 +112,6 @@ final class UsageSqliteSchema {
             CREATE INDEX idx_executions_call_started
             ON ai_model_executions(call_id, started_at_ms, unit_index, attempt_index)
             """);
-        statement.execute("CREATE INDEX idx_daily_day ON ai_usage_daily(day)");
         statement.execute("""
             CREATE INDEX idx_calls_filtered_hour ON ai_calls(
               (started_at_ms / 3600000), status, usage_quality, complete, started_at_ms, input_tokens,
@@ -141,10 +123,6 @@ final class UsageSqliteSchema {
         statement.execute("""
             CREATE INDEX idx_executions_retention
             ON ai_model_executions(started_at_ms, call_id)
-            """);
-        statement.execute("""
-            CREATE INDEX idx_calls_retention
-            ON ai_calls(started_at_ms, id) WHERE status <> 'IN_PROGRESS'
             """);
     }
 

@@ -1,14 +1,60 @@
 import type { UsageTrendPoint } from '@/api/generated'
+import { formatBucketStart, type UsageTrendResolution } from '@/utils/usage'
+import { fromDate, toCalendarDate } from '@internationalized/date'
 
-export function bucketDuration(resolution?: string) {
-  return resolution === 'HOUR' ? 3600000 : 86400000
+export function bucketDuration(
+  resolution?: string,
+  bucketStart?: string,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+) {
+  if (!bucketStart || !Number.isFinite(Date.parse(bucketStart))) {
+    return resolution === 'HOUR' ? 3600000 : 86400000
+  }
+  const start = new Date(bucketStart)
+  const local = fromDate(start, timeZone)
+  if (resolution === 'HOUR') {
+    let end = start.getTime() + (60 - local.minute) * 60000
+    // An offset transition can start a partial hour, including Lord Howe's 30-minute change.
+    if (fromDate(new Date(end), timeZone).offset !== local.offset) {
+      let before = start.getTime()
+      while (end - before > 1) {
+        const middle = Math.floor((before + end) / 2)
+        if (fromDate(new Date(middle), timeZone).offset === local.offset) before = middle
+        else end = middle
+      }
+    }
+    return end - start.getTime()
+  }
+  const nextDay = toCalendarDate(local).add({ days: 1 }).toDate(timeZone)
+  return nextDay.getTime() - start.getTime()
 }
 
-export function chartDomain(points: UsageTrendPoint[], from?: string, to?: string) {
+export function chartTimeLabels(
+  dates: Date[],
+  resolution: UsageTrendResolution,
+  timeZone: string,
+) {
+  const labels = dates.map((date) => formatBucketStart(date.toISOString(), resolution, timeZone))
+  return labels.map((label, index) => {
+    const day = label.slice(5, 10).replace('-', '/')
+    if (resolution === 'DAY') return day
+    const repeated = labels.some((other, otherIndex) =>
+      otherIndex !== index && other.slice(0, 16) === label.slice(0, 16) && other !== label,
+    )
+    return `${day} ${label.slice(11, 16)}${repeated ? ` ${label.split(' ')[2]}` : ''}`
+  })
+}
+
+export function chartDomain(
+  points: UsageTrendPoint[],
+  from?: string,
+  to?: string,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+) {
   const buckets = points
     .map((point) => ({
       start: Date.parse(point.bucketStart || ''),
-      step: bucketDuration(point.resolution),
+      step: bucketDuration(point.resolution, point.bucketStart, timeZone),
     }))
     .filter((point) => Number.isFinite(point.start))
   const step = buckets.length ? Math.min(...buckets.map((point) => point.step)) : 86400000

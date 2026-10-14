@@ -20,7 +20,7 @@ const UsageSegmentedStub = defineComponent({
 
 function mountHeatmap(points: unknown[] = []) {
   return mount(UsageHeatmap, {
-    props: { points },
+    props: { points, anchor: new Date(), timeZone: 'UTC' },
     global: {
       stubs: { UsageSegmented: UsageSegmentedStub },
       directives: { tooltip: () => {} },
@@ -29,10 +29,54 @@ function mountHeatmap(points: unknown[] = []) {
 }
 
 describe('UsageHeatmap', () => {
+  it('distinguishes unknown token buckets from known zero and absent buckets', async () => {
+    const wrapper = mountHeatmap([
+      { bucketStart: '2026-08-10T00:00:00Z', callCount: 2 },
+      { bucketStart: '2026-08-09T00:00:00Z', callCount: 1, accountedTotalTokens: 0 },
+    ])
+    await wrapper.setProps({ anchor: new Date('2026-08-10T12:00:00Z') })
+    const unknown = wrapper.get('[aria-label="2026-08-10：未知 Token"]')
+    expect(unknown.classes()).toContain('is-unknown')
+    expect(wrapper.get('[aria-label="2026-08-09：0 Token"]').classes()).toContain('l0')
+    expect(wrapper.get('[aria-label="2026-08-08：0 Token"]').classes()).toContain('l0')
+    await wrapper.get('button[data-value="calls"]').trigger('click')
+    expect(wrapper.get('[aria-label="2026-08-10：2 次调用"]').classes()).toContain('l4')
+  })
+
+  it.each([
+    ['Asia/Shanghai', '2026-08-09T16:00:00Z'],
+    ['Asia/Kathmandu', '2026-08-09T18:15:00Z'],
+    ['America/New_York', '2026-08-10T04:00:00Z'],
+  ])('maps UTC bucket instants to the local grid day in %s', async (timeZone, bucketStart) => {
+    const wrapper = mountHeatmap([{ bucketStart, accountedTotalTokens: 12 }])
+    await wrapper.setProps({ anchor: new Date(bucketStart), timeZone })
+    expect(wrapper.get('[aria-label="2026-08-10：12 Token"]').classes()).toContain('l4')
+    expect(wrapper.findAll('.usage-heat-cell[aria-label]').at(-1)?.attributes('aria-label')).toBe('2026-08-10：12 Token')
+    expect(wrapper.text()).not.toContain('UTC')
+    wrapper.unmount()
+  })
+
+  it('updates the last grid day when its shared anchor crosses midnight', async () => {
+    const wrapper = mountHeatmap()
+    await wrapper.setProps({ anchor: new Date('2026-08-10T23:59:00Z') })
+    expect(
+      wrapper.findAll('.usage-heat-cell[aria-label]').at(-1)?.attributes('aria-label'),
+    ).toContain('2026-08-10')
+    await wrapper.setProps({ anchor: new Date('2026-08-11T00:01:00Z') })
+    expect(
+      wrapper.findAll('.usage-heat-cell[aria-label]').at(-1)?.attributes('aria-label'),
+    ).toContain('2026-08-11')
+  })
+
   it('renders one cell per grid day with level classes', async () => {
     const today = new Date().toISOString().slice(0, 10)
     const wrapper = mountHeatmap([
-      { bucketStart: `${today}T00:00:00Z`, resolution: 'DAY', callCount: 3, accountedTotalTokens: 900 },
+      {
+        bucketStart: `${today}T00:00:00Z`,
+        resolution: 'DAY',
+        callCount: 3,
+        accountedTotalTokens: 900,
+      },
     ])
     await flushPromises()
     const cells = wrapper.findAll('.usage-heat .usage-heat-cell')
@@ -45,7 +89,12 @@ describe('UsageHeatmap', () => {
   it('switches the metric without rebuilding the grid', async () => {
     const today = new Date().toISOString().slice(0, 10)
     const wrapper = mountHeatmap([
-      { bucketStart: `${today}T00:00:00Z`, resolution: 'DAY', callCount: 7, accountedTotalTokens: 10 },
+      {
+        bucketStart: `${today}T00:00:00Z`,
+        resolution: 'DAY',
+        callCount: 7,
+        accountedTotalTokens: 10,
+      },
     ])
     await flushPromises()
     const before = wrapper.findAll('.usage-heat .usage-heat-cell').length

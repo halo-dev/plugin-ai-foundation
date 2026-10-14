@@ -5,6 +5,7 @@ import {
   bucketDuration,
   chartCeiling,
   chartDomain,
+  chartTimeLabels,
   compactChartNumber,
   USAGE_CHART_OTHER_COLOR,
   usageCategoryColor,
@@ -19,10 +20,10 @@ const PLOT_RIGHT = 8
 interface StackSegment {
   key: string
   color: string
-  value: number
+  value?: number
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   points?: UsageTrendPoint[]
   /** Ordered Top N dimension keys; falls back to input/output stacking when empty */
   categories?: string[]
@@ -31,7 +32,10 @@ const props = defineProps<{
   from?: string
   to?: string
   highlightKey?: string | null
-}>()
+  timeZone?: string
+}>(), {
+  timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+})
 
 const wrap = shallowRef<HTMLElement>()
 const width = shallowRef(0)
@@ -50,7 +54,7 @@ onMounted(() => {
 onBeforeUnmount(() => observer?.disconnect())
 
 const points = computed(() => props.points || [])
-const domain = computed(() => chartDomain(points.value, props.from, props.to))
+const domain = computed(() => chartDomain(points.value, props.from, props.to, props.timeZone))
 const resolution = computed(() =>
   points.value.some((point) => point.resolution === 'DAY') ? 'DAY' : 'HOUR',
 )
@@ -69,30 +73,31 @@ function segmentsOf(point: UsageTrendPoint): StackSegment[] {
       return {
         key,
         color: usageCategoryColor(key, categories),
-        value: usageMetricValue(
-          { accountedTotalTokens: value?.accountedTotalTokens, callCount: value?.callCount },
-          props.metric,
-        ),
+        value: value ? usageMetricValue(value, props.metric) : 0,
       }
     })
-    const known = segments.reduce((sum, segment) => sum + segment.value, 0)
-    const other = Math.max(0, (metricTotal(point) ?? 0) - known)
-    if (other > 0) {
+    const known = segments.reduce((sum, segment) => sum + (segment.value ?? 0), 0)
+    const total = metricTotal(point)
+    const other = total == null ? undefined : Math.max(0, total - known)
+    if (other != null && other > 0) {
       segments.push({ key: '__other__', color: USAGE_CHART_OTHER_COLOR, value: other })
     }
-    return segments.filter((segment) => segment.value > 0)
+    return segments
   }
   if (props.metric === 'calls') {
     return [{ key: '__calls__', color: '#4CCBA0', value: point.callCount ?? 0 }]
   }
-  const input = point.inputTokens ?? 0
-  const output = point.outputTokens ?? 0
-  const unknown = Math.max(0, (point.accountedTotalTokens ?? 0) - input - output)
+  const input = point.inputTokens
+  const output = point.outputTokens
+  const unknown =
+    point.accountedTotalTokens == null
+      ? undefined
+      : Math.max(0, point.accountedTotalTokens - (input ?? 0) - (output ?? 0))
   return [
     { key: '__input__', color: '#a5b4fc', value: input },
     { key: '__output__', color: '#4CCBA0', value: output },
     { key: '__unknown__', color: USAGE_CHART_OTHER_COLOR, value: unknown },
-  ].filter((segment) => segment.value > 0)
+  ]
 }
 
 const ceiling = computed(() =>
@@ -113,29 +118,26 @@ const ticks = computed(() =>
   })),
 )
 
-const timeTicks = computed(() =>
-  [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-    const date = new Date(domain.value.start + (domain.value.end - domain.value.start) * ratio)
-    return {
-      ratio,
-      label:
-        resolution.value === 'HOUR'
-          ? `${date.getUTCMonth() + 1}/${date.getUTCDate()} ${String(date.getUTCHours()).padStart(2, '0')}:00`
-          : `${date.getUTCMonth() + 1}/${date.getUTCDate()}`,
-    }
-  }),
-)
+const timeTicks = computed(() => {
+  const ratios = [0, 0.25, 0.5, 0.75, 1]
+  const dates = ratios.map((ratio) =>
+    new Date(domain.value.start + (domain.value.end - domain.value.start) * ratio),
+  )
+  const labels = chartTimeLabels(dates, resolution.value, props.timeZone)
+  return ratios.map((ratio, index) => ({ ratio, label: labels[index] }))
+})
 
 const bars = computed(() => {
   const span = domain.value.end - domain.value.start
   return points.value.map((point) => {
     const start = Date.parse(point.bucketStart || '')
     const slotX = yAxisWidth.value + ((start - domain.value.start) / span) * plotWidth.value
-    const slotWidth = (bucketDuration(point.resolution) / span) * plotWidth.value
+    const slotWidth = (bucketDuration(point.resolution, point.bucketStart, props.timeZone) / span) * plotWidth.value
     const barWidth = Math.max(1, Math.min(30, slotWidth * 0.68))
     const segments: (StackSegment & { y: number; height: number })[] = []
     let accumulated = 0
     for (const segment of segmentsOf(point)) {
+      if (segment.value == null || segment.value <= 0) continue
       const height = (segment.value / ceiling.value) * plotHeight
       segments.push({
         ...segment,
@@ -174,7 +176,7 @@ const tooltipRows = computed(() => {
   const bar = activeBar.value
   if (!bar) return []
   return segmentsOf(bar.point)
-    .filter((segment) => segment.value > 0)
+    .filter((segment) => segment.value == null || segment.value > 0)
     .map((segment) => ({
       color: segment.color,
       label: segmentLabel(segment.key),
@@ -199,7 +201,7 @@ function segmentLabel(key: string) {
   }
 }
 
-function formatValue(value: number) {
+function formatValue(value?: number) {
   return formatUsageMetric(value, props.metric)
 }
 
@@ -216,7 +218,7 @@ function hasUsageWarning(point: UsageTrendPoint) {
 
 function barAriaLabel(bar: (typeof bars.value)[number]) {
   const parts = [
-    formatBucketStart(bar.point.bucketStart, bar.point.resolution),
+    formatBucketStart(bar.point.bucketStart, bar.point.resolution, props.timeZone),
     `调用 ${bar.point.callCount ?? 0}`,
     `Token ${formatTokens(bar.point.accountedTotalTokens)}`,
   ]
@@ -318,7 +320,7 @@ function barAriaLabel(bar: (typeof bars.value)[number]) {
     </svg>
     <div v-if="activeBar" class=":uno: usage-chart-tooltip" :style="tooltipStyle" role="tooltip">
       <div class=":uno: usage-chart-tooltip-title">
-        {{ formatBucketStart(activeBar.point.bucketStart, activeBar.point.resolution) }}
+        {{ formatBucketStart(activeBar.point.bucketStart, activeBar.point.resolution, timeZone) }}
       </div>
       <div v-for="row in tooltipRows" :key="row.label" class=":uno: usage-chart-tooltip-row">
         <i :style="{ background: row.color }"></i>
@@ -328,7 +330,7 @@ function barAriaLabel(bar: (typeof bars.value)[number]) {
       <div class=":uno: usage-chart-tooltip-total">
         <span>合计</span>
         <span class=":uno: usage-chart-tooltip-value">{{
-          formatValue(metricTotal(activeBar.point) ?? 0)
+          formatValue(metricTotal(activeBar.point))
         }}</span>
       </div>
       <div v-if="activeBar.incomplete" class=":uno: mt-1 text-xs text-rose-600">数据不完整</div>

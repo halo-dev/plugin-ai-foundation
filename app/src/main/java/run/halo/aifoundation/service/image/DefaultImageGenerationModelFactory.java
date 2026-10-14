@@ -1,5 +1,6 @@
 package run.halo.aifoundation.service.image;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.image.ImageGenerationModel;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -22,6 +23,7 @@ public class DefaultImageGenerationModelFactory implements ImageGenerationModelF
         this(null, new ModelCapabilityService(), null, null);
     }
 
+    @Autowired
     public DefaultImageGenerationModelFactory(ProviderClientCache providerClientCache,
         ModelCapabilityService modelCapabilityService,
         ImageGenerationModelRuntimeFactory runtimeFactory,

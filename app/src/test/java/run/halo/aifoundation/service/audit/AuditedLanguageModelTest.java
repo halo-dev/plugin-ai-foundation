@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -95,6 +96,70 @@ class AuditedLanguageModelTest {
 
         verify(auditRecorder).recordModelInvocation(context, "language.streamText");
         verify(delegate).streamText(request);
+    }
+
+    @Test
+    void nullStreamRequestPreservesMiddlewareEmptyRequestBehavior() {
+        var expected = GenerateTextResult.builder().text("ok").build();
+        var result = new StreamTextResult(Flux.empty(), Flux.just("ok"), Flux.empty(),
+            Flux.empty(), Mono.empty(), Mono.just(expected));
+        when(delegate.streamText(any(GenerateTextRequest.class))).thenReturn(result);
+        var descriptor = mock(UsageCallDescriptor.class);
+        var session = mock(UsageCallSession.class);
+        when(statistics.describeCall(context, "language.streamText", true, null))
+            .thenReturn(descriptor);
+        when(statistics.beginCall(descriptor)).thenReturn(session);
+
+        var stream = model.streamText(null);
+
+        var request = org.mockito.ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(delegate).streamText(request.capture());
+        assertThat(request.getValue()).usingRecursiveComparison()
+            .isEqualTo(GenerateTextRequest.builder().build());
+        verify(statistics, never()).beginCall(descriptor);
+        StepVerifier.create(stream.textStream()).expectNext("ok").verifyComplete();
+        StepVerifier.create(stream.result()).expectNext(expected).verifyComplete();
+        verify(statistics).beginCall(descriptor);
+        verify(auditRecorder).recordModelInvocation(context, "language.streamText");
+    }
+
+    @Test
+    void streamProjectionsDoNotRetryDeclinedUsageAdmission() {
+        var request = GenerateTextRequest.builder().prompt("hello").build();
+        var expected = GenerateTextResult.builder().text("ok").build();
+        when(delegate.streamText(request)).thenReturn(new StreamTextResult(
+            Flux.empty(), Flux.just("ok"), Flux.empty(), Flux.empty(), Mono.empty(),
+            Mono.just(expected)));
+        var descriptor = mock(UsageCallDescriptor.class);
+        when(statistics.describeCall(context, "language.streamText", true, null))
+            .thenReturn(descriptor);
+        when(statistics.beginCall(descriptor)).thenReturn(null);
+
+        var stream = model.streamText(request);
+
+        StepVerifier.create(stream.textStream()).expectNext("ok").verifyComplete();
+        StepVerifier.create(stream.result()).expectNext(expected).verifyComplete();
+        verify(statistics).beginCall(descriptor);
+    }
+
+    @Test
+    void streamProjectionsDoNotRetryFailedUsageAdmission() {
+        var request = GenerateTextRequest.builder().prompt("hello").build();
+        var expected = GenerateTextResult.builder().text("ok").build();
+        when(delegate.streamText(request)).thenReturn(new StreamTextResult(
+            Flux.empty(), Flux.just("ok"), Flux.empty(), Flux.empty(), Mono.empty(),
+            Mono.just(expected)));
+        var descriptor = mock(UsageCallDescriptor.class);
+        when(statistics.describeCall(context, "language.streamText", true, null))
+            .thenReturn(descriptor);
+        when(statistics.beginCall(descriptor))
+            .thenThrow(new IllegalStateException("usage admission unavailable"));
+
+        var stream = model.streamText(request);
+
+        StepVerifier.create(stream.textStream()).expectNext("ok").verifyComplete();
+        StepVerifier.create(stream.result()).expectNext(expected).verifyComplete();
+        verify(statistics).beginCall(descriptor);
     }
 
     @Test

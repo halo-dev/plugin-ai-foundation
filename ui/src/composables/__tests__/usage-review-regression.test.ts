@@ -1,4 +1,5 @@
 import { aiConsoleApiClient } from '@/api'
+import UsageCallDetails from '@/views/components/usage/UsageCallDetails.vue'
 import UsageStackedChart from '@/views/components/usage/UsageStackedChart.vue'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -11,9 +12,87 @@ vi.mock('@halo-dev/components', () => ({
   VButton: { template: '<button><slot /></button>' },
   VEmpty: { template: '<div />' },
   VLoading: { template: '<div />' },
+  VTag: { template: '<span><slot /></span>' },
+  VStatusDot: { props: ['text'], template: '<span>{{ text }}</span>' },
 }))
 
 describe('Usage statistics regression tests', () => {
+  it('updates the call summary and executions together from the latest detail', async () => {
+    vi.mocked(aiConsoleApiClient.usageStatistics.getAiUsageCall).mockResolvedValueOnce({
+      data: {
+        call: {
+          id: 'live-call',
+          status: 'SUCCEEDED',
+          durationMillis: 2400,
+          attemptCount: 2,
+          requestModelId: 'requested',
+          responseModelId: 'actual',
+          complete: true,
+          usage: { accountedTotalTokens: 300, quality: 'REPORTED_TOTAL' },
+        },
+        executions: [
+          { id: 'finished-execution', status: 'SUCCEEDED', usage: { accountedTotalTokens: 300 } },
+        ],
+      },
+    } as never)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = mount(UsageCallDetails, {
+      props: { call: { id: 'live-call', status: 'IN_PROGRESS', complete: false } },
+      global: { plugins: [[VueQueryPlugin, { queryClient: client }]] },
+    })
+    expect(wrapper.get('.usage-process-summary').text()).toContain('进行中')
+    await flushPromises()
+    expect(wrapper.get('.usage-process-summary').text()).toContain('成功')
+    expect(wrapper.get('.usage-process-summary').text()).toContain('共 2 次执行')
+    expect(wrapper.get('.usage-process-summary').text()).toContain('2.4 s')
+    expect(wrapper.get('.usage-consumption-total').text()).toContain('300')
+    expect(wrapper.get('details').text()).toContain('requested → actual')
+    expect(wrapper.find('.usage-process-warning').exists()).toBe(false)
+    expect(wrapper.get('.usage-execution-list').text()).toContain('300')
+    wrapper.unmount()
+    client.clear()
+    vi.mocked(aiConsoleApiClient.usageStatistics.getAiUsageCall).mockClear()
+  })
+
+  it('keeps unknown trend totals and dimension tooltips distinct from known zero', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    try {
+      const wrapper = mount(UsageStackedChart, {
+        props: {
+          metric: 'tokens',
+          labelOf: (key: string) => key,
+          categories: ['model'],
+          points: [
+            {
+              bucketStart: '2026-08-10T00:00:00Z',
+              resolution: 'DAY',
+              callCount: 2,
+              byDimension: { model: { callCount: 2 } },
+            },
+          ],
+        },
+      })
+      await wrapper.get('rect[role="button"]').trigger('focus')
+      expect(wrapper.get('.usage-chart-tooltip-total').text()).toBe('合计未知')
+      expect(wrapper.get('.usage-chart-tooltip-row').text()).toContain('model未知')
+      expect(wrapper.find('rect[height="6"]').exists()).toBe(true)
+      await wrapper.setProps({
+        points: [{ bucketStart: '2026-08-10T00:00:00Z', accountedTotalTokens: 0 }],
+      })
+      expect(wrapper.get('.usage-chart-tooltip-total').text()).toBe('合计0')
+      expect(wrapper.find('rect[height="6"]').exists()).toBe(false)
+      wrapper.unmount()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('reloads incomplete execution detail after close and reopen', async () => {
     const fetch = vi.mocked(aiConsoleApiClient.usageStatistics.getAiUsageCall)
     fetch
@@ -60,6 +139,7 @@ describe('Usage statistics regression tests', () => {
           metric: 'tokens',
           labelOf: (key: string) => key,
           categories: [],
+          timeZone: 'UTC',
           from: '2026-06-01T00:00:00Z',
           to: '2026-09-11T00:00:00Z',
           points: [

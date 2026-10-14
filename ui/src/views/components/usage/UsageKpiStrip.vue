@@ -52,7 +52,12 @@ const PERCENT_FORMAT = { style: 'percent', maximumFractionDigits: 1 } as const
       <div class=":uno: usage-kpi">
         <dt class=":uno: usage-kpi-label">Token 总量</dt>
         <dd class=":uno: usage-kpi-value">
-          <NumberFlow :value="summary?.accountedTotalTokens ?? 0" :format="INTEGER_FORMAT" />
+          <NumberFlow
+            v-if="!summary || summary.accountedTotalTokens != null"
+            :value="summary?.accountedTotalTokens ?? 0"
+            :format="INTEGER_FORMAT"
+          />
+          <template v-else>未知</template>
         </dd>
         <dd class=":uno: usage-kpi-sub">
           输入 {{ subTokens(summary?.inputTokens) }} · 输出

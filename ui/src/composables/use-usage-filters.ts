@@ -1,5 +1,5 @@
 import { normalizeUsageTrendResolution, type UsageTrendResolution } from '@/utils/usage'
-import { utils } from '@halo-dev/ui-shared'
+import { parseDate } from '@internationalized/date'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -37,6 +37,7 @@ export interface UsageFilterState {
 export interface UsageQueryParams {
   from: string
   to: string
+  timeZone: string
   callerPlugin?: string
   feature?: string
   providerName?: string
@@ -61,6 +62,7 @@ const USAGE_MAX_RANGE_DAYS = 3660
 export function toUsageQueryParams(
   state: UsageFilterState,
   now: Date,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 ): UsageQueryParams | undefined {
   let from: Date
   let to: Date
@@ -72,25 +74,20 @@ export function toUsageQueryParams(
     if (!state.toDate) {
       return undefined
     }
-    const startDay = utils.date.dayjs(state.fromDate)
-    const endDay = utils.date.dayjs(state.toDate)
-    if (!startDay.isValid()) {
+    try {
+      from = parseDate(state.fromDate).toDate(timeZone)
+      // Advance the calendar date before resolving midnight, including 23/25-hour DST days.
+      to = parseDate(state.toDate).add({ days: 1 }).toDate(timeZone)
+    } catch {
       return undefined
     }
-    if (!endDay.isValid()) {
-      return undefined
-    }
-    from = startDay.startOf('day').toDate()
-    // The end date uses the next local midnight as the exclusive upper bound (calendar arithmetic, DST-safe)
-    to = endDay.startOf('day').add(1, 'day').toDate()
   } else {
     const duration = RANGE_DURATIONS[state.range]
     if (!duration) {
       return undefined
     }
-    const end = utils.date.dayjs(now)
-    to = end.toDate()
-    from = end.subtract(duration, 'millisecond').toDate()
+    to = now
+    from = new Date(now.getTime() - duration)
   }
 
   if (Number.isNaN(from.getTime())) {
@@ -99,10 +96,10 @@ export function toUsageQueryParams(
   if (Number.isNaN(to.getTime())) {
     return undefined
   }
-  if (!utils.date.dayjs(from).isBefore(to)) {
+  if (from.getTime() >= to.getTime()) {
     return undefined
   }
-  if (utils.date.dayjs(to).diff(from) > USAGE_MAX_RANGE_DAYS * 24 * 60 * 60 * 1000) {
+  if (to.getTime() - from.getTime() > USAGE_MAX_RANGE_DAYS * 24 * 60 * 60 * 1000) {
     return undefined
   }
 
@@ -110,6 +107,7 @@ export function toUsageQueryParams(
   return {
     from: from.toISOString(),
     to: to.toISOString(),
+    timeZone,
     callerPlugin: state.callerPlugin || undefined,
     feature: validFeature(feature),
     providerName: state.providerName || undefined,
@@ -130,6 +128,7 @@ function validFeature(value?: string) {
 
 export function useUsageFilters(now: () => Date = () => new Date()) {
   const router = useRouter()
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   const range = useRouteQuery<string>('range', '30d')
   const fromDate = useRouteQuery<string | undefined>('from')
@@ -171,11 +170,11 @@ export function useUsageFilters(now: () => Date = () => new Date()) {
 
   // Absolute times belong to one query session; first paint, pagination and aggregations share the same anchor
   const fingerprint = computed(() =>
-    JSON.stringify({ state: state.value, anchor: anchor.value.toISOString() }),
+    JSON.stringify({ state: state.value, anchor: anchor.value.toISOString(), timeZone }),
   )
 
   function buildParams() {
-    return toUsageQueryParams(state.value, anchor.value)
+    return toUsageQueryParams(state.value, anchor.value, timeZone)
   }
 
   function refreshAnchor() {
@@ -243,6 +242,7 @@ export function useUsageFilters(now: () => Date = () => new Date()) {
 
   return {
     state,
+    timeZone,
     fingerprint,
     buildParams,
     refreshAnchor,

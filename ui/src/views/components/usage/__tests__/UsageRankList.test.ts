@@ -19,6 +19,27 @@ function mountRank(items: UsageBreakdownItem[], props: Record<string, unknown> =
 }
 
 describe('UsageRankList', () => {
+  it('keeps an all-unknown Other total and share unknown without a value bar', () => {
+    const wrapper = mountRank([
+      ...Array.from({ length: 7 }, (_, index) => item(`known-${index}`, 100)),
+      { value: 'unknown-a', callCount: 2 },
+      { value: 'unknown-b', callCount: 3 },
+    ])
+    const other = wrapper.findAll('.usage-rank').at(-1)!
+    expect(other.get('.usage-rank-value').text()).toBe('未知')
+    expect(other.get('.usage-rank-sub').text()).toContain('5 次调用 · 未知')
+    expect(other.find('.usage-rank-bar').exists()).toBe(false)
+  })
+
+  it('preserves a known zero in Other when another member is unknown', () => {
+    const wrapper = mountRank([
+      ...Array.from({ length: 7 }, (_, index) => item(`known-${index}`, 100)),
+      item('zero', 0),
+      { value: 'unknown', callCount: 3 },
+    ])
+    expect(wrapper.findAll('.usage-rank-value').at(-1)?.text()).toBe('0')
+  })
+
   it('sorts entries by the active metric and renders bars', () => {
     const wrapper = mountRank([item('b', 100), item('a', 300, 5), item('c', 200)])
     const names = wrapper.findAll('.usage-rank-name').map((name) => name.text())

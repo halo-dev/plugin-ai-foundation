@@ -50,6 +50,19 @@ function mountStrip(summary: Record<string, unknown> = {}) {
 }
 
 describe('UsageKpiStrip', () => {
+  it('keeps missing token totals unknown after loading and preserves known zero', async () => {
+    const wrapper = mountStrip({ accountedTotalTokens: null })
+    expect(wrapper.find('.usage-kpi-value').text()).toBe('未知')
+    await wrapper.setProps({ summary: { accountedTotalTokens: 0 } })
+    expect(wrapper.find('.usage-kpi-value').text()).toBe('0')
+  })
+
+  it('uses backend coverage excluding partial calls without recomputing it', () => {
+    const wrapper = mountStrip({ usageCoverage: 0.97 })
+    expect(wrapper.findAll('.usage-kpi-value')[3]?.text()).toBe('97%')
+    expect(wrapper.text()).toContain('缺失 1 · 部分上报 2')
+  })
+
   it('renders zero placeholders before the summary arrives', () => {
     const wrapper = mount(UsageKpiStrip, { props: {} })
     expect(wrapper.findAll('.usage-kpi')).toHaveLength(5)

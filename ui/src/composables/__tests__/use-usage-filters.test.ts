@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -102,30 +102,15 @@ describe('toUsageQueryParams', () => {
   })
 
   describe('custom range boundaries', () => {
-    const originalTZ = process.env.TZ
-
-    afterEach(() => {
-      if (originalTZ === undefined) {
-        delete process.env.TZ
-      } else {
-        process.env.TZ = originalTZ
-      }
-    })
-
-    it('advances to the next local midnight across DST transitions', () => {
-      // 2026-03-08 美国夏令时开始，2026-03-07 ~ 2026-03-09 本地日历两天仅 47 小时；
-      // 固定 +24h 算法会得到 48 小时并落在次日 01:00
-      process.env.TZ = 'America/New_York'
-      const params = toUsageQueryParams(
-        { range: 'custom', fromDate: '2026-03-07', toDate: '2026-03-08' },
-        now,
-      )
-      expect(params).toBeDefined()
-      const from = new Date(params!.from)
-      const to = new Date(params!.to)
-      expect(to.getHours()).toBe(0)
-      expect(to.getDate()).toBe(9)
-      expect(to.getTime() - from.getTime()).toBe(47 * 60 * 60 * 1000)
+    it.each([
+      ['Asia/Shanghai', '2026-08-01', '2026-07-31T16:00:00.000Z', '2026-08-01T16:00:00.000Z'],
+      ['Asia/Kathmandu', '2026-08-01', '2026-07-31T18:15:00.000Z', '2026-08-01T18:15:00.000Z'],
+      ['America/New_York', '2026-03-08', '2026-03-08T05:00:00.000Z', '2026-03-09T04:00:00.000Z'],
+      ['America/New_York', '2026-11-01', '2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z'],
+    ])('uses calendar midnights in %s for %s', (timeZone, date, from, to) => {
+      expect(toUsageQueryParams(
+        { range: 'custom', fromDate: date, toDate: date }, now, timeZone,
+      )).toMatchObject({ from, to, timeZone })
     })
 
     it('rejects ranges beyond the 3660-day backend limit', () => {
@@ -160,6 +145,9 @@ describe('useUsageFilters', () => {
 
     expect(filters!.state.value.resolution).toBe('DAY')
     expect(filters!.buildParams()?.resolution).toBe('DAY')
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    expect(filters!.buildParams()?.timeZone).toBe(timeZone)
+    expect(JSON.parse(filters!.fingerprint.value).timeZone).toBe(timeZone)
   })
 
   it('freezes preset boundaries for one query session and advances them on refresh', async () => {

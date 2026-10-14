@@ -1,7 +1,7 @@
 import type { UsageCallItem } from '@/api/generated'
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import UsageCallTable from '../UsageCallTable.vue'
 
 vi.mock('@halo-dev/components', () => ({
@@ -26,9 +26,17 @@ vi.mock('@halo-dev/components', () => ({
   }),
 }))
 
+vi.mock('@/composables/use-usage-statistics', () => ({
+  useUsageCallDetail: () => ({
+    data: ref(),
+    isLoading: ref(false),
+    isError: ref(false),
+    refetch: vi.fn(),
+  }),
+}))
+
 const UsageCallExecutionsStub = defineComponent({
-  props: ['callId'],
-  template: '<div data-test="executions">executions:{{ callId }}</div>',
+  template: '<div data-test="executions">executions</div>',
 })
 
 function mountTable(props: Partial<InstanceType<typeof UsageCallTable>['$props']> = {}) {
@@ -189,7 +197,7 @@ describe('UsageCallTable', () => {
 
     await row.trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-test="executions"]').text()).toContain('executions:call-1')
+    expect(wrapper.find('[data-test="executions"]').exists()).toBe(true)
     expect(row.attributes('aria-expanded')).toBe('true')
 
     await row.trigger('click')
@@ -228,5 +236,4 @@ describe('UsageCallTable', () => {
     expect(wrapper.get('details').text()).toContain('gpt-4o-prod')
     expect(wrapper.get('[aria-label="本次消耗"]').text()).not.toContain('缓存读取')
   })
-
 })

@@ -1,6 +1,6 @@
 package run.halo.aifoundation.service.usage;
 
-import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.rollupAndRetain;
+import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.retain;
 import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.storeWithQueries;
 
 import run.halo.aifoundation.service.observation.NormalizedUsage;
@@ -44,7 +44,7 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void boundsChildDeletionBeforeArchivingACallWithManyExecutions() throws Exception {
+    void boundsExecutionDeletionAndRetainsCallFacts() throws Exception {
         store = createStore();
         var call = start("many-attempts", Instant.parse("2026-04-01T10:00:00Z"));
         store.startCall(call);
@@ -58,16 +58,16 @@ class SqliteUsageStatisticsStoreTest {
             store.finishCall(terminal(call, usage(count, count)));
         }));
         var clock = Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"), ZoneOffset.UTC);
-        assertThat(store.rollupAndRetainBatch(clock)).isTrue();
+        assertThat(store.retainBatch(clock)).isTrue();
         assertThat(store.getCall(call.id())).isPresent();
         try (var connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + paths().database());
             var statement = connection.createStatement();
             var rows = statement.executeQuery("SELECT COUNT(*) FROM ai_model_executions")) {
             rows.next();
-            assertThat(rows.getInt(1)).isEqualTo(UsageStatisticsMaintenance.EXECUTION_BATCH_SIZE + 1);
+            assertThat(rows.getInt(1)).isEqualTo(UsageStatisticsMaintenance.EXECUTION_BATCH_SIZE * 2 + 1);
         }
-        rollupAndRetain(store, clock);
-        assertThat(store.getCall(call.id())).isEmpty();
+        retain(store, clock);
+        assertThat(store.getCall(call.id()).orElseThrow().executions()).isEmpty();
         assertThat(store.summary(query("2026-04-01T00:00:00Z", "2026-04-02T00:00:00Z"), true)
             .accountedTotalTokens()).isEqualTo(count * 2L);
     }
@@ -77,7 +77,7 @@ class SqliteUsageStatisticsStoreTest {
         store = new SqliteUsageStatisticsStore(paths());
         store.initialize();
         var at = Instant.parse("2026-04-01T10:00:00Z");
-        var count = UsageStatisticsMaintenance.CALL_BATCH_SIZE + 1;
+        var count = 257;
         for (int i = 0; i < count; i++) {
             var call = start("batch-" + i, at);
             store.startCall(call);
@@ -87,13 +87,13 @@ class SqliteUsageStatisticsStoreTest {
         }
         var clock = Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"), ZoneOffset.UTC);
         var query = query("2026-04-01T00:00:00Z", "2026-04-02T00:00:00Z");
-        assertThat(store.rollupAndRetainBatch(clock)).isTrue();
+        assertThat(store.retainBatch(clock)).isFalse();
         assertThat(store.summary(query, true).callCount()).isEqualTo(count);
         store.close();
         store = new SqliteUsageStatisticsStore(paths());
         store.initialize();
-        rollupAndRetain(store, clock);
-        rollupAndRetain(store, clock);
+        retain(store, clock);
+        retain(store, clock);
         assertThat(store.summary(query, true).callCount()).isEqualTo(count);
         assertThat(store.summary(query, true).accountedTotalTokens()).isEqualTo(count * 3L);
     }
@@ -181,14 +181,14 @@ class SqliteUsageStatisticsStoreTest {
         assertThat(failed.accountedTotalTokens()).isNull();
         assertThat(failed.callCount()).isZero();
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC));
         assertThat(store.summary(withStatus(base, UsageStatus.FAILED), true)
             .accountedTotalTokens()).isNull();
     }
 
     @Test
-    void doesNotRewriteArchivedTokenFactsAfterExecutionRetention() {
+    void doesNotRewriteTokenFactsAfterExecutionRetention() {
         store = createStore();
         var start = start("archived-retry", Instant.parse("2026-07-01T10:00:00Z"));
         store.startCall(start);
@@ -205,11 +205,11 @@ class SqliteUsageStatisticsStoreTest {
         var failedQuery = withStatus(
             query("2026-07-01T00:00:00Z", "2026-07-02T00:00:00Z"), UsageStatus.SUCCEEDED);
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-01T00:00:00Z"), ZoneOffset.UTC));
         assertThat(store.summary(failedQuery, true).accountedTotalTokens()).isEqualTo(15L);
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-02T00:00:00Z"), ZoneOffset.UTC));
         assertThat(store.summary(failedQuery, true).accountedTotalTokens()).isEqualTo(15L);
     }
@@ -228,31 +228,31 @@ class SqliteUsageStatisticsStoreTest {
             UsageStatus.SUCCEEDED, null, "actual", 1, 1, 0, true, usage(10, 5)));
         var executionDay = query("2026-07-01T00:00:00Z", "2026-07-02T00:00:00Z");
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-02T02:00:00Z"), ZoneOffset.UTC));
 
         var summary = store.summary(executionDay, true);
         assertThat(summary.callCount()).isEqualTo(1);
         assertThat(summary.accountedTotalTokens()).isEqualTo(15L);
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-03T02:00:00Z"), ZoneOffset.UTC));
         assertThat(store.summary(executionDay, true).accountedTotalTokens()).isEqualTo(15L);
     }
 
     @Test
-    void rerollsRecentDaysSoLateTerminalUpdatesAreNotFrozen() {
+    void lateTerminalUpdatesRemainVisibleAfterMaintenance() {
         store = createStore();
         var start = start("late-terminal", Instant.parse("2026-08-10T23:59:00Z"));
         store.startCall(start);
         var query = query("2026-08-10T00:00:00Z", "2026-08-11T00:00:00Z");
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"), ZoneOffset.UTC));
         assertThat(store.summary(query, true).inProgressCount()).isEqualTo(1);
 
         store.finishCall(terminal(start, usage(4, 2)));
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-12T02:00:00Z"), ZoneOffset.UTC));
 
         var summary = store.summary(query, true);
@@ -262,18 +262,18 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void rerollsCallFactsUntilCallDetailRetentionExpires() {
+    void longRunningCallsRemainUpdatableAfterMaintenance() {
         store = createStore();
         var start = start("long-running-call", Instant.parse("2026-07-01T10:00:00Z"));
         store.startCall(start);
         var query = query("2026-07-01T00:00:00Z", "2026-07-02T00:00:00Z");
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"), ZoneOffset.UTC));
         assertThat(store.summary(query, true).inProgressCount()).isEqualTo(1);
 
         store.finishCall(terminal(start, usage(4, 2)));
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-12T02:00:00Z"), ZoneOffset.UTC));
 
         var summary = store.summary(query, true);
@@ -282,13 +282,13 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void rollupLeavesRecentCallDetailsInPlace() {
+    void retentionLeavesCallFactsInPlace() {
         store = createStore();
         var start = start("safety-delay", Instant.parse("2026-08-10T23:59:00Z"));
         store.finishCall(terminal(start, usage(1, 1)));
         var query = query("2026-08-10T00:00:00Z", "2026-08-11T00:00:00Z");
 
-        rollupAndRetain(store,
+        retain(store,
             Clock.fixed(Instant.parse("2026-08-11T00:30:00Z"), ZoneOffset.UTC));
 
         assertThat(store.getCall(start.id())).isPresent();
@@ -296,14 +296,14 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void rollsUpWithoutDoubleCountingAndRetainsDailyHistory() {
+    void retainsCallFactsWithoutDoubleCounting() {
         store = createStore();
         var start = start("old-call", Instant.parse("2026-04-01T10:00:00Z"));
         store.finishCall(terminal(start, usage(7, 3)));
 
-        rollupAndRetain(store, Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC));
+        retain(store, Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC));
 
-        assertThat(store.getCall(start.id())).isEmpty();
+        assertThat(store.getCall(start.id())).isPresent();
         var summary = store.summary(query("2026-04-01T00:00:00Z", "2026-04-02T00:00:00Z"),
             true);
         assertThat(summary.callCount()).isEqualTo(1);
@@ -313,7 +313,7 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void hourlyTrendsUseExecutionFactsAndArchivedIntervalsRemainDaily() {
+    void hourlyTrendsKeepTheirResolutionAfterExecutionRetention() {
         store = createStore();
         var start = start("hourly", Instant.parse("2026-08-10T10:15:00Z"));
         store.startCall(start);
@@ -347,7 +347,7 @@ class SqliteUsageStatisticsStoreTest {
 
         var old = start("archived-hourly", Instant.parse("2026-04-01T10:00:00Z"));
         store.finishCall(terminal(old, usage(1, 1)));
-        rollupAndRetain(store, Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
+        retain(store, Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
             ZoneOffset.UTC));
         assertThat(store.trends(hourlyQuery, true, null)).singleElement()
             .extracting(UsageTrendPoint::resolution).isEqualTo(UsageTrendResolution.HOUR);
@@ -356,7 +356,7 @@ class SqliteUsageStatisticsStoreTest {
             null, null, UsageTrendResolution.HOUR);
 
         assertThat(store.trends(archivedQuery, true, null)).singleElement()
-            .extracting(UsageTrendPoint::resolution).isEqualTo(UsageTrendResolution.DAY);
+            .extracting(UsageTrendPoint::resolution).isEqualTo(UsageTrendResolution.HOUR);
     }
 
     @Test
@@ -373,13 +373,13 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void breakdownGroupsAcrossRawAndArchivedSources() {
+    void breakdownGroupsAcrossHistoricalAndRecentCalls() {
         store = createStore();
         var old = new UsageCallStart("breakdown-old", 1, Instant.parse("2026-04-01T10:00:00Z"),
             "plugin-search", "1.0.0", "stack", "semantic-search", "language.generateText",
             "LANGUAGE", "model-a", "provider-a", "openai", "requested", false);
         store.finishCall(terminal(old, usage(10, 5)));
-        rollupAndRetain(store, Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
+        retain(store, Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
             ZoneOffset.UTC));
 
         var recent = new UsageCallStart("breakdown-recent", 1,
@@ -417,13 +417,13 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void trendsSplitBucketsByDimensionAcrossRawAndArchivedSources() {
+    void trendsSplitHistoricalAndRecentBucketsByDimension() {
         store = createStore();
         var old = new UsageCallStart("trend-dim-old", 1, Instant.parse("2026-04-01T10:00:00Z"),
             "plugin-search", "1.0.0", "stack", "semantic-search", "language.generateText",
             "LANGUAGE", "model-a", "provider-a", "openai", "requested", false);
         store.finishCall(terminal(old, usage(10, 5)));
-        rollupAndRetain(store, Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
+        retain(store, Clock.fixed(Instant.parse("2026-08-11T02:00:00Z"),
             ZoneOffset.UTC));
         var recent = new UsageCallStart("trend-dim-recent", 1,
             Instant.parse("2026-08-10T10:00:00Z"), "plugin-search", "1.0.0", "stack",
@@ -755,39 +755,62 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     @Test
-    void rollupFailureIsAtomicAndRetryDoesNotDoubleCount() throws Exception {
-        var paths = paths();
-        store = new SqliteUsageStatisticsStore(paths);
-        store.initialize();
-        var start = start("rollup-retry", Instant.parse("2026-04-01T10:00:00Z"));
+    void executionRetentionFailureDoesNotChangeFactsAndCanRetry() throws Exception {
+        store = createStore();
+        var start = start("retention-retry", Instant.parse("2026-04-01T10:00:00Z"));
+        store.startCall(start);
+        store.recordExecution(new UsageExecutionRecord("expired", start.id(), start.epoch(),
+            UsageUnitKind.GENERATION_STEP, 0, 0, start.startedAt(), start.startedAt(),
+            UsageStatus.SUCCEEDED, null, "requested", "actual", usage(5, 5)));
         store.finishCall(terminal(start, usage(5, 5)));
         try (var connection = new org.sqlite.JDBC().connect(
-            "jdbc:sqlite:" + paths.database(), new java.util.Properties())) {
+            "jdbc:sqlite:" + paths().database(), new java.util.Properties())) {
             connection.createStatement().execute("""
-                CREATE TRIGGER fail_daily BEFORE INSERT ON ai_usage_daily
+                CREATE TRIGGER fail_retention BEFORE DELETE ON ai_model_executions
                 BEGIN SELECT RAISE(ABORT, 'injected'); END
                 """);
         }
         var clock = Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC);
-
-        assertThatThrownBy(() -> rollupAndRetain(store, clock))
-            .isInstanceOf(IllegalStateException.class);
-        assertThat(store.getCall(start.id())).isPresent();
+        assertThatThrownBy(() -> retain(store, clock)).isInstanceOf(IllegalStateException.class);
+        assertThat(store.getCall(start.id()).orElseThrow().executions()).hasSize(1);
         try (var connection = new org.sqlite.JDBC().connect(
-            "jdbc:sqlite:" + paths.database(), new java.util.Properties())) {
-            connection.createStatement().execute("DROP TRIGGER fail_daily");
+            "jdbc:sqlite:" + paths().database(), new java.util.Properties())) {
+            connection.createStatement().execute("DROP TRIGGER fail_retention");
         }
-
-        rollupAndRetain(store, clock);
-        rollupAndRetain(store, clock);
-
-        var fullDay = store.summary(query("2026-04-01T00:00:00Z", "2026-04-02T00:00:00Z"),
-            true);
+        retain(store, clock);
+        retain(store, clock);
+        assertThat(store.getCall(start.id()).orElseThrow().executions()).isEmpty();
+        var fullDay = store.summary(query("2026-04-01T00:00:00Z", "2026-04-02T00:00:00Z"), true);
         assertThat(fullDay.callCount()).isEqualTo(1);
         assertThat(fullDay.accountedTotalTokens()).isEqualTo(10L);
-        var partialDay = store.summary(query("2026-04-01T12:00:00Z", "2026-04-02T00:00:00Z"),
-            true);
-        assertThat(partialDay.callCount()).isEqualTo(1);
+        assertThat(store.summary(query("2026-04-01T12:00:00Z", "2026-04-02T00:00:00Z"), true)
+            .callCount()).isZero();
+    }
+
+    @Test
+    void executionRetentionKeepsBoundaryAndActiveCallsWithoutDegradingHealth() {
+        store = createStore();
+        var clock = Clock.fixed(Instant.parse("2026-10-14T12:00:00Z"), ZoneOffset.UTC);
+        var cutoff = Instant.parse("2026-09-14T00:00:00Z");
+        for (var id : java.util.List.of("expired", "boundary", "active")) {
+            var at = id.equals("boundary") ? cutoff : cutoff.minusMillis(1);
+            var call = start(id, at);
+            store.startCall(call);
+            store.recordExecution(new UsageExecutionRecord(id + "-execution", id, 1,
+                UsageUnitKind.GENERATION_STEP, 0, 0, at, at.plusMillis(1),
+                UsageStatus.SUCCEEDED, null, "requested", "actual", usage(2, 1)));
+            if (!id.equals("active")) {
+                store.finishCall(terminal(call, usage(2, 1)));
+            }
+        }
+        var health = store.readHealth();
+        retain(store, clock);
+        assertThat(store.getCall("expired").orElseThrow().executions()).isEmpty();
+        assertThat(store.getCall("boundary").orElseThrow().executions()).hasSize(1);
+        assertThat(store.getCall("active").orElseThrow().executions()).hasSize(1);
+        assertThat(store.readHealth()).isEqualTo(health);
+        assertThat(store.summary(query("2026-09-13T00:00:00Z", "2026-09-15T00:00:00Z"), true)
+            .accountedTotalTokens()).isEqualTo(6);
     }
 
     private SqliteUsageStatisticsStore createStore() {

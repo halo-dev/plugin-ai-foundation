@@ -138,13 +138,14 @@ class UsageStatisticsServiceTest {
         try {
             // The writer takes up to one batch out of the queue before it blocks inside storage.
             // Park it first, then saturate the queue, so no enqueue race can free capacity.
-            service.beginCall(descriptor());
+            var session = service.beginCall(descriptor());
             assertThat(parked.await(5, TimeUnit.SECONDS)).isTrue();
 
             var enqueueNanos = new long[UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100];
             for (int i = 0; i < UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100; i++) {
                 var started = System.nanoTime();
-                service.beginCall(descriptor());
+                session.beginExecution(UsageUnitKind.GENERATION_STEP, i)
+                    .succeed(NormalizedUsage.missing(), "gpt");
                 enqueueNanos[i] = System.nanoTime() - started;
             }
             java.util.Arrays.sort(enqueueNanos);
@@ -298,7 +299,7 @@ class UsageStatisticsServiceTest {
             .isEqualTo("SQLException (SQLite errorCode=11)");
         assertThat(service.health().queueDepth()).isZero();
         verify(store).writeBatch(any());
-        verify(store, org.mockito.Mockito.never()).writeHealth(any());
+        verify(store, org.mockito.Mockito.never()).writeHealth(any(), org.mockito.ArgumentMatchers.anyList());
     }
 
     @Test
@@ -337,13 +338,13 @@ class UsageStatisticsServiceTest {
         verify(store).writeBatch(any());
         verify(store).startCall(first.start());
         verify(store, org.mockito.Mockito.never()).startCall(second.start());
-        verify(store, org.mockito.Mockito.never()).writeHealth(any());
+        verify(store, org.mockito.Mockito.never()).writeHealth(any(), org.mockito.ArgumentMatchers.anyList());
     }
 
     @Test
     void runtimeMaintenanceIntegrityFailureDisablesStatistics() throws Exception {
         var store = mock(UsageStatisticsStore.class);
-        when(store.rollupAndRetainBatch(any())).thenThrow(new IllegalStateException(
+        when(store.retainBatch(any())).thenThrow(new IllegalStateException(
             "private wrapper", new UsageDatabaseIntegrityException("private database path")));
         service = new UsageStatisticsService(store, callerResolver());
         service.initialize();
@@ -355,7 +356,7 @@ class UsageStatisticsServiceTest {
         assertThat(service.health().integrityError())
             .isEqualTo("UsageDatabaseIntegrityException");
         invokeMaintenance(service);
-        verify(store).rollupAndRetainBatch(any());
+        verify(store).retainBatch(any());
     }
 
     @Test
@@ -363,7 +364,7 @@ class UsageStatisticsServiceTest {
         var store = mock(UsageStatisticsStore.class);
         doThrow(new IllegalStateException("transient write failure"))
             .when(store).writeBatch(any());
-        doThrow(storageFailure(11)).when(store).writeHealth(any());
+        doThrow(storageFailure(11)).when(store).writeHealth(any(), org.mockito.ArgumentMatchers.anyList());
         service = new UsageStatisticsService(store, callerResolver());
         service.initialize();
 
@@ -372,7 +373,7 @@ class UsageStatisticsServiceTest {
 
         assertThat(service.health().integrityError())
             .isEqualTo("SQLException (SQLite errorCode=11)");
-        verify(store).writeHealth(any());
+        verify(store).writeHealth(any(), org.mockito.ArgumentMatchers.anyList());
     }
 
     @Test
@@ -551,7 +552,7 @@ class UsageStatisticsServiceTest {
         var paths = new UsageDatabasePaths(directory);
         var store = new SqliteUsageStatisticsStore(paths) {
             @Override
-            public synchronized boolean rollupAndRetainBatch(java.time.Clock clock) {
+            public synchronized boolean retainBatch(java.time.Clock clock) {
                 entered.countDown();
                 while (release.getCount() > 0) {
                     try {
@@ -595,7 +596,7 @@ class UsageStatisticsServiceTest {
             verify(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
             nextBatch.countDown();
             return false;
-        }).when(store).rollupAndRetainBatch(any());
+        }).when(store).retainBatch(any());
         service = new UsageStatisticsService(store, callerResolver());
         service.initialize();
         invokeMaintenance(service);
@@ -609,6 +610,48 @@ class UsageStatisticsServiceTest {
         }
         assertThat(nextBatch.await(3, TimeUnit.SECONDS)).isTrue();
         assertThat(service.health().droppedEvents()).isZero();
+    }
+
+    @Test
+    void limitsCallDetailsToNinetyDaysAndKeepsCursorsStableAsTimeMoves(
+        @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {
+        var now = new java.util.concurrent.atomic.AtomicReference<>(
+            Instant.parse("2026-10-14T12:00:00Z"));
+        var clock = mock(java.time.Clock.class);
+        when(clock.instant()).thenAnswer(ignored -> now.get());
+        var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(directory));
+        service = new UsageStatisticsService(store, callerResolver(), clock);
+        service.initialize();
+        var cutoff = now.get().minus(Duration.ofDays(90));
+        for (var at : java.util.List.of(cutoff.minusMillis(1), cutoff,
+            cutoff.plusSeconds(60), cutoff.plusSeconds(120))) {
+            var start = new run.halo.aifoundation.service.observation.UsageCallStart(
+                at.toString(), 1, at, "plugin", "1", "test", null, "language.generateText",
+                "LANGUAGE", "model", "provider", "openai", "gpt", false);
+            store.finishCall(new UsageCallTerminal(start, at.plusMillis(100),
+                run.halo.aifoundation.service.observation.UsageStatus.SUCCEEDED, null, "gpt",
+                1, 0, 0, true, new NormalizedUsage(1L, 1L, null, null, null, null, null, null)));
+        }
+        var query = query(cutoff.minusSeconds(60).toString(), now.get().toString());
+        assertThat(service.summary(query).block().callCount()).isEqualTo(4);
+        assertThat(service.getCall(cutoff.minusMillis(1).toString()).block()).isEmpty();
+        assertThat(service.getCall(cutoff.toString()).block()).isPresent();
+        assertThat(service.listCalls(query, 10, null).block().items()).hasSize(3);
+        var first = service.listCalls(query, 1, null).block();
+        assertThat(first.items().getFirst().startedAt()).isEqualTo(cutoff.plusSeconds(120));
+        now.set(now.get().plusSeconds(1));
+        var second = service.listCalls(query, 1, first.nextCursor()).block();
+        assertThat(second.items()).singleElement()
+            .extracting(UsageCallItem::startedAt).isEqualTo(cutoff.plusSeconds(60));
+        assertThat(second.nextCursor()).isNull();
+        assertThat(service.getCall(cutoff.toString()).block()).isEmpty();
+        assertThat(service.listCalls(query(cutoff.minusSeconds(60).toString(), cutoff.toString()),
+            10, null).block().items()).isEmpty();
+        var otherZone = new UsageQuery(query.from(), query.to(), null, null, null, null,
+            null, null, null, null, null, java.time.ZoneId.of("Asia/Kathmandu"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            service.listCalls(otherZone, 1, first.nextCursor()).block())
+            .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid cursor");
     }
 
     private static CallerPluginResolver callerResolver() {

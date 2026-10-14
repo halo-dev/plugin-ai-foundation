@@ -1,6 +1,6 @@
 package run.halo.aifoundation.service.usage;
 
-import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.rollupAndRetain;
+import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.retain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,7 +64,7 @@ class UsageObservationRegressionTest {
             store.finishCall(new UsageCallTerminal(start,start.startedAt().plusSeconds(1),
                 UsageStatus.SUCCEEDED,null,"actual",1,0,0,true,
                 new NormalizedUsage(10L,5L,null,null,null,null,null,null)));
-            rollupAndRetain(store, Clock.fixed(Instant.parse("2026-09-10T02:00:00Z"),ZoneOffset.UTC));
+            retain(store, Clock.fixed(Instant.parse("2026-09-10T02:00:00Z"),ZoneOffset.UTC));
             var summary = store.summary(query("2026-06-01T08:00:00Z","2026-06-01T20:00:00Z"),true);
             assertThat(summary.callCount()).as("expired sub-day facts must not disappear")
                 .isEqualTo(1);
@@ -73,13 +73,13 @@ class UsageObservationRegressionTest {
         }
     }
     @Test
-    void lateCompletionMustBeVisibleAfterRollup() {
+    void lateCompletionMustBeVisibleAfterRetention() {
         var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(temp));
         store.initialize();
         try {
             var start = start();
             store.startCall(start);
-            rollupAndRetain(store, Clock.fixed(Instant.parse("2026-06-02T02:00:00Z"),ZoneOffset.UTC));
+            retain(store, Clock.fixed(Instant.parse("2026-06-02T02:00:00Z"),ZoneOffset.UTC));
             store.finishCall(new UsageCallTerminal(start,Instant.parse("2026-06-02T03:00:00Z"),
                 UsageStatus.SUCCEEDED,null,"actual",1,0,0,true,
                 new NormalizedUsage(10L,5L,null,null,null,null,null,null)));
@@ -265,7 +265,7 @@ class UsageObservationRegressionTest {
             var summary = store.summary(range, true);
             assertThat(summary.complete()).isTrue();
             assertThat(summary.partialUsageCalls()).isEqualTo(1);
-            assertThat(summary.usageCoverage()).isEqualTo(1D);
+            assertThat(summary.usageCoverage()).isZero();
             assertThat(summary.accountedTotalTokens()).isEqualTo(15L);
             assertThat(store.trends(range, true, null).getFirst().partialUsageCalls()).isEqualTo(1);
         } finally {

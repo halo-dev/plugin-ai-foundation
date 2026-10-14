@@ -54,6 +54,42 @@ class UsageStatisticsConsoleEndpointTest {
     }
 
     @Test
+    void rejectsInvalidTimeZoneOnAllQueries() {
+        for (var endpoint : java.util.List.of("summary", "trends", "breakdown?dimension=model")) {
+            var separator = endpoint.contains("?") ? "&" : "?";
+            client.get().uri("/usage-statistics/" + endpoint + separator + "timeZone=Unknown/Place")
+                .exchange().expectStatus().isBadRequest();
+        }
+    }
+
+    @Test
+    void passesTheSameTimeZoneAndRangeToAllAggregates() {
+        when(service.summary(any())).thenReturn(Mono.just(new UsageSummary(0, 0, 0, 0,
+            null, null, null, null, null, null, 0, 0, 1D, true)));
+        when(service.trends(any(), nullable(UsageBreakdownDimension.class)))
+            .thenReturn(Mono.just(java.util.List.of()));
+        when(service.breakdown(any(), eq(UsageBreakdownDimension.MODEL)))
+            .thenReturn(Mono.just(new UsageBreakdown(java.util.List.of())));
+        var filters = "from=2026-03-31T18:15:00Z&to=2026-04-01T18:15:00Z"
+            + "&timeZone=Asia/Kathmandu";
+        client.get().uri("/usage-statistics/summary?" + filters)
+            .exchange().expectStatus().isOk();
+        client.get().uri("/usage-statistics/trends?" + filters)
+            .exchange().expectStatus().isOk();
+        client.get().uri("/usage-statistics/breakdown?dimension=model&" + filters)
+            .exchange().expectStatus().isOk();
+        var queries = ArgumentCaptor.forClass(UsageQuery.class);
+        verify(service).summary(queries.capture());
+        verify(service).trends(queries.capture(), nullable(UsageBreakdownDimension.class));
+        verify(service).breakdown(queries.capture(), eq(UsageBreakdownDimension.MODEL));
+        assertThat(queries.getAllValues()).allSatisfy(query -> {
+            assertThat(query.from()).isEqualTo(Instant.parse("2026-03-31T18:15:00Z"));
+            assertThat(query.to()).isEqualTo(Instant.parse("2026-04-01T18:15:00Z"));
+            assertThat(query.timeZone()).isEqualTo(java.time.ZoneId.of("Asia/Kathmandu"));
+        });
+    }
+
+    @Test
     void acceptsHourlyTrendResolution() {
         when(service.trends(any(), nullable(UsageBreakdownDimension.class)))
             .thenReturn(Mono.just(java.util.List.of(
@@ -68,6 +104,7 @@ class UsageStatisticsConsoleEndpointTest {
         var query = ArgumentCaptor.forClass(UsageQuery.class);
         verify(service).trends(query.capture(), nullable(UsageBreakdownDimension.class));
         assertThat(query.getValue().resolution()).isEqualTo(UsageTrendResolution.HOUR);
+        assertThat(query.getValue().timeZone()).isEqualTo(java.time.ZoneId.of("UTC"));
     }
 
     @Test
@@ -105,7 +142,9 @@ class UsageStatisticsConsoleEndpointTest {
             .exchange().expectStatus().isOk().expectBody()
             .jsonPath("$.dimension").doesNotExist()
             .jsonPath("$.items[0].value").isEqualTo("search")
-            .jsonPath("$.items[0].failedCount").isEqualTo(1);
+            .jsonPath("$.items[0].failedCount").isEqualTo(1)
+            .jsonPath("$.preciseRange").doesNotExist()
+            .jsonPath("$.dataTo").doesNotExist();
 
         var query = ArgumentCaptor.forClass(UsageQuery.class);
         verify(service).breakdown(query.capture(), eq(UsageBreakdownDimension.CALLER_PLUGIN));
@@ -195,19 +234,23 @@ class UsageStatisticsConsoleEndpointTest {
     }
 
     @Test
-    void mapsEveryConfirmedFilterAndDisclosesDegradedDailySummary() {
+    void mapsEveryConfirmedFilterAndDisclosesIncompleteSummary() {
         var summary = new UsageSummary(2, 0, 1, 1, null, 5L, null, null, 2L,
-            5L, 1, 1, 0.5D, false);
+            5L, 1, 1, 0D, false);
         when(service.summary(any())).thenReturn(Mono.just(summary));
 
         client.get().uri("/usage-statistics/summary?from=2026-01-01T00:00:00Z"
                 + "&to=2026-01-02T00:00:00Z&callerPlugin=search&feature=rag"
                 + "&providerName=provider&modelName=model&modelType=language"
-                + "&operation=language.generateText&status=failed&usageQuality=partial")
+                + "&operation=language.generateText&status=failed&usageQuality=partial"
+                + "&timeZone=Asia/Kathmandu")
             .exchange().expectStatus().isOk().expectBody()
             .jsonPath("$.inputTokens").doesNotExist()
-            .jsonPath("$.usageCoverage").isEqualTo(0.5)
-            .jsonPath("$.complete").isEqualTo(false);
+            .jsonPath("$.usageCoverage").isEqualTo(0)
+            .jsonPath("$.complete").isEqualTo(false)
+            .jsonPath("$.preciseRange").doesNotExist()
+            .jsonPath("$.dataFrom").doesNotExist()
+            .jsonPath("$.dataTo").doesNotExist();
 
         var query = ArgumentCaptor.forClass(UsageQuery.class);
         verify(service).summary(query.capture());
@@ -219,5 +262,6 @@ class UsageStatisticsConsoleEndpointTest {
         assertThat(query.getValue().operation()).isEqualTo("language.generateText");
         assertThat(query.getValue().status()).isEqualTo(UsageStatus.FAILED);
         assertThat(query.getValue().usageQuality()).isEqualTo(UsageQuality.PARTIAL);
+        assertThat(query.getValue().timeZone()).isEqualTo(java.time.ZoneId.of("Asia/Kathmandu"));
     }
 }

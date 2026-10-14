@@ -1,44 +1,51 @@
 <script setup lang="ts">
 import type { UsageTrendPoint } from '@/api/generated'
-import { formatTokens, usageMetricValue, type UsageMetric } from '@/utils/usage'
+import { formatBucketStart, formatTokens, usageMetricValue, type UsageMetric } from '@/utils/usage'
 import { heatmapGrid, heatmapLeveler, heatmapMonthLabels } from '@/utils/usage-heatmap'
 import { computed, nextTick, onMounted, shallowRef, watch } from 'vue'
 import UsageSegmented from './UsageSegmented.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   points?: UsageTrendPoint[]
-}>()
+  anchor: Date
+  timeZone?: string
+}>(), {
+  timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+})
 
 const metric = shallowRef<UsageMetric>('tokens')
 
 const scroller = shallowRef<HTMLElement>()
 
 const valuesByDate = computed(() => {
-  const map = new Map<string, number>()
+  const map = new Map<string, number | undefined>()
   for (const point of props.points || []) {
-    const date = (point.bucketStart || '').slice(0, 10)
-    if (!date) continue
+    if (!point.bucketStart) continue
+    const date = formatBucketStart(point.bucketStart, 'DAY', props.timeZone)
     const value = usageMetricValue(point, metric.value)
-    map.set(date, (map.get(date) || 0) + value)
+    const previous = map.get(date)
+    map.set(date, value == null ? previous : (previous ?? 0) + value)
   }
   return map
 })
 
-const days = computed(() => heatmapGrid(new Date()))
+const days = computed(() => heatmapGrid(props.anchor, props.timeZone))
 const monthLabels = computed(() => heatmapMonthLabels(days.value))
 const leveler = computed(() => heatmapLeveler(days.value.map((d) => valuesByDate.value.get(d.date) || 0)))
 
 const cells = computed(() =>
   days.value.map((day) => {
-    const value = valuesByDate.value.get(day.date) || 0
-    return { ...day, value, level: leveler.value(value) }
+    const value = valuesByDate.value.has(day.date) ? valuesByDate.value.get(day.date) : 0
+    return { ...day, value, level: value == null ? undefined : leveler.value(value) }
   }),
 )
 
 const weekdayLabels = ['周一', '', '周三', '', '周五', '', '周日']
 
-function formatValue(value: number) {
-  return metric.value === 'tokens' ? `${formatTokens(value)} Token` : `${value.toLocaleString()} 次调用`
+function formatValue(value?: number) {
+  return metric.value === 'tokens'
+    ? `${formatTokens(value)} Token`
+    : `${(value ?? 0).toLocaleString()} 次调用`
 }
 
 async function scrollToLatest() {
@@ -57,7 +64,7 @@ watch(() => props.points, scrollToLatest)
   <div class=":uno: px-4 py-3">
     <div class=":uno: mb-3 flex flex-wrap items-center gap-2">
       <h3 class=":uno: text-sm text-gray-950 font-semibold">用量热力图</h3>
-      <span class=":uno: text-xs text-gray-400">最近一年的每日用量（UTC）</span>
+      <span class=":uno: text-xs text-gray-400">最近一年的每日用量</span>
       <UsageSegmented
         class=":uno: ml-auto"
         :model-value="metric"
@@ -91,7 +98,7 @@ watch(() => props.points, scrollToLatest)
           v-for="cell in cells"
           :key="cell.date"
           class=":uno: usage-heat-cell"
-          :class="`:uno: l${cell.level}`"
+          :class="cell.level == null ? ':uno: is-unknown' : `:uno: l${cell.level}`"
           :style="{ gridColumn: cell.week + 2, gridRow: cell.weekday + 2 }"
           :aria-label="`${cell.date}：${formatValue(cell.value)}`"
           v-tooltip="`${cell.date} · ${formatValue(cell.value)}`"
@@ -103,6 +110,7 @@ watch(() => props.points, scrollToLatest)
         少
         <i v-for="level in 5" :key="level" class=":uno: usage-heat-cell" :class="`:uno: l${level - 1}`"></i>
         多
+        <i class=":uno: usage-heat-cell is-unknown"></i>未知
       </div>
     </div>
   </div>
@@ -144,6 +152,9 @@ watch(() => props.points, scrollToLatest)
   width: 11px;
   height: 11px;
   flex: none;
+}
+.usage-heat-cell.is-unknown {
+  background: repeating-linear-gradient(135deg, #f3f4f6 0 2px, #9ca3af 2px 3px);
 }
 .usage-heat-cell.l0 {
   background: #f3f4f6;

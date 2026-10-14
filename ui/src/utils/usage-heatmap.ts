@@ -1,5 +1,7 @@
+import { fromDate, startOfWeek, toCalendarDate } from '@internationalized/date'
+
 interface UsageHeatmapDay {
-  /** YYYY-MM-DD (UTC) */
+  /** YYYY-MM-DD in the query time zone */
   date: string
   /** Column index 0..52, each column starting on a Monday */
   week: number
@@ -9,23 +11,29 @@ interface UsageHeatmapDay {
 
 const USAGE_HEATMAP_WEEKS = 53
 
-/**
- * Builds a 53-week × 7-day grid (UTC, Monday on the first row) ending at today.
- * The first column starts on the Monday of the week 52 weeks ago so the grid stays aligned.
- */
-export function heatmapGrid(today: Date): UsageHeatmapDay[] {
-  const end = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-  const weekday = (new Date(end).getUTCDay() + 6) % 7
-  const weekStart = end - weekday * 86400000
-  const firstStart = weekStart - (USAGE_HEATMAP_WEEKS - 1) * 7 * 86400000
+function heatmapStart(anchor: Date, timeZone: string) {
+  const date = toCalendarDate(fromDate(anchor, timeZone))
+  return startOfWeek(date, 'zh-CN', 'mon').subtract({ weeks: USAGE_HEATMAP_WEEKS - 1 })
+}
+
+/** The first visible local day is complete; today includes data up to the shared refresh instant. */
+export function heatmapRange(anchor: Date, timeZone: string) {
+  return {
+    from: heatmapStart(anchor, timeZone).toDate(timeZone).toISOString(),
+    to: anchor.toISOString(),
+  }
+}
+
+/** Builds 53 Monday-aligned calendar weeks through the anchor's local date, including DST days. */
+export function heatmapGrid(
+  anchor: Date,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+): UsageHeatmapDay[] {
+  const end = toCalendarDate(fromDate(anchor, timeZone))
+  const start = heatmapStart(anchor, timeZone)
   const days: UsageHeatmapDay[] = []
-  for (let time = firstStart; time <= end; time += 86400000) {
-    const date = new Date(time)
-    days.push({
-      date: date.toISOString().slice(0, 10),
-      week: Math.floor((time - firstStart) / (7 * 86400000)),
-      weekday: (date.getUTCDay() + 6) % 7,
-    })
+  for (let date = start, index = 0; date.compare(end) <= 0; date = date.add({ days: 1 }), index++) {
+    days.push({ date: date.toString(), week: Math.floor(index / 7), weekday: index % 7 })
   }
   return days
 }

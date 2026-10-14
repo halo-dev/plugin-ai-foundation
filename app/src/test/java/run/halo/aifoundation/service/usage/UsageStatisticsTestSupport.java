@@ -7,8 +7,8 @@ final class UsageStatisticsTestSupport {
     private UsageStatisticsTestSupport() {
     }
 
-    static void rollupAndRetain(UsageStatisticsStore store, Clock clock) {
-        while (store.rollupAndRetainBatch(clock)) {
+    static void retain(UsageStatisticsStore store, Clock clock) {
+        while (store.retainBatch(clock)) {
             // Tests drain all batches synchronously; the service yields after each batch.
         }
     }

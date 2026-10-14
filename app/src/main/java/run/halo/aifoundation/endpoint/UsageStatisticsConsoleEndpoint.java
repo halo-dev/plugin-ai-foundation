@@ -6,8 +6,10 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
@@ -54,10 +56,9 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                     .response(responseBuilder().implementation(UsageSummary.class)))
             .GET("usage-statistics/trends", this::trends,
                 builder -> filters(builder.operationId("ListAiUsageTrends").tag(tag))
-                    .description("List filtered UTC usage trend buckets.")
+                    .description("List filtered usage trend buckets in the requested time zone.")
                     .parameter(parameterBuilder().name("resolution").in(ParameterIn.QUERY)
-                        .description("Optional trend bucket resolution: DAY or HOUR. HOUR applies "
-                            + "only to detail-backed intervals; archived intervals remain DAY.")
+                        .description("Optional trend bucket resolution: DAY or HOUR.")
                         .implementation(String.class))
                     .parameter(parameterBuilder().name("dimension").in(ParameterIn.QUERY)
                         .description("Optional per-bucket grouping: model, provider, or "
@@ -74,7 +75,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                     .response(responseBuilder().implementation(UsageBreakdown.class)))
             .GET("usage-statistics/calls", this::calls,
                 builder -> filters(builder.operationId("ListAiUsageCalls").tag(tag))
-                    .description("List logical AI calls using cursor pagination.")
+                    .description("List logical AI calls from the last 90 days using cursor pagination.")
                     .parameter(parameterBuilder().name("size").in(ParameterIn.QUERY)
                         .description("Page size from 1 to 200.").implementation(Integer.class))
                     .parameter(parameterBuilder().name("cursor").in(ParameterIn.QUERY)
@@ -83,7 +84,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                     .response(responseBuilder().implementation(UsageCallPage.class)))
             .GET("usage-statistics/calls/{id}", this::call,
                 builder -> builder.operationId("GetAiUsageCall").tag(tag)
-                    .description("Get a logical AI call and its physical executions.")
+                    .description("Get a logical AI call from the last 90 days and its retained executions.")
                     .parameter(parameterBuilder().name("id").in(ParameterIn.PATH)
                         .required(true).implementation(String.class))
                     .response(responseBuilder().implementation(UsageCallDetail.class)))
@@ -163,7 +164,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
         return request.bodyToMono(ResetRequest.class)
             .switchIfEmpty(Mono.error(new IllegalArgumentException("request body is required")))
             .flatMap(body -> service.reset(body.confirmation()))
-            .flatMap(ignored -> ServerResponse.ok().build())
+            .then(ServerResponse.ok().build())
             .onErrorResume(IllegalArgumentException.class, this::badRequest)
             .onErrorResume(IllegalStateException.class, this::unavailable);
     }
@@ -187,7 +188,7 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                 text(request, "modelName"), text(request, "modelType"),
                 text(request, "operation"), enumValue(request, "status", UsageStatus.class),
                 enumValue(request, "usageQuality", UsageQuality.class),
-                resolution == null ? null : trendResolution(resolution));
+                resolution == null ? null : trendResolution(resolution), timeZone(request));
         });
     }
 
@@ -197,14 +198,27 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
                 .description("Inclusive ISO-8601 instant; defaults to 30 days before to.")
                 .implementation(Instant.class))
             .parameter(parameterBuilder().name("to").in(ParameterIn.QUERY)
-                .description("Exclusive ISO-8601 instant; defaults to now.")
-                .implementation(Instant.class));
+                .description("Exclusive ISO-8601 instant; defaults to the next UTC midnight "
+                    + "for stable cursor pagination.")
+                .implementation(Instant.class))
+            .parameter(parameterBuilder().name("timeZone").in(ParameterIn.QUERY)
+                .description("IANA time zone for trend buckets; defaults to UTC.")
+                .implementation(String.class));
         for (var name : new String[] {"callerPlugin", "feature", "providerName", "modelName",
             "modelType", "operation", "status", "usageQuality"}) {
             builder.parameter(parameterBuilder().name(name).in(ParameterIn.QUERY)
                 .implementation(String.class));
         }
         return builder;
+    }
+
+    private static ZoneId timeZone(ServerRequest request) {
+        var value = text(request, "timeZone");
+        try {
+            return ZoneId.of(value == null ? "UTC" : value);
+        } catch (DateTimeException error) {
+            throw new IllegalArgumentException("invalid timeZone: " + value, error);
+        }
     }
 
     private static Instant instant(ServerRequest request, String name, Instant fallback) {

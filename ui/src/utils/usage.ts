@@ -1,4 +1,5 @@
 import { utils } from '@halo-dev/ui-shared'
+import { fromDate, toCalendarDate } from '@internationalized/date'
 import type { AiModel, AiProvider, CallerPluginInfo } from '@/api/generated'
 
 const UNKNOWN_TEXT = '未知'
@@ -178,18 +179,20 @@ export function formatDateTime(iso?: string | null) {
   return utils.date.format(iso, 'YYYY-MM-DD HH:mm:ss')
 }
 
-/** UTC 桶起始时间按分辨率展示；DAY 分辨率只展示日期，避免暗示小时精度。 */
+/** Bucket instants use the query time zone; the offset distinguishes repeated DST hours. */
 export function formatBucketStart(
   iso: string | undefined,
   resolution?: UsageTrendResolution | null,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 ) {
-  if (!iso) {
-    return UNKNOWN_TEXT
-  }
-  if (resolution === 'DAY') {
-    return utils.date.dayjs(iso).isValid() ? utils.date.toISOString(iso).slice(0, 10) : UNKNOWN_TEXT
-  }
-  return formatDateTime(iso)
+  if (!iso || !Number.isFinite(Date.parse(iso))) return UNKNOWN_TEXT
+  const date = fromDate(new Date(iso), timeZone)
+  const day = toCalendarDate(date).toString()
+  if (resolution === 'DAY') return day
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const offsetMinutes = Math.abs(date.offset / 60000)
+  const offset = `${date.offset < 0 ? '-' : '+'}${pad(Math.floor(offsetMinutes / 60))}:${pad(offsetMinutes % 60)}`
+  return `${day} ${pad(date.hour)}:${pad(date.minute)}:${pad(date.second)} GMT${offset}`
 }
 
 export type UsageMetric = 'tokens' | 'calls'
@@ -199,7 +202,7 @@ export function usageMetricValue(
   item: { accountedTotalTokens?: number | null; callCount?: number | null },
   metric: UsageMetric,
 ) {
-  return metric === 'tokens' ? (item.accountedTotalTokens ?? 0) : (item.callCount ?? 0)
+  return metric === 'tokens' ? (item.accountedTotalTokens ?? undefined) : (item.callCount ?? 0)
 }
 
 export function formatUsageMetric(value: number | undefined | null, metric: UsageMetric) {

@@ -45,7 +45,8 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
          * Get usage totals grouped by a dimension.
          * @param {string} dimension Group by: model, provider, or callerPlugin.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -57,7 +58,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getAiUsageBreakdown: async (dimension: string, from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        getAiUsageBreakdown: async (dimension: string, from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'dimension' is not null or undefined
             assertParamExists('getAiUsageBreakdown', 'dimension', dimension)
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/breakdown`;
@@ -90,6 +91,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
                 localVarQueryParameter['to'] = (to as any instanceof Date) ?
                     (to as any).toISOString() :
                     to;
+            }
+
+            if (timeZone !== undefined) {
+                localVarQueryParameter['timeZone'] = timeZone;
             }
 
             if (callerPlugin !== undefined) {
@@ -140,7 +145,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
             };
         },
         /**
-         * Get a logical AI call and its physical executions.
+         * Get a logical AI call from the last 90 days and its retained executions.
          * @param {string} id 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -220,7 +225,8 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
         /**
          * Get filtered AI call and token totals.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -232,7 +238,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getAiUsageSummary: async (from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        getAiUsageSummary: async (from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/summary`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -263,6 +269,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
                 localVarQueryParameter['to'] = (to as any instanceof Date) ?
                     (to as any).toISOString() :
                     to;
+            }
+
+            if (timeZone !== undefined) {
+                localVarQueryParameter['timeZone'] = timeZone;
             }
 
             if (callerPlugin !== undefined) {
@@ -309,9 +319,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
             };
         },
         /**
-         * List logical AI calls using cursor pagination.
+         * List logical AI calls from the last 90 days using cursor pagination.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -325,7 +336,7 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listAiUsageCalls: async (from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, size?: number, cursor?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listAiUsageCalls: async (from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, size?: number, cursor?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/calls`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -356,6 +367,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
                 localVarQueryParameter['to'] = (to as any instanceof Date) ?
                     (to as any).toISOString() :
                     to;
+            }
+
+            if (timeZone !== undefined) {
+                localVarQueryParameter['timeZone'] = timeZone;
             }
 
             if (callerPlugin !== undefined) {
@@ -410,9 +425,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
             };
         },
         /**
-         * List filtered UTC usage trend buckets.
+         * List filtered usage trend buckets in the requested time zone.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -421,12 +437,12 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
          * @param {string} [operation] 
          * @param {string} [status] 
          * @param {string} [usageQuality] 
-         * @param {string} [resolution] Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.
+         * @param {string} [resolution] Optional trend bucket resolution: DAY or HOUR.
          * @param {string} [dimension] Optional per-bucket grouping: model, provider, or callerPlugin. Adds byDimension to each bucket.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listAiUsageTrends: async (from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, dimension?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listAiUsageTrends: async (from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, dimension?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/trends`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -457,6 +473,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiAxiosParamCr
                 localVarQueryParameter['to'] = (to as any instanceof Date) ?
                     (to as any).toISOString() :
                     to;
+            }
+
+            if (timeZone !== undefined) {
+                localVarQueryParameter['timeZone'] = timeZone;
             }
 
             if (callerPlugin !== undefined) {
@@ -567,7 +587,8 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
          * Get usage totals grouped by a dimension.
          * @param {string} dimension Group by: model, provider, or callerPlugin.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -579,14 +600,14 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async getAiUsageBreakdown(dimension: string, from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsageBreakdown>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.getAiUsageBreakdown(dimension, from, to, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, options);
+        async getAiUsageBreakdown(dimension: string, from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsageBreakdown>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getAiUsageBreakdown(dimension, from, to, timeZone, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.getAiUsageBreakdown']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Get a logical AI call and its physical executions.
+         * Get a logical AI call from the last 90 days and its retained executions.
          * @param {string} id 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -611,7 +632,8 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
         /**
          * Get filtered AI call and token totals.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -623,16 +645,17 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async getAiUsageSummary(from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsageSummary>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.getAiUsageSummary(from, to, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, options);
+        async getAiUsageSummary(from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsageSummary>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getAiUsageSummary(from, to, timeZone, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.getAiUsageSummary']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * List logical AI calls using cursor pagination.
+         * List logical AI calls from the last 90 days using cursor pagination.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -646,16 +669,17 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listAiUsageCalls(from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, size?: number, cursor?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsageCallPage>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listAiUsageCalls(from, to, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, size, cursor, options);
+        async listAiUsageCalls(from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, size?: number, cursor?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsageCallPage>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listAiUsageCalls(from, to, timeZone, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, size, cursor, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.listAiUsageCalls']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * List filtered UTC usage trend buckets.
+         * List filtered usage trend buckets in the requested time zone.
          * @param {string} [from] Inclusive ISO-8601 instant; defaults to 30 days before to.
-         * @param {string} [to] Exclusive ISO-8601 instant; defaults to now.
+         * @param {string} [to] Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
+         * @param {string} [timeZone] IANA time zone for trend buckets; defaults to UTC.
          * @param {string} [callerPlugin] 
          * @param {string} [feature] 
          * @param {string} [providerName] 
@@ -664,13 +688,13 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp = functio
          * @param {string} [operation] 
          * @param {string} [status] 
          * @param {string} [usageQuality] 
-         * @param {string} [resolution] Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.
+         * @param {string} [resolution] Optional trend bucket resolution: DAY or HOUR.
          * @param {string} [dimension] Optional per-bucket grouping: model, provider, or callerPlugin. Adds byDimension to each bucket.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listAiUsageTrends(from?: string, to?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, dimension?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<UsageTrendPoint>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listAiUsageTrends(from, to, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, resolution, dimension, options);
+        async listAiUsageTrends(from?: string, to?: string, timeZone?: string, callerPlugin?: string, feature?: string, providerName?: string, modelName?: string, modelType?: string, operation?: string, status?: string, usageQuality?: string, resolution?: string, dimension?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<UsageTrendPoint>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listAiUsageTrends(from, to, timeZone, callerPlugin, feature, providerName, modelName, modelType, operation, status, usageQuality, resolution, dimension, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi.listAiUsageTrends']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -704,10 +728,10 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFactory = fu
          * @throws {RequiredError}
          */
         getAiUsageBreakdown(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest, options?: RawAxiosRequestConfig): AxiosPromise<UsageBreakdown> {
-            return localVarFp.getAiUsageBreakdown(requestParameters.dimension, requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(axios, basePath));
+            return localVarFp.getAiUsageBreakdown(requestParameters.dimension, requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(axios, basePath));
         },
         /**
-         * Get a logical AI call and its physical executions.
+         * Get a logical AI call from the last 90 days and its retained executions.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageCallRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -730,25 +754,25 @@ export const ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFactory = fu
          * @throws {RequiredError}
          */
         getAiUsageSummary(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageSummaryRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<UsageSummary> {
-            return localVarFp.getAiUsageSummary(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(axios, basePath));
+            return localVarFp.getAiUsageSummary(requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(axios, basePath));
         },
         /**
-         * List logical AI calls using cursor pagination.
+         * List logical AI calls from the last 90 days using cursor pagination.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageCallsRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
         listAiUsageCalls(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageCallsRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<UsageCallPage> {
-            return localVarFp.listAiUsageCalls(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.size, requestParameters.cursor, options).then((request) => request(axios, basePath));
+            return localVarFp.listAiUsageCalls(requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.size, requestParameters.cursor, options).then((request) => request(axios, basePath));
         },
         /**
-         * List filtered UTC usage trend buckets.
+         * List filtered usage trend buckets in the requested time zone.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrendsRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
         listAiUsageTrends(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrendsRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<Array<UsageTrendPoint>> {
-            return localVarFp.listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, requestParameters.dimension, options).then((request) => request(axios, basePath));
+            return localVarFp.listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, requestParameters.dimension, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete all usage statistics. Requires confirmation RESET.
@@ -783,11 +807,18 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsa
     readonly from?: string
 
     /**
-     * Exclusive ISO-8601 instant; defaults to now.
+     * Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
      * @type {string}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
      */
     readonly to?: string
+
+    /**
+     * IANA time zone for trend buckets; defaults to UTC.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdown
+     */
+    readonly timeZone?: string
 
     /**
      * 
@@ -874,11 +905,18 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsa
     readonly from?: string
 
     /**
-     * Exclusive ISO-8601 instant; defaults to now.
+     * Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
      * @type {string}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageSummary
      */
     readonly to?: string
+
+    /**
+     * IANA time zone for trend buckets; defaults to UTC.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageSummary
+     */
+    readonly timeZone?: string
 
     /**
      * 
@@ -951,11 +989,18 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUs
     readonly from?: string
 
     /**
-     * Exclusive ISO-8601 instant; defaults to now.
+     * Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
      * @type {string}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageCalls
      */
     readonly to?: string
+
+    /**
+     * IANA time zone for trend buckets; defaults to UTC.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageCalls
+     */
+    readonly timeZone?: string
 
     /**
      * 
@@ -1042,11 +1087,18 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUs
     readonly from?: string
 
     /**
-     * Exclusive ISO-8601 instant; defaults to now.
+     * Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.
      * @type {string}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrends
      */
     readonly to?: string
+
+    /**
+     * IANA time zone for trend buckets; defaults to UTC.
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrends
+     */
+    readonly timeZone?: string
 
     /**
      * 
@@ -1105,7 +1157,7 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUs
     readonly usageQuality?: string
 
     /**
-     * Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.
+     * Optional trend bucket resolution: DAY or HOUR.
      * @type {string}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrends
      */
@@ -1148,11 +1200,11 @@ export class ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi extends Bas
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi
      */
     public getAiUsageBreakdown(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageBreakdownRequest, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).getAiUsageBreakdown(requestParameters.dimension, requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).getAiUsageBreakdown(requestParameters.dimension, requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * Get a logical AI call and its physical executions.
+     * Get a logical AI call from the last 90 days and its retained executions.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageCallRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1180,29 +1232,29 @@ export class ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi extends Bas
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi
      */
     public getAiUsageSummary(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiGetAiUsageSummaryRequest = {}, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).getAiUsageSummary(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).getAiUsageSummary(requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * List logical AI calls using cursor pagination.
+     * List logical AI calls from the last 90 days using cursor pagination.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageCallsRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi
      */
     public listAiUsageCalls(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageCallsRequest = {}, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).listAiUsageCalls(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.size, requestParameters.cursor, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).listAiUsageCalls(requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.size, requestParameters.cursor, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * List filtered UTC usage trend buckets.
+     * List filtered usage trend buckets in the requested time zone.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrendsRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi
      */
     public listAiUsageTrends(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiListAiUsageTrendsRequest = {}, options?: RawAxiosRequestConfig) {
-        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, requestParameters.dimension, options).then((request) => request(this.axios, this.basePath));
+        return ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApiFp(this.configuration).listAiUsageTrends(requestParameters.from, requestParameters.to, requestParameters.timeZone, requestParameters.callerPlugin, requestParameters.feature, requestParameters.providerName, requestParameters.modelName, requestParameters.modelType, requestParameters.operation, requestParameters.status, requestParameters.usageQuality, requestParameters.resolution, requestParameters.dimension, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

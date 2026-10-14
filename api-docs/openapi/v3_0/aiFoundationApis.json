@@ -1235,12 +1235,19 @@
             "format" : "date-time"
           }
         }, {
-          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "description" : "Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.",
           "in" : "query",
           "name" : "to",
           "schema" : {
             "type" : "string",
             "format" : "date-time"
+          }
+        }, {
+          "description" : "IANA time zone for trend buckets; defaults to UTC.",
+          "in" : "query",
+          "name" : "timeZone",
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
@@ -1316,7 +1323,7 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/calls" : {
       "get" : {
-        "description" : "List logical AI calls using cursor pagination.",
+        "description" : "List logical AI calls from the last 90 days using cursor pagination.",
         "operationId" : "ListAiUsageCalls",
         "parameters" : [ {
           "description" : "Inclusive ISO-8601 instant; defaults to 30 days before to.",
@@ -1327,12 +1334,19 @@
             "format" : "date-time"
           }
         }, {
-          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "description" : "Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.",
           "in" : "query",
           "name" : "to",
           "schema" : {
             "type" : "string",
             "format" : "date-time"
+          }
+        }, {
+          "description" : "IANA time zone for trend buckets; defaults to UTC.",
+          "in" : "query",
+          "name" : "timeZone",
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
@@ -1415,7 +1429,7 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/calls/{id}" : {
       "get" : {
-        "description" : "Get a logical AI call and its physical executions.",
+        "description" : "Get a logical AI call from the last 90 days and its retained executions.",
         "operationId" : "GetAiUsageCall",
         "parameters" : [ {
           "in" : "path",
@@ -1490,12 +1504,19 @@
             "format" : "date-time"
           }
         }, {
-          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "description" : "Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.",
           "in" : "query",
           "name" : "to",
           "schema" : {
             "type" : "string",
             "format" : "date-time"
+          }
+        }, {
+          "description" : "IANA time zone for trend buckets; defaults to UTC.",
+          "in" : "query",
+          "name" : "timeZone",
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
@@ -1563,7 +1584,7 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/trends" : {
       "get" : {
-        "description" : "List filtered UTC usage trend buckets.",
+        "description" : "List filtered usage trend buckets in the requested time zone.",
         "operationId" : "ListAiUsageTrends",
         "parameters" : [ {
           "description" : "Inclusive ISO-8601 instant; defaults to 30 days before to.",
@@ -1574,12 +1595,19 @@
             "format" : "date-time"
           }
         }, {
-          "description" : "Exclusive ISO-8601 instant; defaults to now.",
+          "description" : "Exclusive ISO-8601 instant; defaults to the next UTC midnight for stable cursor pagination.",
           "in" : "query",
           "name" : "to",
           "schema" : {
             "type" : "string",
             "format" : "date-time"
+          }
+        }, {
+          "description" : "IANA time zone for trend buckets; defaults to UTC.",
+          "in" : "query",
+          "name" : "timeZone",
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
@@ -1630,7 +1658,7 @@
             "type" : "string"
           }
         }, {
-          "description" : "Optional trend bucket resolution: DAY or HOUR. HOUR applies only to detail-backed intervals; archived intervals remain DAY.",
+          "description" : "Optional trend bucket resolution: DAY or HOUR.",
           "in" : "query",
           "name" : "resolution",
           "schema" : {

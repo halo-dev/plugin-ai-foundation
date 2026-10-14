@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UsageCallItem } from '@/api/generated'
+import { useUsageCallDetail } from '@/composables/use-usage-statistics'
 import {
   formatDuration,
   formatTokens,
@@ -11,49 +12,51 @@ import { VStatusDot } from '@halo-dev/components'
 import { computed } from 'vue'
 import UsageCallExecutions from './UsageCallExecutions.vue'
 const props = defineProps<{ call: UsageCallItem }>()
+const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.call.id || '')
+const call = computed(() => data.value?.call ?? props.call)
 const responseModel = computed(() => {
-  const request = props.call.requestModelId || '未知'
-  const response = props.call.responseModelId
+  const request = call.value.requestModelId || '未知'
+  const response = call.value.responseModelId
   if (!response) return request
-  if (response === props.call.requestModelId) return request
+  if (response === call.value.requestModelId) return request
   return `${request} → ${response}`
 })
 const responseMode = computed(() => {
-  if (props.call.streaming == null) return '未知'
-  if (props.call.streaming) return '流式响应'
+  if (call.value.streaming == null) return '未知'
+  if (call.value.streaming) return '流式响应'
   return '非流式响应'
 })
 const showUnknownUsage = computed(() => {
-  if (!props.call.usage) return true
-  if (props.call.usage.quality === 'MISSING') return true
-  return props.call.usage.quality === 'PARTIAL'
+  if (!call.value.usage) return true
+  if (call.value.usage.quality === 'MISSING') return true
+  return call.value.usage.quality === 'PARTIAL'
 })
 const showIncompleteCall = computed(() => {
-  if (props.call.complete === false) return true
-  return Boolean(props.call.missingExecutionCount)
+  if (call.value.complete === false) return true
+  return Boolean(call.value.missingExecutionCount)
 })
 const fields = computed(() => [
-  { label: '模型标识', value: props.call.modelName || '未知' },
-  { label: '供应商标识', value: props.call.providerName || '未知' },
+  { label: '模型标识', value: call.value.modelName || '未知' },
+  { label: '供应商标识', value: call.value.providerName || '未知' },
   {
     label: '请求 → 响应模型',
     value: responseModel.value,
   },
-  { label: '调用插件', value: props.call.callerPluginName || '未知插件' },
-  { label: '插件版本', value: props.call.callerPluginVersion || '未知' },
+  { label: '调用插件', value: call.value.callerPluginName || '未知插件' },
+  { label: '插件版本', value: call.value.callerPluginVersion || '未知' },
   {
     label: '响应方式',
     value: responseMode.value,
   },
-  ...(props.call.feature ? [{ label: '功能标识', value: props.call.feature }] : []),
-  ...(props.call.modelType === 'LANGUAGE'
-    ? [{ label: '生成步骤', value: String(props.call.stepCount ?? '未知') }]
+  ...(call.value.feature ? [{ label: '功能标识', value: call.value.feature }] : []),
+  ...(call.value.modelType === 'LANGUAGE'
+    ? [{ label: '生成步骤', value: String(call.value.stepCount ?? '未知') }]
     : []),
 ])
 const breakdown = computed(() => [
-  { label: '缓存读取', value: props.call.usage?.cacheReadInputTokens },
-  { label: '缓存创建', value: props.call.usage?.cacheCreationInputTokens },
-  { label: '推理输出', value: props.call.usage?.reasoningOutputTokens },
+  { label: '缓存读取', value: call.value.usage?.cacheReadInputTokens },
+  { label: '缓存创建', value: call.value.usage?.cacheCreationInputTokens },
+  { label: '推理输出', value: call.value.usage?.reasoningOutputTokens },
 ])
 </script>
 <template>
@@ -108,7 +111,13 @@ const breakdown = computed(() => [
             统计可能低于实际消耗。</template
           >
         </p>
-        <UsageCallExecutions v-if="call.id" :call-id="call.id" />
+        <UsageCallExecutions
+          v-if="call.id"
+          :executions="data?.executions"
+          :loading="isLoading"
+          :error="isError"
+          @retry="refetch()"
+        />
       </div>
     </div>
     <details class=":uno: usage-technical-details">

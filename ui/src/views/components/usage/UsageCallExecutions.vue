@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useUsageCallDetail } from '@/composables/use-usage-statistics'
+import type { UsageExecutionRecord } from '@/api/generated'
 import {
   formatDateTime,
   formatDuration,
@@ -23,11 +23,13 @@ function executionDuration(startedAt?: string, completedAt?: string) {
   return formatDuration(utils.date.dayjs(completedAt).diff(startedAt))
 }
 
-const props = defineProps<{
-  callId: string
+defineProps<{
+  executions?: UsageExecutionRecord[]
+  loading?: boolean
+  error?: boolean
 }>()
 
-const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.callId)
+const emit = defineEmits<{ (event: 'retry'): void }>()
 </script>
 
 <template>
@@ -36,16 +38,16 @@ const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.cal
       <h4>执行过程</h4>
       <span>每次请求的实际消耗</span>
     </div>
-    <VLoading v-if="isLoading" />
-    <div v-else-if="isError" class=":uno: usage-executions-message">
-      执行详情加载失败 <VButton size="sm" @click="refetch()">重试</VButton>
+    <VLoading v-if="loading" />
+    <div v-else-if="error" class=":uno: usage-executions-message">
+      执行详情加载失败 <VButton size="sm" @click="emit('retry')">重试</VButton>
     </div>
-    <p v-else-if="!data?.executions?.length" class=":uno: usage-executions-message">
+    <p v-else-if="!executions?.length" class=":uno: usage-executions-message">
       暂无执行记录。明细仅保留 30 天，较早或缓存命中的调用可能没有数据。
     </p>
     <div v-else class=":uno: usage-execution-list">
       <article
-        v-for="execution in data.executions"
+        v-for="execution in executions"
         :key="execution.id"
         class=":uno: usage-execution"
       >

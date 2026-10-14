@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { heatmapGrid, heatmapLeveler, heatmapMonthLabels } from '../usage-heatmap'
+import { heatmapGrid, heatmapLeveler, heatmapMonthLabels, heatmapRange } from '../usage-heatmap'
+import { parseDate } from '@internationalized/date'
 
 describe('usage-heatmap utils', () => {
   it('builds a 53-week grid aligned to Monday with today as the last day', () => {
-    const days = heatmapGrid(new Date('2026-10-13T08:00:00Z'))
+    const days = heatmapGrid(new Date('2026-10-13T08:00:00Z'), 'UTC')
     const weekday = (new Date('2026-10-13T00:00:00Z').getUTCDay() + 6) % 7
     expect(days).toHaveLength(52 * 7 + weekday + 1)
     expect(days.at(-1)?.date).toBe('2026-10-13')
@@ -17,7 +18,7 @@ describe('usage-heatmap utils', () => {
   })
 
   it('labels a month only at the first week it appears', () => {
-    const days = heatmapGrid(new Date('2026-10-13T00:00:00Z'))
+    const days = heatmapGrid(new Date('2026-10-13T00:00:00Z'), 'UTC')
     const labels = heatmapMonthLabels(days)
     const labeled = labels.filter(Boolean)
     // 53 weeks span 13 months (both ends in October); labels appear only on month transitions
@@ -26,6 +27,24 @@ describe('usage-heatmap utils', () => {
       expect(labeled[i]).not.toBe(labeled[i - 1])
     }
     expect(labeled.at(-1)).toBe('10')
+  })
+
+  it.each([
+    ['Asia/Shanghai', '2026-10-13T16:01:00Z', '2026-10-14', '2025-10-12T16:00:00.000Z'],
+    ['Asia/Kathmandu', '2026-10-13T18:16:00Z', '2026-10-14', '2025-10-12T18:15:00.000Z'],
+    ['America/New_York', '2026-11-02T04:59:00Z', '2026-11-01', '2025-10-27T04:00:00.000Z'],
+    ['America/New_York', '2026-03-09T03:59:00Z', '2026-03-08', '2025-03-03T05:00:00.000Z'],
+  ])('covers every local date and its entire first day in %s', (timeZone, iso, last, from) => {
+    const anchor = new Date(iso)
+    const days = heatmapGrid(anchor, timeZone)
+    const range = heatmapRange(anchor, timeZone)
+    expect(range).toEqual({ from, to: anchor.toISOString() })
+    expect(days.at(-1)?.date).toBe(last)
+    expect(range.from).toBe(parseDate(days[0]!.date).toDate(timeZone).toISOString())
+    for (let index = 1; index < days.length; index++) {
+      expect(days[index]!.date).toBe(parseDate(days[index - 1]!.date).add({ days: 1 }).toString())
+    }
+    expect(new Set(days.map((day) => day.date)).size).toBe(days.length)
   })
 
   it('returns level 0 for empty data and zero values', () => {

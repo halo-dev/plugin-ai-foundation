@@ -126,6 +126,31 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     }
 
     @Override
+    public synchronized void writeHealth(UsageHealthState health,
+        List<UsageCallStart> incompleteCalls) {
+        writeBatch(List.of(() -> {
+            try (var statement = writer.prepareStatement(
+                "UPDATE ai_calls SET complete = 0 WHERE id = ? AND epoch = ?")) {
+                var currentEpoch = currentEpoch();
+                for (var start : incompleteCalls) {
+                    if (start.epoch() != currentEpoch) {
+                        continue;
+                    }
+                    // The start event may still be queued or may itself have been dropped.
+                    insertStart(writer, start);
+                    statement.setString(1, start.id());
+                    statement.setLong(2, start.epoch());
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+                writeHealth(health);
+            } catch (SQLException error) {
+                throw databaseError("checkpoint statistics health", error);
+            }
+        }));
+    }
+
+    @Override
     public synchronized void writeBatch(List<Runnable> writes) {
         requireInitialized();
         var restoreAutoCommit = true;
@@ -288,7 +313,6 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             try (var statement = writer.createStatement()) {
                 statement.executeUpdate("DELETE FROM ai_model_executions");
                 statement.executeUpdate("DELETE FROM ai_calls");
-                statement.executeUpdate("DELETE FROM ai_usage_daily");
                 statement.executeUpdate("""
                     UPDATE ai_statistics_health SET affected_since_ms = NULL,
                       affected_until_ms = NULL, last_write_error_at_ms = NULL,
@@ -319,7 +343,20 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
 
     @Override
     public synchronized void reconcileAbandoned(Instant now) {
+        reconcileAbandoned(now, java.util.Set.of(), true);
+    }
+
+    @Override
+    public synchronized void reconcileAbandoned(Instant now, java.util.Set<String> activeCallIds) {
+        reconcileAbandoned(now, activeCallIds, false);
+    }
+
+    private void reconcileAbandoned(Instant now, java.util.Set<String> activeCallIds,
+        boolean updateHealth) {
         requireInitialized();
+        var active = List.copyOf(activeCallIds);
+        var excluded = active.isEmpty() ? "" : " AND id NOT IN ("
+            + String.join(",", java.util.Collections.nCopies(active.size(), "?")) + ")";
         var sql = """
             WITH recovered AS MATERIALIZED (
               SELECT call_id, COUNT(*) attempts,
@@ -356,20 +393,43 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
                 WHERE call_id = ai_calls.id AND response_model_id IS NOT NULL
                 ORDER BY completed_at_ms DESC, id DESC LIMIT 1)
             WHERE status = 'IN_PROGRESS'
-            """;
-        try (var statement = writer.prepareStatement(sql)) {
-            statement.setLong(1, now.toEpochMilli());
-            statement.setLong(2, now.toEpochMilli());
-            statement.executeUpdate();
-        } catch (SQLException error) {
-            throw databaseError("reconcile abandoned calls", error);
-        }
+            """ + excluded;
+        writeBatch(List.of(() -> {
+            // Read the pending calls before changing their status. Recovery and health must
+            // commit together so a restart cannot hide or recount an interrupted recovery.
+            var healthSql = """
+                UPDATE ai_statistics_health SET
+                  incomplete_calls = incomplete_calls +
+                    (SELECT COUNT(*) FROM ai_calls WHERE status = 'IN_PROGRESS' AND complete = 1),
+                  affected_since_ms = MIN(COALESCE(affected_since_ms,
+                    (SELECT MIN(started_at_ms) FROM ai_calls WHERE status = 'IN_PROGRESS')),
+                    (SELECT MIN(started_at_ms) FROM ai_calls WHERE status = 'IN_PROGRESS')),
+                  affected_until_ms = MAX(COALESCE(affected_until_ms, ?), ?)
+                WHERE id = 1 AND EXISTS (SELECT 1 FROM ai_calls WHERE status = 'IN_PROGRESS')
+                """;
+            try (var health = writer.prepareStatement(healthSql);
+                var statement = writer.prepareStatement(sql)) {
+                if (updateHealth) {
+                    health.setLong(1, now.toEpochMilli());
+                    health.setLong(2, now.toEpochMilli());
+                    health.executeUpdate();
+                }
+                statement.setLong(1, now.toEpochMilli());
+                statement.setLong(2, now.toEpochMilli());
+                for (int index = 0; index < active.size(); index++) {
+                    statement.setString(index + 3, active.get(index));
+                }
+                statement.executeUpdate();
+            } catch (SQLException error) {
+                throw databaseError("reconcile abandoned calls", error);
+            }
+        }));
     }
 
     @Override
-    public synchronized boolean rollupAndRetainBatch(Clock clock) {
+    public synchronized boolean retainBatch(Clock clock) {
         requireInitialized();
-        return maintenance.rollupAndRetainBatch(writer, clock);
+        return maintenance.retainBatch(writer, clock);
     }
 
     @Override

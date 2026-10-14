@@ -6,7 +6,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,50 +22,13 @@ class UsageStatisticsQueryRepository {
 
     UsageSummary summary(Connection connection, UsageQuery query, boolean complete)
         throws SQLException {
-        var plan = sourcePlan(connection, query);
-        var raw = SummaryValues.empty();
-        for (var interval : plan.raw()) {
-            raw = raw.add(queryRawSummary(connection, interval));
-        }
-        var daily = plan.daily() == null ? SummaryValues.empty()
-            : queryDailySummary(connection, plan.daily());
-        var tokens = raw.tokens.add(daily.tokens);
-        var calls = raw.calls + daily.calls;
-        var known = raw.known + daily.known;
-        return new UsageSummary(calls, raw.inProgress + daily.inProgress,
-            raw.succeeded + daily.succeeded, raw.failed + daily.failed,
+        var values = queryRawSummary(connection, query);
+        var tokens = values.tokens;
+        return new UsageSummary(values.calls, values.inProgress, values.succeeded, values.failed,
             tokens.input, tokens.output, tokens.cacheRead, tokens.cacheCreation,
-            tokens.reasoning, tokens.total, raw.missing + daily.missing,
-            raw.partial + daily.partial,
-            calls == 0 ? 1D : (double) known / calls,
-            complete && raw.incomplete + daily.incomplete == 0);
-    }
-
-    private SummaryValues queryDailySummary(Connection connection, UsageQuery query)
-        throws SQLException {
-        var filter = aggregateFilter(query, true);
-        var count = "SUM(call_count)";
-        var sql = "SELECT " + count + " call_count,"
-            + count + " FILTER (WHERE status = 'IN_PROGRESS') in_progress_count,"
-            + count + " FILTER (WHERE status = 'SUCCEEDED') success_count,"
-            + count + " FILTER (WHERE status = 'FAILED') failed_count,"
-            + " SUM(known_usage_calls) known_usage_calls,"
-            + " SUM(missing_usage_calls) missing_usage_calls,"
-            + count + " FILTER (WHERE usage_quality = 'PARTIAL') partial_usage_calls,"
-            + " SUM(incomplete_call_count) incomplete_calls,"
-            + " SUM(input_tokens) input_tokens, SUM(output_tokens) output_tokens,"
-            + " SUM(cache_read_input_tokens) cache_read_input_tokens,"
-            + " SUM(cache_creation_input_tokens) cache_creation_input_tokens,"
-            + " SUM(reasoning_output_tokens) reasoning_output_tokens,"
-            + " SUM(accounted_total_tokens) accounted_total_tokens FROM ai_usage_daily "
-            + filter.sql();
-        try (var statement = connection.prepareStatement(sql)) {
-            bind(statement, filter.parameters());
-            try (var row = statement.executeQuery()) {
-                row.next();
-                return readSummary(row);
-            }
-        }
+            tokens.reasoning, tokens.total, values.missing, values.partial,
+            values.calls == 0 ? 1D : (double) (values.known - values.partial) / values.calls,
+            complete && values.incomplete == 0);
     }
 
     private static SummaryValues readSummary(ResultSet row) throws SQLException {
@@ -84,7 +46,7 @@ class UsageStatisticsQueryRepository {
 
     private SummaryValues queryRawSummary(Connection connection, UsageQuery query)
         throws SQLException {
-        var filter = aggregateFilter(query, false);
+        var filter = aggregateFilter(query);
         // The index orders these groups. Classify each group once, rather than evaluating
         // every status/quality counter for every call, and avoid a temporary GROUP BY sort.
         var sql = """
@@ -95,7 +57,7 @@ class UsageStatisticsQueryRepository {
               SUM(reasoning_output_tokens) reasoning_output_tokens,
               SUM(accounted_total_tokens) accounted_total_tokens
             FROM
-            """ + aggregateTable(false) + " " + filter.sql()
+            """ + aggregateTable() + " " + filter.sql()
             + " GROUP BY (started_at_ms / 3600000), status, usage_quality, complete";
         // Fold the ordered groups with scalar aggregates, without a second GROUP BY sort.
         // This returns one row and avoids JDBC work proportional to the number of hours.
@@ -125,58 +87,61 @@ class UsageStatisticsQueryRepository {
     }
 
     List<UsageTrendPoint> trends(Connection connection, UsageQuery query,
-        boolean complete, UsageBreakdownDimension dimension)
-        throws SQLException {
+        boolean complete, UsageBreakdownDimension dimension) throws SQLException {
         var points = new java.util.TreeMap<Instant, UsageTrendPoint>();
-        var plan = sourcePlan(connection, query);
-        for (var interval : plan.raw()) {
-            queryTrendSource(connection, interval, false, dimension).forEach(point ->
-                points.merge(point.bucketStart(), point,
-                    UsageStatisticsQueryRepository::mergePoint));
+        var rules = query.timeZone().getRules();
+        var from = query.from();
+        // SQLite has no IANA rules. Aggregate each constant-offset interval in SQL; Java
+        // only resolves calendar boundaries and merges buckets, never individual calls.
+        while (from.isBefore(query.to())) {
+            var transition = rules.nextTransition(from);
+            var to = transition != null && transition.getInstant().isBefore(query.to())
+                ? transition.getInstant() : query.to();
+            var previous = rules.previousTransition(from.plusNanos(1));
+            queryTrendInterval(connection, withRange(query, from, to), complete, dimension,
+                previous == null ? null : previous.getInstant()).forEach(point ->
+                    points.merge(point.bucketStart(), point,
+                        UsageStatisticsQueryRepository::mergePoint));
+            from = to;
         }
-        if (plan.daily() != null) {
-            queryTrendSource(connection, plan.daily(), true, dimension).forEach(point ->
-                points.merge(point.bucketStart(), point,
-                    UsageStatisticsQueryRepository::mergePoint));
-        }
-        return points.values().stream()
-            .map(point -> point.withComplete(complete && point.complete()))
-            .toList();
+        return List.copyOf(points.values());
     }
 
-    private List<UsageTrendPoint> queryTrendSource(Connection connection, UsageQuery query,
-        boolean daily, UsageBreakdownDimension dimension) throws SQLException {
-        var filter = aggregateFilter(query, daily);
-        var bucket = daily ? "day || 'T00:00:00Z'" : "(started_at_ms / 3600000) * 3600000";
-        var grouping = daily ? "bucket" : "(started_at_ms / 3600000)";
-        var count = daily ? "SUM(call_count)" : "COUNT(*)";
-        var partial = count + " FILTER (WHERE usage_quality = 'PARTIAL')";
-        var missing = daily ? "SUM(missing_usage_calls)"
-            : "COUNT(*) FILTER (WHERE usage_quality = 'MISSING')";
-        var incomplete = daily ? "SUM(incomplete_call_count)"
-            : "COUNT(*) FILTER (WHERE complete = 0)";
-        var table = daily ? "ai_usage_daily" : aggregateTable(false);
-        var resolution = daily ? UsageTrendResolution.DAY : query.effectiveResolution();
+    private List<UsageTrendPoint> queryTrendInterval(Connection connection, UsageQuery query,
+        boolean complete, UsageBreakdownDimension dimension, Instant offsetStart)
+        throws SQLException {
+        var filter = aggregateFilter(query);
+        var resolution = query.effectiveResolution();
+        var offset = query.timeZone().getRules().getOffset(query.from()).getTotalSeconds() * 1000L;
+        var unit = resolution == UsageTrendResolution.DAY ? 86_400_000L : 3_600_000L;
+        var localTime = "(started_at_ms + " + offset + ")";
+        // Integer floor division also handles instants before the Unix epoch.
+        var bucket = "(" + localTime + " - CASE WHEN " + localTime + " < 0 THEN "
+            + (unit - 1) + " ELSE 0 END) / " + unit;
         var dimensionColumn = dimension == null ? null : dimension.column();
         var sql = "SELECT " + (dimensionColumn == null ? "" : dimensionColumn + " group_value, ")
-            + bucket + " bucket, " + count
-            + " call_count, SUM(input_tokens) input_tokens, SUM(output_tokens) output_tokens,"
-            + " SUM(accounted_total_tokens) accounted_total_tokens, " + missing
-            + " missing_usage_calls, " + partial
-            + " partial_usage_calls, " + incomplete
-            + " incomplete_calls FROM " + table + " " + filter.sql()
-            + " GROUP BY " + grouping
-            + (dimensionColumn == null ? "" : ", " + dimensionColumn)
-            + " ORDER BY " + grouping;
+            + bucket + " bucket, COUNT(*) call_count,"
+            + " SUM(input_tokens) input_tokens, SUM(output_tokens) output_tokens,"
+            + " SUM(accounted_total_tokens) accounted_total_tokens,"
+            + " COUNT(*) FILTER (WHERE usage_quality = 'MISSING') missing_usage_calls,"
+            + " COUNT(*) FILTER (WHERE usage_quality = 'PARTIAL') partial_usage_calls,"
+            + " COUNT(*) FILTER (WHERE complete = 0) incomplete_calls FROM " + aggregateTable()
+            + " " + filter.sql() + " GROUP BY bucket"
+            + (dimensionColumn == null ? "" : ", " + dimensionColumn);
         try (var statement = connection.prepareStatement(sql)) {
             bind(statement, filter.parameters());
             try (var rows = statement.executeQuery()) {
-                var points = new java.util.TreeMap<Instant, UsageTrendPoint>();
+                var points = new ArrayList<UsageTrendPoint>();
                 while (rows.next()) {
-                    var startedAt = daily ? Instant.parse(rows.getString("bucket"))
-                        : Instant.ofEpochMilli(rows.getLong("bucket"));
-                    if (resolution == UsageTrendResolution.DAY) {
-                        startedAt = startedAt.truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+                    var bucketNumber = rows.getLong("bucket");
+                    var startedAt = resolution == UsageTrendResolution.DAY
+                        ? LocalDate.ofEpochDay(bucketNumber).atStartOfDay(query.timeZone()).toInstant()
+                        : Instant.ofEpochMilli(bucketNumber * unit - offset);
+                    // A fractional-hour DST transition starts a partial hour. Clamp to the
+                    // offset boundary, not the query boundary, and keep repeated hours distinct.
+                    if (resolution == UsageTrendResolution.HOUR && offsetStart != null
+                        && startedAt.isBefore(offsetStart)) {
+                        startedAt = offsetStart;
                     }
                     Map<String, UsageTrendDimensionValue> byDimension = null;
                     if (dimensionColumn != null) {
@@ -184,59 +149,37 @@ class UsageStatisticsQueryRepository {
                             new UsageTrendDimensionValue(rows.getLong("call_count"),
                                 nullableLong(rows, "accounted_total_tokens")));
                     }
-                    var point = new UsageTrendPoint(startedAt,
-                        resolution,
+                    points.add(new UsageTrendPoint(startedAt, resolution,
                         rows.getLong("call_count"), nullableLong(rows, "input_tokens"),
                         nullableLong(rows, "output_tokens"),
                         nullableLong(rows, "accounted_total_tokens"),
-                        rows.getLong("missing_usage_calls"),
-                        rows.getLong("partial_usage_calls"), rows.getLong("incomplete_calls") == 0,
-                        byDimension);
-                    points.merge(startedAt, point, UsageStatisticsQueryRepository::mergePoint);
+                        rows.getLong("missing_usage_calls"), rows.getLong("partial_usage_calls"),
+                        complete && rows.getLong("incomplete_calls") == 0, byDimension));
                 }
-                return List.copyOf(points.values());
+                return points;
             }
         }
     }
 
     UsageBreakdown breakdown(Connection connection, UsageQuery query,
         UsageBreakdownDimension dimension) throws SQLException {
-        var groups = new java.util.HashMap<String, BreakdownValues>();
-        var plan = sourcePlan(connection, query);
-        for (var interval : plan.raw()) {
-            queryBreakdownSource(connection, interval, false, dimension, groups);
-        }
-        if (plan.daily() != null) {
-            queryBreakdownSource(connection, plan.daily(), true, dimension, groups);
-        }
-        var items = groups.entrySet().stream()
-            .map(entry -> entry.getValue().toItem(entry.getKey()))
-            .sorted(java.util.Comparator.comparing(UsageBreakdownItem::accountedTotalTokens,
-                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
-            .toList();
-        return new UsageBreakdown(items);
-    }
-
-    private void queryBreakdownSource(Connection connection, UsageQuery query, boolean daily,
-        UsageBreakdownDimension dimension, java.util.Map<String, BreakdownValues> groups)
-        throws SQLException {
-        var filter = aggregateFilter(query, daily);
-        var count = daily ? "SUM(call_count)" : "COUNT(*)";
-        var table = daily ? "ai_usage_daily" : aggregateTable(false);
-        var sql = "SELECT " + dimension.column() + " group_value, " + count + " call_count, "
-            + count + " FILTER (WHERE status = 'FAILED') failed_count,"
-            + " SUM(accounted_total_tokens) accounted_total_tokens FROM " + table + " "
+        var filter = aggregateFilter(query);
+        var sql = "SELECT " + dimension.column() + " group_value, COUNT(*) call_count, "
+            + "COUNT(*) FILTER (WHERE status = 'FAILED') failed_count,"
+            + " SUM(accounted_total_tokens) accounted_total_tokens FROM " + aggregateTable() + " "
             + filter.sql() + " GROUP BY " + dimension.column();
         try (var statement = connection.prepareStatement(sql)) {
             bind(statement, filter.parameters());
             try (var rows = statement.executeQuery()) {
+                var items = new ArrayList<UsageBreakdownItem>();
                 while (rows.next()) {
-                    var values = new BreakdownValues(rows.getLong("call_count"),
-                        rows.getLong("failed_count"),
-                        nullableLong(rows, "accounted_total_tokens"));
-                    groups.merge(groupValue(rows.getString("group_value")), values,
-                        BreakdownValues::add);
+                    items.add(new UsageBreakdownItem(groupValue(rows.getString("group_value")),
+                        rows.getLong("call_count"), rows.getLong("failed_count"),
+                        nullableLong(rows, "accounted_total_tokens")));
                 }
+                items.sort(java.util.Comparator.comparing(UsageBreakdownItem::accountedTotalTokens,
+                    java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+                return new UsageBreakdown(List.copyOf(items));
             }
         }
     }
@@ -249,7 +192,7 @@ class UsageStatisticsQueryRepository {
 
     UsageCallPage listCalls(Connection connection, UsageQuery query, int size,
         String encodedCursor) throws SQLException {
-        var base = filter(query, "started_at_ms", false);
+        var base = filter(query);
         var parameters = new ArrayList<>(base.parameters());
         var sql = new StringBuilder("SELECT * FROM ai_calls ").append(base.sql());
         if (StringUtils.hasText(encodedCursor)) {
@@ -336,24 +279,13 @@ class UsageStatisticsQueryRepository {
             row.getInt("complete") != 0, usage(row));
     }
 
-    private SqlFilter filter(UsageQuery query, String timeColumn, boolean daily) {
+    private SqlFilter filter(UsageQuery query) {
         var clauses = new ArrayList<String>();
         var parameters = new ArrayList<Object>();
-        if (daily) {
-            var fromDay = query.from().atZone(ZoneOffset.UTC).toLocalDate();
-            if (!query.from().equals(fromDay.atStartOfDay().toInstant(ZoneOffset.UTC))) {
-                fromDay = fromDay.plusDays(1);
-            }
-            clauses.add("day >= ?");
-            parameters.add(fromDay.toString());
-            clauses.add("day < ?");
-            parameters.add(query.to().atZone(ZoneOffset.UTC).toLocalDate().toString());
-        } else {
-            clauses.add(timeColumn + " >= ?");
-            parameters.add(query.from().toEpochMilli());
-            clauses.add(timeColumn + " < ?");
-            parameters.add(query.to().toEpochMilli());
-        }
+        clauses.add("started_at_ms >= ?");
+        parameters.add(query.from().toEpochMilli());
+        clauses.add("started_at_ms < ?");
+        parameters.add(query.to().toEpochMilli());
         addFilter(clauses, parameters, "caller_plugin_name", query.callerPlugin());
         addFilter(clauses, parameters, "feature", query.feature());
         addFilter(clauses, parameters, "provider_name", query.providerName());
@@ -367,57 +299,20 @@ class UsageStatisticsQueryRepository {
         return new SqlFilter("WHERE " + String.join(" AND ", clauses), parameters);
     }
 
-    private SourcePlan sourcePlan(Connection connection, UsageQuery query) throws SQLException {
-        var boundaryValue = stringMeta(connection, "call_detail_start");
-        if (boundaryValue == null) {
-            return new SourcePlan(List.of(query), null);
-        }
-        var boundary = LocalDate.parse(boundaryValue).atStartOfDay().toInstant(ZoneOffset.UTC);
-        if (!query.from().isBefore(boundary)) {
-            return new SourcePlan(List.of(query), null);
-        }
-        // Expired detail cannot answer partial UTC days. Expand explicitly and disclose the range.
-        var from = query.from().atZone(ZoneOffset.UTC).toLocalDate()
-            .atStartOfDay().toInstant(ZoneOffset.UTC);
-        var requestedEnd = query.to().isBefore(boundary) ? query.to() : boundary;
-        var endDay = requestedEnd.atZone(ZoneOffset.UTC).toLocalDate();
-        var end = endDay.atStartOfDay().toInstant(ZoneOffset.UTC);
-        if (end.isBefore(requestedEnd)) {
-            end = endDay.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        }
-        // Old unfinished/late-finished calls remain raw. Archived calls are removed atomically,
-        // so combining both sources does not double count. Use DAY for both old sources.
-        var raw = new ArrayList<UsageQuery>();
-        var historical = withRange(query, from, end);
-        raw.add(new UsageQuery(from, end, query.callerPlugin(), query.feature(),
-            query.providerName(), query.modelName(), query.modelType(), query.operation(),
-            query.status(), query.usageQuality(), UsageTrendResolution.DAY));
-        if (query.to().isAfter(boundary)) {
-            raw.add(withRange(query, boundary, query.to()));
-        }
-        return new SourcePlan(raw, historical);
-    }
-
     private static UsageQuery withRange(UsageQuery source, Instant from, Instant to) {
         return new UsageQuery(from, to, source.callerPlugin(), source.feature(),
             source.providerName(), source.modelName(), source.modelType(), source.operation(),
-            source.status(), source.usageQuality(), source.resolution());
+            source.status(), source.usageQuality(), source.resolution(), source.timeZone());
     }
 
-    private static String aggregateTable(boolean daily) {
-        if (daily) {
-            return "ai_usage_daily";
-        }
+    private static String aggregateTable() {
         // The hour-leading covering index streams grouped rows in order and carries every
         // counter column, so aggregation never needs a table lookup per call.
         return "ai_calls INDEXED BY idx_calls_filtered_hour";
     }
 
-    private SqlFilter aggregateFilter(UsageQuery query, boolean daily) {
-        var base = filter(query, daily ? "day" : "started_at_ms", daily);
-        if (daily) {
-            return base;
-        }
+    private SqlFilter aggregateFilter(UsageQuery query) {
+        var base = filter(query);
         var parameters = new ArrayList<>(base.parameters());
         parameters.add(query.from().toEpochMilli() / 3_600_000L);
         parameters.add(query.to().toEpochMilli() / 3_600_000L);
@@ -507,65 +402,15 @@ class UsageStatisticsQueryRepository {
         return UsageSqliteJdbc.nullableLong(row, column);
     }
 
-    private static String stringMeta(Connection connection, String key) throws SQLException {
-        try (var statement = connection.prepareStatement(
-            "SELECT value FROM ai_statistics_meta WHERE key = ?")) {
-            statement.setString(1, key);
-            try (var rows = statement.executeQuery()) {
-                return rows.next() ? rows.getString(1) : null;
-            }
-        }
-    }
-
     private record SqlFilter(String sql, List<Object> parameters) {
     }
 
     private record SummaryValues(long calls, long inProgress, long succeeded, long failed,
                                  long known, long missing,
                                  long incomplete, long partial, TokenValues tokens) {
-
-        private static SummaryValues empty() {
-            return new SummaryValues(0, 0, 0, 0, 0, 0, 0, 0, TokenValues.empty());
-        }
-
-        private SummaryValues add(SummaryValues other) {
-            return new SummaryValues(calls + other.calls, inProgress + other.inProgress,
-                succeeded + other.succeeded, failed + other.failed,
-                known + other.known, missing + other.missing,
-                incomplete + other.incomplete, partial + other.partial, tokens.add(other.tokens));
-        }
-    }
-
-    private record SourcePlan(List<UsageQuery> raw, UsageQuery daily) {
-    }
-
-    private record BreakdownValues(long calls, long failed, Long total) {
-
-        private BreakdownValues add(BreakdownValues other) {
-            return new BreakdownValues(calls + other.calls, failed + other.failed,
-                UsageStatisticsQueryRepository.add(total, other.total));
-        }
-
-        private UsageBreakdownItem toItem(String value) {
-            return new UsageBreakdownItem(value, calls, failed, total);
-        }
     }
 
     private record TokenValues(Long input, Long output, Long cacheRead, Long cacheCreation,
                                Long reasoning, Long total) {
-
-        private static TokenValues empty() {
-            return new TokenValues(null, null, null, null, null, null);
-        }
-
-        private TokenValues add(TokenValues other) {
-            return new TokenValues(
-                UsageStatisticsQueryRepository.add(input, other.input),
-                UsageStatisticsQueryRepository.add(output, other.output),
-                UsageStatisticsQueryRepository.add(cacheRead, other.cacheRead),
-                UsageStatisticsQueryRepository.add(cacheCreation, other.cacheCreation),
-                UsageStatisticsQueryRepository.add(reasoning, other.reasoning),
-                UsageStatisticsQueryRepository.add(total, other.total));
-        }
     }
 }

@@ -68,6 +68,16 @@ describe('usage utils', () => {
     expect(formatDuration(1200)).toBe('1.2 s')
   })
 
+  it.each([
+    ['Asia/Shanghai', '2026-07-31T16:00:00Z', '2026-08-01', '2026-08-01 00:00:00 GMT+08:00'],
+    ['Asia/Kathmandu', '2026-07-31T18:15:00Z', '2026-08-01', '2026-08-01 00:00:00 GMT+05:45'],
+    ['America/New_York', '2026-11-01T05:00:00Z', '2026-11-01', '2026-11-01 01:00:00 GMT-04:00'],
+    ['America/New_York', '2026-11-01T06:00:00Z', '2026-11-01', '2026-11-01 01:00:00 GMT-05:00'],
+  ])('formats local bucket dates and offsets in %s', (timeZone, iso, day, hour) => {
+    expect(formatBucketStart(iso, 'DAY', timeZone)).toBe(day)
+    expect(formatBucketStart(iso, 'HOUR', timeZone)).toBe(hour)
+  })
+
   it('formats datetimes and day-resolution buckets without hourly precision', () => {
     const iso = '2026-08-01T12:34:56Z'
     const parsed = new Date(iso)
@@ -78,7 +88,7 @@ describe('usage utils', () => {
     expect(formatDateTime(iso)).toBe(expected)
     expect(formatDateTime(undefined)).toBe('未知')
     expect(formatDateTime('not-a-date')).toBe('未知')
-    expect(formatBucketStart('2026-08-01T00:00:00Z', 'DAY')).toBe('2026-08-01')
-    expect(formatBucketStart(iso, 'HOUR')).toBe(expected)
+    expect(formatBucketStart('2026-08-01T00:00:00Z', 'DAY', 'UTC')).toBe('2026-08-01')
+    expect(formatBucketStart(iso, 'HOUR')).toMatch(new RegExp(`^${expected} GMT[+-]\\d{2}:\\d{2}$`))
   })
 })

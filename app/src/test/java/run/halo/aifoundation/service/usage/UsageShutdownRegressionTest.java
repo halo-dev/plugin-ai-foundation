@@ -74,6 +74,81 @@ class UsageShutdownRegressionTest {
     }
 
     @Test
+    void shutdownBetweenYieldAndReschedulePreservesAcceptedEvents() throws Exception {
+        var store = mock(UsageStatisticsStore.class);
+        when(store.currentEpoch()).thenReturn(1L);
+        doAnswer(invocation -> {
+            invocation.getArgument(0, java.util.List.class).forEach(action ->
+                ((Runnable) action).run());
+            return null;
+        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
+        var atReschedule = new CountDownLatch(1);
+        var releaseReschedule = new CountDownLatch(1);
+        var once = new java.util.concurrent.atomic.AtomicBoolean();
+        var queue = new java.util.concurrent.ArrayBlockingQueue<Object>(8192) {
+            @Override
+            public boolean isEmpty() {
+                var empty = super.isEmpty();
+                if (Thread.currentThread().getName().startsWith("ai-usage-writer-")
+                    && once.compareAndSet(false, true)) {
+                    atReschedule.countDown();
+                    try {
+                        assertThat(releaseReschedule.await(4, TimeUnit.SECONDS)).isTrue();
+                    } catch (InterruptedException error) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(error);
+                    }
+                }
+                return empty;
+            }
+        };
+        var service = new UsageStatisticsService(store, mock(CallerPluginResolver.class));
+        var queueField = UsageStatisticsService.class.getDeclaredField("pendingWrites");
+        queueField.setAccessible(true);
+        queueField.set(service, queue);
+        var entered = new CountDownLatch(1);
+        var releaseWrite = new CountDownLatch(1);
+        var saved = new AtomicInteger();
+        doAnswer(invocation -> {
+            if (saved.incrementAndGet() == 1) {
+                entered.countDown();
+                assertThat(releaseWrite.await(4, TimeUnit.SECONDS)).isTrue();
+            }
+            return null;
+        }).when(store).startCall(any());
+        service.initialize();
+        try {
+            var descriptor = new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
+                "m", "p", "openai", "gpt"), "language.generateText", false, null,
+                CallerPluginInfo.builder().pluginName("plugin").build());
+            service.beginCall(descriptor);
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+            for (int i = 1; i < 1500; i++) {
+                service.beginCall(descriptor);
+            }
+            releaseWrite.countDown();
+            assertThat(atReschedule.await(2, TimeUnit.SECONDS)).isTrue();
+            var closed = CompletableFuture.runAsync(service::close);
+            var writerField = UsageStatisticsService.class.getDeclaredField("writer");
+            writerField.setAccessible(true);
+            var writer = (ThreadPoolExecutor) writerField.get(service);
+            for (int i = 0; i < 200 && !writer.isShutdown(); i++) {
+                Thread.sleep(10);
+            }
+            assertThat(writer.isShutdown()).isTrue();
+            releaseReschedule.countDown();
+            closed.get(4, TimeUnit.SECONDS);
+            assertThat(saved.get()).isEqualTo(1500);
+            assertThat(service.health().droppedEvents()).isZero();
+            assertThat(service.health().queueDepth()).isZero();
+        } finally {
+            releaseWrite.countDown();
+            releaseReschedule.countDown();
+            service.close();
+        }
+    }
+
+    @Test
     void shutdownClosesStoreEvenWhenReaderExceedsTimeout() throws Exception {
         var store = mock(UsageStatisticsStore.class);
         when(store.currentEpoch()).thenReturn(1L);

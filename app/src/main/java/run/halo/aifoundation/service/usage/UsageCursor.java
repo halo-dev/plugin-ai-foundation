@@ -48,6 +48,7 @@ record UsageCursor(Instant startedAt, String id, String filterHash) {
             append(canonical, query.status());
             append(canonical, query.usageQuality());
             append(canonical, query.resolution());
+            append(canonical, query.timeZone());
             var bytes = digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(bytes, 0, 8);
         } catch (NoSuchAlgorithmException impossible) {

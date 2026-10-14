@@ -46,7 +46,7 @@ const displayNames = computed(() =>
 const entries = computed<UsageRankEntry[]>(() => {
   const items = props.items || []
   const sorted = [...items].sort(
-    (a, b) => usageMetricValue(b, props.metric) - usageMetricValue(a, props.metric),
+    (a, b) => (usageMetricValue(b, props.metric) ?? -1) - (usageMetricValue(a, props.metric) ?? -1),
   )
   const top = sorted.slice(0, USAGE_CHART_TOP_N)
   const rest = sorted.slice(USAGE_CHART_TOP_N)
@@ -57,7 +57,9 @@ const entries = computed<UsageRankEntry[]>(() => {
       label: `其他 (${rest.length})`,
       calls: rest.reduce((sum, item) => sum + (item.callCount ?? 0), 0),
       failed: rest.reduce((sum, item) => sum + (item.failedCount ?? 0), 0),
-      tokens: rest.reduce((sum, item) => sum + (item.accountedTotalTokens ?? 0), 0),
+      tokens: rest.some((item) => item.accountedTotalTokens != null)
+        ? rest.reduce((sum, item) => sum + (item.accountedTotalTokens ?? 0), 0)
+        : undefined,
       other: true,
     })
   }
@@ -79,11 +81,11 @@ function toEntry(item: UsageBreakdownItem): UsageRankEntry {
 const categories = computed(() => entries.value.filter((e) => !e.other).map((e) => e.key))
 
 const maxValue = computed(() =>
-  Math.max(1, ...entries.value.map((entry) => entryValue(entry))),
+  Math.max(1, ...entries.value.map((entry) => entryValue(entry) ?? 0)),
 )
 
 const totalValue = computed(() =>
-  entries.value.reduce((sum, entry) => sum + entryValue(entry), 0),
+  entries.value.reduce((sum, entry) => sum + (entryValue(entry) ?? 0), 0),
 )
 
 function entryValue(entry: UsageRankEntry) {
@@ -100,8 +102,10 @@ function formatEntryValue(entry: UsageRankEntry) {
 }
 
 function entryShare(entry: UsageRankEntry) {
+  const value = entryValue(entry)
+  if (value == null) return '未知'
   if (!totalValue.value) return '0%'
-  return `${Math.round((entryValue(entry) / totalValue.value) * 100)}%`
+  return `${Math.round((value / totalValue.value) * 100)}%`
 }
 </script>
 
@@ -136,10 +140,10 @@ function entryShare(entry: UsageRankEntry) {
         <span class=":uno: usage-rank-name" :title="entry.label">{{ entry.label }}</span>
         <span class=":uno: usage-rank-value">{{ formatEntryValue(entry) }}</span>
       </span>
-      <span class=":uno: usage-rank-bar" aria-hidden="true"
+      <span v-if="entryValue(entry) != null" class=":uno: usage-rank-bar" aria-hidden="true"
         ><i
           :style="{
-            width: `${Math.max(1.5, (entryValue(entry) / maxValue) * 100)}%`,
+            width: `${Math.max(1.5, ((entryValue(entry) ?? 0) / maxValue) * 100)}%`,
             background: entry.other
               ? USAGE_CHART_OTHER_COLOR
               : usageCategoryColor(entry.key, categories),

@@ -43,6 +43,7 @@ public class UsageStatisticsService
 
     static final int WRITE_QUEUE_CAPACITY = 8_192;
     static final int MAX_WRITE_ATTEMPTS = 3;
+    private static final Duration CALL_DETAIL_RANGE = Duration.ofDays(90);
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(5);
     private final UsageStatisticsStore store;
     private final CallerPluginResolver callerPluginResolver;
@@ -53,6 +54,8 @@ public class UsageStatisticsService
     private final AtomicBoolean draining = new AtomicBoolean();
     private final AtomicBoolean closing = new AtomicBoolean();
     private final Object admissionLock = new Object();
+    private final java.util.Map<String, TrackedCall> trackedCalls = new java.util.HashMap<>();
+    private boolean reconciliationNeeded;
     private final ScheduledExecutorService maintenance;
     private final Scheduler readerScheduler;
     private final ReentrantReadWriteLock storeAccess = new ReentrantReadWriteLock(true);
@@ -128,7 +131,18 @@ public class UsageStatisticsService
             context.modelType().name(), context.modelName(), context.providerName(),
             context.providerType(), context.modelId(), descriptor.streaming());
         var session = new UsageCallSession(this, start, clock);
-        submit(start.epoch(), () -> store.startCall(start), () -> markIncomplete(session));
+        synchronized (admissionLock) {
+            if (start.epoch() != epoch) {
+                return null;
+            }
+            if (trackedCalls.size() >= WRITE_QUEUE_CAPACITY) {
+                droppedEvents.incrementAndGet();
+                markIncomplete(session);
+                return null;
+            }
+            trackedCalls.put(start.id(), new TrackedCall(session, false));
+            submit(start.epoch(), () -> store.startCall(start), () -> markIncomplete(session));
+        }
         return session;
     }
 
@@ -138,9 +152,31 @@ public class UsageStatisticsService
     }
 
     public void finishCall(UsageCallSession session, UsageCallTerminal terminal) {
-        submit(session.start().epoch(),
-            () -> store.finishCall(withCurrentCompleteness(session, terminal)),
-            () -> markIncomplete(session));
+        synchronized (admissionLock) {
+            if (session.start().epoch() != epoch) {
+                return;
+            }
+            if (!terminal.complete()) {
+                markIncomplete(session);
+            }
+        }
+        submit(session.start().epoch(), () -> {
+            store.finishCall(withCurrentCompleteness(session, terminal));
+            synchronized (admissionLock) {
+                trackedCalls.computeIfPresent(session.start().id(),
+                    (id, tracked) -> new TrackedCall(tracked.session(), true));
+            }
+        }, () -> {
+            synchronized (admissionLock) {
+                if (session.start().epoch() != epoch) {
+                    return;
+                }
+                markIncomplete(session);
+                trackedCalls.computeIfPresent(session.start().id(),
+                    (id, tracked) -> new TrackedCall(tracked.session(), true));
+                reconciliationNeeded = true;
+            }
+        });
     }
 
     public Mono<UsageSummary> summary(UsageQuery query) {
@@ -157,11 +193,34 @@ public class UsageStatisticsService
     }
 
     public Mono<UsageCallPage> listCalls(UsageQuery query, int size, String cursor) {
-        return read(() -> store.listCalls(query, size, cursor));
+        return read(() -> {
+            var cutoff = clock.instant().minus(CALL_DETAIL_RANGE);
+            if (!query.to().isAfter(cutoff)) {
+                return new UsageCallPage(List.of(), null);
+            }
+            var recent = query.from().isBefore(cutoff)
+                ? new UsageQuery(cutoff, query.to(), query.callerPlugin(), query.feature(),
+                    query.providerName(), query.modelName(), query.modelType(), query.operation(),
+                    query.status(), query.usageQuality(), query.resolution(), query.timeZone())
+                : query;
+            var recentCursor = cursor;
+            if (cursor != null && !cursor.isBlank()) {
+                var decoded = UsageCursor.decode(cursor, query);
+                recentCursor = UsageCursor.encode(decoded.startedAt(), decoded.id(), recent);
+            }
+            var page = store.listCalls(recent, size, recentCursor);
+            if (page.nextCursor() == null) {
+                return page;
+            }
+            var next = UsageCursor.decode(page.nextCursor(), recent);
+            return new UsageCallPage(page.items(),
+                UsageCursor.encode(next.startedAt(), next.id(), query));
+        });
     }
 
     public Mono<Optional<UsageCallDetail>> getCall(String id) {
-        return read(() -> store.getCall(id));
+        return read(() -> store.getCall(id).filter(detail ->
+            !detail.call().startedAt().isBefore(clock.instant().minus(CALL_DETAIL_RANGE))));
     }
 
     public Mono<Void> reset(String confirmation) {
@@ -182,6 +241,8 @@ public class UsageStatisticsService
                 healthDirty.set(false);
                 // Reset retires queued events as well as persisted history.
                 pendingWrites.clear();
+                trackedCalls.clear();
+                reconciliationNeeded = false;
                 epoch = nextEpoch;
             }
             return null;
@@ -314,19 +375,23 @@ public class UsageStatisticsService
     }
 
     private void scheduleDrain() {
-        if (!draining.compareAndSet(false, true)) {
-            return;
-        }
-        try {
-            writer.execute(this::drainWrites);
-        } catch (RejectedExecutionException error) {
-            draining.set(false);
-            PendingWrite event;
-            while ((event = pendingWrites.poll()) != null) {
-                droppedEvents.incrementAndGet();
-                event.onFailure().run();
+        synchronized (admissionLock) {
+            // Close owns the final drain once admission is closed. Checking and scheduling
+            // under the same lock prevents a yielded drain from racing executor shutdown.
+            if (closing.get() || !draining.compareAndSet(false, true)) {
+                return;
             }
-            markAffected();
+            try {
+                writer.execute(this::drainWrites);
+            } catch (RejectedExecutionException error) {
+                draining.set(false);
+                PendingWrite event;
+                while ((event = pendingWrites.poll()) != null) {
+                    droppedEvents.incrementAndGet();
+                    event.onFailure().run();
+                }
+                markAffected();
+            }
         }
     }
 
@@ -368,8 +433,43 @@ public class UsageStatisticsService
                 batch.clear();
             }
         } finally {
+            reconcileLostTerminals();
             draining.set(false);
             rescheduleDrain();
+        }
+    }
+
+    private void reconcileLostTerminals() {
+        var lock = storeAccess.readLock();
+        lock.lock();
+        try {
+            if (!persistHealthIfDirty()) {
+                return;
+            }
+            final java.util.Set<String> active;
+            synchronized (admissionLock) {
+                if (!available || healthDirty.get() || !reconciliationNeeded
+                    || !pendingWrites.isEmpty()) {
+                    return;
+                }
+                // Only this writer persists queued events. New admissions after the snapshot
+                // cannot reach SQLite until this recovery finishes; reset holds the write lock.
+                active = trackedCalls.entrySet().stream()
+                    .filter(entry -> !entry.getValue().ended())
+                    .map(java.util.Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
+                reconciliationNeeded = false;
+            }
+            try {
+                store.reconcileAbandoned(clock.instant(), active);
+            } catch (RuntimeException | LinkageError error) {
+                synchronized (admissionLock) {
+                    reconciliationNeeded = true;
+                }
+                recordWriteFailure(error);
+            }
+            persistHealthIfDirty();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -492,10 +592,15 @@ public class UsageStatisticsService
     private record PendingWrite(long epoch, Runnable action, Runnable onFailure) {
     }
 
+    private record TrackedCall(UsageCallSession session, boolean ended) {
+    }
+
     private void markIncomplete(UsageCallSession session) {
-        if (session.markIncomplete()) {
-            incompleteCalls.incrementAndGet();
-            markAffected(session.start().startedAt());
+        synchronized (admissionLock) {
+            if (session.start().epoch() == epoch && session.markIncomplete()) {
+                incompleteCalls.incrementAndGet();
+                markAffected(session.start().startedAt());
+            }
         }
     }
 
@@ -557,12 +662,13 @@ public class UsageStatisticsService
     }
 
     private void maintainOneBatch() {
+        reconcileLostTerminals();
         var more = false;
         var lock = storeAccess.readLock();
         lock.lock();
         try {
             if (canAccessStore()) {
-                more = store.rollupAndRetainBatch(clock);
+                more = store.retainBatch(clock);
             }
         } catch (RuntimeException | LinkageError error) {
             recordWriteFailure(error);
@@ -669,16 +775,38 @@ public class UsageStatisticsService
         return query.from().isAfter(until);
     }
 
-    private void persistHealthIfDirty() {
-        if (!available || !healthDirty.compareAndSet(true, false)) {
-            return;
+    private boolean persistHealthIfDirty() {
+        final UsageHealthState health;
+        final List<UsageCallStart> incomplete;
+        final java.util.Map<String, TrackedCall> ended;
+        synchronized (admissionLock) {
+            if (!available) {
+                return false;
+            }
+            ended = trackedCalls.entrySet().stream().filter(entry -> entry.getValue().ended())
+                .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
+                    java.util.Map.Entry::getValue));
+            if (!healthDirty.compareAndSet(true, false)) {
+                ended.forEach((id, tracked) -> trackedCalls.remove(id, tracked));
+                return true;
+            }
+            health = healthState();
+            incomplete = trackedCalls.values().stream().map(TrackedCall::session)
+                .filter(UsageCallSession::isIncomplete).map(UsageCallSession::start).toList();
         }
         try {
-            store.writeHealth(healthState());
+            store.writeHealth(health, incomplete);
+            synchronized (admissionLock) {
+                if (!healthDirty.get()) {
+                    ended.forEach((id, tracked) -> trackedCalls.remove(id, tracked));
+                }
+            }
+            return true;
         } catch (RuntimeException | LinkageError error) {
             disableIfCorrupt(error);
             healthDirty.set(true);
             log.warn("Failed to persist AI usage statistics health");
+            return false;
         }
     }
 

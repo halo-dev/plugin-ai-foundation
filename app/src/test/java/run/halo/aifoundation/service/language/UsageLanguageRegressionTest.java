@@ -10,8 +10,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -23,14 +27,20 @@ import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.control.CancellationSource;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.exception.AiGenerationTimeoutException;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageCallStart;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.observation.UsageExecutionRecord;
 import run.halo.aifoundation.service.observation.UsageExecutionScope;
+import run.halo.aifoundation.service.observation.UsageObservation;
+import run.halo.aifoundation.service.observation.UsageStatus;
 import run.halo.aifoundation.service.observation.UsageUnitKind;
 import run.halo.aifoundation.tool.ToolDefinition;
 
@@ -115,6 +125,69 @@ class UsageLanguageRegressionTest {
 
         verify(scope).fail(any(run.halo.aifoundation.exception.AiGenerationTimeoutException.class),
             argThat(value -> value.accountedTotalTokens() == 15L), eq("test-model"));
+        verify(chat).stream(any(Prompt.class));
+    }
+
+    @Test
+    void reasoningToolContinuousChunksDoNotExtendStepDeadline() {
+        var chat = mock(ChatModel.class);
+        var answer = new ChatResponse(List.of(new Generation(new AssistantMessage("answer"),
+            ChatGenerationMetadata.builder().finishReason("stop").build())));
+        when(chat.stream(any(Prompt.class))).thenAnswer(ignored -> Flux.just(usage())
+            .concatWith(Flux.interval(Duration.ofMillis(200)).take(20).map(index -> answer)));
+        var observation = mock(UsageObservation.class);
+        var start = new UsageCallStart("call", 1, Instant.EPOCH, "plugin", "1", "test", null,
+            "language.generateText", "LANGUAGE", "model", "provider", "test", "test-model", false);
+        var session = new UsageCallSession(observation, start, Clock.systemUTC());
+        var timeout = Duration.ofSeconds(1);
+        var timedRequest = GenerateTextRequest.builder().prompt("hello").maxRetries(2)
+            .tools(List.of(ToolDefinition.builder().name("test").build()))
+            .timeouts(GenerationTimeouts.builder().stepTimeout(timeout).build()).build();
+
+        StepVerifier.withVirtualTime(() -> model(chat).generateText(timedRequest)
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session)))
+            .expectSubscription()
+            .expectNoEvent(Duration.ofMillis(999))
+            .thenAwait(Duration.ofMillis(1))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(AiGenerationTimeoutException.class);
+                var failure = (AiGenerationTimeoutException) error;
+                assertThat(failure.getScope()).isEqualTo("step");
+                assertThat(failure.getTimeout()).isEqualTo(timeout);
+            })
+            .verify(Duration.ofSeconds(5));
+
+        var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
+        verify(observation).recordExecution(eq(session), execution.capture());
+        assertThat(execution.getValue().status()).isEqualTo(UsageStatus.TIMED_OUT);
+        assertThat(execution.getValue().error().type()).isEqualTo("TIMEOUT");
+        assertThat(execution.getValue().usage().inputTokens()).isEqualTo(10L);
+        assertThat(execution.getValue().usage().outputTokens()).isEqualTo(5L);
+        assertThat(execution.getValue().usage().accountedTotalTokens()).isEqualTo(15L);
+        assertThat(execution.getValue().responseModelId()).isEqualTo("test-model");
+        verify(chat).stream(any(Prompt.class));
+    }
+
+    @Test
+    void reasoningToolStreamCanCompleteBeforeStepDeadline() {
+        var chat = mock(ChatModel.class);
+        var answer = new ChatResponse(List.of(new Generation(new AssistantMessage("answer"),
+            ChatGenerationMetadata.builder().finishReason("stop").build())));
+        when(chat.stream(any(Prompt.class))).thenAnswer(ignored -> Flux.just(answer, usage())
+            .delayElements(Duration.ofMillis(200)));
+        var timedRequest = GenerateTextRequest.builder().prompt("hello").maxRetries(0)
+            .tools(List.of(ToolDefinition.builder().name("test").build()))
+            .timeouts(GenerationTimeouts.builder().stepTimeout(Duration.ofSeconds(1)).build())
+            .build();
+
+        StepVerifier.withVirtualTime(() -> model(chat).generateText(timedRequest))
+            .thenAwait(Duration.ofMillis(400))
+            .assertNext(result -> {
+                assertThat(result.getText()).isEqualTo("answer");
+                assertThat(result.getUsage().getTotalTokens()).isEqualTo(15);
+            })
+            .expectComplete()
+            .verify(Duration.ofSeconds(5));
         verify(chat).stream(any(Prompt.class));
     }
 

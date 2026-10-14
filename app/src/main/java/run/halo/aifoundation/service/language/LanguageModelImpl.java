@@ -1748,7 +1748,7 @@ public class LanguageModelImpl implements LanguageModel {
             var prompt = new Prompt(messages, buildChatOptions(request));
             if (shouldUseReasoningAwareStreamCall(request)) {
                 Supplier<Flux<ChatResponse>> invocation =
-                    () -> withStepTimeout(chatModel.stream(prompt), request);
+                    () -> withStepDeadline(chatModel.stream(prompt), request);
                 var stream = observeChatStream(stepIndex, invocation);
                 return stream.collectList().map(this::aggregateStreamResponses);
             }
@@ -2073,6 +2073,18 @@ public class LanguageModelImpl implements LanguageModel {
         return mono.timeout(timeout)
             .onErrorMap(TimeoutException.class,
                 error -> new AiGenerationTimeoutException("step", timeout, error));
+    }
+
+    private <T> Flux<T> withStepDeadline(Flux<T> flux, GenerateTextRequest request) {
+        var timeout = stepTimeout(request);
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return flux;
+        }
+        // Non-streaming generation has one deadline, even when the provider emits chunks.
+        // Keep the timeout inside execution observation to retain usage and record a failure.
+        return flux.takeUntilOther(Mono.delay(timeout)
+            .flatMap(ignored -> Mono.error(
+                new AiGenerationTimeoutException("step", timeout, new TimeoutException()))));
     }
 
     private <T> Flux<T> withStepTimeout(Flux<T> flux, GenerateTextRequest request) {

@@ -26,7 +26,13 @@ const queryClient = useQueryClient()
 
 const healthQuery = useUsageHealth()
 const summaryQuery = useUsageSummary(filters.buildParams, filters.fingerprint, filters.valid)
-const heatmapQuery = useUsageHeatmapTrends(filters.buildParams, filters.fingerprint, filters.valid)
+const heatmapAnchor = shallowRef(new Date())
+const heatmapQuery = useUsageHeatmapTrends(
+  filters.buildParams,
+  filters.fingerprint,
+  filters.valid,
+  heatmapAnchor,
+)
 const callsQuery = useUsageCalls(filters.buildParams, filters.fingerprint, filters.valid)
 
 const { data: callers } = useCallerPluginsFetch()
@@ -48,6 +54,7 @@ const fetching = computed(
 )
 
 async function refresh() {
+  heatmapAnchor.value = new Date()
   filters.refreshAnchor()
   await nextTick()
   reloadUsageQueries(queryClient)
@@ -116,7 +123,12 @@ async function refresh() {
         热力图数据加载失败
         <VButton size="sm" @click="heatmapQuery.refetch()">重试</VButton>
       </div>
-      <UsageHeatmap v-else :points="heatmapQuery.data.value" />
+      <UsageHeatmap
+        v-else
+        :points="heatmapQuery.data.value"
+        :anchor="heatmapAnchor"
+        :time-zone="filters.timeZone"
+      />
     </VCard>
 
     <VCard :body-class="['!p-0']">

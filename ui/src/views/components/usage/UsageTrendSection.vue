@@ -59,7 +59,7 @@ function labelOf(key: string) {
 const categories = computed(() => {
   const items = breakdownQuery.data.value?.items || []
   return [...items]
-    .sort((a, b) => usageMetricValue(b, metric.value) - usageMetricValue(a, metric.value))
+    .sort((a, b) => (usageMetricValue(b, metric.value) ?? -1) - (usageMetricValue(a, metric.value) ?? -1))
     .slice(0, USAGE_CHART_TOP_N)
     .map((item) => item.value ?? '')
 })
@@ -131,6 +131,7 @@ function selectCategory(key: string) {
         :label-of="labelOf"
         :from="filters.buildParams()?.from"
         :to="filters.buildParams()?.to"
+        :time-zone="filters.timeZone"
         :highlight-key="highlightKey"
       />
       <UsageRankList

@@ -18,9 +18,4 @@ public record UsageTrendPoint(
     @JsonInclude(JsonInclude.Include.NON_NULL)
     Map<String, UsageTrendDimensionValue> byDimension
 ) {
-
-    UsageTrendPoint withComplete(boolean value) {
-        return new UsageTrendPoint(bucketStart, resolution, callCount, inputTokens, outputTokens,
-            accountedTotalTokens, missingUsageCalls, partialUsageCalls, value, byDimension);
-    }
 }

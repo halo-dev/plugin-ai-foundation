@@ -62,7 +62,8 @@ public class AuditedLanguageModel implements LanguageModel {
             () -> usageStatistics.describeCall(context, STREAM_TEXT, true,
             request == null ? null : request.getMetadata()), null);
         var lazy = new LazySession(usageStatistics, descriptor);
-        var outputType = request.getOutput() == null ? null : request.getOutput().getType();
+        var outputType = request == null || request.getOutput() == null
+            ? null : request.getOutput().getType();
         var partialOutput = result.partialOutputStream();
         var elements = result.elementStream();
         var output = result.output();
@@ -161,6 +162,7 @@ public class AuditedLanguageModel implements LanguageModel {
         private final UsageObservation service;
         private final UsageCallDescriptor descriptor;
         private final AtomicInteger subscribers = new AtomicInteger();
+        private boolean started;
         private UsageCallSession session;
 
         private LazySession(UsageObservation service, UsageCallDescriptor descriptor) {
@@ -169,10 +171,13 @@ public class AuditedLanguageModel implements LanguageModel {
         }
 
         private synchronized UsageCallSession start() {
-            if (session == null) {
+            if (!started) {
+                started = true;
                 session = service.beginCall(descriptor);
             }
-            subscribers.incrementAndGet();
+            if (session != null) {
+                subscribers.incrementAndGet();
+            }
             return session;
         }
 

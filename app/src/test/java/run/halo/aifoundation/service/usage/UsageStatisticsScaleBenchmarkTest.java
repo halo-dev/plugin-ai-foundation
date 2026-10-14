@@ -59,12 +59,12 @@ class UsageStatisticsScaleBenchmarkTest {
         store.initialize();
         var activeStore = store;
         var enqueueP95 = enqueueP95();
-        var rollupStarted = System.nanoTime();
+        var retentionStarted = System.nanoTime();
         var batchMillis = new ArrayList<Double>();
         boolean more;
         do {
             var batchStarted = System.nanoTime();
-            more = store.rollupAndRetainBatch(
+            more = store.retainBatch(
                 Clock.fixed(Instant.parse("2026-08-12T02:00:00Z"), ZoneOffset.UTC));
             batchMillis.add(elapsedMillis(batchStarted));
         } while (more);
@@ -72,8 +72,8 @@ class UsageStatisticsScaleBenchmarkTest {
         var maintenanceP95 = batchMillis.get((int) Math.ceil(batchMillis.size() * 0.95) - 1);
         System.out.printf("Maintenance batches=%d p95=%.2fms max=%.2fms%n",
             batchMillis.size(), maintenanceP95, batchMillis.getLast());
-        var rollupMillis = elapsedMillis(rollupStarted);
-        System.out.printf("Retention completed in %.2fms%n", rollupMillis);
+        var retentionMillis = elapsedMillis(retentionStarted);
+        System.out.printf("Retention completed in %.2fms%n", retentionMillis);
 
         var query = query(null);
         var filtered = query("plugin-7");
@@ -87,6 +87,12 @@ class UsageStatisticsScaleBenchmarkTest {
         System.out.printf("Summary first=%.2fms filteredP95=%.2fms%n",
             coldSummaryMillis, filteredSummaryP95);
         var trendsP95 = p95(40, () -> activeStore.trends(query, true, null));
+        var localQuery = new UsageQuery(query.from(), query.to(), null, null, null, null,
+            null, null, null, null, UsageTrendResolution.DAY,
+            java.time.ZoneId.of("Asia/Kathmandu"));
+        var localTrendsP95 = p95(25, () -> activeStore.trends(localQuery, true, null));
+        assertThat(activeStore.trends(localQuery, true, null).stream()
+            .mapToLong(UsageTrendPoint::callCount).sum()).isEqualTo(CALL_COUNT);
         var first = activeStore.listCalls(query, 1, null).items().getFirst();
         var detailP95 = p95(25, () -> activeStore.getCall(first.id()));
         System.out.printf("Queries completed: summaryP95=%.2fms trendsP95=%.2fms%n",
@@ -103,14 +109,14 @@ class UsageStatisticsScaleBenchmarkTest {
         var plans = queryPlans(paths.database());
         System.out.printf("""
             AI usage scale benchmark
-            calls=%d executions=%d load=%.2fms rollup=%.2fms
+            calls=%d executions=%d load=%.2fms retention=%.2fms
             enqueueP95=%.5fms
             listP95=%.2fms deepCursorP95=%.2fms detailP95=%.2fms
-            summaryP95=%.2fms trendsP95=%.2fms
+            summaryP95=%.2fms trendsP95=%.2fms localTrendsP95=%.2fms
             quickCheck=%.2fms databaseBytes=%d walBytes=%d
             plans=%s%n
-            """, CALL_COUNT, CALL_COUNT * EXECUTIONS_PER_CALL, loadMillis, rollupMillis,
-            enqueueP95, listP95, deepCursorP95, detailP95, summaryP95, trendsP95,
+            """, CALL_COUNT, CALL_COUNT * EXECUTIONS_PER_CALL, loadMillis, retentionMillis,
+            enqueueP95, listP95, deepCursorP95, detailP95, summaryP95, trendsP95, localTrendsP95,
             quickCheckMillis, databaseBytes, walBytes, plans);
 
         assertThat(listP95).isLessThanOrEqualTo(200D);
@@ -121,6 +127,7 @@ class UsageStatisticsScaleBenchmarkTest {
         assertThat(filteredSummaryP95).isLessThanOrEqualTo(500D);
         assertThat(summaryP95).isLessThanOrEqualTo(500D);
         assertThat(trendsP95).isLessThanOrEqualTo(500D);
+        assertThat(localTrendsP95).isLessThanOrEqualTo(500D);
     }
 
     private static double enqueueP95() throws Exception {
@@ -312,12 +319,13 @@ class UsageStatisticsScaleBenchmarkTest {
                 SELECT * FROM ai_model_executions
                 WHERE call_id = 'call-999999' ORDER BY started_at_ms, unit_index, attempt_index
                 """);
-            addPlan(connection, plans, "daily-calls", """
-                SELECT * FROM ai_usage_daily WHERE day >= '2026-05-13' AND day < '2026-08-11'
-                """);
-            addPlan(connection, plans, "daily-tokens", """
-                SELECT * FROM ai_usage_daily
-                WHERE day >= '2026-05-13' AND day < '2026-08-11'
+            addPlan(connection, plans, "local-day-trends", """
+                SELECT (started_at_ms + 20700000) / 86400000 AS bucket,
+                  COUNT(*), SUM(accounted_total_tokens)
+                FROM ai_calls INDEXED BY idx_calls_filtered_hour
+                WHERE started_at_ms >= 0 AND started_at_ms < 9223372036854775807
+                  AND (started_at_ms / 3600000) >= 0
+                GROUP BY bucket
                 """);
         }
         return List.copyOf(plans);
