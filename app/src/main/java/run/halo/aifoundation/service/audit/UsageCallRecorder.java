@@ -4,7 +4,6 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import reactor.core.publisher.Mono;
-import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageObservation;
 import run.halo.aifoundation.service.observation.UsageTelemetry;
@@ -18,22 +17,24 @@ final class UsageCallRecorder {
         String operation, boolean streaming, Map<String, Object> metadata,
         Supplier<Mono<T>> invocation, int failureStepCount,
         BiConsumer<UsageCallSession, T> success) {
+        // Assemble once to preserve middleware state and synchronous invocation failures.
+        var source = invocation.get();
         // Describe eagerly at assembly time so the caller snapshot reflects the invoking plugin.
         var descriptor = UsageTelemetry.safely(
             () -> statistics.describeCall(context, operation, streaming, metadata), null);
         if (descriptor == null) {
-            return Mono.defer(invocation);
+            return source;
         }
         return Mono.defer(() -> {
             var session = UsageTelemetry.safely(() -> statistics.beginCall(descriptor), null);
             if (session == null) {
-                return Mono.defer(invocation);
+                return source;
             }
-            return Mono.defer(invocation)
+            return source
                 .doOnSuccess(result -> UsageTelemetry.safely(
                     () -> success.accept(session, result)))
                 .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, NormalizedUsage.missing(), failureStepCount)))
+                    () -> session.fail(error, failureStepCount)))
                 .doOnCancel(() -> UsageTelemetry.safely(session::cancel))
                 .contextWrite(contextView ->
                     contextView.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));

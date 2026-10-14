@@ -241,7 +241,7 @@ class UsageRecoveryRegressionTest {
         var ended = service.beginCall(descriptor());
         ended.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
             .succeed(new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
-        ended.succeed(NormalizedUsage.missing(), "gpt", 1);
+        ended.succeed("gpt", 1);
         service.close(); // Final drain also recovers permanently lost terminals.
         assertThat(service.health().incompleteCalls()).isEqualTo(1);
         assertThat(service.health().droppedEvents()).isEqualTo(1);
@@ -292,7 +292,7 @@ class UsageRecoveryRegressionTest {
         try {
             assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
             var ended = service.beginCall(descriptor());
-            ended.succeed(NormalizedUsage.missing(), "gpt", 0);
+            ended.succeed("gpt", 0);
             assertThat(service.health().droppedEvents()).isEqualTo(1);
             release.countDown();
             service.close();
@@ -332,12 +332,12 @@ class UsageRecoveryRegressionTest {
             assertThat(service.health().incompleteCalls()).isEqualTo(1);
             assertThat(service.health().droppedEvents()).isEqualTo(1);
             service.reset("RESET").block();
-            first.succeed(NormalizedUsage.missing(), "gpt", 0);
+            first.succeed("gpt", 0);
             assertThat(service.health().complete()).isTrue();
             var current = service.beginCall(descriptor());
             assertThat(current).isNotNull();
             assertThat(current.start().epoch()).isEqualTo(2);
-            current.succeed(NormalizedUsage.missing(), "gpt", 0);
+            current.succeed("gpt", 0);
         } finally {
             service.close();
         }
@@ -547,7 +547,7 @@ class UsageRecoveryRegressionTest {
             var session = service.beginCall(descriptor());
             session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
                 .succeed(new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
-            session.succeed(NormalizedUsage.missing(), "gpt", 1);
+            session.succeed("gpt", 1);
             writer.submit(() -> { }).get(3, TimeUnit.SECONDS);
             now.set(Instant.parse("2026-10-01T00:00:00Z"));
             writer.submit(maintain).get(3, TimeUnit.SECONDS);

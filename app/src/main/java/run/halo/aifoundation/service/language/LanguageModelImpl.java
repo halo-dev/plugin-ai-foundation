@@ -229,8 +229,7 @@ public class LanguageModelImpl implements LanguageModel {
             return parts.doOnNext(part -> {
                 if (PartType.ERROR.equals(part.getType())) {
                     UsageTelemetry.safely(() -> session.fail(
-                        new IllegalStateException("Language stream ended with an error"),
-                        NormalizedUsage.missing(), 0));
+                        new IllegalStateException("Language stream ended with an error"), 0));
                 } else if (PartType.ABORT.equals(part.getType())) {
                     UsageTelemetry.safely(session::cancel);
                 }
@@ -2102,7 +2101,7 @@ public class LanguageModelImpl implements LanguageModel {
             var session = UsageCallSession.from(contextView);
             if (session != null) {
                 UsageTelemetry.safely(
-                    () -> session.fail(error, NormalizedUsage.missing(), 0));
+                    () -> session.fail(error, 0));
             }
             return Mono.empty();
         });

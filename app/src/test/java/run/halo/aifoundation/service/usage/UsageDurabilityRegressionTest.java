@@ -19,7 +19,6 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.CallerPluginResolver;
 import run.halo.aifoundation.service.audit.ModelCallContext;
-import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageCallStart;
 
@@ -177,8 +176,7 @@ class UsageDurabilityRegressionTest {
             for (int i = 0; i < 1501; i++) {
                 var session = service.beginCall(descriptor);
                 session.succeedProjection();
-                session.succeed(new NormalizedUsage(10L, 5L, null, null, null, 15L, null, null),
-                    "gpt", 1);
+                session.succeed("gpt", 1);
             }
         } finally {
             service.close();
@@ -191,8 +189,15 @@ class UsageDurabilityRegressionTest {
                 null, null, null, null, null, null, null, null, null);
             var summary = reopened.summary(query, true);
             assertThat(summary.callCount()).isEqualTo(1501);
-            assertThat(summary.accountedTotalTokens()).isEqualTo(1501L * 15);
-            assertThat(summary.missingUsageCalls()).isZero();
+            assertThat(summary.accountedTotalTokens()).isNull();
+            assertThat(summary.missingUsageCalls()).isEqualTo(1501);
+            assertThat(summary.usageCoverage()).isZero();
+            assertThat(reopened.listCalls(query, 1, null).items()).singleElement()
+                .satisfies(call -> {
+                    assertThat(call.responseModelId()).isEqualTo("gpt");
+                    assertThat(call.stepCount()).isEqualTo(1);
+                    assertThat(call.attemptCount()).isZero();
+                });
         }
     }
 

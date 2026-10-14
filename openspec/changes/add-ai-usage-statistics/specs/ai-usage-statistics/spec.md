@@ -34,15 +34,50 @@ Observation callback and persistence failures SHALL NOT replace the model result
 - **WHEN** consumers subscribe to projections of one shared stream, including a stream supplied by cache middleware without provider execution
 - **THEN** the projections share one logical-call session and statistics do not subscribe to additional projections to force usage collection
 
-### Requirement: Subscription-scoped non-streaming calls
-Non-streaming audited invocations SHALL create their call session and invoke their delegate at subscription time. Repeated subscriptions SHALL invoke the delegate again; synchronous delegate exceptions SHALL become reactive errors. This is an observable change from assembly-time middleware invocation.
+### Requirement: Subscription-scoped observation with compatible invocation semantics
+Non-streaming audited invocations SHALL preserve the pre-statistics delegate and middleware assembly timing, synchronous exception timing, and returned-publisher reuse. The statistics wrapper SHALL obtain the invocation publisher once at assembly time and create a call session for each subscription when observation is available. It SHALL NOT rebuild that publisher per subscription, add caching, or move middleware that already defers work into assembly time. Observation unavailability or callback failure SHALL preserve these invocation semantics.
 
-#### Scenario: Repeated subscription
-- **WHEN** a consumer subscribes twice to the same non-streaming invocation publisher
-- **THEN** each subscription creates its own logical call and enters the delegate/middleware chain; provider execution still depends on that chain, including any cache short circuit
+#### Scenario: No subscription
+- **WHEN** a consumer obtains a non-streaming invocation publisher without subscribing
+- **THEN** the delegate and middleware retain their existing assembly behavior and no logical-call session is created; previously deferred provider work remains deferred
+
+#### Scenario: Repeated subscription to a cold publisher
+- **WHEN** a consumer subscribes twice to the same non-streaming invocation publisher backed by an uncached cold source
+- **THEN** each subscription creates its own logical call and subscribes to the same assembled publisher; the cold source still executes for each subscription without statistics adding a cache
+
+#### Scenario: Middleware-local cache reuse
+- **WHEN** language request middleware returns a cached publisher and a consumer subscribes twice to the audited result
+- **THEN** the middleware is assembled once, both subscriptions reuse its cache, and each subscription has an independent logical-call session without forcing an additional provider execution
+
+#### Scenario: Synchronous assembly failure
+- **WHEN** the delegate or middleware throws synchronously while assembling the invocation publisher
+- **THEN** the model method throws that same error synchronously and no subscription-scoped call session is created
+
+#### Scenario: Statistics unavailable
+- **WHEN** describing or beginning observation returns no descriptor or session, or throws an observation error
+- **THEN** model results, publisher reuse, and existing exception timing remain unchanged
+
+### Requirement: Execution-backed consumption
+Consumption statistics SHALL derive usage only from observed provider executions, including steps, batches, and retry attempts. Logical-call results or logical errors SHALL NOT supply fallback usage when execution evidence is absent. This rule SHALL apply to both non-streaming calls and streaming projections, including late results. It SHALL NOT change usage returned to SDK consumers. Absence of execution evidence SHALL mean unknown usage, not an inferred cache hit or measured zero.
+
+#### Scenario: Cached result subscribed twice
+- **WHEN** two subscriptions share a language middleware cache, only the first performs an observed execution reporting 15 tokens, and both return a result containing those 15 tokens
+- **THEN** statistics contain two successful logical calls, one execution, and 15 known tokens; the second call has missing usage and complete usage coverage is 50%, while both SDK results retain their original usage
+
+#### Scenario: Result without observed execution
+- **WHEN** middleware returns a result containing usage without any observed execution, or a late streaming result supplies usage after projections complete without an execution
+- **THEN** the call retains unknown statistical usage and contributes no fabricated consumption; its result remains unchanged
+
+#### Scenario: Explicitly reported zero
+- **WHEN** an observed execution explicitly reports zero token consumption
+- **THEN** statistics preserve measured zero rather than treating it as missing usage
+
+#### Scenario: Failed execution reports usage
+- **WHEN** an observed provider execution fails after reporting usage, including usage attached to its execution error
+- **THEN** that execution's known consumption remains part of its logical call; removing logical-result fallback SHALL NOT discard observed failed-attempt usage
 
 ### Requirement: Consistent operational metrics
-Summary, trends, breakdowns, and call history SHALL filter by logical-call start time and logical-call status. Every reported attempt's consumption SHALL contribute once to its logical call. Trends SHALL attribute a call to the bucket containing its start, even if an execution ends in another bucket.
+Summary, trends, breakdowns, and call history SHALL filter by logical-call start time and logical-call status. Every reported attempt's consumption SHALL contribute once to its logical call. Trends SHALL attribute a call to the bucket containing its start, even if an execution ends in another bucket. Logical-call duration SHALL begin at subscription, excluding synchronous publisher assembly time.
 
 #### Scenario: Retry succeeds
 - **WHEN** a failed attempt reports 10 tokens and its successful retry reports 5

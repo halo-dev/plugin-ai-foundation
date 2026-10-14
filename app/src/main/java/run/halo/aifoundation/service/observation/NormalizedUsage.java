@@ -123,30 +123,6 @@ public record NormalizedUsage(
                 accountedTotalTokens, UsageQuality.PARTIAL);
     }
 
-    public static NormalizedUsage fromLogicalFailure(Throwable error) {
-        var usage = fromFailure(error);
-        for (int depth = 0; depth < 8; depth++, error = error.getCause()) {
-            if (error == null) {
-                break;
-            }
-            if (isLaterStepFailure(error)) {
-                // Exception usage describes the failing step, not any earlier unseen steps.
-                return usage.partial();
-            }
-        }
-        return usage;
-    }
-
-    private static boolean isLaterStepFailure(Throwable error) {
-        if (!(error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e)) {
-            return false;
-        }
-        if (e.getStepIndex() == null) {
-            return false;
-        }
-        return e.getStepIndex() > 0;
-    }
-
     public static NormalizedUsage sum(Collection<NormalizedUsage> values) {
         try {
             return sumChecked(values);

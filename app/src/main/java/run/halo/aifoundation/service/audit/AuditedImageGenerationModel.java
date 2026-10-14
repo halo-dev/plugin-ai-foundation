@@ -13,7 +13,6 @@ import run.halo.aifoundation.image.middleware.ImageGenerationMiddlewareAware;
 import run.halo.aifoundation.image.middleware.ImageGenerationMiddlewares;
 import run.halo.aifoundation.model.ModelInfo;
 import run.halo.aifoundation.model.ProviderInfo;
-import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageObservation;
 import run.halo.aifoundation.service.observation.UsageOperation;
@@ -71,14 +70,14 @@ public class AuditedImageGenerationModel implements ImageGenerationModel,
 
     private static void succeed(UsageCallSession session, GenerateImageResult result) {
         if (result == null) {
-            session.succeed(NormalizedUsage.missing(), null, 0);
+            session.succeed(null, 0);
             return;
         }
         String responseModel = null;
         if (!CollectionUtils.isEmpty(result.getResponses())) {
             responseModel = result.getResponses().getLast().getModel();
         }
-        session.succeed(NormalizedUsage.from(result.getUsage()), responseModel, 1);
+        session.succeed(responseModel, 1);
     }
 
     @Override

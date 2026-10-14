@@ -51,33 +51,29 @@ public final class UsageCallSession {
             attemptIndex, clock.instant());
     }
 
-    public void succeed(NormalizedUsage usage, String responseModelId, int stepCount) {
+    public void succeed(String responseModelId, int stepCount) {
         var executionStatus = latestExecutionStatus.get();
         if (shouldPreserveExecutionStatus(executionStatus)) {
-            finish(executionStatus, latestExecutionError.get(), usage, responseModelId, stepCount);
+            finish(executionStatus, latestExecutionError.get(), responseModelId, stepCount);
             return;
         }
-        finish(UsageStatus.SUCCEEDED, null, usage, responseModelId, stepCount);
+        finish(UsageStatus.SUCCEEDED, null, responseModelId, stepCount);
     }
 
     /** A filtered projection may finish before a cached stream's result metadata is consumed. */
     public void succeedProjection() {
         var status = latestExecutionStatus.get();
         finish(status == null ? UsageStatus.SUCCEEDED : status, latestExecutionError.get(),
-            NormalizedUsage.missing(), null, 0, true);
+            null, 0, true);
     }
 
-    public void fail(Throwable error, NormalizedUsage usage, int stepCount) {
+    public void fail(Throwable error, int stepCount) {
         var status = UsageError.failureStatus(error);
-        var fallback = usage;
-        if (NormalizedUsage.isMissing(fallback)) {
-            fallback = NormalizedUsage.fromLogicalFailure(error);
-        }
-        finish(status, UsageError.from(error), fallback, null, stepCount);
+        finish(status, UsageError.from(error), null, stepCount);
     }
 
     public void cancel() {
-        finish(UsageStatus.CANCELLED, null, NormalizedUsage.missing(), null, 0);
+        finish(UsageStatus.CANCELLED, null, null, 0);
     }
 
     public boolean markIncomplete() {
@@ -120,27 +116,24 @@ public final class UsageCallSession {
         return start;
     }
 
-    private synchronized void finish(UsageStatus status, UsageError error, NormalizedUsage usage,
+    private synchronized void finish(UsageStatus status, UsageError error,
         String responseModelId, int stepCount) {
-        finish(status, error, usage, responseModelId, stepCount, false);
+        finish(status, error, responseModelId, stepCount, false);
     }
 
-    private synchronized void finish(UsageStatus status, UsageError error, NormalizedUsage usage,
+    private synchronized void finish(UsageStatus status, UsageError error,
         String responseModelId, int stepCount, boolean projection) {
         if (!acceptTerminal(projection)) {
             return;
         }
-        // Upsert the same logical call once final metadata arrives; never subscribe for it.
-        // Provider executions remain authoritative and can never be replaced by cached usage.
+        // Upsert final metadata without subscribing for it. Only observed executions supply
+        // usage, including when cached result metadata arrives after a projection completes.
         provisionalTerminal = projection && attempts.get() == 0;
         if (completedAt == null) {
             completedAt = clock.instant();
         }
         var complete = !incomplete.get();
-        var resolvedUsage = attempts.get() > 0 ? executionUsage : usage;
-        if (resolvedUsage == null) {
-            resolvedUsage = NormalizedUsage.missing();
-        }
+        var resolvedUsage = executionUsage == null ? NormalizedUsage.missing() : executionUsage;
         var resolvedResponseModelId = responseModelId;
         var resolvedStepCount = stepCount;
         if (start.streaming()) {
@@ -190,6 +183,6 @@ public final class UsageCallSession {
         service.finishCall(this, new UsageCallTerminal(start, value.completedAt(), value.status(),
             value.error(), value.responseModelId(), value.stepCount(), attempts.get(),
             missingExecutions.get(), !incomplete.get(),
-            attempts.get() > 0 ? executionUsage : value.usage()));
+            executionUsage == null ? NormalizedUsage.missing() : executionUsage));
     }
 }

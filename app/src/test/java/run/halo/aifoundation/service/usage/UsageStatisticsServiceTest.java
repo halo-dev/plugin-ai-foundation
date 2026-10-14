@@ -192,7 +192,7 @@ class UsageStatisticsServiceTest {
 
         session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
             .succeed(new NormalizedUsage(2L, 1L, null, null, null, null, null, null), "model");
-        session.succeed(NormalizedUsage.missing(), "model", 1);
+        session.succeed("model", 1);
 
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         await(() -> {
@@ -490,7 +490,7 @@ class UsageStatisticsServiceTest {
 
         oldCall.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
             .succeed(NormalizedUsage.missing(), "gpt");
-        oldCall.succeed(NormalizedUsage.missing(), "gpt", 1);
+        oldCall.succeed("gpt", 1);
         var newCall = service.beginCall(descriptor());
         assertThat(newCall.start().epoch()).isEqualTo(2);
         service.close();

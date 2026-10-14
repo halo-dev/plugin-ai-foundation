@@ -9,7 +9,6 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.embedding.EmbeddingModel;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingResponse;
-import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageObservation;
 import run.halo.aifoundation.service.observation.UsageOperation;
@@ -51,7 +50,7 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
         auditRecorder.recordModelInvocation(context, UsageOperation.EMBEDDING_EMBED_QUERY);
         return record(UsageOperation.EMBEDDING_EMBED_QUERY, null, () -> delegate.embedQuery(text),
             (session, result) -> session.succeed(
-                NormalizedUsage.missing(), null, result == null ? 0 : 1));
+                null, result == null ? 0 : 1));
     }
 
     @Override
@@ -72,11 +71,11 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
 
     private static void succeed(UsageCallSession session, EmbeddingResponse response) {
         if (response == null) {
-            session.succeed(NormalizedUsage.missing(), null, 0);
+            session.succeed(null, 0);
             return;
         }
         var responseModel = response.getResponse() == null
             ? null : response.getResponse().getModel();
-        session.succeed(NormalizedUsage.from(response.getUsage()), responseModel, 1);
+        session.succeed(responseModel, 1);
     }
 }

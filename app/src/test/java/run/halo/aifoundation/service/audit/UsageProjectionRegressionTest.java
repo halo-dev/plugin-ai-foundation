@@ -20,6 +20,7 @@ import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageCallStart;
 import run.halo.aifoundation.service.observation.UsageCallTerminal;
@@ -28,9 +29,9 @@ import run.halo.aifoundation.service.observation.UsageObservation;
 class UsageProjectionRegressionTest {
 
     @Test
-    void cacheResultUsageDoesNotDependOnProjectionOrderOrSubscribeForMetadata() {
-        assertThat(run(false).usage().accountedTotalTokens()).isEqualTo(15L);
-        assertThat(run(true).usage().accountedTotalTokens()).isEqualTo(15L);
+    void cacheResultUsageStaysMissingRegardlessOfProjectionOrderWithoutExtraSubscriptions() {
+        assertThat(run(false).usage()).isEqualTo(NormalizedUsage.missing());
+        assertThat(run(true).usage()).isEqualTo(NormalizedUsage.missing());
     }
 
     private UsageCallTerminal run(boolean textFirst) {
@@ -60,6 +61,7 @@ class UsageProjectionRegressionTest {
             assertThat(resultSubscriptions.get()).isZero();
         }
         assertThat(stream.result().block()).isSameAs(result);
+        assertThat(result.getTotalUsage().getTotalTokens()).isEqualTo(15);
         assertThat(resultSubscriptions.get()).isEqualTo(1);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(sink, times(textFirst ? 2 : 1)).finishCall(eq(session), terminal.capture());
@@ -68,6 +70,11 @@ class UsageProjectionRegressionTest {
         assertThat(terminals).extracting(UsageCallTerminal::callId).containsOnly("id");
         assertThat(terminals).extracting(UsageCallTerminal::completedAt)
             .containsOnly(terminals.getFirst().completedAt());
+        assertThat(terminals).extracting(UsageCallTerminal::usage)
+            .containsOnly(NormalizedUsage.missing());
+        assertThat(terminals).extracting(UsageCallTerminal::attemptCount).containsOnly(0);
+        assertThat(terminals).extracting(UsageCallTerminal::missingExecutionCount).containsOnly(0);
+        assertThat(terminal.getValue().stepCount()).isEqualTo(1);
         return terminal.getValue();
     }
 }

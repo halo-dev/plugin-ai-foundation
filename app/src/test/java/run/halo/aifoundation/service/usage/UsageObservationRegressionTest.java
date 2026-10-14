@@ -228,7 +228,7 @@ class UsageObservationRegressionTest {
                 var call = service.beginCall(descriptor);
                 call.beginExecution(UsageUnitKind.GENERATION_STEP, 0).succeed(
                     new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
-                call.succeed(NormalizedUsage.missing(), "gpt", 1);
+                call.succeed("gpt", 1);
                 samples[i] = System.nanoTime() - started;
             }
             reading.get(30, java.util.concurrent.TimeUnit.SECONDS);

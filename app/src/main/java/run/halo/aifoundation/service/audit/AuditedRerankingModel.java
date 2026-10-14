@@ -6,7 +6,6 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankingModel;
-import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageObservation;
 import run.halo.aifoundation.service.observation.UsageOperation;
@@ -45,11 +44,11 @@ public class AuditedRerankingModel implements RerankingModel {
 
     private static void succeed(UsageCallSession session, RerankResponse response) {
         if (response == null) {
-            session.succeed(NormalizedUsage.missing(), null, 0);
+            session.succeed(null, 0);
             return;
         }
         var responseModel = response.getResponse() == null
             ? null : response.getResponse().getModel();
-        session.succeed(NormalizedUsage.from(response.getUsage()), responseModel, 1);
+        session.succeed(responseModel, 1);
     }
 }

@@ -107,7 +107,7 @@ class LanguageModelImplTest {
                     context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session)))
             .verifyComplete();
 
-        verify(session).fail(any(IllegalStateException.class), any(NormalizedUsage.class), eq(0));
+        verify(session).fail(any(IllegalStateException.class), eq(0));
     }
 
     @Test

@@ -14,7 +14,6 @@ import run.halo.aifoundation.chat.LanguageModelCapabilities;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
 import run.halo.aifoundation.schema.OutputType;
-import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageObservation;
@@ -112,7 +111,7 @@ public class AuditedLanguageModel implements LanguageModel {
             return source.doOnSuccess(result ->
                     UsageTelemetry.safely(() -> succeed(session, result)))
                 .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, NormalizedUsage.missing(), 0)))
+                    () -> session.fail(error, 0)))
                 .doFinally(signal -> lazy.finish(session, signal))
                 .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         });
@@ -127,7 +126,7 @@ public class AuditedLanguageModel implements LanguageModel {
             return source.doOnSuccess(ignored -> UsageTelemetry.safely(
                     session::succeedProjection))
                 .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, NormalizedUsage.missing(), 0)))
+                    () -> session.fail(error, 0)))
                 .doFinally(signal -> lazy.finish(session, signal))
                 .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         });
@@ -142,7 +141,7 @@ public class AuditedLanguageModel implements LanguageModel {
             return source.doOnComplete(() -> UsageTelemetry.safely(
                     session::succeedProjection))
                 .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, NormalizedUsage.missing(), 0)))
+                    () -> session.fail(error, 0)))
                 .doFinally(signal -> lazy.finish(session, signal))
                 .contextWrite(value -> value.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         });
@@ -150,12 +149,12 @@ public class AuditedLanguageModel implements LanguageModel {
 
     private static void succeed(UsageCallSession session, GenerateTextResult result) {
         if (result == null) {
-            session.succeed(NormalizedUsage.missing(), null, 0);
+            session.succeed(null, 0);
             return;
         }
         var responseModel = result.getResponse() == null ? null : result.getResponse().getModel();
         var steps = result.getSteps() == null ? 1 : result.getSteps().size();
-        session.succeed(NormalizedUsage.from(result.getTotalUsage()), responseModel, steps);
+        session.succeed(responseModel, steps);
     }
 
     private static final class LazySession {

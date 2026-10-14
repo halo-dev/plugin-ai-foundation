@@ -39,7 +39,7 @@ class UsageExecutionObserverTest {
         var session = session(service);
         var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
                 () -> Mono.error(failure), ignored -> NormalizedUsage.missing(), ignored -> null)
-            .doOnError(error -> session.fail(error, NormalizedUsage.missing(), 1))
+            .doOnError(error -> session.fail(error, 1))
             .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         StepVerifier.create(observed).expectErrorMatches(error -> error == failure).verify();
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
@@ -60,7 +60,7 @@ class UsageExecutionObserverTest {
                 () -> Flux.just(first, last, last), value -> value, ignored -> "actual")
             .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         StepVerifier.create(observed).expectNext(first, last, last).verifyComplete();
-        session.succeed(NormalizedUsage.missing(), "actual", 1);
+        session.succeed("actual", 1);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
         assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(15L);
@@ -83,7 +83,7 @@ class UsageExecutionObserverTest {
             .retryWhen(Retry.max(1))
             .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         StepVerifier.create(observed).expectNext("success").verifyComplete();
-        session.succeed(new NormalizedUsage(2L, 3L, null, null, null, null, null, null), "actual", 1);
+        session.succeed("actual", 1);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
         assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(15L);
@@ -91,32 +91,38 @@ class UsageExecutionObserverTest {
     }
 
     @Test
-    void logicalFailureWithoutObservedExecutionsRetainsReportedUsage() {
+    void logicalFailureWithoutObservedExecutionsDoesNotUseExceptionUsage() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
             "invalid", null, null, "private output must not be retained", null, 0,
             LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(), null);
-        session.fail(failure, NormalizedUsage.missing(), 0);
+        session.fail(failure, 0);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
         assertThat(terminal.getValue().status()).isEqualTo(UsageStatus.FAILED);
-        assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(10L);
+        assertThat(terminal.getValue().attemptCount()).isZero();
+        assertThat(terminal.getValue().missingExecutionCount()).isZero();
+        assertThat(terminal.getValue().usage()).isEqualTo(NormalizedUsage.missing());
         assertThat(terminal.getValue().toString()).doesNotContain("private output");
     }
 
     @Test
-    void failureWithOnlyALaterStepsUsageDoesNotClaimCompleteCallCoverage() {
+    void lateLogicalFailureDoesNotRestoreExceptionUsageAfterProjectionCompletes() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
             "invalid", null, null, null, null, 2,
             LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(), null);
-        session.fail(failure, NormalizedUsage.missing(), 0);
+        session.succeedProjection();
+        session.fail(failure, 0);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
-        verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
-        assertThat(terminal.getValue().usage().accountedTotalTokens()).isEqualTo(10L);
-        assertThat(terminal.getValue().usage().quality()).isEqualTo(UsageQuality.PARTIAL);
+        verify(service, times(2)).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
+        assertThat(terminal.getAllValues()).extracting(UsageCallTerminal::usage)
+            .containsOnly(NormalizedUsage.missing());
+        assertThat(terminal.getAllValues()).extracting(UsageCallTerminal::attemptCount)
+            .containsOnly(0);
+        assertThat(terminal.getValue().status()).isEqualTo(UsageStatus.FAILED);
     }
 
     @Test
@@ -167,7 +173,7 @@ class UsageExecutionObserverTest {
 
         session.beginExecution(UsageUnitKind.RERANK, 0)
             .succeed(NormalizedUsage.missing(), null);
-        session.succeed(NormalizedUsage.missing(), null, 1);
+        session.succeed(null, 1);
 
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
@@ -230,8 +236,7 @@ class UsageExecutionObserverTest {
             .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectNext("ok").verifyComplete();
-        session.succeed(new NormalizedUsage(99L, 99L, null, null, null, null, null, null),
-            "actual", 1);
+        session.succeed("actual", 1);
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         verify(service, times(2)).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
@@ -315,7 +320,7 @@ class UsageExecutionObserverTest {
 
         session.beginExecution(UsageUnitKind.RERANK, 0)
             .fail(timeout, NormalizedUsage.missing(), null);
-        session.fail(timeout, NormalizedUsage.missing(), 1);
+        session.fail(timeout, 1);
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         verify(service).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
@@ -335,7 +340,7 @@ class UsageExecutionObserverTest {
 
         session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
             .fail(cancelled, NormalizedUsage.missing(), null);
-        session.fail(cancelled, NormalizedUsage.missing(), 1);
+        session.fail(cancelled, 1);
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         verify(service).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
@@ -373,7 +378,7 @@ class UsageExecutionObserverTest {
         session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
             .fail(failure, NormalizedUsage.missing(), null);
 
-        session.succeed(NormalizedUsage.missing(), null, 0);
+        session.succeed(null, 0);
 
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
@@ -390,7 +395,7 @@ class UsageExecutionObserverTest {
         session.beginExecution(UsageUnitKind.GENERATION_STEP, 1)
             .succeed(NormalizedUsage.missing(), "actual-1");
 
-        session.succeed(NormalizedUsage.missing(), null, 0);
+        session.succeed(null, 0);
 
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
@@ -443,7 +448,7 @@ class UsageExecutionObserverTest {
                 pool.submit(() -> {
                     ready.countDown();
                     start.await();
-                    session.succeed(NormalizedUsage.missing(), null, 1);
+                    session.succeed(null, 1);
                     return null;
                 });
             }

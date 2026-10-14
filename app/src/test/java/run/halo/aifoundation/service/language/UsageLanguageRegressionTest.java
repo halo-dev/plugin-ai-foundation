@@ -33,7 +33,6 @@ import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.exception.AiGenerationTimeoutException;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageCallStart;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
@@ -204,7 +203,7 @@ class UsageLanguageRegressionTest {
             .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session))
             .collectList().block();
 
-        verify(session).fail(any(AiGenerationCancelledException.class), any(NormalizedUsage.class), eq(0));
+        verify(session).fail(any(AiGenerationCancelledException.class), eq(0));
         verifyNoInteractions(chat);
     }
 
