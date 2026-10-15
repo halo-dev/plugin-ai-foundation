@@ -7,7 +7,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -132,8 +132,6 @@ public final class DashScopeEmbeddingModel
             var usage = root.path("usage");
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
-            var totalTokens = usage.path("total_tokens").isNumber()
-                ? usage.path("total_tokens").asInt() : 0;
             var metadataValues = new LinkedHashMap<String, Object>();
             if (hasText(root.path("request_id").asText(null))) {
                 metadataValues.put("id", root.path("request_id").asText());
@@ -142,7 +140,7 @@ public final class DashScopeEmbeddingModel
                 metadataValues.put("sparseEmbeddings", List.copyOf(sparse));
             }
             var metadata = new EmbeddingResponseMetadata(requestedModel,
-                new DefaultUsage(totalTokens, 0, totalTokens, rawUsage), metadataValues);
+                ProviderUsage.embedding(usage, "total_tokens", "total_tokens", rawUsage), metadataValues);
             return new EmbeddingResponse(embeddings, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse DashScope embedding response", e);

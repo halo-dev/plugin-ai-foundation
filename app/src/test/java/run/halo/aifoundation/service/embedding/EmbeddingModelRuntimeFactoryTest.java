@@ -22,10 +22,12 @@ import run.halo.aifoundation.provider.openailike.OpenAiEmbeddingOptionsFactory;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 class EmbeddingModelRuntimeFactoryTest {
 
-    private final EmbeddingModelRuntimeFactory factory = new EmbeddingModelRuntimeFactory();
+    private final EmbeddingModelRuntimeFactory factory =
+        new EmbeddingModelRuntimeFactory(new UsageExecutionObserver());
 
     @Test
     void create_preservesBatchingLimitsAndProviderTypeMetadata() {

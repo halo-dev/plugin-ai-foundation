@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiModel;
@@ -23,17 +24,21 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.ModelResolution;
+import run.halo.aifoundation.service.model.ModelRuntimeContextResolver;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 import run.halo.app.extension.Metadata;
 
 class DefaultImageGenerationModelFactoryTest {
 
     @Test
-    void create_returnsRuntimeWhenProviderClientExists() {
+    void springManagedFactoryReturnsRuntimeWhenProviderClientExists() {
         var capturedOptions = new AtomicReference<Map<String, Object>>();
         var client = new ProviderImageGenerationClient() {
             @Override
@@ -61,19 +66,30 @@ class DefaultImageGenerationModelFactoryTest {
         var model = model();
         when(providerClientCache.getOrCreateImageGenerationClient(provider, "sk-test",
             ProviderModelRef.from(model))).thenReturn(client);
-        var factory = new DefaultImageGenerationModelFactory(providerClientCache,
-            new ModelCapabilityService(), new MediaResourcePolicy(), new ModelCapabilityMatcher());
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(ProviderClientCache.class, () -> providerClientCache);
+            context.registerBean(ModelCapabilityService.class, ModelCapabilityService::new);
+            context.registerBean(ImageGenerationModelRuntimeFactory.class,
+                () -> new ImageGenerationModelRuntimeFactory(new MediaResourcePolicy(),
+                    new ModelCapabilityMatcher(), new UsageExecutionObserver()));
+            context.registerBean(ModelRuntimeContextResolver.class,
+                () -> new ModelRuntimeContextResolver(new EffectiveParameterMappingResolver(),
+                    new ParameterMappingTemplateRegistry()));
+            context.register(DefaultImageGenerationModelFactory.class);
+            context.refresh();
+            var factory = context.getBean(DefaultImageGenerationModelFactory.class);
 
-        var imageModel = factory.create(new ModelResolution(model, provider,
-            new ImageProviderType(), "sk-test"));
+            var imageModel = factory.create(new ModelResolution(model, provider,
+                new ImageProviderType(), "sk-test"));
 
-        assertThat(imageModel).isInstanceOf(ImageGenerationModelImpl.class);
-        StepVerifier.create(imageModel.generateImage("Draw"))
-            .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("img"))
-            .verifyComplete();
-        assertThat(capturedOptions.get()).isEqualTo(Map.of("quality", "hd"));
-        verify(providerClientCache).getOrCreateImageGenerationClient(provider, "sk-test",
-            ProviderModelRef.from(model));
+            assertThat(imageModel).isInstanceOf(ImageGenerationModelImpl.class);
+            StepVerifier.create(imageModel.generateImage("Draw"))
+                .assertNext(result -> assertThat(result.getImage().getBase64()).isEqualTo("img"))
+                .verifyComplete();
+            assertThat(capturedOptions.get()).isEqualTo(Map.of("quality", "hd"));
+            verify(providerClientCache).getOrCreateImageGenerationClient(provider, "sk-test",
+                ProviderModelRef.from(model));
+        }
     }
 
     private AiModel model() {

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# openai-like-endpoint-config Specification
+
+## Purpose
+
+Allow administrators to configure relative endpoint paths for OpenAI-compatible providers, including rerank support, and preview the resulting URLs in the Console.
+
+## Requirements
 
 ### Requirement: OpenAI-compatible endpoint overrides
 The system SHALL allow `openailike` provider instances to configure chat, embedding, rerank, and image endpoint paths independently from Base URL.

@@ -27,6 +27,9 @@ class StackWalkingCallerPluginResolverTest {
         var provider = mockPluginWrapperProvider(self);
         var resolver = new StackWalkingCallerPluginResolver(client, provider);
         var callerPlugin = callerPlugin();
+        var descriptor = mock(org.pf4j.PluginDescriptor.class);
+        when(caller.getDescriptor()).thenReturn(descriptor);
+        when(descriptor.getVersion()).thenReturn("1.2.3");
 
         when(self.getPluginId()).thenReturn("ai-foundation");
         when(self.getPluginManager()).thenReturn(pluginManager);
@@ -39,6 +42,11 @@ class StackWalkingCallerPluginResolverTest {
         assertThat(snapshot.isDetected()).isTrue();
         assertThat(snapshot.getPluginName()).isEqualTo("consumer-plugin");
         assertThat(snapshot.getDisplayName()).isNull();
+        assertThat(snapshot.getVersion()).isEqualTo("1.2.3");
+        when(descriptor.getVersion()).thenReturn("2.0.0");
+        assertThat(snapshot.getVersion()).isEqualTo("1.2.3");
+        assertThat(ConsumerPluginCaller.resolveSnapshot(resolver).getVersion()).isEqualTo("2.0.0");
+        org.mockito.Mockito.verifyNoInteractions(client);
 
         StepVerifier.create(ConsumerPluginCaller.resolve(resolver))
             .assertNext(info -> {

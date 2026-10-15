@@ -28,6 +28,8 @@
     "@halo-dev/api-client": "^2.26.0",
     "@halo-dev/components": "^2.26.0",
     "@halo-dev/ui-shared": "^2.26.0",
+    "@internationalized/date": "3.12.2",
+    "@number-flow/vue": "^0.5.2",
     "@tanstack/vue-query": "^4.44.0",
     "@vueuse/core": "^14.3.0",
     "@vueuse/integrations": "^14.3.0",

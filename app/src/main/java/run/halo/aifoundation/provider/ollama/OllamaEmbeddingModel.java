@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.Embedding;
@@ -106,14 +106,14 @@ final class OllamaEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEm
             if (results.isEmpty()) {
                 throw new IllegalStateException("Ollama embedding response contains no vectors");
             }
-            var promptTokens = integer(root, "prompt_eval_count");
             var nativeUsage = new LinkedHashMap<String, Object>();
             for (var field : List.of("prompt_eval_count", "total_duration", "load_duration")) {
                 if (root.path(field).isNumber()) {
                     nativeUsage.put(field, root.path(field).numberValue());
                 }
             }
-            var usage = new DefaultUsage(promptTokens, 0, promptTokens, Map.copyOf(nativeUsage));
+            var usage = ProviderUsage.embedding(root, "prompt_eval_count", "prompt_eval_count",
+                Map.copyOf(nativeUsage));
             var model = hasText(root.path("model").asText())
                 ? root.path("model").asText() : requestedModel;
             return new EmbeddingResponse(results,
@@ -123,10 +123,6 @@ final class OllamaEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEm
         } catch (Exception error) {
             throw new IllegalStateException("Failed to parse Ollama embedding response", error);
         }
-    }
-
-    private Integer integer(com.fasterxml.jackson.databind.JsonNode root, String field) {
-        return root.path(field).isNumber() ? root.path(field).asInt() : 0;
     }
 
     private void put(Map<String, Object> values, String key, Object value) {

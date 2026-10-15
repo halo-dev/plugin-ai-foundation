@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingResponse;
@@ -185,8 +185,6 @@ public final class ErnieEmbeddingModel implements ProviderEmbeddingModel {
                 IndexedEmbeddingDecoder.floatArray(value,
                     "Qianfan embedding vector must be an array"));
             var usage = root.path("usage");
-            var promptTokens = integer(usage, "prompt_tokens");
-            var totalTokens = integer(usage, "total_tokens");
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadataValues = new LinkedHashMap<String, Object>();
@@ -197,15 +195,11 @@ public final class ErnieEmbeddingModel implements ProviderEmbeddingModel {
             }
             var model = hasText(text(root, "model")) ? text(root, "model") : requestedModel;
             var metadata = new EmbeddingResponseMetadata(model,
-                new DefaultUsage(promptTokens, 0, totalTokens, rawUsage), metadataValues);
+                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), metadataValues);
             return new EmbeddingResponse(results, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse Qianfan embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node, String field) {
-        return node.path(field).isNumber() ? node.path(field).asInt() : 0;
     }
 
     private String text(JsonNode node, String field) {

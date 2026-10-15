@@ -25,6 +25,10 @@ const tabs: Tab[] = [
     value: AI_FOUNDATION_ROUTE_NAMES.CALLERS,
   },
   {
+    label: '用量统计',
+    value: AI_FOUNDATION_ROUTE_NAMES.USAGE,
+  },
+  {
     label: '测试',
     value: AI_FOUNDATION_ROUTE_NAMES.TEST,
   },

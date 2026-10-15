@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.chat.metadata.DefaultUsage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingResponse;
@@ -142,21 +142,15 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
                 IndexedEmbeddingDecoder.floatArrayOrBase64(value,
                     "Gitee AI embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var promptTokens = integer(usage, "prompt_tokens");
-            var totalTokens = integer(usage, "total_tokens");
             var rawUsage = JsonNodes.isAbsent(usage)
                 ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadata = new EmbeddingResponseMetadata(
                 hasText(text(root, "model")) ? text(root, "model") : requestedModel,
-                new DefaultUsage(promptTokens, 0, totalTokens, rawUsage), Map.of());
+                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), Map.of());
             return new EmbeddingResponse(indexed, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse Gitee AI embedding response", e);
         }
-    }
-
-    private Integer integer(JsonNode node, String field) {
-        return node.path(field).isNumber() ? node.path(field).asInt() : 0;
     }
 
     private String text(JsonNode node, String field) {
