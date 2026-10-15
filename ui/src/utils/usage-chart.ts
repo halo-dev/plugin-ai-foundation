@@ -64,6 +64,9 @@ export function chartDomain(
     : first + step
   const requestedStart = parseBoundary(from, first)
   const requestedEnd = parseBoundary(to, last)
+  if (!buckets.length && requestedStart < requestedEnd) {
+    return { start: requestedStart, end: requestedEnd, step }
+  }
   const start = Math.min(requestedStart, first)
   const end = Math.max(requestedEnd, last)
   return { start, end: Math.max(start + step, end), step }

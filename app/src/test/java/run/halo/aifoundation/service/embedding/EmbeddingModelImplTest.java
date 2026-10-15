@@ -326,6 +326,47 @@ class EmbeddingModelImplTest {
     }
 
     @Test
+    void embed_checksCancellationAfterWaitingForScheduler() throws Exception {
+        var springModel = mock(EmbeddingModel.class);
+        when(springModel.call(any(EmbeddingRequest.class)))
+            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
+        var source = new CancellationSource();
+        var model = new EmbeddingModelImpl(springModel, "openai", 96, false);
+        var request = run.halo.aifoundation.embedding.EmbeddingRequest.builder()
+            .inputs(List.of("first"))
+            .cancellationToken(source.token())
+            .build();
+        var scheduler = reactor.core.scheduler.Schedulers.newSingle("embedding-cancel-test");
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        scheduler.schedule(() -> {
+            entered.countDown();
+            try {
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        try (var schedulers = org.mockito.Mockito.mockStatic(reactor.core.scheduler.Schedulers.class,
+            org.mockito.Mockito.CALLS_REAL_METHODS)) {
+            assertThat(entered.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            schedulers.when(reactor.core.scheduler.Schedulers::boundedElastic).thenReturn(scheduler);
+            StepVerifier.create(model.embed(request))
+                .then(() -> {
+                    verifyNoInteractions(springModel);
+                    source.cancel();
+                    release.countDown();
+                })
+                .expectError(EmbeddingCancelledException.class)
+                .verify(Duration.ofSeconds(5));
+            verifyNoInteractions(springModel);
+        } finally {
+            release.countDown();
+            scheduler.dispose();
+        }
+    }
+
+    @Test
     void embed_checksCancellationBeforeEachRetryAttempt() {
         var springModel = mock(EmbeddingModel.class);
         var source = new CancellationSource();

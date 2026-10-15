@@ -262,7 +262,7 @@ class UsageStatisticsServiceTest {
         assertThat(service.health().available()).isFalse();
         assertThat(service.health().integrityError())
             .isEqualTo("SQLException (SQLite errorCode=26)");
-        assertThat(service.beginCall(descriptor()).isIncomplete()).isTrue();
+        assertThat(service.beginCall(descriptor())).isNull();
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.summary(query).block())
             .hasMessage("AI usage statistics are unavailable");
         verify(store).summary(query, true);

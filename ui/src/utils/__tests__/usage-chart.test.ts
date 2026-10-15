@@ -9,6 +9,15 @@ describe('usage chart time axis', () => {
     ], undefined, undefined, 'UTC')
     expect(domain.end).toBe(Date.parse('2026-09-10T02:00:00Z'))
   })
+  it.each([
+    ['2026-09-01T00:00:00Z', '2026-09-11T00:00:00Z'],
+    ['2026-09-01T12:00:00Z', '2026-09-01T13:00:00Z'],
+  ])('keeps an empty history within the requested range %s to %s', (from, to) => {
+    const domain = chartDomain([], from, to, 'UTC')
+    expect(domain.start).toBe(Date.parse(from))
+    expect(domain.end).toBe(Date.parse(to))
+  })
+
   it('keeps sparse calls at their time within the entire selected range', () => {
     const domain = chartDomain(
       [{ bucketStart: '2026-09-10T00:00:00Z', resolution: 'DAY' }],

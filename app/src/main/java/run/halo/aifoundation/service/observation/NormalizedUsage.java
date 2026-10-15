@@ -22,6 +22,9 @@ public record NormalizedUsage(
 
     public NormalizedUsage {
         if (quality == null) {
+            // Explicit quality denotes already-normalized evidence, including unknown totals.
+            accountedTotalTokens = accountedTotalTokens != null
+                ? accountedTotalTokens : accounted(inputTokens, outputTokens, providerTotalTokens);
             quality = quality(inputTokens, outputTokens, providerTotalTokens);
             if (quality == UsageQuality.MISSING) {
                 if (hasTokenDetails(cacheReadInputTokens, cacheCreationInputTokens,
@@ -30,8 +33,6 @@ public record NormalizedUsage(
                 }
             }
         }
-        accountedTotalTokens = accountedTotalTokens != null
-            ? accountedTotalTokens : accounted(inputTokens, outputTokens, providerTotalTokens);
     }
 
     public static boolean isMissing(NormalizedUsage usage) {

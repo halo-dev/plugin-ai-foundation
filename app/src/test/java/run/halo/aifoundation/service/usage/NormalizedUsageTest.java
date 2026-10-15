@@ -60,6 +60,36 @@ class NormalizedUsageTest {
     }
 
     @Test
+    void complementaryPartialExecutionsDoNotInventAnAccountedTotal() {
+        var inputOnly = new NormalizedUsage(10L, null, null, null, null, null, null, null);
+        var outputOnly = new NormalizedUsage(null, 5L, null, null, null, null, null, null);
+
+        var usage = NormalizedUsage.sum(List.of(inputOnly, outputOnly));
+
+        assertThat(usage.inputTokens()).isEqualTo(10L);
+        assertThat(usage.outputTokens()).isEqualTo(5L);
+        assertThat(usage.accountedTotalTokens()).isNull();
+        assertThat(usage.partial().accountedTotalTokens()).isNull();
+        assertThat(usage.quality()).isEqualTo(UsageQuality.PARTIAL);
+    }
+
+    @Test
+    void accountedTotalDoesNotDependOnExecutionGroupingOrOrder() {
+        var inputOnly = new NormalizedUsage(10L, null, null, null, null, null, null, null);
+        var outputOnly = new NormalizedUsage(null, 5L, null, null, null, null, null, null);
+        var known = new NormalizedUsage(2L, 3L, null, null, null, null, null, null);
+        var all = NormalizedUsage.sum(List.of(inputOnly, outputOnly, known));
+        var incremental = NormalizedUsage.sum(List.of(
+            NormalizedUsage.sum(List.of(inputOnly, outputOnly)), known));
+        var reordered = NormalizedUsage.sum(List.of(
+            NormalizedUsage.sum(List.of(known, outputOnly)), inputOnly));
+
+        assertThat(all.accountedTotalTokens()).isEqualTo(5L);
+        assertThat(incremental).isEqualTo(all);
+        assertThat(reordered).isEqualTo(all);
+    }
+
+    @Test
     void doesNotInspectRawObjectsOrInvokeProviderAccessors() {
         var usage = NormalizedUsage.from(LanguageModelUsage.builder().inputTokens(10)
             .outputTokens(5).raw(new Object() {

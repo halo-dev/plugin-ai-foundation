@@ -257,8 +257,10 @@ public class EmbeddingModelImpl implements EmbeddingModel {
         EmbeddingOptions options) {
         var call = Mono.defer(() -> {
             checkCancellation(request);
-            Supplier<Mono<EmbeddingBatchResult>> invocation = () -> Mono.fromCallable(
-                    () -> embedBatch(request, batch, options))
+            Supplier<Mono<EmbeddingBatchResult>> invocation = () -> Mono.fromCallable(() -> {
+                    checkCancellation(request);
+                    return embedBatch(request, batch, options);
+                })
                 .subscribeOn(Schedulers.boundedElastic())
                 .transform(mono -> withEmbeddingTimeout(mono, request));
             return usageExecutionObserver.observe(UsageUnitKind.EMBEDDING_BATCH, batch.index(),

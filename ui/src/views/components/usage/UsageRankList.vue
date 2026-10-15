@@ -119,14 +119,14 @@ function entryShare(entry: UsageRankEntry) {
       class=":uno: usage-rank"
       :class="{
         ':uno: is-dimmed': highlightKey != null && highlightKey !== entry.key,
-        ':uno: is-static': entry.other,
+        ':uno: is-static': entry.other || !entry.key,
       }"
-      :disabled="entry.other"
+      :disabled="entry.other || !entry.key"
       @click="emit('select', entry.key)"
-      @mouseenter="!entry.other && emit('highlight', entry.key)"
-      @mouseleave="!entry.other && emit('highlight', null)"
-      @focus="!entry.other && emit('highlight', entry.key)"
-      @blur="!entry.other && emit('highlight', null)"
+      @mouseenter="!entry.other && entry.key && emit('highlight', entry.key)"
+      @mouseleave="!entry.other && entry.key && emit('highlight', null)"
+      @focus="!entry.other && entry.key && emit('highlight', entry.key)"
+      @blur="!entry.other && entry.key && emit('highlight', null)"
     >
       <span class=":uno: usage-rank-head">
         <i

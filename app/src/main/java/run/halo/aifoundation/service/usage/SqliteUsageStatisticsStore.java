@@ -160,6 +160,9 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             writer.commit();
         } catch (RuntimeException | SQLException error) {
             restoreAutoCommit = UsageSqliteTransactions.rollback(writer, error);
+            if (!restoreAutoCommit) {
+                throw new UsageWriterUnavailableException(error);
+            }
             throw new IllegalStateException("Failed to write statistics batch", error);
         } catch (Error error) {
             // Roll back even fatal failures, then propagate them without retrying here.
@@ -330,6 +333,9 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
             return nextEpoch;
         } catch (RuntimeException | SQLException error) {
             restoreAutoCommit = UsageSqliteTransactions.rollback(writer, error);
+            if (!restoreAutoCommit) {
+                throw new UsageWriterUnavailableException(error);
+            }
             throw new IllegalStateException("Failed to reset statistics", error);
         } catch (Error error) {
             restoreAutoCommit = UsageSqliteTransactions.rollback(writer, error);

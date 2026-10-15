@@ -74,6 +74,20 @@ describe('UsageRankList', () => {
     expect(wrapper.emitted('highlight')).toContainEqual([null])
   })
 
+  it('shows an unknown caller as a static row while known callers remain selectable', async () => {
+    const wrapper = mountRank([item('plugin-a', 300), item('', 100)], {
+      dimension: 'callerPlugin',
+    })
+    const [known, unknown] = wrapper.findAll('.usage-rank')
+    expect(unknown!.text()).toContain('未知')
+    expect(unknown!.attributes('disabled')).toBeDefined()
+    const unknownButton = unknown!.element as HTMLButtonElement
+    unknownButton.click()
+    expect(wrapper.emitted('select')).toBeUndefined()
+    await known!.trigger('click')
+    expect(wrapper.emitted('select')).toEqual([['plugin-a']])
+  })
+
   it('dims non-highlighted rows and renders unknown keys as 未知', async () => {
     const wrapper = mountRank([item('a', 300), item('', 100)], { highlightKey: 'a' })
     const rows = wrapper.findAll('.usage-rank')

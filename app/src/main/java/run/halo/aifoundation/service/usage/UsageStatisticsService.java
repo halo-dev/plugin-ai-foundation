@@ -132,6 +132,9 @@ public class UsageStatisticsService
             context.providerType(), context.modelId(), descriptor.streaming());
         var session = new UsageCallSession(this, start, clock);
         synchronized (admissionLock) {
+            if (!accepting || !available) {
+                return null;
+            }
             if (start.epoch() != epoch) {
                 return null;
             }
@@ -552,6 +555,7 @@ public class UsageStatisticsService
                 return error;
             } catch (RuntimeException error) {
                 failure = error;
+                disableIfUnavailable(error);
                 if (isIntegrityFailure(error) || !available) {
                     return error;
                 }
@@ -634,7 +638,7 @@ public class UsageStatisticsService
                 }
                 return query.call();
             } catch (Exception | LinkageError error) {
-                disableIfCorrupt(error);
+                disableIfUnavailable(error);
                 throw error;
             } finally {
                 lock.unlock();
@@ -690,7 +694,7 @@ public class UsageStatisticsService
     }
 
     private void recordWriteFailure(Throwable error) {
-        disableIfCorrupt(error);
+        disableIfUnavailable(error);
         if (error instanceof LinkageError) {
             accepting = false;
             available = false;
@@ -803,7 +807,7 @@ public class UsageStatisticsService
             }
             return true;
         } catch (RuntimeException | LinkageError error) {
-            disableIfCorrupt(error);
+            disableIfUnavailable(error);
             healthDirty.set(true);
             log.warn("Failed to persist AI usage statistics health");
             return false;
@@ -820,17 +824,29 @@ public class UsageStatisticsService
         };
     }
 
-    private void disableIfCorrupt(Throwable error) {
-        if (!isIntegrityFailure(error)) {
+    private void disableIfUnavailable(Throwable error) {
+        var corrupt = isIntegrityFailure(error);
+        if (!corrupt && !isWriterUnavailable(error)) {
             return;
         }
         synchronized (admissionLock) {
-            integrityError.compareAndSet(null, safeMessage(error));
+            if (corrupt) {
+                integrityError.compareAndSet(null, safeMessage(error));
+            }
             accepting = false;
             available = false;
             markAffected();
             discardPendingWrites();
         }
+    }
+
+    private static boolean isWriterUnavailable(Throwable error) {
+        for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+            if (error instanceof UsageWriterUnavailableException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String safeMessage(Throwable error) {
