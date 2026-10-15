@@ -19,7 +19,8 @@ import UsageResetModal from '@/views/components/usage/UsageResetModal.vue'
 import UsageTrendSection from '@/views/components/usage/UsageTrendSection.vue'
 import { VAlert, VButton, VCard } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { computed, nextTick, shallowRef } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, shallowRef, watch } from 'vue'
 
 const filters = useUsageFilters()
 const queryClient = useQueryClient()
@@ -59,6 +60,29 @@ async function refresh() {
   await nextTick()
   reloadUsageQueries(queryClient)
 }
+
+const autoRefreshInterval = useLocalStorage('plugin:ai-foundation:usage:auto-refresh-interval', 0)
+let autoRefreshTimer: ReturnType<typeof setInterval> | undefined
+
+watch(
+  autoRefreshInterval,
+  (interval) => {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer)
+      autoRefreshTimer = undefined
+    }
+    if (interval > 0) {
+      autoRefreshTimer = setInterval(refresh, interval)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+  }
+})
 </script>
 
 <template>
@@ -75,9 +99,11 @@ async function refresh() {
           :feature-invalid="filters.featureInvalid.value"
           :has-dimension-filters="filters.hasDimensionFilters.value"
           :fetching="fetching"
+          :auto-refresh-interval="autoRefreshInterval"
           @change="filters.applyChange"
           @clear="filters.clearDimensionFilters"
           @refresh="refresh"
+          @auto-refresh-change="autoRefreshInterval = $event"
           @reset="resetModalVisible = true"
         />
       </div>
