@@ -17,6 +17,35 @@ vi.mock('@halo-dev/components', () => ({
 }))
 
 describe('Usage statistics regression tests', () => {
+  it('keeps the requested resolution in an empty trend chart', async () => {
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      disconnect() {}
+    })
+    const wrapper = mount(UsageStackedChart, {
+      props: {
+        metric: 'tokens',
+        labelOf: (key: string) => key,
+        points: [],
+        resolution: 'DAY',
+        from: '2026-08-01T00:00:00Z',
+        to: '2026-08-05T00:00:00Z',
+        timeZone: 'UTC',
+      },
+    })
+    try {
+      const labels = () => wrapper.findAll('.tabular-nums > span').map((label) => label.text())
+      expect(labels()).toEqual(['08/01', '08/02', '08/03', '08/04', '08/05'])
+      await wrapper.setProps({ resolution: 'HOUR' })
+      expect(labels()).toEqual([
+        '08/01 00:00', '08/02 00:00', '08/03 00:00', '08/04 00:00', '08/05 00:00',
+      ])
+    } finally {
+      wrapper.unmount()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('updates the call summary and executions together from the latest detail', async () => {
     vi.mocked(aiConsoleApiClient.usageStatistics.getAiUsageCall).mockResolvedValueOnce({
       data: {

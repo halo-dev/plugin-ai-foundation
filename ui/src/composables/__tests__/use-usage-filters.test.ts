@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { toUsageQueryParams, useUsageFilters } from '../use-usage-filters'
@@ -125,6 +125,58 @@ describe('toUsageQueryParams', () => {
 })
 
 describe('useUsageFilters', () => {
+  it('batches related filter changes into one navigation without losing query fields', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { render: () => h('div') } }],
+    })
+    await router.push('/?providerName=old-provider&modelName=old-model&keep=value')
+    await router.isReady()
+    let filters: ReturnType<typeof useUsageFilters>
+    const wrapper = mount(defineComponent({
+      setup() {
+        filters = useUsageFilters(() => now)
+        return () => h('div')
+      },
+    }), { global: { plugins: [router] } })
+    const replace = vi.spyOn(router, 'replace')
+    try {
+      filters!.applyChange({ range: 'custom', fromDate: '2026-08-01', toDate: '2026-08-03' })
+      await flushPromises()
+      expect(replace).toHaveBeenCalledTimes(1)
+      expect(router.currentRoute.value.query).toMatchObject({
+        range: 'custom', from: '2026-08-01', to: '2026-08-03', keep: 'value',
+      })
+      expect(filters!.valid.value).toBe(true)
+
+      replace.mockClear()
+      filters!.applyChange({ fromDate: '2026-08-02', toDate: '2026-08-04' })
+      await flushPromises()
+      expect(replace).toHaveBeenCalledTimes(1)
+      expect(router.currentRoute.value.query).toMatchObject({ from: '2026-08-02', to: '2026-08-04' })
+
+      replace.mockClear()
+      filters!.applyChange({ range: '7d' })
+      await flushPromises()
+      expect(replace).toHaveBeenCalledTimes(1)
+      expect(router.currentRoute.value.query.range).toBe('7d')
+      expect(router.currentRoute.value.query.from).toBeUndefined()
+      expect(router.currentRoute.value.query.to).toBeUndefined()
+      expect(filters!.valid.value).toBe(true)
+
+      replace.mockClear()
+      filters!.applyChange({ providerName: 'new-provider' })
+      await flushPromises()
+      expect(replace).toHaveBeenCalledTimes(1)
+      expect(router.currentRoute.value.query.providerName).toBe('new-provider')
+      expect(router.currentRoute.value.query.modelName).toBeUndefined()
+      expect(router.currentRoute.value.query.keep).toBe('value')
+    } finally {
+      replace.mockRestore()
+      wrapper.unmount()
+    }
+  })
+
   it('normalizes an invalid route resolution at the query boundary', async () => {
     const router = createRouter({
       history: createMemoryHistory(),

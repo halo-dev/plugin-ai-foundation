@@ -132,6 +132,7 @@ function selectCategory(key: string) {
         :from="filters.buildParams()?.from"
         :to="filters.buildParams()?.to"
         :time-zone="filters.timeZone"
+        :resolution="filters.state.value.resolution"
         :highlight-key="highlightKey"
       />
       <UsageRankList

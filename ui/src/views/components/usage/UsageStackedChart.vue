@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<{
   to?: string
   highlightKey?: string | null
   timeZone?: string
+  resolution?: 'DAY' | 'HOUR'
 }>(), {
   timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
 })
@@ -56,7 +57,9 @@ onBeforeUnmount(() => observer?.disconnect())
 const points = computed(() => props.points || [])
 const domain = computed(() => chartDomain(points.value, props.from, props.to, props.timeZone))
 const resolution = computed(() =>
-  points.value.some((point) => point.resolution === 'DAY') ? 'DAY' : 'HOUR',
+  points.value.length
+    ? (points.value.some((point) => point.resolution === 'DAY') ? 'DAY' : 'HOUR')
+    : (props.resolution ?? 'DAY'),
 )
 
 const stacked = computed(() => Boolean(props.categories?.length))
