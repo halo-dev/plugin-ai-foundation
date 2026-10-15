@@ -4,6 +4,8 @@ public record UsageBreakdownItem(
     String value,
     long callCount,
     long failedCount,
-    Long accountedTotalTokens
+    Long accountedTotalTokens,
+    long missingUsageCalls,
+    long partialUsageCalls
 ) {
 }

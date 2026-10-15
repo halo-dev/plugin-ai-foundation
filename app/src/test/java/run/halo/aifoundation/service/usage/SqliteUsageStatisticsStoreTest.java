@@ -27,6 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SqliteUsageStatisticsStoreTest {
@@ -414,6 +415,52 @@ class SqliteUsageStatisticsStoreTest {
             assertThat(item.value()).isEqualTo("provider-a");
             assertThat(item.accountedTotalTokens()).isEqualTo(15L);
         });
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = UsageBreakdownDimension.class,
+        names = {"MODEL", "PROVIDER"})
+    void breakdownPreservesKnownSubtotalsAndCountsUsageQuality(UsageBreakdownDimension dimension) {
+        store = createStore();
+        var at = Instant.parse("2026-08-10T10:00:00Z");
+        var groups = java.util.Map.of(
+            "mixed", java.util.List.of(usage(10, 5), NormalizedUsage.missing(),
+                usage(2, 1).partial()),
+            "missing", java.util.List.of(NormalizedUsage.missing()),
+            "zero", java.util.List.of(usage(0, 0)),
+            "partial", java.util.List.of(usage(1, 1).partial()));
+        groups.forEach((group, usages) -> {
+            for (int i = 0; i < usages.size(); i++) {
+                var call = new UsageCallStart(group + i, 1, at, "plugin-search", "1.0.0",
+                    "stack", "semantic-search", "language.generateText", "LANGUAGE", group,
+                    group, "openai", "requested", false);
+                store.finishCall(terminal(call, usages.get(i)));
+            }
+        });
+        var outside = new UsageCallStart("outside", 1, at.plusSeconds(3600),
+            "plugin-search", "1.0.0", "stack", "semantic-search", "language.generateText",
+            "LANGUAGE", "mixed", "mixed", "openai", "requested", false);
+        store.finishCall(terminal(outside, NormalizedUsage.missing()));
+
+        var items = store.breakdown(
+            query("2026-08-10T10:00:00Z", "2026-08-10T11:00:00Z"), dimension).items();
+        assertThat(items).extracting(UsageBreakdownItem::value)
+            .containsExactly("mixed", "partial", "zero", "missing");
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (var item : items) {
+            com.fasterxml.jackson.databind.JsonNode json = mapper.valueToTree(item);
+            assertThat(json.has("missingUsageCalls")).isTrue();
+            assertThat(json.has("partialUsageCalls")).isTrue();
+            assertThat(json.get("missingUsageCalls").asLong())
+                .isEqualTo(java.util.Set.of("mixed", "missing").contains(item.value()) ? 1 : 0);
+            assertThat(json.get("partialUsageCalls").asLong())
+                .isEqualTo(java.util.Set.of("mixed", "partial").contains(item.value()) ? 1 : 0);
+        }
+        assertThat(items.get(0).callCount()).isEqualTo(3);
+        assertThat(items.get(0).accountedTotalTokens()).isEqualTo(18L);
+        assertThat(items.get(1).accountedTotalTokens()).isEqualTo(2L);
+        assertThat(items.get(2).accountedTotalTokens()).isZero();
+        assertThat(items.get(3).accountedTotalTokens()).isNull();
     }
 
     @Test

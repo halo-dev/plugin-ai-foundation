@@ -17,6 +17,8 @@ interface UsageRankEntry {
   calls: number
   failed: number
   tokens?: number
+  missing: number
+  partial: number
   other: boolean
 }
 
@@ -57,6 +59,8 @@ const entries = computed<UsageRankEntry[]>(() => {
       label: `其他 (${rest.length})`,
       calls: rest.reduce((sum, item) => sum + (item.callCount ?? 0), 0),
       failed: rest.reduce((sum, item) => sum + (item.failedCount ?? 0), 0),
+      missing: rest.reduce((sum, item) => sum + (item.missingUsageCalls ?? 0), 0),
+      partial: rest.reduce((sum, item) => sum + (item.partialUsageCalls ?? 0), 0),
       tokens: rest.some((item) => item.accountedTotalTokens != null)
         ? rest.reduce((sum, item) => sum + (item.accountedTotalTokens ?? 0), 0)
         : undefined,
@@ -73,6 +77,8 @@ function toEntry(item: UsageBreakdownItem): UsageRankEntry {
     label: usageDimensionLabel(displayNames.value, key),
     calls: item.callCount ?? 0,
     failed: item.failedCount ?? 0,
+    missing: item.missingUsageCalls ?? 0,
+    partial: item.partialUsageCalls ?? 0,
     tokens: item.accountedTotalTokens ?? undefined,
     other: false,
   }
@@ -95,10 +101,16 @@ function entryValue(entry: UsageRankEntry) {
   )
 }
 
+function hasPartialUsage(entry: UsageRankEntry) {
+  return props.metric === 'tokens' && (entry.missing > 0 || entry.partial > 0)
+}
+
+const hasPartialEntries = computed(() => entries.value.some(hasPartialUsage))
+
 function formatEntryValue(entry: UsageRankEntry) {
-  return props.metric === 'tokens'
-    ? formatTokens(entry.tokens)
-    : entry.calls.toLocaleString()
+  if (props.metric !== 'tokens') return entry.calls.toLocaleString()
+  const value = formatTokens(entry.tokens)
+  return hasPartialUsage(entry) && entry.tokens != null ? `已知 ${value}` : value
 }
 
 function entryShare(entry: UsageRankEntry) {
@@ -156,7 +168,13 @@ function entryShare(entry: UsageRankEntry) {
         >
         · {{ entryShare(entry) }}
       </span>
+      <span v-if="hasPartialUsage(entry)" class=":uno: usage-rank-sub">
+        缺失用量 {{ entry.missing }} 次 · 部分上报 {{ entry.partial }} 次
+      </span>
     </button>
+    <p v-if="hasPartialEntries" class=":uno: text-xs text-gray-500">
+      排序和占比仅基于已知 Token，未报告的部分未计入。
+    </p>
     <p v-if="!entries.length" class=":uno: py-6 text-center text-xs text-gray-400">
       当前筛选条件下暂无数据
     </p>

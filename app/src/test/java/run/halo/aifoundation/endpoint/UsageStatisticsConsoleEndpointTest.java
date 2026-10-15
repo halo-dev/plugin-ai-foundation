@@ -128,7 +128,7 @@ class UsageStatisticsConsoleEndpointTest {
     @Test
     void breakdownRequiresDimensionAndMapsFilters() {
         var breakdown = new UsageBreakdown(
-            java.util.List.of(new UsageBreakdownItem("search", 3, 1, 9L)));
+            java.util.List.of(new UsageBreakdownItem("search", 3, 1, 9L, 1, 1)));
         when(service.breakdown(any(), eq(UsageBreakdownDimension.CALLER_PLUGIN)))
             .thenReturn(Mono.just(breakdown));
 
@@ -143,6 +143,9 @@ class UsageStatisticsConsoleEndpointTest {
             .jsonPath("$.dimension").doesNotExist()
             .jsonPath("$.items[0].value").isEqualTo("search")
             .jsonPath("$.items[0].failedCount").isEqualTo(1)
+            .jsonPath("$.items[0].accountedTotalTokens").isEqualTo(9)
+            .jsonPath("$.items[0].missingUsageCalls").isEqualTo(1)
+            .jsonPath("$.items[0].partialUsageCalls").isEqualTo(1)
             .jsonPath("$.preciseRange").doesNotExist()
             .jsonPath("$.dataTo").doesNotExist();
 

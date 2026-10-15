@@ -29,6 +29,38 @@ function mountHeatmap(points: unknown[] = []) {
 }
 
 describe('UsageHeatmap', () => {
+  it.each(['missingUsageCalls', 'partialUsageCalls'])(
+    'marks known token subtotals with %s without marking complete call counts', async (counter) => {
+      const wrapper = mountHeatmap([
+        { bucketStart: '2026-08-10T00:00:00Z', callCount: 1, accountedTotalTokens: 10 },
+        { bucketStart: '2026-08-10T01:00:00Z', callCount: 1, [counter]: 1 },
+      ])
+      await wrapper.setProps({ anchor: new Date('2026-08-10T12:00:00Z') })
+      const cell = wrapper.get('[aria-label^="2026-08-10："]')
+      expect(cell.attributes('aria-label')).toContain('已知 10 Token（用量未完整报告）')
+      expect(cell.classes()).toContain('is-partial')
+      expect(cell.classes()).not.toContain('is-unknown')
+      await wrapper.get('button[data-value="calls"]').trigger('click')
+      expect(cell.attributes('aria-label')).toBe('2026-08-10：2 次调用')
+      expect(cell.classes()).not.toContain('is-partial')
+      wrapper.unmount()
+    },
+  )
+
+  it('marks incomplete event delivery for both metrics', async () => {
+    const wrapper = mountHeatmap([
+      { bucketStart: '2026-08-10T00:00:00Z', callCount: 2, accountedTotalTokens: 10, complete: false },
+    ])
+    await wrapper.setProps({ anchor: new Date('2026-08-10T12:00:00Z') })
+    const cell = wrapper.get('[aria-label^="2026-08-10："]')
+    expect(cell.attributes('aria-label')).toContain('统计数据不完整')
+    expect(cell.classes()).toContain('is-partial')
+    await wrapper.get('button[data-value="calls"]').trigger('click')
+    expect(cell.attributes('aria-label')).toContain('2 次调用（统计数据不完整）')
+    expect(cell.classes()).toContain('is-partial')
+    wrapper.unmount()
+  })
+
   it('distinguishes unknown token buckets from known zero and absent buckets', async () => {
     const wrapper = mountHeatmap([
       { bucketStart: '2026-08-10T00:00:00Z', callCount: 2 },

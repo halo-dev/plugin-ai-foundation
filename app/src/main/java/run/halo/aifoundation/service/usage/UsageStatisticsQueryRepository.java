@@ -166,6 +166,8 @@ class UsageStatisticsQueryRepository {
         var filter = aggregateFilter(query);
         var sql = "SELECT " + dimension.column() + " group_value, COUNT(*) call_count, "
             + "COUNT(*) FILTER (WHERE status = 'FAILED') failed_count,"
+            + " COUNT(*) FILTER (WHERE usage_quality = 'MISSING') missing_usage_calls,"
+            + " COUNT(*) FILTER (WHERE usage_quality = 'PARTIAL') partial_usage_calls,"
             + " SUM(accounted_total_tokens) accounted_total_tokens FROM " + aggregateTable() + " "
             + filter.sql() + " GROUP BY " + dimension.column();
         try (var statement = connection.prepareStatement(sql)) {
@@ -175,7 +177,8 @@ class UsageStatisticsQueryRepository {
                 while (rows.next()) {
                     items.add(new UsageBreakdownItem(groupValue(rows.getString("group_value")),
                         rows.getLong("call_count"), rows.getLong("failed_count"),
-                        nullableLong(rows, "accounted_total_tokens")));
+                        nullableLong(rows, "accounted_total_tokens"),
+                        rows.getLong("missing_usage_calls"), rows.getLong("partial_usage_calls")));
                 }
                 items.sort(java.util.Comparator.comparing(UsageBreakdownItem::accountedTotalTokens,
                     java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));

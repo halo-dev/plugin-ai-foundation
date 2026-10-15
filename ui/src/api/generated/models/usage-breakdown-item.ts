@@ -40,6 +40,18 @@ export interface UsageBreakdownItem {
     'failedCount'?: number;
     /**
      * 
+     * @type {number}
+     * @memberof UsageBreakdownItem
+     */
+    'missingUsageCalls'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof UsageBreakdownItem
+     */
+    'partialUsageCalls'?: number;
+    /**
+     * 
      * @type {string}
      * @memberof UsageBreakdownItem
      */

@@ -19,6 +19,35 @@ function mountRank(items: UsageBreakdownItem[], props: Record<string, unknown> =
 }
 
 describe('UsageRankList', () => {
+  it('labels mixed usage as a known subtotal only in token mode', async () => {
+    const wrapper = mountRank([
+      { ...item('mixed', 15, 3), missingUsageCalls: 1, partialUsageCalls: 1 },
+      { ...item('complete', 10, 1), missingUsageCalls: 0, partialUsageCalls: 0 },
+    ])
+    const rows = wrapper.findAll('.usage-rank')
+    expect(rows[0]!.get('.usage-rank-value').text()).toBe('已知 15')
+    expect(rows[0]!.text()).toContain('缺失用量 1 次 · 部分上报 1 次')
+    expect(rows[1]!.get('.usage-rank-value').text()).toBe('10')
+    expect(wrapper.text()).toContain('排序和占比仅基于已知 Token')
+    await wrapper.setProps({ metric: 'calls' })
+    expect(wrapper.findAll('.usage-rank-value')[0]!.text()).toBe('3')
+    expect(wrapper.text()).not.toContain('缺失用量')
+    expect(wrapper.text()).not.toContain('排序和占比仅基于已知 Token')
+    wrapper.unmount()
+  })
+
+  it('aggregates missing and partial usage for Other without replacing known zero', () => {
+    const wrapper = mountRank([
+      ...Array.from({ length: 7 }, (_, index) => item(`known-${index}`, 100)),
+      { ...item('zero', 0, 1), partialUsageCalls: 1 },
+      { value: 'missing', callCount: 2, missingUsageCalls: 2 },
+    ])
+    const other = wrapper.findAll('.usage-rank').at(-1)!
+    expect(other.get('.usage-rank-value').text()).toBe('已知 0')
+    expect(other.text()).toContain('缺失用量 2 次 · 部分上报 1 次')
+    wrapper.unmount()
+  })
+
   it('keeps an all-unknown Other total and share unknown without a value bar', () => {
     const wrapper = mountRank([
       ...Array.from({ length: 7 }, (_, index) => item(`known-${index}`, 100)),

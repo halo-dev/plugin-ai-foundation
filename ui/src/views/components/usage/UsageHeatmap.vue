@@ -18,25 +18,38 @@ const metric = shallowRef<UsageMetric>('tokens')
 const scroller = shallowRef<HTMLElement>()
 
 const valuesByDate = computed(() => {
-  const map = new Map<string, number | undefined>()
+  const map = new Map<string, { value?: number; missing: number; partial: number; incomplete: boolean }>()
   for (const point of props.points || []) {
     if (!point.bucketStart) continue
     const date = formatBucketStart(point.bucketStart, 'DAY', props.timeZone)
     const value = usageMetricValue(point, metric.value)
     const previous = map.get(date)
-    map.set(date, value == null ? previous : (previous ?? 0) + value)
+    map.set(date, {
+      value: value == null ? previous?.value : (previous?.value ?? 0) + value,
+      missing: (previous?.missing ?? 0) + (point.missingUsageCalls ?? 0),
+      partial: (previous?.partial ?? 0) + (point.partialUsageCalls ?? 0),
+      incomplete: previous?.incomplete === true || point.complete === false,
+    })
   }
   return map
 })
 
 const days = computed(() => heatmapGrid(props.anchor, props.timeZone))
 const monthLabels = computed(() => heatmapMonthLabels(days.value))
-const leveler = computed(() => heatmapLeveler(days.value.map((d) => valuesByDate.value.get(d.date) || 0)))
+const leveler = computed(() => heatmapLeveler(days.value.map((d) => valuesByDate.value.get(d.date)?.value || 0)))
 
 const cells = computed(() =>
   days.value.map((day) => {
-    const value = valuesByDate.value.has(day.date) ? valuesByDate.value.get(day.date) : 0
-    return { ...day, value, level: value == null ? undefined : leveler.value(value) }
+    const measured = valuesByDate.value.get(day.date)
+    const value = measured ? measured.value : 0
+    const partialUsage = metric.value === 'tokens' && !!measured && (measured.missing > 0 || measured.partial > 0)
+    const incomplete = measured?.incomplete === true
+    const warnings = [
+      ...(partialUsage ? ['用量未完整报告'] : []),
+      ...(incomplete ? ['统计数据不完整'] : []),
+    ]
+    const label = `${partialUsage && value != null ? '已知 ' : ''}${formatValue(value)}${warnings.length ? `（${warnings.join('；')}）` : ''}`
+    return { ...day, value, label, partial: partialUsage || incomplete, level: value == null ? undefined : leveler.value(value) }
   }),
 )
 
@@ -98,10 +111,10 @@ watch(() => props.points, scrollToLatest)
           v-for="cell in cells"
           :key="cell.date"
           class=":uno: usage-heat-cell"
-          :class="cell.level == null ? ':uno: is-unknown' : `:uno: l${cell.level}`"
+          :class="[cell.level == null ? ':uno: is-unknown' : `:uno: l${cell.level}`, { ':uno: is-partial': cell.partial }]"
           :style="{ gridColumn: cell.week + 2, gridRow: cell.weekday + 2 }"
-          :aria-label="`${cell.date}：${formatValue(cell.value)}`"
-          v-tooltip="`${cell.date} · ${formatValue(cell.value)}`"
+          :aria-label="`${cell.date}：${cell.label}`"
+          v-tooltip="`${cell.date} · ${cell.label}`"
         ></i>
       </div>
       <div
@@ -111,6 +124,7 @@ watch(() => props.points, scrollToLatest)
         <i v-for="level in 5" :key="level" class=":uno: usage-heat-cell" :class="`:uno: l${level - 1}`"></i>
         多
         <i class=":uno: usage-heat-cell is-unknown"></i>未知
+        <i class=":uno: usage-heat-cell l1 is-partial"></i>不完整
       </div>
     </div>
   </div>
@@ -155,6 +169,10 @@ watch(() => props.points, scrollToLatest)
 }
 .usage-heat-cell.is-unknown {
   background: repeating-linear-gradient(135deg, #f3f4f6 0 2px, #9ca3af 2px 3px);
+}
+.usage-heat-cell.is-partial {
+  outline: 1px dashed currentColor;
+  outline-offset: -1px;
 }
 .usage-heat-cell.l0 {
   background: #f3f4f6;
