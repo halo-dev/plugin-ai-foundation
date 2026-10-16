@@ -63,6 +63,25 @@ class StackWalkingCallerPluginResolverTest {
     }
 
     @Test
+    void resolveCurrentCaller_doesNotAttributeUnknownCallsToFoundation() {
+        var client = mock(ReactiveExtensionClient.class);
+        var self = mock(PluginWrapper.class);
+        var manager = mock(PluginManager.class);
+        when(self.getPluginId()).thenReturn("ai-foundation");
+        when(self.getPluginManager()).thenReturn(manager);
+        when(self.getPluginClassLoader()).thenReturn(getClass().getClassLoader());
+        when(manager.getStartedPlugins()).thenReturn(List.of(self));
+        var resolver = new StackWalkingCallerPluginResolver(client, mockPluginWrapperProvider(self));
+
+        var caller = resolver.resolveCurrentCallerSnapshot();
+
+        assertThat(caller.isDetected()).isFalse();
+        assertThat(caller.getPluginName()).isNull();
+        assertThat(caller.getDetectionSource()).isEqualTo("none");
+        org.mockito.Mockito.verifyNoInteractions(client);
+    }
+
+    @Test
     void resolveCurrentCaller_returnsUndetectedWhenNoPluginWrapperAvailable() {
         var client = mock(ReactiveExtensionClient.class);
         var provider = mockPluginWrapperProvider(null);
