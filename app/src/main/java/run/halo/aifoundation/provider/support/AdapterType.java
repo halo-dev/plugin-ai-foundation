@@ -38,6 +38,7 @@ public enum AdapterType {
     GITEE_CHAT("gitee-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     GITEE_MESSAGES("gitee-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
     GITEE_EMBEDDING("gitee-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
+    TOKENHUB_CHAT("tokenhub-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     KIMI_CHAT("kimi-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     MINIMAX_MESSAGES("minimax-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
     MINIMAX_CHAT("minimax-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),

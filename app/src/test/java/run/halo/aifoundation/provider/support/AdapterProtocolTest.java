@@ -39,6 +39,7 @@ class AdapterProtocolTest {
                 tuple("gitee-responses", AdapterProtocol.RESPONSES),
                 tuple("gitee-chat", AdapterProtocol.CHAT_COMPLETIONS),
                 tuple("gitee-messages", AdapterProtocol.MESSAGES),
+                tuple("tokenhub-chat", AdapterProtocol.CHAT_COMPLETIONS),
                 tuple("kimi-chat", AdapterProtocol.CHAT_COMPLETIONS),
                 tuple("minimax-messages", AdapterProtocol.MESSAGES),
                 tuple("minimax-chat", AdapterProtocol.CHAT_COMPLETIONS),
