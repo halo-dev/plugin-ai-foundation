@@ -4,6 +4,7 @@ export const AI_FOUNDATION_ROUTE_NAMES = {
   MODELS: 'AiFoundationModels',
   DEFAULTS: 'AiFoundationDefaults',
   CALLERS: 'AiFoundationCallers',
+  TOOLS: 'AiFoundationTools',
   USAGE: 'AiFoundationUsage',
   TEST: 'AiFoundationTest',
 } as const

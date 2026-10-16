@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -27,6 +31,7 @@ import run.halo.aifoundation.message.ModelMessageRole;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolDefinition;
+import run.halo.aifoundation.tool.ToolApprovalResponse;
 
 class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
 
@@ -232,6 +237,60 @@ class LanguageModelToolApprovalTest extends LanguageModelTestSupport {
                     .containsExactly(1);
             })
             .verifyComplete();
+    }
+
+    @Test
+    void streamTextResumesAnApprovedToolWithTheCurrentRequestsAuthenticatedIdentity() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "run", "{\"command\":\"approved action\"}", 2, 3)),
+            Flux.just(chatResponse("Approved action completed.", "stop", 4, 5)));
+        var model = languageModel(chatModel, "openai");
+        var initialIdentity = UsernamePasswordAuthenticationToken.authenticated("admin", null, List.of());
+        var resumedIdentity = UsernamePasswordAuthenticationToken.authenticated("admin", null, List.of());
+        var observedIdentity = new AtomicReference<Authentication>();
+        var executions = new AtomicInteger();
+        var tool = ToolDefinition.builder().name("run").needsApproval(true)
+            .executor(context -> ReactiveSecurityContextHolder.getContext()
+                .switchIfEmpty(Mono.error(new IllegalStateException("Missing authenticated caller")))
+                .map(security -> {
+                    observedIdentity.set(security.getAuthentication());
+                    executions.incrementAndGet();
+                    return (Object) Map.of("actor", security.getAuthentication().getName());
+                })).build();
+        var initial = model.streamText(GenerateTextRequest.builder().prompt("Perform an approved action")
+            .tools(List.of(tool)).stopWhen(StopCondition.stepCountIs(2)).build());
+        StepVerifier.create(initial.fullStream().collectList()
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(initialIdentity)))
+            .assertNext(parts -> assertThat(parts.stream()
+                .filter(part -> PartType.TOOL_APPROVAL_REQUEST.equals(part.getType())))
+                .hasSize(1))
+            .verifyComplete();
+        var pending = initial.result().block();
+        assertThat(pending).isNotNull();
+        assertThat(pending.getToolResults()).isEmpty();
+        assertThat(executions).hasValue(0);
+        var approval = pending.getToolApprovalRequests().getFirst();
+        var messages = new ArrayList<ModelMessage>();
+        messages.add(ModelMessage.user("Perform an approved action"));
+        messages.addAll(pending.getResponseMessages());
+        messages.add(ModelMessage.tool(List.of(ModelMessagePart.toolApprovalResponse(
+            ToolApprovalResponse.builder().approvalId(approval.getApprovalId())
+                .toolCallId(approval.getToolCallId()).toolName(approval.getToolName())
+                .approved(true).build()))));
+        var resumed = model.streamText(GenerateTextRequest.builder().messages(messages)
+            .tools(List.of(tool)).stopWhen(StopCondition.stepCountIs(2)).build());
+
+        StepVerifier.create(resumed.fullStream().collectList()
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(resumedIdentity)))
+            .assertNext(parts -> assertThat(parts).isNotEmpty()).verifyComplete();
+        StepVerifier.create(resumed.result()).assertNext(result -> {
+            assertThat(result.getToolErrors()).isEmpty();
+            assertThat(result.getToolResults()).hasSize(1);
+            assertThat(result.getText()).isEqualTo("Approved action completed.");
+        }).verifyComplete();
+        assertThat(observedIdentity.get()).isSameAs(resumedIdentity).isNotSameAs(initialIdentity);
+        assertThat(executions).hasValue(1);
     }
 
     @Test

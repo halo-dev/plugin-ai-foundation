@@ -12,8 +12,27 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.test.StepVerifier;
+import reactor.util.context.Context;
 
 class CancellableStreamReplayCoordinatorTest {
+
+    @Test
+    void runsSourceWithFirstSubscribersContextAndKeepsItForLaterViews() {
+        var subscriptions = new AtomicInteger();
+        var coordinator = new CancellableStreamReplayCoordinator<>(
+            Flux.deferContextual(context -> Flux.just(context.<String>get("caller")))
+                .doOnSubscribe(ignored -> subscriptions.incrementAndGet()),
+            () -> "cancelled");
+        var replay = coordinator.flux();
+
+        StepVerifier.create(replay.contextWrite(Context.of("caller", "administrator")))
+            .expectNext("administrator")
+            .verifyComplete();
+        StepVerifier.create(replay.contextWrite(Context.of("caller", "another-view")))
+            .expectNext("administrator")
+            .verifyComplete();
+        assertThat(subscriptions).hasValue(1);
+    }
 
     @Test
     void staysLazyAndReplaysSuccessfulRunWithoutReconnect() {

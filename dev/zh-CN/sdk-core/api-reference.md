@@ -11,11 +11,13 @@
 
 ## 服务入口与模型信息
 
-| 类型             | 用途                                                              |
-| ---------------- | ----------------------------------------------------------------- |
-| `AiModelService` | 跨插件解析默认或指定名称的语言、Embedding、Rerank、图像生成模型。 |
-| `ModelInfo`      | 已解析模型的只读身份和模型级信息。                                |
-| `ProviderInfo`   | 已解析模型所属 Provider 的只读信息。                              |
+| 类型                                                                    | 用途                                                              |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `AiModelService`                                                        | 跨插件解析默认或指定名称的语言、Embedding、Rerank、图像生成模型。 |
+| `AiToolService`、`AiToolProvider`、`ToolRegistration`、`ToolDescriptor` | [注册、发现与解析所选共享工具](../tool-catalog.md)。              |
+| `ToolConfiguration`                                                     | 提供 FormKit 配置表单和配置读取、保存回调。                       |
+| `ModelInfo`                                                             | 已解析模型的只读身份和模型级信息。                                |
+| `ProviderInfo`                                                          | 已解析模型所属 Provider 的只读信息。                              |
 
 `AiModelService` 的八个解析方法分为四组：`languageModel`、`embeddingModel`、
 `rerankingModel`、`imageGenerationModel`，每组都提供无参默认模型和接收

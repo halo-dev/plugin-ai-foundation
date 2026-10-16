@@ -27,6 +27,7 @@ export function useLanguageGenerationSettings() {
   const reasoningMode = shallowRef<ReasoningMode>('DEFAULT')
   const reasoningEffort = shallowRef<ReasoningEffort>('MEDIUM')
   const testToolEnabled = shallowRef(false)
+  const toolIds = shallowRef<string[]>([])
   const testToolApprovalEnabled = shallowRef(false)
   const externalTestToolEnabled = shallowRef(false)
   const agentTestToolsEnabled = shallowRef(false)
@@ -60,6 +61,7 @@ export function useLanguageGenerationSettings() {
       .filter(Boolean)
     return {
       systemPrompt: systemPrompt.value,
+      toolIds: [...toolIds.value],
       temperature: numberOrUndefined(temperature.value),
       topP: numberOrUndefined(topP.value),
       topK: numberOrUndefined(topK.value),
@@ -136,6 +138,7 @@ export function useLanguageGenerationSettings() {
     reasoningMode,
     reasoningEffort,
     testToolEnabled,
+    toolIds,
     testToolApprovalEnabled,
     externalTestToolEnabled,
     agentTestToolsEnabled,

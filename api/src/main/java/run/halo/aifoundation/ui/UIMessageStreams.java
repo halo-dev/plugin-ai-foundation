@@ -66,7 +66,7 @@ public final class UIMessageStreams {
     public static <M> UIMessageStream createWithOptions(
         Consumer<UIMessageStreamOptions<M>> configure) {
         Objects.requireNonNull(configure, "configure must not be null");
-        return new UIMessageStream(Flux.defer(() -> {
+        return new UIMessageStream(Flux.deferContextual(context -> {
             var options = new UIMessageStreamOptions<M>();
             configure.accept(options);
             var writer = new DefaultWriter(options);
@@ -89,6 +89,7 @@ public final class UIMessageStreams {
             reader.responseMessage()
                 .zipWith(reader.finish())
                 .map(tuple -> toFinish(options.originalMessages(), tuple.getT1(), tuple.getT2()))
+                .contextWrite(context)
                 .subscribe(options.finishHandler());
             return chunks;
         }));

@@ -7,6 +7,9 @@ Only exports from `ui/packages/sdk/src/index.ts` are public; do not import inter
 
 ## Chat
 
+Tool catalog exports are `listTools`, `ListToolsOptions`, `ToolDescriptor`,
+`AI_TOOL_SELECTOR_FORMKIT_TYPE`, and `AiToolSelectorOptions`. See the [tool selector guide](../tool-catalog.md).
+
 | Exports                                             | Purpose                                               |
 | --------------------------------------------------- | ----------------------------------------------------- |
 | `useChat`, `UseChatOptions`                         | Vue chat state and operations.                        |

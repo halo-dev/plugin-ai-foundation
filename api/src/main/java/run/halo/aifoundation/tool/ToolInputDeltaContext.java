@@ -9,22 +9,52 @@ import run.halo.aifoundation.message.ModelMessage;
 
 /**
  * Immutable provider-neutral snapshot for one streamed tool input delta callback.
+ *
+ * <p>The runtime supplies this snapshot before the next raw input fragment is exposed. Maps and message lists cannot be
+ * modified through this context. Use the tool call identity to correlate observations across callbacks, and honor the
+ * optional cancellation signal during asynchronous work.
  */
 @Value
 public class ToolInputDeltaContext {
+    /** Original model tool call identity, used to correlate later input and result events. */
     String toolCallId;
+    /** Model-facing name of the tool whose input is being processed. */
     String toolName;
+    /** Unparsed provider-native argument fragment; it may not be valid JSON by itself. */
     String inputTextDelta;
+    /** Zero-based model invocation step that produced this callback. */
     Integer stepIndex;
+    /** Immutable list of provider-neutral messages used for this generation step. */
     List<ModelMessage> messages;
+    /** Caller application context, excluded from model prompts. */
     Map<String, Object> requestContext;
+    /** Provider or Halo metadata associated with this call and step. */
     Map<String, Object> providerMetadata;
+    /** Optional cooperative cancellation signal for request-scoped work. */
     CancellationToken cancellationToken;
 
+    /**
+     * Creates a callback snapshot with immutable collection copies.
+     *
+     * @param toolCallId original model call identity
+     * @param toolName model-facing tool name
+     * @param inputTextDelta raw streamed argument fragment
+     * @param stepIndex zero-based model invocation step
+     * @param messages messages used for this generation step
+     * @param requestContext caller application context
+     * @param providerMetadata provider or Halo metadata
+     * @param cancellationToken optional cooperative cancellation signal
+     */
     @Builder
-    public ToolInputDeltaContext(String toolCallId, String toolName, String inputTextDelta,
-        Integer stepIndex, List<ModelMessage> messages, Map<String, Object> requestContext,
-        Map<String, Object> providerMetadata, CancellationToken cancellationToken) {
+    public ToolInputDeltaContext(
+            String toolCallId,
+            String toolName,
+            String inputTextDelta,
+            Integer stepIndex,
+            List<ModelMessage> messages,
+            Map<String, Object> requestContext,
+            Map<String, Object> providerMetadata,
+            CancellationToken cancellationToken) {
         this.toolCallId = toolCallId;
         this.toolName = toolName;
         this.inputTextDelta = inputTextDelta;

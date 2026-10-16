@@ -109,6 +109,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private final ReactiveExtensionClient client;
     private final AiModelService aiModelService;
+    private final run.halo.aifoundation.AiToolService aiToolService;
     private final ModelConsoleModelValidator modelValidator;
 
     @Override
@@ -389,7 +390,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return request.bodyToMono(TestUiMessageChatRequest.class)
             .flatMap(body -> validateTestUiMessageChatRequest(body).then(Mono.defer(() -> {
                 var cancellation = UIMessageCancellations.create();
-                return aiModelService.languageModel(modelName)
+                return resolveConsoleTools(body.getToolIds())
+                    .flatMap(tools -> aiModelService.languageModel(modelName)
                     .map(languageModel -> UIMessageChatHandlers.<Map<String, Object>>streamText(
                         options -> options
                             .model(languageModel)
@@ -397,7 +399,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                             .metadataSupplier(() -> new LinkedHashMap<>())
                             .serializer(ModelConsoleEndpoint::writeJson)
                             .request(builder -> applyConsoleGenerationOptions(builder, body,
-                                ConsoleTestToolOptions.from(request)))
+                                ConsoleTestToolOptions.from(request), tools))
                             .cancellationToken(cancellation.token())
                             .onError(ModelConsoleEndpoint::safeMessage)
                             .onFinish(finish -> log.debug(
@@ -406,7 +408,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                                 modelName, finish.messages().size(), finish.terminal().aborted(),
                                 finish.terminal().errorText()
                             ))
-                    ))
+                    )))
                     .flatMap(chat -> uiMessageStreamResponse(chat.response(), cancellation));
             })))
             .onErrorResume(error -> {
@@ -420,6 +422,15 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                         Map.of("exceptionType", "error")))
                 ), ModelConsoleEndpoint::writeJson), UIMessageCancellations.create());
             });
+    }
+
+    private Mono<List<ToolDefinition>> resolveConsoleTools(List<String> toolIds) {
+        if (toolIds == null || toolIds.isEmpty()) {
+            return Mono.just(List.of());
+        }
+        return aiToolService.resolveTools(toolIds)
+            .onErrorMap(IllegalArgumentException.class, error ->
+                new ResponseStatusException(HttpStatus.BAD_REQUEST, error.getMessage(), error));
     }
 
     private Mono<ServerResponse> uiMessageStreamResponse(UIMessageStreamResponse response,
@@ -747,7 +758,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private void applyConsoleGenerationOptions(
         GenerateTextRequest.GenerateTextRequestBuilder builder,
-        TestUiMessageChatRequest request, ConsoleTestToolOptions options) {
+        TestUiMessageChatRequest request, ConsoleTestToolOptions options,
+        List<ToolDefinition> registeredTools) {
         var generation = GenerateTextRequest.builder()
             .system(request.getSystem())
             .temperature(request.getTemperature())
@@ -770,6 +782,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             .context(request.getContext())
             .output(request.getOutput())
             .toolChoice(request.getToolChoice())
+            .tools(registeredTools)
+            .stopWhen(registeredTools.isEmpty() ? null : StopCondition.stepCountIs(5))
             .build();
         generation = withConsoleTestTool(generation, options);
         builder.system(generation.getSystem())
@@ -1672,6 +1686,9 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class TestUiMessageChatRequest {
+        @io.swagger.v3.oas.annotations.media.Schema(
+            description = "Stable IDs of explicitly selected shared tools.")
+        private List<String> toolIds;
         private String id;
         private List<TestUiMessage> messages;
         private String trigger = "submit-message";

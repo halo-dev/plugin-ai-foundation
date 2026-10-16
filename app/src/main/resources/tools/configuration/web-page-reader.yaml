@@ -1,0 +1,28 @@
+schema:
+  - $formkit: switch
+    name: vpnCompatibilityEnabled
+    label: VPN 兼容模式
+    value: false
+    onValue: true
+    offValue: false
+    help: 使用可信 VPN/TUN 的 Fake-IP 时开启。仅兼容 HTTPS，仍禁止访问其他私有地址。
+  - $formkit: number
+    name: maxResponseSizeMb
+    label: 下载大小上限（MiB）
+    value: 10
+    number: integer
+    min: 1
+    max: 100
+    step: 1
+    validation: required|number|between:1,100
+    help: 下载并解压后的响应大小上限，默认 10 MiB。
+  - $formkit: number
+    name: maxContentCharacters
+    label: 正文长度上限（字符）
+    value: 100000
+    number: integer
+    min: 1
+    max: 2000000
+    step: 1
+    validation: required|number|between:1,2000000
+    help: 返回正文的长度上限，超出部分会截断，默认 100000 字符。
