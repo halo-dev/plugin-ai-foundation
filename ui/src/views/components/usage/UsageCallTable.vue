@@ -10,7 +10,7 @@ import {
   usageStatusLabel,
   usageStatusState,
 } from '@/utils/usage'
-import { VButton, VEmpty, VStatusDot } from '@halo-dev/components'
+import { IconErrorWarning, VButton, VEmpty, VStatusDot } from '@halo-dev/components'
 import { computed, shallowRef } from 'vue'
 import UsageCallDetails from './UsageCallDetails.vue'
 
@@ -60,6 +60,12 @@ function modelText(call: UsageCallItem) {
 }
 function providerText(call: UsageCallItem) {
   return providerNames.value.get(call.providerName || '') || call.providerName || '未知供应商'
+}
+function attentionTooltip(call: UsageCallItem) {
+  const reasons: string[] = []
+  if (call.complete === false) reasons.push('调用记录不完整')
+  if (usageNeedsAttention(call.usage?.quality)) reasons.push(usageQualityLabel(call.usage?.quality))
+  return reasons.join('，')
 }
 function durationClass(call: UsageCallItem) {
   const millis = call.durationMillis
@@ -139,16 +145,17 @@ function durationClass(call: UsageCallItem) {
                 >
               </td>
               <td>
-                <VStatusDot
-                  :state="usageStatusState(call.status)"
-                  :text="usageStatusLabel(call.status)"
-                />
-                <span
-                  v-if="call.complete === false || usageNeedsAttention(call.usage?.quality)"
-                  class=":uno: ml-1 text-xs text-orange-600"
-                  :title="usageQualityLabel(call.usage?.quality)"
-                  >!</span
-                >
+                <div class=":uno: flex items-center gap-1">
+                  <VStatusDot
+                    :state="usageStatusState(call.status)"
+                    :text="usageStatusLabel(call.status)"
+                  />
+                  <IconErrorWarning
+                    v-if="call.complete === false || usageNeedsAttention(call.usage?.quality)"
+                    v-tooltip="attentionTooltip(call)"
+                    class=":uno: size-3.5 shrink-0 text-orange-600"
+                  />
+                </div>
               </td>
             </tr>
             <tr v-if="isExpanded(call)" class=":uno: usage-detail-row">
