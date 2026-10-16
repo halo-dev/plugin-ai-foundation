@@ -116,7 +116,7 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
         return new OpenAiCompatibleImageGenerationClient(new OpenAiCompatibleImageOptions(
             getProviderType(), resolveBaseUrl(provider),
             imageEndpointPath(provider), apiKey, modelId, java.util.Map.of()),
-            webClientBuilder(provider));
+            imageWebClientBuilder(provider));
     }
 
     @Override

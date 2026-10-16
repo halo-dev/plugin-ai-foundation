@@ -158,7 +158,7 @@ public class ZhiPuProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new ZhiPuImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            webClientBuilder(provider));
+            imageWebClientBuilder(provider));
     }
 
     @Override

@@ -130,7 +130,7 @@ public class DouBaoProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new DouBaoImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            webClientBuilder(provider));
+            imageWebClientBuilder(provider));
     }
 
     @Override

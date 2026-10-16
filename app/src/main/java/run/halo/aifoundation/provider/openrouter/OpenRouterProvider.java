@@ -171,7 +171,7 @@ public class OpenRouterProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new OpenRouterImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId,
-            Map.of()), webClientBuilder(provider));
+            Map.of()), imageWebClientBuilder(provider));
     }
 
     @Override

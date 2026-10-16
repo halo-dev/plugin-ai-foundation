@@ -123,6 +123,10 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         return ProviderHttpClientFactory.discoveryWebClientBuilder(provider);
     }
 
+    protected WebClient.Builder imageWebClientBuilder(AiProvider provider) {
+        return ProviderHttpClientFactory.imageWebClientBuilder(provider);
+    }
+
     protected RestClient.Builder restClientBuilder(AiProvider provider) {
         return ProviderHttpClientFactory.restClientBuilder(provider);
     }

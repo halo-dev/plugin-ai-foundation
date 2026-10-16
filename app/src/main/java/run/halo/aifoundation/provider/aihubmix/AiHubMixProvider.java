@@ -175,7 +175,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new AiHubMixImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId,
-            AiHubMixHeaders.DEFAULTS), webClientBuilder(provider));
+            AiHubMixHeaders.DEFAULTS), imageWebClientBuilder(provider));
     }
 
     @Override
