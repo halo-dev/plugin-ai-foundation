@@ -35,7 +35,21 @@ const heatmapQuery = useUsageHeatmapTrends(
   filters.valid,
   heatmapAnchor,
 )
-const callsQuery = useUsageCalls(filters.buildParams, filters.fingerprint, filters.valid)
+// Keep the request bounds and cache key together for the call pagination session.
+const callsSession = shallowRef(buildCallsSession())
+const callsQuery = useUsageCalls(
+  () => callsSession.value.params,
+  computed(() => callsSession.value.fingerprint),
+  computed(() => callsSession.value.params !== undefined),
+)
+
+function buildCallsSession() {
+  return { params: filters.buildParams(), fingerprint: filters.fingerprint.value }
+}
+
+watch(filters.state, () => {
+  callsSession.value = buildCallsSession()
+})
 
 const { data: callers } = useCallerPluginsFetch()
 const { data: providers } = useProvidersFetch()
@@ -58,6 +72,7 @@ const fetching = computed(
 async function refresh() {
   heatmapAnchor.value = new Date()
   filters.refreshAnchor()
+  callsSession.value = buildCallsSession()
   await nextTick()
   reloadUsageQueries(queryClient)
 }
@@ -74,14 +89,15 @@ watch(
     }
     if (interval > 0) {
       autoRefreshTimer = setInterval(() => {
-        // Preserve in-flight queries and the call pagination session during automatic refresh.
-        if (
-          queryClient.isFetching({ queryKey: [QK_USAGE] }) > 0 ||
-          (callsQuery.data.value?.pages.length ?? 0) > 1
-        ) {
+        if (queryClient.isFetching({ queryKey: [QK_USAGE] }) > 0) {
           return
         }
-        void refresh()
+        heatmapAnchor.value = new Date()
+        filters.refreshAnchor()
+        // New statistics keys refresh automatically; preserve calls once more pages are loaded.
+        if ((callsQuery.data.value?.pages.length ?? 0) <= 1) {
+          callsSession.value = buildCallsSession()
+        }
       }, interval)
     }
   },

@@ -133,13 +133,69 @@ describe('usage automatic refresh', () => {
     await flushPromises()
     await tick(9000)
     expect(table.props('items')).toHaveLength(2)
-    expect(api.getAiUsageSummary).toHaveBeenCalledTimes(1)
+    expect(api.getAiUsageSummary).toHaveBeenCalledTimes(4)
+    expect(api.getAiUsageBreakdown).toHaveBeenCalledTimes(4)
+    expect(api.listAiUsageTrends).toHaveBeenCalledTimes(8)
     expect(api.listAiUsageCalls).toHaveBeenCalledTimes(2)
     wrapper.findComponent({ name: 'UsageFilterBar' }).vm.$emit('refresh')
     await flushPromises()
     expect(table.props('items')).toHaveLength(1)
     await tick()
     expect(api.listAiUsageCalls).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps pagination request bounds stable while statistics advance and resets them on filter changes', async () => {
+    const { wrapper } = await mountView()
+    const table = wrapper.findComponent({ name: 'UsageCallTable' })
+    const initialParams = vi.mocked(api.listAiUsageCalls).mock.calls[0]![0]
+    vi.mocked(api.listAiUsageCalls).mockResolvedValueOnce({
+      data: { items: [{ id: 'second' }], nextCursor: 'page-3' },
+    } as never)
+    table.vm.$emit('load-more')
+    await flushPromises()
+    await tick(6000)
+    table.vm.$emit('load-more')
+    await flushPromises()
+    expect(api.listAiUsageCalls).toHaveBeenLastCalledWith({ ...initialParams, cursor: 'page-3' })
+    expect(table.props('items')).toHaveLength(3)
+    const latestSummaryParams = vi.mocked(api.getAiUsageSummary).mock.lastCall![0]
+    expect(latestSummaryParams.to).not.toBe(initialParams.to)
+
+    wrapper.findComponent({ name: 'UsageFilterBar' }).vm.$emit('change', { status: 'FAILED' })
+    await flushPromises()
+    await flushPromises()
+    expect(table.props('items')).toHaveLength(1)
+    expect(api.listAiUsageCalls).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: 'FAILED',
+        cursor: undefined,
+        to: latestSummaryParams.to,
+      }),
+    )
+    await tick()
+    expect(api.listAiUsageCalls).toHaveBeenCalledTimes(5)
+  })
+
+  it('continues refreshing statistics for a custom date range with multiple call pages', async () => {
+    const { wrapper } = await mountView()
+    wrapper.findComponent({ name: 'UsageFilterBar' }).vm.$emit('change', {
+      range: 'custom',
+      fromDate: '2026-09-01',
+      toDate: '2026-09-30',
+    })
+    await flushPromises()
+    await flushPromises()
+    const table = wrapper.findComponent({ name: 'UsageCallTable' })
+    table.vm.$emit('load-more')
+    await flushPromises()
+    const callsCount = vi.mocked(api.listAiUsageCalls).mock.calls.length
+    const summaryCount = vi.mocked(api.getAiUsageSummary).mock.calls.length
+    const params = vi.mocked(api.getAiUsageSummary).mock.lastCall![0]
+    await tick(6000)
+    expect(api.getAiUsageSummary).toHaveBeenCalledTimes(summaryCount + 2)
+    expect(api.getAiUsageSummary).toHaveBeenLastCalledWith(params)
+    expect(api.listAiUsageCalls).toHaveBeenCalledTimes(callsCount)
+    expect(table.props('items')).toHaveLength(2)
   })
 
   it('restores the saved interval, changes it, stops it and clears it on unmount', async () => {
