@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import type { ToolDescriptor } from '@/api/generated'
-import {
-  toolCategoryLabel,
-  toolDisplayDescription,
-  toolDisplayName,
-  toolSelectable,
-  toolStatusLabel,
-  toolStatusState,
-  type CatalogTool,
-  type ToolGroup,
-} from '@/utils/tools'
-import { VButton, VCard, VStatusDot, VSwitch, VTag } from '@halo-dev/components'
-import { computed } from 'vue'
+import { buildToolCollections, type ToolCollection, type ToolGroup } from '@/utils/tools'
+import { useMediaQuery } from '@vueuse/core'
+import { computed, shallowRef, watch } from 'vue'
+import ToolCatalogCard from './ToolCatalogCard.vue'
+import ToolGroupCard from './ToolGroupCard.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -21,6 +14,7 @@ const props = withDefaults(
     management?: boolean
     pendingIds?: string[]
     compact?: boolean
+    keyword?: string
   }>(),
   {
     selectedIds: undefined,
@@ -28,6 +22,7 @@ const props = withDefaults(
     management: false,
     pendingIds: () => [],
     compact: false,
+    keyword: '',
   },
 )
 
@@ -40,129 +35,101 @@ const emit = defineEmits<{
 
 const selected = computed(() => new Set(props.selectedIds))
 const pending = computed(() => new Set(props.pendingIds))
-const cards = computed(() =>
-  props.groups.flatMap((group) =>
-    group.tools.map((tool) => ({
-      tool,
-      name: toolDisplayName(tool),
-      description: toolDisplayDescription(tool),
-      statusLabel: toolStatusLabel(tool),
-      statusState: toolStatusState(tool),
-      tags: [...new Set([toolCategoryLabel(tool.category), ...(tool.tags || [])])],
-      selected: !!tool.id && selected.value.has(tool.id),
-      pending: !!tool.id && pending.value.has(tool.id),
-      selectable: toolSelectable(tool),
-      configurable: !!tool.configurationSchema?.length,
-    })),
-  ),
+const collections = computed(() =>
+  buildToolCollections(props.groups.flatMap((group) => group.tools)),
+)
+const groupCollections = computed(() => collections.value.filter((collection) => collection.group))
+const wideLayout = useMediaQuery('(min-width: 1280px)')
+const groupColumns = computed(() => {
+  const columns: ToolCollection[][] = props.compact || !wideLayout.value ? [[]] : [[], []]
+  groupCollections.value.forEach((collection, index) => {
+    columns[index % columns.length]!.push(collection)
+  })
+  return columns.filter((column) => column.length)
+})
+const standaloneCollections = computed(() =>
+  collections.value.filter((collection) => !collection.group),
+)
+const expandedKeys = shallowRef(new Set<string>())
+
+watch(
+  [() => props.keyword, collections],
+  ([keyword, collections]) => {
+    const groupKeys = new Set(
+      collections.filter((collection) => collection.group).map((collection) => collection.key),
+    )
+    const expanded = new Set([...expandedKeys.value].filter((key) => groupKeys.has(key)))
+    if (keyword.trim()) for (const key of groupKeys) expanded.add(key)
+    expandedKeys.value = expanded
+  },
+  { immediate: true },
 )
 
-function cardDisabled(tool: CatalogTool) {
-  return props.disabled || (!!tool.id && pending.value.has(tool.id))
-}
-
-function toggleTool(tool: CatalogTool) {
-  if (cardDisabled(tool) || !toolSelectable(tool) || !tool.id) return
-  emit('toggle', tool.id)
-}
-
-function changeEnabled(tool: CatalogTool, enabled: boolean) {
-  if (cardDisabled(tool) || !tool.id) return
-  emit('enabled', tool, enabled)
-}
-
-function showDetails(tool: CatalogTool) {
-  if (!cardDisabled(tool)) emit('details', tool)
-}
-
-function configureTool(tool: CatalogTool) {
-  if (!cardDisabled(tool) && tool.configurationSchema?.length) emit('configure', tool)
+function setExpanded(key: string, expanded: boolean) {
+  if (props.disabled) return
+  const keys = new Set(expandedKeys.value)
+  if (expanded) keys.add(key)
+  else keys.delete(key)
+  expandedKeys.value = keys
 }
 </script>
 
 <template>
-  <ul
-    class=":uno: grid grid-cols-1 m-0 list-none gap-3 p-3"
-    :class="{ ':uno: sm:grid-cols-2 xl:grid-cols-3': !compact }"
-    aria-label="工具列表"
-  >
-    <li v-for="card in cards" :key="card.tool.id" class=":uno: min-w-0">
-      <VCard
-        class=":uno: h-full"
-        :class="{ ':uno: ring-primary': card.selected }"
-        :data-tool-id="card.tool.id"
+  <div class=":uno: min-w-0 p-3 space-y-3">
+    <div
+      v-if="groupCollections.length"
+      class=":uno: grid grid-cols-1 items-start gap-3"
+      :class="{ ':uno: xl:grid-cols-2': !compact }"
+    >
+      <ul
+        v-for="(column, index) in groupColumns"
+        :key="index"
+        :aria-label="
+          groupColumns.length > 1 ? `工具组${index === 0 ? '左' : '右'}列` : '工具组列表'
+        "
+        class=":uno: m-0 min-w-0 flex flex-col list-none gap-3 p-0"
       >
-        <div class=":uno: flex items-start gap-3">
-          <input
-            v-if="selectedIds !== undefined && card.tool.id"
-            type="checkbox"
-            :checked="card.selected"
-            :disabled="disabled || card.pending || !card.selectable"
-            :aria-label="`选择 ${card.name}`"
-            class=":uno: mt-1 flex-none"
-            @change="toggleTool(card.tool)"
+        <li v-for="collection in column" :key="collection.key" class=":uno: min-w-0">
+          <ToolGroupCard
+            :collection="collection"
+            :expanded="expandedKeys.has(collection.key)"
+            :selected-ids="selectedIds"
+            :disabled="disabled"
+            :management="management"
+            :pending-ids="pendingIds"
+            :compact="compact"
+            @update:expanded="setExpanded(collection.key, $event)"
+            @toggle="emit('toggle', $event)"
+            @details="emit('details', $event)"
+            @configure="emit('configure', $event)"
+            @enabled="(tool, enabled) => emit('enabled', tool, enabled)"
           />
-          <div class=":uno: min-w-0 flex flex-1 items-center gap-2">
-            <h3 class=":uno: m-0 min-w-0 break-words text-sm text-gray-950 font-medium">
-              {{ card.name }}
-            </h3>
-            <VStatusDot
-              class=":uno: flex-none"
-              :state="card.statusState"
-              :text="card.statusLabel"
-            />
-          </div>
-          <VSwitch
-            v-if="management"
-            :model-value="card.tool.enabled !== false"
-            :disabled="disabled || card.pending"
-            :loading="card.pending"
-            :aria-label="`启用 ${card.name}`"
-            @update:model-value="changeEnabled(card.tool, $event)"
-          />
-        </div>
-        <div class=":uno: mt-2 break-all text-xs text-gray-500">
-          来源：{{ card.tool.pluginName }}
-        </div>
-        <div v-if="card.tags.length" class=":uno: mt-2 flex flex-wrap gap-1.5">
-          <VTag v-for="tag in card.tags" :key="tag">{{ tag }}</VTag>
-        </div>
-        <p
-          v-if="card.description"
-          class=":uno: my-3 break-words text-sm text-gray-600"
-          :class="{ ':uno: line-clamp-2': compact, ':uno: line-clamp-3': !compact }"
-        >
-          {{ card.description }}
-        </p>
-        <div class=":uno: mt-1 break-all text-xs text-gray-400">{{ card.tool.id }}</div>
-        <template #footer>
-          <div class=":uno: flex items-center justify-end gap-2">
-            <VButton
-              v-if="management && card.configurable"
-              size="sm"
-              :disabled="disabled || card.pending"
-              :aria-label="`配置 ${card.name}`"
-              @click="configureTool(card.tool)"
-            >
-              配置
-            </VButton>
-            <VButton
-              size="sm"
-              :disabled="disabled || card.pending"
-              :aria-label="`查看 ${card.name} 详情`"
-              @click="showDetails(card.tool)"
-            >
-              详情
-            </VButton>
-          </div>
-        </template>
-      </VCard>
-    </li>
-  </ul>
+        </li>
+      </ul>
+    </div>
+    <ul
+      v-if="standaloneCollections.length"
+      aria-label="工具列表"
+      class=":uno: grid grid-cols-1 m-0 list-none gap-3 p-0"
+      :class="{ ':uno: sm:grid-cols-2 xl:grid-cols-4': !compact }"
+    >
+      <li v-for="collection in standaloneCollections" :key="collection.key" class=":uno: min-w-0">
+        <ToolCatalogCard
+          v-if="collection.tools[0]"
+          :tool="collection.tools[0]"
+          :selected="
+            selectedIds === undefined ? undefined : selected.has(collection.tools[0].id || '')
+          "
+          :disabled="disabled"
+          :management="management"
+          :pending="pending.has(collection.tools[0].id || '')"
+          :compact="compact"
+          @toggle="emit('toggle', $event)"
+          @details="emit('details', $event)"
+          @configure="emit('configure', $event)"
+          @enabled="(tool, enabled) => emit('enabled', tool, enabled)"
+        />
+      </li>
+    </ul>
+  </div>
 </template>
-
-<style scoped>
-:deep(.card-body) {
-  flex-grow: 1;
-}
-</style>

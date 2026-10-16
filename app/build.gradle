@@ -31,7 +31,7 @@ configurations.runtimeClasspath {
 }
 
 dependencies {
-    implementation platform('run.halo.tools.platform:plugin:2.23.0')
+    implementation platform('run.halo.tools.platform:plugin:2.26.0')
     implementation platform("org.springframework.ai:spring-ai-bom:2.0.0")
     implementation project(':api')
 
@@ -40,6 +40,9 @@ dependencies {
     compileOnly 'run.halo.app:api'
     compileOnly 'io.projectreactor.netty:reactor-netty-http'
     implementation 'org.jsoup:jsoup:1.23.1'
+    implementation('org.apache.pdfbox:pdfbox:3.0.8') {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
 
     testImplementation 'run.halo.app:api'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

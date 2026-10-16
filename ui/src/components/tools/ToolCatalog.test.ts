@@ -26,8 +26,9 @@ vi.mock('@halo-dev/components', () => ({
   VStatusDot: { props: ['text'], template: '<span>{{ text }}</span>' },
   VSwitch: {
     props: ['modelValue', 'disabled'],
+    emits: ['update:modelValue'],
     template:
-      '<button :disabled="disabled" type="button" role="switch" :aria-checked="modelValue" />',
+      '<button :disabled="disabled" type="button" role="switch" :aria-checked="modelValue" @click="$emit(\'update:modelValue\', !modelValue)" />',
   },
   VCard: { template: '<div><slot name="header" /><slot /><slot name="footer" /></div>' },
   VEmpty: { props: ['title', 'message'], template: '<div>{{ title }} {{ message }}</div>' },
@@ -50,7 +51,7 @@ describe('ToolCatalog', () => {
         localName: 'search_site',
         name: 'ai_foundation_search_site',
         displayName: '站内搜索',
-        category: '内容',
+        category: 'content',
         tags: ['公开内容'],
         enabled: true,
         configured: true,
@@ -137,7 +138,7 @@ describe('ToolCatalog', () => {
         id: 'ai-foundation/read_web_page',
         localName: 'read_web_page',
         displayName: '网页读取',
-        category: '网络',
+        category: 'web',
       },
     ]
     const wrapper = mountCatalog()
@@ -174,6 +175,38 @@ describe('ToolCatalog', () => {
     })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['plugin:ai-foundation:tools'] })
     expect(Toast.success).toHaveBeenCalledWith('工具已禁用')
+  })
+
+  it('finds group metadata and leaf names, expanding only the matching grouped tools', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountCatalog()
+    expect(wrapper.findAll('[data-tool-group-id]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-tool-id]')).toHaveLength(1)
+    await wrapper.get('input[aria-label="搜索工具"]').setValue('文章管理')
+    expect(wrapper.get('[data-tool-group-id] [role="heading"]').text()).toBe('文章管理')
+    expect(wrapper.findAll('[data-tool-id]')).toHaveLength(2)
+    expect(wrapper.text()).toContain('当前显示 2 个')
+    await wrapper.get('input[aria-label="搜索工具"]').setValue('读取正文')
+    expect(wrapper.findAll('[data-tool-id]')).toHaveLength(1)
+    expect(wrapper.get('[data-tool-id]').attributes('data-tool-id')).toBe('ai-foundation/get_post')
+    expect(wrapper.text()).toContain('当前显示 1 个')
+    expect(wrapper.find('section[aria-label="standalone-plugin 提供的工具"]').exists()).toBe(false)
+  })
+
+  it('updates a grouped leaf through its switch without treating the group as an enabled resource', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountCatalog()
+    const group = wrapper.get('[data-tool-group-id]')
+    expect(group.findAll('[role="switch"]')).toHaveLength(0)
+    await group.get('button[aria-label="展开 文章管理 工具组"]').trigger('click')
+    await group.get('button[aria-label="启用 读取正文"]').trigger('click')
+    await flushPromises()
+    expect(aiConsoleApiClient.tool.updateToolState).toHaveBeenCalledWith({
+      pluginName: 'ai-foundation',
+      localName: 'get_post',
+      toolEnabledRequest: { enabled: false },
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['plugin:ai-foundation:tools'] })
   })
 
   it('reports a failed tool state change without claiming success', async () => {
@@ -225,6 +258,36 @@ describe('ToolCatalog', () => {
     expect(wrapper.text()).toContain('暂无工具')
   })
 })
+
+function groupedCatalog(): ToolDescriptor[] {
+  const group = {
+    id: 'ai-foundation/posts',
+    displayName: '文章管理',
+    description: '管理本站文章',
+  }
+  return [
+    {
+      ...data.value[0],
+      id: 'ai-foundation/list_posts',
+      localName: 'list_posts',
+      displayName: '查询文章',
+      group,
+    },
+    {
+      ...data.value[0],
+      id: 'ai-foundation/get_post',
+      localName: 'get_post',
+      displayName: '读取正文',
+      group,
+    },
+    {
+      ...data.value[0],
+      id: 'standalone-plugin/clock',
+      pluginName: 'standalone-plugin',
+      displayName: '独立时间工具',
+    },
+  ]
+}
 
 function mountCatalog() {
   const wrapper = mount(ToolCatalog, {

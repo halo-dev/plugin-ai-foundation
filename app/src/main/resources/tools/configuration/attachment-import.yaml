@@ -1,0 +1,18 @@
+schema:
+  - $formkit: number
+    name: maxResponseSizeMb
+    label: 下载大小上限（MiB）
+    value: 20
+    number: integer
+    min: 1
+    max: 100
+    step: 1
+    validation: required|number|between:1,100
+    help: HTTP 解压后的下载大小上限，默认 20 MiB。
+  - $formkit: switch
+    name: vpnCompatibilityEnabled
+    label: VPN 兼容模式
+    value: false
+    onValue: true
+    offValue: false
+    help: 使用可信 VPN/TUN 的 Fake-IP 时开启，仅兼容域名 HTTPS 443。

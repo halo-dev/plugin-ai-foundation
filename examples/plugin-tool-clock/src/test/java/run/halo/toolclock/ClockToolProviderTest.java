@@ -32,49 +32,54 @@ class ClockToolProviderTest {
     void advertisesBothToolsAndMarksOnlyFormattedTimeUnconfigured() {
         when(settings.read()).thenReturn(Mono.just(ClockToolSettingsStore.Settings.empty()));
         var tools = provider.tools().collectList().block();
-        assertThat(tools).extracting(tool -> tool.getDefinition().getName())
-            .containsExactly("current_time", "formatted_time");
+        assertThat(tools)
+                .extracting(tool -> tool.getDefinition().getName())
+                .containsExactly("current_time", "formatted_time");
         assertThat(tools.getFirst().isConfigured()).isTrue();
         assertThat(tools.getLast().isConfigured()).isFalse();
         assertThat(tools.getLast().getConfiguration().getSchema())
-            .extracting(field -> field.get("$formkit")).containsExactly("text", "select");
+                .extracting(field -> field.get("$formkit"))
+                .containsExactly("text", "select");
         StepVerifier.create(tools.getFirst().getDefinition().getExecutor().execute(context()))
-            .assertNext(result -> assertThat(((Map<?, ?>) result).get("utc"))
-                .isEqualTo("2026-10-14T12:34:56Z"))
-            .verifyComplete();
+                .assertNext(
+                        result -> assertThat(((Map<?, ?>) result).get("utc")).isEqualTo("2026-10-14T12:34:56Z"))
+                .verifyComplete();
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "datetime, 2026-10-14T20:34:56+08:00",
-        "date, 2026-10-14",
-        "time, 20:34:56+08:00"
-    })
+    @CsvSource({"datetime, 2026-10-14T20:34:56+08:00", "date, 2026-10-14", "time, 20:34:56+08:00"})
     void usesConfiguredTimezoneAndFormatWhenExecuted(String format, String expected) {
-        when(settings.read()).thenReturn(Mono.just(
-            new ClockToolSettingsStore.Settings("Asia/Shanghai", format)));
-        var tool = provider.tools().filter(item -> item.getDefinition().getName().equals("formatted_time"))
-            .blockFirst();
+        when(settings.read()).thenReturn(Mono.just(new ClockToolSettingsStore.Settings("Asia/Shanghai", format)));
+        var tool = provider.tools()
+                .filter(item -> item.getDefinition().getName().equals("formatted_time"))
+                .blockFirst();
         assertThat(tool.isConfigured()).isTrue();
+        assertThat(tool.getDefinition().getDescription())
+                .contains("Configured zoneId=Asia/Shanghai", "format=" + format, "takes no arguments");
         StepVerifier.create(tool.getDefinition().getExecutor().execute(context()))
-            .assertNext(result -> {
-                var output = (Map<?, ?>) result;
-                assertThat(output.get("zoneId")).isEqualTo("Asia/Shanghai");
-                assertThat(output.get("format")).isEqualTo(format);
-                assertThat(output.get("formatted")).isEqualTo(expected);
-                assertThat(output.get("isoInstant")).isEqualTo("2026-10-14T12:34:56Z");
-            }).verifyComplete();
+                .assertNext(result -> {
+                    var output = (Map<?, ?>) result;
+                    assertThat(output.get("zoneId")).isEqualTo("Asia/Shanghai");
+                    assertThat(output.get("format")).isEqualTo(format);
+                    assertThat(output.get("formatted")).isEqualTo(expected);
+                    assertThat(output.get("isoInstant")).isEqualTo("2026-10-14T12:34:56Z");
+                })
+                .verifyComplete();
     }
 
     @Test
     void refusesExecutionWhenConfigurationBecomesUnavailable() {
-        when(settings.read()).thenReturn(Mono.just(new ClockToolSettingsStore.Settings("UTC", "date")),
-            Mono.just(ClockToolSettingsStore.Settings.empty()));
-        var tool = provider.tools().filter(item -> item.getDefinition().getName().equals("formatted_time"))
-            .blockFirst();
+        when(settings.read())
+                .thenReturn(
+                        Mono.just(new ClockToolSettingsStore.Settings("UTC", "date")),
+                        Mono.just(ClockToolSettingsStore.Settings.empty()));
+        var tool = provider.tools()
+                .filter(item -> item.getDefinition().getName().equals("formatted_time"))
+                .blockFirst();
         assertThat(tool.isConfigured()).isTrue();
         StepVerifier.create(tool.getDefinition().getExecutor().execute(context()))
-            .expectErrorMessage("请先配置格式化时间工具的时区和输出格式").verify();
+                .expectErrorMessage("请先配置格式化时间工具的时区和输出格式")
+                .verify();
     }
 
     @Test
@@ -86,8 +91,8 @@ class ClockToolProviderTest {
         var configuration = provider.tools().collectList().block().getLast().getConfiguration();
 
         StepVerifier.create(configuration.getValues().get())
-            .assertNext(current -> assertThat(current).containsEntry("format", "datetime"))
-            .verifyComplete();
+                .assertNext(current -> assertThat(current).containsEntry("format", "datetime"))
+                .verifyComplete();
         StepVerifier.create(configuration.getSave().apply(values)).verifyComplete();
         verify(settings).save(values);
     }
@@ -96,15 +101,20 @@ class ClockToolProviderTest {
     void hangingSettingsStillExposeTheClockAndConfigurableTool() {
         when(settings.read()).thenReturn(Mono.never());
         StepVerifier.withVirtualTime(() -> provider.tools().collectList())
-            .expectSubscription().thenAwait(Duration.ofSeconds(2))
-            .assertNext(tools -> {
-                assertThat(tools).hasSize(2);
-                assertThat(tools.getFirst().isConfigured()).isTrue();
-                assertThat(tools.getLast().isConfigured()).isFalse();
-            }).verifyComplete();
+                .expectSubscription()
+                .thenAwait(Duration.ofSeconds(2))
+                .assertNext(tools -> {
+                    assertThat(tools).hasSize(2);
+                    assertThat(tools.getFirst().isConfigured()).isTrue();
+                    assertThat(tools.getLast().isConfigured()).isFalse();
+                })
+                .verifyComplete();
     }
 
     private static ToolExecutionContext context() {
-        return ToolExecutionContext.builder().toolCallId("test-call").input(Map.of()).build();
+        return ToolExecutionContext.builder()
+                .toolCallId("test-call")
+                .input(Map.of())
+                .build();
     }
 }

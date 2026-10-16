@@ -54,7 +54,13 @@ export type {
   UIMessageStreamReadStatus,
 } from './stream-reader'
 export { AI_TOOL_SELECTOR_FORMKIT_TYPE, listTools } from './tools'
-export type { AiToolSelectorOptions, ListToolsOptions, ToolDescriptor } from './tools'
+export type {
+  AiToolSelectorOptions,
+  ListToolsOptions,
+  ToolDescriptor,
+  ToolGroupDescriptor,
+  ToolPresetDescriptor,
+} from './tools'
 export {
   DefaultChatTransport,
   HttpChatTransport,

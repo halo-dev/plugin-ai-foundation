@@ -72,4 +72,6 @@ export * from './tool-choice';
 export * from './tool-config';
 export * from './tool-descriptor';
 export * from './tool-enabled-request';
+export * from './tool-group-descriptor';
+export * from './tool-preset-descriptor';
 export * from './uimessage-chunk';

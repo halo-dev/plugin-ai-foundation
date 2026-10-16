@@ -5,7 +5,7 @@
     "version" : "2.26.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:48439",
+    "url" : "http://localhost:55421",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -3740,6 +3740,9 @@
           "enabled" : {
             "type" : "boolean"
           },
+          "group" : {
+            "$ref" : "#/components/schemas/ToolGroupDescriptor"
+          },
           "id" : {
             "type" : "string"
           },
@@ -3780,6 +3783,46 @@
         "properties" : {
           "enabled" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "ToolGroupDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "presets" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ToolPresetDescriptor"
+            }
+          }
+        }
+      },
+      "ToolPresetDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "toolIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         }
       },

@@ -91,4 +91,6 @@ models/tool-choice.ts
 models/tool-config.ts
 models/tool-descriptor.ts
 models/tool-enabled-request.ts
+models/tool-group-descriptor.ts
+models/tool-preset-descriptor.ts
 models/uimessage-chunk.ts

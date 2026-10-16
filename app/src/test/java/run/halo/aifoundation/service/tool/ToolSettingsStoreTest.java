@@ -28,8 +28,10 @@ class ToolSettingsStoreTest {
 
     @Mock
     ReactiveExtensionClient client;
+
     @Mock
     PluginContext pluginContext;
+
     ToolSettingsStore store;
 
     @BeforeEach
@@ -60,7 +62,7 @@ class ToolSettingsStoreTest {
         var entry = JSON.readTree(map.getData().get("sharedTools")).get("ai-foundation/web_search");
         assertThat(entry.get("enabled").booleanValue()).isFalse();
         assertThat(entry.get("values").get("braveApiKeySecretName").stringValue())
-            .isEqualTo("brave-key");
+                .isEqualTo("brave-key");
         assertThat(store.enabledStates().block()).containsEntry("ai-foundation/web_search", false);
     }
 
@@ -71,11 +73,11 @@ class ToolSettingsStoreTest {
         when(client.update(any(ConfigMap.class))).thenAnswer(call -> Mono.just(call.getArgument(0)));
 
         store.saveConfiguration("ai-foundation/web_search", Map.of("braveApiKeySecretName", "key-ref"))
-            .block();
+                .block();
 
         assertThat(store.enabledStates().block()).containsEntry("ai-foundation/web_search", false);
         assertThat(store.configuration("ai-foundation/web_search").block())
-            .containsEntry("braveApiKeySecretName", "key-ref");
+                .containsEntry("braveApiKeySecretName", "key-ref");
     }
 
     @Test
@@ -84,14 +86,16 @@ class ToolSettingsStoreTest {
         var latest = configMap("{\"other-plugin/clock\":{\"enabled\":false}}");
         when(client.fetch(ConfigMap.class, CONFIG_MAP)).thenReturn(Mono.just(first), Mono.just(latest));
         when(client.update(any(ConfigMap.class)))
-            .thenReturn(Mono.error(new OptimisticLockingFailureException("changed")))
-            .thenAnswer(call -> Mono.just(call.getArgument(0)));
+                .thenReturn(Mono.error(new OptimisticLockingFailureException("changed")))
+                .thenAnswer(call -> Mono.just(call.getArgument(0)));
 
         store.setEnabled("ai-foundation/read_web_page", false).block();
 
         var entries = JSON.readTree(latest.getData().get("sharedTools"));
-        assertThat(entries.get("other-plugin/clock").get("enabled").booleanValue()).isFalse();
-        assertThat(entries.get("ai-foundation/read_web_page").get("enabled").booleanValue()).isFalse();
+        assertThat(entries.get("other-plugin/clock").get("enabled").booleanValue())
+                .isFalse();
+        assertThat(entries.get("ai-foundation/read_web_page").get("enabled").booleanValue())
+                .isFalse();
     }
 
     @Test
@@ -105,18 +109,24 @@ class ToolSettingsStoreTest {
         verify(client).create(captured.capture());
         assertThat(captured.getValue().getMetadata().getName()).isEqualTo(CONFIG_MAP);
         assertThat(JSON.readTree(captured.getValue().getData().get("sharedTools"))
-            .get("ai-foundation/search_site").get("enabled").booleanValue()).isFalse();
+                        .get("ai-foundation/search_site")
+                        .get("enabled")
+                        .booleanValue())
+                .isFalse();
     }
 
     @Test
     void unreadableOrInvalidSettingsNeverFallBackToEnabled() {
         when(client.fetch(ConfigMap.class, CONFIG_MAP)).thenReturn(Mono.error(new IllegalStateException("unreadable")));
-        StepVerifier.create(store.enabledStates()).expectErrorMessage("unreadable").verify();
+        StepVerifier.create(store.enabledStates())
+                .expectErrorMessage("unreadable")
+                .verify();
 
         when(client.fetch(ConfigMap.class, CONFIG_MAP))
-            .thenReturn(Mono.just(configMap("{\"plugin/tool\":{\"enabled\":\"false\"}}")));
+                .thenReturn(Mono.just(configMap("{\"plugin/tool\":{\"enabled\":\"false\"}}")));
         StepVerifier.create(store.enabledStates())
-            .expectErrorMessage("Shared tool settings are invalid").verify();
+                .expectErrorMessage("Shared tool settings are invalid")
+                .verify();
     }
 
     private static ConfigMap configMap(String sharedTools) {

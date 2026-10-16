@@ -49,7 +49,8 @@ public final class CancellableStreamReplayCoordinator<T> {
             sink.onCancel(replay::cancel);
             if (!started && !terminal) {
                 started = true;
-                source.subscribe(new SourceSubscriber());
+                // The first view owns the shared run, including its caller/security context.
+                source.contextWrite(sink.contextView()).subscribe(new SourceSubscriber());
             }
             replay.drain();
             requestSourceIfNeeded();

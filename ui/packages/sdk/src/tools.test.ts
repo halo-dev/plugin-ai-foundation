@@ -9,6 +9,9 @@ const descriptor = {
   localName: 'search_site',
   name: 'ai_foundation_search_site',
   displayName: '站内搜索',
+  enabled: true,
+  configured: true,
+  status: 'ENABLED',
 }
 
 describe('listTools', () => {
@@ -57,6 +60,26 @@ describe('listTools', () => {
     await expect(listTools({ fetch })).rejects.toBeInstanceOf(AIUIError)
   })
 
+  it('preserves source-owned groups and explicit preset membership', async () => {
+    const tool = {
+      ...descriptor,
+      group: {
+        id: 'ai-foundation/posts',
+        displayName: '文章',
+        presets: [
+          {
+            id: 'ai-foundation/posts/read',
+            displayName: '文章检索',
+            toolIds: [descriptor.id],
+          },
+        ],
+      },
+    }
+    expect(await listTools({ fetch: async () => new Response(JSON.stringify([tool])) })).toEqual([
+      tool,
+    ])
+  })
+
   it.each([{}, [null], [{ ...descriptor, id: '' }], [{ ...descriptor, name: 12 }]])(
     'rejects invalid catalog identities (%j)',
     async (data) => {
@@ -68,10 +91,19 @@ describe('listTools', () => {
 
   it.each([
     { enabled: 'true' },
+    { enabled: undefined },
     { configured: 0 },
+    { configured: undefined },
     { status: 7 },
+    { status: undefined },
+    { status: 'UNKNOWN' },
     { tags: ['valid', false] },
     { configurationSchema: [null] },
+    { group: { id: '', presets: [] } },
+    { group: { id: 'demo/posts', presets: 'read' } },
+    { group: { id: 'demo/posts', displayName: 3, presets: [] } },
+    { group: { id: 'demo/posts', presets: [null] } },
+    { group: { id: 'demo/posts', presets: [{ id: 'demo/posts/read', toolIds: [false] }] } },
   ])('rejects invalid optional descriptor metadata (%j)', async (metadata) => {
     await expect(
       listTools({

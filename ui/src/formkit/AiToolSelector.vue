@@ -2,7 +2,13 @@
 import type { ToolDescriptor } from '@/api/generated'
 import { useToolsFetch } from '@/composables/use-tools-fetch'
 import { AI_FOUNDATION_ROUTE_NAMES } from '@/routes'
-import { filterTools, toolDisplayName, toolSelectable, toolStatusLabel } from '@/utils/tools'
+import {
+  buildToolCollections,
+  filterTools,
+  toolDisplayName,
+  toolSelectable,
+  toolStatusLabel,
+} from '@/utils/tools'
 import { IconRefreshLine, VButton, VLoading } from '@halo-dev/components'
 import { PopoverClose, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui'
 import { computed, nextTick, shallowRef, useId, useTemplateRef, watch } from 'vue'
@@ -10,7 +16,9 @@ import { RouterLink } from 'vue-router'
 import MingcuteCloseLine from '~icons/mingcute/close-line'
 import MingcuteDownLine from '~icons/mingcute/down-line'
 import MingcuteSettings3Line from '~icons/mingcute/settings-3-line'
+import AiToolSelectGroup from './AiToolSelectGroup.vue'
 import AiToolSelectOption from './AiToolSelectOption.vue'
+import { addToolSelection, removeToolSelection, toggleToolPreset } from './ai-tool-selection'
 
 const props = withDefaults(
   defineProps<{
@@ -68,13 +76,13 @@ const selectedSummary = computed(() => {
 const selectedTitle = computed(() =>
   selectedTools.value.map(({ id, tool }) => (tool ? toolDisplayName(tool) : id)).join('、'),
 )
-const visibleTools = computed(() =>
+const scopedTools = computed(() =>
   filterTools(tools.value, {
-    keyword: keyword.value,
     pluginName: props.pluginName,
     category: props.category,
   }),
 )
+const visibleTools = computed(() => filterTools(scopedTools.value, { keyword: keyword.value }))
 const groups = computed(() => {
   const sources = new Map<string, ToolDescriptor[]>()
   for (const tool of visibleTools.value) {
@@ -87,6 +95,7 @@ const groups = computed(() => {
     source,
     label: source === 'ai-foundation' ? 'AI Foundation' : source,
     tools,
+    collections: buildToolCollections(tools),
   }))
 })
 const selectableIds = computed(() =>
@@ -124,6 +133,28 @@ function toggleTool(id: string) {
 function selectAll() {
   if (props.disabled || selectionPending.value || !selectableIds.value.length) return
   emit('update:modelValue', [...new Set([...selectedIds.value, ...selectableIds.value])])
+}
+
+function selectTools(ids: string[]) {
+  if (props.disabled || selectionPending.value) return
+  const next = addToolSelection(selectedIds.value, ids, scopedTools.value)
+  if (next.length !== selectedIds.value.length) emit('update:modelValue', next)
+}
+
+function removeGroupTools(ids: string[]) {
+  if (props.disabled || selectionPending.value) return
+  const scope = new Set(scopedTools.value.map((tool) => tool.id))
+  const next = removeToolSelection(
+    selectedIds.value,
+    ids.filter((id) => scope.has(id)),
+  )
+  if (next.length !== selectedIds.value.length) emit('update:modelValue', next)
+}
+
+function togglePreset(ids: string[]) {
+  if (props.disabled || selectionPending.value) return
+  const next = toggleToolPreset(selectedIds.value, ids, scopedTools.value)
+  if (next.length !== selectedIds.value.length) emit('update:modelValue', next)
 }
 
 function clearSelection() {
@@ -363,14 +394,30 @@ function handleOptionKeydown(event: KeyboardEvent) {
                       <span class=":uno: flex-none text-gray-400">{{ group.tools.length }}</span>
                     </header>
                     <div class=":uno: py-1">
-                      <AiToolSelectOption
-                        v-for="tool in group.tools"
-                        :key="tool.id"
-                        :tool="tool"
-                        :selected="!!tool.id && selectedIds.includes(tool.id)"
-                        :disabled="disabled || selectionPending"
-                        @toggle="toggleTool"
-                      />
+                      <template v-for="collection in group.collections" :key="collection.key">
+                        <AiToolSelectGroup
+                          v-if="collection.group"
+                          :collection="collection"
+                          :catalog="scopedTools"
+                          :selected-ids="selectedIds"
+                          :disabled="disabled || selectionPending"
+                          :searching="!!keyword.trim()"
+                          @toggle="toggleTool"
+                          @select="selectTools"
+                          @remove="removeGroupTools"
+                          @preset="togglePreset"
+                        />
+                        <AiToolSelectOption
+                          v-else
+                          :tool="collection.tools[0]!"
+                          :selected="
+                            !!collection.tools[0]?.id &&
+                            selectedIds.includes(collection.tools[0].id)
+                          "
+                          :disabled="disabled || selectionPending"
+                          @toggle="toggleTool"
+                        />
+                      </template>
                     </div>
                   </section>
                 </template>

@@ -1,5 +1,25 @@
 plugins {
     id "com.vanniktech.maven.publish" version "0.36.0" apply false
+    id 'com.diffplug.spotless' version '8.10.2'
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Keep shared-tool sources aligned with Halo's Java and Javadoc formatter.
+spotless {
+    java {
+        target 'api/src/main/java/run/halo/aifoundation/AiToolService.java',
+            'api/src/main/java/run/halo/aifoundation/tool/**/*.java',
+            'app/src/main/java/run/halo/aifoundation/service/tool/**/*.java',
+            'app/src/main/java/run/halo/aifoundation/tool/**/*.java',
+            'app/src/test/java/run/halo/aifoundation/service/tool/**/*.java',
+            'app/src/test/java/run/halo/aifoundation/service/language/HaloSharedToolApprovalTest.java',
+            'app/src/test/java/run/halo/aifoundation/tool/**/*.java',
+            'examples/plugin-tool-clock/src/**/*.java'
+        palantirJavaFormat('2.90.0').formatJavadoc(true)
+    }
 }
 
 // Root build.gradle — parent project only

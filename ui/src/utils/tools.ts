@@ -8,11 +8,34 @@ export interface ToolGroup {
   tools: CatalogTool[]
 }
 
+/** A business group, or one standalone tool contributed without a group. */
+export interface ToolCollection {
+  key: string
+  group?: NonNullable<CatalogTool['group']>
+  tools: CatalogTool[]
+}
+
+const categoryLabels: Record<string, string> = {
+  content: '内容',
+  web: '网络',
+  media: '媒体',
+  site: '站点',
+  utility: '实用',
+  other: '其他',
+}
+
+export function normalizeToolCategory(category?: string) {
+  return category && Object.prototype.hasOwnProperty.call(categoryLabels, category)
+    ? category
+    : 'other'
+}
+
 export function toolStatus(tool: CatalogTool): 'ENABLED' | 'DISABLED' | 'UNCONFIGURED' {
   if (tool.enabled === false || tool.status === 'DISABLED') return 'DISABLED'
   if (tool.configured === false || tool.status === 'UNCONFIGURED') return 'UNCONFIGURED'
-  if (tool.status && tool.status !== 'ENABLED') return 'DISABLED'
-  return 'ENABLED'
+  return tool.enabled === true && tool.configured === true && tool.status === 'ENABLED'
+    ? 'ENABLED'
+    : 'DISABLED'
 }
 
 export function toolStatusLabel(tool: CatalogTool) {
@@ -30,9 +53,7 @@ export function toolSelectable(tool: CatalogTool) {
 }
 
 export function toolCategoryLabel(category?: string) {
-  return (
-    ({ web: '网页', site: '站内' } as Record<string, string>)[category || ''] || category || '其他'
-  )
+  return categoryLabels[normalizeToolCategory(category)] || categoryLabels.other!
 }
 
 export function toolDisplayName(tool: ToolDescriptor) {
@@ -51,7 +72,7 @@ export function filterTools(
   return tools.filter((tool) => {
     return (
       (!pluginName || tool.pluginName === pluginName) &&
-      (!category || (tool.category || '其他') === category) &&
+      (!category || normalizeToolCategory(tool.category) === category) &&
       (!search ||
         [
           tool.id,
@@ -63,16 +84,36 @@ export function filterTools(
           tool.pluginName,
           tool.category,
           toolCategoryLabel(tool.category),
+          tool.group?.id,
+          tool.group?.displayName,
+          tool.group?.description,
+          ...(tool.group?.presets || []).flatMap((preset) => [
+            preset.displayName,
+            preset.description,
+          ]),
           ...(tool.tags || []),
         ].some((value) => value?.toLocaleLowerCase().includes(search)))
     )
   })
 }
 
+export function buildToolCollections(tools: CatalogTool[]): ToolCollection[] {
+  const collections = new Map<string, ToolCollection>()
+  for (const tool of tools) {
+    const group = tool.group?.id ? tool.group : undefined
+    // The source remains part of the identity even if a custom catalog reuses a group id.
+    const key = JSON.stringify([tool.pluginName, group ? 'group' : 'tool', group?.id || tool.id])
+    const collection = collections.get(key)
+    if (collection) collection.tools.push(tool)
+    else collections.set(key, { key, group, tools: [tool] })
+  }
+  return [...collections.values()]
+}
+
 export function groupTools(tools: CatalogTool[]): ToolGroup[] {
   const groups = new Map<string, CatalogTool[]>()
   for (const tool of tools) {
-    const category = tool.category || '其他'
+    const category = normalizeToolCategory(tool.category)
     const group = groups.get(category)
     if (group) group.push(tool)
     else groups.set(category, [tool])
@@ -85,6 +126,6 @@ export function toolFilterOptions(tools: ToolDescriptor[]) {
     pluginNames: Array.from(
       new Set(tools.map((tool) => tool.pluginName).filter((name): name is string => !!name)),
     ),
-    categories: Array.from(new Set(tools.map((tool) => tool.category || '其他'))),
+    categories: Array.from(new Set(tools.map((tool) => normalizeToolCategory(tool.category)))),
   }
 }

@@ -131,6 +131,7 @@ async function updateEnabled(tool: ToolDescriptor, enabled: boolean) {
         </header>
         <ToolCatalogList
           :groups="source.groups"
+          :keyword="keyword"
           management
           :pending-ids="pendingIds"
           @details="selectedTool = $event"

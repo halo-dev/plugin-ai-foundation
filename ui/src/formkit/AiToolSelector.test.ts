@@ -5,6 +5,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import AiToolSelectGroup from './AiToolSelectGroup.vue'
 import AiToolSelector from './AiToolSelector.vue'
 
 vi.mock('@/composables/use-tools-fetch', () => ({ useToolsFetch: vi.fn() }))
@@ -116,7 +117,7 @@ describe('AiToolSelector', () => {
   it.each([
     ['EXTERNAL-CONTENT', ['网页搜索']],
     ['other-plugin', ['网页搜索', '待配置工具']],
-    ['站内', ['站内搜索', '已禁用工具']],
+    ['站点', ['站内搜索', '已禁用工具']],
   ])('searches tool metadata with %s', async (keyword, labels) => {
     const wrapper = mountSelector()
     await openSelector(wrapper)
@@ -306,7 +307,7 @@ describe('AiToolSelector', () => {
   it('expands details below the tool without replacing search, selection or the scrollable list', async () => {
     const wrapper = mountSelector({ modelValue: [siteId, webId] })
     await openSelector(wrapper)
-    await searchFor('站内')
+    await searchFor('站点')
     const content = popup()
     const list = toolList()
     const search = getSearchInput()
@@ -323,7 +324,7 @@ describe('AiToolSelector', () => {
     expect(ariaButton('收起 站内搜索 详情')).toBe(detailsButton)
     expect(detailsButton.getAttribute('aria-expanded')).toBe('true')
     expect(getSearchInput()).toBe(search)
-    expect(search.value).toBe('站内')
+    expect(search.value).toBe('站点')
     expect(checkbox('站内搜索')).toBe(selectedInput)
     expect(selectedInput.checked).toBe(true)
     expect(checkboxes()).toHaveLength(2)
@@ -368,7 +369,7 @@ describe('AiToolSelector', () => {
   it('closes expanded details with one Escape and reopens the list without leftover expansions', async () => {
     const wrapper = mountSelector({ modelValue: [siteId, webId] })
     await openSelector(wrapper)
-    await searchFor('站内')
+    await searchFor('站点')
     await clickAriaButton('查看 站内搜索 详情')
     const detailsButton = ariaButton('收起 站内搜索 详情')
     detailsButton.focus()
@@ -412,7 +413,7 @@ describe('AiToolSelector', () => {
   it('retains expanded details and list position through a background catalog refresh', async () => {
     const wrapper = mountSelector({ modelValue: [siteId] })
     await openSelector(wrapper)
-    await searchFor('站内')
+    await searchFor('站点')
     await clickAriaButton('查看 站内搜索 详情')
     const list = toolList()
     const search = getSearchInput()
@@ -431,12 +432,280 @@ describe('AiToolSelector', () => {
     expect(inlineDetails('站内搜索')).toBe(details)
     expect(ariaButton('收起 站内搜索 详情').getAttribute('aria-expanded')).toBe('true')
     expect(getSearchInput()).toBe(search)
-    expect(search.value).toBe('站内')
+    expect(search.value).toBe('站点')
     expect(toolList()).toBe(list)
     expect(list.scrollTop).toBe(96)
     expect(checkbox('站内搜索').checked).toBe(true)
     expect(wrapper.props('modelValue')).toEqual([siteId])
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('collapses business groups within their existing source and exposes availability counts', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountSelector()
+    await openSelector(wrapper)
+    const group = toolGroup()
+    expect(group.textContent).toContain('可选 2')
+    expect(group.textContent).toContain('不可选 2')
+    expect(group.textContent).toContain('已选 0')
+    expect(group.textContent).not.toContain('文章和页面工作流')
+    expect(group.textContent).not.toContain('取消本组')
+    expect(ariaButton('展开工具组 内容工具').getAttribute('aria-expanded')).toBe('false')
+    expect(group.querySelector('[data-tool-id]')).toBeNull()
+    expect(checkbox('网页搜索').closest('section')).not.toBe(group.closest('section'))
+    await clickAriaButton('展开工具组 内容工具')
+    expect(group.textContent).toContain('文章和页面工作流')
+    expect(checkbox('站内搜索').closest('[data-tool-group]')).toBe(group)
+    expect(checkbox('文章读取').disabled).toBe(false)
+    expect(checkbox('已禁用工具').disabled).toBe(true)
+    expect(checkbox('未配置工具').disabled).toBe(true)
+    await clickAriaButton('收起工具组 内容工具')
+    await vi.waitFor(() => expect(group.querySelector('[data-tool-id]')).toBeNull())
+    expect(popup()).toBeTruthy()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('selects, overrides and clears group members while preserving choices in other groups', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountSelector({ modelValue: [siteId, disabledId, webId, 'removed/tool'] })
+    await openSelector(wrapper)
+    expect(groupCheckbox().indeterminate).toBe(true)
+    expect(groupCheckbox().getAttribute('aria-checked')).toBe('mixed')
+    groupCheckbox().click()
+    await nextTick()
+    expect(lastSelection(wrapper)).toEqual([siteId, disabledId, webId, 'removed/tool', articleId])
+    expect(groupCheckbox().checked).toBe(true)
+    expect(groupCheckbox().indeterminate).toBe(false)
+    await clickAriaButton('展开工具组 内容工具')
+    await clickAriaButton('查看 站内搜索 详情')
+    await setChecked('文章读取', false)
+    expect(groupCheckbox().indeterminate).toBe(true)
+    expect(inlineDetails('站内搜索')).not.toBeNull()
+    groupCheckbox().click()
+    await nextTick()
+    expect(groupCheckbox().checked).toBe(true)
+    groupCheckbox().click()
+    await nextTick()
+    expect(lastSelection(wrapper)).toEqual([webId, 'removed/tool'])
+    expect(groupCheckbox().checked).toBe(false)
+    expect(inlineDetails('站内搜索')).not.toBeNull()
+    expect(popup()).toBeTruthy()
+  })
+
+  it('adds a full preset during a narrower search and reports missing or unavailable members', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountSelector({ modelValue: [webId] })
+    await openSelector(wrapper)
+    await searchFor('站内搜索')
+    expect(ariaButton('收起工具组 内容工具').getAttribute('aria-expanded')).toBe('true')
+    expect(toolGroup().querySelector('input[aria-label="选择 文章读取"]')).toBeNull()
+    expect(toolGroup().textContent).toContain('组选择仅作用于当前搜索结果')
+    expect(ariaButton('切换预设 写作预设').textContent).toContain('+2')
+    expect(ariaButton('切换预设 写作预设').textContent).toContain('3不可用')
+    await clickAriaButton('切换预设 写作预设')
+    expect(lastSelection(wrapper)).toEqual([webId, siteId, articleId])
+    expect(lastSelection(wrapper)).not.toContain(disabledId)
+    expect(lastSelection(wrapper)).not.toContain(groupNeedsConfigId)
+    expect(lastSelection(wrapper)).not.toContain('ai-foundation/missing')
+    expect(lastSelection(wrapper)).not.toContain(contentGroupId)
+    expect(ariaButton('切换预设 写作预设').disabled).toBe(false)
+    expect(ariaButton('切换预设 写作预设').getAttribute('aria-pressed')).toBe('true')
+    expect(getSearchInput().value).toBe('站内搜索')
+    expect(popup()).toBeTruthy()
+    await searchFor('')
+    expect(ariaButton('展开工具组 内容工具').getAttribute('aria-expanded')).toBe('false')
+    await clickAriaButton('展开工具组 内容工具')
+    expect(checkbox('文章读取').checked).toBe(true)
+    await setChecked('文章读取', false)
+    expect(lastSelection(wrapper)).toEqual([webId, siteId])
+  })
+
+  it('expands matching groups in search and limits batch changes to visible group results', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountSelector({ modelValue: [articleId, webId] })
+    await openSelector(wrapper)
+    await searchFor('内容工具')
+    expect(checkbox('站内搜索')).toBeTruthy()
+    expect(checkbox('未配置工具').disabled).toBe(true)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    await searchFor('站内搜索')
+    groupCheckbox().click()
+    await nextTick()
+    expect(lastSelection(wrapper)).toEqual([articleId, webId, siteId])
+    groupCheckbox().click()
+    await nextTick()
+    expect(lastSelection(wrapper)).toEqual([articleId, webId])
+  })
+
+  it('keeps preset additions within permanent source/category constraints while preserving older IDs', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountSelector({
+      modelValue: [articleId, webId],
+      pluginName: 'ai-foundation',
+      category: 'site',
+    })
+    await openSelector(wrapper)
+    await searchFor('站内搜索')
+    expect(ariaButton('切换预设 写作预设').textContent).toContain('+1')
+    expect(ariaButton('切换预设 写作预设').textContent).toContain('4不可用')
+    await clickAriaButton('切换预设 写作预设')
+    expect(lastSelection(wrapper)).toEqual([articleId, webId, siteId])
+    expect(lastSelection(wrapper)).not.toContain(disabledId)
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
+    await clickAriaButton('切换预设 写作预设')
+    expect(lastSelection(wrapper)).toEqual([articleId, webId])
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(2)
+  })
+
+  it('omits zero unavailable counts and labels a fully selected preset as selected', async () => {
+    data.value = groupedCatalog()
+      .filter((tool) => tool.id === siteId || tool.id === articleId)
+      .map((tool) => ({
+        ...tool,
+        group: {
+          ...tool.group!,
+          presets: [{ id: 'read', displayName: '只读预设', toolIds: [siteId, articleId] }],
+        },
+      }))
+    const wrapper = mountSelector({ modelValue: [siteId, articleId] })
+    await openSelector(wrapper)
+    expect(toolGroup().textContent).not.toContain('不可选 0')
+    expect(toolGroup().textContent).not.toContain('不可用')
+    expect(ariaButton('切换预设 只读预设').textContent).toContain('已选')
+    expect(ariaButton('切换预设 只读预设').textContent).not.toContain('+0')
+    expect(ariaButton('切换预设 只读预设').disabled).toBe(false)
+    expect(ariaButton('切换预设 只读预设').getAttribute('aria-pressed')).toBe('true')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    await clickAriaButton('切换预设 只读预设')
+    expect(lastSelection(wrapper)).toEqual([])
+    expect(ariaButton('切换预设 只读预设').getAttribute('aria-pressed')).toBe('false')
+    expect(ariaButton('切换预设 只读预设').textContent).toContain('+2')
+    await clickAriaButton('切换预设 只读预设')
+    expect(lastSelection(wrapper)).toEqual([siteId, articleId])
+    expect(popup()).toBeTruthy()
+  })
+
+  it('toggles overlapping read and edit presets without clearing members of the other preset', async () => {
+    const createId = 'ai-foundation/create_post'
+    const updateId = 'ai-foundation/update_post'
+    const readIds = [siteId, articleId]
+    const editIds = [...readIds, createId, updateId]
+    const source = groupedCatalog()
+    const article = source.find((tool) => tool.id === articleId)!
+    data.value = [
+      ...source,
+      { ...article, id: createId, displayName: '创建草稿' },
+      { ...article, id: updateId, displayName: '编辑草稿' },
+    ].map((tool) => ({
+      ...tool,
+      group: tool.group
+        ? {
+            ...tool.group,
+            presets: [
+              { id: 'read', displayName: '只读查询', toolIds: readIds },
+              { id: 'edit', displayName: '草稿编辑', toolIds: editIds },
+            ],
+          }
+        : undefined,
+    }))
+    const wrapper = mountSelector({ modelValue: [webId, ...editIds, disabledId] })
+    await openSelector(wrapper)
+    const list = toolList()
+    list.scrollTop = 96
+    expect(ariaButton('切换预设 只读查询').getAttribute('aria-pressed')).toBe('true')
+    expect(ariaButton('切换预设 草稿编辑').getAttribute('aria-pressed')).toBe('true')
+    await clickAriaButton('切换预设 只读查询')
+    expect(lastSelection(wrapper)).toEqual([webId, createId, updateId, disabledId])
+    expect(ariaButton('切换预设 草稿编辑').getAttribute('aria-pressed')).toBe('false')
+    expect(ariaButton('切换预设 草稿编辑').textContent).toContain('+2')
+    await clickAriaButton('切换预设 草稿编辑')
+    expect(lastSelection(wrapper)).toEqual([webId, createId, updateId, disabledId, ...readIds])
+    expect(ariaButton('切换预设 草稿编辑').getAttribute('aria-pressed')).toBe('true')
+    await clickAriaButton('切换预设 草稿编辑')
+    expect(lastSelection(wrapper)).toEqual([webId, disabledId])
+    expect(toolList()).toBe(list)
+    expect(list.scrollTop).toBe(96)
+    expect(popup()).toBeTruthy()
+  })
+
+  it.each(['group', 'preset'])(
+    'allows an unavailable saved selection to be cleared with its %s toggle',
+    async (control) => {
+      data.value = groupedCatalog().map((tool) =>
+        tool.group ? { ...tool, enabled: false, status: 'DISABLED' } : tool,
+      )
+      const wrapper = mountSelector({ modelValue: [siteId, webId] })
+      await openSelector(wrapper)
+      expect(groupCheckbox().disabled).toBe(false)
+      expect(groupCheckbox().indeterminate).toBe(true)
+      expect(groupCheckbox().getAttribute('aria-checked')).toBe('mixed')
+      expect(ariaButton('切换预设 写作预设').disabled).toBe(false)
+      if (control === 'group') {
+        groupCheckbox().click()
+        await nextTick()
+      } else {
+        await clickAriaButton('切换预设 写作预设')
+      }
+      expect(lastSelection(wrapper)).toEqual([webId])
+      expect(groupCheckbox().checked).toBe(false)
+      expect(groupCheckbox().indeterminate).toBe(false)
+      expect(groupCheckbox().disabled).toBe(true)
+      expect(ariaButton('切换预设 写作预设').disabled).toBe(true)
+      groupCheckbox().dispatchEvent(new Event('change', { bubbles: true }))
+      ariaButton('切换预设 写作预设').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await nextTick()
+      expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
+      expect(popup()).toBeTruthy()
+    },
+  )
+
+  it('does not extend saved IDs when new members join a selected group after refresh', async () => {
+    data.value = groupedCatalog()
+    const wrapper = mountSelector({ modelValue: [siteId, articleId] })
+    await openSelector(wrapper)
+    await clickAriaButton('展开工具组 内容工具')
+    await clickAriaButton('查看 站内搜索 详情')
+    const details = inlineDetails('站内搜索')
+    const list = toolList()
+    list.scrollTop = 96
+    data.value = [
+      ...groupedCatalog(),
+      {
+        ...data.value.find((tool) => tool.id === articleId)!,
+        id: 'ai-foundation/new-member',
+        displayName: '新增工具',
+      },
+    ]
+    await nextTick()
+    expect(checkbox('新增工具').checked).toBe(false)
+    expect(groupCheckbox().indeterminate).toBe(true)
+    expect(inlineDetails('站内搜索')).toBe(details)
+    expect(toolList()).toBe(list)
+    expect(list.scrollTop).toBe(96)
+    expect(wrapper.props('modelValue')).toEqual([siteId, articleId])
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('guards group selection and preset synthetic events while the catalog is refreshing', async () => {
+    data.value = groupedCatalog()
+    isFetching.value = true
+    const wrapper = mountSelector({ modelValue: [siteId] })
+    await openSelector(wrapper)
+    expect(groupCheckbox().disabled).toBe(true)
+    expect(ariaButton('切换预设 写作预设').disabled).toBe(true)
+    groupCheckbox().checked = true
+    groupCheckbox().indeterminate = false
+    groupCheckbox().dispatchEvent(new Event('change', { bubbles: true }))
+    ariaButton('切换预设 写作预设').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    const group = wrapper.findComponent(AiToolSelectGroup)
+    group.vm.$emit('select', [articleId])
+    group.vm.$emit('preset', [articleId])
+    group.vm.$emit('remove', [siteId])
+    await nextTick()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(groupCheckbox().checked).toBe(false)
+    expect(groupCheckbox().indeterminate).toBe(true)
+    expect(popup()).toBeTruthy()
   })
 })
 
@@ -526,6 +795,7 @@ async function searchFor(keyword: string) {
   input.value = keyword
   input.dispatchEvent(new Event('input', { bubbles: true }))
   await nextTick()
+  await flushPromises()
 }
 function ariaButton(label: string) {
   const button = popup().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
@@ -611,4 +881,62 @@ function catalog(): CatalogTool[] {
       inputSchema: {},
     },
   ]
+}
+
+const contentGroupId = 'ai-foundation/content-tools'
+const articleId = 'ai-foundation/get_post'
+const groupNeedsConfigId = 'ai-foundation/needs-config'
+
+function groupedCatalog(): CatalogTool[] {
+  const group = {
+    id: contentGroupId,
+    displayName: '内容工具',
+    description: '文章和页面工作流',
+    presets: [
+      {
+        id: 'writing',
+        displayName: '写作预设',
+        description: '读取和编辑内容',
+        toolIds: [siteId, articleId, disabledId, groupNeedsConfigId, 'ai-foundation/missing'],
+      },
+    ],
+  }
+  return [
+    ...catalog()
+      .filter((tool) => tool.id !== unconfiguredId)
+      .map((tool) => ({
+        ...tool,
+        group: tool.pluginName === 'ai-foundation' ? group : undefined,
+      })),
+    {
+      id: articleId,
+      pluginName: 'ai-foundation',
+      displayName: '文章读取',
+      category: 'content',
+      enabled: true,
+      configured: true,
+      status: 'ENABLED',
+      group,
+    },
+    {
+      id: groupNeedsConfigId,
+      pluginName: 'ai-foundation',
+      displayName: '未配置工具',
+      category: 'content',
+      enabled: true,
+      configured: false,
+      status: 'UNCONFIGURED',
+      group,
+    },
+  ]
+}
+
+function toolGroup() {
+  const group = popup().querySelector<HTMLElement>(`[data-tool-group="${contentGroupId}"]`)
+  if (!group) throw new Error('Expected the content tool group')
+  return group
+}
+
+function groupCheckbox() {
+  return toolGroup().querySelector<HTMLInputElement>('input[aria-label="选择工具组 内容工具"]')!
 }

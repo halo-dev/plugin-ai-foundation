@@ -39,11 +39,11 @@ class ClockToolSettingsStoreTest {
     void missingConfigurationIsNotReadyAndHasDefaultFormat() {
         when(client.fetch(ConfigMap.class, CONFIG_MAP_NAME)).thenReturn(Mono.empty());
         StepVerifier.create(store.read())
-            .assertNext(settings -> {
-                assertThat(settings.ready()).isFalse();
-                assertThat(settings.values()).containsEntry("zoneId", "")
-                    .containsEntry("format", "datetime");
-            }).verifyComplete();
+                .assertNext(settings -> {
+                    assertThat(settings.ready()).isFalse();
+                    assertThat(settings.values()).containsEntry("zoneId", "").containsEntry("format", "datetime");
+                })
+                .verifyComplete();
     }
 
     @Test
@@ -54,17 +54,20 @@ class ClockToolSettingsStoreTest {
         when(client.update(any(ConfigMap.class))).thenAnswer(call -> Mono.just(call.getArgument(0)));
 
         StepVerifier.create(store.save(Map.of("zoneId", " Asia/Shanghai ", "format", "date")))
-            .verifyComplete();
+                .verifyComplete();
 
         var saved = ArgumentCaptor.forClass(ConfigMap.class);
         verify(client).update(saved.capture());
-        assertThat(saved.getValue().getData()).containsEntry("selector", selector)
-            .containsEntry("anotherGroup", "{\"enabled\":true}");
-        var clockValues = JsonMapper.builder().build().readTree(saved.getValue().getData().get("clockTool"));
+        assertThat(saved.getValue().getData())
+                .containsEntry("selector", selector)
+                .containsEntry("anotherGroup", "{\"enabled\":true}");
+        var clockValues =
+                JsonMapper.builder().build().readTree(saved.getValue().getData().get("clockTool"));
         assertThat(clockValues.path("zoneId").asString()).isEqualTo("Asia/Shanghai");
         assertThat(clockValues.path("format").asString()).isEqualTo("date");
-        StepVerifier.create(store.read()).assertNext(settings -> assertThat(settings.ready()).isTrue())
-            .verifyComplete();
+        StepVerifier.create(store.read())
+                .assertNext(settings -> assertThat(settings.ready()).isTrue())
+                .verifyComplete();
     }
 
     @Test
@@ -76,7 +79,9 @@ class ClockToolSettingsStoreTest {
         verify(client).create(created.capture());
         assertThat(created.getValue().getMetadata().getName()).isEqualTo(CONFIG_MAP_NAME);
         assertThat(created.getValue().getData()).containsOnlyKeys("clockTool");
-        var values = JsonMapper.builder().build().readTree(created.getValue().getData().get("clockTool"));
+        var values = JsonMapper.builder()
+                .build()
+                .readTree(created.getValue().getData().get("clockTool"));
         assertThat(values.path("format").asString()).isEqualTo("datetime");
     }
 
@@ -85,13 +90,12 @@ class ClockToolSettingsStoreTest {
         var before = configMap(Map.of("selector", "{\"toolIds\":[]}"));
         var latestSelector = "{\"toolIds\":[\"tool-clock-example/current_time\"]}";
         var latest = configMap(Map.of("selector", latestSelector));
-        when(client.fetch(ConfigMap.class, CONFIG_MAP_NAME))
-            .thenReturn(Mono.just(before), Mono.just(latest));
+        when(client.fetch(ConfigMap.class, CONFIG_MAP_NAME)).thenReturn(Mono.just(before), Mono.just(latest));
         when(client.update(any(ConfigMap.class)))
-            .thenReturn(Mono.error(new OptimisticLockingFailureException("Concurrent update")),
-                Mono.just(latest));
+                .thenReturn(Mono.error(new OptimisticLockingFailureException("Concurrent update")), Mono.just(latest));
 
-        StepVerifier.create(store.save(Map.of("zoneId", "UTC", "format", "time"))).verifyComplete();
+        StepVerifier.create(store.save(Map.of("zoneId", "UTC", "format", "time")))
+                .verifyComplete();
 
         var saved = ArgumentCaptor.forClass(ConfigMap.class);
         verify(client, times(2)).update(saved.capture());
@@ -103,7 +107,8 @@ class ClockToolSettingsStoreTest {
     @ValueSource(strings = {"", " ", "Not/A-Timezone", "Asia/Invalid"})
     void rejectsInvalidTimezonesBeforeWriting(String zone) {
         StepVerifier.create(store.save(Map.of("zoneId", zone, "format", "datetime")))
-            .expectError(IllegalArgumentException.class).verify();
+                .expectError(IllegalArgumentException.class)
+                .verify();
         verifyNoInteractions(client);
     }
 
@@ -111,17 +116,22 @@ class ClockToolSettingsStoreTest {
     @ValueSource(strings = {"", "custom", "DATE", "yyyy-MM-dd"})
     void rejectsUnsupportedFormatsBeforeWriting(String format) {
         StepVerifier.create(store.save(Map.of("zoneId", "UTC", "format", format)))
-            .expectErrorMessage("输出格式必须为 datetime、date 或 time").verify();
+                .expectErrorMessage("输出格式必须为 datetime、date 或 time")
+                .verify();
         verifyNoInteractions(client);
     }
 
     @Test
     void rejectsWrongValueTypesBeforeWriting() {
         StepVerifier.create(store.save(Map.of("zoneId", 8, "format", "date")))
-            .expectError(IllegalArgumentException.class).verify();
+                .expectError(IllegalArgumentException.class)
+                .verify();
         StepVerifier.create(store.save(Map.of("zoneId", "UTC", "format", 8)))
-            .expectError(IllegalArgumentException.class).verify();
-        StepVerifier.create(store.save(null)).expectError(IllegalArgumentException.class).verify();
+                .expectError(IllegalArgumentException.class)
+                .verify();
+        StepVerifier.create(store.save(null))
+                .expectError(IllegalArgumentException.class)
+                .verify();
         verifyNoInteractions(client);
     }
 
