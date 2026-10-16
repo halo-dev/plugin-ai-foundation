@@ -41,6 +41,8 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 
 ![](./images/preview-test.png)
 
+![](./images/preview-usage.png)
+
 ## 项目结构
 
 本项目为多模块 Gradle 项目：
