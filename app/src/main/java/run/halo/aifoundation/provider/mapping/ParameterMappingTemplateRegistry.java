@@ -32,6 +32,10 @@ public class ParameterMappingTemplateRegistry {
         AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
         AdapterType.OLLAMA_OPENAI_CHAT, AdapterType.OLLAMA_RESPONSES,
         AdapterType.OLLAMA_MESSAGES);
+    // TokenHub supports max_tokens; do not also opt it into OPENAI_CHAT reasoning templates.
+    private static final Set<AdapterType> MAX_TOKENS = java.util.stream.Stream.concat(
+        OPENAI_CHAT.stream(), java.util.stream.Stream.of(AdapterType.TOKENHUB_CHAT))
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
     private static final Set<AdapterType> OLLAMA_CHAT = Set.of(AdapterType.OLLAMA_CHAT);
     private static final Set<AdapterType> RESPONSES = Set.of(
         AdapterType.OPENAI_RESPONSES, AdapterType.DEEPSEEK_RESPONSES,
@@ -85,7 +89,7 @@ public class ParameterMappingTemplateRegistry {
 
     private List<ParameterMappingTemplateDescriptor> scalarTemplates() {
         return List.of(
-            template("openai.max-tokens", "max_tokens", ModelParameter.MAX_OUTPUT_TOKENS, OPENAI_CHAT),
+            template("openai.max-tokens", "max_tokens", ModelParameter.MAX_OUTPUT_TOKENS, MAX_TOKENS),
             template("openai.max-completion-tokens", "max_completion_tokens",
                 ModelParameter.MAX_OUTPUT_TOKENS, OPENAI_CHAT),
             template("ollama.num-predict", "num_predict", ModelParameter.MAX_OUTPUT_TOKENS,
