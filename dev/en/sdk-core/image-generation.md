@@ -35,6 +35,14 @@ cancellation, timeout, and request middleware.
 Each `GeneratedFile` can contain a URL or base64 data. Check the actual representation; AI
 Foundation neither downloads provider URLs nor stores generated files as Halo attachments.
 
+Since AI Foundation 1.2.0, the provider settings in Console expose an image response buffer limit
+through `AiProvider.spec.maxInMemorySize`. The value is in bytes and defaults to 67,108,864 bytes
+(64 MiB) when unset. The accepted range is 1,024–1,073,741,824 bytes (1 KiB–1 GiB).
+
+This setting applies only to image generation responses; it does not affect chat or model discovery
+requests. Increase it when a response containing large base64 images exceeds the limit. The limit
+applies to the entire response body, not to each individual image.
+
 Use `ImageGenerationMiddlewares.defaultSettings`, `mapRequest`, `mapResult`, and `wrap` for model
 defaults, policy, caching, watermarking, or result transformation. Request-scoped middleware is
 added with `GenerateImageRequest.middleware(...)`.
