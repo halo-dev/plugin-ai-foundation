@@ -1,10 +1,11 @@
 import type { UsageCallItem } from '@/api/generated'
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, ref } from 'vue'
+import { defineComponent, h, ref, type DirectiveBinding } from 'vue'
 import UsageCallTable from '../UsageCallTable.vue'
 
 vi.mock('@halo-dev/components', () => ({
+  IconErrorWarning: defineComponent({ template: '<svg data-test="attention-icon" />' }),
   VStatusDot: defineComponent({ props: ['text'], template: '<span>{{ text }}</span>' }),
   VLoading: defineComponent({
     template: '<div data-test="loading">loading</div>',
@@ -47,7 +48,9 @@ function mountTable(props: Partial<InstanceType<typeof UsageCallTable>['$props']
         UsageCallExecutions: UsageCallExecutionsStub,
       },
       directives: {
-        tooltip: () => {},
+        tooltip: (el: Element, binding: DirectiveBinding<string>) => {
+          el.setAttribute('data-tooltip', binding.value)
+        },
       },
     },
   })
@@ -158,8 +161,8 @@ describe('UsageCallTable', () => {
     })
     // Rows show a warning marker; quality details live in the expanded detail
     const rows = wrapper.findAll('[role="button"]')
-    expect(rows[0]!.text()).toContain('!')
-    expect(rows[1]!.text()).toContain('!')
+    expect(rows[0]!.get('[data-test="attention-icon"]').attributes('data-tooltip')).toBe('部分用量')
+    expect(rows[1]!.get('[data-test="attention-icon"]').attributes('data-tooltip')).toBe('用量缺失')
     await rows[0]!.trigger('click')
     expect(wrapper.text()).toContain('部分用量')
     expect(wrapper.text()).toContain('2 条执行记录缺少用量')
@@ -167,6 +170,24 @@ describe('UsageCallTable', () => {
     await rows[1]!.trigger('click')
     expect(wrapper.text()).toContain('用量缺失')
   })
+
+  it.each([
+    { complete: true, quality: 'REPORTED_COMPONENTS', tooltip: undefined },
+    { complete: false, quality: 'REPORTED_COMPONENTS', tooltip: '调用记录不完整' },
+    { complete: false, quality: 'PARTIAL', tooltip: '调用记录不完整，部分用量' },
+    { complete: false, quality: 'MISSING', tooltip: '调用记录不完整，用量缺失' },
+  ])(
+    'shows the matching attention tooltip for $complete / $quality',
+    ({ complete, quality, tooltip }) => {
+      const wrapper = mountTable({ items: [call({ complete, usage: { quality } })] })
+      const icon = wrapper.find('[data-test="attention-icon"]')
+      expect(icon.exists()).toBe(tooltip !== undefined)
+      if (tooltip !== undefined) {
+        expect(icon.attributes('data-tooltip')).toBe(tooltip)
+        expect(icon.attributes('title')).toBeUndefined()
+      }
+    },
+  )
 
   it('marks streaming and incomplete calls', async () => {
     const wrapper = mountTable({
