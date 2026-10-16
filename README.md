@@ -8,7 +8,7 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 
 ## 功能特性
 
-- **多提供商支持**：内置 OpenAI、OpenRouter、DeepSeek、月之暗面 Kimi、硅基流动、阿里云百炼、豆包、文心一言、智谱开放平台、Ollama、OpenAI 兼容、AIHubMix、Gitee 模力方舟、MiniMax 和 Xiaomi MiMo
+- **多提供商支持**：内置 OpenAI、OpenRouter、DeepSeek、月之暗面 Kimi、硅基流动、阿里云百炼、豆包、文心一言、智谱开放平台、Ollama、OpenAI 兼容、AIHubMix、Gitee 模力方舟、MiniMax、Xiaomi MiMo 和腾讯云 TokenHub
 - **统一模型管理**：在 Halo 控制台管理 Provider、API Key Secret、语言 / Embedding / Rerank / 图像生成模型、Adapter 与模型能力
 - **模型自动发现**：从 Provider 拉取模型，并保留远程声明、内建能力和管理员覆盖的来源信息
 - **统一参数映射**：按 Provider 或模型配置采样、重试、推理、Embedding、Rerank 和图像参数到供应方字段的映射
@@ -21,6 +21,10 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 - **模型测试工作台**：在控制台验证对话、Embedding、Rerank、图像生成和单轮 RAG，并查看流事件、用量、warning 与诊断信息
 - **用量统计**：查看调用次数、Token 用量、趋势和调用明细，按插件、供应商和模型等维度筛选，并支持自动刷新
 - **消费方 SDK**：提供 Provider-neutral Java API、浏览器 / Vue npm 包和 FormKit `aiModelSelector`
+
+腾讯云 TokenHub 预配置仅接入 Chat Completions。请手动添加平台支持对话接口的模型 ID；平台模型目录包含其他模态，当前不自动导入，以免将图片、视频或嵌入模型误识别为对话模型。图片输入、工具调用等能力和参数支持因模型而异，仅为已核实支持的模型启用对应特性。默认使用中国站接口地址，其他地域请按腾讯云官方说明覆盖 Base URL。
+
+TokenHub 当前限制：签名推理块 `reasoning_details` 尚不能可靠地跨流式、多轮工具调用保留，请勿依赖此预配置进行需要签名续接的推理流程。结构化输出仅使用提示词引导和本地校验，不启用原生 JSON Schema 或保证原生严格约束。推理开关和力度参数因模型而异，当前不提供统一默认映射；如需使用，请依据具体模型的官方文档配置模型级参数映射，勿将某个模型的配置套用于所有模型。
 
 ## 已接入插件
 

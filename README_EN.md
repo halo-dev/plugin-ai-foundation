@@ -12,7 +12,7 @@ ecosystem.
 
 - **Multiple AI providers**: Built-in support for OpenAI, OpenRouter, DeepSeek, Moonshot Kimi,
   SiliconFlow, Alibaba Cloud Model Studio, Doubao, ERNIE, Zhipu AI, Ollama, OpenAI-compatible
-  providers, AIHubMix, Gitee AI, MiniMax, and Xiaomi MiMo
+  providers, AIHubMix, Gitee AI, MiniMax, Xiaomi MiMo, and Tencent Cloud TokenHub
 - **Unified model management**: Manage providers, API key secrets, language, embedding, reranking,
   and image models, adapters, and model capabilities from the Halo Console
 - **Model discovery**: Fetch available models from providers while retaining the source of remote
@@ -37,6 +37,19 @@ ecosystem.
   plugin, provider, or model, and enable automatic refresh
 - **Consumer SDKs**: Use a provider-neutral Java API, a browser/Vue npm package, and the FormKit
   `aiModelSelector`
+
+The Tencent Cloud TokenHub preset supports Chat Completions only. Add a model ID that supports the
+platform's chat endpoint manually. Automatic discovery is disabled because its catalog includes other
+modalities without reliable type metadata. Image input, tool calling, and parameter support vary by model;
+enable features only for models verified to support them. The default endpoint is for the China site;
+override the base URL for other regions according to Tencent Cloud documentation.
+
+Current TokenHub limitations: signed `reasoning_details` are not reliably preserved across streamed,
+multi-turn tool calls. Do not rely on this preset for reasoning flows requiring signed continuation.
+Structured output uses prompt guidance and local validation, without native JSON Schema or guaranteed
+native strict enforcement. Reasoning switches and effort values vary by model; no universal default
+mapping is provided. Configure model-level parameter mappings from the specific model's official
+documentation rather than applying one model's controls to every model.
 
 ## Plugins using AI Foundation
 

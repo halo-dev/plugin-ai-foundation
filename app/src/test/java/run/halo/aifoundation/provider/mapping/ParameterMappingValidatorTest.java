@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
 
 class ParameterMappingValidatorTest {
 
@@ -56,6 +58,46 @@ class ParameterMappingValidatorTest {
             .hasMessageContaining("does not match INTEGER");
         assertThat(value.getField()).isEqualTo("reasoning.level");
         assertThat(value.getValue()).isEqualTo("invalid");
+    }
+
+    @Test
+    void acceptsTokenHubMaxTokensTemplateAndFieldOverrideAtBothScopes() {
+        var provider = new TokenHubProvider();
+        assertThat(provider.getDefaultParameterMappings(AdapterType.TOKENHUB_CHAT)
+            .get(ModelParameter.MAX_OUTPUT_TOKENS))
+            .isEqualTo(DefaultParameterMapping.template("openai.max-tokens"));
+        for (var field : List.of("", "max_tokens")) {
+            var selection = new ModelParameterMappings.Selection();
+            selection.setMode(ModelParameterMappings.Mode.TEMPLATE);
+            selection.setTemplate("openai.max-tokens");
+            selection.setField(field);
+            var language = new ModelParameterMappings.LanguageMappings();
+            language.setMaxOutputTokens(selection);
+            var mappings = new ModelParameterMappings();
+            mappings.setLanguage(language);
+
+            validator.validateProvider(mappings, provider);
+            validator.validateModel(mappings, ModelType.LANGUAGE, AdapterType.TOKENHUB_CHAT);
+        }
+        var registry = new ParameterMappingTemplateRegistry();
+        assertThat(registry.compatible(ModelParameter.MAX_OUTPUT_TOKENS, AdapterType.TOKENHUB_CHAT))
+            .extracting(ParameterMappingTemplateDescriptor::id)
+            .containsExactly("openai.max-tokens");
+    }
+
+    @Test
+    void doesNotEnableTokenHubThinkingBudgetTemplate() {
+        var selection = new ModelParameterMappings.Selection();
+        selection.setMode(ModelParameterMappings.Mode.TEMPLATE);
+        selection.setTemplate("reasoning.thinking-budget");
+        var mappings = reasoningMappings(selection);
+        assertThatThrownBy(() -> validator.validateProvider(mappings, new TokenHubProvider()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("not compatible with adapter");
+        assertThatThrownBy(() -> validator.validateModel(mappings, ModelType.LANGUAGE,
+            AdapterType.TOKENHUB_CHAT))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("not compatible with adapter");
     }
 
     private AiProviderType providerType() {

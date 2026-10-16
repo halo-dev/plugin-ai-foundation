@@ -113,6 +113,7 @@ export const DiscoveredModelItemAdapterTypeEnum = {
     GiteeChat: 'gitee-chat',
     GiteeMessages: 'gitee-messages',
     GiteeEmbedding: 'gitee-embedding',
+    TokenhubChat: 'tokenhub-chat',
     KimiChat: 'kimi-chat',
     MinimaxMessages: 'minimax-messages',
     MinimaxChat: 'minimax-chat',
