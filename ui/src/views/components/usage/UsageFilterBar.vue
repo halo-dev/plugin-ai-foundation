@@ -7,13 +7,23 @@ import {
   USAGE_QUALITY_OPTIONS,
   USAGE_STATUS_OPTIONS,
 } from '@/utils/usage'
-import { IconRefreshLine, VButton, VDropdown, VDropdownItem, VSpace } from '@halo-dev/components'
+import { IconRefreshLine, VButton, VDropdown, VDropdownItem } from '@halo-dev/components'
 import { computed, ref, watch } from 'vue'
+import MingcuteArrowDownLine from '~icons/mingcute/down-line'
 import MingcuteFilterLine from '~icons/mingcute/filter-line'
 import MingcuteMore2Line from '~icons/mingcute/more-2-line'
 import UsageDateRangePicker from './UsageDateRangePicker.vue'
 import UsageSegmented from './UsageSegmented.vue'
 import UsageSelect from './UsageSelect.vue'
+
+const AUTO_REFRESH_OPTIONS = [
+  { label: '关闭', value: 0 },
+  { label: '3 秒', value: 3_000 },
+  { label: '5 秒', value: 5_000 },
+  { label: '10 秒', value: 10_000 },
+  { label: '30 秒', value: 30_000 },
+  { label: '1 分钟', value: 60_000 },
+] as const
 
 const props = defineProps<{
   state: UsageFilterState
@@ -23,6 +33,7 @@ const props = defineProps<{
   featureInvalid?: boolean
   hasDimensionFilters?: boolean
   fetching?: boolean
+  autoRefreshInterval?: number
 }>()
 
 const emit = defineEmits<{
@@ -30,7 +41,14 @@ const emit = defineEmits<{
   (event: 'clear'): void
   (event: 'refresh'): void
   (event: 'reset'): void
+  (event: 'auto-refresh-change', interval: number): void
 }>()
+
+const autoRefreshLabel = computed(
+  () =>
+    AUTO_REFRESH_OPTIONS.find((option) => option.value === props.autoRefreshInterval)?.label ||
+    '关闭',
+)
 
 const callerItems = computed(() => [
   { label: '全部', value: undefined },
@@ -98,18 +116,35 @@ function update(patch: Partial<UsageFilterState>) {
         :options="[...USAGE_RANGE_OPTIONS]"
         @update:model-value="update({ range: $event || '30d' })"
       />
-      <VSpace class=":uno: shrink-0" spacing="xs" align="center">
+      <div class=":uno: inline-flex shrink-0 items-center gap-0.5">
         <VButton
           v-tooltip="'刷新'"
           aria-label="刷新"
           size="sm"
           ghost
-         
           circle
           @click="emit('refresh')"
         >
           <IconRefreshLine :class="{ ':uno: animate-spin': fetching }" />
         </VButton>
+        <VDropdown placement="bottom-end" :distance="6">
+          <VButton size="sm" ghost aria-label="自动刷新周期">
+            {{ autoRefreshLabel }}
+            <template #icon><MingcuteArrowDownLine /></template>
+          </VButton>
+          <template #popper>
+            <div class=":uno: px-3 pb-1 pt-2 text-xs text-gray-400">刷新周期</div>
+            <VDropdownItem
+              v-for="option in AUTO_REFRESH_OPTIONS"
+              :key="option.value"
+              v-close-popper
+              :selected="option.value === autoRefreshInterval"
+              @click="emit('auto-refresh-change', option.value)"
+            >
+              {{ option.label }}
+            </VDropdownItem>
+          </template>
+        </VDropdown>
         <VDropdown placement="bottom-end" :distance="6">
           <VButton aria-label="更多操作" circle ghost size="sm">
             <MingcuteMore2Line />
@@ -120,7 +155,7 @@ function update(patch: Partial<UsageFilterState>) {
             </VDropdownItem>
           </template>
         </VDropdown>
-      </VSpace>
+      </div>
     </div>
 
     <div class=":uno: flex flex-wrap items-center gap-2" v-if="state.range === 'custom'">

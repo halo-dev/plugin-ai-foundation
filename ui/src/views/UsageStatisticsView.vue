@@ -4,6 +4,7 @@ import { useModelsFetch } from '@/composables/use-models-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import { useUsageFilters } from '@/composables/use-usage-filters'
 import {
+  QK_USAGE,
   reloadUsageQueries,
   useUsageCalls,
   useUsageHealth,
@@ -19,7 +20,8 @@ import UsageResetModal from '@/views/components/usage/UsageResetModal.vue'
 import UsageTrendSection from '@/views/components/usage/UsageTrendSection.vue'
 import { VAlert, VButton, VCard } from '@halo-dev/components'
 import { useQueryClient } from '@tanstack/vue-query'
-import { computed, nextTick, shallowRef } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, shallowRef, watch } from 'vue'
 
 const filters = useUsageFilters()
 const queryClient = useQueryClient()
@@ -33,7 +35,21 @@ const heatmapQuery = useUsageHeatmapTrends(
   filters.valid,
   heatmapAnchor,
 )
-const callsQuery = useUsageCalls(filters.buildParams, filters.fingerprint, filters.valid)
+// Keep the request bounds and cache key together for the call pagination session.
+const callsSession = shallowRef(buildCallsSession())
+const callsQuery = useUsageCalls(
+  () => callsSession.value.params,
+  computed(() => callsSession.value.fingerprint),
+  computed(() => callsSession.value.params !== undefined),
+)
+
+function buildCallsSession() {
+  return { params: filters.buildParams(), fingerprint: filters.fingerprint.value }
+}
+
+watch(filters.state, () => {
+  callsSession.value = buildCallsSession()
+})
 
 const { data: callers } = useCallerPluginsFetch()
 const { data: providers } = useProvidersFetch()
@@ -56,9 +72,43 @@ const fetching = computed(
 async function refresh() {
   heatmapAnchor.value = new Date()
   filters.refreshAnchor()
+  callsSession.value = buildCallsSession()
   await nextTick()
   reloadUsageQueries(queryClient)
 }
+
+const autoRefreshInterval = useLocalStorage('plugin:ai-foundation:usage:auto-refresh-interval', 0)
+let autoRefreshTimer: ReturnType<typeof setInterval> | undefined
+
+watch(
+  autoRefreshInterval,
+  (interval) => {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer)
+      autoRefreshTimer = undefined
+    }
+    if (interval > 0) {
+      autoRefreshTimer = setInterval(() => {
+        if (queryClient.isFetching({ queryKey: [QK_USAGE] }) > 0) {
+          return
+        }
+        heatmapAnchor.value = new Date()
+        filters.refreshAnchor()
+        // New statistics keys refresh automatically; preserve calls once more pages are loaded.
+        if ((callsQuery.data.value?.pages.length ?? 0) <= 1) {
+          callsSession.value = buildCallsSession()
+        }
+      }, interval)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+  }
+})
 </script>
 
 <template>
@@ -75,9 +125,11 @@ async function refresh() {
           :feature-invalid="filters.featureInvalid.value"
           :has-dimension-filters="filters.hasDimensionFilters.value"
           :fetching="fetching"
+          :auto-refresh-interval="autoRefreshInterval"
           @change="filters.applyChange"
           @clear="filters.clearDimensionFilters"
           @refresh="refresh"
+          @auto-refresh-change="autoRefreshInterval = $event"
           @reset="resetModalVisible = true"
         />
       </div>
