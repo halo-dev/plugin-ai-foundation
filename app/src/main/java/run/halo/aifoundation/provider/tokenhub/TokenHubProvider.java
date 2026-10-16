@@ -33,7 +33,7 @@ public class TokenHubProvider extends AbstractAiProviderType {
 
     @Override
     public String getDescription() {
-        return "腾讯云大模型服务平台，使用 OpenAI 兼容对话接口；请手动填写平台支持对话接口的模型 ID。";
+        return "腾讯云大模型服务平台，使用 OpenAI 兼容对话接口；请手动填写对话模型 ID，并按该模型的实际能力选择工具调用等特性。";
     }
 
     @Override
@@ -73,8 +73,8 @@ public class TokenHubProvider extends AbstractAiProviderType {
 
     @Override
     public List<ModelFeature> getSupportedFeatures() {
-        // The catalog does not establish model-specific tool, media or reasoning capabilities.
-        return List.of(ModelFeature.STREAMING);
+        // Adapter capabilities permit explicit per-model configuration, not catalog-wide claims.
+        return List.of(ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
     }
 
     @Override
@@ -95,6 +95,7 @@ public class TokenHubProvider extends AbstractAiProviderType {
         var factory = chatCompletionsOptionsFactory(reasoning, false, structuredOutput);
         return chatCompletionsProviderOptionsBuilder()
             .requestHeadersSupported(true)
+            .seedSupported(true)
             .nativeStrictToolSchemas(false)
             .structuredOutputSupport(structuredOutput)
             .chatOptionsFactory(factory::basic)
@@ -117,8 +118,7 @@ public class TokenHubProvider extends AbstractAiProviderType {
         defaults.putAll(super.getDefaultParameterMappings());
         // Do not assume every hosted model supports non-portable sampling controls.
         for (var parameter : List.of(ModelParameter.TOP_K, ModelParameter.MIN_P,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.SEED,
-            ModelParameter.PARALLEL_TOOL_CALLS)) {
+            ModelParameter.REPETITION_PENALTY)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);

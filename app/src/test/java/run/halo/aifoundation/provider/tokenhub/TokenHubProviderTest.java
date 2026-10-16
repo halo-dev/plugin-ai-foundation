@@ -18,6 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
+import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
@@ -27,7 +30,7 @@ import run.halo.app.extension.Metadata;
 
 @ProviderContractSource(
     provider = "tokenhub",
-    officialDocumentation = "https://cloud.tencent.com/document/product/1823/130058",
+    officialDocumentation = "https://cloud.tencent.com/document/product/1823/135872",
     retrievedAt = "2026-10-16"
 )
 class TokenHubProviderTest {
@@ -58,16 +61,28 @@ class TokenHubProviderTest {
         assertThat(getClass().getResource("/static/brands/tokenhub.png")).isNotNull();
         assertThat(provider.getSupportedModelTypes()).containsExactly(ModelType.LANGUAGE);
         assertThat(provider.getSupportedAdapterTypes()).containsExactly(AdapterType.TOKENHUB_CHAT);
-        assertThat(provider.getSupportedFeatures()).containsExactly(ModelFeature.STREAMING);
+        assertThat(provider.getSupportedFeatures()).containsExactly(ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
         assertThat(provider.maxEmbeddingsPerCall()).isZero();
         assertThat(provider.buildEmbeddingModel(config(null), "test-key", "model")).isNull();
         assertThat(provider.languageModelProviderOptions().nativeStrictToolSchemas()).isFalse();
+        assertThat(provider.languageModelProviderOptions().seedSupported()).isTrue();
         assertThat(provider.languageModelProviderOptions().structuredOutputSupport())
             .isEqualTo(StructuredOutputSupport.PROMPT_ONLY);
         var model = (TokenHubChatModel) provider.buildChatModel(config(null), "test-key", "model");
         assertThat(model.getOptions().getBaseUrl()).isEqualTo("https://tokenhub.tencentmaas.com/v1");
         assertThat(model.getOptions().getModel()).isEqualTo("model");
         assertThat(AdapterType.fromValue("tokenhub-chat")).isEqualTo(AdapterType.TOKENHUB_CHAT);
+    }
+
+    @Test
+    void retainsDocumentedParameterMappings() {
+        var mappings = provider.getDefaultParameterMappings(AdapterType.TOKENHUB_CHAT);
+        assertThat(mappings.get(ModelParameter.SEED))
+            .isEqualTo(DefaultParameterMapping.template("chat.seed"));
+        assertThat(mappings.get(ModelParameter.PARALLEL_TOOL_CALLS))
+            .isEqualTo(DefaultParameterMapping.template("chat.parallel-tool-calls"));
+        assertThat(mappings.get(ModelParameter.TOP_K))
+            .isEqualTo(DefaultParameterMapping.unsupported());
     }
 
     @Test
@@ -92,12 +107,16 @@ class TokenHubProviderTest {
                 """);
         });
         var model = provider.buildChatModel(config(baseUrl()), "test-key", "configured-model");
-        var response = model.call(new Prompt("Hi"));
+        var request = GenerateTextRequest.builder().seed(17).parallelToolCalls(false).build();
+        var options = provider.languageModelProviderOptions().chatOptionsFactory().build(request);
+        var response = model.call(new Prompt("Hi", options));
         assertThat(response.getResult().getOutput().getText()).isEqualTo("Hello");
         assertThat(response.getMetadata().getUsage().getTotalTokens()).isEqualTo(3);
         assertThat(body.get().get("model")).isEqualTo("configured-model");
         assertThat(body.get().get("stream")).isNotEqualTo(true);
         assertThat(auth.get()).isEqualTo("Bearer test-key");
+        assertThat(body.get().get("seed")).isEqualTo(17);
+        assertThat(body.get().get("parallel_tool_calls")).isEqualTo(false);
     }
 
     @Test

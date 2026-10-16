@@ -40,7 +40,8 @@ ecosystem.
 
 The Tencent Cloud TokenHub preset supports Chat Completions only. Add a model ID that supports the
 platform's chat endpoint manually. Automatic discovery is disabled because its catalog includes other
-modalities without reliable type metadata. The default endpoint is for the China site; override the
+modalities without reliable type metadata. Tool calling and parameter support vary by model; enable
+features only for models verified to support them. The default endpoint is for the China site; override the
 base URL for other regions according to Tencent Cloud documentation.
 
 ## Plugins using AI Foundation

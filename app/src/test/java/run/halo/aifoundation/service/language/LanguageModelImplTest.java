@@ -97,6 +97,34 @@ import run.halo.aifoundation.service.observation.UsageUnitKind;
 class LanguageModelImplTest {
 
     @Test
+    void tokenHubPreservesDocumentedControlsThroughRuntimeMappings() {
+        var provider = new run.halo.aifoundation.provider.tokenhub.TokenHubProvider();
+        var values = provider.getDefaultParameterMappings().entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, entry ->
+                new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping(
+                    entry.getValue().mode(), entry.getValue().template(), null,
+                    run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.Source.BUILT_IN)));
+        var mappings = new run.halo.aifoundation.provider.mapping.EffectiveParameterMappings(values);
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var composition = LanguageModelRuntimeComposition.create("tokenhub", "configured-model",
+            provider.languageModelProviderOptions(), new LanguageModelRuntimeSupport());
+        var model = new LanguageModelImpl(chatModel, composition, mappings);
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hi").seed(17).parallelToolCalls(false).build()))
+            .assertNext(result -> assertThat(result.getWarnings())
+                .noneMatch(this::isMappedParameterWarning))
+            .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        var options = (ChatCompletionsOptions) captor.getValue().getOptions();
+        assertThat(options.getSeed()).isEqualTo(17);
+        assertThat(options.getParallelToolCalls()).isFalse();
+    }
+
+    @Test
     void streamTextMarksErrorPartsAsLogicalCallFailureForFilteredProjections() {
         var session = mock(UsageCallSession.class);
         var model = new LanguageModelImpl(mock(ChatModel.class), "openai");
