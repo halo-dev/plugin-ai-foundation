@@ -38,6 +38,10 @@ import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.embedding.EmbeddingUtils;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
 import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerateTextResult;
+import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.chat.LanguageModelCapabilities;
+import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.chat.GenerationResponseMetadata;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
@@ -392,7 +396,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 return aiModelService.languageModel(modelName)
                     .map(languageModel -> UIMessageChatHandlers.<Map<String, Object>>streamText(
                         options -> options
-                            .model(languageModel)
+                            .model(new ConsoleTestLanguageModel(languageModel))
                             .chatRequest(toUiMessageChatRequest(body))
                             .metadataSupplier(() -> new LinkedHashMap<>())
                             .serializer(ModelConsoleEndpoint::writeJson)
@@ -1877,6 +1881,30 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 .title(file.getTitle())
                 .metadata(file.getMetadata())
                 .build();
+        }
+    }
+
+    // Keep the Console caller on the stack when UI message generation invokes the model lazily.
+    private record ConsoleTestLanguageModel(LanguageModel delegate) implements LanguageModel {
+
+        @Override
+        public Mono<GenerateTextResult> generateText(String prompt) {
+            return delegate.generateText(prompt);
+        }
+
+        @Override
+        public Mono<GenerateTextResult> generateText(GenerateTextRequest request) {
+            return delegate.generateText(request);
+        }
+
+        @Override
+        public StreamTextResult streamText(GenerateTextRequest request) {
+            return delegate.streamText(request);
+        }
+
+        @Override
+        public LanguageModelCapabilities capabilities() {
+            return delegate.capabilities();
         }
     }
 
