@@ -10,7 +10,7 @@ import { heatmapRange } from '@/utils/usage-heatmap'
 import { useInfiniteQuery, useQuery, type QueryClient } from '@tanstack/vue-query'
 import { computed, type ComputedRef, type Ref } from 'vue'
 
-const QK_USAGE = 'plugin:ai-foundation:usage'
+export const QK_USAGE = 'plugin:ai-foundation:usage'
 const QK_USAGE_SUMMARY = [QK_USAGE, 'summary']
 const QK_USAGE_TRENDS = [QK_USAGE, 'trends']
 const QK_USAGE_CALLS = [QK_USAGE, 'calls']

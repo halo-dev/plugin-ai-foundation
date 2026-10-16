@@ -4,6 +4,7 @@ import { useModelsFetch } from '@/composables/use-models-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import { useUsageFilters } from '@/composables/use-usage-filters'
 import {
+  QK_USAGE,
   reloadUsageQueries,
   useUsageCalls,
   useUsageHealth,
@@ -72,7 +73,16 @@ watch(
       autoRefreshTimer = undefined
     }
     if (interval > 0) {
-      autoRefreshTimer = setInterval(refresh, interval)
+      autoRefreshTimer = setInterval(() => {
+        // Preserve in-flight queries and the call pagination session during automatic refresh.
+        if (
+          queryClient.isFetching({ queryKey: [QK_USAGE] }) > 0 ||
+          (callsQuery.data.value?.pages.length ?? 0) > 1
+        ) {
+          return
+        }
+        void refresh()
+      }, interval)
     }
   },
   { immediate: true },
