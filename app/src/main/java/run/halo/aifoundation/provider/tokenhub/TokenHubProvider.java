@@ -33,7 +33,7 @@ public class TokenHubProvider extends AbstractAiProviderType {
 
     @Override
     public String getDescription() {
-        return "腾讯云大模型服务平台，使用 OpenAI 兼容对话接口；请手动填写对话模型 ID，并按该模型的实际能力选择工具调用等特性。";
+        return "腾讯云大模型服务平台，使用 OpenAI 兼容对话接口；请手动填写对话模型 ID，并按该模型的实际能力选择图片输入、工具调用等特性。";
     }
 
     @Override
@@ -74,7 +74,7 @@ public class TokenHubProvider extends AbstractAiProviderType {
     @Override
     public List<ModelFeature> getSupportedFeatures() {
         // Adapter capabilities permit explicit per-model configuration, not catalog-wide claims.
-        return List.of(ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
+        return List.of(ModelFeature.STREAMING, ModelFeature.TOOL_CALL, ModelFeature.VISION);
     }
 
     @Override

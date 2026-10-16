@@ -23,7 +23,7 @@ import run.halo.app.extension.ReactiveExtensionClient;
 class TokenHubModelValidationTest {
 
     @Test
-    void acceptsExplicitToolCapabilityWithoutEnablingItForEveryModel() {
+    void acceptsExplicitCapabilitiesWithoutEnablingThemForEveryModel() {
         var client = mock(ReactiveExtensionClient.class);
         var cache = mock(ProviderClientCache.class);
         var provider = new AiProvider();
@@ -50,6 +50,10 @@ class TokenHubModelValidationTest {
         assertThat(spec.getFeatures()).containsExactly(ModelFeature.TOOL_CALL);
 
         spec.setFeatures(List.of(ModelFeature.VISION));
+        StepVerifier.create(validator.validate(model)).verifyComplete();
+        assertThat(spec.getFeatures()).containsExactly(ModelFeature.VISION);
+
+        spec.setFeatures(List.of(ModelFeature.REASONING));
         StepVerifier.create(validator.validate(model))
             .expectError(org.springframework.web.server.ResponseStatusException.class)
             .verify();
