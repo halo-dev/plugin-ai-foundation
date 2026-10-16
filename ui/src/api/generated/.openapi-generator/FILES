@@ -11,6 +11,7 @@ api/console-api-aifoundation-halo-run-v1alpha1-model-option-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-provider-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-provider-type-api.ts
 api/console-api-aifoundation-halo-run-v1alpha1-tool-api.ts
+api/console-api-aifoundation-halo-run-v1alpha1-usage-statistics-api.ts
 base.ts
 common.ts
 configuration.ts
@@ -56,6 +57,7 @@ models/model-option.ts
 models/model-parameter-definition-info.ts
 models/model-parameter-mappings.ts
 models/move-operation.ts
+models/normalized-usage.ts
 models/output-spec.ts
 models/parameter-mapping-template-info.ts
 models/provider-model-discovery-response.ts
@@ -70,6 +72,7 @@ models/rerank-preview.ts
 models/rerank-response-metadata.ts
 models/rerank-usage.ts
 models/rerank-warning.ts
+models/reset-request.ts
 models/selection.ts
 models/test-completion-stream-request.ts
 models/test-embedding-request.ts
@@ -94,3 +97,14 @@ models/tool-enabled-request.ts
 models/tool-group-descriptor.ts
 models/tool-preset-descriptor.ts
 models/uimessage-chunk.ts
+models/usage-breakdown-item.ts
+models/usage-breakdown.ts
+models/usage-call-detail.ts
+models/usage-call-item.ts
+models/usage-call-page.ts
+models/usage-error.ts
+models/usage-execution-record.ts
+models/usage-health.ts
+models/usage-summary.ts
+models/usage-trend-dimension-value.ts
+models/usage-trend-point.ts

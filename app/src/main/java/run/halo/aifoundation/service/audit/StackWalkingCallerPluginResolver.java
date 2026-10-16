@@ -38,29 +38,30 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     @Override
     public CallerPluginInfo resolveCurrentCallerSnapshot() {
-        return detectCallerPluginName()
-            .map(pluginName -> CallerPluginInfo.builder()
+        return detectCallerPlugin()
+            .map(plugin -> CallerPluginInfo.builder()
                 .detected(true)
                 .detectionSource(DETECTION_SOURCE)
-                .pluginName(pluginName)
+                .pluginName(plugin.getPluginId())
+                .version(plugin.getDescriptor().getVersion())
                 .build())
             .orElseGet(this::unknown);
     }
 
-    private Optional<String> detectCallerPluginName() {
+    private Optional<PluginWrapper> detectCallerPlugin() {
         var self = pluginWrapperProvider.getIfAvailable();
         if (self == null || self.getPluginManager() == null) {
             return Optional.empty();
         }
 
-        var pluginByClassLoader = new IdentityHashMap<ClassLoader, String>();
+        var pluginByClassLoader = new IdentityHashMap<ClassLoader, PluginWrapper>();
         for (var plugin : self.getPluginManager().getStartedPlugins()) {
             if (plugin == null || Objects.equals(self.getPluginId(), plugin.getPluginId())) {
                 continue;
             }
             var classLoader = plugin.getPluginClassLoader();
             if (classLoader != null) {
-                pluginByClassLoader.put(classLoader, plugin.getPluginId());
+                pluginByClassLoader.put(classLoader, plugin);
             }
         }
         if (pluginByClassLoader.isEmpty()) {

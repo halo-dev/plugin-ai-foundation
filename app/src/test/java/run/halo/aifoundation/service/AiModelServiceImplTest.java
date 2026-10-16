@@ -37,13 +37,20 @@ import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.CallerPluginObservationRegistry;
 import run.halo.aifoundation.service.audit.CallerPluginResolver;
+import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.image.DefaultImageGenerationModelFactory;
 import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeFactory;
+import run.halo.aifoundation.service.language.LanguageModelRuntimeProperties;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
+import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
 import run.halo.aifoundation.service.rerank.DefaultRerankingModelFactory;
 import run.halo.aifoundation.service.rerank.RerankingModelRuntimeFactory;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageCallSession;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.usage.UsageStatisticsService;
 import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
 import run.halo.app.extension.Metadata;
@@ -70,6 +77,9 @@ class AiModelServiceImplTest {
     @Mock
     CallerPluginObservationRegistry callerPluginObservationRegistry;
 
+    @Mock
+    UsageStatisticsService usageStatisticsService;
+
     CallerPluginAuditRecorder callerPluginAuditRecorder;
 
     AiModelServiceImpl service;
@@ -81,18 +91,28 @@ class AiModelServiceImplTest {
                 .detected(false)
                 .detectionSource("none")
                 .build());
+        lenient().when(usageStatisticsService.describeCall(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.isNull()))
+            .thenAnswer(invocation -> mock(UsageCallDescriptor.class));
+        lenient().when(usageStatisticsService.beginCall(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mock(UsageCallSession.class));
         callerPluginAuditRecorder = new CallerPluginAuditRecorder(callerPluginResolver,
             callerPluginObservationRegistry);
         service = new AiModelServiceImpl(
             new DefaultAiModelResolver(client, providerClientCache, secretResolver,
                 defaultModelSlotStore),
             new DefaultLanguageModelFactory(providerClientCache,
-                new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport())),
-            new DefaultEmbeddingModelFactory(providerClientCache, new EmbeddingModelRuntimeFactory()),
+                new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport(),
+                    new MediaResourcePolicy(), new ModelCapabilityMatcher(),
+                    new LanguageModelRuntimeProperties(), new UsageExecutionObserver())),
+            new DefaultEmbeddingModelFactory(providerClientCache,
+                new EmbeddingModelRuntimeFactory(new UsageExecutionObserver())),
             new DefaultRerankingModelFactory(providerClientCache,
-                new RerankingModelRuntimeFactory()),
+                new RerankingModelRuntimeFactory(new UsageExecutionObserver())),
             new DefaultImageGenerationModelFactory(),
-            callerPluginAuditRecorder
+            callerPluginAuditRecorder,
+            usageStatisticsService
         );
     }
 

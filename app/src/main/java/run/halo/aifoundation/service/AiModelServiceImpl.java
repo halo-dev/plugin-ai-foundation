@@ -19,6 +19,7 @@ import run.halo.aifoundation.service.audit.ModelCallContext;
 import run.halo.aifoundation.service.image.ImageGenerationModelFactory;
 import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.aifoundation.service.rerank.RerankingModelFactory;
+import run.halo.aifoundation.service.observation.UsageObservation;
 
 @Component
 @RequiredArgsConstructor
@@ -30,6 +31,7 @@ public class AiModelServiceImpl implements AiModelService {
     private final RerankingModelFactory rerankingModelFactory;
     private final ImageGenerationModelFactory imageGenerationModelFactory;
     private final CallerPluginAuditRecorder callerPluginAuditRecorder;
+    private final UsageObservation usageStatistics;
 
     @Override
     public Mono<LanguageModel> languageModel() {
@@ -94,29 +96,33 @@ public class AiModelServiceImpl implements AiModelService {
     private LanguageModel createLanguageModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.LANGUAGE);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedLanguageModel(languageModelFactory.create(resolution), context,
-            callerPluginAuditRecorder);
+        var model = languageModelFactory.create(resolution);
+        return new AuditedLanguageModel(model, context, callerPluginAuditRecorder,
+            usageStatistics);
     }
 
     private EmbeddingModel createEmbeddingModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.EMBEDDING);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedEmbeddingModel(embeddingModelFactory.create(resolution), context,
-            callerPluginAuditRecorder);
+        var model = embeddingModelFactory.create(resolution);
+        return new AuditedEmbeddingModel(model, context, callerPluginAuditRecorder,
+            usageStatistics);
     }
 
     private RerankingModel createRerankingModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.RERANK);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedRerankingModel(rerankingModelFactory.create(resolution), context,
-            callerPluginAuditRecorder);
+        var model = rerankingModelFactory.create(resolution);
+        return new AuditedRerankingModel(model, context, callerPluginAuditRecorder,
+            usageStatistics);
     }
 
     private ImageGenerationModel createImageGenerationModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.IMAGE_GENERATION);
         callerPluginAuditRecorder.recordModelResolution(context);
-        return new AuditedImageGenerationModel(imageGenerationModelFactory.create(resolution),
-            context, callerPluginAuditRecorder);
+        var model = imageGenerationModelFactory.create(resolution);
+        return new AuditedImageGenerationModel(model, context, callerPluginAuditRecorder,
+            usageStatistics);
     }
 
 }

@@ -7,11 +7,7 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
-import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
-import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
-import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
-import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.aifoundation.service.model.ModelRuntimeContextResolver;
 
@@ -24,17 +20,7 @@ public class DefaultImageGenerationModelFactory implements ImageGenerationModelF
     private final ModelRuntimeContextResolver runtimeContextResolver;
 
     public DefaultImageGenerationModelFactory() {
-        this(null, new ModelCapabilityService(), new MediaResourcePolicy(),
-            new ModelCapabilityMatcher());
-    }
-
-    public DefaultImageGenerationModelFactory(ProviderClientCache providerClientCache,
-        ModelCapabilityService modelCapabilityService, MediaResourcePolicy mediaResourcePolicy,
-        ModelCapabilityMatcher capabilityMatcher) {
-        this(providerClientCache, modelCapabilityService,
-            new ImageGenerationModelRuntimeFactory(mediaResourcePolicy, capabilityMatcher),
-            new ModelRuntimeContextResolver(new EffectiveParameterMappingResolver(),
-                new ParameterMappingTemplateRegistry()));
+        this(null, new ModelCapabilityService(), null, null);
     }
 
     @Autowired

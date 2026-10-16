@@ -93,7 +93,7 @@ class AnthropicMessagesModelTest {
                     assertThat(call.name()).isEqualTo("search");
                     assertThat(call.arguments()).isEqualTo("{\"q\":\"Halo\"}");
                 });
-            assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(12);
+            assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(19);
             assertThat(response.getMetadata().getUsage().getCompletionTokens()).isEqualTo(7);
             assertThat((Object) response.getMetadata().get("container")).isNull();
             assertThat((Map<String, Object>) response.getMetadata().getUsage().getNativeUsage())
@@ -194,9 +194,76 @@ class AnthropicMessagesModelTest {
                 .containsEntry("reasoningSignature", "signed-1")
                 .containsKey("reasoningBlocks"));
             assertThat(responses).anySatisfy(response -> {
-                assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(8);
+                assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(10);
                 assertThat(response.getMetadata().getUsage().getCompletionTokens()).isEqualTo(5);
             });
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void preservesLongUsageAcrossStreamingEvents() throws Exception {
+        var server = server("/v1/messages", exchange -> {
+            var bytes = (event("{\"type\":\"message_start\",\"message\":{\"usage\":{"
+                + "\"input_tokens\":3000000000,\"cache_read_input_tokens\":7}}}")
+                + event("{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},"
+                + "\"usage\":{\"output_tokens\":5}}"))
+                .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+        });
+        try {
+            var options = ChatCompletionsOptions.builder().baseUrl(baseUrl(server))
+                .apiKey("secret").model("model-1").maxTokens(1024).build();
+            var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
+            var parts = model.streamParts(new Prompt(new UserMessage("Find"), options))
+                .collectList().block();
+            var response = (ProviderStreamPart.ChatResponsePart) parts.getLast();
+            var usage = (run.halo.aifoundation.provider.usage.ProviderUsage)
+                response.response().getMetadata().getUsage();
+            assertThat(usage.inputTokens()).isEqualTo(3_000_000_007L);
+            assertThat(usage.totalTokens()).isEqualTo(3_000_000_012L);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void finalUsageReplacesEarlierCumulativeCountersAndKeepsOmittedFields() throws Exception {
+        var server = server("/v1/messages", exchange -> {
+            var bytes = (event("""
+                {"type":"message_start","message":{"usage":{"input_tokens":10,
+                  "output_tokens":1,"cache_read_input_tokens":4,"cache_creation_input_tokens":2}}}
+                """.replace("\n", "")) + event("""
+                {"type":"message_delta","delta":{},"usage":{"output_tokens":3}}
+                """.replace("\n", "")) + event("""
+                {"type":"message_delta","delta":{"stop_reason":"end_turn"},
+                 "usage":{"input_tokens":20,"output_tokens":5,"cache_read_input_tokens":8,
+                   "output_tokens_details":{"thinking_tokens":2}}}
+                """.replace("\n", ""))).getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+        });
+        try {
+            var options = ChatCompletionsOptions.builder().baseUrl(baseUrl(server))
+                .apiKey("secret").model("model-1").maxTokens(1024).build();
+            var model = new AnthropicMessagesModel(options, WebClient.builder(), new TestProfile());
+            var parts = model.streamParts(new Prompt(new UserMessage("Find"), options))
+                .collectList().block();
+            var snapshots = parts.stream()
+                .filter(ProviderStreamPart.ChatResponsePart.class::isInstance)
+                .map(ProviderStreamPart.ChatResponsePart.class::cast)
+                .map(part -> (run.halo.aifoundation.provider.usage.ProviderUsage)
+                    part.response().getMetadata().getUsage()).toList();
+            assertThat(snapshots.get(1).complete()).isFalse();
+            assertThat(snapshots.getFirst().inputTokens()).isEqualTo(16L);
+            assertThat(snapshots.getLast().inputTokens()).isEqualTo(30L);
+            assertThat(snapshots.getLast().totalTokens()).isEqualTo(35L);
+            assertThat(snapshots.getLast().reasoningTokens()).isEqualTo(2L);
+            assertThat(snapshots.getLast().complete()).isTrue();
         } finally {
             server.stop(0);
         }

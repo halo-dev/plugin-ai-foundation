@@ -4,10 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
-import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
+import reactor.util.context.Context;
 
 /**
  * Lazily runs one source subscription, replays its complete history, and cancels the source when
@@ -50,7 +51,7 @@ public final class CancellableStreamReplayCoordinator<T> {
             if (!started && !terminal) {
                 started = true;
                 // The first view owns the shared run, including its caller/security context.
-                source.contextWrite(sink.contextView()).subscribe(new SourceSubscriber());
+                source.subscribe(new SourceSubscriber(Context.of(sink.contextView())));
             }
             replay.drain();
             requestSourceIfNeeded();
@@ -182,7 +183,18 @@ public final class CancellableStreamReplayCoordinator<T> {
         }
     }
 
-    private final class SourceSubscriber implements Subscriber<T> {
+    private final class SourceSubscriber implements CoreSubscriber<T> {
+        private final Context context;
+
+        private SourceSubscriber(Context context) {
+            this.context = context;
+        }
+
+        @Override
+        public Context currentContext() {
+            return context;
+        }
+
         @Override
         public void onSubscribe(Subscription subscription) {
             synchronized (CancellableStreamReplayCoordinator.this) {

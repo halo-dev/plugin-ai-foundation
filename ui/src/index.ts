@@ -10,6 +10,7 @@ import {
   aiToolSelectorInput,
 } from './formkit/ai-tool-selector-input'
 import { AI_FOUNDATION_ROUTE_NAMES } from './routes'
+import "./styles/index.css"
 
 const pluginModule = {
   formkit: {
@@ -64,6 +65,14 @@ const pluginModule = {
             path: 'callers',
             name: AI_FOUNDATION_ROUTE_NAMES.CALLERS,
             component: () => import('./views/CallerPluginListView.vue'),
+          },
+          {
+            path: 'usage',
+            name: AI_FOUNDATION_ROUTE_NAMES.USAGE,
+            component: () =>
+              import(
+                /* webpackChunkName: "AiFoundationUsage" */ './views/UsageStatisticsView.vue'
+              ),
           },
           {
             path: 'test',

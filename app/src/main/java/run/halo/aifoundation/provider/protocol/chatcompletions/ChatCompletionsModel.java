@@ -15,6 +15,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -451,16 +452,7 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
             return null;
         }
         var raw = OBJECT_MAPPER.convertValue(node, Object.class);
-        return new ChatCompletionsUsage(
-            integer(node.path(Fields.PROMPT_TOKENS)),
-            integer(node.path(Fields.COMPLETION_TOKENS)),
-            integer(node.path(Fields.TOTAL_TOKENS)),
-            raw
-        );
-    }
-
-    private Integer integer(JsonNode node) {
-        return node != null && node.isNumber() ? node.asInt() : null;
+        return ProviderUsage.chatCompletions(node, raw);
     }
 
     private String chatCompletionsUrl(ChatCompletionsOptions options) {
@@ -524,27 +516,4 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         return hasText(value) ? value.toLowerCase(Locale.ROOT) : value;
     }
 
-    private record ChatCompletionsUsage(Integer promptTokens, Integer completionTokens,
-                                         Integer totalTokens, Object nativeUsage) implements Usage {
-
-        @Override
-        public Integer getPromptTokens() {
-            return promptTokens;
-        }
-
-        @Override
-        public Integer getCompletionTokens() {
-            return completionTokens;
-        }
-
-        @Override
-        public Integer getTotalTokens() {
-            return totalTokens;
-        }
-
-        @Override
-        public Object getNativeUsage() {
-            return nativeUsage;
-        }
-    }
 }

@@ -17,6 +17,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -386,11 +387,7 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         if (JsonNodes.isAbsent(node)) {
             return null;
         }
-        var input = integer(node, "input_tokens");
-        var output = integer(node, "output_tokens");
-        return new MessagesUsage(input, output,
-            input != null && output != null ? input + output : null,
-            OBJECT_MAPPER.convertValue(node, Object.class));
+        return ProviderUsage.messages(node, OBJECT_MAPPER.convertValue(node, Object.class));
     }
 
     private ProviderStreamPart.ChatResponsePart chatPart(String content,
@@ -452,11 +449,6 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         return JsonNodes.isAbsent(value) ? null : value.asText();
     }
 
-    private static Integer integer(JsonNode node, String key) {
-        var value = node.path(key);
-        return value.isNumber() ? value.asInt() : null;
-    }
-
     private static String string(Object value) {
         return value != null ? value.toString() : "";
     }
@@ -468,9 +460,8 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
     private final class StreamState {
         private final String diagnosticId;
         private final Map<Integer, BlockState> blocks = new LinkedHashMap<>();
-        private Integer inputTokens;
-        private Integer cacheCreationTokens;
-        private Integer cacheReadTokens;
+        private final com.fasterxml.jackson.databind.node.ObjectNode cumulativeUsage =
+            OBJECT_MAPPER.createObjectNode();
 
         private StreamState(String diagnosticId) {
             this.diagnosticId = diagnosticId;
@@ -505,10 +496,9 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
 
         private List<ProviderStreamPart> messageStart(JsonNode root) {
             var usage = root.path("message").path("usage");
-            inputTokens = integer(usage, "input_tokens");
-            cacheCreationTokens = integer(usage, "cache_creation_input_tokens");
-            cacheReadTokens = integer(usage, "cache_read_input_tokens");
-            return List.of();
+            mergeUsage(usage);
+            return List.of(chatPart("", null, Map.of(), null,
+                usageSnapshot().partial(), diagnosticId));
         }
 
         private List<ProviderStreamPart> blockStart(JsonNode root) throws JsonProcessingException {
@@ -590,19 +580,29 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         }
 
         private List<ProviderStreamPart> messageDelta(JsonNode root) {
-            var usageNode = root.path("usage");
-            var outputTokens = integer(usageNode, "output_tokens");
-            var raw = new LinkedHashMap<String, Object>();
-            put(raw, "input_tokens", inputTokens);
-            put(raw, "output_tokens", outputTokens);
-            put(raw, "cache_creation_input_tokens", cacheCreationTokens);
-            put(raw, "cache_read_input_tokens", cacheReadTokens);
-            var usage = new MessagesUsage(inputTokens, outputTokens,
-                inputTokens != null && outputTokens != null ? inputTokens + outputTokens : null,
-                Map.copyOf(raw));
-            return List.of(chatPart("", null, Map.of(), text(root.path("delta"), "stop_reason"),
-                usage, diagnosticId));
+            mergeUsage(root.path("usage"));
+            var stopReason = text(root.path("delta"), "stop_reason");
+            var usage = usageSnapshot();
+            return List.of(chatPart("", null, Map.of(), stopReason,
+                hasContent(stopReason) ? usage : usage.partial(), diagnosticId));
         }
+
+        private void mergeUsage(JsonNode update) {
+            // These are cumulative snapshots, not deltas to add. Omitted fields retain their
+            // previous value; explicit invalid/null counters remain unknown.
+            for (var field : List.of("input_tokens", "output_tokens", "cache_read_input_tokens",
+                "cache_creation_input_tokens", "output_tokens_details", "iterations")) {
+                if (update.has(field)) {
+                    cumulativeUsage.set(field, update.get(field).deepCopy());
+                }
+            }
+        }
+
+        private ProviderUsage usageSnapshot() {
+            return ProviderUsage.messages(cumulativeUsage,
+                OBJECT_MAPPER.convertValue(cumulativeUsage, Object.class));
+        }
+
     }
 
     private static final class BlockState {
@@ -622,26 +622,4 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
                                 List<AssistantMessage.ToolCall> toolCalls) {
     }
 
-    private record MessagesUsage(Integer promptTokens, Integer completionTokens,
-                                 Integer totalTokens, Object nativeUsage) implements Usage {
-        @Override
-        public Integer getPromptTokens() {
-            return promptTokens;
-        }
-
-        @Override
-        public Integer getCompletionTokens() {
-            return completionTokens;
-        }
-
-        @Override
-        public Integer getTotalTokens() {
-            return totalTokens;
-        }
-
-        @Override
-        public Object getNativeUsage() {
-            return nativeUsage;
-        }
-    }
 }

@@ -9,6 +9,7 @@ import {
   ConsoleApiAifoundationHaloRunV1alpha1ProviderApi,
   ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi,
   ConsoleApiAifoundationHaloRunV1alpha1ToolApi,
+  ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi,
 } from './generated'
 
 const aiCoreApiClient = {
@@ -36,6 +37,11 @@ const aiConsoleApiClient = {
   ),
   provider: new ConsoleApiAifoundationHaloRunV1alpha1ProviderApi(undefined, '', axiosInstance),
   providerType: new ConsoleApiAifoundationHaloRunV1alpha1ProviderTypeApi(
+    undefined,
+    '',
+    axiosInstance,
+  ),
+  usageStatistics: new ConsoleApiAifoundationHaloRunV1alpha1UsageStatisticsApi(
     undefined,
     '',
     axiosInstance,
