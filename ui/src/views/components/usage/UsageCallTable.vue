@@ -145,6 +145,8 @@ function durationClass(call: UsageCallItem) {
                   <IconErrorWarning
                     v-if="call.complete === false"
                     v-tooltip="'调用记录不完整'"
+                    role="img"
+                    aria-label="调用记录不完整"
                     class=":uno: size-3.5 shrink-0 text-orange-600"
                   />
                 </div>
@@ -158,7 +160,10 @@ function durationClass(call: UsageCallItem) {
           </tbody>
         </table>
       </div>
-      <div v-if="!loading" class=":uno: flex items-center justify-center px-5 py-4">
+      <div v-if="!loading" class=":uno: flex items-center justify-center gap-3 px-5 py-4">
+        <span v-if="hasNextPage" class=":uno: text-xs text-gray-400"
+          >已加载 {{ items.length }} 条</span
+        >
         <VButton v-if="hasNextPage" :loading="fetchingNextPage" @click="emit('loadMore')">{{
           loadMoreError ? '加载失败，重试' : '加载更多'
         }}</VButton>

@@ -182,6 +182,7 @@ describe('UsageCallTable', () => {
       expect(icon.exists()).toBe(tooltip !== undefined)
       if (tooltip !== undefined) {
         expect(icon.attributes('data-tooltip')).toBe(tooltip)
+        expect(icon.attributes('aria-label')).toBe(tooltip)
         expect(icon.attributes('title')).toBeUndefined()
       }
     },
@@ -228,6 +229,7 @@ describe('UsageCallTable', () => {
 
   it('emits loadMore from the pagination button', async () => {
     const wrapper = mountTable({ items: [call()], hasNextPage: true })
+    expect(wrapper.text()).toContain('已加载 1 条')
     const loadMore = wrapper.findAll('button').find((button) => button.text() === '加载更多')
     expect(loadMore).toBeDefined()
     await loadMore!.trigger('click')
