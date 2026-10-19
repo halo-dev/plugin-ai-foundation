@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { UsageSummary } from '@/api/generated'
 import { cappedUsageCoverage, formatCoverage, formatTokens } from '@/utils/usage'
-import { VAlert } from '@halo-dev/components'
 import NumberFlow from '@number-flow/vue'
 import { computed } from 'vue'
 
@@ -41,13 +40,6 @@ const PERCENT_FORMAT = { style: 'percent', maximumFractionDigits: 1 } as const
 
 <template>
   <div aria-label="用量汇总">
-    <VAlert
-      v-if="summary?.complete === false"
-      class=":uno: m-4"
-      type="warning"
-      description="部分统计数据丢失，数值可能低于实际用量。"
-      role="status"
-    />
     <dl class=":uno: grid grid-cols-2 lg:grid-cols-5">
       <div class=":uno: usage-kpi">
         <dt class=":uno: usage-kpi-label">Token 总量</dt>

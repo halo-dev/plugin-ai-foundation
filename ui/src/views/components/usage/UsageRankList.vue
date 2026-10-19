@@ -105,8 +105,6 @@ function hasPartialUsage(entry: UsageRankEntry) {
   return props.metric === 'tokens' && (entry.missing > 0 || entry.partial > 0)
 }
 
-const hasPartialEntries = computed(() => entries.value.some(hasPartialUsage))
-
 function formatEntryValue(entry: UsageRankEntry) {
   if (props.metric !== 'tokens') return entry.calls.toLocaleString()
   const value = formatTokens(entry.tokens)
@@ -172,9 +170,6 @@ function entryShare(entry: UsageRankEntry) {
         缺失用量 {{ entry.missing }} 次 · 部分上报 {{ entry.partial }} 次
       </span>
     </button>
-    <p v-if="hasPartialEntries" class=":uno: text-xs text-gray-500">
-      排序和占比仅基于已知 Token，未报告的部分未计入。
-    </p>
     <p v-if="!entries.length" class=":uno: py-6 text-center text-xs text-gray-400">
       当前筛选条件下暂无数据
     </p>

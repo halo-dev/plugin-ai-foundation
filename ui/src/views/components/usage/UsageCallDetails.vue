@@ -31,10 +31,6 @@ const showUnknownUsage = computed(() => {
   if (call.value.usage.quality === 'MISSING') return true
   return call.value.usage.quality === 'PARTIAL'
 })
-const showIncompleteCall = computed(() => {
-  if (call.value.complete === false) return true
-  return Boolean(call.value.missingExecutionCount)
-})
 const fields = computed(() => [
   { label: '模型标识', value: call.value.modelName || '未知' },
   { label: '供应商标识', value: call.value.providerName || '未知' },
@@ -104,12 +100,8 @@ const breakdown = computed(() => [
           ><span>总耗时 {{ formatDuration(call.durationMillis) }}</span>
           <span v-if="call.streaming">流式响应</span>
         </div>
-        <p v-if="showIncompleteCall" class=":uno: usage-process-warning">
-          {{ call.complete === false ? '统计数据不完整。' : ''
-          }}<template v-if="call.missingExecutionCount"
-            >{{ call.missingExecutionCount }} 条执行记录缺少用量，Token
-            统计可能低于实际消耗。</template
-          >
+        <p v-if="call.missingExecutionCount" class=":uno: usage-process-warning">
+          {{ call.missingExecutionCount }} 条执行记录缺少用量，Token 统计可能低于实际消耗。
         </p>
         <UsageCallExecutions
           v-if="call.id"

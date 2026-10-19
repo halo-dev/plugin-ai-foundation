@@ -4,9 +4,7 @@ import {
   formatDateTime,
   formatDuration,
   formatTokens,
-  usageNeedsAttention,
   usageOperationLabel,
-  usageQualityLabel,
   usageStatusLabel,
   usageStatusState,
 } from '@/utils/usage'
@@ -60,12 +58,6 @@ function modelText(call: UsageCallItem) {
 }
 function providerText(call: UsageCallItem) {
   return providerNames.value.get(call.providerName || '') || call.providerName || '未知供应商'
-}
-function attentionTooltip(call: UsageCallItem) {
-  const reasons: string[] = []
-  if (call.complete === false) reasons.push('调用记录不完整')
-  if (usageNeedsAttention(call.usage?.quality)) reasons.push(usageQualityLabel(call.usage?.quality))
-  return reasons.join('，')
 }
 function durationClass(call: UsageCallItem) {
   const millis = call.durationMillis
@@ -151,8 +143,8 @@ function durationClass(call: UsageCallItem) {
                     :text="usageStatusLabel(call.status)"
                   />
                   <IconErrorWarning
-                    v-if="call.complete === false || usageNeedsAttention(call.usage?.quality)"
-                    v-tooltip="attentionTooltip(call)"
+                    v-if="call.complete === false"
+                    v-tooltip="'调用记录不完整'"
                     class=":uno: size-3.5 shrink-0 text-orange-600"
                   />
                 </div>

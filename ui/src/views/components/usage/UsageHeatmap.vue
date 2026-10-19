@@ -44,11 +44,8 @@ const cells = computed(() =>
     const value = measured ? measured.value : 0
     const partialUsage = metric.value === 'tokens' && !!measured && (measured.missing > 0 || measured.partial > 0)
     const incomplete = measured?.incomplete === true
-    const warnings = [
-      ...(partialUsage ? ['用量未完整报告'] : []),
-      ...(incomplete ? ['统计数据不完整'] : []),
-    ]
-    const label = `${partialUsage && value != null ? '已知 ' : ''}${formatValue(value)}${warnings.length ? `（${warnings.join('；')}）` : ''}`
+    const warning = incomplete ? '统计数据不完整' : partialUsage ? '用量未完整报告' : ''
+    const label = `${partialUsage && value != null ? '已知 ' : ''}${formatValue(value)}${warning ? `（${warning}）` : ''}`
     return { ...day, value, label, partial: partialUsage || incomplete, level: value == null ? undefined : leveler.value(value) }
   }),
 )
