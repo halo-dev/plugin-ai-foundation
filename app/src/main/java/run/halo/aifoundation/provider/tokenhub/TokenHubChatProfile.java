@@ -16,6 +16,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.util.MimeTypeUtils;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsProfile;
+import run.halo.aifoundation.provider.support.ReasoningProviderMetadata;
 import run.halo.aifoundation.provider.support.UriReferencePolicy;
 
 /** TokenHub Chat Completions policy for documented sampling, thinking and media fields. */
@@ -90,7 +91,8 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         if (metadata == null) {
             return;
         }
-        var details = metadata.get(REASONING_DETAILS);
+        var details = ReasoningProviderMetadata.values(metadata, providerType())
+            .get(REASONING_DETAILS);
         if (details != null) {
             body.put("reasoning_details", details);
         }
@@ -164,9 +166,9 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         if (value == null) {
             return;
         }
-        if (!List.of("low", "medium", "high").contains(value)) {
+        if (!List.of("low", "medium", "high", "max").contains(value)) {
             throw new IllegalArgumentException(
-                "TokenHub reasoning_effort must be low, medium, or high");
+                "TokenHub reasoning_effort must be low, medium, high, or max");
         }
     }
 

@@ -137,10 +137,10 @@ public class TokenHubProvider extends AbstractAiProviderType {
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
-        // TokenHub's catalog exposes identifiers, names and online status only. It mixes chat,
-        // image, video, 3D, speech and embedding models without type metadata, and provider code
-        // must not infer model types from identifier text. Administrators add model IDs manually.
-        return Mono.just(List.of());
+        // TokenHub returns identifiers, display names and status only, without model types.
+        // Classify every entry as the provider default and let administrators adjust the type
+        // before importing; never infer types from identifier text.
+        return discoverIdentifierOnlyModels(provider, apiKey, "/models");
     }
 
     @Override

@@ -33,6 +33,10 @@ public class ParameterMappingTemplateRegistry {
         AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
         AdapterType.OLLAMA_OPENAI_CHAT, AdapterType.OLLAMA_RESPONSES,
         AdapterType.OLLAMA_MESSAGES);
+    private static final Set<AdapterType> OPENAI_CHAT_THINKING_BUDGET = Set.copyOf(
+        OPENAI_CHAT.stream()
+            .filter(adapter -> adapter != AdapterType.TOKENHUB_CHAT)
+            .toList());
     private static final Set<AdapterType> OLLAMA_CHAT = Set.of(AdapterType.OLLAMA_CHAT);
     private static final Set<AdapterType> RESPONSES = Set.of(
         AdapterType.OPENAI_RESPONSES, AdapterType.DEEPSEEK_RESPONSES,
@@ -312,7 +316,7 @@ public class ParameterMappingTemplateRegistry {
                     value("think", ValueType.STRING, "medium"),
                     value("think", ValueType.STRING, "high"))),
             reasoningTemplate("reasoning.thinking-budget", "OpenAI 请求体", "thinking_budget",
-                OPENAI_CHAT, ParameterMappingApplicator.root("thinking_budget"),
+                OPENAI_CHAT_THINKING_BUDGET, ParameterMappingApplicator.root("thinking_budget"),
                 reasoning(null, null,
                     value("thinking_budget", ValueType.INTEGER, "256"),
                     value("thinking_budget", ValueType.INTEGER, "512"),

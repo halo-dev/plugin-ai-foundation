@@ -30,9 +30,13 @@ import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
+import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.app.extension.Metadata;
 
 @ProviderContractSource(
@@ -112,6 +116,12 @@ class TokenHubProviderTest {
             .containsEntry("thinking", Map.of("type", "enabled"))
             .containsEntry("reasoning_effort", "medium");
 
+        var maxEffort = options.mutate()
+            .extraBody(Map.of("reasoning_effort", "max"))
+            .build();
+        assertThat(requestBody(maxEffort, new UserMessage("Think")))
+            .containsEntry("reasoning_effort", "max");
+
         var format = ChatCompletionsOptions.ResponseFormat.builder()
             .type(ChatCompletionsOptions.ResponseFormat.Type.JSON_SCHEMA)
             .name("answer")
@@ -174,27 +184,30 @@ class TokenHubProviderTest {
                   "index":0,"finish_reason":"stop","message":{
                     "role":"assistant","content":"Done",
                     "reasoning_content":"Inspect the contract.",
-                    "reasoning_details":[{"type":"reasoning.text","text":"Inspect",
+                    "reasoning_details":[{"type":"thinking","content":"Inspect",
                       "signature":"sig-1"}]}}],
                  "usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
                 """, options, "diagnostic-1");
 
+        var details = List.of(Map.of("type", "thinking", "content", "Inspect",
+            "signature", "sig-1"));
         var metadata = response.getResult().getOutput().getMetadata();
         assertThat(metadata).containsEntry("reasoningContent", "Inspect the contract.")
-            .containsKey("reasoningDetails");
+            .containsEntry("reasoningDetails", details);
 
         var assistant = AssistantMessage.builder()
             .content("Done")
-            .properties(metadata)
+            .properties(Map.of(
+                "reasoningContent", "Inspect the contract.",
+                "reasoningProviderMetadata", Map.of("tokenhub",
+                    Map.of("reasoningDetails", details))))
             .build();
         var body = requestBody(options, new UserMessage("Find"), assistant);
         var messages = (List<Map<String, Object>>) body.get("messages");
         assertThat(messages.getLast())
             .containsEntry("role", "assistant")
             .containsEntry("reasoning_content", "Inspect the contract.")
-            .containsEntry("reasoning_details",
-                List.of(Map.of("type", "reasoning.text", "text", "Inspect",
-                    "signature", "sig-1")));
+            .containsEntry("reasoning_details", details);
     }
 
     @Test
@@ -297,14 +310,95 @@ class TokenHubProviderTest {
                 List.of(EmbeddingContent.text("Halo")), null, Map.of())))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("multimodal");
+        assertThatThrownBy(() -> new TokenHubEmbeddingModel(new TokenHubEmbeddingOptions(
+            "https://example.com/v1", "test-key", "kinfra-text-embedding-0.6b", Map.of(), null),
+            WebClient.builder()).call(new ProviderEmbeddingRequest(
+                List.of("x".repeat(2001)), List.of(), null, Map.of())))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("2000");
     }
 
     @Test
-    void discoveryIsDisabledBecauseTheCatalogHasNoModelTypes() {
-        StepVerifier.create(provider.discoverModels(provider("https://example.com/v1"),
-                "test-key"))
-            .assertNext(models -> assertThat(models).isEmpty())
-            .verifyComplete();
+    void discoveryListsTheCatalogAsLowConfidenceProviderDefaults() throws Exception {
+        var authorization = new AtomicReference<String>();
+        var server = HttpServer.create(
+            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        server.createContext("/v1/models", exchange -> {
+            try (exchange) {
+                authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                var response = """
+                    {"object":"list","data":[
+                      {"id":"hy3","object":"model","name":"Hy3","status":"online"},
+                      {"id":"deepseek-v4-pro","object":"model","name":"DeepSeek-V4-Pro",
+                        "status":"online"},
+                      {"id":"kinfra-text-embedding-0.6b","object":"model",
+                        "name":"Kinfra Embedding","status":"pre-offline"}]}
+                    """;
+                var bytes = response.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+            }
+        });
+        server.start();
+
+        try {
+            var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
+            StepVerifier.create(provider.discoverModels(provider(baseUrl), "test-key"))
+                .assertNext(models -> {
+                    assertThat(models).hasSize(3);
+                    assertThat(models).allSatisfy(model -> {
+                        assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
+                        assertThat(model.adapterType()).isEqualTo(AdapterType.TOKENHUB_CHAT);
+                        assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
+                        assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
+                    });
+                })
+                .verifyComplete();
+            assertThat(authorization.get()).isEqualTo("Bearer test-key");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void streamingErrorFramesFailTheRequest() throws Exception {
+        var server = HttpServer.create(
+            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            try (exchange) {
+                var response = """
+                    data: {"error":{"type":"server_error","message":"boom"}}
+
+                    data: [DONE]
+
+                    """;
+                var bytes = response.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+            }
+        });
+        server.start();
+
+        try {
+            var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
+            var options = ChatCompletionsOptions.builder()
+                .baseUrl(baseUrl)
+                .apiKey("test-key")
+                .model("hy3")
+                .build();
+            var model = new TokenHubChatModel(options, WebClient.builder());
+
+            StepVerifier.create(model.streamParts(
+                    new Prompt(List.of(new UserMessage("Hi")), options)))
+                .expectErrorSatisfies(error -> assertThat(error)
+                    .isInstanceOf(ProviderHttpException.class)
+                    .hasMessageContaining("boom"))
+                .verify();
+        } finally {
+            server.stop(0);
+        }
     }
 
     private ChatCompletionsOptions options(GenerateTextRequest request, String modelId) {

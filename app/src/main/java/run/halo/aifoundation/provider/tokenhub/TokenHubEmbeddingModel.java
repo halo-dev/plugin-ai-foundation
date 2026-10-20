@@ -25,6 +25,7 @@ import run.halo.aifoundation.provider.usage.ProviderUsage;
 public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final int MAX_INPUT_CHARACTERS = 2000;
 
     private final TokenHubEmbeddingOptions defaultOptions;
     private final EmbeddingHttpTransport transport;
@@ -89,6 +90,11 @@ public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
         if (inputs.stream().anyMatch(this::isBlank)) {
             throw new IllegalArgumentException(
                 "TokenHub embedding input must contain non-blank text");
+        }
+        if (inputs.stream().anyMatch(input -> input.length() > MAX_INPUT_CHARACTERS)) {
+            throw new IllegalArgumentException(
+                "TokenHub embedding input must be at most " + MAX_INPUT_CHARACTERS
+                    + " characters per text");
         }
         return List.copyOf(inputs);
     }
