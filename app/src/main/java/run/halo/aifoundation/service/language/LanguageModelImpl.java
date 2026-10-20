@@ -1856,6 +1856,22 @@ public class LanguageModelImpl implements LanguageModel {
         return warnings;
     }
 
+    private List<ReasoningPart> reasoningParts(String reasoningText,
+        Map<String, Object> metadata) {
+        var text = reasoningText != null ? reasoningText : "";
+        var extracted = reasoningExtractor.extract("", metadata).reasoning().stream()
+            .findFirst()
+            .orElse(null);
+        if (!hasText(text) && extracted == null) {
+            return List.of();
+        }
+        return List.of(ReasoningPart.builder()
+            .text(text)
+            .signature(extracted != null ? extracted.getSignature() : null)
+            .providerMetadata(extracted != null ? extracted.getProviderMetadata() : Map.of())
+            .build());
+    }
+
     private Map<String, Object> reasoningProviderMetadata(String reasoningContent,
         Map<String, Object> outputMetadata) {
         return reasoningExtractor.extract("", outputMetadata).reasoning().stream()
@@ -2211,6 +2227,10 @@ public class LanguageModelImpl implements LanguageModel {
     private Flux<TextStreamPart> mapStreamResponse(GenerateTextRequest request,
         LanguageModelGenerationRun run, ChatResponse response, SimpleStreamState state) {
         var parts = new ArrayList<TextStreamPart>();
+        var result = response.getResult();
+        if (result != null) {
+            mergeOutputMetadata(state.outputMetadata, outputMetadata(result.getOutput()));
+        }
         var extraction = streamExtraction(response);
         var text = extraction.text();
         var reasoning = extraction.reasoningText();
@@ -2262,7 +2282,7 @@ public class LanguageModelImpl implements LanguageModel {
             }
             var accumulatedText = state.text.toString();
             var accumulatedReasoning = state.reasoning.toString();
-            var reasoningParts = responseMapper.reasoningParts(accumulatedReasoning);
+            var reasoningParts = reasoningParts(accumulatedReasoning, state.outputMetadata);
             var warnings = mergeWarnings(
                 mergeWarnings(responseMapper.mapWarnings(response), requestWarnings(request)),
                 mergeWarnings(run.warnings(),
@@ -2474,6 +2494,7 @@ public class LanguageModelImpl implements LanguageModel {
         private final AtomicBoolean reasoningStarted = new AtomicBoolean(false);
         private final StringBuilder text = new StringBuilder();
         private final StringBuilder reasoning = new StringBuilder();
+        private final Map<String, Object> outputMetadata = new LinkedHashMap<>();
     }
 
     private final class StreamResponseAggregation {
@@ -2669,18 +2690,7 @@ public class LanguageModelImpl implements LanguageModel {
         }
 
         List<ReasoningPart> reasoningParts() {
-            var text = reasoning.toString();
-            var extracted = reasoningExtractor.extract("", outputMetadata).reasoning().stream()
-                .findFirst()
-                .orElse(null);
-            if (!hasText(text) && extracted == null) {
-                return List.of();
-            }
-            return List.of(ReasoningPart.builder()
-                .text(text)
-                .signature(extracted != null ? extracted.getSignature() : null)
-                .providerMetadata(extracted != null ? extracted.getProviderMetadata() : Map.of())
-                .build());
+            return LanguageModelImpl.this.reasoningParts(reasoning.toString(), outputMetadata);
         }
 
         FinishReason finishReason() {

@@ -2496,6 +2496,55 @@ class LanguageModelImplTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void streamText_preservesProviderReasoningMetadataInResponseMessages() {
+        var chatModel = mock(ChatModel.class);
+        var firstDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "Inspecting ", "signature", "sig-1");
+        var secondDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "the request.", "signature", "sig-2");
+        var details = List.of(firstDetail, secondDetail);
+        var firstOutput = AssistantMessage.builder()
+            .content("")
+            .properties(Map.of(
+                "reasoningContent", "Inspecting ",
+                "reasoningDetails", List.of(firstDetail)))
+            .build();
+        var secondOutput = AssistantMessage.builder()
+            .content("")
+            .properties(Map.of(
+                "reasoningContent", "the request.",
+                "reasoningDetails", List.of(secondDetail)))
+            .build();
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            new ChatResponse(
+                List.of(new Generation(firstOutput,
+                    ChatGenerationMetadata.builder().build())),
+                ChatResponseMetadata.builder().id("resp_stream").model("test-model").build()),
+            new ChatResponse(
+                List.of(new Generation(secondOutput,
+                    ChatGenerationMetadata.builder().finishReason("stop").build())),
+                ChatResponseMetadata.builder().id("resp_stream").model("test-model").build())));
+        var model = new LanguageModelImpl(chatModel, "tokenhub",
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .build());
+
+        var result = model.streamText(GenerateTextRequest.builder().prompt("Hi").build())
+            .result()
+            .block();
+
+        assertThat(result.getReasoningText()).isEqualTo("Inspecting the request.");
+        var reasoning = result.getResponseMessages().getFirst().getContent().stream()
+            .filter(part -> PartType.isReasoning(part.getType()))
+            .findFirst()
+            .orElseThrow();
+        assertThat(reasoning.getProviderMetadata())
+            .containsEntry("tokenhub", Map.of("reasoningDetails", details));
+    }
+
+    @Test
     void streamText_warnsWhenReasoningReturnsAfterDisabledRequest() {
         var chatModel = mock(ChatModel.class);
         when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
