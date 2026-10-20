@@ -103,11 +103,13 @@ class TokenHubProviderTest {
             .build(), "hunyuan-turbos-latest");
         var body = requestBody(options, new UserMessage("Think"));
 
-        assertThat(body).containsEntry("max_completion_tokens", 4096)
+        // TokenHub models differ on the output-token field, so the adapter preserves whichever
+        // field the caller or model mapping selected.
+        assertThat(body).containsEntry("max_tokens", 4096)
             .containsEntry("temperature", 1d)
             .containsEntry("top_p", 0.9d)
             .containsEntry("seed", 42)
-            .doesNotContainKey("max_tokens");
+            .doesNotContainKey("max_completion_tokens");
 
         var thinking = options.mutate()
             .extraBody(Map.of("thinking", Map.of("type", "enabled"),
@@ -122,6 +124,14 @@ class TokenHubProviderTest {
             .build();
         assertThat(requestBody(maxEffort, new UserMessage("Think")))
             .containsEntry("reasoning_effort", "max");
+
+        var currentTokens = options.mutate()
+            .maxTokens(null)
+            .maxCompletionTokens(2048)
+            .build();
+        assertThat(requestBody(currentTokens, new UserMessage("Think")))
+            .containsEntry("max_completion_tokens", 2048)
+            .doesNotContainKey("max_tokens");
 
         var format = ChatCompletionsOptions.ResponseFormat.builder()
             .type(ChatCompletionsOptions.ResponseFormat.Type.JSON_SCHEMA)
@@ -145,8 +155,14 @@ class TokenHubProviderTest {
             new UserMessage("Hot")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("temperature");
+        for (var effort : List.of("none", "minimal", "xhigh")) {
+            assertThat(requestBody(base.mutate()
+                .extraBody(Map.of("reasoning_effort", effort)).build(),
+                new UserMessage("Think")))
+                .containsEntry("reasoning_effort", effort);
+        }
         assertThatThrownBy(() -> requestBody(base.mutate()
-            .extraBody(Map.of("reasoning_effort", "xhigh")).build(),
+            .extraBody(Map.of("reasoning_effort", "extreme")).build(),
             new UserMessage("Think")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("reasoning_effort");
@@ -242,6 +258,31 @@ class TokenHubProviderTest {
         var dataContent = (List<Map<String, Object>>) dataMessages.getFirst().get("content");
         assertThat((Map<String, Object>) dataContent.get(1).get("video_url"))
             .extractingByKey("url").asString().startsWith("data:video/mp4;base64,");
+
+        var uploadedVideo = Media.builder().mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
+            .data(URI.create("ms://uploaded-video")).build();
+        var uploadedVideoBody = requestBody(options,
+            UserMessage.builder().text("Describe").media(uploadedVideo).build());
+        var uploadedVideoContent = (List<Map<String, Object>>) ((List<Map<String, Object>>)
+            uploadedVideoBody.get("messages")).getFirst().get("content");
+        assertThat((Map<String, Object>) uploadedVideoContent.get(1).get("video_url"))
+            .containsEntry("url", "ms://uploaded-video");
+
+        var uploadedImage = Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG)
+            .data(URI.create("ms://uploaded-image")).build();
+        var uploadedImageBody = requestBody(options,
+            UserMessage.builder().text("Describe").media(uploadedImage).build());
+        var uploadedImageContent = (List<Map<String, Object>>) ((List<Map<String, Object>>)
+            uploadedImageBody.get("messages")).getFirst().get("content");
+        assertThat((Map<String, Object>) uploadedImageContent.get(1).get("image_url"))
+            .containsEntry("url", "ms://uploaded-image");
+
+        var unsupportedImage = Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG)
+            .data(URI.create("file:///tmp/image.png")).build();
+        assertThatThrownBy(() -> requestBody(options,
+            UserMessage.builder().text("Describe").media(unsupportedImage).build()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("image input");
 
         var audio = Media.builder().mimeType(MimeTypeUtils.parseMimeType("audio/mpeg"))
             .data(new byte[] {1, 2, 3}).build();

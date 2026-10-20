@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -23,8 +22,10 @@ import run.halo.aifoundation.provider.support.UriReferencePolicy;
 final class TokenHubChatProfile implements ChatCompletionsProfile {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final UriReferencePolicy DATA_OR_HTTP =
-        UriReferencePolicy.allowing("http://", "https://", "data:");
+    // Images and videos accept public URLs, Base64 data URLs, and references to files
+    // uploaded through TokenHub (ms://).
+    private static final UriReferencePolicy MEDIA_REFERENCE =
+        UriReferencePolicy.allowing("http://", "https://", "data:", "ms://");
     private static final UriReferencePolicy HTTP_ONLY =
         UriReferencePolicy.allowing("http://", "https://");
     private static final String REASONING_DETAILS = "reasoningDetails";
@@ -42,7 +43,7 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
     @Override
     public void customizeRequest(Map<String, Object> body, Prompt prompt,
         ChatCompletionsOptions options, boolean stream) {
-        useMaxCompletionTokens(body);
+        validateMaxTokens(body);
         validateSampling(body);
         validateStops(body.get("stop"));
         validateLogprobs(body);
@@ -56,11 +57,12 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         var mimeType = mimeType(media);
         var reference = mediaReference(media, mimeType);
         if (mimeType.startsWith("image/")) {
-            return Map.of("type", "image_url", "image_url", Map.of("url", reference));
+            return Map.of("type", "image_url", "image_url",
+                Map.of("url", mediaUrl(reference, "image")));
         }
         if (mimeType.startsWith("video/")) {
             return Map.of("type", "video_url", "video_url",
-                Map.of("url", dataOrHttpReference(reference, "video")));
+                Map.of("url", mediaUrl(reference, "video")));
         }
         if (mimeType.startsWith("audio/")) {
             throw new IllegalArgumentException(
@@ -98,15 +100,15 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         }
     }
 
-    private void useMaxCompletionTokens(Map<String, Object> body) {
-        var deprecated = body.remove("max_tokens");
-        if (deprecated != null && !body.containsKey("max_completion_tokens")) {
-            body.put("max_completion_tokens", deprecated);
-        }
-        var maxTokens = body.get("max_completion_tokens");
-        if (maxTokens != null && !positiveInteger(maxTokens)) {
-            throw new IllegalArgumentException(
-                "TokenHub max_completion_tokens must be a positive integer");
+    private void validateMaxTokens(Map<String, Object> body) {
+        // TokenHub models differ on the accepted output-token field, so preserve whichever
+        // field the model's parameter mapping selected.
+        for (var field : List.of("max_tokens", "max_completion_tokens")) {
+            var value = body.get(field);
+            if (value != null && !positiveInteger(value)) {
+                throw new IllegalArgumentException(
+                    "TokenHub " + field + " must be a positive integer");
+            }
         }
     }
 
@@ -166,9 +168,12 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         if (value == null) {
             return;
         }
-        if (!List.of("low", "medium", "high", "max").contains(value)) {
+        // TokenHub documents different ranges per model, from none/minimal up to xhigh/max.
+        if (!List.of("none", "minimal", "low", "medium", "high", "xhigh", "max")
+            .contains(value)) {
             throw new IllegalArgumentException(
-                "TokenHub reasoning_effort must be low, medium, high, or max");
+                "TokenHub reasoning_effort must be none, minimal, low, medium, high, xhigh, "
+                    + "or max");
         }
     }
 
@@ -228,17 +233,17 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
             "TokenHub " + kind + " input must use an HTTP(S) URL; data URLs are not accepted");
     }
 
-    private String dataOrHttpReference(String reference, String kind) {
-        if (DATA_OR_HTTP.allows(reference)) {
+    private String mediaUrl(String reference, String kind) {
+        if (MEDIA_REFERENCE.allows(reference)) {
             return reference;
         }
-        throw new IllegalArgumentException(
-            "TokenHub " + kind + " input must use an HTTP(S) URL or a data URL");
+        throw new IllegalArgumentException("TokenHub " + kind
+            + " input must use an HTTP(S) URL, an ms:// file reference, or a data URL");
     }
 
     private String dataUrl(String mimeType, byte[] bytes) {
         var value = "data:" + mimeType + ";base64," + Base64.getEncoder().encodeToString(bytes);
-        if (!DATA_OR_HTTP.allows(value)) {
+        if (!MEDIA_REFERENCE.allows(value)) {
             throw new IllegalArgumentException("TokenHub media data URL is not accepted");
         }
         return value;
