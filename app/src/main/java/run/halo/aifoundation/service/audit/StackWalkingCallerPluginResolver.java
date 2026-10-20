@@ -20,6 +20,8 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     private static final StackWalker STACK_WALKER = StackWalker.getInstance(RETAIN_CLASS_REFERENCE);
     private static final String DETECTION_SOURCE = "stack-classloader";
+    private static final String CONSOLE_TEST_CLASS_NAME =
+        "run.halo.aifoundation.endpoint.ModelConsoleEndpoint";
     private static final List<String> FRAMEWORK_PACKAGE_PREFIXES = List.of(
         "java.", "jdk.", "reactor.", "org.springframework.", "org.pf4j.",
         "run.halo.aifoundation.");
@@ -64,15 +66,19 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
                 pluginByClassLoader.put(classLoader, plugin);
             }
         }
-        if (pluginByClassLoader.isEmpty()) {
-            return Optional.empty();
-        }
-
         return STACK_WALKER.walk(frames -> frames
             .map(StackWalker.StackFrame::getDeclaringClass)
-            .filter(this::isCandidateCallerClass)
-            .map(Class::getClassLoader)
-            .map(pluginByClassLoader::get)
+            .map(type -> {
+                // Only the Console test boundary may identify Foundation as its own caller.
+                // Include nested classes for deferred RAG reranking invocations.
+                if (type.getClassLoader() == self.getPluginClassLoader()
+                    && (type.getName().equals(CONSOLE_TEST_CLASS_NAME)
+                        || type.getName().startsWith(CONSOLE_TEST_CLASS_NAME + "$"))) {
+                    return self;
+                }
+                return isCandidateCallerClass(type)
+                    ? pluginByClassLoader.get(type.getClassLoader()) : null;
+            })
             .filter(Objects::nonNull)
             .findFirst());
     }

@@ -2,6 +2,10 @@
 
 [简体中文](../../zh-CN/sdk-core/generating-structured-data.md) | English
 
+`StructuredOutputSchemaException` and `StructuredOutputTerminationException`, described below,
+are available since 1.0.1. When using these types, set both the Java SDK dependency and the minimum
+AI Foundation plugin version to 1.0.1 or later. Basic structured output remains available in 1.0.0.
+
 Attach an `OutputSpec` to a normal text request:
 
 ```java

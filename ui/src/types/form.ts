@@ -18,6 +18,7 @@ export interface ProviderFormState {
   apiKeySecretName?: string
   proxyHost?: string
   proxyPort?: number
+  maxInMemorySize?: number
   parameterMappings?: ModelParameterMappings
 }
 

@@ -20,6 +20,7 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 - **UI Message Stream**：提供可持久化的消息协议、SSE 响应、消息校验 / 转换、取消和前端工具续跑
 - **默认模型设置**：分别配置语言、Embedding、Rerank 和图像生成默认模型
 - **模型测试工作台**：在控制台验证对话、Embedding、Rerank、图像生成和单轮 RAG，并查看流事件、用量、warning 与诊断信息
+- **用量统计**：查看调用次数、Token 用量、趋势和调用明细，按插件、供应商和模型等维度筛选，并支持自动刷新
 - **消费方 SDK**：提供 Provider-neutral Java API、浏览器 / Vue npm 包，以及 FormKit `aiModelSelector` 和 `aiToolSelector`
 
 ## 已接入插件
@@ -30,6 +31,7 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 - [评论组件 Next](https://www.halo.run/store/apps/app-p8xona4f)
 - [轻言](https://www.halo.run/store/apps/app-cmisffbv)
 - [链接管理](https://www.halo.run/store/apps/app-hfbQg)
+- [AI 助手](https://www.halo.run/store/apps/app-riNgb)
 
 ## 界面预览
 
@@ -40,6 +42,8 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 ![](./images/preview-default.png)
 
 ![](./images/preview-test.png)
+
+![](./images/preview-usage.png)
 
 ## 项目结构
 

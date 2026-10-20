@@ -249,7 +249,7 @@ public class OllamaProvider extends AbstractAiProviderType {
         String apiKey, String modelId) {
         return new OllamaImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), OllamaEndpoints.openAiBaseUrl(resolveBaseUrl(provider)), apiKey,
-            modelId, null), webClientBuilder(provider));
+            modelId, null), imageWebClientBuilder(provider));
     }
 
     @Override

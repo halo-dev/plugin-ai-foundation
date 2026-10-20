@@ -159,7 +159,7 @@ public class ErnieProvider extends AbstractAiProviderType {
     public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
         String apiKey, String modelId) {
         return new ErnieImageGenerationClient(new ImageGenerationClientOptions(getProviderType(),
-            resolveBaseUrl(provider), apiKey, modelId, null), webClientBuilder(provider));
+            resolveBaseUrl(provider), apiKey, modelId, null), imageWebClientBuilder(provider));
     }
 
     @Override

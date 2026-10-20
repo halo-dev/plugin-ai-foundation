@@ -33,6 +33,8 @@ ecosystem.
   image generation
 - **Model playground**: Validate chat, embeddings, reranking, image generation, and single-turn RAG
   while inspecting stream events, usage, warnings, and diagnostics
+- **Usage statistics**: View call counts, token usage, trends, and call details, filter by caller
+  plugin, provider, or model, and enable automatic refresh
 - **Consumer SDKs**: Use a provider-neutral Java API, a browser/Vue npm package, and the FormKit
   `aiModelSelector`
 

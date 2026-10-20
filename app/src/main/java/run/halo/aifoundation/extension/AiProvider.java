@@ -43,6 +43,8 @@ public class AiProvider extends AbstractExtension {
         private String proxyHost;
         @Schema(description = "Proxy port for this provider (optional)")
         private Integer proxyPort;
+        @Schema(description = "In-memory buffer limit in bytes for image generation responses (optional, defaults to 64 MB)")
+        private Integer maxInMemorySize;
         @Schema(description = "Administrator overrides for provider-neutral parameter mappings")
         private ModelParameterMappings parameterMappings;
     }

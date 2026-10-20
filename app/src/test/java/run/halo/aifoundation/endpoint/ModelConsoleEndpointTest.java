@@ -12,9 +12,14 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.pf4j.PluginDescriptor;
+import org.pf4j.PluginManager;
+import org.pf4j.PluginWrapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
@@ -49,6 +54,8 @@ import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankResult;
 import run.halo.aifoundation.rerank.RerankingModel;
+import run.halo.aifoundation.service.audit.CallerPluginInfo;
+import run.halo.aifoundation.service.audit.StackWalkingCallerPluginResolver;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
@@ -553,6 +560,49 @@ class ModelConsoleEndpointTest {
             .bodyValue(updated)
             .exchange()
             .expectStatus().isEqualTo(409);
+    }
+
+    @Test
+    void testUiMessageChatStream_detectsFoundationCallerAfterAsyncModelResolution() {
+        var resolver = foundationCallerResolver();
+        var caller = new AtomicReference<CallerPluginInfo>();
+        var languageModel = mock(LanguageModel.class);
+        when(aiModelService.languageModel("gpt-4"))
+            .thenReturn(Mono.just(languageModel)
+                .publishOn(reactor.core.scheduler.Schedulers.boundedElastic()));
+        when(languageModel.streamText(any(GenerateTextRequest.class))).thenAnswer(invocation -> {
+            caller.set(resolver.resolveCurrentCallerSnapshot());
+            return streamResult(Flux.just(TextStreamPart.textDelta("text-1", "Hi")));
+        });
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(uiMessageBody("Hello"))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .consumeWith(response -> assertThat(response.getResponseBody()).contains("Hi"));
+
+        assertThat(caller.get()).isNotNull();
+        assertThat(caller.get().getPluginName()).isEqualTo("ai-foundation");
+        assertThat(caller.get().getVersion()).isEqualTo("1.0.0");
+        assertThat(caller.get().isDetected()).isTrue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private StackWalkingCallerPluginResolver foundationCallerResolver() {
+        var self = mock(PluginWrapper.class);
+        var manager = mock(PluginManager.class);
+        var descriptor = mock(PluginDescriptor.class);
+        var provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(self);
+        when(self.getPluginId()).thenReturn("ai-foundation");
+        when(self.getPluginManager()).thenReturn(manager);
+        when(self.getPluginClassLoader()).thenReturn(ModelConsoleEndpoint.class.getClassLoader());
+        when(self.getDescriptor()).thenReturn(descriptor);
+        when(descriptor.getVersion()).thenReturn("1.0.0");
+        when(manager.getStartedPlugins()).thenReturn(List.of(self));
+        return new StackWalkingCallerPluginResolver(client, provider);
     }
 
     @Test
@@ -1360,11 +1410,14 @@ class ModelConsoleEndpointTest {
 
     @Test
     void testRagUiMessageStream_usesOptionalRerankModel() {
+        var resolver = foundationCallerResolver();
+        var caller = new AtomicReference<CallerPluginInfo>();
         var languageModel = ragAwareLanguageModel("Reranked answer");
         var rerankingModel = mock(RerankingModel.class);
         when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
         when(aiModelService.rerankingModel("rerank-model")).thenReturn(Mono.just(rerankingModel));
         when(rerankingModel.rerank(any(RerankRequest.class))).thenAnswer(invocation -> {
+            caller.set(resolver.resolveCurrentCallerSnapshot());
             RerankRequest request = invocation.getArgument(0);
             return Mono.just(RerankResponse.builder()
                 .query(request.getQuery())
@@ -1400,6 +1453,9 @@ class ModelConsoleEndpointTest {
         assertThat(captor.getValue().getDocuments())
             .extracting(RerankDocument::getText)
             .containsExactly("Generic CMS content", "AI Foundation RAG content");
+        assertThat(caller.get()).isNotNull();
+        assertThat(caller.get().getPluginName()).isEqualTo("ai-foundation");
+        assertThat(caller.get().getVersion()).isEqualTo("1.0.0");
     }
 
     @Test
