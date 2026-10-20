@@ -1,0 +1,39 @@
+schema:
+  - $formkit: secret
+    name: deepseekApiKeySecretName
+    label: DeepSeek API Key
+    descriptionPreset: AI Foundation DeepSeek 网页抓取
+    help: 填写 DeepSeek API Key 或选择已有密钥；清空后，此工具显示为未配置。
+    requiredKeys:
+      - key: api-key
+        help: DeepSeek API Key
+  - $formkit: number
+    name: maxResponseSizeMb
+    label: 响应大小上限（MiB）
+    value: 10
+    number: integer
+    min: 1
+    max: 100
+    step: 1
+    validation: required|number|between:1,100
+    help: 解压后的接口响应大小上限，默认 10 MiB。
+  - $formkit: number
+    name: maxContentCharacters
+    label: 返回文本长度上限（字符）
+    value: 100000
+    number: integer
+    min: 1
+    max: 2000000
+    step: 1
+    validation: required|number|between:1,2000000
+    help: 单次调用的网页标题和 Markdown 正文合计最多返回 100000 字符（默认），超出部分会截断；链接和结构化信息保留完整。
+  - $formkit: number
+    name: timeoutSeconds
+    label: 请求超时（秒）
+    value: 30
+    number: integer
+    min: 1
+    max: 120
+    step: 1
+    validation: required|number|between:1,120
+    help: 每次 DeepSeek 网页抓取请求的超时时间，默认 30 秒。

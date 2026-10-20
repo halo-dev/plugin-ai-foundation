@@ -300,6 +300,8 @@ public class ToolProviderConfiguration {
 | 站内搜索 | `ai-foundation/search_site`   | 搜索本站公开、已发布且未回收的内容   |
 | 网页读取 | `ai-foundation/read_web_page` | 读取公网网页及 JSON、XML 等文本资源 |
 | 联网搜索 | `ai-foundation/web_search`    | 通过 Brave Search 搜索互联网         |
+| DeepSeek 网页搜索 | `ai-foundation/deepseek_web_search` | 通过 DeepSeek 搜索网页，返回摘要及可选正文 |
+| DeepSeek 网页抓取 | `ai-foundation/deepseek_web_fetch` | 通过 DeepSeek 抓取指定网页，返回 Markdown 正文 |
 
 联网搜索需要先配置 Brave Search API 密钥。在该工具卡片上点击「配置」，创建或选择密钥后保存。
 密钥存放在 Halo Secret 中，工具配置只保存密钥引用。
@@ -337,6 +339,44 @@ public class ToolProviderConfiguration {
 
 也可以在 Mihomo/Clash 的 `blacklist` 模式下，将目标域名加入 `fake-ip-filter`，使其返回真实
 IP，此时无需开启兼容模式。参见 [Mihomo DNS 配置](https://wiki.metacubex.one/config/dns/#fake-ip-filter)。
+
+### 使用 DeepSeek 网页搜索与抓取
+
+在对应工具卡片上点击「配置」，创建或选择 DeepSeek API 密钥后保存。可以选择已有的 Halo
+Secret，包括之前为 DeepSeek Provider 创建的密钥，无需重复输入。密钥存放在 Halo Secret
+中，工具配置只保存密钥引用。
+
+两个工具独立保存以下配置；网页搜索还可以设置默认返回条数：
+
+| 配置 | 默认值 | 可配置范围 |
+| ---- | ------ | ---------- |
+| 响应大小上限 | 10 MiB | 1–100 MiB |
+| 返回文本上限 | 100000 字符 | 1–2000000 字符 |
+| 请求超时 | 30 秒 | 1–120 秒 |
+| 搜索默认条数（仅网页搜索） | 10 条 | 1–50 条 |
+
+返回文本上限按单次调用合计：搜索包含所有结果的标题、摘要和正文，抓取包含标题与 Markdown
+正文。搜索优先保留摘要，再分配正文长度。达到上限时，结果会标记 `truncated: true`；搜索的
+每条结果也有独立的截断标记。
+
+`deepseek_web_search` 接受 `query`（1–128 个 Unicode 字符，不可全为空白），支持
+`site:`、引号等搜索语法。可用 `count` 指定本次返回条数（1–50）；`oriQuestion` 可选，用于
+提供原始问题，长度为 1–128 个 Unicode 字符；`needContent` 默认为 `false`，设为 `true` 时
+请求结果正文。可选 `localization` 接受 IPv4、IPv6 地址或空字符串，用于优先返回本地化结果。
+例如：
+
+```json
+{"query":"Halo 插件开发 site:docs.halo.run","count":5,"needContent":false}
+```
+
+`deepseek_web_fetch` 接受已知的公网 HTTP(S) `url`，长度不超过 8192 个字符，地址不能包含
+用户名或密码。返回页面标题和 Markdown 正文，获取效果取决于目标站点的可用性及访问策略。
+
+选用工具时，按当前任务和已配置的服务决定：查找网页可使用 Brave「联网搜索」或
+「DeepSeek 网页搜索」；已有网址、希望获取 Markdown 正文时使用「DeepSeek 网页抓取」。
+需要保留 JSON、XML 等原始文本结构时使用「网页读取」，PDF、DOCX 则使用「文档读取」。
+DeepSeek 搜索与抓取需要对应账号可用的 API 权限与余额，详见
+[官方使用指南](https://api-docs.deepseek.com/zh-cn/guides/search)。
 
 ## 使用 Halo 核心工具
 

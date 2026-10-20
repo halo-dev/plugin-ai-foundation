@@ -44,12 +44,19 @@ final class HaloToolGroups {
             .name("web")
             .displayName("网页与联网搜索")
             .description("搜索互联网并读取网页或文本资源")
-            .presets(List.of(ToolPreset.builder()
-                    .name("research")
-                    .displayName("联网研究")
-                    .description("搭配使用联网搜索与网页读取")
-                    .toolNames(List.of("read_web_page", "web_search"))
-                    .build()))
+            .presets(List.of(
+                    ToolPreset.builder()
+                            .name("research")
+                            .displayName("联网研究")
+                            .description("搭配使用联网搜索与网页读取")
+                            .toolNames(List.of("read_web_page", "web_search"))
+                            .build(),
+                    ToolPreset.builder()
+                            .name("deepseek-research")
+                            .displayName("DeepSeek 联网研究")
+                            .description("使用 DeepSeek 搜索并抓取网页正文")
+                            .toolNames(List.of("deepseek_web_search", "deepseek_web_fetch"))
+                            .build()))
             .build();
 
     private HaloToolGroups() {}

@@ -18,7 +18,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ToolConfigurationSchemasTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"web-search", "web-page-reader", "document-reader", "attachment-import", "content-detail"})
+    @ValueSource(
+            strings = {
+                "web-search",
+                "web-page-reader",
+                "document-reader",
+                "attachment-import",
+                "content-detail",
+                "deepseek-web-search",
+                "deepseek-web-fetch"
+            })
     void loadsStandardFormKitNodesWithDistinctFieldNames(String name) {
         var schema = ToolConfigurationSchemas.load(name);
 

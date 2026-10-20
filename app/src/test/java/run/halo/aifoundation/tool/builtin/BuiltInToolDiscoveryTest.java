@@ -49,9 +49,9 @@ class BuiltInToolDiscoveryTest {
             fixture.start();
             var catalog = fixture.registry().listTools().collectList().block();
 
-            assertThat(fixture.context.getBeansOfType(AiToolProvider.class)).hasSize(11);
+            assertThat(fixture.context.getBeansOfType(AiToolProvider.class)).hasSize(12);
             assertThat(catalog)
-                    .hasSize(40)
+                    .hasSize(42)
                     .extracting(ToolDescriptor::id)
                     .doesNotHaveDuplicates()
                     .allMatch(id -> id.startsWith("ai-foundation/"));
@@ -60,6 +60,8 @@ class BuiltInToolDiscoveryTest {
                     .contains(
                             "read_web_page",
                             "web_search",
+                            "deepseek_web_search",
+                            "deepseek_web_fetch",
                             "search_site",
                             "read_document",
                             "list_posts",
@@ -72,7 +74,7 @@ class BuiltInToolDiscoveryTest {
                             "get_site_info");
             assertThat(catalog.stream().filter(tool -> !tool.configured()))
                     .extracting(ToolDescriptor::localName)
-                    .containsExactly("web_search");
+                    .containsExactlyInAnyOrder("web_search", "deepseek_web_search", "deepseek_web_fetch");
             fixture.verifyNoBusinessCalls();
         }
     }
@@ -87,7 +89,7 @@ class BuiltInToolDiscoveryTest {
             assertGroup(catalog, "pages", 7);
             assertGroup(catalog, "taxonomy", 6);
             assertGroup(catalog, "attachments", 5);
-            assertGroup(catalog, "web", 2);
+            assertGroup(catalog, "web", 4);
             var posts = named(catalog, "get_post").group();
             assertThat(posts.presets().getFirst().toolIds())
                     .containsExactly(
@@ -107,6 +109,12 @@ class BuiltInToolDiscoveryTest {
                             .getFirst()
                             .toolIds())
                     .containsExactly("ai-foundation/read_web_page", "ai-foundation/web_search");
+            assertThat(named(catalog, "deepseek_web_search")
+                            .group()
+                            .presets()
+                            .get(1)
+                            .toolIds())
+                    .containsExactly("ai-foundation/deepseek_web_search", "ai-foundation/deepseek_web_fetch");
             assertThat(named(catalog, "search_site").group()).isNull();
         }
     }
@@ -125,7 +133,7 @@ class BuiltInToolDiscoveryTest {
 
             var catalog = fixture.registry().listTools().collectList().block();
 
-            assertThat(catalog).hasSize(43).extracting(ToolDescriptor::id).doesNotHaveDuplicates();
+            assertThat(catalog).hasSize(45).extracting(ToolDescriptor::id).doesNotHaveDuplicates();
             assertThat(catalog)
                     .extracting(ToolDescriptor::id)
                     .contains("ai-foundation/local_first", "ai-foundation/local_second", "external-plugin/external");
@@ -145,7 +153,7 @@ class BuiltInToolDiscoveryTest {
                     () -> new TestProvider(Flux.error(new IllegalStateException("source unavailable")))));
 
             assertThat(fixture.registry().listTools().collectList().block())
-                    .hasSize(40)
+                    .hasSize(42)
                     .extracting(ToolDescriptor::localName)
                     .contains("list_posts", "create_post_draft", "read_document", "read_web_page");
         }
@@ -220,6 +228,7 @@ class BuiltInToolDiscoveryTest {
         private final HaloDraftContentService draftContent = mock(HaloDraftContentService.class);
         private final AttachmentService attachments = mock(AttachmentService.class);
         private final PublicHttpClient http = mock(PublicHttpClient.class);
+        private final DeepSeekWebClient deepSeek = mock(DeepSeekWebClient.class);
         private final SearchService search = mock(SearchService.class);
         private final ToolPermissionChecker permissions = mock(ToolPermissionChecker.class);
 
@@ -250,6 +259,7 @@ class BuiltInToolDiscoveryTest {
             context.registerBean(HaloToolAccess.class, () -> mock(HaloToolAccess.class));
             context.registerBean(AttachmentService.class, () -> attachments);
             context.registerBean(PublicHttpClient.class, () -> http);
+            context.registerBean(DeepSeekWebClient.class, () -> deepSeek);
             context.registerBean(SearchService.class, () -> search);
             context.register(
                     HaloContentToolSettings.class,
@@ -257,6 +267,7 @@ class BuiltInToolDiscoveryTest {
                     DocumentReaderSettings.class,
                     WebPageReaderSettings.class,
                     WebSearchSettings.class,
+                    DeepSeekWebToolSettings.class,
                     SiteSearcher.class,
                     AiToolServiceImpl.class);
         }
@@ -280,7 +291,7 @@ class BuiltInToolDiscoveryTest {
         }
 
         private void verifyNoBusinessCalls() {
-            verifyNoInteractions(client, postContent, systemInfo, draftContent, attachments, http, search);
+            verifyNoInteractions(client, postContent, systemInfo, draftContent, attachments, http, search, deepSeek);
         }
 
         @Override

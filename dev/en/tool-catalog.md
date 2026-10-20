@@ -314,6 +314,8 @@ dependencies, source, and build instructions, see the
 | Site search     | `ai-foundation/search_site`   | Search public, published, non-recycled site content           |
 | Read a web page | `ai-foundation/read_web_page` | Read public pages and text resources such as JSON and XML    |
 | Web search      | `ai-foundation/web_search`    | Search the internet through Brave Search                      |
+| DeepSeek web search | `ai-foundation/deepseek_web_search` | Search through DeepSeek with summaries and optional page content |
+| DeepSeek web fetch | `ai-foundation/deepseek_web_fetch` | Fetch a known page through DeepSeek as Markdown |
 
 Web search requires a Brave Search API key. Click **Configure** on its card, create or select the
 key, and save. Keys are stored in Halo Secrets; tool settings store only the Secret reference.
@@ -360,6 +362,45 @@ address directly remain unsupported.
 Alternatively, add the target domain to Mihomo/Clash's `fake-ip-filter` in `blacklist` mode to return
 real IP addresses without enabling compatibility mode. See the
 [Mihomo DNS configuration](https://wiki.metacubex.one/config/dns/#fake-ip-filter).
+
+### Use DeepSeek search and fetch
+
+Click **Configure** on either tool card, create or select a DeepSeek API key, and save. You can select
+an existing Halo Secret, including a key previously created for a DeepSeek Provider, without entering
+it again. Keys are stored in Halo Secrets; tool settings store only the Secret reference.
+
+Each tool saves its own limits. Search also has a default result count:
+
+| Setting | Default | Allowed range |
+| ------- | ------- | ------------- |
+| Response size limit | 10 MiB | 1–100 MiB |
+| Returned text limit | 100000 characters | 1–2000000 characters |
+| Request timeout | 30 seconds | 1–120 seconds |
+| Default result count (search only) | 10 | 1–50 |
+
+The text limit applies to the whole call: titles, summaries, and content across all search results,
+or the fetched title and Markdown body. Search prioritizes summaries before page bodies. Results
+set `truncated: true` when text is shortened; each search result also has its own truncation flag.
+
+`deepseek_web_search` accepts `query` (1–128 Unicode characters, not all whitespace), including
+search syntax such as `site:` and quoted phrases. Optional `count` overrides the default result
+count (1–50). Optional `oriQuestion` supplies the original question (1–128 Unicode characters).
+`needContent` defaults to `false`; set it to `true` to request page content. Optional `localization`
+accepts an IPv4/IPv6 address or an empty string to prioritize localized results. For example:
+
+```json
+{"query":"Halo plugin development site:docs.halo.run","count":5,"needContent":false}
+```
+
+`deepseek_web_fetch` accepts a known public HTTP(S) `url` of up to 8192 characters, without a username
+or password. It returns the page title and Markdown content. Results depend on the target site's
+availability and access policy.
+
+Choose Brave **Web search** or **DeepSeek web search** to find pages, according to the task and the
+configured service. Use **DeepSeek web fetch** for Markdown from a known URL, **Read a web page** to
+preserve raw JSON, XML, and other text structures, and **Read a document** for PDF or DOCX files.
+DeepSeek search and fetch require API access and available account balance; see the
+[official guide](https://api-docs.deepseek.com/zh-cn/guides/search).
 
 ## Use Halo core tools
 
