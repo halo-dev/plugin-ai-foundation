@@ -12,7 +12,7 @@ ecosystem.
 
 - **Multiple AI providers**: Built-in support for OpenAI, OpenRouter, DeepSeek, Moonshot Kimi,
   SiliconFlow, Alibaba Cloud Model Studio, Doubao, ERNIE, Zhipu AI, Ollama, OpenAI-compatible
-  providers, AIHubMix, Gitee AI, MiniMax, and Xiaomi MiMo
+  providers, AIHubMix, Gitee AI, MiniMax, Tencent Cloud TokenHub, and Xiaomi MiMo
 - **Unified model management**: Manage providers, API key secrets, language, embedding, reranking,
   and image models, adapters, and model capabilities from the Halo Console
 - **Model discovery**: Fetch available models from providers while retaining the source of remote

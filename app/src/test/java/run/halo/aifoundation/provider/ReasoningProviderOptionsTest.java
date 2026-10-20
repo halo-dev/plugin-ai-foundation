@@ -18,6 +18,7 @@ import run.halo.aifoundation.provider.openai.OpenAiProvider;
 import run.halo.aifoundation.provider.openailike.OpenAiLikeProvider;
 import run.halo.aifoundation.provider.openrouter.OpenRouterProvider;
 import run.halo.aifoundation.provider.siliconflow.SiliconFlowProvider;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
 import run.halo.aifoundation.provider.zhipu.ZhiPuProvider;
 
 class ReasoningProviderOptionsTest {
@@ -48,6 +49,7 @@ class ReasoningProviderOptionsTest {
             new OpenAiLikeProvider(),
             new OpenRouterProvider(),
             new SiliconFlowProvider(),
+            new TokenHubProvider(),
             new ZhiPuProvider());
     }
 }
