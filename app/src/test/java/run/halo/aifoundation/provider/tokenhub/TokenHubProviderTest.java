@@ -235,10 +235,12 @@ class TokenHubProviderTest {
 
         var dataVideo = Media.builder().mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
             .data(new byte[] {1, 2, 3}).build();
-        assertThatThrownBy(() -> requestBody(options,
-            UserMessage.builder().text("Describe").media(dataVideo).build()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("HTTP(S) URL");
+        var dataBody = requestBody(options,
+            UserMessage.builder().text("Describe").media(dataVideo).build());
+        var dataMessages = (List<Map<String, Object>>) dataBody.get("messages");
+        var dataContent = (List<Map<String, Object>>) dataMessages.getFirst().get("content");
+        assertThat((Map<String, Object>) dataContent.get(1).get("video_url"))
+            .extractingByKey("url").asString().startsWith("data:video/mp4;base64,");
 
         var audio = Media.builder().mimeType(MimeTypeUtils.parseMimeType("audio/mpeg"))
             .data(new byte[] {1, 2, 3}).build();

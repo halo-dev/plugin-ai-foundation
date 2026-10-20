@@ -60,7 +60,7 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         }
         if (mimeType.startsWith("video/")) {
             return Map.of("type", "video_url", "video_url",
-                Map.of("url", httpReference(reference, "video")));
+                Map.of("url", dataOrHttpReference(reference, "video")));
         }
         if (mimeType.startsWith("audio/")) {
             throw new IllegalArgumentException(
@@ -226,6 +226,14 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         }
         throw new IllegalArgumentException(
             "TokenHub " + kind + " input must use an HTTP(S) URL; data URLs are not accepted");
+    }
+
+    private String dataOrHttpReference(String reference, String kind) {
+        if (DATA_OR_HTTP.allows(reference)) {
+            return reference;
+        }
+        throw new IllegalArgumentException(
+            "TokenHub " + kind + " input must use an HTTP(S) URL or a data URL");
     }
 
     private String dataUrl(String mimeType, byte[] bytes) {
