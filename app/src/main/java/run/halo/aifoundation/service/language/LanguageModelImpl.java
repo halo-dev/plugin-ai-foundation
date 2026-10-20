@@ -63,6 +63,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
+import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.schema.OutputType;
 import run.halo.aifoundation.service.language.mapping.LanguageModelChatOptionsBuilder;
 import run.halo.aifoundation.service.language.mapping.LanguageModelMessageMapper;
@@ -1770,6 +1771,10 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private boolean isRetryableProviderFailure(Throwable error) {
+        if (error instanceof ProviderHttpException http) {
+            var status = http.getStatusCode();
+            return status == 408 || status == 429 || status >= 500;
+        }
         return !(error instanceof IllegalArgumentException
             || error instanceof AiGenerationCancelledException
             || error instanceof AiGenerationTimeoutException

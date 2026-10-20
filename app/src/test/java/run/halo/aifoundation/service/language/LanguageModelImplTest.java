@@ -39,6 +39,7 @@ import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.Disposable;
@@ -407,6 +408,60 @@ class LanguageModelImplTest {
             .verifyComplete();
 
         verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_retriesRateLimitedProviderFailures() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new ProviderHttpException("tokenhub", "chat", 429, "{}"))
+            .thenReturn(chatResponse("Recovered", "stop", 1, 1));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(1)
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Recovered"))
+            .verifyComplete();
+
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_doesNotRetryDeterministicProviderFailures() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new ProviderHttpException("tokenhub", "chat", 400, "{}"));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(2)
+                .build()))
+            .expectErrorSatisfies(error -> assertThat(error)
+                .isInstanceOf(ProviderHttpException.class))
+            .verify();
+
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_doesNotRetryInBandErrorsReportedWithHttp200() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new ProviderHttpException("tokenhub", "chat", 200, "{}"));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(2)
+                .build()))
+            .expectErrorSatisfies(error -> assertThat(error)
+                .isInstanceOf(ProviderHttpException.class))
+            .verify();
+
+        verify(chatModel).call(any(Prompt.class));
     }
 
     @Test
