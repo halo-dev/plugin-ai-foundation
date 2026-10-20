@@ -31,6 +31,7 @@ import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -264,7 +265,8 @@ class TokenHubProviderTest {
                 var response = """
                     {"object":"list","model":"kinfra-text-embedding-0.6b","data":[
                       {"index":1,"embedding":[0.3,0.4]},
-                      {"index":0,"embedding":[0.1,0.2]}],
+                      {"index":0,"embedding":[0.1,0.2]},
+                      {"index":2,"embedding":[0.5,0.6]}],
                      "usage":{"prompt_tokens":4,"total_tokens":4}}
                     """;
                 var bytes = response.getBytes(StandardCharsets.UTF_8);
@@ -280,16 +282,18 @@ class TokenHubProviderTest {
             var model = new TokenHubEmbeddingModel(new TokenHubEmbeddingOptions(baseUrl,
                 "test-key", "kinfra-text-embedding-0.6b", Map.of("X-Trace", "1"), null),
                 WebClient.builder());
+            var longEmoji = "😀".repeat(1001);
             var response = model.call(new ProviderEmbeddingRequest(
-                List.of("Halo CMS", "AI Foundation"), List.of(), model.getOptions(), Map.of()));
+                List.of("Halo CMS", "AI Foundation", longEmoji), List.of(), model.getOptions(),
+                Map.of()));
 
             assertThat(authorization.get()).isEqualTo("Bearer test-key");
             assertThat(captured.get()).containsEntry("model", "kinfra-text-embedding-0.6b")
                 .containsEntry("encoding_format", "float");
             assertThat((List<Object>) captured.get().get("input"))
-                .containsExactly("Halo CMS", "AI Foundation");
+                .containsExactly("Halo CMS", "AI Foundation", longEmoji);
             assertThat(response.getResults()).extracting(result -> result.getOutput()[0])
-                .containsExactly(0.1f, 0.3f);
+                .containsExactly(0.1f, 0.3f, 0.5f);
             assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(4);
         } finally {
             server.stop(0);
@@ -355,6 +359,8 @@ class TokenHubProviderTest {
                         assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
                         assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
                     });
+                    assertThat(models).extracting(DiscoveredModel::displayName)
+                        .containsExactly("Hy3", "DeepSeek-V4-Pro", "Kinfra Embedding");
                 })
                 .verifyComplete();
             assertThat(authorization.get()).isEqualTo("Bearer test-key");

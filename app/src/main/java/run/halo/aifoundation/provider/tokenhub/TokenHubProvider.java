@@ -140,7 +140,7 @@ public class TokenHubProvider extends AbstractAiProviderType {
         // TokenHub returns identifiers, display names and status only, without model types.
         // Classify every entry as the provider default and let administrators adjust the type
         // before importing; never infer types from identifier text.
-        return discoverIdentifierOnlyModels(provider, apiKey, "/models");
+        return discoverIdentifierOnlyModels(provider, apiKey, "/models", "name");
     }
 
     @Override

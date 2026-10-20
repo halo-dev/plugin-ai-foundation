@@ -91,7 +91,8 @@ public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
             throw new IllegalArgumentException(
                 "TokenHub embedding input must contain non-blank text");
         }
-        if (inputs.stream().anyMatch(input -> input.length() > MAX_INPUT_CHARACTERS)) {
+        if (inputs.stream().anyMatch(input -> input.codePointCount(0, input.length())
+            > MAX_INPUT_CHARACTERS)) {
             throw new IllegalArgumentException(
                 "TokenHub embedding input must be at most " + MAX_INPUT_CHARACTERS
                     + " characters per text");
