@@ -56,6 +56,7 @@ const {
   reasoningMode,
   reasoningEffort,
   testToolEnabled,
+  toolIds,
   testToolApprovalEnabled,
   externalTestToolEnabled,
   agentTestToolsEnabled,
@@ -404,6 +405,7 @@ function distanceToConversationBottom(element: HTMLElement) {
         :reasoning-mode="reasoningMode"
         :reasoning-effort="reasoningEffort"
         :test-tool-enabled="testToolEnabled"
+        :tool-ids="toolIds"
         :test-tool-approval-enabled="testToolApprovalEnabled"
         :external-test-tool-enabled="externalTestToolEnabled"
         :agent-test-tools-enabled="agentTestToolsEnabled"
@@ -447,6 +449,7 @@ function distanceToConversationBottom(element: HTMLElement) {
         @update:reasoning-mode="reasoningMode = $event"
         @update:reasoning-effort="reasoningEffort = $event"
         @update:test-tool-enabled="testToolEnabled = $event"
+        @update:tool-ids="toolIds = $event"
         @update:test-tool-approval-enabled="testToolApprovalEnabled = $event"
         @update:external-test-tool-enabled="externalTestToolEnabled = $event"
         @update:agent-test-tools-enabled="agentTestToolsEnabled = $event"

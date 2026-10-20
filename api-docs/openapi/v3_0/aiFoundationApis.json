@@ -1222,6 +1222,148 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/tools" : {
+      "get" : {
+        "description" : "List tools contributed by enabled plugins without executors.",
+        "operationId" : "ListTools",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ToolDescriptor"
+                  }
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Tool" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/tools/{pluginName}/{localName}/configuration" : {
+      "get" : {
+        "description" : "Get provider-owned configuration values without credentials.",
+        "operationId" : "GetToolConfiguration",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "pluginName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "localName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ToolConfig"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Tool" ]
+      },
+      "put" : {
+        "description" : "Validate and save provider-owned tool configuration.",
+        "operationId" : "UpdateToolConfiguration",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "pluginName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "localName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ToolConfig"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ToolConfig"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Tool" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/tools/{pluginName}/{localName}/state" : {
+      "put" : {
+        "description" : "Enable or disable a shared tool for all consumers.",
+        "operationId" : "UpdateToolState",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "pluginName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "localName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ToolEnabledRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ToolDescriptor"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Tool" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/usage-statistics/breakdown" : {
       "get" : {
         "description" : "Get usage totals grouped by a dimension.",
@@ -4038,6 +4180,14 @@
           "toolChoice" : {
             "$ref" : "#/components/schemas/ToolChoice"
           },
+          "toolIds" : {
+            "type" : "array",
+            "description" : "Stable IDs of explicitly selected shared tools.",
+            "items" : {
+              "type" : "string",
+              "description" : "Stable IDs of explicitly selected shared tools."
+            }
+          },
           "topK" : {
             "type" : "integer",
             "format" : "int32"
@@ -4064,6 +4214,133 @@
           "type" : {
             "type" : "string",
             "enum" : [ "AUTO", "NONE", "REQUIRED", "TOOL" ]
+          }
+        }
+      },
+      "ToolConfig" : {
+        "type" : "object",
+        "properties" : {
+          "values" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          }
+        }
+      },
+      "ToolDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "configurationSchema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "configured" : {
+            "type" : "boolean"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "displayDescription" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "group" : {
+            "$ref" : "#/components/schemas/ToolGroupDescriptor"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "inputSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "localName" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "outputSchema" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "pluginName" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ToolEnabledRequest" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ToolGroupDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "presets" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ToolPresetDescriptor"
+            }
+          }
+        }
+      },
+      "ToolPresetDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "toolIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         }
       },

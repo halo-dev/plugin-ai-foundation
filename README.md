@@ -14,13 +14,14 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 - **统一参数映射**：按 Provider 或模型配置采样、重试、推理、Embedding、Rerank 和图像参数到供应方字段的映射
 - **文本与多模态生成**：支持非流式与流式文本、图片 / 文件输入、推理内容、来源、结构化输出和多步骤结果
 - **工具调用**：支持服务端与外部工具、流式工具输入、审批、输入修复、并行工具调用和步骤控制
+- **共享工具**：插件工具发现、网页读取、网络与全站搜索，以及 FormKit 工具选择器
 - **Embedding、Rerank 与 RAG**：提供文本向量、批处理、相似度、重排和可组合的检索 / 重排 / 上下文注入 middleware
 - **图像生成**：支持文生图、图生图、蒙版编辑、多图聚合和图像 middleware
 - **UI Message Stream**：提供可持久化的消息协议、SSE 响应、消息校验 / 转换、取消和前端工具续跑
 - **默认模型设置**：分别配置语言、Embedding、Rerank 和图像生成默认模型
 - **模型测试工作台**：在控制台验证对话、Embedding、Rerank、图像生成和单轮 RAG，并查看流事件、用量、warning 与诊断信息
 - **用量统计**：查看调用次数、Token 用量、趋势和调用明细，按插件、供应商和模型等维度筛选，并支持自动刷新
-- **消费方 SDK**：提供 Provider-neutral Java API、浏览器 / Vue npm 包和 FormKit `aiModelSelector`
+- **消费方 SDK**：提供 Provider-neutral Java API、浏览器 / Vue npm 包，以及 FormKit `aiModelSelector` 和 `aiToolSelector`
 
 ## 已接入插件
 
@@ -113,6 +114,7 @@ UI Message 能力。
   Object stream、Transport 与 UI Message 协议。
 - [插件集成示例](./dev/zh-CN/plugin-integration-examples.md)：Halo 插件依赖、后端模型调用、
   UI Message Endpoint、Vue Chat 与模型设置。
+- [共享工具](./dev/zh-CN/tool-catalog.md)：内置工具配置、工具选择器、后端调用和插件工具注册。
 
 [SDK Core 单页参考](./dev/zh-CN/dev.md) 与
 [UI Message Stream 单页参考](./dev/zh-CN/ui-message-stream.md) 适合全文搜索。

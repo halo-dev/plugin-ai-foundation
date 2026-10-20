@@ -9,13 +9,15 @@ not consumer APIs.
 
 ## Service and capabilities
 
-| Area                    | Public types                                                           | Purpose                                                                    |
-| ----------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Service                 | `AiModelService`                                                       | Resolve default or named language, embedding, reranking, and image models. |
-| Model identity          | `ModelInfo`, `ProviderInfo`                                            | Read-only resolved model and provider information.                         |
-| Capability snapshot     | `ModelCapabilities`, `LanguageCapability`, `ImageGenerationCapability` | Provider-neutral effective capabilities.                                   |
-| Capability requirements | `ModelCapabilityRequirement`, `InputSource`                            | Positive all-of requirements for model selection.                          |
-| Capability provenance   | `ModelCapabilitySources`, `CapabilityDomain`, `CapabilitySource`       | Source of each capability domain.                                          |
+| Area                    | Public types                                                            | Purpose                                                                                |
+| ----------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Service                 | `AiModelService`                                                        | Resolve default or named language, embedding, reranking, and image models.             |
+| Shared tools            | `AiToolService`, `AiToolProvider`, `ToolRegistration`, `ToolDescriptor` | [Register, discover and resolve explicitly selected shared tools](../tool-catalog.md). |
+| Tool configuration      | `ToolConfiguration`                                                     | Provide a FormKit schema and configuration read/save callbacks.                        |
+| Model identity          | `ModelInfo`, `ProviderInfo`                                             | Read-only resolved model and provider information.                                     |
+| Capability snapshot     | `ModelCapabilities`, `LanguageCapability`, `ImageGenerationCapability`  | Provider-neutral effective capabilities.                                               |
+| Capability requirements | `ModelCapabilityRequirement`, `InputSource`                             | Positive all-of requirements for model selection.                                      |
+| Capability provenance   | `ModelCapabilitySources`, `CapabilityDomain`, `CapabilitySource`        | Source of each capability domain.                                                      |
 
 `ModelCapabilityRequirement.languageImageInput(...)` and
 `imageGenerationTextToImage()` cover common requirements. The same capability model is used by

@@ -63,6 +63,8 @@ class ModelConsoleEndpointTest {
 
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
     private final AiModelService aiModelService = mock(AiModelService.class);
+    private final run.halo.aifoundation.AiToolService aiToolService =
+        mock(run.halo.aifoundation.AiToolService.class);
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
     private AiProviderType mockType;
 
@@ -102,7 +104,7 @@ class ModelConsoleEndpointTest {
 
         var modelValidator = new ModelConsoleModelValidator(client, providerClientCache,
             new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
-        var endpoint = new ModelConsoleEndpoint(client, aiModelService, modelValidator);
+        var endpoint = new ModelConsoleEndpoint(client, aiModelService, aiToolService, modelValidator);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();
@@ -661,6 +663,52 @@ class ModelConsoleEndpointTest {
         assertThat(request.getMessages().getFirst().getRole().name()).isEqualTo("USER");
         assertThat(request.getMessages().getFirst().getContent().getFirst().getText())
             .isEqualTo("Hello");
+    }
+
+    @Test
+    void testUiMessageChatStream_resolvesOnlySelectedSharedTools() {
+        var languageModel = mock(LanguageModel.class);
+        var tool = run.halo.aifoundation.tool.ToolDefinition.builder()
+            .name("shared_site_search")
+            .description("Search published content")
+            .inputSchema(Map.of("type", "object", "properties", Map.of()))
+            .executor(context -> Mono.just(Map.of("items", List.of())))
+            .build();
+        when(aiToolService.resolveTools(List.of("ai-foundation/search_site")))
+            .thenReturn(Mono.just(List.of(tool)));
+        when(aiModelService.languageModel("gpt-4")).thenReturn(Mono.just(languageModel));
+        when(languageModel.streamText(any(GenerateTextRequest.class)))
+            .thenReturn(streamResult(Flux.just(
+                TextStreamPart.textDelta("text-1", "Result"),
+                TextStreamPart.finish(FinishReason.STOP, "stop", null))));
+
+        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "id", "chat-1",
+                "messages", List.of(uiMessage("user-1", "user", "text-1", "Search")),
+                "toolIds", List.of("ai-foundation/search_site")))
+            .exchange().expectStatus().isOk();
+
+        var captor = ArgumentCaptor.forClass(GenerateTextRequest.class);
+        verify(languageModel).streamText(captor.capture());
+        assertThat(captor.getValue().getTools()).containsExactly(tool);
+        assertThat(captor.getValue().getStopWhen()).isNotNull();
+        verify(aiToolService).resolveTools(List.of("ai-foundation/search_site"));
+    }
+
+    @Test
+    void testUiMessageChatStream_unavailableToolReturns400BeforeModelCall() {
+        when(aiToolService.resolveTools(List.of("removed/tool")))
+            .thenReturn(Mono.error(new IllegalArgumentException("Tool unavailable: removed/tool")));
+        webTestClient.post().uri("/models/gpt-4/test-chat/ui-message/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of(
+                "id", "chat-1",
+                "messages", List.of(uiMessage("user-1", "user", "text-1", "Search")),
+                "toolIds", List.of("removed/tool")))
+            .exchange().expectStatus().isBadRequest();
+        verify(aiModelService, never()).languageModel(any());
     }
 
     @Test

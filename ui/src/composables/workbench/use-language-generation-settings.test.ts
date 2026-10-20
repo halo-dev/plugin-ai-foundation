@@ -6,6 +6,7 @@ describe('useLanguageGenerationSettings', () => {
   it('builds the chat request parameters from the current controls', () => {
     const settings = useLanguageGenerationSettings()
     settings.systemPrompt.value = ' Be concise '
+    settings.toolIds.value = ['ai-foundation/search_site']
     settings.temperature.value = 0.2
     settings.topK.value = 40
     settings.minP.value = 0.1
@@ -23,6 +24,7 @@ describe('useLanguageGenerationSettings', () => {
 
     expect(settings.buildValidatedParameters()).toEqual({
       systemPrompt: ' Be concise ',
+      toolIds: ['ai-foundation/search_site'],
       temperature: 0.2,
       topP: 1,
       topK: 40,

@@ -27,6 +27,7 @@ defineProps<{
   reasoningMode?: ReasoningMode
   reasoningEffort?: ReasoningEffort
   testToolEnabled?: boolean
+  toolIds?: string[]
   testToolApprovalEnabled?: boolean
   externalTestToolEnabled?: boolean
   agentTestToolsEnabled?: boolean
@@ -73,6 +74,7 @@ const emit = defineEmits<{
   'update:reasoningMode': [value: ReasoningMode]
   'update:reasoningEffort': [value: ReasoningEffort]
   'update:testToolEnabled': [value: boolean]
+  'update:toolIds': [value: string[]]
   'update:testToolApprovalEnabled': [value: boolean]
   'update:externalTestToolEnabled': [value: boolean]
   'update:agentTestToolsEnabled': [value: boolean]
@@ -133,6 +135,7 @@ const emit = defineEmits<{
         :reasoning-mode="reasoningMode"
         :reasoning-effort="reasoningEffort"
         :test-tool-enabled="testToolEnabled"
+        :tool-ids="toolIds"
         :test-tool-approval-enabled="testToolApprovalEnabled"
         :external-test-tool-enabled="externalTestToolEnabled"
         :agent-test-tools-enabled="agentTestToolsEnabled"
@@ -162,6 +165,7 @@ const emit = defineEmits<{
         @update:reasoning-mode="emit('update:reasoningMode', $event)"
         @update:reasoning-effort="emit('update:reasoningEffort', $event)"
         @update:test-tool-enabled="emit('update:testToolEnabled', $event)"
+        @update:tool-ids="emit('update:toolIds', $event)"
         @update:test-tool-approval-enabled="emit('update:testToolApprovalEnabled', $event)"
         @update:external-test-tool-enabled="emit('update:externalTestToolEnabled', $event)"
         @update:agent-test-tools-enabled="emit('update:agentTestToolsEnabled', $event)"

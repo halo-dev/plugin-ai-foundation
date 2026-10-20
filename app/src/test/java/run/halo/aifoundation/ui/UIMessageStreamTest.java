@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import reactor.util.context.Context;
 import run.halo.aifoundation.chat.FinishReason;
 import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.control.CancellationSource;
@@ -25,6 +26,28 @@ import run.halo.aifoundation.tool.ToolResult;
 import tools.jackson.databind.json.JsonMapper;
 
 class UIMessageStreamTest {
+
+    @Test
+    void writerMergedStreamRetainsTheSubscribersContextWhenCollectingFinish() {
+        var observedCaller = new AtomicReference<String>();
+        var finish = new AtomicReference<UIMessageStreamFinish<Void>>();
+        var stream = UIMessageStreams.<Void>createWithOptions(options -> options
+            .messageId("msg-context")
+            .onFinish(finish::set)
+            .execute(writer -> writer.merge(Flux.deferContextual(context -> {
+                observedCaller.set(context.getOrDefault("caller", "missing"));
+                return Flux.just(UIMessageChunks.textStart("text-1"),
+                    UIMessageChunks.textDelta("text-1", "hello"),
+                    UIMessageChunks.textEnd("text-1"));
+            }))));
+
+        StepVerifier.create(stream.chunks().collectList()
+                .contextWrite(Context.of("caller", "administrator")))
+            .assertNext(chunks -> assertThat(chunks).hasSize(3))
+            .verifyComplete();
+        assertThat(observedCaller).hasValue("administrator");
+        assertThat(finish.get().responseMessage().text()).isEqualTo("hello");
+    }
 
     @Test
     void factoriesExposeStableTypeDiscriminators() {

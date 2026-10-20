@@ -18,6 +18,9 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -30,6 +33,13 @@ import run.halo.aifoundation.message.ModelMessageRole;
 import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.tool.ToolDefinition;
 import run.halo.aifoundation.tool.ToolExecutionContext;
+import run.halo.aifoundation.ui.ToolPart;
+import run.halo.aifoundation.ui.ToolPartState;
+import run.halo.aifoundation.ui.UIMessage;
+import run.halo.aifoundation.ui.UIMessageChatHandlers;
+import run.halo.aifoundation.ui.UIMessageParts;
+import run.halo.aifoundation.ui.UIMessageRole;
+import run.halo.aifoundation.ui.UIMessageStreamFinish;
 
 class LanguageModelToolLoopTest extends LanguageModelTestSupport {
 
@@ -238,6 +248,90 @@ class LanguageModelToolLoopTest extends LanguageModelTestSupport {
                     .isEqualTo(
                         "OpenAI-compatible image request failed: status=429, body=余额不足");
             });
+    }
+
+    @Test
+    void streamTextPreservesTheSubscribingCallersSecurityContextDuringToolExecution() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_1", "readProfile", "{}", 2, 3)),
+            Flux.just(chatResponse("Read the current user's profile.", "stop", 4, 5)));
+        var model = languageModel(chatModel, "openai");
+        var authentication = UsernamePasswordAuthenticationToken.authenticated("admin", null, List.of());
+        var observedIdentity = new AtomicReference<Authentication>();
+        var executions = new AtomicInteger();
+        var request = GenerateTextRequest.builder().prompt("Read my profile")
+            .tools(List.of(ToolDefinition.builder().name("readProfile")
+                .executor(context -> ReactiveSecurityContextHolder.getContext()
+                    .switchIfEmpty(Mono.error(new IllegalStateException("Missing authenticated caller")))
+                    .map(security -> {
+                        observedIdentity.set(security.getAuthentication());
+                        executions.incrementAndGet();
+                        return (Object) Map.of("actor", security.getAuthentication().getName());
+                    }))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2)).build();
+        var stream = model.streamText(request);
+
+        StepVerifier.create(stream.fullStream().collectList()
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)))
+            .assertNext(parts -> assertThat(parts).isNotEmpty()).verifyComplete();
+        // Reading the cached result must not execute the authenticated tool a second time.
+        StepVerifier.create(stream.result()).assertNext(result -> {
+            assertThat(result.getToolErrors()).isEmpty();
+            assertThat(result.getToolResults()).hasSize(1);
+            assertThat(result.getText()).isEqualTo("Read the current user's profile.");
+        }).verifyComplete();
+        assertThat(observedIdentity.get()).isSameAs(authentication);
+        assertThat(executions).hasValue(1);
+    }
+
+    @Test
+    void uiMessageChatPreservesTheFirstChunkSubscribersIdentityThroughToolsAndFinishAggregation() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(toolCallResponse("call_get_post", "get_post", "{\"name\":\"hello\"}", 2, 3)),
+            Flux.just(chatResponse("The post was read successfully.", "stop", 4, 5)));
+        var model = languageModel(chatModel, "openai");
+        var authentication = UsernamePasswordAuthenticationToken.authenticated("admin", null, List.of());
+        var observedIdentity = new AtomicReference<Authentication>();
+        var executions = new AtomicInteger();
+        var tool = ToolDefinition.builder().name("get_post")
+            .executor(context -> ReactiveSecurityContextHolder.getContext()
+                .switchIfEmpty(Mono.error(new IllegalStateException("Missing authenticated caller")))
+                .map(security -> {
+                    observedIdentity.set(security.getAuthentication());
+                    executions.incrementAndGet();
+                    return (Object) Map.of("name", context.getInput().get("name"), "title", "Hello");
+                })).build();
+        var user = new UIMessage<>("user-security-context", UIMessageRole.USER,
+            List.of(UIMessageParts.text("user-text", "Read the hello post")), Map.<String, Object>of());
+        var capturedFinish = new AtomicReference<UIMessageStreamFinish<Map<String, Object>>>();
+        var chat = UIMessageChatHandlers.<Map<String, Object>>streamText(options -> options
+            .model(model).messages(List.of(user)).metadataSupplier(Map::of)
+            .request(request -> request.tools(List.of(tool)).stopWhen(StopCondition.stepCountIs(2)))
+            .onFinish(capturedFinish::set));
+
+        // This must be the first subscription: finish aggregation also subscribes internally.
+        StepVerifier.create(chat.stream().chunks().collectList()
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)))
+            .assertNext(chunks -> assertThat(chunks).extracting(chunk -> chunk.type())
+                .contains("tool-output-available", "finish")
+                .doesNotContain("tool-output-error", "tool-input-error", "error"))
+            .verifyComplete();
+        StepVerifier.create(chat.finish()).assertNext(finish -> {
+            assertThat(finish.responseMessage().text()).isEqualTo("The post was read successfully.");
+            assertThat(finish.responseMessage().parts()).filteredOn(ToolPart.class::isInstance)
+                .singleElement().satisfies(part -> {
+                    var output = (ToolPart) part;
+                    assertThat(output.toolName()).isEqualTo("get_post");
+                    assertThat(output.state()).isEqualTo(ToolPartState.OUTPUT_AVAILABLE);
+                    assertThat(output.output()).isEqualTo(Map.of("name", "hello", "title", "Hello"));
+                });
+            assertThat(capturedFinish.get()).isEqualTo(finish);
+        }).verifyComplete();
+        assertThat(observedIdentity.get()).isSameAs(authentication);
+        assertThat(executions).hasValue(1);
     }
 
     @Test

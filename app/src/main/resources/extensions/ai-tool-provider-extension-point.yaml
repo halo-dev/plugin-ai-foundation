@@ -1,0 +1,9 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: ExtensionPointDefinition
+metadata:
+  name: ai-tool-provider
+spec:
+  className: run.halo.aifoundation.tool.AiToolProvider
+  displayName: AI Tool Provider
+  type: MULTI_INSTANCE
+  description: Contributes discoverable server-side tools from enabled Halo plugins.

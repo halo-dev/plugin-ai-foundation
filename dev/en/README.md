@@ -21,6 +21,7 @@ selector using the repository's current public contracts.
 | Execute browser tools or approvals          | [Tool interaction](./sdk-ui/chatbot-tool-usage.md)                           |
 | Customize requests or read streams directly | [Transport and stream reading](./sdk-ui/transport-and-reading-streams.md)    |
 | Select a model in plugin settings           | [FormKit model selector](./model-selector.md)                                |
+| Register, discover, or select shared tools  | [Tool catalog and selector](./tool-catalog.md)                               |
 | Build an end-to-end consumer plugin         | [Plugin integration example](./plugin-integration-examples.md)               |
 | Look up a Java type                         | [SDK Core API index](./sdk-core/api-reference.md)                            |
 | Look up an npm export                       | [SDK UI export index](./sdk-ui/api-reference.md)                             |
