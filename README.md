@@ -102,26 +102,20 @@ cd ui && pnpm install && pnpm dev
 
 ## 其他插件集成
 
-其他 Halo 插件可以通过依赖 `api` 模块调用语言、Embedding、Rerank、图像生成、RAG 和
-UI Message 能力。
+其他 Halo 插件可以通过依赖 `api` 模块调用语言、Embedding、Rerank、图像生成、RAG 和 UI Message 能力。
 
 本插件还注册了 FormKit `aiModelSelector` 输入，供其他插件在设置页中选择已配置的 AI 模型。
 
-- [SDK Core](./dev/zh-CN/sdk-core/README.md)：Java 后端的文本、工具、结构化输出、Embedding、
-  Rerank、RAG、图像生成、middleware 与错误处理。
-- [SDK UI](./dev/zh-CN/sdk-ui/README.md)：Vue Chat、消息持久化、工具交互、Completion、
-  Object stream、Transport 与 UI Message 协议。
-- [插件集成示例](./dev/zh-CN/plugin-integration-examples.md)：Halo 插件依赖、后端模型调用、
-  UI Message Endpoint、Vue Chat 与模型设置。
+- [SDK Core](./dev/zh-CN/sdk-core/README.md)：Java 后端的文本、工具、结构化输出、Embedding、Rerank、RAG、图像生成、middleware 与错误处理。
+- [SDK UI](./dev/zh-CN/sdk-ui/README.md)：Vue Chat、消息持久化、工具交互、Completion、Object stream、Transport 与 UI Message 协议。
+- [插件集成示例](./dev/zh-CN/plugin-integration-examples.md)：Halo 插件依赖、后端模型调用、UI Message Endpoint、Vue Chat 与模型设置。
 
 [SDK Core 单页参考](./dev/zh-CN/dev.md) 与
 [UI Message Stream 单页参考](./dev/zh-CN/ui-message-stream.md) 适合全文搜索。
 
 ## AI 辅助开发
 
-仓库提供可分发的
-[`use-ai-foundation-sdk`](./skills/use-ai-foundation-sdk/SKILL.md) Skill。可以使用
-[Skills CLI](https://skills.sh/docs/cli) 安装到当前项目：
+仓库提供可分发的 [`use-ai-foundation-sdk`](./skills/use-ai-foundation-sdk/SKILL.md) Skill。可以使用 [Skills CLI](https://skills.sh/docs/cli) 安装到当前项目：
 
 ```bash
 npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk
@@ -133,8 +127,7 @@ npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk
 npx skills add halo-dev/plugin-ai-foundation --skill use-ai-foundation-sdk --global --agent codex
 ```
 
-安装后通过 `$use-ai-foundation-sdk` 调用。Skill 会识别目标插件使用的 SDK 版本，优先复用
-本地已安装的 Java 或 npm 依赖；只有需要更多文档或源码上下文时才拉取对应版本的官方仓库。
+安装后通过 `$use-ai-foundation-sdk` 调用。Skill 会识别目标插件使用的 SDK 版本，优先复用本地已安装的 Java 或 npm 依赖；只有需要更多文档或源码上下文时才拉取对应版本的官方仓库。
 
 ## 许可证
 
