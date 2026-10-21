@@ -148,7 +148,7 @@ describe('UsageCallTable', () => {
     expect((text.match(/未知/g) || []).length).toBeGreaterThanOrEqual(3)
   })
 
-  it('renders partial and missing usage qualities distinctly', async () => {
+  it('keeps partial and missing usage qualities in the expanded detail', async () => {
     const wrapper = mountTable({
       items: [
         call({
@@ -159,10 +159,10 @@ describe('UsageCallTable', () => {
         call({ id: 'c2', usage: { quality: 'MISSING' } }),
       ],
     })
-    // Rows show a warning marker; quality details live in the expanded detail
+    // Row markers are reserved for lost events; quality details live in the expanded detail
     const rows = wrapper.findAll('[role="button"]')
-    expect(rows[0]!.get('[data-test="attention-icon"]').attributes('data-tooltip')).toBe('部分用量')
-    expect(rows[1]!.get('[data-test="attention-icon"]').attributes('data-tooltip')).toBe('用量缺失')
+    expect(rows[0]!.find('[data-test="attention-icon"]').exists()).toBe(false)
+    expect(rows[1]!.find('[data-test="attention-icon"]').exists()).toBe(false)
     await rows[0]!.trigger('click')
     expect(wrapper.text()).toContain('部分用量')
     expect(wrapper.text()).toContain('2 条执行记录缺少用量')
@@ -172,18 +172,17 @@ describe('UsageCallTable', () => {
   })
 
   it.each([
-    { complete: true, quality: 'REPORTED_COMPONENTS', tooltip: undefined },
-    { complete: false, quality: 'REPORTED_COMPONENTS', tooltip: '调用记录不完整' },
-    { complete: false, quality: 'PARTIAL', tooltip: '调用记录不完整，部分用量' },
-    { complete: false, quality: 'MISSING', tooltip: '调用记录不完整，用量缺失' },
+    { complete: true, tooltip: undefined },
+    { complete: false, tooltip: '调用记录不完整' },
   ])(
-    'shows the matching attention tooltip for $complete / $quality',
-    ({ complete, quality, tooltip }) => {
-      const wrapper = mountTable({ items: [call({ complete, usage: { quality } })] })
+    'shows the attention tooltip only for an incomplete call record ($complete)',
+    ({ complete, tooltip }) => {
+      const wrapper = mountTable({ items: [call({ complete })] })
       const icon = wrapper.find('[data-test="attention-icon"]')
       expect(icon.exists()).toBe(tooltip !== undefined)
       if (tooltip !== undefined) {
         expect(icon.attributes('data-tooltip')).toBe(tooltip)
+        expect(icon.attributes('aria-label')).toBe(tooltip)
         expect(icon.attributes('title')).toBeUndefined()
       }
     },
@@ -193,9 +192,11 @@ describe('UsageCallTable', () => {
     const wrapper = mountTable({
       items: [call({ id: 'c1', streaming: true, complete: false })],
     })
+    expect(wrapper.get('[data-test="attention-icon"]').attributes('data-tooltip')).toBe(
+      '调用记录不完整',
+    )
     await wrapper.find('[role="button"]').trigger('click')
     expect(wrapper.text()).toContain('流式')
-    expect(wrapper.text()).toContain('不完整')
   })
 
   it('uses historical snapshots without linking to live resources', async () => {
@@ -228,6 +229,7 @@ describe('UsageCallTable', () => {
 
   it('emits loadMore from the pagination button', async () => {
     const wrapper = mountTable({ items: [call()], hasNextPage: true })
+    expect(wrapper.text()).toContain('已加载 1 条')
     const loadMore = wrapper.findAll('button').find((button) => button.text() === '加载更多')
     expect(loadMore).toBeDefined()
     await loadMore!.trigger('click')

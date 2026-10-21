@@ -10,15 +10,10 @@ const props = defineProps<{
 }>()
 
 const unavailable = computed(() => props.health?.available === false)
-const incomplete = computed(() => props.health?.complete === false)
-const degraded = computed(() => unavailable.value || incomplete.value)
 
 const title = computed(() => {
   if (unavailable.value) {
     return '统计存储不可用'
-  }
-  if (incomplete.value) {
-    return '统计数据可能不完整'
   }
   return '统计状态检查失败'
 })
@@ -71,7 +66,7 @@ const timeDetails = computed(() => {
 
 <template>
   <VAlert
-    v-if="degraded || error"
+    v-if="unavailable || error"
     :type="unavailable ? 'error' : 'warning'"
     :title="title"
     role="alert"
@@ -82,9 +77,6 @@ const timeDetails = computed(() => {
           <template v-if="unavailable">
             模型调用不受影响，用量统计已停止记录。插件不会自动恢复或清空数据库，请查看 Halo
             日志排查原因。
-          </template>
-          <template v-else-if="incomplete">
-            部分统计事件未能保存，统计结果可能低于实际用量。
           </template>
           <template v-else>
             无法获取统计健康状态，当前页面展示的汇总与历史可能低于实际用量，请稍后刷新重试。

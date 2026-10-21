@@ -4,9 +4,7 @@ import {
   formatDateTime,
   formatDuration,
   formatTokens,
-  usageNeedsAttention,
   usageOperationLabel,
-  usageQualityLabel,
   usageStatusLabel,
   usageStatusState,
 } from '@/utils/usage'
@@ -60,12 +58,6 @@ function modelText(call: UsageCallItem) {
 }
 function providerText(call: UsageCallItem) {
   return providerNames.value.get(call.providerName || '') || call.providerName || '未知供应商'
-}
-function attentionTooltip(call: UsageCallItem) {
-  const reasons: string[] = []
-  if (call.complete === false) reasons.push('调用记录不完整')
-  if (usageNeedsAttention(call.usage?.quality)) reasons.push(usageQualityLabel(call.usage?.quality))
-  return reasons.join('，')
 }
 function durationClass(call: UsageCallItem) {
   const millis = call.durationMillis
@@ -151,8 +143,10 @@ function durationClass(call: UsageCallItem) {
                     :text="usageStatusLabel(call.status)"
                   />
                   <IconErrorWarning
-                    v-if="call.complete === false || usageNeedsAttention(call.usage?.quality)"
-                    v-tooltip="attentionTooltip(call)"
+                    v-if="call.complete === false"
+                    v-tooltip="'调用记录不完整'"
+                    role="img"
+                    aria-label="调用记录不完整"
                     class=":uno: size-3.5 shrink-0 text-orange-600"
                   />
                 </div>
@@ -166,7 +160,10 @@ function durationClass(call: UsageCallItem) {
           </tbody>
         </table>
       </div>
-      <div v-if="!loading" class=":uno: flex items-center justify-center px-5 py-4">
+      <div v-if="!loading" class=":uno: flex items-center justify-center gap-3 px-5 py-4">
+        <span v-if="hasNextPage" class=":uno: text-xs text-gray-400"
+          >已加载 {{ items.length }} 条</span
+        >
         <VButton v-if="hasNextPage" :loading="fetchingNextPage" @click="emit('loadMore')">{{
           loadMoreError ? '加载失败，重试' : '加载更多'
         }}</VButton>
