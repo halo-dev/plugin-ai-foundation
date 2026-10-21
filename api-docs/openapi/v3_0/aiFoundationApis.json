@@ -991,7 +991,7 @@
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/observed-caller-plugins" : {
       "get" : {
-        "description" : "List caller plugins observed by AI Foundation since startup.",
+        "description" : "List caller plugins recorded in usage statistics, enriched with plugin metadata.",
         "operationId" : "ListObservedCallerPlugins",
         "responses" : {
           "default" : {

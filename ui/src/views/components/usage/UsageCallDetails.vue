@@ -11,7 +11,7 @@ import {
 import { VStatusDot } from '@halo-dev/components'
 import { computed } from 'vue'
 import UsageCallExecutions from './UsageCallExecutions.vue'
-const props = defineProps<{ call: UsageCallItem }>()
+const props = defineProps<{ call: UsageCallItem; callerName?: string }>()
 const { data, isLoading, isError, refetch } = useUsageCallDetail(() => props.call.id || '')
 const call = computed(() => data.value?.call ?? props.call)
 const responseModel = computed(() => {
@@ -38,7 +38,7 @@ const fields = computed(() => [
     label: '请求 → 响应模型',
     value: responseModel.value,
   },
-  { label: '调用插件', value: call.value.callerPluginName || '未知插件' },
+  { label: '调用插件', value: props.callerName || call.value.callerPluginName || '未知插件' },
   { label: '插件版本', value: call.value.callerPluginVersion || '未知' },
   {
     label: '响应方式',

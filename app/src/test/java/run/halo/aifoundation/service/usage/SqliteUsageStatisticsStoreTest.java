@@ -12,6 +12,7 @@ import run.halo.aifoundation.service.observation.UsageUnitKind;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -860,6 +861,23 @@ class SqliteUsageStatisticsStoreTest {
             .accountedTotalTokens()).isEqualTo(6);
     }
 
+    @Test
+    void callerPluginsListsEachCallerWithItsMostRecentVersion() {
+        store = createStore();
+        var at = Instant.parse("2026-04-01T10:00:00Z");
+        store.startCall(start("call-1", at, "plugin-search", "1.2.3"));
+        store.startCall(start("call-2", at.plusSeconds(60), "plugin-search", "1.3.0"));
+        store.startCall(start("call-3", at, "plugin-agent", "0.1.0"));
+        store.startCall(start("call-4", at, null, null));
+
+        assertThat(store.callerPlugins())
+            .extracting(UsageCallerPlugin::name, UsageCallerPlugin::version,
+                UsageCallerPlugin::detectionSource)
+            .containsExactly(
+                tuple("plugin-agent", "0.1.0", "stack"),
+                tuple("plugin-search", "1.3.0", "stack"));
+    }
+
     private SqliteUsageStatisticsStore createStore() {
         var result = new SqliteUsageStatisticsStore(paths());
         result.initialize();
@@ -871,7 +889,12 @@ class SqliteUsageStatisticsStoreTest {
     }
 
     private static UsageCallStart start(String id, Instant startedAt) {
-        return new UsageCallStart(id, 1, startedAt, "plugin-search", "1.2.3", "stack",
+        return start(id, startedAt, "plugin-search", "1.2.3");
+    }
+
+    private static UsageCallStart start(String id, Instant startedAt, String caller,
+        String version) {
+        return new UsageCallStart(id, 1, startedAt, caller, version, "stack",
             "semantic-search", "language.generateText", "LANGUAGE", "configured-model",
             "provider-resource", "openai", "requested-model", false);
     }

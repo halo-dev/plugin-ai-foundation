@@ -308,6 +308,12 @@ public class SqliteUsageStatisticsStore implements UsageStatisticsStore {
     }
 
     @Override
+    public List<UsageCallerPlugin> callerPlugins() {
+        requireInitialized();
+        return withReader(queries::callerPlugins);
+    }
+
+    @Override
     public synchronized long reset() {
         requireInitialized();
         var restoreAutoCommit = true;
