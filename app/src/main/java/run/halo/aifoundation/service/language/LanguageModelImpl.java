@@ -2,6 +2,7 @@ package run.halo.aifoundation.service.language;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1893,18 +1894,52 @@ public class LanguageModelImpl implements LanguageModel {
             }
             var previous = target.get(key);
             if (previous instanceof List<?> left && value instanceof List<?> right) {
-                var combined = new ArrayList<Object>(left);
+                var combined = previous instanceof MergedList owned
+                    ? owned : new MergedList(left);
                 combined.addAll(right);
-                target.put(key, combined);
+                if (combined != previous) {
+                    target.put(key, combined);
+                }
             } else if (previous instanceof Map<?, ?> left && value instanceof Map<?, ?> right) {
-                var combined = new LinkedHashMap<String, Object>();
-                mergeOutputMetadata(combined, stringKeyed(left));
+                var combined = previous instanceof MergedMap owned
+                    ? owned : new MergedMap(left);
                 mergeOutputMetadata(combined, stringKeyed(right));
-                target.put(key, combined);
+                if (combined != previous) {
+                    target.put(key, combined);
+                }
             } else {
-                target.put(key, value);
+                target.put(key, ownedMetadataValue(value));
             }
         });
+    }
+
+    /** Accumulator-owned list so repeated chunk merges append instead of copying. */
+    private static final class MergedList extends ArrayList<Object> {
+        MergedList(Collection<?> values) {
+            super(values.size());
+            addAll(values);
+        }
+    }
+
+    /** Accumulator-owned map so repeated chunk merges update nested values in place. */
+    private static final class MergedMap extends LinkedHashMap<String, Object> {
+        MergedMap(Map<?, ?> values) {
+            values.forEach((key, value) -> {
+                if (key != null && value != null) {
+                    put(String.valueOf(key), value);
+                }
+            });
+        }
+    }
+
+    private static Object ownedMetadataValue(Object value) {
+        if (value instanceof List<?> list) {
+            return new MergedList(list);
+        }
+        if (value instanceof Map<?, ?> map) {
+            return new MergedMap(map);
+        }
+        return value;
     }
 
     @SuppressWarnings("unchecked")
