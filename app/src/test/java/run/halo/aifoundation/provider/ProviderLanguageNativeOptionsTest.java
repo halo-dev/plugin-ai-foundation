@@ -24,6 +24,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 import run.halo.aifoundation.provider.siliconflow.SiliconFlowProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
 import run.halo.aifoundation.provider.zhipu.ZhiPuProvider;
 import run.halo.aifoundation.service.language.mapping.LanguageModelChatOptionsBuilder;
 
@@ -88,6 +89,7 @@ class ProviderLanguageNativeOptionsTest {
             new OpenAiLikeProvider(),
             new OpenRouterProvider(),
             new SiliconFlowProvider(),
+            new TokenHubProvider(),
             new ZhiPuProvider()
         );
     }

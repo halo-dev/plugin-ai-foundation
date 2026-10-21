@@ -26,6 +26,7 @@ import run.halo.aifoundation.provider.openailike.OpenAiLikeProvider;
 import run.halo.aifoundation.provider.openrouter.OpenRouterProvider;
 import run.halo.aifoundation.provider.siliconflow.SiliconFlowProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
 import run.halo.aifoundation.provider.zhipu.ZhiPuProvider;
 
 class ProviderParameterMappingCoverageTest {
@@ -101,7 +102,8 @@ class ProviderParameterMappingCoverageTest {
             Map.entry("kimi", "reasoning.kimi"),
             Map.entry("openrouter", "reasoning.openrouter"),
             Map.entry("dashscope", "reasoning.dashscope"),
-            Map.entry("mimo", "reasoning.responses-effort")
+            Map.entry("mimo", "reasoning.responses-effort"),
+            Map.entry("tokenhub", "reasoning.tokenhub")
         );
 
         providers().forEach(providerType -> {
@@ -198,7 +200,8 @@ class ProviderParameterMappingCoverageTest {
             new DeepSeekProvider(), new SiliconFlowProvider(), new DouBaoProvider(),
             new ErnieProvider(), new ZhiPuProvider(), new OllamaProvider(),
             new MiniMaxProvider(), new KimiProvider(), new OpenRouterProvider(),
-            new DashScopeProvider(), new GiteeProvider(), new MiMoProvider()
+            new DashScopeProvider(), new GiteeProvider(), new MiMoProvider(),
+            new TokenHubProvider()
         );
     }
 }

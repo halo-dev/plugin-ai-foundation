@@ -39,6 +39,8 @@ import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
+import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.Disposable;
@@ -305,6 +307,30 @@ class LanguageModelImplTest {
     }
 
     @Test
+    void generateText_allowsTokenHubUploadedMediaReferences() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var model = languageModelWithCapabilities(chatModel, "tokenhub",
+            new TokenHubProvider().languageModelProviderOptions(),
+            LanguageCapability.builder()
+                .fileInput(true)
+                .inputMediaTypes(List.of("video/mp4"))
+                .inputSources(List.of(InputSource.URL))
+                .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+                    ModelMessagePart.text("Describe"),
+                    ModelMessagePart.file(DataContent.url("ms://uploaded-video",
+                        "video/mp4", "clip.mp4"))))))
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
     void generateText_rejectsSystemMediaBeforeProviderCall() {
         var chatModel = mock(ChatModel.class);
         var model = languageModelWithCapabilities(chatModel, LanguageCapability.builder()
@@ -407,6 +433,60 @@ class LanguageModelImplTest {
             .verifyComplete();
 
         verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_retriesRateLimitedProviderFailures() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new ProviderHttpException("tokenhub", "chat", 429, "{}"))
+            .thenReturn(chatResponse("Recovered", "stop", 1, 1));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(1)
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Recovered"))
+            .verifyComplete();
+
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_doesNotRetryDeterministicProviderFailures() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new ProviderHttpException("tokenhub", "chat", 400, "{}"));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(2)
+                .build()))
+            .expectErrorSatisfies(error -> assertThat(error)
+                .isInstanceOf(ProviderHttpException.class))
+            .verify();
+
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    void generateText_doesNotRetryInBandErrorsReportedWithHttp200() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+            .thenThrow(new ProviderHttpException("tokenhub", "chat", 200, "{}"));
+        var model = new LanguageModelImpl(chatModel, "openai");
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(2)
+                .build()))
+            .expectErrorSatisfies(error -> assertThat(error)
+                .isInstanceOf(ProviderHttpException.class))
+            .verify();
+
+        verify(chatModel).call(any(Prompt.class));
     }
 
     @Test
@@ -2493,6 +2573,55 @@ class LanguageModelImplTest {
             .verifyComplete();
 
         assertNoOverlappingStreamBlocks(stream.fullStream().collectList().block());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void streamText_preservesProviderReasoningMetadataInResponseMessages() {
+        var chatModel = mock(ChatModel.class);
+        var firstDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "Inspecting ", "signature", "sig-1");
+        var secondDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "the request.", "signature", "sig-2");
+        var details = List.of(firstDetail, secondDetail);
+        var firstOutput = AssistantMessage.builder()
+            .content("")
+            .properties(Map.of(
+                "reasoningContent", "Inspecting ",
+                "reasoningDetails", List.of(firstDetail)))
+            .build();
+        var secondOutput = AssistantMessage.builder()
+            .content("")
+            .properties(Map.of(
+                "reasoningContent", "the request.",
+                "reasoningDetails", List.of(secondDetail)))
+            .build();
+        when(chatModel.stream(any(Prompt.class))).thenReturn(Flux.just(
+            new ChatResponse(
+                List.of(new Generation(firstOutput,
+                    ChatGenerationMetadata.builder().build())),
+                ChatResponseMetadata.builder().id("resp_stream").model("test-model").build()),
+            new ChatResponse(
+                List.of(new Generation(secondOutput,
+                    ChatGenerationMetadata.builder().finishReason("stop").build())),
+                ChatResponseMetadata.builder().id("resp_stream").model("test-model").build())));
+        var model = new LanguageModelImpl(chatModel, "tokenhub",
+            LanguageModelProviderOptions.builder()
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .build());
+
+        var result = model.streamText(GenerateTextRequest.builder().prompt("Hi").build())
+            .result()
+            .block();
+
+        assertThat(result.getReasoningText()).isEqualTo("Inspecting the request.");
+        var reasoning = result.getResponseMessages().getFirst().getContent().stream()
+            .filter(part -> PartType.isReasoning(part.getType()))
+            .findFirst()
+            .orElseThrow();
+        assertThat(reasoning.getProviderMetadata())
+            .containsEntry("tokenhub", Map.of("reasoningDetails", details));
     }
 
     @Test

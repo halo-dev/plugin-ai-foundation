@@ -3,6 +3,8 @@ package run.halo.aifoundation.service.language;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
@@ -12,8 +14,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.model.ChatModel;
+import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -359,6 +366,122 @@ class LanguageModelToolInputLifecycleTest extends LanguageModelTestSupport {
             "start:first", "start:second", "delta:first", "delta:second",
             "available:first", "available:second"
         );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void streamingToolCallsReplayProviderReasoningMetadata() {
+        var chatModel = providerStreamingModel();
+        var provider = (ProviderStreamingChatModel) chatModel;
+        var firstDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "Inspect ", "signature", "sig-1");
+        var secondDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "the request.", "signature", "sig-2");
+        var details = List.of(firstDetail, secondDetail);
+        var toolCalls = List.of(new AssistantMessage.ToolCall(
+            "call_1", "function", "weather", "{\"location\":\"SF\"}"));
+        when(provider.streamParts(any(Prompt.class))).thenReturn(
+            Flux.just(
+                new ProviderStreamPart.ChatResponsePart(assistantChunk(Map.of(
+                    "reasoningContent", "Inspect ",
+                    "reasoningDetails", List.of(firstDetail)), List.of(), null)),
+                new ProviderStreamPart.ChatResponsePart(assistantChunk(Map.of(
+                    "reasoningContent", "the request.",
+                    "reasoningDetails", List.of(secondDetail)), toolCalls, "tool_calls"))),
+            Flux.just(new ProviderStreamPart.ChatResponsePart(
+                chatResponse("It is 22C.", "stop", 4, 5))));
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(weatherInputSchema())
+                .executor(context -> Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(languageModel(chatModel, "tokenhub",
+                    reasoningHistoryProviderOptions()).streamText(request)
+                .fullStream().collectList())
+            .assertNext(parts -> assertThat(parts).extracting(TextStreamPart::getType)
+                .containsSubsequence(PartType.TOOL_CALL, PartType.TOOL_RESULT))
+            .verifyComplete();
+
+        var prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(provider, times(2)).streamParts(prompts.capture());
+        var assistant = prompts.getAllValues().get(1).getInstructions().stream()
+            .filter(AssistantMessage.class::isInstance)
+            .map(AssistantMessage.class::cast)
+            .findFirst()
+            .orElseThrow();
+        assertThat(assistant.getMetadata())
+            .containsEntry("reasoningContent", "Inspect the request.");
+        assertThat((Map<String, Object>) assistant.getMetadata()
+            .get("reasoningProviderMetadata"))
+            .containsEntry("tokenhub", Map.of("reasoningDetails", details));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void nonStreamingToolCallsReplayProviderReasoningMetadata() {
+        var chatModel = mock(ChatModel.class);
+        var firstDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "Inspect ", "signature", "sig-1");
+        var secondDetail = Map.<String, Object>of(
+            "type", "thinking", "content", "the request.", "signature", "sig-2");
+        var details = List.of(firstDetail, secondDetail);
+        var toolCalls = List.of(new AssistantMessage.ToolCall(
+            "call_1", "function", "weather", "{\"location\":\"SF\"}"));
+        when(chatModel.stream(any(Prompt.class))).thenReturn(
+            Flux.just(
+                assistantChunk(Map.of(
+                    "reasoningContent", "Inspect ",
+                    "reasoningDetails", List.of(firstDetail)), List.of(), null),
+                assistantChunk(Map.of(
+                    "reasoningContent", "the request.",
+                    "reasoningDetails", List.of(secondDetail)), toolCalls, "tool_calls")),
+            Flux.just(chatResponse("It is 22C.", "stop", 4, 5)));
+        var request = GenerateTextRequest.builder()
+            .prompt("Weather in SF?")
+            .tools(List.of(ToolDefinition.builder()
+                .name("weather")
+                .inputSchema(weatherInputSchema())
+                .executor(context -> Mono.just(Map.of("temperature", 22)))
+                .build()))
+            .stopWhen(StopCondition.stepCountIs(2))
+            .build();
+
+        StepVerifier.create(languageModel(chatModel, "tokenhub",
+                    reasoningHistoryProviderOptions()).generateText(request))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("It is 22C."))
+            .verifyComplete();
+
+        var prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).stream(prompts.capture());
+        var assistant = prompts.getAllValues().get(1).getInstructions().stream()
+            .filter(AssistantMessage.class::isInstance)
+            .map(AssistantMessage.class::cast)
+            .findFirst()
+            .orElseThrow();
+        assertThat(assistant.getMetadata())
+            .containsEntry("reasoningContent", "Inspect the request.");
+        assertThat((Map<String, Object>) assistant.getMetadata()
+            .get("reasoningProviderMetadata"))
+            .containsEntry("tokenhub", Map.of("reasoningDetails", details));
+    }
+
+    private ChatResponse assistantChunk(Map<String, Object> properties,
+        List<AssistantMessage.ToolCall> toolCalls, String finishReason) {
+        var output = AssistantMessage.builder()
+            .content("")
+            .properties(properties)
+            .toolCalls(toolCalls)
+            .build();
+        return new ChatResponse(
+            List.of(new Generation(output, ChatGenerationMetadata.builder()
+                .finishReason(finishReason)
+                .build())),
+            ChatResponseMetadata.builder().id("resp_tool").model("test-model").build());
     }
 
     private ChatModel providerStreamingModel() {

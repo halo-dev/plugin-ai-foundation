@@ -13,6 +13,7 @@ import run.halo.aifoundation.provider.kimi.KimiProvider;
 import run.halo.aifoundation.provider.minimax.MiniMaxProvider;
 import run.halo.aifoundation.provider.mimo.MiMoProvider;
 import run.halo.aifoundation.provider.openrouter.OpenRouterProvider;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
 import run.halo.aifoundation.provider.zhipu.ZhiPuProvider;
 
 import run.halo.aifoundation.provider.openai.OpenAiProvider;
@@ -100,7 +101,8 @@ class ProviderNativeToolStrictTest {
             new DouBaoProvider(),
             new ErnieProvider(),
             new MiniMaxProvider(),
-            new ZhiPuProvider()
+            new ZhiPuProvider(),
+            new TokenHubProvider()
         );
     }
 

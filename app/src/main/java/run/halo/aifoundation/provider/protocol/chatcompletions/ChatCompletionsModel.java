@@ -32,6 +32,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
+import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
@@ -232,6 +233,7 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
+            rejectError(root, data, "chat");
             var id = root.path(Fields.ID).asText("");
             var model = root.path(Fields.MODEL).asText("");
             var usage = usage(root.path(Fields.USAGE));
@@ -252,6 +254,12 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         }
     }
 
+    private void rejectError(JsonNode root, String data, String operation) {
+        if (root.hasNonNull(Fields.ERROR)) {
+            throw new ProviderHttpException(profile.providerType(), operation, 200, data);
+        }
+    }
+
     private ChatResponse chatResponseChunk(String data, ToolCallStreamAssembler toolCallState,
         ChatCompletionsOptions options) {
         return chatResponseChunk(data, toolCallState, options,
@@ -262,6 +270,7 @@ public class ChatCompletionsModel implements ChatModel, ProviderStreamingChatMod
         ChatCompletionsOptions options, String diagnosticId) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
+            rejectError(root, data, "chat-stream");
             var id = root.path(Fields.ID).asText("");
             var model = root.path(Fields.MODEL).asText("");
             var usage = usage(root.path(Fields.USAGE));

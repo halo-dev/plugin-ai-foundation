@@ -25,13 +25,18 @@ public class ParameterMappingTemplateRegistry {
         AdapterType.DOUBAO_RESPONSES, AdapterType.DOUBAO_CHAT,
         AdapterType.ERNIE_RESPONSES, AdapterType.ERNIE_CHAT,
         AdapterType.GITEE_RESPONSES, AdapterType.GITEE_CHAT,
-        AdapterType.KIMI_CHAT, AdapterType.MINIMAX_MESSAGES, AdapterType.MINIMAX_CHAT,
+        AdapterType.KIMI_CHAT, AdapterType.TOKENHUB_CHAT, AdapterType.MINIMAX_MESSAGES,
+        AdapterType.MINIMAX_CHAT,
         AdapterType.OPENROUTER_CHAT, AdapterType.OPENROUTER_RESPONSES,
         AdapterType.SILICONFLOW_CHAT,
         AdapterType.MIMO_RESPONSES, AdapterType.MIMO_CHAT, AdapterType.ZHIPU_CHAT,
         AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
         AdapterType.OLLAMA_OPENAI_CHAT, AdapterType.OLLAMA_RESPONSES,
         AdapterType.OLLAMA_MESSAGES);
+    private static final Set<AdapterType> OPENAI_CHAT_THINKING_BUDGET = Set.copyOf(
+        OPENAI_CHAT.stream()
+            .filter(adapter -> adapter != AdapterType.TOKENHUB_CHAT)
+            .toList());
     private static final Set<AdapterType> OLLAMA_CHAT = Set.of(AdapterType.OLLAMA_CHAT);
     private static final Set<AdapterType> RESPONSES = Set.of(
         AdapterType.OPENAI_RESPONSES, AdapterType.DEEPSEEK_RESPONSES,
@@ -248,6 +253,14 @@ public class ParameterMappingTemplateRegistry {
                     value("reasoning_effort", ValueType.STRING, "low"),
                     value("reasoning_effort", ValueType.STRING, "high"),
                     value("reasoning_effort", ValueType.STRING, "max"))),
+            reasoningTemplate("reasoning.tokenhub", "TokenHub 请求体",
+                "thinking.type / reasoning_effort", Set.of(AdapterType.TOKENHUB_CHAT),
+                ParameterMappingApplicator.root("reasoning_effort"),
+                reasoning(value("thinking.type", ValueType.STRING, "enabled"),
+                    value("thinking.type", ValueType.STRING, "disabled"),
+                    value("reasoning_effort", ValueType.STRING, "low"),
+                    value("reasoning_effort", ValueType.STRING, "medium"),
+                    value("reasoning_effort", ValueType.STRING, "high"))),
             reasoningTemplate("reasoning.minimax", "MiniMax 请求体", "thinking.type",
                 Set.of(AdapterType.MINIMAX_MESSAGES, AdapterType.MINIMAX_CHAT),
                 ParameterMappingApplicator.rootObject("thinking", "type"),
@@ -303,7 +316,7 @@ public class ParameterMappingTemplateRegistry {
                     value("think", ValueType.STRING, "medium"),
                     value("think", ValueType.STRING, "high"))),
             reasoningTemplate("reasoning.thinking-budget", "OpenAI 请求体", "thinking_budget",
-                OPENAI_CHAT, ParameterMappingApplicator.root("thinking_budget"),
+                OPENAI_CHAT_THINKING_BUDGET, ParameterMappingApplicator.root("thinking_budget"),
                 reasoning(null, null,
                     value("thinking_budget", ValueType.INTEGER, "256"),
                     value("thinking_budget", ValueType.INTEGER, "512"),

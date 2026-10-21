@@ -254,8 +254,23 @@ public abstract class AbstractAiProviderType implements AiProviderType {
      */
     protected Mono<List<DiscoveredModel>> discoverIdentifierOnlyModels(AiProvider provider,
         String apiKey, String path) {
-        return discoverDataArrayModels(provider, apiKey, path,
-            node -> providerDefaultModelProfile(stringValue(node, "id")));
+        return discoverIdentifierOnlyModels(provider, apiKey, path, null);
+    }
+
+    protected Mono<List<DiscoveredModel>> discoverIdentifierOnlyModels(AiProvider provider,
+        String apiKey, String path, String displayNameField) {
+        return discoverDataArrayModels(provider, apiKey, path, node -> {
+            var model = providerDefaultModelProfile(stringValue(node, "id"));
+            if (model == null) {
+                return null;
+            }
+            var displayName = displayNameField != null
+                ? stringValue(node, displayNameField)
+                : null;
+            return displayName == null || displayName.isBlank() ? model
+                : new DiscoveredModel(model.modelId(), displayName, model.modelType(),
+                    model.features(), model.adapterType(), model.source(), model.confidence());
+        });
     }
 
     protected Mono<List<DiscoveredModel>> discoverDataArrayModels(AiProvider provider,

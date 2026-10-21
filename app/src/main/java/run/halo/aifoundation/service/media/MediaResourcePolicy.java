@@ -1,7 +1,9 @@
 package run.halo.aifoundation.service.media;
 
 import java.net.URI;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 import run.halo.aifoundation.exception.InvalidMediaContentException;
@@ -36,6 +38,23 @@ public class MediaResourcePolicy {
         this.maxUrlLength = maxUrlLength;
         this.allowedUrlSchemes = allowedUrlSchemes == null ? DEFAULT_ALLOWED_URL_SCHEMES
             : Set.copyOf(allowedUrlSchemes);
+    }
+
+    /**
+     * Returns a policy with the same limits that also accepts the given provider-specific URL
+     * schemes, such as an uploaded-file reference scheme.
+     */
+    public MediaResourcePolicy withAdditionalSchemes(Set<String> schemes) {
+        if (schemes == null || schemes.isEmpty()) {
+            return this;
+        }
+        var combined = new LinkedHashSet<>(allowedUrlSchemes);
+        schemes.stream()
+            .filter(scheme -> scheme != null && !scheme.isBlank())
+            .map(scheme -> scheme.toLowerCase(Locale.ROOT))
+            .forEach(combined::add);
+        return new MediaResourcePolicy(maxPartBytes, maxTotalBytes, maxUrlCount, maxUrlLength,
+            combined);
     }
 
     public void validate(List<DataContent> media) {

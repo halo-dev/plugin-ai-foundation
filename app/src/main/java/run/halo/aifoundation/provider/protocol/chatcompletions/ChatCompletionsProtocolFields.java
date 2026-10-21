@@ -11,6 +11,7 @@ final class Fields {
     static final String DATA = "data";
     static final String DELTA = "delta";
     static final String DESCRIPTION = "description";
+    static final String ERROR = "error";
     static final String EXPIRES_AT = "expires_at";
     static final String FINISH_REASON = "finish_reason";
     static final String FINISH_REASON_CAMEL = "finishReason";
