@@ -878,6 +878,18 @@ class SqliteUsageStatisticsStoreTest {
                 tuple("plugin-search", "1.3.0", "stack"));
     }
 
+    @Test
+    void callerPluginsBreaksSameMillisecondTiesDeterministically() {
+        store = createStore();
+        var at = Instant.parse("2026-04-01T10:00:00Z");
+        store.startCall(start("call-a", at, "plugin-search", "1.2.3"));
+        store.startCall(start("call-b", at, "plugin-search", "1.4.0"));
+
+        assertThat(store.callerPlugins())
+            .extracting(UsageCallerPlugin::name, UsageCallerPlugin::version)
+            .containsExactly(tuple("plugin-search", "1.4.0"));
+    }
+
     private SqliteUsageStatisticsStore createStore() {
         var result = new SqliteUsageStatisticsStore(paths());
         result.initialize();

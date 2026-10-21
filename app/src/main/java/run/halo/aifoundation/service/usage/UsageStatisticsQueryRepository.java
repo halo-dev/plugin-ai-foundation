@@ -234,18 +234,20 @@ class UsageStatisticsQueryRepository {
     }
 
     List<UsageCallerPlugin> callerPlugins(Connection connection) throws SQLException {
-        // Take version and detection source from each caller's most recent call. Ties within the
-        // same millisecond collapse in the outer GROUP BY.
+        // Take version and detection source from each caller's most recent call. The id tie-break
+        // keeps the choice deterministic when a caller has calls in the same millisecond.
         var sql = """
-            SELECT caller_plugin_name, caller_plugin_version, caller_detection_source
-            FROM ai_calls
-            WHERE caller_plugin_name IS NOT NULL
-              AND (caller_plugin_name, started_at_ms) IN (
-                SELECT caller_plugin_name, MAX(started_at_ms) FROM ai_calls
-                WHERE caller_plugin_name IS NOT NULL GROUP BY caller_plugin_name
-              )
-            GROUP BY caller_plugin_name
-            ORDER BY caller_plugin_name
+            WITH names(name) AS (
+              SELECT DISTINCT caller_plugin_name FROM ai_calls
+              WHERE caller_plugin_name IS NOT NULL
+            )
+            SELECT n.name AS caller_plugin_name, c.caller_plugin_version,
+              c.caller_detection_source
+            FROM names n JOIN ai_calls c ON c.id = (
+              SELECT c2.id FROM ai_calls c2 WHERE c2.caller_plugin_name = n.name
+              ORDER BY c2.started_at_ms DESC, c2.id DESC LIMIT 1
+            )
+            ORDER BY n.name
             """;
         try (var statement = connection.prepareStatement(sql);
             var rows = statement.executeQuery()) {
