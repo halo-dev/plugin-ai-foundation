@@ -3,6 +3,7 @@ package run.halo.aifoundation.provider.tokenhub;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -132,6 +133,7 @@ public class TokenHubProvider extends AbstractAiProviderType {
             .structuredOutputChatOptionsFactory(optionsFactory::structured)
             .reasoningControlOptions(reasoning)
             .reasoningContentExtractor(this::reasoningContent)
+            .additionalMediaUrlSchemes(Set.of("ms"))
             .build();
     }
 

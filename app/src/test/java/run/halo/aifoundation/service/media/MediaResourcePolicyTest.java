@@ -55,6 +55,22 @@ class MediaResourcePolicyTest {
     }
 
     @Test
+    void additionalSchemesExtendThePolicyWithoutRelaxingItsLimits() {
+        var base = new MediaResourcePolicy(10, 20, 2, 100, Set.of("https"));
+        var extended = base.withAdditionalSchemes(Set.of("MS"));
+
+        extended.validate(List.of(DataContent.url("ms://uploaded-video")));
+        assertThatThrownBy(() -> base.validate(
+            List.of(DataContent.url("ms://uploaded-video"))))
+            .isInstanceOf(InvalidMediaContentException.class)
+            .hasMessage("media URL scheme is not supported");
+        assertThatThrownBy(() -> extended.validate(List.of(DataContent.url(
+            "https://example.com/" + "a".repeat(120)))))
+            .isInstanceOf(InvalidMediaContentException.class)
+            .hasMessage("media URL exceeds maximum length");
+    }
+
+    @Test
     void validate_rejectsTooManyUrls() {
         var policy = new MediaResourcePolicy(10, 20, 1, 100, Set.of("https"));
 

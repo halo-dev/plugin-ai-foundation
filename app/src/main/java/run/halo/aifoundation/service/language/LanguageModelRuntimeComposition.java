@@ -68,9 +68,12 @@ public record LanguageModelRuntimeComposition(
         var resolvedCapabilities = configuration.modelCapabilities();
         var reasoningHistorySupported = reasoningHistorySupported(resolvedCapabilities,
             resolvedOptions);
+        var mediaPolicy = (mediaResourcePolicy != null ? mediaResourcePolicy
+            : new MediaResourcePolicy()).withAdditionalSchemes(
+                resolvedOptions.additionalMediaUrlSchemes());
         var requestValidator = new LanguageModelRequestValidator(context.providerType(),
             reasoningHistorySupported, resolvedCapabilities, context.modelName(),
-            context.providerName(), mediaResourcePolicy, capabilityMatcher);
+            context.providerName(), mediaPolicy, capabilityMatcher);
         var messageMapper = new LanguageModelMessageMapper(context.providerType());
         var messageHistoryAssembler = new GenerationMessageHistoryAssembler(context.providerType(),
             reasoningHistorySupported, messageMapper);

@@ -1,5 +1,7 @@
 package run.halo.aifoundation.provider.support;
 
+import java.util.Set;
+
 /**
  * Provider-specific switches used by the generic language model implementation.
  */
@@ -15,7 +17,8 @@ public record LanguageModelProviderOptions(
     StructuredOutputChatOptionsFactory structuredOutputChatOptionsFactory,
     ReasoningControlOptions reasoningControlOptions,
     AssistantReasoningContentExtractor reasoningContentExtractor,
-    NativeChatOptionsApplicator nativeOptionsApplicator
+    NativeChatOptionsApplicator nativeOptionsApplicator,
+    Set<String> additionalMediaUrlSchemes
 ) {
     public static LanguageModelProviderOptions defaults() {
         return builder().build();
@@ -39,6 +42,7 @@ public record LanguageModelProviderOptions(
         private ReasoningControlOptions reasoningControlOptions = ReasoningControlOptions.unsupported();
         private AssistantReasoningContentExtractor reasoningContentExtractor;
         private NativeChatOptionsApplicator nativeOptionsApplicator;
+        private Set<String> additionalMediaUrlSchemes = Set.of();
 
         private Builder() {
         }
@@ -112,6 +116,12 @@ public record LanguageModelProviderOptions(
             return this;
         }
 
+        public Builder additionalMediaUrlSchemes(Set<String> additionalMediaUrlSchemes) {
+            this.additionalMediaUrlSchemes = additionalMediaUrlSchemes != null
+                ? Set.copyOf(additionalMediaUrlSchemes) : Set.of();
+            return this;
+        }
+
         public LanguageModelProviderOptions build() {
             return new LanguageModelProviderOptions(
                 reasoningHistorySupported,
@@ -125,7 +135,8 @@ public record LanguageModelProviderOptions(
                 structuredOutputChatOptionsFactory,
                 reasoningControlOptions,
                 reasoningContentExtractor,
-                nativeOptionsApplicator
+                nativeOptionsApplicator,
+                additionalMediaUrlSchemes
             );
         }
     }

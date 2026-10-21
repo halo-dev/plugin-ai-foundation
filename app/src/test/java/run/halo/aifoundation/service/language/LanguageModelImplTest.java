@@ -39,6 +39,7 @@ import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.tokenhub.TokenHubProvider;
 import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -303,6 +304,30 @@ class LanguageModelImplTest {
             .singleElement()
             .extracting(Media::getData)
             .isEqualTo("https://example.com/image.png");
+    }
+
+    @Test
+    void generateText_allowsTokenHubUploadedMediaReferences() {
+        var chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done", "stop", 1, 1));
+        var model = languageModelWithCapabilities(chatModel, "tokenhub",
+            new TokenHubProvider().languageModelProviderOptions(),
+            LanguageCapability.builder()
+                .fileInput(true)
+                .inputMediaTypes(List.of("video/mp4"))
+                .inputSources(List.of(InputSource.URL))
+                .build());
+
+        StepVerifier.create(model.generateText(GenerateTextRequest.builder()
+                .messages(List.of(new ModelMessage(ModelMessageRole.USER, List.of(
+                    ModelMessagePart.text("Describe"),
+                    ModelMessagePart.file(DataContent.url("ms://uploaded-video",
+                        "video/mp4", "clip.mp4"))))))
+                .build()))
+            .assertNext(result -> assertThat(result.getText()).isEqualTo("Done"))
+            .verifyComplete();
+
+        verify(chatModel).call(any(Prompt.class));
     }
 
     @Test
