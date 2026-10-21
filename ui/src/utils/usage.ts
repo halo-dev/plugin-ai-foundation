@@ -117,16 +117,6 @@ export function usageStatusState(value?: string): 'success' | 'error' | 'warning
   }
 }
 
-export function usageNeedsAttention(quality?: string) {
-  switch (quality) {
-    case 'PARTIAL':
-    case 'MISSING':
-      return true
-    default:
-      return false
-  }
-}
-
 export function usageStatusTagTheme(value?: string | null): TagTheme {
   return (STATUS_TAG_THEMES as Record<string, TagTheme>)[value || ''] || 'default'
 }

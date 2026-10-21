@@ -3,13 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import UsageKpiStrip from '../UsageKpiStrip.vue'
 
-vi.mock('@halo-dev/components', () => ({
-  VAlert: defineComponent({
-    props: ['description'],
-    template: '<div data-test="alert">{{ description }}</div>',
-  }),
-}))
-
 vi.mock('@number-flow/vue', () => ({
   default: defineComponent({
     props: ['value', 'format'],
@@ -107,11 +100,5 @@ describe('UsageKpiStrip', () => {
     const wrapper = mountStrip()
     await wrapper.find('.usage-kpi-link').trigger('click')
     expect(wrapper.emitted('filterFailed')).toHaveLength(1)
-  })
-
-  it('shows a degradation alert for incomplete data', () => {
-    const wrapper = mountStrip({ complete: false })
-    expect(wrapper.text()).toContain('部分统计数据丢失')
-    expect(wrapper.text()).toContain('部分上报')
   })
 })

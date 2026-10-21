@@ -186,9 +186,6 @@ onBeforeUnmount(() => {
     <VCard :body-class="['!p-0']">
       <div class=":uno: flex flex-wrap items-center gap-2 px-4 py-3">
         <h3 class=":uno: text-sm text-gray-950 font-semibold">调用明细</h3>
-        <span v-if="!callsQuery.isLoading.value" class=":uno: text-xs text-gray-400"
-          >{{ callItems.length }} 条已加载</span
-        >
       </div>
       <UsageCallTable
         :items="callItems"

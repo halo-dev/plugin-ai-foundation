@@ -28,11 +28,9 @@ describe('UsageRankList', () => {
     expect(rows[0]!.get('.usage-rank-value').text()).toBe('已知 15')
     expect(rows[0]!.text()).toContain('缺失用量 1 次 · 部分上报 1 次')
     expect(rows[1]!.get('.usage-rank-value').text()).toBe('10')
-    expect(wrapper.text()).toContain('排序和占比仅基于已知 Token')
     await wrapper.setProps({ metric: 'calls' })
     expect(wrapper.findAll('.usage-rank-value')[0]!.text()).toBe('3')
     expect(wrapper.text()).not.toContain('缺失用量')
-    expect(wrapper.text()).not.toContain('排序和占比仅基于已知 Token')
     wrapper.unmount()
   })
 

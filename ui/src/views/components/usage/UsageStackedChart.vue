@@ -336,7 +336,6 @@ function barAriaLabel(bar: (typeof bars.value)[number]) {
           formatValue(metricTotal(activeBar.point))
         }}</span>
       </div>
-      <div v-if="activeBar.incomplete" class=":uno: mt-1 text-xs text-rose-600">数据不完整</div>
     </div>
     <div
       class=":uno: flex justify-between text-xs text-gray-400 tabular-nums"
