@@ -154,7 +154,7 @@ function durationClass(call: UsageCallItem) {
             </tr>
             <tr v-if="isExpanded(call)" class=":uno: usage-detail-row">
               <td :id="`usage-detail-${call.id}`" colspan="9">
-                <UsageCallDetails :call="call" />
+                <UsageCallDetails :call="call" :caller-name="callerText(call)" />
               </td>
             </tr>
           </tbody>

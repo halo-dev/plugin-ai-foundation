@@ -42,6 +42,9 @@ public interface UsageStatisticsStore extends AutoCloseable {
 
     Optional<UsageCallDetail> getCall(String id);
 
+    /** Distinct caller plugins across all retained calls, ordered by plugin name. */
+    List<UsageCallerPlugin> callerPlugins();
+
     long reset();
 
     /** Atomically recover interrupted calls and persist their incomplete health interval. */

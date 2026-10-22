@@ -233,6 +233,34 @@ class UsageStatisticsQueryRepository {
         return Optional.of(new UsageCallDetail(call.get(), findExecutions(connection, id)));
     }
 
+    List<UsageCallerPlugin> callerPlugins(Connection connection) throws SQLException {
+        // Take version and detection source from each caller's most recent call. The id tie-break
+        // keeps the choice deterministic when a caller has calls in the same millisecond.
+        var sql = """
+            WITH names(name) AS (
+              SELECT DISTINCT caller_plugin_name FROM ai_calls
+              WHERE caller_plugin_name IS NOT NULL
+            )
+            SELECT n.name AS caller_plugin_name, c.caller_plugin_version,
+              c.caller_detection_source
+            FROM names n JOIN ai_calls c ON c.id = (
+              SELECT c2.id FROM ai_calls c2 WHERE c2.caller_plugin_name = n.name
+              ORDER BY c2.started_at_ms DESC, c2.id DESC LIMIT 1
+            )
+            ORDER BY n.name
+            """;
+        try (var statement = connection.prepareStatement(sql);
+            var rows = statement.executeQuery()) {
+            var plugins = new ArrayList<UsageCallerPlugin>();
+            while (rows.next()) {
+                plugins.add(new UsageCallerPlugin(rows.getString("caller_plugin_name"),
+                    rows.getString("caller_plugin_version"),
+                    rows.getString("caller_detection_source")));
+            }
+            return plugins;
+        }
+    }
+
     private Optional<UsageCallItem> findCall(Connection connection, String id) throws SQLException {
         try (var statement = connection.prepareStatement("SELECT * FROM ai_calls WHERE id = ?")) {
             statement.setString(1, id);

@@ -95,7 +95,7 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     private Mono<CallerPluginInfo> fetchCallerPlugin(String pluginName) {
         return client.fetch(Plugin.class, pluginName)
-            .map(plugin -> fromPlugin(plugin, true))
+            .map(this::fromPlugin)
             .defaultIfEmpty(CallerPluginInfo.builder()
                 .detected(true)
                 .detectionSource(DETECTION_SOURCE)
@@ -103,22 +103,8 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
                 .build());
     }
 
-    private CallerPluginInfo fromPlugin(Plugin plugin, boolean detected) {
-        var spec = plugin.getSpec();
-        var author = spec != null ? spec.getAuthor() : null;
-        return CallerPluginInfo.builder()
-            .detected(detected)
-            .detectionSource(DETECTION_SOURCE)
-            .pluginName(plugin.getMetadata() != null ? plugin.getMetadata().getName() : null)
-            .displayName(spec != null ? spec.getDisplayName() : null)
-            .description(spec != null ? spec.getDescription() : null)
-            .version(spec != null ? spec.getVersion() : null)
-            .authorName(author != null ? author.getName() : null)
-            .authorWebsite(author != null ? author.getWebsite() : null)
-            .homepage(spec != null ? spec.getHomepage() : null)
-            .repo(spec != null ? spec.getRepo() : null)
-            .issues(spec != null ? spec.getIssues() : null)
-            .build();
+    private CallerPluginInfo fromPlugin(Plugin plugin) {
+        return CallerPluginInfo.fromPlugin(plugin, DETECTION_SOURCE);
     }
 
     private CallerPluginInfo unknown() {

@@ -226,6 +226,10 @@ public class UsageStatisticsService
             !detail.call().startedAt().isBefore(clock.instant().minus(CALL_DETAIL_RANGE))));
     }
 
+    public Mono<List<UsageCallerPlugin>> callerPlugins() {
+        return read(store::callerPlugins);
+    }
+
     public Mono<Void> reset(String confirmation) {
         if (!"RESET".equals(confirmation)) {
             return Mono.error(new IllegalArgumentException("confirmation must equal RESET"));
