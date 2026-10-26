@@ -266,7 +266,7 @@ export function createModelFromDiscovered(
     ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
   } as AiModel['spec']
-  applyCatalogImportOverrides(spec, model, override)
+  applyImportOverrides(spec, model, override)
 
   return {
     apiVersion: 'aifoundation.halo.run/v1alpha1',
@@ -278,15 +278,21 @@ export function createModelFromDiscovered(
   }
 }
 
-// Catalog-derived media coverage belongs to the adapter used during discovery. Preserve manual
-// choices and remove that coverage when the administrator selects another invocation adapter.
-function applyCatalogImportOverrides(
+// Manual choices take priority over both provider and catalog metadata. Catalog-derived media
+// coverage also belongs to the adapter used during discovery and must not cross adapter changes.
+function applyImportOverrides(
   spec: AiModel['spec'],
   model: DiscoveredModel,
   override?: DiscoveredModelProfileOverride,
 ) {
-  if (!model.catalogMatch || spec.modelType !== model.modelType) return
-  let fields = [...(model.catalogMatch.fields || [])]
+  if (spec.modelType !== model.modelType) return
+  const changedFeatures = override?.features
+    ? [...new Set([...(model.features || []), ...override.features])].filter(
+        (feature) => model.features.includes(feature) !== override.features!.includes(feature),
+      )
+    : []
+  if (!model.catalogMatch && !changedFeatures.length) return
+  let fields = [...(model.catalogMatch?.fields || [])]
   const capabilities = spec.capabilities
     ? {
         ...spec.capabilities,
@@ -303,11 +309,6 @@ function applyCatalogImportOverrides(
     }
     fields = fields.filter((field) => !field.startsWith('language.'))
   }
-  const changedFeatures = override?.features
-    ? [...new Set([...(model.features || []), ...override.features])].filter(
-        (feature) => model.features.includes(feature) !== override.features!.includes(feature),
-      )
-    : []
   for (const feature of changedFeatures) {
     fields = fields.filter((field) => field !== `features.${feature}`)
     if (!language) continue
@@ -318,14 +319,16 @@ function applyCatalogImportOverrides(
       )
       if (language.imageInput) {
         language.inputMediaTypes = [...(language.inputMediaTypes || []), 'image/png', 'image/jpeg']
-        language.inputSources = ['data']
+        language.inputSources ??= ['data']
       }
     }
     if (feature === 'audio-input') {
       // Manual audio selection uses the existing adapter defaults after import.
       language.fileInput =
         spec.features?.includes('audio-input') === true ||
-        language.inputMediaTypes?.includes('application/pdf') === true
+        language.inputMediaTypes?.some(
+          (type) => !type.startsWith('image/') && !type.startsWith('audio/'),
+        ) === true
       language.inputMediaTypes = language.inputMediaTypes?.filter(
         (type) => !type.startsWith('audio/'),
       )
@@ -334,13 +337,13 @@ function applyCatalogImportOverrides(
       fields = fields.filter((field) => !field.startsWith('language.'))
     }
   }
-  if (changedFeatures.length) {
+  if (changedFeatures.length && spec.modelType === AiModelSpecModelTypeEnum.Language) {
     sources.language = 'manual'
   }
   if (capabilities) capabilities.sources = sources
   spec.capabilities = capabilities
   spec.capabilitySources = sources
-  if (fields.length) spec.catalogMatch = { ...model.catalogMatch, fields }
+  if (model.catalogMatch && fields.length) spec.catalogMatch = { ...model.catalogMatch, fields }
 }
 
 function discoveredCapabilityFields(
