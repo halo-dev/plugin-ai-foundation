@@ -607,3 +607,78 @@ function discoveredModel(
     capabilitySources: evidence.capabilitySources,
   }
 }
+
+describe('catalog capability imports', () => {
+  function catalogModel() {
+    return {
+      ...discoveredModel(
+        'gpt-example',
+        AiModelSpecModelTypeEnum.Language,
+        [AiModelSpecFeaturesEnum.Vision, AiModelSpecFeaturesEnum.ToolCall],
+        DiscoveredModelItemAdapterTypeEnum.OpenaiResponses,
+        {
+          capabilities: {
+            language: {
+              imageInput: true,
+              fileInput: true,
+              reasoningHistory: false,
+              inputMediaTypes: ['image/png', 'image/jpeg', 'application/pdf'],
+              inputSources: ['data'],
+            },
+          },
+          capabilitySources: { language: 'catalog' },
+        },
+      ),
+      catalogMatch: {
+        providerId: 'openai',
+        modelId: 'gpt-example',
+        fetchedAt: '2026-10-26T10:00:00Z',
+        fields: [
+          'features.vision',
+          'features.tool-call',
+          'language.imageInput',
+          'language.fileInput',
+          'language.inputMediaTypes',
+          'language.inputSources',
+        ],
+      },
+    }
+  }
+
+  it('persists exact provenance and capability snapshot without mutating discovery', () => {
+    const model = catalogModel()
+    const imported = createModelFromDiscovered('openai-prod', model)
+    expect(imported.spec.catalogMatch).toEqual(model.catalogMatch)
+    expect(imported.spec.capabilitySources?.language).toBe('catalog')
+    expect(imported.spec.capabilities?.language?.reasoningHistory).toBe(false)
+  })
+
+  it('preserves explicit admin feature deselection over catalog capability flags', () => {
+    const model = catalogModel()
+    const imported = createModelFromDiscovered('openai-prod', model, { features: [] })
+    expect(imported.spec.features).toEqual([])
+    expect(imported.spec.capabilities?.language?.imageInput).toBe(false)
+    expect(imported.spec.capabilities?.language?.inputMediaTypes).toEqual(['application/pdf'])
+    expect(imported.spec.capabilitySources?.language).toBe('manual')
+    expect(imported.spec.catalogMatch?.fields || []).not.toContain('features.vision')
+    expect(model.capabilities?.language?.imageInput).toBe(true)
+  })
+
+  it('drops adapter-specific catalog coverage when selecting a different adapter', () => {
+    const imported = createModelFromDiscovered('openai-prod', catalogModel(), {
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiChat,
+    })
+    expect(imported.spec.capabilities?.language?.fileInput).toBeUndefined()
+    expect(imported.spec.capabilities?.language?.inputMediaTypes).toBeUndefined()
+    expect(imported.spec.capabilitySources?.language).toBe('unknown')
+    expect(imported.spec.catalogMatch?.fields).toEqual(['features.vision', 'features.tool-call'])
+  })
+
+  it('does not transfer catalog language data to another model type', () => {
+    const imported = createModelFromDiscovered('openai-prod', catalogModel(), {
+      modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+    })
+    expect(imported.spec.catalogMatch).toBeUndefined()
+    expect(imported.spec.capabilities).toBeUndefined()
+  })
+})

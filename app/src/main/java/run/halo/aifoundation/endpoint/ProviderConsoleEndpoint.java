@@ -21,6 +21,9 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
+import run.halo.aifoundation.catalog.ModelCatalogEnricher;
+import run.halo.aifoundation.catalog.ModelCatalogStatus;
+import run.halo.aifoundation.catalog.ModelsDevCatalogService;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
@@ -46,11 +49,24 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
     private final ProviderClientCache providerClientCache;
     private final SecretResolver secretResolver;
     private final ParameterMappingValidator parameterMappingValidator;
+    private final ModelCatalogEnricher catalogEnricher;
+    private final ModelsDevCatalogService catalogService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.aifoundation.halo.run/v1alpha1/Provider";
         return route()
+            .GET("model-catalog", request -> ServerResponse.ok().bodyValue(catalogService.status()),
+                builder -> builder.operationId("GetModelCatalogStatus")
+                    .description("Read the locally cached models.dev catalog status.")
+                    .tag(tag)
+                    .response(responseBuilder().implementation(ModelCatalogStatus.class)))
+            .POST("model-catalog/refresh", request -> catalogService.refresh()
+                    .flatMap(status -> ServerResponse.ok().bodyValue(status)),
+                builder -> builder.operationId("RefreshModelCatalog")
+                    .description("Refresh third-party capability metadata; never updates saved models.")
+                    .tag(tag)
+                    .response(responseBuilder().implementation(ModelCatalogStatus.class)))
             .GET("providers", this::listProviders,
                 builder -> builder.operationId("ListProviders")
                     .description("List all AI providers.")
@@ -312,6 +328,7 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 HttpStatus.BAD_REQUEST, e.getMessage()));
         }
         return providerType.discoverModels(provider, apiKey)
+            .map(models -> catalogEnricher.enrich(provider, providerType, models))
             .map(models -> models.stream()
                 .map(dm -> new DiscoveredModelItem(
                     dm.modelId(),
@@ -325,7 +342,8 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                         ? dm.adapterType()
                         : providerType.recommendAdapterType(dm).orElse(null),
                     dm.capabilities(),
-                    dm.capabilitySources()
+                    dm.capabilitySources(),
+                    dm.catalogMatch()
                 ))
                 .toList()
             )
@@ -333,7 +351,8 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                 log.info("Discovered {} models for provider {}", models.size(), providerName);
                 return ServerResponse.ok()
                     .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(new ProviderModelDiscoveryResponse(providerName, models));
+                    .bodyValue(new ProviderModelDiscoveryResponse(providerName, models,
+                        catalogService.status()));
             });
     }
 

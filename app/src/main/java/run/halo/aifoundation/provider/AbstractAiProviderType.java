@@ -29,6 +29,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptionsFactory;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
@@ -302,12 +303,29 @@ public abstract class AbstractAiProviderType implements AiProviderType {
 
     protected DiscoveredModel modelProfile(Map<?, ?> node, String modelId) {
         var explicitType = explicitModelType(node);
-        if (explicitType != null) {
-            return remoteDiscoveredModel(modelId, explicitType,
-                explicitFeatures(node, explicitType),
-                recommendAdapterType(explicitType).orElse(null));
+        var model = explicitType != null
+            ? remoteDiscoveredModel(modelId, explicitType, explicitFeatures(node, explicitType),
+                recommendAdapterType(explicitType).orElse(null))
+            : providerDefaultModelProfile(modelId);
+        if (model == null || model.modelType() != ModelType.LANGUAGE || node == null) {
+            return model;
         }
-        return providerDefaultModelProfile(modelId);
+        var evidence = new java.util.EnumMap<ModelFeature, Boolean>(ModelFeature.class);
+        if (node.get("features") instanceof Collection<?>) {
+            DiscoveryFeatureEvidence.declared(evidence, explicitFeatures(node, ModelType.LANGUAGE),
+                ModelFeature.VISION, ModelFeature.AUDIO_INPUT, ModelFeature.TOOL_CALL,
+                ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+        }
+        evidence.putAll(DiscoveryFeatureEvidence.booleans(node));
+        var features = new LinkedHashSet<>(model.features());
+        evidence.forEach((feature, enabled) -> {
+            if (enabled) {
+                features.add(feature);
+            } else {
+                features.remove(feature);
+            }
+        });
+        return model.toBuilder().features(Set.copyOf(features)).featureEvidence(evidence).build();
     }
 
     protected DiscoveredModel providerDefaultModelProfile(String modelId) {
@@ -399,7 +417,14 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "reasoning", "thinking")) {
             features.add(ModelFeature.REASONING);
         }
-        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "tools", "functioncalling")) {
+        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "audio", "audioinput")) {
+            features.add(ModelFeature.AUDIO_INPUT);
+        }
+        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "structuredoutput", "structuredoutputs",
+            "jsonschema")) {
+            features.add(ModelFeature.STRUCTURED_OUTPUT);
+        }
+        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "tools", "functioncalling", "toolcall")) {
             features.add(ModelFeature.TOOL_CALL);
         }
         return Set.copyOf(features);

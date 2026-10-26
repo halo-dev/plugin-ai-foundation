@@ -61,7 +61,9 @@ export function capabilitySummaryLabels(capabilities?: ModelCapabilities) {
 export function capabilitySourceLabel(value?: string) {
   switch (value) {
     case ModelCapabilitySourcesLanguageEnum.Remote:
-      return '远程'
+      return '供应商'
+    case ModelCapabilitySourcesLanguageEnum.Catalog:
+      return 'models.dev 目录'
     case ModelCapabilitySourcesLanguageEnum.BuiltIn:
       return '内置'
     case ModelCapabilitySourcesLanguageEnum.Manual:

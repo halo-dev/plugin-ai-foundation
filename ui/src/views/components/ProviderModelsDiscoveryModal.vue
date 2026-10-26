@@ -9,6 +9,7 @@ import type {
 import {
   QK_MODELS,
   useDiscoverModelsFetch,
+  useModelCatalogStatusFetch,
   type DiscoveredModel,
 } from '@/composables/use-models-fetch'
 import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
@@ -46,6 +47,8 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { useFuse } from '@vueuse/integrations/useFuse'
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import RiCheckLine from '~icons/ri/check-line'
+import ModelCatalogProvenance from './ModelCatalogProvenance.vue'
+import ModelCatalogStatus from './ModelCatalogStatus.vue'
 
 const props = defineProps<{
   provider: AiProvider
@@ -61,7 +64,30 @@ const modal = ref<InstanceType<typeof VModal> | null>(null)
 
 const providerName = computed(() => props.provider.metadata.name || '')
 
-const { data: models, isLoading } = useDiscoverModelsFetch(providerName)
+const { data: models, isLoading, refetch: refetchModels } = useDiscoverModelsFetch(providerName)
+const isRefreshingCatalog = ref(false)
+const { data: catalogStatus, refetch: refetchCatalogStatus } = useModelCatalogStatusFetch()
+const editedModelIds = ref(new Set<string>())
+
+async function refreshCatalog() {
+  if (isRefreshingCatalog.value || isImporting.value) return
+  isRefreshingCatalog.value = true
+  try {
+    const { data } = await aiConsoleApiClient.provider.refreshModelCatalog()
+    await refetchCatalogStatus()
+    if (data.error) {
+      Toast.warning(data.error)
+    } else {
+      Toast.success('能力目录已刷新')
+    }
+    // Only refresh discovery. Saved models are never updated by this action.
+    await refetchModels()
+  } catch {
+    Toast.warning('能力目录刷新失败，仍可使用当前模型列表')
+  } finally {
+    isRefreshingCatalog.value = false
+  }
+}
 const {
   data: providerTypes,
   isLoading: isLoadingProviderTypes,
@@ -96,6 +122,17 @@ const selectedModels = ref<Set<string>>(new Set())
 const profileOverrides = ref<DiscoveredModelProfiles>({})
 const isImporting = shallowRef(false)
 const selectedModelCount = computed(() => selectedModels.value.size)
+watch([() => catalogStatus.value?.fetchedAt, isLoading], ([fetchedAt, loading]) => {
+  if (
+    fetchedAt &&
+    fetchedAt !== models.value?.catalog?.fetchedAt &&
+    !loading &&
+    !isRefreshingCatalog.value &&
+    !isImporting.value
+  ) {
+    void refetchModels()
+  }
+})
 const selectedModelsNeedAdapter = computed(() =>
   allModels.value.some(
     (model) => selectedModels.value.has(model.modelId) && !profileFor(model).adapterType,
@@ -144,6 +181,7 @@ function adapterOptionsFor(model: DiscoveredModel) {
 }
 
 function setModelType(model: DiscoveredModel, event: Event) {
+  editedModelIds.value.add(model.modelId)
   const current = profileFor(model)
   const next = discoveredModelProfileForProviderType(selectedProviderType.value, model, {
     ...current,
@@ -156,6 +194,7 @@ function setModelType(model: DiscoveredModel, event: Event) {
 }
 
 function setAdapterType(model: DiscoveredModel, event: Event) {
+  editedModelIds.value.add(model.modelId)
   const current = profileFor(model)
   profileOverrides.value = {
     ...profileOverrides.value,
@@ -178,6 +217,7 @@ function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum)
   if (!featureOptionsFor(model).some((item) => item.value === feature)) {
     return
   }
+  editedModelIds.value.add(model.modelId)
   const profile = profileFor(model)
   let features = profile.features
   if (!profile.features.includes(feature)) {
@@ -274,7 +314,13 @@ async function handleImport() {
 watch(
   [allModels, selectedProviderType],
   ([items, providerType]) => {
-    const nextProfiles = syncDiscoveredModelProfiles(items, providerType, profileOverrides.value)
+    const editedProfiles = Object.fromEntries(
+      Object.entries(profileOverrides.value).filter(([id]) => editedModelIds.value.has(id)),
+    )
+    const nextProfiles = syncDiscoveredModelProfiles(items, providerType, editedProfiles)
+    selectedModels.value = new Set(
+      [...selectedModels.value].filter((id) => items.some((item) => item.modelId === id)),
+    )
     const isUnchanged =
       Object.keys(nextProfiles).length === Object.keys(profileOverrides.value).length &&
       Object.entries(nextProfiles).every(([modelId, profile]) => {
@@ -341,6 +387,12 @@ onMounted(() => {
           placeholder="搜索模型名称或供应商模型 ID..."
         />
       </div>
+      <ModelCatalogStatus
+        :status="catalogStatus"
+        :refreshing="isRefreshingCatalog"
+        :disabled="isImporting"
+        @refresh="refreshCatalog"
+      />
       <div class=":uno: min-h-0 flex-1 overflow-y-auto">
         <VLoading v-if="isLoading || isLoadingProviderTypes" />
         <div
@@ -475,6 +527,7 @@ onMounted(() => {
                         {{ source }}
                       </span>
                     </div>
+                    <ModelCatalogProvenance v-if="model.catalogMatch" :match="model.catalogMatch" />
                   </div>
                 </template>
               </VEntity>
@@ -494,7 +547,12 @@ onMounted(() => {
             type="secondary"
             @click="handleImport"
             :loading="isImporting"
-            :disabled="selectedModelCount === 0 || selectedModelsNeedAdapter || isImporting"
+            :disabled="
+              selectedModelCount === 0 ||
+              selectedModelsNeedAdapter ||
+              isImporting ||
+              isRefreshingCatalog
+            "
           >
             {{ selectedModelCount > 0 ? `导入 ${selectedModelCount} 个模型` : '导入' }}
           </VButton>

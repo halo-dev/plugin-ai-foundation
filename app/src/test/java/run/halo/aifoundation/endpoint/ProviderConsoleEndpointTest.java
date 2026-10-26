@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -19,6 +20,9 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
+import run.halo.aifoundation.catalog.ModelCatalogEnricher;
+import run.halo.aifoundation.catalog.ModelsDevCatalogService;
+import run.halo.aifoundation.catalog.ModelCatalogStatus;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -40,6 +44,7 @@ class ProviderConsoleEndpointTest {
     private final ReactiveExtensionClient client = mock(ReactiveExtensionClient.class);
     private final ProviderClientCache providerClientCache = mock(ProviderClientCache.class);
     private final SecretResolver secretResolver = mock(SecretResolver.class);
+    private final ModelsDevCatalogService catalogService = mock(ModelsDevCatalogService.class);
     private AiProviderType openAiType;
 
     private WebTestClient webTestClient;
@@ -58,10 +63,24 @@ class ProviderConsoleEndpointTest {
         when(providerClientCache.getProviderType("openai")).thenReturn(openAiType);
 
         var endpoint = new ProviderConsoleEndpoint(client, providerClientCache, secretResolver,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
+            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+            new ModelCatalogEnricher(catalogService),
+            catalogService);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();
+    }
+
+    @Test
+    void refreshingCatalogNeverReadsOrWritesSavedModels() {
+        var status = new ModelCatalogStatus(ModelsDevCatalogService.SOURCE_URL,
+            java.time.Instant.parse("2026-10-26T10:00:00Z"), null, true, false, false, null);
+        when(catalogService.refresh()).thenReturn(Mono.just(status));
+        webTestClient.post().uri("/model-catalog/refresh").exchange()
+            .expectStatus().isOk()
+            .expectBody().jsonPath("$.available").isEqualTo(true)
+            .jsonPath("$.sourceUrl").isEqualTo(ModelsDevCatalogService.SOURCE_URL);
+        verifyNoInteractions(client, secretResolver);
     }
 
     // ---- list ----

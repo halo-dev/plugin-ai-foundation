@@ -27,6 +27,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
@@ -293,6 +294,15 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     private DiscoveredModel languageModel(String modelId, Map<?, ?> node) {
         var features = languageFeatures(node);
+        var evidence = DiscoveryFeatureEvidence.booleans(node);
+        if (node.get("features") != null) {
+            DiscoveryFeatureEvidence.declared(evidence, features, ModelFeature.TOOL_CALL,
+                ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+        }
+        if (node.get("input_modalities") != null) {
+            DiscoveryFeatureEvidence.declared(evidence, features, ModelFeature.VISION,
+                ModelFeature.AUDIO_INPUT);
+        }
         var inputs = tokens(node.get("input_modalities"));
         var mediaTypes = new ArrayList<String>();
         if (inputs.contains("image")) {
@@ -301,19 +311,22 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         if (inputs.contains("pdf")) {
             mediaTypes.add("application/pdf");
         }
+        var declaredInputs = node.get("input_modalities") != null;
         var capability = LanguageCapability.builder()
-            .imageInput(inputs.contains("image"))
-            .fileInput(inputs.contains("pdf"))
-            .reasoningHistory(features.contains(ModelFeature.REASONING))
-            .inputMediaTypes(List.copyOf(mediaTypes))
-            .inputSources(mediaTypes.isEmpty() ? List.of()
-                : List.of(InputSource.DATA, InputSource.URL))
+            .imageInput(declaredInputs ? inputs.contains("image") : null)
+            .fileInput(declaredInputs ? inputs.contains("pdf") : null)
+            .reasoningHistory(node.get("features") != null
+                ? features.contains(ModelFeature.REASONING) : null)
+            .inputMediaTypes(declaredInputs ? List.copyOf(mediaTypes) : null)
+            .inputSources(declaredInputs ? (mediaTypes.isEmpty() ? List.of()
+                : List.of(InputSource.DATA, InputSource.URL)) : null)
             .build();
         return DiscoveredModel.builder()
             .modelId(modelId)
             .displayName(modelId)
             .modelType(ModelType.LANGUAGE)
             .features(features)
+            .featureEvidence(evidence)
             .adapterType(AdapterType.AIHUBMIX_RESPONSES)
             .source(DiscoverySource.REMOTE)
             .confidence(DiscoveryConfidence.HIGH)

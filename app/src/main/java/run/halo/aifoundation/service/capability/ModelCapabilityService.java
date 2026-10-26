@@ -32,7 +32,12 @@ public class ModelCapabilityService {
         var imageGeneration = copy(explicit == null ? null : explicit.getImageGeneration());
 
         if (spec.getModelType() == ModelType.LANGUAGE) {
-            language = applyLanguageDefaults(language, spec.getFeatures(), providerType);
+            // A manual tool/reasoning override does not replace catalog-derived media coverage.
+            var catalogMediaCoverage = spec.getCatalogMatch() != null
+                && spec.getCatalogMatch().fields() != null
+                && spec.getCatalogMatch().fields().contains("language.inputMediaTypes");
+            language = applyLanguageDefaults(language, spec.getFeatures(), providerType,
+                catalogMediaCoverage);
         }
         if (spec.getModelType() == ModelType.IMAGE_GENERATION
             && sources.getImageGeneration() != CapabilitySource.MANUAL) {
@@ -47,7 +52,8 @@ public class ModelCapabilityService {
     }
 
     private LanguageCapability applyLanguageDefaults(LanguageCapability language,
-        List<ModelFeature> features, @Nullable AiProviderType providerType) {
+        List<ModelFeature> features, @Nullable AiProviderType providerType,
+        boolean catalogMediaCoverage) {
         var result = language;
         var hasVision = features != null && features.contains(ModelFeature.VISION);
         var hasAudioInput = features != null && features.contains(ModelFeature.AUDIO_INPUT);
@@ -71,7 +77,7 @@ public class ModelCapabilityService {
                 result.setFileInput(true);
             }
         }
-        if (result != null && Boolean.TRUE.equals(result.getImageInput())) {
+        if (!catalogMediaCoverage && result != null && Boolean.TRUE.equals(result.getImageInput())) {
             if (result.getInputMediaTypes() == null || result.getInputMediaTypes().isEmpty()) {
                 result.setInputMediaTypes(List.of("image/*"));
             }
@@ -79,7 +85,8 @@ public class ModelCapabilityService {
                 result.setInputSources(List.of(InputSource.DATA));
             }
         }
-        if (result != null && hasAudioInput && Boolean.TRUE.equals(result.getFileInput())) {
+        if (!catalogMediaCoverage && result != null && hasAudioInput
+            && Boolean.TRUE.equals(result.getFileInput())) {
             appendDefault(result.getInputMediaTypes(), "audio/*", result::setInputMediaTypes);
             if (result.getInputSources() == null || result.getInputSources().isEmpty()) {
                 result.setInputSources(List.of(InputSource.DATA));

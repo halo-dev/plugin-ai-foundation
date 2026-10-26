@@ -266,6 +266,7 @@ export function createModelFromDiscovered(
     ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
   } as AiModel['spec']
+  applyCatalogImportOverrides(spec, model, override)
 
   return {
     apiVersion: 'aifoundation.halo.run/v1alpha1',
@@ -275,6 +276,72 @@ export function createModelFromDiscovered(
     },
     spec,
   }
+}
+
+// Catalog-derived media coverage belongs to the adapter used during discovery. Preserve manual
+// choices and remove that coverage when the administrator selects another invocation adapter.
+function applyCatalogImportOverrides(
+  spec: AiModel['spec'],
+  model: DiscoveredModel,
+  override?: DiscoveredModelProfileOverride,
+) {
+  if (!model.catalogMatch || spec.modelType !== model.modelType) return
+  let fields = [...(model.catalogMatch.fields || [])]
+  const capabilities = spec.capabilities
+    ? {
+        ...spec.capabilities,
+        language: spec.capabilities.language ? { ...spec.capabilities.language } : undefined,
+      }
+    : undefined
+  const sources = { ...spec.capabilitySources }
+  const language = capabilities?.language
+  if (spec.adapterType !== model.adapterType && language) {
+    for (const field of fields) {
+      if (field.startsWith('language.')) {
+        delete language[field.slice('language.'.length) as keyof typeof language]
+      }
+    }
+    fields = fields.filter((field) => !field.startsWith('language.'))
+    if (sources.language === 'catalog') sources.language = 'unknown'
+  }
+  const changedFeatures = override?.features
+    ? [...new Set([...(model.features || []), ...override.features])].filter(
+        (feature) => model.features.includes(feature) !== override.features!.includes(feature),
+      )
+    : []
+  for (const feature of changedFeatures) {
+    fields = fields.filter((field) => field !== `features.${feature}`)
+    if (!language) continue
+    if (feature === 'vision') {
+      language.imageInput = spec.features?.includes('vision') === true
+      language.inputMediaTypes = language.inputMediaTypes?.filter(
+        (type) => !type.startsWith('image/'),
+      )
+      if (language.imageInput) {
+        language.inputMediaTypes = [...(language.inputMediaTypes || []), 'image/png', 'image/jpeg']
+        language.inputSources = ['data']
+      }
+    }
+    if (feature === 'audio-input') {
+      // Manual audio selection uses the existing adapter defaults after import.
+      language.fileInput =
+        spec.features?.includes('audio-input') === true ||
+        language.inputMediaTypes?.includes('application/pdf') === true
+      language.inputMediaTypes = language.inputMediaTypes?.filter(
+        (type) => !type.startsWith('audio/'),
+      )
+    }
+    if (feature === 'vision' || feature === 'audio-input') {
+      fields = fields.filter((field) => !field.startsWith('language.'))
+    }
+  }
+  if (changedFeatures.length) {
+    sources.language = 'manual'
+  }
+  if (capabilities) capabilities.sources = sources
+  spec.capabilities = capabilities
+  spec.capabilitySources = sources
+  if (fields.length) spec.catalogMatch = { ...model.catalogMatch, fields }
 }
 
 function discoveredCapabilityFields(

@@ -27,6 +27,7 @@ import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
@@ -318,6 +319,17 @@ public class OpenRouterProvider extends AbstractAiProviderType {
         if (reasoning) {
             features.add(ModelFeature.REASONING);
         }
+        var evidence = DiscoveryFeatureEvidence.booleans(node);
+        if (node.get("supported_parameters") instanceof List<?>) {
+            DiscoveryFeatureEvidence.declared(evidence, features, ModelFeature.TOOL_CALL,
+                ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+        }
+        var declaredInputs = node.get("architecture") instanceof Map<?, ?> architecture
+            && architecture.get("input_modalities") instanceof List<?>;
+        if (declaredInputs) {
+            DiscoveryFeatureEvidence.declared(evidence, features, ModelFeature.VISION,
+                ModelFeature.AUDIO_INPUT);
+        }
         var mediaTypes = new ArrayList<String>();
         inputs.forEach(input -> {
             switch (input) {
@@ -330,18 +342,19 @@ public class OpenRouterProvider extends AbstractAiProviderType {
             }
         });
         var capability = LanguageCapability.builder()
-            .imageInput(inputs.contains("image"))
-            .fileInput(containsAny(inputs, "file", "audio", "video"))
-            .reasoningHistory(reasoning)
-            .inputMediaTypes(List.copyOf(mediaTypes))
-            .inputSources(mediaTypes.isEmpty() ? List.of()
-                : List.of(InputSource.DATA, InputSource.URL))
+            .imageInput(declaredInputs ? inputs.contains("image") : null)
+            .fileInput(declaredInputs ? containsAny(inputs, "file", "audio", "video") : null)
+            .reasoningHistory(node.get("supported_parameters") instanceof List<?> ? reasoning : null)
+            .inputMediaTypes(declaredInputs ? List.copyOf(mediaTypes) : null)
+            .inputSources(declaredInputs ? (mediaTypes.isEmpty() ? List.of()
+                : List.of(InputSource.DATA, InputSource.URL)) : null)
             .build();
         return DiscoveredModel.builder()
             .modelId(modelId)
             .displayName(stringValue(node, "name"))
             .modelType(ModelType.LANGUAGE)
             .features(Set.copyOf(features))
+            .featureEvidence(evidence)
             .adapterType(AdapterType.OPENROUTER_CHAT)
             .source(DiscoverySource.REMOTE)
             .confidence(DiscoveryConfidence.HIGH)

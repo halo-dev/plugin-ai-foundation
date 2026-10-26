@@ -48,6 +48,8 @@ models/language-mappings.ts
 models/metadata.ts
 models/model-capabilities.ts
 models/model-capability-sources.ts
+models/model-catalog-match.ts
+models/model-catalog-status.ts
 models/model-message-part.ts
 models/model-message.ts
 models/model-option-provider.ts

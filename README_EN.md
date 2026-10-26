@@ -15,8 +15,9 @@ ecosystem.
   providers, AIHubMix, Gitee AI, MiniMax, Tencent Cloud TokenHub, and Xiaomi MiMo
 - **Unified model management**: Manage providers, API key secrets, language, embedding, reranking,
   and image models, adapters, and model capabilities from the Halo Console
-- **Model discovery**: Fetch available models from providers while retaining the source of remote
-  declarations, built-in capabilities, and administrator overrides
+- **Model discovery**: Supplement provider-discovered models with exact matches from models.dev,
+  retaining provider, third-party catalog, and administrator provenance. A persistent cache refreshes
+  every 24 hours; refresh failures and missing matches preserve the existing discovery workflow.
 - **Parameter mapping**: Configure provider- or model-level mappings for sampling, retries,
   reasoning, embedding, reranking, and image parameters
 - **Text and multimodal generation**: Generate text with streaming or non-streaming responses,

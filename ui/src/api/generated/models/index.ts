@@ -29,6 +29,8 @@ export * from './language-mappings';
 export * from './metadata';
 export * from './model-capabilities';
 export * from './model-capability-sources';
+export * from './model-catalog-match';
+export * from './model-catalog-status';
 export * from './model-message';
 export * from './model-message-part';
 export * from './model-option';

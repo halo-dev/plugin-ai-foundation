@@ -34,6 +34,14 @@ type ProviderModelDiscoveryResult = Omit<
 export const QK_MODELS = 'plugin:ai-foundation:models'
 export const QK_DISCOVERED_MODELS = 'plugin:ai-foundation:discovered-models'
 
+export function useModelCatalogStatusFetch() {
+  return useQuery({
+    queryKey: ['plugin:ai-foundation:model-catalog'],
+    queryFn: async () => (await aiConsoleApiClient.provider.getModelCatalogStatus()).data,
+    refetchInterval: (data) => (data?.refreshing ? 1000 : false),
+  })
+}
+
 export function useModelsFetch({ providerName }: { providerName?: Ref<string | undefined> }) {
   return useQuery<AiModel[]>({
     queryKey: [QK_MODELS, providerName],

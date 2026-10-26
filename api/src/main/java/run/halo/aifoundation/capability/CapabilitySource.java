@@ -19,6 +19,11 @@ public enum CapabilitySource {
     REMOTE("remote"),
 
     /**
+     * Capability data was supplemented by an exact match in a third-party model catalog.
+     */
+    CATALOG("catalog"),
+
+    /**
      * Capability data came from AI Foundation's built-in provider or adapter knowledge.
      */
     BUILT_IN("built-in"),

@@ -31,6 +31,7 @@ export interface ModelFormState {
   adapterType?: AiModelSpecAdapterTypeEnum
   capabilities?: AiModel['spec']['capabilities']
   capabilitySources?: AiModel['spec']['capabilitySources']
+  catalogMatch?: AiModel['spec']['catalogMatch']
   parameterMappings?: ModelParameterMappings
   nativeOptions?: Record<string, unknown>
 }

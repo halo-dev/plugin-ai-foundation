@@ -14,6 +14,7 @@ import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilityRequirement;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
+import run.halo.aifoundation.catalog.ModelCatalogMatch;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -26,6 +27,34 @@ class ModelCapabilityServiceTest {
 
     private final ModelCapabilityService service = new ModelCapabilityService();
     private final ModelCapabilityMatcher matcher = new ModelCapabilityMatcher();
+
+    @Test
+    void catalogMediaCoverageIsNotExpandedByLegacyFeatureDefaults() {
+        var model = model(ModelType.LANGUAGE);
+        model.getSpec().setFeatures(List.of(ModelFeature.AUDIO_INPUT, ModelFeature.VISION));
+        model.getSpec().setCapabilities(ModelCapabilities.builder()
+            .language(LanguageCapability.builder().imageInput(true).fileInput(true)
+                .reasoningHistory(false)
+                .inputMediaTypes(List.of("image/png", "audio/wav"))
+                .inputSources(List.of(InputSource.DATA)).build()).build());
+        model.getSpec().setCapabilitySources(ModelCapabilitySources.builder()
+            .language(CapabilitySource.CATALOG).build());
+        model.getSpec().setCatalogMatch(new ModelCatalogMatch("openai", "model", null,
+            List.of("language.inputMediaTypes")));
+
+        var capabilities = service.effectiveCapabilities(model, null);
+        assertThat(capabilities.getLanguage().getInputMediaTypes())
+            .containsExactly("image/png", "audio/wav");
+        assertThat(capabilities.getLanguage().getInputSources()).containsExactly(InputSource.DATA);
+        assertThat(capabilities.getLanguage().getReasoningHistory()).isFalse();
+
+        // Changing an unrelated feature marks the language domain manual, but leaves the
+        // catalog's precise media coverage intact.
+        model.getSpec().setCapabilitySources(ModelCapabilitySources.builder()
+            .language(CapabilitySource.MANUAL).build());
+        assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
+            .containsExactly("image/png", "audio/wav");
+    }
 
     @Test
     void effectiveCapabilities_defaultsVisionFeatureToImageInput() {
