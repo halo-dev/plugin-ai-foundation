@@ -183,6 +183,8 @@ const languageSourceLabel = computed(() =>
       props.formState?.capabilitySources,
       'language',
     ),
+    props.formState?.catalogMatch,
+    'language',
   ),
 )
 const imageGenerationSourceLabel = computed(() =>
@@ -192,6 +194,8 @@ const imageGenerationSourceLabel = computed(() =>
       props.formState?.capabilitySources,
       'imageGeneration',
     ),
+    props.formState?.catalogMatch,
+    'imageGeneration',
   ),
 )
 const visibleCapabilitySourceLabel = computed(() =>

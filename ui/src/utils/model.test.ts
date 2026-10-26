@@ -626,7 +626,7 @@ describe('catalog capability imports', () => {
               inputSources: ['data'],
             },
           },
-          capabilitySources: { language: 'catalog' },
+          capabilitySources: { language: 'unknown' },
         },
       ),
       catalogMatch: {
@@ -649,7 +649,7 @@ describe('catalog capability imports', () => {
     const model = catalogModel()
     const imported = createModelFromDiscovered('openai-prod', model)
     expect(imported.spec.catalogMatch).toEqual(model.catalogMatch)
-    expect(imported.spec.capabilitySources?.language).toBe('catalog')
+    expect(imported.spec.capabilitySources?.language).toBe('unknown')
     expect(imported.spec.capabilities?.language?.reasoningHistory).toBe(false)
   })
 

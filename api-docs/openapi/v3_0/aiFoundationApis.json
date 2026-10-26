@@ -2624,11 +2624,11 @@
         "properties" : {
           "imageGeneration" : {
             "type" : "string",
-            "enum" : [ "remote", "catalog", "built-in", "manual", "unknown" ]
+            "enum" : [ "remote", "built-in", "manual", "unknown" ]
           },
           "language" : {
             "type" : "string",
-            "enum" : [ "remote", "catalog", "built-in", "manual", "unknown" ]
+            "enum" : [ "remote", "built-in", "manual", "unknown" ]
           }
         }
       },

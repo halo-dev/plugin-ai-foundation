@@ -245,7 +245,9 @@ function capabilitySourceLabels(model: DiscoveredModel) {
         model.capabilitySources,
         domain as 'language' | 'imageGeneration',
       )
-      return source ? `${label}: ${capabilitySourceLabel(source)}` : ''
+      return source
+        ? `${label}: ${capabilitySourceLabel(source, model.catalogMatch, domain as 'language' | 'imageGeneration')}`
+        : ''
     })
     .filter(Boolean)
 }

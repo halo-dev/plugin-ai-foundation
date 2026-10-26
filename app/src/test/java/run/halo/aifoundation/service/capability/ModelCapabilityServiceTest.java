@@ -38,7 +38,7 @@ class ModelCapabilityServiceTest {
                 .inputMediaTypes(List.of("image/png", "audio/wav"))
                 .inputSources(List.of(InputSource.DATA)).build()).build());
         model.getSpec().setCapabilitySources(ModelCapabilitySources.builder()
-            .language(CapabilitySource.CATALOG).build());
+            .language(CapabilitySource.UNKNOWN).build());
         model.getSpec().setCatalogMatch(new ModelCatalogMatch("openai", "model", null,
             List.of("language.inputMediaTypes")));
 
@@ -54,6 +54,12 @@ class ModelCapabilityServiceTest {
             .language(CapabilitySource.MANUAL).build());
         assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
             .containsExactly("image/png", "audio/wav");
+
+        // A pre-catalog reader drops the optional provenance. Its existing audio default is
+        // deliberately unchanged; decoding compatibility does not promise downgrade parity.
+        model.getSpec().setCatalogMatch(null);
+        assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
+            .containsExactly("image/png", "audio/wav", "audio/*");
     }
 
     @Test

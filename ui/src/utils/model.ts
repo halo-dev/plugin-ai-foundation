@@ -302,7 +302,6 @@ function applyCatalogImportOverrides(
       }
     }
     fields = fields.filter((field) => !field.startsWith('language.'))
-    if (sources.language === 'catalog') sources.language = 'unknown'
   }
   const changedFeatures = override?.features
     ? [...new Set([...(model.features || []), ...override.features])].filter(

@@ -126,10 +126,12 @@ public class ModelCatalogEnricher {
         if (fields.isEmpty()) {
             return model;
         }
+        // Keep the published enum stable: older readers reject unknown source values.
+        // Per-field catalog attribution belongs exclusively to catalogMatch.
         var sources = ModelCapabilitySources.builder()
             .language(providerImage != null || providerAudio != null ? CapabilitySource.REMOTE
                 : fields.stream().anyMatch(field -> field.startsWith("language."))
-                    && source(model) != CapabilitySource.REMOTE ? CapabilitySource.CATALOG : source(model))
+                    && source(model) != CapabilitySource.REMOTE ? CapabilitySource.UNKNOWN : source(model))
             .imageGeneration(model.capabilitySources().getImageGeneration())
             .build();
         var capabilities = ModelCapabilities.builder()

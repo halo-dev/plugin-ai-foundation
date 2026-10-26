@@ -43,7 +43,7 @@ class ModelCatalogEnricherTest {
             .containsExactly("image/png", "image/jpeg", "application/pdf");
         assertThat(result.capabilities().getLanguage().getInputSources()).containsExactly(InputSource.DATA);
         assertThat(result.capabilities().getLanguage().getReasoningHistory()).isFalse();
-        assertThat(result.capabilitySources().getLanguage()).isEqualTo(CapabilitySource.CATALOG);
+        assertThat(result.capabilitySources().getLanguage()).isEqualTo(CapabilitySource.UNKNOWN);
         assertThat(result.catalogMatch().providerId()).isEqualTo("openai");
         assertThat(result.catalogMatch().fetchedAt()).isEqualTo(ModelsDevCatalogServiceTest.NOW);
         assertThat(result.source()).isEqualTo(DiscoverySource.RULE);

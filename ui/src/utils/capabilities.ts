@@ -3,6 +3,7 @@ import type {
   LanguageCapability,
   ModelCapabilities,
   ModelCapabilitySources,
+  ModelCatalogMatch,
   ModelOption,
 } from '@/api/generated'
 import {
@@ -58,12 +59,22 @@ export function capabilitySummaryLabels(capabilities?: ModelCapabilities) {
   return labels
 }
 
-export function capabilitySourceLabel(value?: string) {
+export function capabilitySourceLabel(
+  value?: string,
+  catalogMatch?: ModelCatalogMatch,
+  domain: keyof ModelCapabilitySources = 'language',
+): string {
+  const hasCatalogFields = catalogMatch?.fields?.some((field) => field.startsWith(`${domain}.`))
+  if (hasCatalogFields && value !== ModelCapabilitySourcesLanguageEnum.Manual) {
+    const original =
+      value && value !== ModelCapabilitySourcesLanguageEnum.Unknown
+        ? `${capabilitySourceLabel(value)} + `
+        : ''
+    return `${original}models.dev 目录`
+  }
   switch (value) {
     case ModelCapabilitySourcesLanguageEnum.Remote:
       return '供应商'
-    case ModelCapabilitySourcesLanguageEnum.Catalog:
-      return 'models.dev 目录'
     case ModelCapabilitySourcesLanguageEnum.BuiltIn:
       return '内置'
     case ModelCapabilitySourcesLanguageEnum.Manual:

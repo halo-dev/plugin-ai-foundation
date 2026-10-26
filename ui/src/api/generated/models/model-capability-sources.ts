@@ -36,7 +36,6 @@ export interface ModelCapabilitySources {
 
 export const ModelCapabilitySourcesImageGenerationEnum = {
     Remote: 'remote',
-    Catalog: 'catalog',
     BuiltIn: 'built-in',
     Manual: 'manual',
     Unknown: 'unknown'
@@ -45,7 +44,6 @@ export const ModelCapabilitySourcesImageGenerationEnum = {
 export type ModelCapabilitySourcesImageGenerationEnum = typeof ModelCapabilitySourcesImageGenerationEnum[keyof typeof ModelCapabilitySourcesImageGenerationEnum];
 export const ModelCapabilitySourcesLanguageEnum = {
     Remote: 'remote',
-    Catalog: 'catalog',
     BuiltIn: 'built-in',
     Manual: 'manual',
     Unknown: 'unknown'
