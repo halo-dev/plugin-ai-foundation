@@ -157,6 +157,7 @@ defineExpose({
       validation="required"
       :options="providerTypeOptions"
       :disabled="isEditing"
+      searchable
       v-model="providerType"
       :value="formState?.providerType"
     >
