@@ -15,7 +15,10 @@ import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
+import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.deepseek.DeepSeekProvider;
+import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.aifoundation.provider.openai.OpenAiProvider;
 import run.halo.aifoundation.provider.openailike.OpenAiLikeProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -42,7 +45,7 @@ class ModelCatalogEnricherTest {
         assertThat(result.capabilities().getLanguage().getInputMediaTypes())
             .containsExactly("image/png", "image/jpeg", "application/pdf");
         assertThat(result.capabilities().getLanguage().getInputSources()).containsExactly(InputSource.DATA);
-        assertThat(result.capabilities().getLanguage().getReasoningHistory()).isFalse();
+        assertThat(result.capabilities().getLanguage().getReasoningHistory()).isNull();
         assertThat(result.capabilitySources().getLanguage()).isEqualTo(CapabilitySource.UNKNOWN);
         assertThat(result.catalogMatch().providerId()).isEqualTo("openai");
         assertThat(result.catalogMatch().fetchedAt()).isEqualTo(ModelsDevCatalogServiceTest.NOW);
@@ -154,6 +157,37 @@ class ModelCatalogEnricherTest {
         assertThat(result.features()).contains(ModelFeature.VISION);
         assertThat(result.capabilities().getLanguage().getImageInput()).isTrue();
         assertThat(result.capabilitySources().getLanguage()).isEqualTo(CapabilitySource.REMOTE);
+    }
+
+    @Test
+    void catalogWithoutReplayEvidencePreservesProviderDefaultAndExplicitFalse() {
+        var enricher = enricher("""
+            {"deepseek":{"id":"deepseek","models":{"deepseek-chat":{
+              "id":"deepseek-chat","reasoning":true,
+              "modalities":{"input":["text"],"output":["text"]}}}}}
+            """);
+        var provider = provider(null);
+        provider.getSpec().setProviderType("deepseek");
+        var type = new DeepSeekProvider();
+        var input = discovered().toBuilder().modelId("deepseek-chat")
+            .adapterType(AdapterType.DEEPSEEK_CHAT).build();
+        var result = enricher.enrich(provider, type, List.of(input)).getFirst();
+        assertThat(result.capabilities().getLanguage().getReasoningHistory()).isNull();
+        var saved = new AiModel();
+        var spec = new AiModel.AiModelSpec();
+        spec.setModelType(ModelType.LANGUAGE);
+        spec.setCapabilities(result.capabilities());
+        spec.setCatalogMatch(result.catalogMatch());
+        saved.setSpec(spec);
+        assertThat(new ModelCapabilityService().effectiveCapabilities(saved, type)
+            .getLanguage().getReasoningHistory()).isTrue();
+
+        var explicit = input.toBuilder().capabilities(ModelCapabilities.builder()
+            .language(LanguageCapability.builder().reasoningHistory(false).build()).build())
+            .capabilitySources(ModelCapabilitySources.builder().language(CapabilitySource.REMOTE).build())
+            .build();
+        var preserved = enricher.enrich(provider, type, List.of(explicit)).getFirst();
+        assertThat(preserved.capabilities().getLanguage().getReasoningHistory()).isFalse();
     }
 
     private ModelCatalogEnricher enricher(String body) {

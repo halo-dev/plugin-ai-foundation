@@ -45,6 +45,7 @@ const detail = computed(() =>
 
 <template>
   <p
+    v-if="match.fields?.length"
     v-tooltip="detail"
     class=":uno: max-w-full inline-flex items-center gap-1 text-xs text-gray-400"
   >

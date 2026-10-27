@@ -5,6 +5,7 @@ import { AiModelSpecDiscoveryConfidenceEnum, AiModelSpecDiscoverySourceEnum } fr
 import { QK_MODELS } from '@/composables/use-models-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import type { ModelFormState } from '@/types/form'
+import { reconcileModelCapabilities } from '@/utils/model-capability-changes'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, useTemplateRef } from 'vue'
@@ -39,7 +40,7 @@ const { mutate, isPending } = useMutation({
       name: props.model.metadata.name,
       aiModel: {
         ...props.model,
-        spec: {
+        spec: reconcileModelCapabilities(props.model.spec, {
           ...props.model.spec,
           modelId: formState.modelId,
           displayName: formState.displayName,
@@ -55,7 +56,7 @@ const { mutate, isPending } = useMutation({
             props.model.spec.discoverySource || AiModelSpecDiscoverySourceEnum.Manual,
           discoveryConfidence:
             props.model.spec.discoveryConfidence || AiModelSpecDiscoveryConfidenceEnum.High,
-        } as AiModel['spec'],
+        } as AiModel['spec']),
       },
     })
   },

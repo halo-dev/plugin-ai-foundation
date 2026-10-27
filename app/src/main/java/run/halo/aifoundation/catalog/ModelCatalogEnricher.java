@@ -118,10 +118,6 @@ public class ModelCatalogEnricher {
                     ? List.of() : List.of(InputSource.DATA));
                 fields.add("language.inputSources");
             }
-            // A model's ability to reason is not evidence of history replay support.
-            if (language.getReasoningHistory() == null) {
-                language.setReasoningHistory(false);
-            }
         }
         if (fields.isEmpty()) {
             return model;

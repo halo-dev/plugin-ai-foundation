@@ -55,11 +55,38 @@ class ModelCapabilityServiceTest {
         assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
             .containsExactly("image/png", "audio/wav");
 
+        // Editing a media field removes its attribution, not the precise coverage contract.
+        model.getSpec().setCatalogMatch(new ModelCatalogMatch("openai", "model", null, List.of()));
+        assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
+            .containsExactly("image/png", "audio/wav");
+        assertThat(matcher.match(service.effectiveCapabilities(model, null),
+            ModelCapabilityRequirement.builder().language(LanguageCapability.builder()
+                .fileInput(true).inputMediaTypes(List.of("audio/ogg"))
+                .inputSources(List.of(InputSource.DATA)).build()).build()).matched()).isFalse();
+
         // A pre-catalog reader drops the optional provenance. Its existing audio default is
         // deliberately unchanged; decoding compatibility does not promise downgrade parity.
         model.getSpec().setCatalogMatch(null);
         assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
             .containsExactly("image/png", "audio/wav", "audio/*");
+    }
+
+    @Test
+    void catalogImportsDefaultAbsentCoverageButPreserveExplicitEmptyLists() {
+        var model = model(ModelType.LANGUAGE);
+        model.getSpec().setFeatures(List.of(ModelFeature.VISION, ModelFeature.AUDIO_INPUT));
+        model.getSpec().setCatalogMatch(new ModelCatalogMatch("openai", "model", null,
+            List.of("language.inputMediaTypes")));
+        var defaults = service.effectiveCapabilities(model, null).getLanguage();
+        assertThat(defaults.getInputMediaTypes()).containsExactly("image/*", "audio/*");
+        assertThat(defaults.getInputSources()).containsExactly(InputSource.DATA);
+
+        model.getSpec().setCapabilities(ModelCapabilities.builder()
+            .language(LanguageCapability.builder().inputMediaTypes(List.of())
+                .inputSources(List.of()).build()).build());
+        var explicit = service.effectiveCapabilities(model, null).getLanguage();
+        assertThat(explicit.getInputMediaTypes()).isEmpty();
+        assertThat(explicit.getInputSources()).isEmpty();
     }
 
     @Test

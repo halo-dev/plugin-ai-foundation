@@ -12,6 +12,7 @@ import {
 } from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/use-models-fetch'
 import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
+import { reconcileModelCapabilities } from './model-capability-changes'
 
 export function findProviderTypeForModel(
   model: AiModel,
@@ -266,7 +267,6 @@ export function createModelFromDiscovered(
     ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
   } as AiModel['spec']
-  applyImportOverrides(spec, model, override)
 
   return {
     apiVersion: 'aifoundation.halo.run/v1alpha1',
@@ -274,76 +274,8 @@ export function createModelFromDiscovered(
     metadata: {
       name: '',
     },
-    spec,
+    spec: reconcileModelCapabilities(model, spec, { importing: true }),
   }
-}
-
-// Manual choices take priority over both provider and catalog metadata. Catalog-derived media
-// coverage also belongs to the adapter used during discovery and must not cross adapter changes.
-function applyImportOverrides(
-  spec: AiModel['spec'],
-  model: DiscoveredModel,
-  override?: DiscoveredModelProfileOverride,
-) {
-  if (spec.modelType !== model.modelType) return
-  const changedFeatures = override?.features
-    ? [...new Set([...(model.features || []), ...override.features])].filter(
-        (feature) => model.features.includes(feature) !== override.features!.includes(feature),
-      )
-    : []
-  if (!model.catalogMatch && !changedFeatures.length) return
-  let fields = [...(model.catalogMatch?.fields || [])]
-  const capabilities = spec.capabilities
-    ? {
-        ...spec.capabilities,
-        language: spec.capabilities.language ? { ...spec.capabilities.language } : undefined,
-      }
-    : undefined
-  const sources = { ...spec.capabilitySources }
-  const language = capabilities?.language
-  if (spec.adapterType !== model.adapterType && language) {
-    for (const field of fields) {
-      if (field.startsWith('language.')) {
-        delete language[field.slice('language.'.length) as keyof typeof language]
-      }
-    }
-    fields = fields.filter((field) => !field.startsWith('language.'))
-  }
-  for (const feature of changedFeatures) {
-    fields = fields.filter((field) => field !== `features.${feature}`)
-    if (!language) continue
-    if (feature === 'vision') {
-      language.imageInput = spec.features?.includes('vision') === true
-      language.inputMediaTypes = language.inputMediaTypes?.filter(
-        (type) => !type.startsWith('image/'),
-      )
-      if (language.imageInput) {
-        language.inputMediaTypes = [...(language.inputMediaTypes || []), 'image/png', 'image/jpeg']
-        language.inputSources ??= ['data']
-      }
-    }
-    if (feature === 'audio-input') {
-      // Manual audio selection uses the existing adapter defaults after import.
-      language.fileInput =
-        spec.features?.includes('audio-input') === true ||
-        language.inputMediaTypes?.some(
-          (type) => !type.startsWith('image/') && !type.startsWith('audio/'),
-        ) === true
-      language.inputMediaTypes = language.inputMediaTypes?.filter(
-        (type) => !type.startsWith('audio/'),
-      )
-    }
-    if (feature === 'vision' || feature === 'audio-input') {
-      fields = fields.filter((field) => !field.startsWith('language.'))
-    }
-  }
-  if (changedFeatures.length && spec.modelType === AiModelSpecModelTypeEnum.Language) {
-    sources.language = 'manual'
-  }
-  if (capabilities) capabilities.sources = sources
-  spec.capabilities = capabilities
-  spec.capabilitySources = sources
-  if (model.catalogMatch && fields.length) spec.catalogMatch = { ...model.catalogMatch, fields }
 }
 
 function discoveredCapabilityFields(
