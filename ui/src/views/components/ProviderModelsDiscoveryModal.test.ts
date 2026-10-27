@@ -56,6 +56,8 @@ vi.mock('@halo-dev/components', () => {
         () =>
           h('button', { disabled: props.disabled }, slots.default?.()),
     }),
+    IconInformation: defineComponent({ template: '<svg />' }),
+    IconRefreshLine: defineComponent({ template: '<svg />' }),
     VEmpty: container,
     VEntity: container,
     VEntityContainer: container,
@@ -63,9 +65,16 @@ vi.mock('@halo-dev/components', () => {
     VLoading: container,
     VModal: container,
     VSpace: container,
+    VStatusDot: container,
     VTag: container,
   }
 })
+
+const tooltipStub = {
+  mounted(el: HTMLElement, binding: { value: string }) {
+    el.setAttribute('data-tooltip', binding.value)
+  },
+}
 
 function model(id: string, features: DiscoveredModel['features']): DiscoveredModel {
   return {
@@ -120,14 +129,14 @@ describe('discovery catalog refresh', () => {
     }
     const wrapper = mount(ProviderModelsDiscoveryModal, {
       props: { provider },
-      global: { stubs: { SearchInput: true } },
+      global: { stubs: { SearchInput: true }, directives: { tooltip: tooltipStub } },
     })
     const buttons = (label: string) =>
       wrapper.findAll('button').filter((button) => button.text() === label)
     await wrapper.findAll('input[type="checkbox"]')[0].setValue(true)
     await wrapper.findAll('input[type="checkbox"]')[1].setValue(true)
     await buttons('工具调用')[0].trigger('click')
-    await buttons('刷新能力目录')[0].trigger('click')
+    await wrapper.get('button[aria-label="刷新能力目录"]').trigger('click')
     await flushPromises()
 
     expect(buttons('工具调用')[0].attributes('aria-pressed')).toBe('false')
@@ -159,7 +168,7 @@ describe('discovery catalog refresh', () => {
           spec: { providerType: 'openai', displayName: 'OpenAI', enabled: true },
         },
       },
-      global: { stubs: { SearchInput: true } },
+      global: { stubs: { SearchInput: true }, directives: { tooltip: tooltipStub } },
     })
     catalogStatus.value = { available: true, fetchedAt: '2026-10-26T11:00:00Z' }
     await flushPromises()

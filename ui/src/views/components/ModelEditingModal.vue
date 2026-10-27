@@ -94,6 +94,7 @@ function onSubmit(data: ModelFormState) {
         adapterType: model.spec.adapterType,
         capabilities: model.spec.capabilities,
         capabilitySources: model.spec.capabilitySources,
+        catalogMatch: model.spec.catalogMatch,
         parameterMappings: model.spec.parameterMappings,
         nativeOptions: model.spec.nativeOptions,
       }"

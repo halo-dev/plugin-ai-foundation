@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ModelCatalogMatch } from '@/api/generated'
+import { IconInformation } from '@halo-dev/components'
 import { computed } from 'vue'
 
 const props = defineProps<{ match: ModelCatalogMatch }>()
@@ -17,18 +18,37 @@ const labels: Record<string, string> = {
 const fields = computed(() =>
   [...new Set(props.match.fields?.map((field) => labels[field] || field))].join('、'),
 )
-const updatedAt = computed(() =>
-  props.match.fetchedAt ? new Date(props.match.fetchedAt).toLocaleString('zh-CN') : '',
+const syncedAt = computed(() =>
+  props.match.fetchedAt
+    ? new Date(props.match.fetchedAt).toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '',
+)
+const summary = computed(() =>
+  fields.value ? `models.dev 补全：${fields.value}` : 'models.dev 目录补全',
+)
+const detail = computed(() =>
+  [
+    `${props.match.providerId} / ${props.match.modelId}`,
+    syncedAt.value && `目录同步于 ${syncedAt.value}`,
+    '仅补全当前接口支持的能力',
+  ]
+    .filter(Boolean)
+    .join(' · '),
 )
 </script>
 
 <template>
-  <details class=":uno: max-w-full text-xs text-gray-500" @click.stop>
-    <summary class=":uno: cursor-pointer">models.dev 补全</summary>
-    <div class=":uno: mt-1 break-words space-y-1">
-      <p>{{ match.providerId }} / {{ match.modelId }}</p>
-      <p>补全：{{ fields }}</p>
-      <p>目录同步于 {{ updatedAt }}，已限制为当前接口支持的能力。</p>
-    </div>
-  </details>
+  <p
+    v-tooltip="detail"
+    class=":uno: max-w-full inline-flex items-center gap-1 text-xs text-gray-400"
+  >
+    <IconInformation class=":uno: size-3.5 flex-none" />
+    <span class=":uno: truncate">{{ summary }}</span>
+  </p>
 </template>

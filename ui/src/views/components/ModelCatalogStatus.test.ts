@@ -3,19 +3,30 @@ import { describe, expect, it } from 'vitest'
 import ModelCatalogProvenance from './ModelCatalogProvenance.vue'
 import ModelCatalogStatus from './ModelCatalogStatus.vue'
 
+const tooltipStub = {
+  mounted(el: HTMLElement, binding: { value: string }) {
+    el.setAttribute('data-tooltip', binding.value)
+  },
+}
+
 const global = {
+  directives: { tooltip: tooltipStub },
   stubs: {
     VButton: { props: ['disabled'], template: '<button :disabled="disabled"><slot /></button>' },
+    VStatusDot: { props: ['state', 'animate'], template: '<span data-test="status-dot" />' },
+    IconRefreshLine: { template: '<svg />' },
+    IconInformation: { template: '<svg />' },
   },
 }
 
 describe('model catalog status', () => {
   it('offers refresh without blocking discovery when the catalog is unavailable', async () => {
     const wrapper = mount(ModelCatalogStatus, { props: { refreshing: false }, global })
-    expect(wrapper.text()).toContain('暂无缓存，使用供应商信息和默认规则')
-    await wrapper.get('button').trigger('click')
+    expect(wrapper.text()).toContain('暂无目录缓存，使用供应商信息和默认规则')
+    const refresh = wrapper.get('button[aria-label="刷新能力目录"]')
+    await refresh.trigger('click')
     expect(wrapper.emitted('refresh')).toHaveLength(1)
-    expect(wrapper.text()).toContain('刷新不会修改已保存模型')
+    expect(refresh.attributes('data-tooltip')).toContain('不会修改已保存的模型')
   })
 
   it('shows the last successful timestamp and failure while using stale data', () => {
@@ -38,10 +49,11 @@ describe('model catalog status', () => {
 
   it('prevents duplicate refreshes during synchronization or import', () => {
     const wrapper = mount(ModelCatalogStatus, { props: { refreshing: true }, global })
-    expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('正在同步')
+    expect(wrapper.get('button[aria-label="刷新能力目录"]').attributes('disabled')).toBeDefined()
   })
 
-  it('shows exact catalog identity and supplemented fields', () => {
+  it('shows supplemented fields inline and keeps catalog identity in the tooltip', () => {
     const wrapper = mount(ModelCatalogProvenance, {
       props: {
         match: {
@@ -51,9 +63,10 @@ describe('model catalog status', () => {
           fields: ['features.tool-call', 'language.imageInput'],
         },
       },
+      global,
     })
-    expect(wrapper.text()).toContain('models.dev 补全')
-    expect(wrapper.text()).toContain('moonshotai-cn / kimi-k2.5')
-    expect(wrapper.text()).toContain('工具调用、图片输入')
+    expect(wrapper.text()).toContain('models.dev 补全：工具调用、图片输入')
+    expect(wrapper.get('p').attributes('data-tooltip')).toContain('moonshotai-cn / kimi-k2.5')
+    expect(wrapper.get('p').attributes('data-tooltip')).toContain('目录同步于')
   })
 })
