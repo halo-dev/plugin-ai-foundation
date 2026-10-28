@@ -31,6 +31,7 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 - [轻言](https://www.halo.run/store/apps/app-cmisffbv)
 - [链接管理](https://www.halo.run/store/apps/app-hfbQg)
 - [AI 助手](https://www.halo.run/store/apps/app-riNgb)
+- [AI 页面工坊](https://www.halo.run/store/apps/app-gscuxwkq)
 
 ## 界面预览
 
