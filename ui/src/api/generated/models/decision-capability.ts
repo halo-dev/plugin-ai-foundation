@@ -22,6 +22,18 @@
 export interface DecisionCapability {
     /**
      * 
+     * @type {boolean}
+     * @memberof DecisionCapability
+     */
+    'choiceConfidence'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof DecisionCapability
+     */
+    'choiceProbabilities'?: boolean;
+    /**
+     * 
      * @type {number}
      * @memberof DecisionCapability
      */
@@ -38,6 +50,24 @@ export interface DecisionCapability {
      * @memberof DecisionCapability
      */
     'questionTypes'?: Array<DecisionCapabilityQuestionTypesEnum>;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof DecisionCapability
+     */
+    'scoreConfidence'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof DecisionCapability
+     */
+    'scoreLegend'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof DecisionCapability
+     */
+    'scoreProbabilities'?: boolean;
     /**
      * 
      * @type {boolean}

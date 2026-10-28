@@ -134,7 +134,16 @@ class AiModelServiceImplTest {
         when(providerClientCache.getOrCreateDecisionClient(provider, "sk-test", ProviderModelRef.from(model)))
             .thenReturn(request -> Mono.empty());
         StepVerifier.create(service.decisionModel())
-            .assertNext(resolved -> assertThat(resolved.capabilities().getMaxScoreLevels()).isEqualTo(10))
+            .assertNext(resolved -> {
+                assertThat(resolved.capabilities().getMaxScoreLevels()).isEqualTo(10);
+                assertThat(resolved.capabilities().getChoiceProbabilities()).isTrue();
+                assertThat(resolved.capabilities().getChoiceConfidence()).isTrue();
+                assertThat(resolved.capabilities().getScoreProbabilities()).isTrue();
+                assertThat(resolved.capabilities().getScoreConfidence()).isTrue();
+                assertThat(resolved.capabilities().getScoreLegend()).isTrue();
+                resolved.capabilities().setChoiceConfidence(false);
+                assertThat(resolved.capabilities().getChoiceConfidence()).isTrue();
+            })
             .verifyComplete();
         verify(client).fetch(AiModel.class, "decision-resource");
     }

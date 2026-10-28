@@ -129,6 +129,26 @@ class TypeSafeDecisionClientTest {
     }
 
     @Test
+    void stillRejectsMissingTypeSafeProtocolFields() {
+        var question = DecisionQuestion.choice("Route?", Map.of("a", "A", "b", "B"));
+        response.set("""
+            {"model":"jev-version","answers":{"q":{"type":"choice","choice":"a",
+              "probabilities":{"a":0.8,"b":0.2}}}}
+            """);
+        StepVerifier.create(client().decide(DecisionRequest.builder().state("message")
+            .questions(Map.of("q", question)).build()))
+            .expectError(IllegalStateException.class).verify();
+
+        response.set("""
+            {"model":"jev-version","answers":{"q":{"type":"score","score":0.2,
+              "confidence":0.6,"probabilities":{"0":0.8,"1":0.2}}}}
+            """);
+        StepVerifier.create(client().decide(DecisionRequest.builder().state("message")
+            .questions(Map.of("q", DecisionQuestion.score("Score?", List.of("low", "high")))).build()))
+            .expectError(IllegalStateException.class).verify();
+    }
+
+    @Test
     void propagatesProviderRateLimitErrors() {
         status.set(429);
         response.set("{\"detail\":\"Rate limited\"}");

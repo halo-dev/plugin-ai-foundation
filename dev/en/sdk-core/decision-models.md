@@ -3,7 +3,9 @@
 [简体中文](../../zh-CN/sdk-core/decision-models.md) | English
 
 Decision models answer closed questions about shared text or JSON state. Consumer plugins own thresholds
-and subsequent actions. These APIs are new in the development build and require matching plugin and
+and subsequent actions. `DecisionModel` is provider-neutral; TypeSafe / Jev is the first built-in
+provider. Other adapters can reuse model resolution, the workbench, and usage recording.
+These APIs are new in the development build and require matching plugin and
 Java/npm SDK versions; the published `1.0.0` API does not include them.
 
 ## Configure TypeSafe / Jev
@@ -41,16 +43,40 @@ Decision types live in `run.halo.aifoundation.decision`. Resolve the service wit
 `ExtensionGetter`; `modelName` means `AiModel.metadata.name`. Null/blank or the no-argument overload
 uses the default decision model. Request metadata stays in local audit records and is not sent upstream.
 
-`YES_NO.probability` is the probability of yes, not a boolean. `CHOICE` preserves its selected option,
-distribution and confidence. `SCORE` preserves its fractional, zero-based level score, legend,
-distribution and confidence. Confidence measures the distribution's concentration, not correctness;
+`YES_NO.probability` is the probability of yes, not a boolean. `CHOICE` requires a selected option;
+`SCORE` requires a finite level index in `[0, number of levels - 1]`, which may be fractional and need
+not be calculated from a distribution. Both accept optional `probabilities` and `confidence`; a score
+also accepts an optional `legend`. These fields are independent and may be absent or null. Missing
+diagnostics are never synthesized. When present, a distribution must cover every option and sum to one,
+and a legend must cover every score level.
+
+Confidence is a provider-reported value in `[0, 1]` whose meaning depends on the provider. TypeSafe
+uses distribution concentration; this is not a universal confidence definition or a correctness guarantee.
 YES_NO has no separate confidence. Unknown token counts remain null. The response reports the served model.
-The runtime validates request fields, provider limits, response question IDs/types and distributions.
+The runtime validates request fields, provider limits, response question IDs/types, and any supplied diagnostics.
 
 `model.capabilities()` returns supported question types and limits. Selectors can filter by
 `modelType: decision` and `requiredCapabilities.decision`. A total timeout uses `GenerationTimeouts`
 and raises `DecisionTimeoutException`. Subscription cancellation cancels HTTP work; cancellation tokens
 are checked before and after inference and raise `DecisionCancelledException`.
+
+`DecisionCapability` also exposes `choiceProbabilities`, `choiceConfidence`, `scoreProbabilities`,
+`scoreConfidence`, and `scoreLegend`: true means supported, false means unsupported, and null means
+unknown. For example, require `requiredCapabilities.decision.choiceProbabilities: true` to select
+models capable of returning choice distributions. Supported does not mean present in every response;
+consumers must still check for absent values.
+
+## Other providers
+
+Add an internal `AiProviderType` implementation and a `decision` adapter implementing
+`buildDecisionClient(...)` and `decisionCapabilities()`. Map the provider's protocol to the public
+request and result types. Label-only and score-only providers do not need to fabricate diagnostics
+or change the shared inference runtime. A boolean-only classifier can use a two-option `CHOICE`;
+`YES_NO` retains its probability contract rather than converting booleans to invented probabilities.
+
+Keep protocol-required fields in the adapter's validation. The TypeSafe client still requires its
+distributions, confidence, and score legends; the optional public contract does not hide a malformed
+TypeSafe response.
 
 ## Browser SDK
 

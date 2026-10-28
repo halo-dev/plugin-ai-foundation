@@ -25,8 +25,13 @@ import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 public class TypeSafeProvider extends AbstractAiProviderType {
     @Override
     public DecisionCapability decisionCapabilities() {
-        return new DecisionCapability(
-            List.of(DecisionQuestionType.values()), true, 255, 10);
+        return DecisionCapability.builder()
+            .questionTypes(List.of(DecisionQuestionType.YES_NO, DecisionQuestionType.CHOICE,
+                DecisionQuestionType.SCORE))
+            .structuredState(true).maxChoiceOptions(255).maxScoreLevels(10)
+            .choiceProbabilities(true).choiceConfidence(true)
+            .scoreProbabilities(true).scoreConfidence(true).scoreLegend(true)
+            .build();
     }
 
     @Override

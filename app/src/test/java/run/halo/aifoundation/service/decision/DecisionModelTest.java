@@ -12,6 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.decision.DecisionAnswer;
 import run.halo.aifoundation.decision.DecisionQuestion;
@@ -21,13 +22,83 @@ import run.halo.aifoundation.decision.DecisionResponse;
 import run.halo.aifoundation.exception.DecisionCancelledException;
 import run.halo.aifoundation.exception.DecisionTimeoutException;
 import run.halo.aifoundation.provider.support.ProviderDecisionClient;
-import run.halo.aifoundation.provider.typesafe.TypeSafeProvider;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 class DecisionModelTest {
     private final ProviderDecisionClient client = mock(ProviderDecisionClient.class);
     private final DecisionModelImpl model = new DecisionModelImpl(client,
-        new UsageExecutionObserver(), new TypeSafeProvider().decisionCapabilities());
+        new UsageExecutionObserver(), new DecisionCapability(
+            List.of(DecisionQuestionType.YES_NO, DecisionQuestionType.CHOICE,
+                DecisionQuestionType.SCORE), true, 512, 4));
+
+    @Test
+    void acceptsLabelAndScoreOnlyResultsWithoutInventingDiagnostics() {
+        var request = mixedRequest();
+        var response = new DecisionResponse("another-provider-model", Map.of(
+            "route", DecisionAnswer.builder().type(DecisionQuestionType.CHOICE).choice("review").build(),
+            "rating", DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.0).build()), null);
+        when(client.decide(any())).thenReturn(Mono.just(response));
+
+        StepVerifier.create(model.decide(request)).assertNext(result -> {
+            assertThat(result).isSameAs(response);
+            assertThat(result.getAnswers().get("route").getChoice()).isEqualTo("review");
+            assertThat(result.getAnswers().get("rating").getScore()).isZero();
+            result.getAnswers().values().forEach(answer -> {
+                assertThat(answer.getProbabilities()).isNull();
+                assertThat(answer.getConfidence()).isNull();
+                assertThat(answer.getLegend()).isNull();
+            });
+        }).verifyComplete();
+    }
+
+    @Test
+    void optionalDiagnosticsAreIndependent() {
+        for (var score : List.of(
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5)
+                .confidence(0.0).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5)
+                .probabilities(Map.of("0", 0.5, "1", 0.5)).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5)
+                .legend(Map.of("0", "low", "1", "high")).build())) {
+            var response = new DecisionResponse("another-provider-model", Map.of(
+                "route", DecisionAnswer.builder().type(DecisionQuestionType.CHOICE)
+                    .choice("review").confidence(0.0).build(), "rating", score), null);
+            when(client.decide(any())).thenReturn(Mono.just(response));
+            StepVerifier.create(model.decide(mixedRequest()))
+                .expectNext(response).verifyComplete();
+        }
+    }
+
+    @Test
+    void stillRejectsInvalidScoresAndMalformedOptionalFields() {
+        for (var score : List.of(
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(2.0).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(Double.NaN).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5).confidence(-0.1).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5)
+                .confidence(Double.POSITIVE_INFINITY).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5)
+                .probabilities(Map.of("0", 1.0)).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5)
+                .probabilities(Map.of("0", 0.1, "1", 0.1)).build(),
+            DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(0.5)
+                .legend(Map.of("0", "low")).build())) {
+            when(client.decide(any())).thenReturn(Mono.just(new DecisionResponse("model", Map.of(
+                "route", DecisionAnswer.builder().type(DecisionQuestionType.CHOICE)
+                    .choice("review").build(), "rating", score), null)));
+            StepVerifier.create(model.decide(mixedRequest()))
+                .expectError(IllegalStateException.class).verify();
+        }
+    }
+
+    private static DecisionRequest mixedRequest() {
+        return DecisionRequest.builder().state("message")
+            .questions(Map.of("route", DecisionQuestion.choice("Route?",
+                    Map.of("review", "Review", "publish", "Publish")),
+                "rating", DecisionQuestion.score("Rating?", List.of("low", "high"))))
+            .build();
+    }
 
     @Test
     void validatesBeforeCallingProvider() {
@@ -88,7 +159,8 @@ class DecisionModelTest {
     void capabilitySnapshotsCannotMutateRuntimeLimits() {
         var capability = model.capabilities();
         capability.setMaxScoreLevels(100);
-        assertThat(model.capabilities().getMaxScoreLevels()).isEqualTo(10);
+        assertThat(model.capabilities().getMaxScoreLevels()).isEqualTo(4);
+        assertThat(model.capabilities().getChoiceConfidence()).isNull();
     }
 
     private static DecisionRequest request() {

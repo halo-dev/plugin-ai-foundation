@@ -16,6 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
+import run.halo.aifoundation.capability.DecisionCapability;
+import run.halo.aifoundation.decision.DecisionQuestionType;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
@@ -323,6 +325,46 @@ class ModelOptionConsoleEndpointTest {
             query = prefixQuery + "&" + query;
         }
         return URI.create("/model-options?" + query);
+    }
+
+    @Test
+    void decisionOutputCapabilitiesDistinguishSupportedUnsupportedAndUnknown() {
+        var labelProvider = providerType("Label provider", null);
+        when(labelProvider.decisionCapabilities()).thenReturn(DecisionCapability.builder()
+            .questionTypes(List.of(DecisionQuestionType.CHOICE, DecisionQuestionType.SCORE))
+            .choiceProbabilities(false).choiceConfidence(false).scoreProbabilities(false)
+            .scoreConfidence(false).scoreLegend(false).build());
+        var unknownProvider = providerType("Unknown provider", null);
+        when(unknownProvider.decisionCapabilities()).thenReturn(new DecisionCapability(
+            List.of(DecisionQuestionType.CHOICE), false, 2, null));
+        when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of(
+            "typesafe", new TypeSafeProvider(), "label-only", labelProvider, "unknown", unknownProvider));
+        mockData(List.of(
+                model("jev", "typesafe", "jev-latest", "Jev", ModelType.DECISION, true, List.of()),
+                model("label", "label-only", "labels", "Labels", ModelType.DECISION, true, List.of()),
+                model("unknown", "unknown", "unknown", "Unknown", ModelType.DECISION, true, List.of())),
+            List.of(
+                provider("typesafe", "TypeSafe", "typesafe", true, AiProvider.AiProviderStatus.Phase.OK),
+                provider("label-only", "Labels", "label-only", true, AiProvider.AiProviderStatus.Phase.OK),
+                provider("unknown", "Unknown", "unknown", true, AiProvider.AiProviderStatus.Phase.OK)));
+
+        webTestClient.get().uri("/model-options?modelType=decision")
+            .exchange().expectStatus().isOk().expectBodyList(ModelOption.class).hasSize(3);
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"choiceProbabilities":true,"choiceConfidence":true,
+              "scoreProbabilities":true,"scoreConfidence":true,"scoreLegend":true}}
+            """))
+            .exchange().expectStatus().isOk().expectBodyList(ModelOption.class)
+            .value(options -> assertThat(options).extracting(ModelOption::getName).containsExactly("jev"));
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"choiceProbabilities":false}}
+            """))
+            .exchange().expectStatus().isOk().expectBodyList(ModelOption.class)
+            .value(options -> assertThat(options).extracting(ModelOption::getName).containsExactly("label"));
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"scoreConfidence":"true"}}
+            """))
+            .exchange().expectStatus().isBadRequest();
     }
 
     @Test

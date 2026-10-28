@@ -36,7 +36,9 @@ public class DecisionModelImpl implements DecisionModel {
             capabilities.getQuestionTypes() == null ? null
                 : List.copyOf(capabilities.getQuestionTypes()),
             capabilities.getStructuredState(), capabilities.getMaxChoiceOptions(),
-            capabilities.getMaxScoreLevels());
+            capabilities.getMaxScoreLevels(), capabilities.getChoiceProbabilities(),
+            capabilities.getChoiceConfidence(), capabilities.getScoreProbabilities(),
+            capabilities.getScoreConfidence(), capabilities.getScoreLegend());
     }
 
     @Override

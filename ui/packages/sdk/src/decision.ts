@@ -17,13 +17,18 @@ export type DecisionQuestion =
 
 export type DecisionAnswer =
   | { type: 'YES_NO'; probability: number }
-  | { type: 'CHOICE'; choice: string; probabilities: Record<string, number>; confidence: number }
+  | {
+      type: 'CHOICE'
+      choice: string
+      probabilities?: Record<string, number> | null
+      confidence?: number | null
+    }
   | {
       type: 'SCORE'
       score: number
-      probabilities: Record<string, number>
-      confidence: number
-      legend: Record<string, string>
+      probabilities?: Record<string, number> | null
+      confidence?: number | null
+      legend?: Record<string, string> | null
     }
 
 export interface DecisionRequest {
@@ -121,17 +126,21 @@ function validateDecisionResponse(
       question.type === 'CHOICE'
         ? Object.keys(question.options)
         : question.levels.map((_, index) => String(index))
-    assert(
-      object(answer.probabilities) && sameKeys(answer.probabilities, keys),
-      `Invalid distribution for ${id}`,
-    )
-    const values = Object.values(answer.probabilities)
-    assert(values.every(probability), `Invalid probabilities for ${id}`)
-    assert(
-      Math.abs(values.reduce((sum, item) => sum + item, 0) - 1) <= 0.001,
-      `Probabilities must sum to one for ${id}`,
-    )
-    assert(probability(answer.confidence), `Invalid confidence for ${id}`)
+    if (answer.probabilities != null) {
+      assert(
+        object(answer.probabilities) && sameKeys(answer.probabilities, keys),
+        `Invalid distribution for ${id}`,
+      )
+      const values = Object.values(answer.probabilities)
+      assert(values.every(probability), `Invalid probabilities for ${id}`)
+      assert(
+        Math.abs(values.reduce((sum, item) => sum + item, 0) - 1) <= 0.001,
+        `Probabilities must sum to one for ${id}`,
+      )
+    }
+    if (answer.confidence != null) {
+      assert(probability(answer.confidence), `Invalid confidence for ${id}`)
+    }
     if (question.type === 'CHOICE') {
       assert(
         typeof answer.choice === 'string' && keys.includes(answer.choice),
@@ -145,12 +154,14 @@ function validateDecisionResponse(
           answer.score <= question.levels.length - 1,
         `Invalid score for ${id}`,
       )
-      assert(
-        object(answer.legend) &&
-          sameKeys(answer.legend, keys) &&
-          Object.values(answer.legend).every((item) => typeof item === 'string'),
-        `Invalid score legend for ${id}`,
-      )
+      if (answer.legend != null) {
+        assert(
+          object(answer.legend) &&
+            sameKeys(answer.legend, keys) &&
+            Object.values(answer.legend).every((item) => typeof item === 'string'),
+          `Invalid score legend for ${id}`,
+        )
+      }
     }
   }
   if (value.usage != null) {

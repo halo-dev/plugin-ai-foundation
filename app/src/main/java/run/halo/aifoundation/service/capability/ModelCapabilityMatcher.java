@@ -61,6 +61,16 @@ public class ModelCapabilityMatcher {
             expected.getMaxChoiceOptions(), issues);
         matchMinInteger("decision.maxScoreLevels", actual == null ? null : actual.getMaxScoreLevels(),
             expected.getMaxScoreLevels(), issues);
+        matchBoolean("decision.choiceProbabilities",
+            actual == null ? null : actual.getChoiceProbabilities(), expected.getChoiceProbabilities(), issues);
+        matchBoolean("decision.choiceConfidence",
+            actual == null ? null : actual.getChoiceConfidence(), expected.getChoiceConfidence(), issues);
+        matchBoolean("decision.scoreProbabilities",
+            actual == null ? null : actual.getScoreProbabilities(), expected.getScoreProbabilities(), issues);
+        matchBoolean("decision.scoreConfidence",
+            actual == null ? null : actual.getScoreConfidence(), expected.getScoreConfidence(), issues);
+        matchBoolean("decision.scoreLegend",
+            actual == null ? null : actual.getScoreLegend(), expected.getScoreLegend(), issues);
         if (expected.getQuestionTypes() != null && !expected.getQuestionTypes().isEmpty()
             && (actual == null || actual.getQuestionTypes() == null
                 || !actual.getQuestionTypes().containsAll(expected.getQuestionTypes()))) {

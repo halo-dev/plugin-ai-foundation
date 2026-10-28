@@ -3,6 +3,8 @@
 简体中文 | [English](../../en/sdk-core/decision-models.md)
 
 决策模型针对共享内容回答封闭问题，返回概率判断、候选选择或有序评分。业务插件决定阈值和后续动作。
+`DecisionModel` 是供应商中立的公共契约，TypeSafe / Jev 是首个内置提供商；其他提供商可以通过独立
+适配器接入相同的模型解析、工作台和用量统计。
 这些 API 是本次开发新增能力，使用时需要包含此功能的 AI Foundation 插件和 Java/npm SDK；已发布的
 `1.0.0` API 不包含它们。
 
@@ -47,9 +49,13 @@ return extensionGetter.getEnabledExtension(AiModelService.class)
 `ExtensionGetter` 获取服务。`metadata` 仅供本地审计，不会发送给提供商。
 
 - `YES_NO` 的 `probability` 是“是”的概率，不会自动转为布尔值。TypeSafe 的 `noul` 在适配器内部转换。
-- `CHOICE` 保留 `choice`、完整 `probabilities` 和 `confidence`。
-- `SCORE` 保留从 0 开始的浮点评分、等级 `legend`、概率分布和置信度。
-- `confidence` 描述分布的集中程度，不等于答案正确率；`YES_NO` 没有单独的置信度字段。
+- `CHOICE` 必须返回请求中的一个 `choice`；`probabilities` 和 `confidence` 各自可选。
+- `SCORE` 必须返回 `[0, 等级数 - 1]` 内的 `score`，允许小数，不要求由概率加权计算。
+  等级 `legend`、`probabilities` 和 `confidence` 各自可选。
+- 附加字段缺失或为 `null` 时保持缺失，不填零、不制造分布，也不从分数反推置信度。
+  如果提供概率分布，必须包含全部选项且总和为 1；如果提供图例，必须覆盖全部评分等级。
+- `confidence` 是提供商返回的 `[0, 1]` 数值，含义取决于提供商，不能统一解释为答案正确率。
+  TypeSafe 的置信度描述分布集中程度；其他提供商可以采用不同定义。`YES_NO` 没有单独的置信度字段。
 - `response.model` 保留实际服务模型，token 数量未知时保持 `null`，不能按零用量处理。
 - 请求验证先于推理；返回结果的问题 ID、类型、选项、数值范围和概率分布也会校验。
 
@@ -57,6 +63,21 @@ return extensionGetter.getEnabledExtension(AiModelService.class)
 `DecisionTimeoutException`。取消 Reactor 订阅会取消 HTTP 请求；`cancellationToken` 在调用前和返回时
 检查，抛出 `DecisionCancelledException`。通过 `model.capabilities()` 查看问题类型和数量限制。
 模型选择器可使用 `modelType: decision` 和 `requiredCapabilities.decision` 过滤。
+
+`DecisionCapability` 还声明 `choiceProbabilities`、`choiceConfidence`、`scoreProbabilities`、
+`scoreConfidence` 和 `scoreLegend`：`true` 表示支持，`false` 表示不支持，`null` 表示未知。
+例如，要求 `requiredCapabilities.decision.choiceProbabilities: true` 可以筛选能够返回单选概率分布的
+模型。声明支持不保证每次响应均包含该字段，业务代码仍需判断是否存在。
+
+## 新增其他提供商
+
+在插件内部新增 `AiProviderType` 实现和对应的 `decision` 适配器，提供 `buildDecisionClient(...)`
+与 `decisionCapabilities()`，将供应方协议映射成公共请求和结果。只返回标签或评分的提供商无需补造
+诊断数据，也无需修改公共推理流程。二元分类若只返回布尔结果，可用两个选项的 `CHOICE` 表达；
+`YES_NO` 保留“是”的概率契约，不把布尔值伪装成概率。
+
+提供商协议的强制字段在适配器内校验。例如 TypeSafe 本身要求返回的分布、置信度和评分图例仍由
+TypeSafe 客户端严格解析；公共层放宽可选字段不会掩盖它的异常响应。
 
 ## 浏览器调用自己的插件接口
 

@@ -30,9 +30,9 @@ const percent = (value: number) => `${(value * 100).toFixed(1)}%`
           }}
         </div>
         <div v-if="answer.confidence != null" class=":uno: mt-1 text-xs text-slate-500">
-          置信度：{{ percent(answer.confidence) }}（反映分布的确定程度，不等于正确率）
+          置信度：{{ percent(answer.confidence) }}（含义由提供商定义，不等于正确率）
         </div>
-        <dl class=":uno: mt-2 space-y-1">
+        <dl v-if="answer.probabilities != null" class=":uno: mt-2 space-y-1">
           <div
             v-for="(probability, option) in answer.probabilities"
             :key="option"
@@ -42,6 +42,16 @@ const percent = (value: number) => `${(value * 100).toFixed(1)}%`
               {{ answer.legend?.[option] || option }}
             </dt>
             <dd class=":uno: shrink-0 tabular-nums">{{ percent(probability) }}</dd>
+          </div>
+        </dl>
+        <dl v-else-if="answer.legend != null" class=":uno: mt-2 space-y-1">
+          <div
+            v-for="(label, level) in answer.legend"
+            :key="level"
+            class=":uno: flex gap-2 text-sm"
+          >
+            <dt class=":uno: shrink-0 tabular-nums">{{ level }}</dt>
+            <dd class=":uno: min-w-0 break-all text-slate-600">{{ label }}</dd>
           </div>
         </dl>
       </template>

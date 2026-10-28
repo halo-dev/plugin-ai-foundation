@@ -218,12 +218,20 @@ record ModelOptionQuery(
             return null;
         }
         rejectUnknownKeys(value, "decision", List.of("questionTypes", "structuredState",
-            "maxChoiceOptions", "maxScoreLevels"));
+            "maxChoiceOptions", "maxScoreLevels", "choiceProbabilities", "choiceConfidence",
+            "scoreProbabilities", "scoreConfidence", "scoreLegend"));
         var types = stringList(value.get("questionTypes"), "decision.questionTypes");
         var builder = DecisionCapability.builder()
             .structuredState(booleanValue(value.get("structuredState"), "decision.structuredState"))
             .maxChoiceOptions(integerValue(value.get("maxChoiceOptions"), "decision.maxChoiceOptions"))
-            .maxScoreLevels(integerValue(value.get("maxScoreLevels"), "decision.maxScoreLevels"));
+            .maxScoreLevels(integerValue(value.get("maxScoreLevels"), "decision.maxScoreLevels"))
+            .choiceProbabilities(booleanValue(value.get("choiceProbabilities"),
+                "decision.choiceProbabilities"))
+            .choiceConfidence(booleanValue(value.get("choiceConfidence"), "decision.choiceConfidence"))
+            .scoreProbabilities(booleanValue(value.get("scoreProbabilities"),
+                "decision.scoreProbabilities"))
+            .scoreConfidence(booleanValue(value.get("scoreConfidence"), "decision.scoreConfidence"))
+            .scoreLegend(booleanValue(value.get("scoreLegend"), "decision.scoreLegend"));
         if (types != null) {
             builder.questionTypes(types.stream().map(type -> {
                 try {

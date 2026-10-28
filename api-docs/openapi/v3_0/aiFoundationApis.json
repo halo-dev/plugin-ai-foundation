@@ -2184,6 +2184,12 @@
       "DecisionCapability" : {
         "type" : "object",
         "properties" : {
+          "choiceConfidence" : {
+            "type" : "boolean"
+          },
+          "choiceProbabilities" : {
+            "type" : "boolean"
+          },
           "maxChoiceOptions" : {
             "type" : "integer",
             "format" : "int32"
@@ -2198,6 +2204,15 @@
               "type" : "string",
               "enum" : [ "YES_NO", "CHOICE", "SCORE" ]
             }
+          },
+          "scoreConfidence" : {
+            "type" : "boolean"
+          },
+          "scoreLegend" : {
+            "type" : "boolean"
+          },
+          "scoreProbabilities" : {
+            "type" : "boolean"
           },
           "structuredState" : {
             "type" : "boolean"

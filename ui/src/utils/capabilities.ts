@@ -42,6 +42,13 @@ export function capabilitySummaryLabels(capabilities?: ModelCapabilities) {
   for (const type of capabilities?.decision?.questionTypes || []) {
     labels.push(decisionLabels[type] || type)
   }
+  const decision = capabilities?.decision
+  if (decision?.choiceProbabilities === true || decision?.scoreProbabilities === true) {
+    labels.push('概率分布')
+  }
+  if (decision?.choiceConfidence === true || decision?.scoreConfidence === true) {
+    labels.push('置信度')
+  }
   const language = capabilities?.language
   const image = capabilities?.imageGeneration
 
@@ -113,6 +120,16 @@ export function capabilityPathLabel(path?: string) {
       return '支持所需选项数量'
     case 'decision.maxScoreLevels':
       return '支持所需评分等级'
+    case 'decision.choiceProbabilities':
+      return '单选概率分布'
+    case 'decision.choiceConfidence':
+      return '单选置信度'
+    case 'decision.scoreProbabilities':
+      return '评分概率分布'
+    case 'decision.scoreConfidence':
+      return '评分置信度'
+    case 'decision.scoreLegend':
+      return '评分等级图例'
     case 'language.imageInput':
       return '支持图片识别'
     case 'language.fileInput':

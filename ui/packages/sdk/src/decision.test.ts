@@ -92,3 +92,99 @@ describe('decision client', () => {
     await expect(client.decide(mixed)).rejects.toBeInstanceOf(AIUIProtocolError)
   })
 })
+
+describe('optional decision diagnostics', () => {
+  const mixed: DecisionRequest = {
+    state: 'message',
+    questions: {
+      route: { type: 'CHOICE', instructions: 'Route?', options: { a: 'A', b: 'B' } },
+      rating: { type: 'SCORE', instructions: 'Rating?', levels: ['low', 'high'] },
+    },
+  }
+
+  it.each([
+    {},
+    { probabilities: null, confidence: null, legend: null },
+    { confidence: 0 },
+    { probabilities: { '0': 0.5, '1': 0.5 } },
+    { legend: { '0': 'low', '1': 'high' } },
+  ])('accepts independent score diagnostics without filling absent values: %j', async (fields) => {
+    const response = {
+      model: 'another-provider-model',
+      answers: {
+        route: { type: 'CHOICE', choice: 'a' },
+        rating: { type: 'SCORE', score: 0, ...fields },
+      },
+    }
+    const client = createDecisionClient({
+      api: '/decision',
+      fetch: vi.fn().mockResolvedValue(Response.json(response)),
+    })
+    expect(await client.decide(mixed)).toEqual(response)
+  })
+
+  it.each([
+    { score: null },
+    { score: 2 },
+    { confidence: '0.5' },
+    { confidence: -0.1 },
+    { probabilities: {} },
+    { probabilities: { '0': 0.1, '1': 0.1 } },
+    { probabilities: { '0': -0.1, '1': 1.1 } },
+    { probabilities: { '0': '0.5', '1': 0.5 } },
+    { legend: {} },
+    { legend: { '0': 'low', '1': null } },
+  ])('rejects invalid scores or malformed diagnostics when supplied: %j', async (fields) => {
+    const response = {
+      model: 'another-provider-model',
+      answers: {
+        route: { type: 'CHOICE', choice: 'a' },
+        rating: { type: 'SCORE', score: 0, ...fields },
+      },
+    }
+    const client = createDecisionClient({
+      api: '/decision',
+      fetch: vi.fn().mockResolvedValue(Response.json(response)),
+    })
+    await expect(client.decide(mixed)).rejects.toBeInstanceOf(AIUIProtocolError)
+  })
+
+  it.each([
+    { choice: null },
+    { choice: 'unknown' },
+    { confidence: 1.1 },
+    { probabilities: { a: 1 } },
+  ])('rejects malformed choices without requiring other diagnostics: %j', async (fields) => {
+    const client = createDecisionClient({
+      api: '/decision',
+      fetch: vi.fn().mockResolvedValue(
+        Response.json({
+          model: 'another-provider-model',
+          answers: {
+            route: { type: 'CHOICE', choice: 'a', ...fields },
+            rating: { type: 'SCORE', score: 0 },
+          },
+        }),
+      ),
+    })
+    await expect(client.decide(mixed)).rejects.toBeInstanceOf(AIUIProtocolError)
+  })
+
+  it.each([{ confidence: 0 }, { probabilities: { a: 0.8, b: 0.2 } }])(
+    'accepts choice confidence and distribution independently: %j',
+    async (fields) => {
+      const response = {
+        model: 'another-provider-model',
+        answers: {
+          route: { type: 'CHOICE', choice: 'a', ...fields },
+          rating: { type: 'SCORE', score: 0 },
+        },
+      }
+      const client = createDecisionClient({
+        api: '/decision',
+        fetch: vi.fn().mockResolvedValue(Response.json(response)),
+      })
+      expect(await client.decide(mixed)).toEqual(response)
+    },
+  )
+})

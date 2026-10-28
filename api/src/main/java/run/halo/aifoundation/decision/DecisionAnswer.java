@@ -17,12 +17,12 @@ public class DecisionAnswer {
     private Double probability;
     /** Selected CHOICE option identifier. */
     private String choice;
-    /** SCORE's probability-weighted level index, which may be fractional. */
+    /** SCORE level index in [0, number of levels - 1], which may be fractional. */
     private Double score;
-    /** Distribution over option identifiers or zero-based score level indices. */
+    /** Optional complete distribution over option identifiers or zero-based score level indices. */
     private Map<String, Double> probabilities;
-    /** Distribution-derived certainty for CHOICE/SCORE, absent for YES_NO. */
+    /** Optional provider-reported CHOICE/SCORE confidence in [0, 1]; semantics vary by provider. */
     private Double confidence;
-    /** SCORE level indices and descriptions. */
+    /** Optional SCORE level indices and descriptions. */
     private Map<String, String> legend;
 }

@@ -125,7 +125,7 @@ public final class DecisionValidation {
             switch (question.getType()) {
                 case YES_NO -> probability(answer.getProbability());
                 case CHOICE -> {
-                    distribution(answer, question.getOptions().keySet());
+                    optionalDiagnostics(answer, question.getOptions().keySet());
                     valid(answer.getChoice() != null
                             && question.getOptions().containsKey(answer.getChoice()),
                         "Decision response selected an unknown option");
@@ -133,27 +133,33 @@ public final class DecisionValidation {
                 case SCORE -> {
                     var keys = IntStream.range(0, question.getLevels().size())
                         .mapToObj(Integer::toString).collect(Collectors.toCollection(LinkedHashSet::new));
-                    distribution(answer, keys);
+                    optionalDiagnostics(answer, keys);
                     var score = answer.getScore();
                     valid(score != null && Double.isFinite(score) && score >= 0
                             && score <= question.getLevels().size() - 1,
                         "Decision score is outside the requested levels");
-                    valid(answer.getLegend() != null && answer.getLegend().keySet().equals(keys)
-                            && answer.getLegend().values().stream().allMatch(v -> v != null),
-                        "Decision score legend does not match the requested levels");
+                    if (answer.getLegend() != null) {
+                        valid(answer.getLegend().keySet().equals(keys)
+                                && answer.getLegend().values().stream().allMatch(v -> v != null),
+                            "Decision score legend does not match the requested levels");
+                    }
                 }
             }
         });
     }
 
-    private static void distribution(DecisionAnswer answer, Set<String> keys) {
+    private static void optionalDiagnostics(DecisionAnswer answer, Set<String> keys) {
         var probabilities = answer.getProbabilities();
-        valid(probabilities != null && probabilities.keySet().equals(keys),
-            "Decision probabilities do not match the requested options");
-        probabilities.values().forEach(DecisionValidation::probability);
-        valid(Math.abs(probabilities.values().stream().mapToDouble(Double::doubleValue).sum() - 1)
-            <= 0.001, "Decision probabilities must sum to one");
-        probability(answer.getConfidence());
+        if (probabilities != null) {
+            valid(probabilities.keySet().equals(keys),
+                "Decision probabilities do not match the requested options");
+            probabilities.values().forEach(DecisionValidation::probability);
+            valid(Math.abs(probabilities.values().stream().mapToDouble(Double::doubleValue).sum() - 1)
+                <= 0.001, "Decision probabilities must sum to one");
+        }
+        if (answer.getConfidence() != null) {
+            probability(answer.getConfidence());
+        }
     }
 
     private static void probability(Double value) {
