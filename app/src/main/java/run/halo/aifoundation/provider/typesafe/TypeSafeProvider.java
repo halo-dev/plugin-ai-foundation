@@ -50,6 +50,11 @@ public class TypeSafeProvider extends AbstractAiProviderType {
     }
 
     @Override
+    public String getIconUrl() {
+        return "/plugins/ai-foundation/assets/static/brands/typesafe.png";
+    }
+
+    @Override
     public String getWebsiteUrl() {
         return "https://typesafe.ai";
     }
