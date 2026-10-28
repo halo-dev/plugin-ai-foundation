@@ -28,6 +28,11 @@ models/ai-provider.ts
 models/caller-plugin-info.ts
 models/copy-operation.ts
 models/data-content.ts
+models/decision-answer.ts
+models/decision-capability.ts
+models/decision-question.ts
+models/decision-response.ts
+models/decision-usage.ts
 models/default-model-slots.ts
 models/default-parameter-mapping-info.ts
 models/discovered-model-item.ts
@@ -74,6 +79,7 @@ models/rerank-warning.ts
 models/reset-request.ts
 models/selection.ts
 models/test-completion-stream-request.ts
+models/test-decision-request.ts
 models/test-embedding-request.ts
 models/test-embedding-response.ts
 models/test-generated-file.ts

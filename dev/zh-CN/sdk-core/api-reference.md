@@ -13,12 +13,12 @@
 
 | 类型             | 用途                                                              |
 | ---------------- | ----------------------------------------------------------------- |
-| `AiModelService` | 跨插件解析默认或指定名称的语言、Embedding、Rerank、图像生成模型。 |
+| `AiModelService` | 跨插件解析默认或指定名称的语言、Embedding、Rerank、图像生成和决策模型。 |
 | `ModelInfo`      | 已解析模型的只读身份和模型级信息。                                |
 | `ProviderInfo`   | 已解析模型所属 Provider 的只读信息。                              |
 
-`AiModelService` 的八个解析方法分为四组：`languageModel`、`embeddingModel`、
-`rerankingModel`、`imageGenerationModel`，每组都提供无参默认模型和接收
+`AiModelService` 的十个解析方法分为五组：`languageModel`、`embeddingModel`、
+`rerankingModel`、`imageGenerationModel`、`decisionModel`，每组都提供无参默认模型和接收
 `AiModel.metadata.name` 的命名重载。
 
 ## Capability
@@ -221,6 +221,17 @@
 
 完整组合示例见
 [Embedding、Rerank 与 RAG](./embeddings-reranking-and-rag.md)。
+
+## 决策模型
+
+通过 `AiModelService.decisionModel()` 或 `decisionModel(modelName)` 获取，详见[决策模型指南](./decision-models.md)。
+
+| 类型 | 用途 |
+| --- | --- |
+| `DecisionModel`、`DecisionRequest`、`DecisionResponse` | 文本或 JSON 状态的批量封闭问题判断。 |
+| `DecisionQuestion`、`DecisionQuestionType`、`DecisionAnswer` | 概率判断、单选和有序评分。 |
+| `DecisionCapability`、`DecisionUsage` | 问题类型、输入与数量限制以及可空 token 用量。 |
+| `DecisionCancelledException`、`DecisionTimeoutException` | 取消与总调用超时。 |
 
 ## 图像生成
 

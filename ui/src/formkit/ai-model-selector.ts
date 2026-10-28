@@ -90,6 +90,8 @@ export function modelFeatureLabel(feature: string): string {
 
 export function modelTypeLabel(type?: string): string {
   switch (type) {
+    case ModelOptionModelTypeEnum.Decision:
+      return '决策'
     case ModelOptionModelTypeEnum.Language:
       return '语言'
     case ModelOptionModelTypeEnum.Embedding:

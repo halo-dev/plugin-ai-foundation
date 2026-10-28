@@ -43,7 +43,8 @@ public enum AdapterProtocol {
     OLLAMA_CHAT(
         "Ollama Chat API",
         "使用 Ollama 原生 /api/chat 接口。"
-    );
+    ),
+    SYSTEM_ONE("System One", "使用状态和类型化问题调用决策接口。");
 
     private final String displayName;
     private final String description;

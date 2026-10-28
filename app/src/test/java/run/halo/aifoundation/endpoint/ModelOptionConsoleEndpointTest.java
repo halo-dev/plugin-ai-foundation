@@ -22,6 +22,7 @@ import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.typesafe.TypeSafeProvider;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.app.extension.Metadata;
@@ -322,6 +323,34 @@ class ModelOptionConsoleEndpointTest {
             query = prefixQuery + "&" + query;
         }
         return URI.create("/model-options?" + query);
+    }
+
+    @Test
+    void decisionOptionsExposeAdapterLimitsAndFilterRequiredCapabilities() {
+        when(providerClientCache.getProviderTypeMap())
+            .thenReturn(Map.of("typesafe", new TypeSafeProvider()));
+        mockData(List.of(model("decision-resource", "typesafe-prod", "jev-latest", "Jev",
+                ModelType.DECISION, true, List.of())),
+            List.of(provider("typesafe-prod", "TypeSafe", "typesafe", true,
+                AiProvider.AiProviderStatus.Phase.UNKNOWN)));
+
+        webTestClient.get().uri(capabilitiesUri("modelType=decision", """
+            {"decision":{"questionTypes":["YES_NO","SCORE"],"structuredState":true,"maxScoreLevels":10}}
+            """))
+            .exchange().expectStatus().isOk().expectBody()
+            .jsonPath("$[0].name").isEqualTo("decision-resource")
+            .jsonPath("$[0].capabilities.decision.maxChoiceOptions").isEqualTo(255)
+            .jsonPath("$[0].capabilities.sources.decision").isEqualTo("built-in");
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"maxScoreLevels":11}}
+            """))
+            .exchange().expectStatus().isOk().expectBody().json("[]");
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"questionTypes":["BOX"]}}
+            """))
+            .exchange().expectStatus().isBadRequest();
     }
 
     private ModelOption option(List<ModelOption> options, String name) {

@@ -7,6 +7,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.lang.Nullable;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
@@ -18,6 +19,7 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
+import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderModelResolver;
@@ -123,6 +125,15 @@ public interface AiProviderType {
     }
 
     // ── Behavior ──────────────────────────────────────────────
+
+    default DecisionCapability decisionCapabilities() {
+        return null;
+    }
+
+    default ProviderDecisionClient buildDecisionClient(
+        AiProvider provider, String apiKey, ProviderModelRef model) {
+        return null;
+    }
 
     ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId);
 

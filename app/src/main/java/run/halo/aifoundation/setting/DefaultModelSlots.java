@@ -7,6 +7,8 @@ public class DefaultModelSlots {
 
     public static final String GROUP = "defaults";
 
+    private String decisionModelName;
+
     private String languageModelName;
 
     private String embeddingModelName;

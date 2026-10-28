@@ -4,6 +4,7 @@ import java.util.Collection;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.util.CollectionUtils;
 import run.halo.aifoundation.chat.LanguageModelUsage;
+import run.halo.aifoundation.decision.DecisionUsage;
 import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.provider.usage.ProviderUsage;
@@ -70,6 +71,12 @@ public record NormalizedUsage(
         return usage == null ? missing()
             : new NormalizedUsage(null, null, null, null, null, value(usage.getTokens()),
                 null, null);
+    }
+
+    public static NormalizedUsage from(DecisionUsage usage) {
+        return usage == null ? missing()
+            : new NormalizedUsage(value(usage.getInputTokens()), value(usage.getOutputTokens()),
+                null, null, null, null, null, null);
     }
 
     public static NormalizedUsage from(RerankUsage usage) {

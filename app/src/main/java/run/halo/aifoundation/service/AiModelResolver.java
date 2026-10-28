@@ -8,6 +8,8 @@ public interface AiModelResolver {
 
     Mono<ModelResolution> resolve(String modelName, ModelType expectedType);
 
+    Mono<String> defaultDecisionModelName();
+
     Mono<String> defaultLanguageModelName();
 
     Mono<String> defaultEmbeddingModelName();

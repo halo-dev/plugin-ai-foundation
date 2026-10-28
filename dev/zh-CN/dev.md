@@ -1037,7 +1037,7 @@ return model.generateText(request)
 
 `aiModelSelector` 是本插件提供的 FormKit 输入类型，可在调用方插件设置页中让用户选择模型。
 保存值是 `AiModel.metadata.name`，可直接传给 `languageModel(modelName)`、`embeddingModel(modelName)`、
-`rerankingModel(modelName)` 或 `imageGenerationModel(modelName)`。
+`rerankingModel(modelName)`、`imageGenerationModel(modelName)` 或 `decisionModel(modelName)`。
 
 FormKit Schema 示例：
 
@@ -1082,7 +1082,7 @@ formSchema:
 
 | Prop                   | 说明                                                         |
 | ---------------------- | ------------------------------------------------------------ |
-| `modelType`            | 筛选 `language`、`embedding`、`rerank` 或 `image-generation` |
+| `modelType`            | 筛选 `language`、`embedding`、`rerank`、`image-generation` 或 `decision` |
 | `providerName`         | 筛选指定 `AiProvider.metadata.name`                          |
 | `providerType`         | 筛选指定供应方类型                                           |
 | `enabled`              | 按 `AiModel.spec.enabled` 筛选                               |

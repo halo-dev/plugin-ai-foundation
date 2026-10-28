@@ -10,7 +10,10 @@ import {
   ModelCapabilitySourcesLanguageEnum,
 } from '@/api/generated'
 
-export type RequiredModelCapabilities = Pick<ModelCapabilities, 'language' | 'imageGeneration'>
+export type RequiredModelCapabilities = Pick<
+  ModelCapabilities,
+  'language' | 'imageGeneration' | 'decision'
+>
 export type RequiredModelCapabilitiesValue = RequiredModelCapabilities | string | undefined
 
 export function normalizeRequiredCapabilities(value?: RequiredModelCapabilitiesValue) {
@@ -22,6 +25,7 @@ export function normalizeRequiredCapabilities(value?: RequiredModelCapabilitiesV
     return trimmed || undefined
   }
   const normalized = pruneEmpty({
+    decision: pruneEmpty(value.decision),
     language: pruneEmpty(value.language),
     imageGeneration: pruneEmpty(value.imageGeneration),
   })
@@ -30,6 +34,14 @@ export function normalizeRequiredCapabilities(value?: RequiredModelCapabilitiesV
 
 export function capabilitySummaryLabels(capabilities?: ModelCapabilities) {
   const labels: string[] = []
+  const decisionLabels: Record<string, string> = {
+    YES_NO: '是非概率',
+    CHOICE: '单选',
+    SCORE: '评分',
+  }
+  for (const type of capabilities?.decision?.questionTypes || []) {
+    labels.push(decisionLabels[type] || type)
+  }
   const language = capabilities?.language
   const image = capabilities?.imageGeneration
 
@@ -93,6 +105,14 @@ export function capabilityUnavailableDetailsLabel(model: ModelOption) {
 
 export function capabilityPathLabel(path?: string) {
   switch (path) {
+    case 'decision.questionTypes':
+      return '支持决策问题类型'
+    case 'decision.structuredState':
+      return '支持 JSON 状态'
+    case 'decision.maxChoiceOptions':
+      return '支持所需选项数量'
+    case 'decision.maxScoreLevels':
+      return '支持所需评分等级'
     case 'language.imageInput':
       return '支持图片识别'
     case 'language.fileInput':

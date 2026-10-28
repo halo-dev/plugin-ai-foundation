@@ -3,6 +3,7 @@ package run.halo.aifoundation.service.capability;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
+import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.capability.ImageGenerationCapability;
 import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
@@ -18,6 +19,8 @@ public class ModelCapabilityMatcher {
             return CapabilityMatchResult.success();
         }
         var issues = new ArrayList<CapabilityMatchIssue>();
+        matchDecision(capabilities == null ? null : capabilities.getDecision(),
+            requirement.getDecision(), issues);
         matchLanguage(capabilities == null ? null : capabilities.getLanguage(),
             requirement.getLanguage(), issues);
         matchImageGeneration(capabilities == null ? null : capabilities.getImageGeneration(),
@@ -45,6 +48,25 @@ public class ModelCapabilityMatcher {
         matchInputSources("language.inputSources",
             actual == null ? null : actual.getInputSources(),
             expected.getInputSources(), issues);
+    }
+
+    private void matchDecision(DecisionCapability actual,
+        DecisionCapability expected, List<CapabilityMatchIssue> issues) {
+        if (expected == null) {
+            return;
+        }
+        matchBoolean("decision.structuredState", actual == null ? null : actual.getStructuredState(),
+            expected.getStructuredState(), issues);
+        matchMinInteger("decision.maxChoiceOptions", actual == null ? null : actual.getMaxChoiceOptions(),
+            expected.getMaxChoiceOptions(), issues);
+        matchMinInteger("decision.maxScoreLevels", actual == null ? null : actual.getMaxScoreLevels(),
+            expected.getMaxScoreLevels(), issues);
+        if (expected.getQuestionTypes() != null && !expected.getQuestionTypes().isEmpty()
+            && (actual == null || actual.getQuestionTypes() == null
+                || !actual.getQuestionTypes().containsAll(expected.getQuestionTypes()))) {
+            issues.add(new CapabilityMatchIssue("decision.questionTypes", expected.getQuestionTypes(),
+                actual == null ? null : actual.getQuestionTypes()));
+        }
     }
 
     private void matchImageGeneration(ImageGenerationCapability actual,

@@ -1,6 +1,6 @@
+import type { AiModel, AiProvider, CallerPluginInfo } from '@/api/generated'
 import { utils } from '@halo-dev/ui-shared'
 import { fromDate, toCalendarDate } from '@internationalized/date'
-import type { AiModel, AiProvider, CallerPluginInfo } from '@/api/generated'
 
 const UNKNOWN_TEXT = '未知'
 export type UsageTrendResolution = 'HOUR' | 'DAY'
@@ -28,6 +28,7 @@ export const USAGE_QUALITY_OPTIONS = [
 // 用量统计的 modelType 过滤值与后端 ModelType.name() 存储值一致，
 // 与 AiModel.spec.modelType 的 kebab 形式不同。
 export const USAGE_MODEL_TYPE_OPTIONS = [
+  { label: '决策模型', value: 'DECISION' },
   { label: '语言模型', value: 'LANGUAGE' },
   { label: 'Embedding', value: 'EMBEDDING' },
   { label: 'Rerank', value: 'RERANK' },
@@ -35,6 +36,7 @@ export const USAGE_MODEL_TYPE_OPTIONS = [
 ] as const
 
 export const USAGE_OPERATION_OPTIONS = [
+  { label: '决策判断', value: 'decision.decide' },
   { label: '文本生成', value: 'language.generateText' },
   { label: '流式文本生成', value: 'language.streamText' },
   { label: '文本嵌入', value: 'embedding.embed' },
@@ -48,6 +50,7 @@ const QUALITY_LABELS = toLabelMap(USAGE_QUALITY_OPTIONS)
 const OPERATION_LABELS = toLabelMap(USAGE_OPERATION_OPTIONS)
 
 const UNIT_KIND_LABELS: Record<string, string> = {
+  DECISION: '决策判断',
   GENERATION_STEP: '生成步骤',
   EMBEDDING_BATCH: '嵌入批次',
   RERANK: '重排序',
@@ -221,10 +224,7 @@ export function usageDisplayNames(
 }
 
 /** 维度值展示名；空值显示「未知」，未知名称回退为原始标识。 */
-export function usageDimensionLabel(
-  names: Map<string, string | undefined>,
-  key?: string | null,
-) {
+export function usageDimensionLabel(names: Map<string, string | undefined>, key?: string | null) {
   if (!key) return UNKNOWN_TEXT
   return names.get(key) || key
 }

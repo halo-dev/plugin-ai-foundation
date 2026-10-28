@@ -15,7 +15,7 @@ AI Foundation registers the FormKit input type `aiModelSelector`. Its saved valu
   validation: required
 ```
 
-`modelType` accepts `language`, `embedding`, `rerank`, or `image-generation`.
+`modelType` accepts `language`, `embedding`, `rerank`, `image-generation`, or `decision`.
 
 ## Capability requirements
 

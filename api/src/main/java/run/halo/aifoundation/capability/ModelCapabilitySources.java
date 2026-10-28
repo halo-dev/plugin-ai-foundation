@@ -18,6 +18,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ModelCapabilitySources {
 
+    private CapabilitySource decision;
+
+    /** Retains the constructor published before decision models were introduced. */
+    public ModelCapabilitySources(CapabilitySource language, CapabilitySource imageGeneration) {
+        this(null, language, imageGeneration);
+    }
+
     /**
      * Source for {@link ModelCapabilities#getLanguage()}.
      */
@@ -39,6 +46,7 @@ public class ModelCapabilitySources {
             return null;
         }
         return switch (domain) {
+            case DECISION -> decision;
             case LANGUAGE -> language;
             case IMAGE_GENERATION -> imageGeneration;
         };
@@ -51,6 +59,7 @@ public class ModelCapabilitySources {
      */
     public static ModelCapabilitySources unknown() {
         return ModelCapabilitySources.builder()
+            .decision(CapabilitySource.UNKNOWN)
             .language(CapabilitySource.UNKNOWN)
             .imageGeneration(CapabilitySource.UNKNOWN)
             .build();

@@ -3,12 +3,13 @@ import { useModelOptionsFetch } from '@/composables/use-model-options-fetch'
 import { useRouteQuery } from '@vueuse/router'
 import { computed, shallowRef, watch, type ComputedRef, type ShallowRef } from 'vue'
 
-export type WorkbenchTestMode = 'chat' | 'embedding' | 'rerank' | 'image' | 'rag'
+export type WorkbenchTestMode = 'chat' | 'embedding' | 'rerank' | 'image' | 'rag' | 'decision'
 
 export interface WorkbenchModels {
   availableOnly: ShallowRef<boolean | undefined>
   selectedModelName: ReturnType<typeof useRouteQuery<string | undefined>>
   testMode: ShallowRef<WorkbenchTestMode>
+  decisionModels: ComputedRef<ModelOption[]>
   chatModels: ComputedRef<ModelOption[]>
   embeddingModels: ComputedRef<ModelOption[]>
   rerankModels: ComputedRef<ModelOption[]>
@@ -22,6 +23,7 @@ export interface WorkbenchModels {
 }
 
 const modelTypeByMode: Record<WorkbenchTestMode, ModelOptionModelTypeEnum> = {
+  decision: ModelOptionModelTypeEnum.Decision,
   chat: ModelOptionModelTypeEnum.Language,
   embedding: ModelOptionModelTypeEnum.Embedding,
   rerank: ModelOptionModelTypeEnum.Rerank,
@@ -48,6 +50,7 @@ export function useWorkbenchModels(): WorkbenchModels {
     computed(() =>
       (modelOptions.value || []).filter((model) => model.name && model.modelType === type),
     )
+  const decisionModels = modelsByType(ModelOptionModelTypeEnum.Decision)
   const chatModels = modelsByType(ModelOptionModelTypeEnum.Language)
   const embeddingModels = modelsByType(ModelOptionModelTypeEnum.Embedding)
   const rerankModels = modelsByType(ModelOptionModelTypeEnum.Rerank)
@@ -55,6 +58,8 @@ export function useWorkbenchModels(): WorkbenchModels {
   const activeModelType = computed(() => modelTypeByMode[testMode.value])
   const activeModels = computed(() => {
     switch (activeModelType.value) {
+      case ModelOptionModelTypeEnum.Decision:
+        return decisionModels.value
       case ModelOptionModelTypeEnum.Embedding:
         return embeddingModels.value
       case ModelOptionModelTypeEnum.Rerank:
@@ -75,6 +80,9 @@ export function useWorkbenchModels(): WorkbenchModels {
       if (!items) return
       const selected = items.find((item) => item.name === selectedModelName.value)
       switch (selected?.modelType) {
+        case ModelOptionModelTypeEnum.Decision:
+          testMode.value = 'decision'
+          break
         case ModelOptionModelTypeEnum.Embedding:
           testMode.value = 'embedding'
           break
@@ -107,6 +115,7 @@ export function useWorkbenchModels(): WorkbenchModels {
     availableOnly,
     selectedModelName,
     testMode,
+    decisionModels,
     chatModels,
     embeddingModels,
     rerankModels,

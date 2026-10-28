@@ -437,3 +437,10 @@ pnpm --dir ui --filter @halo-dev/ai-foundation-sdk typecheck
 pnpm --dir ui --filter @halo-dev/ai-foundation-sdk test
 pnpm --dir ui --filter @halo-dev/ai-foundation-sdk build
 ```
+
+## Decision models
+
+Use `createDecisionClient({ api })` with your consumer plugin's decision endpoint for typed probability,
+choice and score results. Custom fetch, headers and AbortSignal are supported; provider keys stay on the
+server. This feature requires plugin/SDK builds that include decision support. See the
+[decision model guide](../../../dev/en/sdk-core/decision-models.md) for setup and Java/browser examples.

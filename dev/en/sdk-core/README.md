@@ -18,7 +18,8 @@ parameter mappings.
 6. [Image generation](./image-generation.md)
 7. [Middleware, step control, and lifecycle](./middleware-and-lifecycle.md)
 8. [Error handling](./error-handling.md)
-9. [Complete public API index](./api-reference.md)
+9. [Decision models](./decision-models.md)
+10. [Complete public API index](./api-reference.md)
 
 ## Entry points
 

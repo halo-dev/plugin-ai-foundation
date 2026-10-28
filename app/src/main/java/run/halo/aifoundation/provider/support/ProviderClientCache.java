@@ -14,6 +14,7 @@ import run.halo.aifoundation.provider.AiProviderType;
 @Component
 public class ProviderClientCache {
 
+    private final Map<String, ProviderDecisionClient> decisionClientCache = new ConcurrentHashMap<>();
     private final Map<String, ChatModel> chatModelCache = new ConcurrentHashMap<>();
     private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
     private final Map<String, ProviderRerankingClient> rerankingClientCache =
@@ -123,8 +124,18 @@ public class ProviderClientCache {
         return prev != null ? prev : client;
     }
 
+    public ProviderDecisionClient getOrCreateDecisionClient(AiProvider provider, String apiKey,
+        ProviderModelRef model) {
+        var type = getProviderType(provider.getSpec().getProviderType());
+        var resolved = ProviderModelResolver.resolve(type, model);
+        var key = cacheKey(provider.getMetadata().getName(), resolved);
+        return decisionClientCache.computeIfAbsent(key,
+            ignored -> type.buildDecisionClient(provider, apiKey, resolved));
+    }
+
     public void invalidate(String providerName) {
         var prefix = providerName + "/";
+        decisionClientCache.keySet().removeIf(key -> key.startsWith(prefix));
         chatModelCache.keySet().removeIf(key -> key.startsWith(prefix));
         embeddingModelCache.keySet().removeIf(key -> key.startsWith(prefix));
         rerankingClientCache.keySet().removeIf(key -> key.startsWith(prefix));
@@ -133,6 +144,7 @@ public class ProviderClientCache {
     }
 
     public void invalidateAll() {
+        decisionClientCache.clear();
         chatModelCache.clear();
         embeddingModelCache.clear();
         rerankingClientCache.clear();

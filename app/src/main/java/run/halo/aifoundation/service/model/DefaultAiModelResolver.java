@@ -56,6 +56,11 @@ public class DefaultAiModelResolver implements AiModelResolver {
     }
 
     @Override
+    public Mono<String> defaultDecisionModelName() {
+        return defaultSlotName("decision", DefaultModelSlots::getDecisionModelName);
+    }
+
+    @Override
     public Mono<String> defaultLanguageModelName() {
         return defaultSlotName("language", DefaultModelSlots::getLanguageModelName);
     }
