@@ -2,8 +2,9 @@
 import { DecisionQuestionTypeEnum } from '@/api/generated'
 import { DECISION_QUESTION_TYPES, type DecisionQuestionDraft } from '@/utils/decision-workbench'
 import { VButton } from '@halo-dev/components'
+import RiDeleteBinLine from '~icons/ri/delete-bin-line'
 
-const props = defineProps<{ question: DecisionQuestionDraft; disabled: boolean }>()
+const props = defineProps<{ question: DecisionQuestionDraft; index: number; disabled: boolean }>()
 const emit = defineEmits<{ update: [question: DecisionQuestionDraft]; remove: [] }>()
 
 function update<K extends keyof DecisionQuestionDraft>(key: K, value: DecisionQuestionDraft[K]) {
@@ -21,11 +22,25 @@ function updateType(value: unknown) {
 </script>
 
 <template>
-  <div class=":uno: border border-slate-200 rounded-lg bg-white p-4">
+  <div class=":uno: min-w-0 border border-slate-100 rounded-lg bg-slate-50/70 space-y-3 !p-3">
+    <div class=":uno: flex items-center justify-between gap-3">
+      <span class=":uno: text-xs text-slate-500 font-medium">问题 {{ index + 1 }}</span>
+      <VButton
+        size="sm"
+        ghost
+        :disabled="disabled"
+        :aria-label="`移除问题 ${index + 1}`"
+        @click="emit('remove')"
+      >
+        <template #icon><RiDeleteBinLine /></template>
+        移除
+      </VButton>
+    </div>
     <div class=":uno: grid grid-cols-1 gap-3 sm:grid-cols-2">
       <FormKit
         type="text"
         label="问题标识"
+        placeholder="例如 spam"
         :model-value="question.id"
         :disabled="disabled"
         @update:model-value="update('id', String($event ?? ''))"
@@ -42,7 +57,8 @@ function updateType(value: unknown) {
     <FormKit
       type="textarea"
       label="判断说明"
-      :rows="2"
+      :rows="3"
+      placeholder="描述需要模型判断的问题…"
       :model-value="question.instructions"
       :disabled="disabled"
       @update:model-value="update('instructions', String($event ?? ''))"
@@ -67,8 +83,5 @@ function updateType(value: unknown) {
       :disabled="disabled"
       @update:model-value="update('criteria', String($event ?? ''))"
     />
-    <div class=":uno: flex justify-end">
-      <VButton size="sm" :disabled="disabled" @click="emit('remove')">移除问题</VButton>
-    </div>
   </div>
 </template>
