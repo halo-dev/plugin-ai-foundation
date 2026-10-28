@@ -3,8 +3,8 @@
 [简体中文](../../zh-CN/sdk-core/decision-models.md) | English
 
 Decision models answer closed questions about shared text or JSON state. Consumer plugins own thresholds
-and subsequent actions. `DecisionModel` is provider-neutral; TypeSafe / Jev is the first built-in
-provider. Other adapters can reuse model resolution, the workbench, and usage recording.
+and subsequent actions. `DecisionModel` is provider-neutral, with built-in TypeSafe and AIHubMix
+decision adapters. Other adapters can reuse model resolution, the workbench, and usage recording.
 These APIs are new in the development build and require matching plugin and
 Java/npm SDK versions; the published `1.0.0` API does not include them.
 
@@ -20,6 +20,18 @@ The adapter supports text/JSON state and `YES_NO`, `CHOICE`, and `SCORE` questio
 2–255 options; scores support 2–10 ordered levels. Images, Box questions, text generation, tool execution,
 and automatic business routing are outside this adapter's current scope. Unsupported native options
 are rejected explicitly.
+
+## Use Jev through AIHubMix
+
+Create an **AIHubMix** provider with its API key and the default Base URL `https://aihubmix.com/v1`.
+Refresh model discovery and import a Jev model returned by the catalog, such as `jev-latest`.
+Catalog entries with type `decision` map to decision models with adapter `aihubmix-system-one`.
+Manual entry of an available model ID is also supported; discovery does not hardcode Jev versions.
+
+Requests use AIHubMix's `POST /v1/systemone`, bearer authentication, and `APP-Code` header.
+Both service-root and `/v1` Base URLs work without duplicating `/v1`. The supported question types
+and limits match the System One adapter above. Imported models can run in the Decision workbench
+without creating a separate TypeSafe provider.
 
 ## Java
 
@@ -106,4 +118,5 @@ and remove decision resources/default slots before downgrading. Automated tests 
 runtime and workbench; evaluate Chinese/domain-specific accuracy and thresholds with your own data.
 
 References: [System One](https://docs.typesafe.ai/api), [model discovery](https://docs.typesafe.ai/api/list-models),
-[confidence](https://docs.typesafe.ai/confidence).
+[confidence](https://docs.typesafe.ai/confidence), [AIHubMix Jev API](https://aihubmix.com/model/jev-latest/llms.txt),
+[AIHubMix model catalog](https://docs.aihubmix.com/cn/api/Models-API).

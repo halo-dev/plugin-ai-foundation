@@ -9,7 +9,7 @@ Halo 官方 AI 能力平台，统一接入主流大模型，为插件生态提�
 ## 功能特性
 
 - **多提供商支持**：内置 OpenAI、OpenRouter、DeepSeek、月之暗面 Kimi、硅基流动、阿里云百炼、豆包、文心一言、智谱开放平台、Ollama、OpenAI 兼容、AIHubMix、Gitee 模力方舟、MiniMax、腾讯云 TokenHub 和 Xiaomi MiMo
-- **决策模型**：提供供应商中立的概率判断、单选、评分 API 和决策工作台，内置 TypeSafe / Jev 适配器
+- **决策模型**：提供供应商中立的概率判断、单选、评分 API 和决策工作台，支持通过 TypeSafe 或 AIHubMix 使用 Jev
 - **统一模型管理**：在 Halo 控制台管理 Provider、API Key Secret、语言 / Embedding / Rerank / 图像生成模型、Adapter 与模型能力
 - **模型自动发现**：从 Provider 拉取模型，并保留远程声明、内建能力和管理员覆盖的来源信息
 - **统一参数映射**：按 Provider 或模型配置采样、重试、推理、Embedding、Rerank 和图像参数到供应方字段的映射

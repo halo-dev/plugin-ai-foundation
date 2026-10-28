@@ -3,7 +3,7 @@
 简体中文 | [English](../../en/sdk-core/decision-models.md)
 
 决策模型针对共享内容回答封闭问题，返回概率判断、候选选择或有序评分。业务插件决定阈值和后续动作。
-`DecisionModel` 是供应商中立的公共契约，TypeSafe / Jev 是首个内置提供商；其他提供商可以通过独立
+`DecisionModel` 是供应商中立的公共契约，内置 TypeSafe 与 AIHubMix 决策适配器；其他提供商可以通过独立
 适配器接入相同的模型解析、工作台和用量统计。
 这些 API 是本次开发新增能力，使用时需要包含此功能的 AI Foundation 插件和 Java/npm SDK；已发布的
 `1.0.0` API 不包含它们。
@@ -19,6 +19,16 @@
 当前适配器支持文本与 JSON 状态，以及 `YES_NO`、`CHOICE`、`SCORE`。每个单选问题最多 255 个选项，
 评分问题为 2–10 个有序等级。不提供图片/Box、文本生成、工具执行或自动业务路由。
 原生参数不支持时会明确拒绝，不会静默忽略。
+
+## 通过 AIHubMix 使用 Jev
+
+在提供商管理中选择 **AIHubMix** 并配置它的 API Key，默认 Base URL 为 `https://aihubmix.com/v1`。
+打开模型发现并刷新列表，导入目录返回的 Jev 模型（如 `jev-latest`）。目录中的 `decision` 类型会映射为
+决策模型，适配器为 `aihubmix-system-one`；也支持手动填写目录中可用的模型 ID，不限定 Jev 版本。
+
+调用使用 AIHubMix 的 `POST /v1/systemone`，带上 AIHubMix 的鉴权与 `APP-Code` 请求头。
+服务根地址和以 `/v1` 结尾的 Base URL 均可使用；适配器不会重复追加 `/v1`。支持的问题类型和限制与
+上述 System One 适配一致，导入后可直接在“决策”工作台测试，无需另建 TypeSafe 提供商。
 
 ## Java 调用
 
@@ -82,7 +92,7 @@ TypeSafe 客户端严格解析；公共层放宽可选字段不会掩盖它的�
 ## 浏览器调用自己的插件接口
 
 消费插件可以接收 `DecisionRequest`、调用 `AiModelService`，并把 `DecisionResponse` 作为 JSON 返回。
-使用消费插件自己的鉴权和业务校验；浏览器不直接持有 TypeSafe API Key。
+使用消费插件自己的鉴权和业务校验；浏览器不直接持有提供商 API Key。
 
 ```ts
 import { createDecisionClient } from '@halo-dev/ai-foundation-sdk'
@@ -109,10 +119,11 @@ if (answer?.type === 'YES_NO') {
 
 原有语言、嵌入、重排和图像 API 及持久化值保持不变。新服务方法提供默认实现，旧的
 `AiModelService` 实现可继续加载；新功能仍要求匹配版本的运行时。
-新增 `decision` 模型类型、`typesafe-system-one` 适配器及默认决策槽位后，旧版插件/生成客户端不能
+新增 `decision` 模型类型、`typesafe-system-one` / `aihubmix-system-one` 适配器及默认决策槽位后，旧版插件/生成客户端不能
 识别新枚举。升级时一起更新相关 SDK；降级前移除新模型资源并清空决策默认槽位。
 
 自动测试覆盖协议、模型解析、验证、取消、超时和工作台。实际中文业务效果与阈值应使用自己的数据评估。
 
 协议依据：[System One](https://docs.typesafe.ai/api)、[模型发现](https://docs.typesafe.ai/api/list-models)、
-[概率与置信度](https://docs.typesafe.ai/confidence)。
+[概率与置信度](https://docs.typesafe.ai/confidence)、[AIHubMix Jev 接口](https://aihubmix.com/model/jev-latest/llms.txt)、
+[AIHubMix 模型目录](https://docs.aihubmix.com/cn/api/Models-API)。

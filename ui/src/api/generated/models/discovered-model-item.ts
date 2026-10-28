@@ -155,7 +155,8 @@ export const DiscoveredModelItemAdapterTypeEnum = {
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
     OllamaImage: 'ollama-image',
-    TypesafeSystemOne: 'typesafe-system-one'
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type DiscoveredModelItemAdapterTypeEnum = typeof DiscoveredModelItemAdapterTypeEnum[keyof typeof DiscoveredModelItemAdapterTypeEnum];

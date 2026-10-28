@@ -10,7 +10,7 @@ ecosystem.
 
 ## Features
 
-- **Decision models**: Provider-neutral probability, choice, and score APIs with a decision workbench and a built-in TypeSafe / Jev adapter.
+- **Decision models**: Provider-neutral probability, choice, and score APIs with a decision workbench and Jev access through TypeSafe or AIHubMix.
 - **Multiple AI providers**: Built-in support for OpenAI, OpenRouter, DeepSeek, Moonshot Kimi,
   SiliconFlow, Alibaba Cloud Model Studio, Doubao, ERNIE, Zhipu AI, Ollama, OpenAI-compatible
   providers, AIHubMix, Gitee AI, MiniMax, Tencent Cloud TokenHub, and Xiaomi MiMo

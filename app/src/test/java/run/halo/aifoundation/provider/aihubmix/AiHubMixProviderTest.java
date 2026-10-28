@@ -77,7 +77,7 @@ class AiHubMixProviderTest {
         assertThat(providerType.getSupportedAdapterTypes()).containsExactly(
             AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
             AdapterType.AIHUBMIX_MESSAGES, AdapterType.AIHUBMIX_EMBEDDING,
-            AdapterType.RERANK, AdapterType.AIHUBMIX_IMAGE);
+            AdapterType.RERANK, AdapterType.AIHUBMIX_IMAGE, AdapterType.AIHUBMIX_SYSTEM_ONE);
         assertThat(providerType.buildChatModel(provider, "key", "gpt-5"))
             .isInstanceOf(AiHubMixResponsesModel.class);
         assertThat(providerType.buildChatModel(provider, "key", new ProviderModelRef(
