@@ -11,7 +11,7 @@
 ## 配置 TypeSafe / Jev
 
 1. 在提供商管理中选择 **TypeSafe (Jev)**，通过 Halo Secret 配置 API Key。
-2. 默认 Base URL 为 `https://api.typesafe.ai`（服务根地址）。可配置代理；路径由适配器追加。
+2. 默认 Base URL 为 `https://api.typesafe.ai`（服务根地址），也支持以 `/v1` 结尾的地址。可配置代理；模型发现与决策调用都会保留路径前缀，且不会重复追加 `/v1`。
 3. 从提供商发现并导入模型，或手动填写供应方允许的模型 ID。模型类型选择 `decision`，适配器为
    `typesafe-system-one`。模型列表来自 `GET /v1/models`，没有硬编码版本列表。
 4. 可在默认模型页设置默认决策模型，在工作台的“决策”页输入文本或 JSON，并添加多个问题。

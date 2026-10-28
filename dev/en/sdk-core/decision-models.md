@@ -11,7 +11,8 @@ Java/npm SDK versions; the published `1.0.0` API does not include them.
 ## Configure TypeSafe / Jev
 
 Create a **TypeSafe (Jev)** provider and select a Halo Secret for its API key. The default service root
-is `https://api.typesafe.ai`; the adapter appends `/v1/systemone` and `/v1/models`. Import a discovered
+is `https://api.typesafe.ai`; URLs ending in `/v1` also work. Discovery and inference preserve proxy
+path prefixes and append `/v1/models` and `/v1/systemone` without duplicating `/v1`. Import a discovered
 model or manually enter an accepted provider model ID with model type `decision` and adapter
 `typesafe-system-one`. Model discovery uses the account's catalog, not a hardcoded model list.
 Optionally configure the default decision model, then use the Console's Decision workbench.

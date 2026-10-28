@@ -1,4 +1,4 @@
-import { AIUIError, AIUIProtocolError } from './errors'
+import { AIUIError, AIUIProtocolError, isAbortError } from './errors'
 import type { FetchFunction } from './types'
 
 export type DecisionJsonValue =
@@ -76,6 +76,7 @@ export function createDecisionClient(options: DecisionClientOptions) {
       try {
         result = await response.json()
       } catch (cause) {
+        if (isAbortError(cause)) throw cause
         throw new AIUIProtocolError('Decision endpoint returned invalid JSON', { cause })
       }
       validateDecisionResponse(result, request)

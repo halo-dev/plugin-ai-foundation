@@ -9,6 +9,7 @@ import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.rerank.RerankUsage;
+import run.halo.aifoundation.service.decision.DecisionResponseValidationException;
 
 public record NormalizedUsage(
     Long inputTokens,
@@ -113,6 +114,9 @@ public record NormalizedUsage(
         for (int depth = 0; depth < 8; depth++, error = error.getCause()) {
             if (error == null) {
                 break;
+            }
+            if (error instanceof DecisionResponseValidationException e) {
+                return from(e.getUsage());
             }
             if (error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e) {
                 return from(e.getUsage());

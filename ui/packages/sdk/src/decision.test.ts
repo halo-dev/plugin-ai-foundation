@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDecisionClient, type DecisionRequest } from './decision'
-import { AIUIError, AIUIProtocolError } from './errors'
+import { AIUIError, AIUIProtocolError, isAbortError } from './errors'
 
 const request: DecisionRequest = {
   state: { comment: 'hello' },
@@ -54,6 +54,29 @@ describe('decision client', () => {
       fetch: vi.fn().mockResolvedValue(new Response('', { status: 429 })),
     })
     await expect(client.decide(request)).rejects.toMatchObject<Partial<AIUIError>>({ status: 429 })
+  })
+
+  it('reports malformed JSON as a protocol error', async () => {
+    const client = createDecisionClient({
+      api: '/decision',
+      fetch: vi.fn().mockResolvedValue(new Response('{invalid json')),
+    })
+    await expect(client.decide(request)).rejects.toMatchObject({
+      name: 'AIUIProtocolError',
+      message: 'Decision endpoint returned invalid JSON',
+      cause: expect.any(SyntaxError),
+    })
+  })
+
+  it('preserves cancellation before receiving response headers', async () => {
+    const error = new DOMException('Cancelled', 'AbortError')
+    const client = createDecisionClient({
+      api: '/decision',
+      fetch: vi.fn().mockRejectedValue(error),
+    })
+    const failure = await client.decide(request).catch((cause: unknown) => cause)
+    expect(failure).toBe(error)
+    expect(isAbortError(failure)).toBe(true)
   })
 
   it('preserves choice distributions and fractional scores, rejecting incomplete distributions', async () => {

@@ -12,12 +12,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.decision.DecisionQuestion;
 import run.halo.aifoundation.decision.DecisionRequest;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.service.decision.DecisionModelImpl;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
@@ -93,21 +97,37 @@ class TypeSafeDecisionClientTest {
         assertThat(requestBody.get()).doesNotContain("local-only", "metadata", "messages");
     }
 
-    @Test
-    void discoversModelsUsingTypeSafeCatalogShape() {
+    @ParameterizedTest
+    @ValueSource(strings = {"", "/", "///", "/v1", "/v1/", "/v1///", "/proxy", "/proxy/v1/"})
+    void normalizesDiscoveryAndInferenceBaseUrlsConsistently(String suffix) {
         response.set("""
             {"models":[{"name":"jev-latest","description":"Decision model","release_date":"2026-09-15"}]}
             """);
         var provider = new AiProvider();
         provider.setSpec(new AiProvider.AiProviderSpec());
-        provider.getSpec().setBaseUrl(baseUrl + "/");
-        StepVerifier.create(new TypeSafeProvider().discoverModels(provider, "test-key"))
+        provider.getSpec().setBaseUrl(baseUrl + suffix);
+        var type = new TypeSafeProvider();
+        var prefix = suffix.startsWith("/proxy") ? "/proxy" : "";
+        StepVerifier.create(type.discoverModels(provider, "test-key"))
             .assertNext(models -> {
                 assertThat(models).hasSize(1);
                 assertThat(models.getFirst().modelId()).isEqualTo("jev-latest");
                 assertThat(models.getFirst().modelType()).isEqualTo(ModelType.DECISION);
             }).verifyComplete();
-        assertThat(path.get()).isEqualTo("/v1/models");
+        assertThat(path.get()).isEqualTo(prefix + "/v1/models");
+        assertThat(authorization.get()).isEqualTo("Bearer test-key");
+
+        response.set("""
+            {"model":"jev-version","answers":{"spam":{"type":"noul","noul":0.2}}}
+            """);
+        var client = type.buildDecisionClient(provider, "test-key",
+            new ProviderModelRef("jev-latest", ModelType.DECISION, AdapterType.TYPESAFE_SYSTEM_ONE));
+        StepVerifier.create(client.decide(DecisionRequest.builder().state("test")
+                .questions(Map.of("spam", DecisionQuestion.yesNo("Spam?"))).build()))
+            .assertNext(result -> assertThat(result.getAnswers().get("spam").getProbability())
+                .isEqualTo(0.2))
+            .verifyComplete();
+        assertThat(path.get()).isEqualTo(prefix + "/v1/systemone");
         assertThat(authorization.get()).isEqualTo("Bearer test-key");
     }
 

@@ -18,6 +18,7 @@ import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
@@ -112,7 +113,8 @@ public class TypeSafeProvider extends AbstractAiProviderType {
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
-        var endpoint = resolveBaseUrl(provider).replaceAll("/+$", "") + "/v1/models";
+        var endpoint = ProviderUris.withoutTrailingPath(resolveBaseUrl(provider), "/v1")
+            + "/v1/models";
         var diagnostics = ProviderDiagnostics.create(getProviderType(), "models");
         return discoveryWebClientBuilder(provider).build().get().uri(endpoint)
             .headers(headers -> headers.setBearerAuth(apiKey))

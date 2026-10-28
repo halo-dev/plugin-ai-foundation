@@ -50,7 +50,13 @@ public class DecisionModelImpl implements DecisionModel {
             var call = observer.observe(UsageUnitKind.DECISION, 0,
                     () -> client.decide(request)
                         .switchIfEmpty(Mono.error(new IllegalStateException("Empty decision response")))
-                        .doOnNext(response -> DecisionValidation.response(request, response)),
+                        .doOnNext(response -> {
+                            try {
+                                DecisionValidation.response(request, response);
+                            } catch (IllegalStateException error) {
+                                throw new DecisionResponseValidationException(error, response);
+                            }
+                        }),
                     response -> NormalizedUsage.from(response.getUsage()), DecisionResponse::getModel)
                 .doOnNext(response -> checkCancellation(request));
             var timeout = request.getTimeouts() == null ? null
