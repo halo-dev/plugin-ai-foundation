@@ -3,22 +3,15 @@
 简体中文 | [English](../../en/sdk-core/decision-models.md)
 
 决策模型针对共享内容回答封闭问题，返回概率判断、候选选择或有序评分。业务插件决定阈值和后续动作。
-`DecisionModel` 是供应商中立的公共契约，内置 TypeSafe 与 AIHubMix 决策适配器；其他提供商可以通过独立
-适配器接入相同的模型解析、工作台和用量统计。
+`DecisionModel` 是供应商中立的公共契约，各提供商通过适配器接入相同的模型解析、工作台和用量统计。
 这些 API 是本次开发新增能力，使用时需要包含此功能的 AI Foundation 插件和 Java/npm SDK；已发布的
 `1.0.0` API 不包含它们。
 
-## 配置 TypeSafe / Jev
+## 配置决策模型
 
-1. 在提供商管理中选择 **TypeSafe (Jev)**，通过 Halo Secret 配置 API Key。
-2. 默认 Base URL 为 `https://api.typesafe.ai`（服务根地址），也支持以 `/v1` 结尾的地址。可配置代理；模型发现与决策调用都会保留路径前缀，且不会重复追加 `/v1`。
-3. 从提供商发现并导入模型，或手动填写供应方允许的模型 ID。模型类型选择 `decision`，适配器为
-   `typesafe-system-one`。模型列表来自 `GET /v1/models`，没有硬编码版本列表。
-4. 可在默认模型页设置默认决策模型，在工作台的“决策”页输入文本或 JSON，并添加多个问题。
-
-当前适配器支持文本与 JSON 状态，以及 `YES_NO`、`CHOICE`、`SCORE`。每个单选问题最多 255 个选项，
-评分问题为 2–10 个有序等级。不提供图片/Box、文本生成、工具执行或自动业务路由。
-原生参数不支持时会明确拒绝，不会静默忽略。
+1. 在提供商管理中配置支持决策模型的提供商，通过 Halo Secret 配置 API Key。
+2. 从提供商发现并导入决策模型，或手动添加模型，将类型设为 `decision` 并选择匹配的适配器。
+3. 可在默认模型页设置默认决策模型，在工作台的“决策”页输入文本或 JSON，并添加多个问题。
 
 ## Java 调用
 
@@ -48,14 +41,14 @@ return extensionGetter.getEnabledExtension(AiModelService.class)
 `modelName` 为 `AiModel.metadata.name`；无参或空白名称使用默认决策模型。跨插件仍通过
 `ExtensionGetter` 获取服务。`metadata` 仅供本地审计，不会发送给提供商。
 
-- `YES_NO` 的 `probability` 是“是”的概率，不会自动转为布尔值。TypeSafe 的 `noul` 在适配器内部转换。
+- `YES_NO` 的 `probability` 是“是”的概率，不会自动转为布尔值。
 - `CHOICE` 必须返回请求中的一个 `choice`；`probabilities` 和 `confidence` 各自可选。
 - `SCORE` 必须返回 `[0, 等级数 - 1]` 内的 `score`，允许小数，不要求由概率加权计算。
   等级 `legend`、`probabilities` 和 `confidence` 各自可选。
 - 附加字段缺失或为 `null` 时保持缺失，不填零、不制造分布，也不从分数反推置信度。
   如果提供概率分布，必须包含全部选项且总和为 1；如果提供图例，必须覆盖全部评分等级。
 - `confidence` 是提供商返回的 `[0, 1]` 数值，含义取决于提供商，不能统一解释为答案正确率。
-  TypeSafe 的置信度描述分布集中程度；其他提供商可以采用不同定义。`YES_NO` 没有单独的置信度字段。
+  `YES_NO` 没有单独的置信度字段。
 - `response.model` 保留实际服务模型，token 数量未知时保持 `null`，不能按零用量处理。
 - 请求验证先于推理；返回结果的问题 ID、类型、选项、数值范围和概率分布也会校验。
 
@@ -76,8 +69,7 @@ return extensionGetter.getEnabledExtension(AiModelService.class)
 诊断数据，也无需修改公共推理流程。二元分类若只返回布尔结果，可用两个选项的 `CHOICE` 表达；
 `YES_NO` 保留“是”的概率契约，不把布尔值伪装成概率。
 
-提供商协议的强制字段在适配器内校验。例如 TypeSafe 本身要求返回的分布、置信度和评分图例仍由
-TypeSafe 客户端严格解析；公共层放宽可选字段不会掩盖它的异常响应。
+提供商协议的强制字段由适配器校验。
 
 ## 浏览器调用自己的插件接口
 
@@ -109,11 +101,7 @@ if (answer?.type === 'YES_NO') {
 
 原有语言、嵌入、重排和图像 API 及持久化值保持不变。新服务方法提供默认实现，旧的
 `AiModelService` 实现可继续加载；新功能仍要求匹配版本的运行时。
-新增 `decision` 模型类型、`typesafe-system-one` / `aihubmix-system-one` 适配器及默认决策槽位后，旧版插件/生成客户端不能
+新增 `decision` 模型类型、决策适配器及默认决策槽位后，旧版插件/生成客户端不能
 识别新枚举。升级时一起更新相关 SDK；降级前移除新模型资源并清空决策默认槽位。
 
 自动测试覆盖协议、模型解析、验证、取消、超时和工作台。实际中文业务效果与阈值应使用自己的数据评估。
-
-协议依据：[System One](https://docs.typesafe.ai/api)、[模型发现](https://docs.typesafe.ai/api/list-models)、
-[概率与置信度](https://docs.typesafe.ai/confidence)、[AIHubMix Jev 接口](https://aihubmix.com/model/jev-latest/llms.txt)、
-[AIHubMix 模型目录](https://docs.aihubmix.com/cn/api/Models-API)。

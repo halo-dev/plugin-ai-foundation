@@ -3,24 +3,18 @@
 [简体中文](../../zh-CN/sdk-core/decision-models.md) | English
 
 Decision models answer closed questions about shared text or JSON state. Consumer plugins own thresholds
-and subsequent actions. `DecisionModel` is provider-neutral, with built-in TypeSafe and AIHubMix
-decision adapters. Other adapters can reuse model resolution, the workbench, and usage recording.
+and subsequent actions. `DecisionModel` is provider-neutral. Provider adapters share model resolution,
+the workbench, and usage recording.
 These APIs are new in the development build and require matching plugin and
 Java/npm SDK versions; the published `1.0.0` API does not include them.
 
-## Configure TypeSafe / Jev
+## Configure decision models
 
-Create a **TypeSafe (Jev)** provider and select a Halo Secret for its API key. The default service root
-is `https://api.typesafe.ai`; URLs ending in `/v1` also work. Discovery and inference preserve proxy
-path prefixes and append `/v1/models` and `/v1/systemone` without duplicating `/v1`. Import a discovered
-model or manually enter an accepted provider model ID with model type `decision` and adapter
-`typesafe-system-one`. Model discovery uses the account's catalog, not a hardcoded model list.
-Optionally configure the default decision model, then use the Console's Decision workbench.
-
-The adapter supports text/JSON state and `YES_NO`, `CHOICE`, and `SCORE` questions. Choices support
-2–255 options; scores support 2–10 ordered levels. Images, Box questions, text generation, tool execution,
-and automatic business routing are outside this adapter's current scope. Unsupported native options
-are rejected explicitly.
+1. Configure a provider that supports decision models and select a Halo Secret for its API key.
+2. Import a decision model from provider discovery, or add one manually with model type `decision`
+   and a matching adapter.
+3. Optionally configure the default decision model. In the Console's Decision workbench, enter text
+   or JSON and add questions.
 
 ## Java
 
@@ -51,8 +45,8 @@ also accepts an optional `legend`. These fields are independent and may be absen
 diagnostics are never synthesized. When present, a distribution must cover every option and sum to one,
 and a legend must cover every score level.
 
-Confidence is a provider-reported value in `[0, 1]` whose meaning depends on the provider. TypeSafe
-uses distribution concentration; this is not a universal confidence definition or a correctness guarantee.
+Confidence is a provider-reported value in `[0, 1]` whose meaning depends on the provider;
+it is not a universal measure of answer correctness.
 YES_NO has no separate confidence. Unknown token counts remain null. The response reports the served model.
 The runtime validates request fields, provider limits, response question IDs/types, and any supplied diagnostics.
 
@@ -75,9 +69,7 @@ request and result types. Label-only and score-only providers do not need to fab
 or change the shared inference runtime. A boolean-only classifier can use a two-option `CHOICE`;
 `YES_NO` retains its probability contract rather than converting booleans to invented probabilities.
 
-Keep protocol-required fields in the adapter's validation. The TypeSafe client still requires its
-distributions, confidence, and score legends; the optional public contract does not hide a malformed
-TypeSafe response.
+Validate provider-required protocol fields in the adapter.
 
 ## Browser SDK
 
@@ -105,7 +97,3 @@ Existing APIs and persisted values are preserved, and new AiModelService methods
 Older releases/clients cannot recognize the new model and adapter enum values: update consuming SDKs,
 and remove decision resources/default slots before downgrading. Automated tests cover the protocol,
 runtime and workbench; evaluate Chinese/domain-specific accuracy and thresholds with your own data.
-
-References: [System One](https://docs.typesafe.ai/api), [model discovery](https://docs.typesafe.ai/api/list-models),
-[confidence](https://docs.typesafe.ai/confidence), [AIHubMix Jev API](https://aihubmix.com/model/jev-latest/llms.txt),
-[AIHubMix model catalog](https://docs.aihubmix.com/cn/api/Models-API).
