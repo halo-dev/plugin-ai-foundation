@@ -22,18 +22,6 @@ The adapter supports text/JSON state and `YES_NO`, `CHOICE`, and `SCORE` questio
 and automatic business routing are outside this adapter's current scope. Unsupported native options
 are rejected explicitly.
 
-## Use Jev through AIHubMix
-
-Create an **AIHubMix** provider with its API key and the default Base URL `https://aihubmix.com/v1`.
-Refresh model discovery and import a Jev model returned by the catalog, such as `jev-latest`.
-Catalog entries with type `decision` map to decision models with adapter `aihubmix-system-one`.
-Manual entry of an available model ID is also supported; discovery does not hardcode Jev versions.
-
-Requests use AIHubMix's `POST /v1/systemone`, bearer authentication, and `APP-Code` header.
-Both service-root and `/v1` Base URLs work without duplicating `/v1`. The supported question types
-and limits match the System One adapter above. Imported models can run in the Decision workbench
-without creating a separate TypeSafe provider.
-
 ## Java
 
 ```java

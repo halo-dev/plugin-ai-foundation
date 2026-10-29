@@ -20,16 +20,6 @@
 评分问题为 2–10 个有序等级。不提供图片/Box、文本生成、工具执行或自动业务路由。
 原生参数不支持时会明确拒绝，不会静默忽略。
 
-## 通过 AIHubMix 使用 Jev
-
-在提供商管理中选择 **AIHubMix** 并配置它的 API Key，默认 Base URL 为 `https://aihubmix.com/v1`。
-打开模型发现并刷新列表，导入目录返回的 Jev 模型（如 `jev-latest`）。目录中的 `decision` 类型会映射为
-决策模型，适配器为 `aihubmix-system-one`；也支持手动填写目录中可用的模型 ID，不限定 Jev 版本。
-
-调用使用 AIHubMix 的 `POST /v1/systemone`，带上 AIHubMix 的鉴权与 `APP-Code` 请求头。
-服务根地址和以 `/v1` 结尾的 Base URL 均可使用；适配器不会重复追加 `/v1`。支持的问题类型和限制与
-上述 System One 适配一致，导入后可直接在“决策”工作台测试，无需另建 TypeSafe 提供商。
-
 ## Java 调用
 
 ```java
