@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import run.halo.aifoundation.service.decision.DecisionResponseValidationException;
 
 @Component
 public class UsageExecutionObserver {
@@ -32,10 +33,20 @@ public class UsageExecutionObserver {
                         UsageTelemetry.safely(() -> responseModel.apply(value), null));
                 }))
                 .doOnError(error -> UsageTelemetry.safely(
-                    () -> scope.fail(error, NormalizedUsage.fromFailure(error), null)))
+                    () -> scope.fail(error, NormalizedUsage.fromFailure(error),
+                        responseModelFromFailure(error))))
                 .doOnCancel(() -> UsageTelemetry.safely(
                     () -> scope.cancel(NormalizedUsage.missing(), null)));
         });
+    }
+
+    private static String responseModelFromFailure(Throwable error) {
+        for (int depth = 0; depth < 8 && error != null; depth++, error = error.getCause()) {
+            if (error instanceof DecisionResponseValidationException e) {
+                return e.getResponseModel();
+            }
+        }
+        return null;
     }
 
     public <T> Flux<T> observeFlux(UsageUnitKind kind, int unitIndex,

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { useChatWorkbench } from '@/composables/workbench/use-chat-workbench'
+import { useDecisionTest } from '@/composables/workbench/use-decision-test'
 import { useEmbeddingTest } from '@/composables/workbench/use-embedding-test'
 import { useImageGenerationTest } from '@/composables/workbench/use-image-generation-test'
 import { useLanguageGenerationSettings } from '@/composables/workbench/use-language-generation-settings'
@@ -12,6 +13,7 @@ import { computed, nextTick, shallowRef, useTemplateRef, watch } from 'vue'
 import RiSendPlaneLine from '~icons/ri/send-plane-line'
 import ChatInputArea from './components/workbench/ChatInputArea.vue'
 import ChatMessageItem from './components/workbench/ChatMessageItem.vue'
+import DecisionTestPanel from './components/workbench/DecisionTestPanel.vue'
 import EmbeddingTestPanel from './components/workbench/EmbeddingTestPanel.vue'
 import ExamplePrompts from './components/workbench/ExamplePrompts.vue'
 import ImageGenerationTestPanel from './components/workbench/ImageGenerationTestPanel.vue'
@@ -24,6 +26,7 @@ const {
   availableOnly,
   selectedModelName,
   testMode,
+  decisionModels,
   chatModels,
   embeddingModels,
   rerankModels,
@@ -111,6 +114,16 @@ const {
   handleEmbeddingKeydown,
 } = embeddingTest
 
+const decisionTest = useDecisionTest(selectedModel)
+const {
+  stateText,
+  stateFormat,
+  questions: decisionQuestions,
+  result: decisionResult,
+  error: decisionError,
+  isLoading: isDecisionTesting,
+} = decisionTest
+
 const rerankTest = useRerankTest(selectedModel)
 const {
   rerankQuery,
@@ -164,6 +177,7 @@ const {
 
 const isAnyTesting = computed(
   () =>
+    isDecisionTesting.value ||
     isStreaming.value ||
     isEmbeddingTesting.value ||
     isRerankTesting.value ||
@@ -213,10 +227,14 @@ function distanceToConversationBottom(element: HTMLElement) {
 
     <VEmpty
       v-else-if="
-        !chatModels.length && !embeddingModels.length && !rerankModels.length && !imageModels.length
+        !decisionModels.length &&
+        !chatModels.length &&
+        !embeddingModels.length &&
+        !rerankModels.length &&
+        !imageModels.length
       "
       title="暂无可测试的模型"
-      message="你可以在配置选项卡中添加或启用支持对话、嵌入、Rerank 或图片生成能力的模型"
+      message="你可以在配置选项卡中添加或启用支持决策、对话、嵌入、Rerank 或图片生成能力的模型"
     >
       <template #actions>
         <VButton :loading="isFetching" @click="refetch()">刷新</VButton>
@@ -225,7 +243,8 @@ function distanceToConversationBottom(element: HTMLElement) {
 
     <div
       v-else
-      class=":uno: grid grid-cols-1 h-full min-h-0 overflow-hidden border border-slate-200/80 rounded-lg bg-white lg:grid-cols-[minmax(0,1fr)_23rem]"
+      class=":uno: grid grid-cols-1 h-full min-h-0 overflow-hidden border border-slate-200/80 rounded-lg bg-white"
+      :class="{ ':uno: lg:grid-cols-[minmax(0,1fr)_23rem]': testMode !== 'decision' }"
     >
       <section class=":uno: min-h-0 min-w-0 flex flex-col bg-[#f8fafc]">
         <WorkbenchToolbar
@@ -321,6 +340,22 @@ function distanceToConversationBottom(element: HTMLElement) {
           </div>
         </template>
 
+        <DecisionTestPanel
+          v-else-if="testMode === 'decision'"
+          v-model:state-text="stateText"
+          v-model:state-format="stateFormat"
+          :questions="decisionQuestions"
+          :result="decisionResult"
+          :error="decisionError"
+          :is-loading="isDecisionTesting"
+          :disabled="!selectedModel"
+          @update-question="decisionTest.updateQuestion"
+          @remove-question="decisionTest.removeQuestion"
+          @add-question="decisionTest.addQuestion"
+          @run="decisionTest.run"
+          @cancel="decisionTest.cancel"
+        />
+
         <template v-else-if="testMode === 'rerank'">
           <RerankTestPanel
             :query="rerankQuery"
@@ -385,6 +420,7 @@ function distanceToConversationBottom(element: HTMLElement) {
       </section>
 
       <ParameterSidebar
+        v-if="testMode !== 'decision'"
         :mode="testMode === 'rag' ? 'chat' : testMode"
         :system-prompt="systemPrompt"
         :temperature="temperature"

@@ -25,6 +25,12 @@ export interface ModelCapabilitySources {
      * @type {string}
      * @memberof ModelCapabilitySources
      */
+    'decision'?: ModelCapabilitySourcesDecisionEnum;
+    /**
+     * 
+     * @type {string}
+     * @memberof ModelCapabilitySources
+     */
     'imageGeneration'?: ModelCapabilitySourcesImageGenerationEnum;
     /**
      * 
@@ -34,6 +40,14 @@ export interface ModelCapabilitySources {
     'language'?: ModelCapabilitySourcesLanguageEnum;
 }
 
+export const ModelCapabilitySourcesDecisionEnum = {
+    Remote: 'remote',
+    BuiltIn: 'built-in',
+    Manual: 'manual',
+    Unknown: 'unknown'
+} as const;
+
+export type ModelCapabilitySourcesDecisionEnum = typeof ModelCapabilitySourcesDecisionEnum[keyof typeof ModelCapabilitySourcesDecisionEnum];
 export const ModelCapabilitySourcesImageGenerationEnum = {
     Remote: 'remote',
     BuiltIn: 'built-in',

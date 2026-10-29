@@ -120,7 +120,8 @@ export const ModelOptionModelTypeEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type ModelOptionModelTypeEnum = typeof ModelOptionModelTypeEnum[keyof typeof ModelOptionModelTypeEnum];

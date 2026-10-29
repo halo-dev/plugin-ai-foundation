@@ -4,10 +4,12 @@ import java.util.Collection;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.util.CollectionUtils;
 import run.halo.aifoundation.chat.LanguageModelUsage;
+import run.halo.aifoundation.decision.DecisionUsage;
 import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.rerank.RerankUsage;
+import run.halo.aifoundation.service.decision.DecisionResponseValidationException;
 
 public record NormalizedUsage(
     Long inputTokens,
@@ -72,6 +74,12 @@ public record NormalizedUsage(
                 null, null);
     }
 
+    public static NormalizedUsage from(DecisionUsage usage) {
+        return usage == null ? missing()
+            : new NormalizedUsage(value(usage.getInputTokens()), value(usage.getOutputTokens()),
+                null, null, null, null, null, null);
+    }
+
     public static NormalizedUsage from(RerankUsage usage) {
         return usage == null ? missing()
             : new NormalizedUsage(value(usage.getInputTokens()), null, null, null, null,
@@ -106,6 +114,9 @@ public record NormalizedUsage(
         for (int depth = 0; depth < 8; depth++, error = error.getCause()) {
             if (error == null) {
                 break;
+            }
+            if (error instanceof DecisionResponseValidationException e) {
+                return from(e.getUsage());
             }
             if (error instanceof run.halo.aifoundation.exception.StructuredOutputValidationException e) {
                 return from(e.getUsage());

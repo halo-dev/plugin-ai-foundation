@@ -154,7 +154,9 @@ export const DiscoveredModelItemAdapterTypeEnum = {
     OllamaResponses: 'ollama-responses',
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
-    OllamaImage: 'ollama-image'
+    OllamaImage: 'ollama-image',
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type DiscoveredModelItemAdapterTypeEnum = typeof DiscoveredModelItemAdapterTypeEnum[keyof typeof DiscoveredModelItemAdapterTypeEnum];
@@ -179,7 +181,8 @@ export const DiscoveredModelItemModelTypeEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type DiscoveredModelItemModelTypeEnum = typeof DiscoveredModelItemModelTypeEnum[keyof typeof DiscoveredModelItemModelTypeEnum];

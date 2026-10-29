@@ -28,6 +28,10 @@ public class ModelCapabilityService {
         var spec = model.getSpec();
         var explicit = spec.getCapabilities();
         var sources = effectiveSources(explicit, spec.getCapabilitySources());
+        var decision = spec.getModelType() == ModelType.DECISION && providerType != null
+            ? providerType.decisionCapabilities() : null;
+        // Decision limits are adapter-owned and cannot be widened by persisted model metadata.
+        sources.setDecision(decision == null ? CapabilitySource.UNKNOWN : CapabilitySource.BUILT_IN);
         var language = copy(explicit == null ? null : explicit.getLanguage());
         var imageGeneration = copy(explicit == null ? null : explicit.getImageGeneration());
 
@@ -40,6 +44,7 @@ public class ModelCapabilityService {
                 providerType);
         }
         return ModelCapabilities.builder()
+            .decision(decision)
             .language(language)
             .imageGeneration(imageGeneration)
             .sources(sources)

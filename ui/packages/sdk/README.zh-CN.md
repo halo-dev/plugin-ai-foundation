@@ -411,3 +411,9 @@ pnpm --dir ui --filter @halo-dev/ai-foundation-sdk typecheck
 pnpm --dir ui --filter @halo-dev/ai-foundation-sdk test
 pnpm --dir ui --filter @halo-dev/ai-foundation-sdk build
 ```
+
+## 决策模型
+
+通过 `createDecisionClient({ api })` 调用消费插件自己的决策端点，返回类型化的概率、单选或评分。
+支持请求头、自定义 fetch 和 AbortSignal；供应商 API Key 留在后端。此能力需要包含决策模型支持的新版本插件与 SDK。
+配置方式、Java 后端和浏览器示例见[决策模型指南](../../../dev/zh-CN/sdk-core/decision-models.md)。

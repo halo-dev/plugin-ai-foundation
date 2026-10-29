@@ -145,7 +145,9 @@ export const ParameterMappingTemplateInfoAdapterTypesEnum = {
     OllamaResponses: 'ollama-responses',
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
-    OllamaImage: 'ollama-image'
+    OllamaImage: 'ollama-image',
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type ParameterMappingTemplateInfoAdapterTypesEnum = typeof ParameterMappingTemplateInfoAdapterTypesEnum[keyof typeof ParameterMappingTemplateInfoAdapterTypesEnum];
@@ -153,7 +155,8 @@ export const ParameterMappingTemplateInfoModelTypeEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type ParameterMappingTemplateInfoModelTypeEnum = typeof ParameterMappingTemplateInfoModelTypeEnum[keyof typeof ParameterMappingTemplateInfoModelTypeEnum];

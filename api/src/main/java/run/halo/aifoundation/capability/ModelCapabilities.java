@@ -19,6 +19,15 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ModelCapabilities {
 
+    /** Decision capabilities supplied by the active provider adapter. */
+    private DecisionCapability decision;
+
+    /** Retains the constructor published before decision models were introduced. */
+    public ModelCapabilities(LanguageCapability language,
+        ImageGenerationCapability imageGeneration, ModelCapabilitySources sources) {
+        this(null, language, imageGeneration, sources);
+    }
+
     /**
      * Fine-grained language model capabilities, or {@code null} when unknown or not applicable.
      */

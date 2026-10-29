@@ -7,12 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import org.springframework.ai.chat.model.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.model.ChatModel;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.exception.DefaultModelNotConfiguredException;
@@ -31,13 +31,13 @@ import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.SecretResolver;
 import run.halo.aifoundation.rerank.RerankResponse;
-import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
-import run.halo.aifoundation.service.embedding.EmbeddingModelRuntimeFactory;
 import run.halo.aifoundation.service.audit.CallerPluginAuditRecorder;
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.CallerPluginObservationRegistry;
 import run.halo.aifoundation.service.audit.CallerPluginResolver;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
+import run.halo.aifoundation.service.embedding.DefaultEmbeddingModelFactory;
+import run.halo.aifoundation.service.embedding.EmbeddingModelRuntimeFactory;
 import run.halo.aifoundation.service.image.DefaultImageGenerationModelFactory;
 import run.halo.aifoundation.service.language.DefaultLanguageModelFactory;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeFactory;
@@ -45,11 +45,11 @@ import run.halo.aifoundation.service.language.LanguageModelRuntimeProperties;
 import run.halo.aifoundation.service.language.LanguageModelRuntimeSupport;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
 import run.halo.aifoundation.service.model.DefaultAiModelResolver;
-import run.halo.aifoundation.service.rerank.DefaultRerankingModelFactory;
-import run.halo.aifoundation.service.rerank.RerankingModelRuntimeFactory;
 import run.halo.aifoundation.service.observation.UsageCallDescriptor;
 import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
+import run.halo.aifoundation.service.rerank.DefaultRerankingModelFactory;
+import run.halo.aifoundation.service.rerank.RerankingModelRuntimeFactory;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
 import run.halo.aifoundation.setting.DefaultModelSlotStore;
 import run.halo.aifoundation.setting.DefaultModelSlots;
@@ -112,8 +112,48 @@ class AiModelServiceImplTest {
                 new RerankingModelRuntimeFactory(new UsageExecutionObserver())),
             new DefaultImageGenerationModelFactory(),
             callerPluginAuditRecorder,
-            usageStatisticsService
+            usageStatisticsService,
+            new run.halo.aifoundation.service.decision.DecisionModelFactory(providerClientCache,
+                new UsageExecutionObserver())
         );
+    }
+
+    @Test
+    void decisionModel_resolvesDefaultResourceNameAndKeepsProviderCapabilities() {
+        var slots = new DefaultModelSlots();
+        slots.setDecisionModelName("decision-resource");
+        var model = aiModel("decision-resource", "typesafe-prod", "jev-latest", "Jev", true,
+            ModelType.DECISION);
+        var provider = aiProvider("typesafe-prod", "typesafe", true);
+        when(defaultModelSlotStore.get()).thenReturn(Mono.just(slots));
+        when(client.fetch(AiModel.class, "decision-resource")).thenReturn(Mono.just(model));
+        when(client.fetch(AiProvider.class, "typesafe-prod")).thenReturn(Mono.just(provider));
+        when(secretResolver.resolveApiKey(null)).thenReturn(Mono.just("sk-test"));
+        when(providerClientCache.getProviderType("typesafe"))
+            .thenReturn(new run.halo.aifoundation.provider.typesafe.TypeSafeProvider());
+        when(providerClientCache.getOrCreateDecisionClient(provider, "sk-test", ProviderModelRef.from(model)))
+            .thenReturn(request -> Mono.empty());
+        StepVerifier.create(service.decisionModel())
+            .assertNext(resolved -> {
+                assertThat(resolved.capabilities().getMaxScoreLevels()).isEqualTo(10);
+                assertThat(resolved.capabilities().getChoiceProbabilities()).isTrue();
+                assertThat(resolved.capabilities().getChoiceConfidence()).isTrue();
+                assertThat(resolved.capabilities().getScoreProbabilities()).isTrue();
+                assertThat(resolved.capabilities().getScoreConfidence()).isTrue();
+                assertThat(resolved.capabilities().getScoreLegend()).isTrue();
+                resolved.capabilities().setChoiceConfidence(false);
+                assertThat(resolved.capabilities().getChoiceConfidence()).isTrue();
+            })
+            .verifyComplete();
+        verify(client).fetch(AiModel.class, "decision-resource");
+    }
+
+    @Test
+    void decisionModel_rejectsWrongModelType() {
+        when(client.fetch(AiModel.class, "language"))
+            .thenReturn(Mono.just(aiModel("language", "openai", "model", "Model", true)));
+        StepVerifier.create(service.decisionModel("language"))
+            .expectError(IncompatibleModelTypeException.class).verify();
     }
 
     // ---- languageModel — fetch by metadata.name ----
@@ -468,6 +508,7 @@ class AiModelServiceImplTest {
 
     private AdapterType defaultAdapter(ModelType modelType) {
         return switch (modelType) {
+            case DECISION -> AdapterType.TYPESAFE_SYSTEM_ONE;
             case LANGUAGE -> AdapterType.OPENAI_CHAT;
             case EMBEDDING -> AdapterType.OPENAI_EMBEDDING;
             case IMAGE_GENERATION -> AdapterType.OPENAI_IMAGE;

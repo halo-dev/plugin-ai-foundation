@@ -175,7 +175,9 @@ export const AiModelSpecAdapterTypeEnum = {
     OllamaResponses: 'ollama-responses',
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
-    OllamaImage: 'ollama-image'
+    OllamaImage: 'ollama-image',
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type AiModelSpecAdapterTypeEnum = typeof AiModelSpecAdapterTypeEnum[keyof typeof AiModelSpecAdapterTypeEnum];
@@ -208,7 +210,8 @@ export const AiModelSpecModelTypeEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type AiModelSpecModelTypeEnum = typeof AiModelSpecModelTypeEnum[keyof typeof AiModelSpecModelTypeEnum];

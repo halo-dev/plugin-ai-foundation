@@ -120,7 +120,8 @@ export const UsageExecutionRecordUnitKindEnum = {
     GenerationStep: 'GENERATION_STEP',
     EmbeddingBatch: 'EMBEDDING_BATCH',
     Rerank: 'RERANK',
-    ImageBatch: 'IMAGE_BATCH'
+    ImageBatch: 'IMAGE_BATCH',
+    Decision: 'DECISION'
 } as const;
 
 export type UsageExecutionRecordUnitKindEnum = typeof UsageExecutionRecordUnitKindEnum[keyof typeof UsageExecutionRecordUnitKindEnum];

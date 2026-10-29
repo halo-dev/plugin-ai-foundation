@@ -92,7 +92,9 @@ public enum AdapterType {
     OLLAMA_RESPONSES("ollama-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     OLLAMA_MESSAGES("ollama-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
     OLLAMA_EMBEDDING("ollama-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
-    OLLAMA_IMAGE("ollama-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION);
+    OLLAMA_IMAGE("ollama-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
+    TYPESAFE_SYSTEM_ONE("typesafe-system-one", ModelType.DECISION, AdapterProtocol.SYSTEM_ONE),
+    AIHUBMIX_SYSTEM_ONE("aihubmix-system-one", ModelType.DECISION, AdapterProtocol.SYSTEM_ONE);
 
     private final String value;
     private final ModelType modelType;

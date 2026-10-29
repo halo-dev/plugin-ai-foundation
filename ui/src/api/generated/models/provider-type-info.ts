@@ -226,7 +226,9 @@ export const ProviderTypeInfoSupportedAdapterTypesEnum = {
     OllamaResponses: 'ollama-responses',
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
-    OllamaImage: 'ollama-image'
+    OllamaImage: 'ollama-image',
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type ProviderTypeInfoSupportedAdapterTypesEnum = typeof ProviderTypeInfoSupportedAdapterTypesEnum[keyof typeof ProviderTypeInfoSupportedAdapterTypesEnum];
@@ -244,7 +246,8 @@ export const ProviderTypeInfoSupportedModelTypesEnum = {
     Language: 'language',
     Embedding: 'embedding',
     Rerank: 'rerank',
-    ImageGeneration: 'image-generation'
+    ImageGeneration: 'image-generation',
+    Decision: 'decision'
 } as const;
 
 export type ProviderTypeInfoSupportedModelTypesEnum = typeof ProviderTypeInfoSupportedModelTypesEnum[keyof typeof ProviderTypeInfoSupportedModelTypesEnum];

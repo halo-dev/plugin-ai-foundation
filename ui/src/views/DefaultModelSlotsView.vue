@@ -49,6 +49,7 @@ const slotDefinitions: Array<{
       },
     },
   },
+  { key: 'decisionModelName', label: '默认决策模型', modelType: ModelOptionModelTypeEnum.Decision },
 ]
 
 const queryClient = useQueryClient()
@@ -68,6 +69,7 @@ watch(
   slots,
   (value) => {
     Object.assign(formState, {
+      decisionModelName: value?.decisionModelName || '',
       languageModelName: value?.languageModelName || '',
       embeddingModelName: value?.embeddingModelName || '',
       rerankModelName: value?.rerankModelName || '',
@@ -85,6 +87,7 @@ const modelOptionCount = computed(() => modelOptions.value?.length || 0)
 
 function normalizeSlots(): DefaultModelSlots {
   return {
+    decisionModelName: formState.decisionModelName || undefined,
     languageModelName: formState.languageModelName || undefined,
     embeddingModelName: formState.embeddingModelName || undefined,
     rerankModelName: formState.rerankModelName || undefined,

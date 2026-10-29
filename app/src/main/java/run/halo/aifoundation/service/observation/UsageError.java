@@ -9,6 +9,8 @@ import java.util.function.Predicate;
 import reactor.core.Exceptions;
 import run.halo.aifoundation.exception.AiGenerationCancelledException;
 import run.halo.aifoundation.exception.AiGenerationTimeoutException;
+import run.halo.aifoundation.exception.DecisionCancelledException;
+import run.halo.aifoundation.exception.DecisionTimeoutException;
 import run.halo.aifoundation.exception.EmbeddingCancelledException;
 import run.halo.aifoundation.exception.EmbeddingTimeoutException;
 import run.halo.aifoundation.exception.RerankCancelledException;
@@ -49,6 +51,7 @@ public record UsageError(String type) {
             case AiGenerationTimeoutException ignored -> true;
             case EmbeddingTimeoutException ignored -> true;
             case RerankTimeoutException ignored -> true;
+            case DecisionTimeoutException ignored -> true;
             case TimeoutException ignored -> true;
             case SocketTimeoutException ignored -> true;
             case HttpTimeoutException ignored -> true;
@@ -66,6 +69,7 @@ public record UsageError(String type) {
             case AiGenerationCancelledException ignored -> true;
             case EmbeddingCancelledException ignored -> true;
             case RerankCancelledException ignored -> true;
+            case DecisionCancelledException ignored -> true;
             default -> false;
         };
     }
