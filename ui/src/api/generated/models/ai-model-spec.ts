@@ -21,6 +21,9 @@ import type { ModelCapabilities } from './model-capabilities';
 import type { ModelCapabilitySources } from './model-capability-sources';
 // May contain unused imports in some cases
 // @ts-ignore
+import type { ModelCatalogMatch } from './model-catalog-match';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { ModelParameterMappings } from './model-parameter-mappings';
 
 /**
@@ -47,6 +50,12 @@ export interface AiModelSpec {
      * @memberof AiModelSpec
      */
     'capabilitySources'?: ModelCapabilitySources;
+    /**
+     * 
+     * @type {ModelCatalogMatch}
+     * @memberof AiModelSpec
+     */
+    'catalogMatch'?: ModelCatalogMatch;
     /**
      * How reliable the discovered model profile is
      * @type {string}

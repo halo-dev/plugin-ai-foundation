@@ -26,8 +26,8 @@ import {
 import {
   adapterOptionsForProviderType,
   defaultAdapterForProviderType,
-  defaultParameterMappingsForAdapter,
   defaultModelTypeForProviderType,
+  defaultParameterMappingsForAdapter,
   modelFeatureOptionsForProviderType,
   modelTypeOptionsForProviderType,
 } from '@/utils/model'
@@ -45,6 +45,7 @@ import { submitForm } from '@formkit/core'
 import { Toast } from '@halo-dev/components'
 import { computed, ref, shallowRef, watch } from 'vue'
 import AdvancedSettingsCollapsible from './AdvancedSettingsCollapsible.vue'
+import ModelCatalogProvenance from './ModelCatalogProvenance.vue'
 import ParameterMappingFields from './ParameterMappingFields.vue'
 
 const props = defineProps<{
@@ -182,6 +183,8 @@ const languageSourceLabel = computed(() =>
       props.formState?.capabilitySources,
       'language',
     ),
+    props.formState?.catalogMatch,
+    'language',
   ),
 )
 const imageGenerationSourceLabel = computed(() =>
@@ -191,6 +194,8 @@ const imageGenerationSourceLabel = computed(() =>
       props.formState?.capabilitySources,
       'imageGeneration',
     ),
+    props.formState?.catalogMatch,
+    'imageGeneration',
   ),
 )
 const visibleCapabilitySourceLabel = computed(() =>
@@ -524,6 +529,7 @@ function sameJson(a: unknown, b: unknown) {
       :source-label="visibleCapabilitySourceLabel"
     >
       <template v-if="isLanguageCapabilityVisible">
+        <ModelCatalogProvenance v-if="formState?.catalogMatch" :match="formState.catalogMatch" />
         <FormKit
           type="checkbox"
           name="features"

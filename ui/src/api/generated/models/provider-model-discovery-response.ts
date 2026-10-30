@@ -16,6 +16,9 @@
 // May contain unused imports in some cases
 // @ts-ignore
 import type { DiscoveredModelItem } from './discovered-model-item';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelCatalogStatus } from './model-catalog-status';
 
 /**
  * 
@@ -23,6 +26,12 @@ import type { DiscoveredModelItem } from './discovered-model-item';
  * @interface ProviderModelDiscoveryResponse
  */
 export interface ProviderModelDiscoveryResponse {
+    /**
+     * 
+     * @type {ModelCatalogStatus}
+     * @memberof ProviderModelDiscoveryResponse
+     */
+    'catalog'?: ModelCatalogStatus;
     /**
      * 
      * @type {Array<DiscoveredModelItem>}

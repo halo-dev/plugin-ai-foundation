@@ -265,7 +265,10 @@ class KimiProviderTest {
                     assertThat(k3.capabilitySources().getLanguage())
                         .isEqualTo(CapabilitySource.REMOTE);
                     assertThat(models.get(1).adapterType()).isEqualTo(AdapterType.KIMI_CHAT);
-                    assertThat(models.get(1).capabilities()).isNull();
+                    assertThat(models.get(1).capabilities().getLanguage().getImageInput()).isFalse();
+                    assertThat(models.get(1).capabilities().getLanguage().getFileInput()).isFalse();
+                    assertThat(models.get(1).featureEvidence()).containsEntry(ModelFeature.VISION, false)
+                        .containsEntry(ModelFeature.REASONING, false);
                 })
                 .verifyComplete();
             assertThat(authorization.get()).isEqualTo("Bearer test-key");

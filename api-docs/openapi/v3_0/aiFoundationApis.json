@@ -481,6 +481,44 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/DefaultModelSlot" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/model-catalog" : {
+      "get" : {
+        "description" : "Read the locally cached models.dev catalog status.",
+        "operationId" : "GetModelCatalogStatus",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModelCatalogStatus"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/model-catalog/refresh" : {
+      "post" : {
+        "description" : "Refresh third-party capability metadata; never updates saved models.",
+        "operationId" : "RefreshModelCatalog",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModelCatalogStatus"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/model-options" : {
       "get" : {
         "description" : "List aggregated AI model options for selectors.",
@@ -1831,6 +1869,9 @@
           "capabilitySources" : {
             "$ref" : "#/components/schemas/ModelCapabilitySources"
           },
+          "catalogMatch" : {
+            "$ref" : "#/components/schemas/ModelCatalogMatch"
+          },
           "discoveryConfidence" : {
             "type" : "string",
             "description" : "How reliable the discovered model profile is",
@@ -2147,6 +2188,9 @@
           },
           "capabilitySources" : {
             "$ref" : "#/components/schemas/ModelCapabilitySources"
+          },
+          "catalogMatch" : {
+            "$ref" : "#/components/schemas/ModelCatalogMatch"
           },
           "confidence" : {
             "type" : "string",
@@ -2588,6 +2632,55 @@
           }
         }
       },
+      "ModelCatalogMatch" : {
+        "type" : "object",
+        "properties" : {
+          "fetchedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "fields" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "modelId" : {
+            "type" : "string"
+          },
+          "providerId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ModelCatalogStatus" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "fetchedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lastAttemptAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "refreshing" : {
+            "type" : "boolean"
+          },
+          "sourceUrl" : {
+            "type" : "string"
+          },
+          "stale" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "ModelMessage" : {
         "type" : "object",
         "properties" : {
@@ -2960,6 +3053,9 @@
       "ProviderModelDiscoveryResponse" : {
         "type" : "object",
         "properties" : {
+          "catalog" : {
+            "$ref" : "#/components/schemas/ModelCatalogStatus"
+          },
           "models" : {
             "type" : "array",
             "items" : {

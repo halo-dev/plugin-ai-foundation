@@ -22,6 +22,7 @@ import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
@@ -167,7 +168,6 @@ public class KimiProvider extends AbstractAiProviderType {
             return null;
         }
         var supportsImage = booleanValue(node, "supports_image_in");
-        var supportsVideo = booleanValue(node, "supports_video_in");
         var supportsReasoning = booleanValue(node, "supports_reasoning");
         var features = new LinkedHashSet<ModelFeature>();
         features.add(ModelFeature.STREAMING);
@@ -177,12 +177,13 @@ public class KimiProvider extends AbstractAiProviderType {
         if (supportsReasoning) {
             features.add(ModelFeature.REASONING);
         }
-        var capabilities = capabilities(supportsImage, supportsVideo, supportsReasoning);
+        var capabilities = capabilities(node);
         return DiscoveredModel.builder()
             .modelId(modelId)
             .displayName(modelId)
             .modelType(ModelType.LANGUAGE)
             .features(Set.copyOf(features))
+            .featureEvidence(DiscoveryFeatureEvidence.booleans(node))
             .adapterType(AdapterType.KIMI_CHAT)
             .source(DiscoverySource.REMOTE)
             .confidence(DiscoveryConfidence.HIGH)
@@ -200,37 +201,31 @@ public class KimiProvider extends AbstractAiProviderType {
             .build();
     }
 
-    private ModelCapabilities capabilities(boolean image, boolean video, boolean reasoning) {
-        if (!hasCapabilities(image, video, reasoning)) {
+    private ModelCapabilities capabilities(Map<?, ?> node) {
+        var image = node.get("supports_image_in") instanceof Boolean value ? value : null;
+        var video = node.get("supports_video_in") instanceof Boolean value ? value : null;
+        var reasoning = node.get("supports_reasoning") instanceof Boolean value ? value : null;
+        if (image == null && video == null && reasoning == null) {
             return null;
         }
         var mediaTypes = new ArrayList<String>();
-        if (image) {
+        if (Boolean.TRUE.equals(image)) {
             mediaTypes.add("image/*");
         }
-        if (video) {
+        if (Boolean.TRUE.equals(video)) {
             mediaTypes.add("video/*");
         }
+        var declaredMedia = image != null || video != null;
         return ModelCapabilities.builder()
             .language(LanguageCapability.builder()
                 .imageInput(image)
                 .fileInput(video)
                 .reasoningHistory(reasoning)
-                .inputMediaTypes(List.copyOf(mediaTypes))
-                .inputSources(!mediaTypes.isEmpty()
-                    ? List.of(InputSource.DATA) : List.of())
+                .inputMediaTypes(declaredMedia ? List.copyOf(mediaTypes) : null)
+                .inputSources(declaredMedia
+                    ? (!mediaTypes.isEmpty() ? List.of(InputSource.DATA) : List.of()) : null)
                 .build())
             .build();
-    }
-
-    private boolean hasCapabilities(boolean image, boolean video, boolean reasoning) {
-        if (image) {
-            return true;
-        }
-        if (video) {
-            return true;
-        }
-        return reasoning;
     }
 
     private String reasoningContent(AssistantMessage message) {

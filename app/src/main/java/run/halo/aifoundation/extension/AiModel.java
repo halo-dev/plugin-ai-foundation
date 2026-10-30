@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
+import run.halo.aifoundation.catalog.ModelCatalogMatch;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
@@ -50,6 +51,8 @@ public class AiModel extends AbstractExtension {
         private ModelCapabilities capabilities;
         @Schema(description = "Source of fine-grained model capabilities by domain")
         private ModelCapabilitySources capabilitySources = ModelCapabilitySources.unknown();
+        @Schema(description = "Third-party catalog provenance captured at import; never refreshed automatically")
+        private ModelCatalogMatch catalogMatch;
         @Schema(description = "Model-specific parameter mapping overrides")
         private ModelParameterMappings parameterMappings;
         @Schema(

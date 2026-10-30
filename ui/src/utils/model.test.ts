@@ -607,3 +607,145 @@ function discoveredModel(
     capabilitySources: evidence.capabilitySources,
   }
 }
+
+describe('remote capability import overrides', () => {
+  function remoteModel() {
+    return discoveredModel(
+      'openai/gpt-4.1-nano',
+      AiModelSpecModelTypeEnum.Language,
+      [AiModelSpecFeaturesEnum.Vision, AiModelSpecFeaturesEnum.ToolCall],
+      DiscoveredModelItemAdapterTypeEnum.OpenrouterChat,
+      {
+        capabilities: {
+          language: {
+            imageInput: true,
+            fileInput: true,
+            inputMediaTypes: ['image/*', 'application/*'],
+            inputSources: ['data', 'url'],
+          },
+          sources: { language: 'remote' },
+        },
+        capabilitySources: { language: 'remote' },
+      },
+    )
+  }
+
+  it('persists manual vision deselection without requiring a catalog match', () => {
+    const model = remoteModel()
+    const original = structuredClone(model)
+    const imported = createModelFromDiscovered('openrouter-prod', model, { features: [] })
+
+    expect(imported.spec.features).toEqual([])
+    expect(imported.spec.capabilities?.language).toEqual({
+      imageInput: false,
+      fileInput: true,
+      inputMediaTypes: ['application/*'],
+      inputSources: ['data', 'url'],
+    })
+    expect(imported.spec.capabilitySources?.language).toBe('manual')
+    expect(imported.spec.capabilities?.sources?.language).toBe('manual')
+    expect(imported.spec.catalogMatch).toBeUndefined()
+    expect(model).toEqual(original)
+  })
+
+  it('keeps document coverage when manually disabling audio input', () => {
+    const model = remoteModel()
+    model.features.push(AiModelSpecFeaturesEnum.AudioInput)
+    model.capabilities!.language!.inputMediaTypes!.push('audio/*')
+    const imported = createModelFromDiscovered('openrouter-prod', model, {
+      features: [AiModelSpecFeaturesEnum.Vision, AiModelSpecFeaturesEnum.ToolCall],
+    })
+
+    expect(imported.spec.capabilities?.language?.fileInput).toBe(true)
+    expect(imported.spec.capabilities?.language?.inputMediaTypes).toEqual([
+      'image/*',
+      'application/*',
+    ])
+    expect(imported.spec.capabilitySources?.language).toBe('manual')
+  })
+
+  it('marks feature-only edits as manual while preserving provider media declarations', () => {
+    const model = remoteModel()
+    const imported = createModelFromDiscovered('openrouter-prod', model, {
+      features: [AiModelSpecFeaturesEnum.Vision],
+    })
+
+    expect(imported.spec.capabilities?.language).toEqual(model.capabilities?.language)
+    expect(imported.spec.capabilitySources?.language).toBe('manual')
+  })
+})
+
+describe('catalog capability imports', () => {
+  function catalogModel() {
+    return {
+      ...discoveredModel(
+        'gpt-example',
+        AiModelSpecModelTypeEnum.Language,
+        [AiModelSpecFeaturesEnum.Vision, AiModelSpecFeaturesEnum.ToolCall],
+        DiscoveredModelItemAdapterTypeEnum.OpenaiResponses,
+        {
+          capabilities: {
+            language: {
+              imageInput: true,
+              fileInput: true,
+              reasoningHistory: false,
+              inputMediaTypes: ['image/png', 'image/jpeg', 'application/pdf'],
+              inputSources: ['data'],
+            },
+          },
+          capabilitySources: { language: 'unknown' },
+        },
+      ),
+      catalogMatch: {
+        providerId: 'openai',
+        modelId: 'gpt-example',
+        fetchedAt: '2026-10-26T10:00:00Z',
+        fields: [
+          'features.vision',
+          'features.tool-call',
+          'language.imageInput',
+          'language.fileInput',
+          'language.inputMediaTypes',
+          'language.inputSources',
+        ],
+      },
+    }
+  }
+
+  it('persists exact provenance and capability snapshot without mutating discovery', () => {
+    const model = catalogModel()
+    const imported = createModelFromDiscovered('openai-prod', model)
+    expect(imported.spec.catalogMatch).toEqual(model.catalogMatch)
+    expect(imported.spec.capabilitySources?.language).toBe('unknown')
+    expect(imported.spec.capabilities?.language?.reasoningHistory).toBe(false)
+  })
+
+  it('preserves explicit admin feature deselection over catalog capability flags', () => {
+    const model = catalogModel()
+    const imported = createModelFromDiscovered('openai-prod', model, { features: [] })
+    expect(imported.spec.features).toEqual([])
+    expect(imported.spec.capabilities?.language?.imageInput).toBe(false)
+    expect(imported.spec.capabilities?.language?.inputMediaTypes).toEqual(['application/pdf'])
+    expect(imported.spec.capabilitySources?.language).toBe('manual')
+    expect(imported.spec.catalogMatch?.fields || []).not.toContain('features.vision')
+    expect(model.capabilities?.language?.imageInput).toBe(true)
+  })
+
+  it('drops adapter-specific catalog coverage when selecting a different adapter', () => {
+    const imported = createModelFromDiscovered('openai-prod', catalogModel(), {
+      adapterType: AiModelSpecAdapterTypeEnum.OpenaiChat,
+    })
+    expect(imported.spec.capabilities?.language?.fileInput).toBeUndefined()
+    expect(imported.spec.capabilities?.language?.inputMediaTypes).toBeUndefined()
+    expect(imported.spec.capabilitySources?.language).toBe('unknown')
+    expect(imported.spec.catalogMatch?.fields).toEqual(['features.vision', 'features.tool-call'])
+  })
+
+  it('does not transfer catalog language data to another model type', () => {
+    const imported = createModelFromDiscovered('openai-prod', catalogModel(), {
+      modelType: AiModelSpecModelTypeEnum.ImageGeneration,
+    })
+    expect(imported.spec.catalogMatch).toBeUndefined()
+    expect(imported.spec.capabilities).toBeUndefined()
+  })
+})

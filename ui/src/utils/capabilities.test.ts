@@ -1,12 +1,23 @@
 import type { ModelOption } from '@/api/generated'
 import { describe, expect, it } from 'vitest'
 import {
+  capabilitySourceLabel,
   capabilitySummaryLabels,
   capabilityUnavailableDetailsLabel,
   normalizeRequiredCapabilities,
 } from './capabilities'
 
 describe('capability helpers', () => {
+  it('shows catalog attribution without requiring a new source enum value', () => {
+    const match = { fields: ['language.inputMediaTypes'] }
+    expect(capabilitySourceLabel('unknown', match)).toBe('models.dev 目录')
+    expect(capabilitySourceLabel('remote', match)).toBe('供应商 + models.dev 目录')
+    expect(capabilitySourceLabel('manual', match)).toBe('手动')
+    expect(capabilitySourceLabel('unknown', match, 'imageGeneration')).toBe('未知')
+    expect(capabilitySourceLabel('unknown', { fields: ['features.tool-call'] })).toBe('未知')
+    expect(capabilitySourceLabel('unknown')).toBe('未知')
+  })
+
   it('normalizes structured required capabilities into JSON', () => {
     expect(
       normalizeRequiredCapabilities({

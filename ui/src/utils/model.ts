@@ -12,6 +12,7 @@ import {
 } from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/use-models-fetch'
 import { MODEL_FEATURE_OPTIONS, MODEL_TYPE_OPTIONS } from '@/types'
+import { reconcileModelCapabilities } from './model-capability-changes'
 
 export function findProviderTypeForModel(
   model: AiModel,
@@ -273,7 +274,7 @@ export function createModelFromDiscovered(
     metadata: {
       name: '',
     },
-    spec,
+    spec: reconcileModelCapabilities(model, spec, { importing: true }),
   }
 }
 
