@@ -4,15 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.Map;
 import java.util.List;
-import run.halo.aifoundation.extension.ModelParameterConstraints;
-import run.halo.aifoundation.extension.ModelParameterProfile;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.extension.ModelParameterMappings;
+import run.halo.aifoundation.extension.ModelParameterProfile;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -27,15 +28,16 @@ class EffectiveParameterMappingResolverTest {
 
     @BeforeEach
     void setUp() {
+        when(providerType.getDefaultBaseUrl()).thenReturn("https://api.openai.com");
         var defaults = Map.of(
             ModelParameter.MAX_OUTPUT_TOKENS,
             DefaultParameterMapping.template("openai.max-tokens"),
             ModelParameter.REASONING, DefaultParameterMapping.unsupported()
         );
         when(providerType.getSupportedAdapterTypes()).thenReturn(
-            java.util.List.of(AdapterType.OPENAI_RESPONSES));
+            List.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(
-            java.util.Optional.of(AdapterType.OPENAI_RESPONSES));
+            Optional.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
             .thenReturn(defaults);
     }
@@ -116,7 +118,7 @@ class EffectiveParameterMappingResolverTest {
 
     @Test
     void mismatchingCatalogIdentityOrAdapterIsIgnoredIncludingConstraints() {
-        for (var mismatch : List.of("provider", "model", "adapter")) {
+        for (var mismatch : List.of("provider", "model", "adapter", "endpoint")) {
             var resolution = resolution(null, null);
             var profile = catalogProfile();
             profile.setMappings(languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, unsupported()));
@@ -127,13 +129,16 @@ class EffectiveParameterMappingResolverTest {
                 profile.setProviderType("other");
             } else if (mismatch.equals("model")) {
                 profile.setModelId("other");
+            } else if (mismatch.equals("endpoint")) {
+                profile.setProviderBaseUrl(null);
             } else {
                 profile.setAdapterType(AdapterType.OPENAI_CHAT);
             }
             resolution.model().getSpec().setCatalogParameters(profile);
             assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
                 .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
-            assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens()).isNull();
+            assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens())
+                .isNull();
         }
     }
 
@@ -172,7 +177,8 @@ class EffectiveParameterMappingResolverTest {
     @Test
     void manualMappingsOverrideConflictingCatalogConstraints() {
         var resolution = resolution(languageMappings(ModelParameter.REASONING,
-            template("reasoning.responses-effort")), languageMappings(ModelParameter.MAX_OUTPUT_TOKENS,
+            template("reasoning.responses-effort")),
+                languageMappings(ModelParameter.MAX_OUTPUT_TOKENS,
             template("openai.max-tokens")));
         var profile = catalogProfile();
         var constraints = new ModelParameterConstraints();
@@ -186,7 +192,8 @@ class EffectiveParameterMappingResolverTest {
         var effective = resolver.resolveProfile(resolution);
         assertThat(effective.getConstraints().getOutputTokens()).isNull();
         assertThat(effective.getConstraints().getReasoning()).isNull();
-        assertThat(effective.getMappings().getLanguage().getReasoning().getReasoningMapping().getHigh())
+        assertThat(effective.getMappings().getLanguage().getReasoning().getReasoningMapping()
+            .getHigh())
             .isNotNull();
     }
 
@@ -201,7 +208,8 @@ class EffectiveParameterMappingResolverTest {
         constraints.setReasoning(reasoning);
         resolution.model().getSpec().setParameterConstraints(constraints);
 
-        var effective = resolver.resolve(resolution).get(ModelParameter.REASONING).reasoningMapping();
+        var effective = resolver.resolve(resolution).get(ModelParameter.REASONING)
+            .reasoningMapping();
         var displayed = resolver.resolveProfile(resolution).getMappings().getLanguage()
             .getReasoning().getReasoningMapping();
         assertThat(effective).isEqualTo(displayed);
@@ -232,9 +240,49 @@ class EffectiveParameterMappingResolverTest {
     }
 
     @Test
-    void overridingProviderRouteInvalidatesAutomaticFacts() {
+    void nonLanguageCatalogFactsPreserveParameterMappingsAndRespectIdentity() {
+        for (var adapter : List.of(AdapterType.OPENAI_EMBEDDING, AdapterType.OPENAI_IMAGE,
+            AdapterType.RERANK)) {
+            var resolution = resolution(null, null);
+            var spec = resolution.model().getSpec();
+            spec.setModelType(adapter.getModelType());
+            spec.setAdapterType(adapter);
+            when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(adapter));
+            var profile = catalogProfile();
+            profile.setAdapterType(adapter);
+            var limits = new ModelParameterConstraints();
+            limits.setContextTokens(8191L);
+            profile.setConstraints(limits);
+            var originalMappings = resolver.resolve(resolution);
+            spec.setCatalogParameters(profile);
+            resolution.provider().getSpec().setChatEndpointPath("/custom/chat");
+            var resolved = resolver.resolveProfile(resolution);
+            assertThat(resolved.getConstraints().getContextTokens()).isEqualTo(8191L);
+            assertThat(resolved.getConstraints().getOutputTokens()).isNull();
+            assertThat(resolver.resolve(resolution).values()).isEqualTo(originalMappings.values());
+
+            var manual = new ModelParameterConstraints();
+            manual.setContextTokens(4096L);
+            spec.setParameterConstraints(manual);
+            assertThat(resolver.resolveProfile(resolution).getConstraints().getContextTokens())
+                .isEqualTo(4096L);
+            spec.setModelId("another-model");
+            assertThat(resolver.applicableCatalogProfile(resolution)).isNull();
+            assertThat(resolver.resolveProfile(resolution).getConstraints().getContextTokens())
+                .isEqualTo(4096L);
+        }
+    }
+
+    @Test
+    void overridingChatCompletionsRouteInvalidatesAutomaticFacts() {
         var resolution = resolution(null, null);
+        resolution.model().getSpec().setAdapterType(AdapterType.OPENAI_CHAT);
+        when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(AdapterType.OPENAI_CHAT));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_CHAT)).thenReturn(
+            Map.of(ModelParameter.MAX_OUTPUT_TOKENS,
+                DefaultParameterMapping.template("openai.max-tokens")));
         var profile = catalogProfile();
+        profile.setAdapterType(AdapterType.OPENAI_CHAT);
         profile.setMappings(languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, unsupported()));
         var constraints = new ModelParameterConstraints();
         constraints.setOutputTokens(100L);
@@ -246,8 +294,28 @@ class EffectiveParameterMappingResolverTest {
         assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens()).isNull();
     }
 
+    @Test
+    void chatPathOverridesDoNotInvalidateOtherLanguageProtocols() {
+        for (var adapter : List.of(AdapterType.OPENAI_RESPONSES, AdapterType.DEEPSEEK_MESSAGES)) {
+            var resolution = resolution(null, null);
+            resolution.model().getSpec().setAdapterType(adapter);
+            when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(adapter));
+            var profile = catalogProfile();
+            profile.setAdapterType(adapter);
+            var limits = new ModelParameterConstraints();
+            limits.setOutputTokens(100L);
+            profile.setConstraints(limits);
+            resolution.model().getSpec().setCatalogParameters(profile);
+            resolution.provider().getSpec().setChatEndpointPath("/custom/chat");
+            assertThat(resolver.applicableCatalogProfile(resolution)).isSameAs(profile);
+            assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens())
+                .isEqualTo(100L);
+        }
+    }
+
     private ModelParameterProfile catalogProfile() {
         var profile = new ModelParameterProfile();
+        profile.setProviderBaseUrl("https://api.openai.com");
         profile.setModelId("gpt");
         profile.setProviderType("openai");
         profile.setAdapterType(AdapterType.OPENAI_RESPONSES);

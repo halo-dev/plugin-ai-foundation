@@ -183,7 +183,7 @@ public class KimiProvider extends AbstractAiProviderType {
             .displayName(modelId)
             .modelType(ModelType.LANGUAGE)
             .features(Set.copyOf(features))
-            .featureEvidence(DiscoveryFeatureEvidence.booleans(node))
+            .featureEvidence(DiscoveryFeatureEvidence.fromBooleanFields(node))
             .adapterType(AdapterType.KIMI_CHAT)
             .source(DiscoverySource.REMOTE)
             .confidence(DiscoveryConfidence.HIGH)
@@ -215,16 +215,16 @@ public class KimiProvider extends AbstractAiProviderType {
         if (Boolean.TRUE.equals(video)) {
             mediaTypes.add("video/*");
         }
-        var declaredMedia = image != null || video != null;
+        var language = LanguageCapability.builder()
+            .imageInput(image)
+            .fileInput(video)
+            .reasoningHistory(reasoning);
+        if (image != null || video != null) {
+            language.inputMediaTypes(List.copyOf(mediaTypes))
+                .inputSources(mediaTypes.isEmpty() ? List.of() : List.of(InputSource.DATA));
+        }
         return ModelCapabilities.builder()
-            .language(LanguageCapability.builder()
-                .imageInput(image)
-                .fileInput(video)
-                .reasoningHistory(reasoning)
-                .inputMediaTypes(declaredMedia ? List.copyOf(mediaTypes) : null)
-                .inputSources(declaredMedia
-                    ? (!mediaTypes.isEmpty() ? List.of(InputSource.DATA) : List.of()) : null)
-                .build())
+            .language(language.build())
             .build();
     }
 

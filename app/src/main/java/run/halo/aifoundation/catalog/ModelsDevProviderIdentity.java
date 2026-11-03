@@ -21,8 +21,10 @@ final class ModelsDevProviderIdentity {
         new Identity("deepseek", "https://api.deepseek.com/v1", "deepseek"),
         new Identity("kimi", "https://api.moonshot.cn/v1", "moonshotai-cn"),
         new Identity("kimi", "https://api.moonshot.ai/v1", "moonshotai"),
-        new Identity("dashscope", "https://dashscope.aliyuncs.com/compatible-mode/v1", "alibaba-cn"),
-        new Identity("dashscope", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "alibaba"),
+        new Identity("dashscope", "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "alibaba-cn"),
+        new Identity("dashscope", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            "alibaba"),
         new Identity("siliconflow", "https://api.siliconflow.cn/v1", "siliconflow-cn"),
         new Identity("siliconflow", "https://api.siliconflow.com/v1", "siliconflow"),
         new Identity("zhipuai", "https://open.bigmodel.cn/api/paas/v4", "zhipuai"),
@@ -41,11 +43,6 @@ final class ModelsDevProviderIdentity {
     }
 
     static String resolve(AiProvider provider, AiProviderType type) {
-        var spec = provider.getSpec();
-        // Endpoint overrides can route the same model ID to a different deployment.
-        if (spec.getChatEndpointPath() != null && !spec.getChatEndpointPath().isBlank()) {
-            return null;
-        }
         var endpoint = endpoint(provider, type);
         return IDENTITIES.stream()
             .filter(item -> item.type().equals(type.getProviderType()))
@@ -60,35 +57,69 @@ final class ModelsDevProviderIdentity {
 
     static boolean matches(AiProvider provider, AiProviderType type,
         ModelsDevCatalog.Entry entry, AdapterType adapter) {
-        if (entry.model() == null) {
-            return entry.apiOverride() == null || normalize(entry.apiOverride())
-                .equals(endpoint(provider, type));
+        // A chat path override does not change the other adapters' request routes.
+        var chatPath = provider.getSpec().getChatEndpointPath();
+        if (adapter.getProtocol() == AdapterProtocol.CHAT_COMPLETIONS
+            && chatPath != null && !chatPath.isBlank()) {
+            return false;
         }
-        var protocol = protocol(adapter.getProtocol());
+        if (!entry.matchesModelType(adapter.getModelType())) {
+            return false;
+        }
+        var protocol = protocol(adapter);
         if (protocol == null) {
             return false;
         }
         var api = entry.api(protocol);
         var catalogEndpoint = normalize(api.path("base_url").asText(null));
-        var configuredEndpoint = endpoint(provider, type);
-        // Compare the selected adapter's actual route, never another protocol's base_url.
-        if (adapter == AdapterType.DEEPSEEK_MESSAGES) {
-            configuredEndpoint += "/anthropic/v1";
-        } else if (adapter == AdapterType.DASHSCOPE_MESSAGES) {
-            configuredEndpoint = new DashScopeEndpointResolver(configuredEndpoint)
-                .messagesBaseUrl() + "/v1";
-        } else if (adapter == AdapterType.ZHIPU_MESSAGES) {
-            configuredEndpoint = new ZhiPuEndpointResolver(configuredEndpoint).messagesBaseUrl();
-        }
+        var configuredEndpoint = adapterEndpoint(endpoint(provider, type), adapter);
         var path = api.path("path").asText(null);
-        var expectedPath = switch (adapter.getProtocol()) {
-            case CHAT_COMPLETIONS -> "/chat/completions";
-            case RESPONSES -> "/responses";
-            case MESSAGES -> "/messages";
-            default -> null;
-        };
         return !catalogEndpoint.isEmpty() && catalogEndpoint.equals(configuredEndpoint)
-            && (path == null || path.equals(expectedPath));
+            && (path == null || path.equals(requestPath(adapter)));
+    }
+
+    private static String adapterEndpoint(String providerEndpoint, AdapterType adapter) {
+        // Compare the selected adapter's actual route, never another protocol's base_url.
+        return switch (adapter) {
+            case DEEPSEEK_MESSAGES -> providerEndpoint + "/anthropic/v1";
+            case DASHSCOPE_MESSAGES ->
+                new DashScopeEndpointResolver(providerEndpoint).messagesBaseUrl() + "/v1";
+            case ZHIPU_MESSAGES -> new ZhiPuEndpointResolver(providerEndpoint).messagesBaseUrl();
+            case DASHSCOPE_IMAGE -> new DashScopeEndpointResolver(providerEndpoint).nativeBaseUrl();
+            default -> providerEndpoint;
+        };
+    }
+
+    private static String requestPath(AdapterType adapter) {
+        return switch (adapter) {
+            case OPENAI_IMAGE, DOUBAO_IMAGE, SILICONFLOW_IMAGE, ZHIPU_IMAGE ->
+                "/images/generations";
+            case OPENROUTER_IMAGE -> "/images";
+            case DASHSCOPE_IMAGE -> "/services/aigc/multimodal-generation/generation";
+            case OPENAI_EMBEDDING, OPENROUTER_EMBEDDING, DOUBAO_EMBEDDING,
+                 SILICONFLOW_EMBEDDING, ZHIPU_EMBEDDING, AIHUBMIX_EMBEDDING,
+                 TOKENHUB_EMBEDDING -> "/embeddings";
+            case RERANK -> "/rerank";
+            default -> switch (adapter.getProtocol()) {
+                case CHAT_COMPLETIONS -> "/chat/completions";
+                case RESPONSES -> "/responses";
+                case MESSAGES -> "/messages";
+                default -> null;
+            };
+        };
+    }
+
+    /** Non-language protocols require an adapter-specific review of the actual request route. */
+    static String protocol(AdapterType adapter) {
+        return switch (adapter) {
+            case OPENAI_IMAGE, OPENROUTER_IMAGE, DASHSCOPE_IMAGE, DOUBAO_IMAGE,
+                 SILICONFLOW_IMAGE, ZHIPU_IMAGE -> "images";
+            case OPENAI_EMBEDDING, OPENROUTER_EMBEDDING, DOUBAO_EMBEDDING,
+                 SILICONFLOW_EMBEDDING, ZHIPU_EMBEDDING, AIHUBMIX_EMBEDDING,
+                 TOKENHUB_EMBEDDING -> "embeddings";
+            case RERANK -> "rerank";
+            default -> protocol(adapter.getProtocol());
+        };
     }
 
     static String protocol(AdapterProtocol protocol) {

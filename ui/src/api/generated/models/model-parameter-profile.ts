@@ -39,7 +39,7 @@ export interface ModelParameterProfile {
      */
     'constraints'?: ModelParameterConstraints;
     /**
-     * Explicit provider feature evidence, excluding catalog facts; null for legacy profiles, empty when no provider evidence was found
+     * Explicit provider feature evidence, excluding catalog facts; empty when no provider evidence was found
      * @type {{ [key: string]: boolean; }}
      * @memberof ModelParameterProfile
      */

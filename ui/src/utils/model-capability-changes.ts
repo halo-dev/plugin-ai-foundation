@@ -1,4 +1,9 @@
-import type { AiModel, AiProvider, LanguageCapability } from '@/api/generated'
+import type {
+  AiModel,
+  AiProvider,
+  ImageGenerationCapability,
+  LanguageCapability,
+} from '@/api/generated'
 import {
   featureConstraints,
   featureSupport,
@@ -40,25 +45,27 @@ function matchesCatalogIdentity(
 ) {
   const profile = next.catalogParameters
   if (
-    next.modelType !== 'language' ||
+    (next.modelType !== previous.modelType && next.adapterType === previous.adapterType) ||
     !profile?.providerType ||
+    !profile.providerBaseUrl ||
     !profile.adapterType ||
     profile.modelId !== next.modelId ||
     profile.adapterType !== next.adapterType ||
     (previous.providerName !== undefined && next.providerName !== previous.providerName) ||
-    provider?.chatEndpointPath?.trim()
+    (provider?.chatEndpointPath?.trim() &&
+      next.adapterType.endsWith('-chat') &&
+      next.adapterType !== 'ollama-chat')
   ) {
     return false
   }
   const providerType = provider?.providerType || previous.catalogParameters?.providerType
   if (providerType && profile.providerType !== providerType) return false
   // A blank configured endpoint uses provider metadata defaults, which are not available here.
-  const baseUrl = provider
-    ? provider.baseUrl?.trim()
-      ? provider.baseUrl
-      : undefined
-    : previous.catalogParameters?.providerBaseUrl
-  return !baseUrl || !profile.providerBaseUrl || profile.providerBaseUrl === baseUrl
+  if (provider) {
+    return !provider.baseUrl?.trim() || profile.providerBaseUrl === provider.baseUrl
+  }
+  const previousBaseUrl = previous.catalogParameters?.providerBaseUrl
+  return !previousBaseUrl || profile.providerBaseUrl === previousBaseUrl
 }
 
 // Imports and saved-model edits must apply the same manual choices and adapter boundaries.
@@ -68,7 +75,9 @@ export function reconcileModelCapabilities(
   options: { importing?: boolean; provider?: CatalogProvider } = {},
 ): ModelSpec {
   const spec = { ...next }
-  if (spec.catalogParameters && !matchesCatalogIdentity(previous, spec, options.provider)) {
+  const invalidCatalogParameters =
+    spec.catalogParameters && !matchesCatalogIdentity(previous, spec, options.provider)
+  if (invalidCatalogParameters) {
     delete spec.catalogParameters
   }
   if (spec.modelType === 'language') {
@@ -99,13 +108,45 @@ export function reconcileModelCapabilities(
   // Existing non-catalog models keep the form's established edit semantics. Discovery imports
   // still need feature overrides to take precedence over explicit provider capability flags.
   if (!previous.catalogMatch && !options.importing) return spec
-  if (spec.modelType !== previous.modelType) {
+  if (
+    spec.modelType !== previous.modelType ||
+    (previous.modelId !== undefined && spec.modelId !== previous.modelId) ||
+    (previous.catalogMatch?.modelId !== undefined &&
+      spec.modelId !== previous.catalogMatch.modelId) ||
+    (previous.providerName !== undefined && spec.providerName !== previous.providerName)
+  ) {
     delete spec.catalogMatch
     return spec
+  }
+  // The import builder does not copy provenance. Keep it for every model type before
+  // capability-specific branches return, then remove only the fields they override.
+  if (previous.catalogMatch) {
+    spec.catalogMatch = {
+      ...previous.catalogMatch,
+      fields: previous.catalogMatch.fields?.filter((field) => {
+        if (spec.modelType === 'language') return true
+        if (field === 'adapterType' && spec.adapterType !== previous.adapterType) return false
+        return field !== 'parameters' || !invalidCatalogParameters
+      }),
+    }
+  }
+  if (spec.modelType === 'image-generation' && previous.catalogMatch) {
+    return reconcileImageCapabilities(previous, spec)
   }
   const changedFeatures = [
     ...new Set([...(previous.features || []), ...(spec.features || [])]),
   ].filter((feature) => previous.features?.includes(feature) !== spec.features?.includes(feature))
+  if (spec.modelType !== 'language' || (!previous.catalogMatch && !changedFeatures.length)) {
+    return spec
+  }
+  return reconcileLanguageCapabilities(previous, spec, changedFeatures)
+}
+
+function manuallyChangedFeatures(
+  previous: CapabilitySnapshot,
+  spec: ModelSpec,
+  changedFeatures: NonNullable<ModelSpec['features']>,
+) {
   const manualFeatureChanges = new Set(
     changedFeatures.filter((feature) => {
       const automatic = featureSupport(feature, spec.catalogParameters?.constraints)
@@ -122,10 +163,15 @@ export function reconcileModelCapabilities(
       manualFeatureChanges.add(feature)
     }
   }
-  if (spec.modelType !== 'language' || (!previous.catalogMatch && !changedFeatures.length)) {
-    return spec
-  }
+  return manualFeatureChanges
+}
 
+function reconcileLanguageCapabilities(
+  previous: CapabilitySnapshot,
+  spec: ModelSpec,
+  changedFeatures: NonNullable<ModelSpec['features']>,
+): ModelSpec {
+  const manualFeatureChanges = manuallyChangedFeatures(previous, spec, changedFeatures)
   const before = previous.capabilities?.language
   const language: LanguageCapability = { ...spec.capabilities?.language }
   // The form derives imageInput from the feature checkbox and represents empty lists as absent.
@@ -151,30 +197,18 @@ export function reconcileModelCapabilities(
     if (feature === 'vision') {
       language.imageInput = enabled
       if (!edited.has('inputMediaTypes')) {
-        language.inputMediaTypes = language.inputMediaTypes?.filter(
-          (type) => !type.startsWith('image/'),
-        )
-        if (enabled) {
-          language.inputMediaTypes = [
-            ...(language.inputMediaTypes || []),
-            'image/png',
-            'image/jpeg',
-          ]
-        }
+        language.inputMediaTypes = updateMediaTypes(language.inputMediaTypes, 'image/', enabled, [
+          'image/png',
+          'image/jpeg',
+        ])
       }
     }
     if (feature === 'audio-input') {
       if (!edited.has('inputMediaTypes')) {
-        language.inputMediaTypes = language.inputMediaTypes?.filter(
-          (type) => !type.startsWith('audio/'),
-        )
-        if (enabled) {
-          language.inputMediaTypes = [
-            ...(language.inputMediaTypes || []),
-            'audio/wav',
-            'audio/mpeg',
-          ]
-        }
+        language.inputMediaTypes = updateMediaTypes(language.inputMediaTypes, 'audio/', enabled, [
+          'audio/wav',
+          'audio/mpeg',
+        ])
       }
       if (!edited.has('fileInput')) {
         language.fileInput =
@@ -237,4 +271,79 @@ export function reconcileModelCapabilities(
   // not fall back to the pre-catalog audio wildcard. Only fields still attributed are shown.
   if (previous.catalogMatch) spec.catalogMatch = { ...previous.catalogMatch, fields }
   return spec
+}
+
+function updateMediaTypes(
+  current: string[] | undefined,
+  prefix: string,
+  enabled: boolean,
+  supported: string[],
+) {
+  const remaining = current?.filter((type) => !type.startsWith(prefix))
+  return enabled ? [...(remaining || []), ...supported] : remaining
+}
+
+function reconcileImageCapabilities(previous: CapabilitySnapshot, spec: ModelSpec): ModelSpec {
+  const before = previous.capabilities?.imageGeneration
+  if (!before && !spec.capabilities?.imageGeneration) return spec
+  const imageGeneration: ImageGenerationCapability = { ...spec.capabilities?.imageGeneration }
+  // Empty catalog coverage must survive the form's empty-list normalization.
+  if (imageGeneration.outputMediaTypes === undefined && before?.outputMediaTypes?.length === 0) {
+    imageGeneration.outputMediaTypes = []
+  }
+  const edited = !sameValue(before?.outputMediaTypes, imageGeneration.outputMediaTypes)
+  const manual = !sameValue(before ?? {}, imageGeneration)
+  let fields = [...(spec.catalogMatch?.fields || [])]
+  if (spec.adapterType !== previous.adapterType && !edited) {
+    if (fields.includes('imageGeneration.outputMediaTypes')) {
+      delete imageGeneration.outputMediaTypes
+    }
+  }
+  if (edited || spec.adapterType !== previous.adapterType) {
+    fields = fields.filter((field) => field !== 'imageGeneration.outputMediaTypes')
+  }
+  // Clearing the final field restores inheritance. False and explicit empty lists still
+  // declare capabilities and must not be mistaken for an unconfigured domain.
+  if (!hasDefinedValues(imageGeneration)) {
+    const capabilities = { ...spec.capabilities }
+    delete capabilities.imageGeneration
+    const embeddedSources = { ...capabilities.sources }
+    delete embeddedSources.imageGeneration
+    if (hasDefinedValues(embeddedSources)) capabilities.sources = embeddedSources
+    else delete capabilities.sources
+    const sources = { ...spec.capabilitySources }
+    delete sources.imageGeneration
+    return {
+      ...spec,
+      capabilities: hasDefinedValues(capabilities) ? capabilities : undefined,
+      capabilitySources: hasDefinedValues(sources) ? sources : undefined,
+      catalogMatch: { ...spec.catalogMatch!, fields },
+    }
+  }
+  const previousSource =
+    previous.capabilitySources?.imageGeneration ?? previous.capabilities?.sources?.imageGeneration
+  if (manual && previousSource !== 'manual') {
+    // The source applies to the whole domain. Capture the same defaults as
+    // ModelCapabilityService before switching to manual, only for untouched fields.
+    if (before?.textToImage == null && imageGeneration.textToImage == null) {
+      imageGeneration.textToImage = true
+    }
+    if (before?.maxImagesPerCall == null && imageGeneration.maxImagesPerCall == null) {
+      imageGeneration.maxImagesPerCall = 1
+    }
+  }
+  const sources = {
+    ...spec.capabilitySources,
+    imageGeneration: manual ? ('manual' as const) : previousSource,
+  }
+  return {
+    ...spec,
+    capabilities: { ...spec.capabilities, imageGeneration, sources },
+    capabilitySources: sources,
+    catalogMatch: { ...spec.catalogMatch!, fields },
+  }
+}
+
+function hasDefinedValues(value: object): boolean {
+  return Object.values(value).some((field) => field !== undefined && field !== null)
 }

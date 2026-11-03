@@ -235,19 +235,14 @@ function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum)
 }
 
 function capabilitySourceLabels(model: DiscoveredModel) {
-  return [
+  const domains = [
     ['language', '语言能力'],
     ['imageGeneration', '图像能力'],
-  ]
+  ] as const
+  return domains
     .map(([domain, label]) => {
-      const source = capabilityDomainSource(
-        model.capabilities,
-        model.capabilitySources,
-        domain as 'language' | 'imageGeneration',
-      )
-      return source
-        ? `${label}: ${capabilitySourceLabel(source, model.catalogMatch, domain as 'language' | 'imageGeneration')}`
-        : ''
+      const source = capabilityDomainSource(model.capabilities, model.capabilitySources, domain)
+      return source ? `${label}: ${capabilitySourceLabel(source, model.catalogMatch, domain)}` : ''
     })
     .filter(Boolean)
 }

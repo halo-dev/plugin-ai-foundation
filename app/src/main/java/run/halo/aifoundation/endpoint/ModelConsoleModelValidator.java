@@ -2,6 +2,7 @@ package run.halo.aifoundation.endpoint;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -92,17 +93,18 @@ class ModelConsoleModelValidator {
                 spec.getModelType(), spec.getAdapterType());
             parameterMappingValidator.validateConstraints(spec.getParameterConstraints());
             var profile = spec.getCatalogParameters();
-            if (profile != null) {
-                if (!java.util.Objects.equals(profile.getModelId(), spec.getModelId())
-                    || !java.util.Objects.equals(profile.getProviderType(), providerType)
-                    || profile.getAdapterType() != spec.getAdapterType()) {
-                    spec.setCatalogParameters(null);
-                } else {
-                    parameterMappingValidator.validateModel(profile.getMappings(),
-                        spec.getModelType(), spec.getAdapterType());
-                    parameterMappingValidator.validateConstraints(profile.getConstraints());
-                }
+            if (profile == null) {
+                return Mono.empty();
             }
+            if (!Objects.equals(profile.getModelId(), spec.getModelId())
+                || !Objects.equals(profile.getProviderType(), providerType)
+                || profile.getAdapterType() != spec.getAdapterType()) {
+                spec.setCatalogParameters(null);
+                return Mono.empty();
+            }
+            parameterMappingValidator.validateModel(profile.getMappings(),
+                spec.getModelType(), spec.getAdapterType());
+            parameterMappingValidator.validateConstraints(profile.getConstraints());
             return Mono.empty();
         } catch (IllegalArgumentException e) {
             return badRequest(e.getMessage());

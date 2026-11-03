@@ -3,7 +3,6 @@ package run.halo.aifoundation.endpoint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -12,6 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
@@ -28,6 +28,7 @@ import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.openai.OpenAiProvider;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -74,54 +75,53 @@ class ModelParameterConsoleEndpointTest {
 
     @Test
     void missingCatalogMatchReturnsNoContent() {
-        when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(2));
+        when(catalog.enrich(any(), any(), any()))
+            .thenAnswer(invocation -> invocation.getArgument(2));
         web.post().uri("/model-parameters/catalog").bodyValue(model()).exchange()
             .expectStatus().isNoContent();
     }
 
-    @Test
-    void sameIdentityWithoutRecordedProvenanceConservativelyPreservesSavedProfile() {
-        var saved = savedModel();
-        var captured = profile("test-model");
-        var constraints = new ModelParameterConstraints();
-        constraints.setToolCalling(true);
-        constraints.setStructuredOutput(true);
-        var reasoning = new ModelParameterConstraints.Reasoning();
-        reasoning.setSupported(false);
-        constraints.setReasoning(reasoning);
-        captured.setConstraints(constraints);
-        saved.getSpec().setCatalogParameters(captured);
-        saved.getSpec().setDiscoverySource(DiscoverySource.REMOTE);
-        saved.getSpec().setFeatures(List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT));
-
-        // The editor sends the model identity, not another provider discovery response.
+    @ParameterizedTest
+    @ValueSource(strings = {"openai-embedding", "openai-image"})
+    void nonLanguageCatalogPreviewPreservesSelectedTypeAndResolvesCapturedFacts(String adapterId) {
+        var adapter = AdapterType.fromValue(adapterId);
         var draft = model();
-        draft.setMetadata(saved.getMetadata());
+        draft.getSpec().setModelType(adapter.getModelType());
+        draft.getSpec().setAdapterType(adapter);
+        var captured = profile("test-model");
+        captured.setAdapterType(adapter);
+        captured.setFeatureEvidence(Map.of());
+        var constraints = new ModelParameterConstraints();
+        constraints.setInputTokens(8191L);
+        captured.setConstraints(constraints);
+        when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> {
+            List<DiscoveredModel> models = invocation.getArgument(2);
+            assertThat(models.getFirst().modelType()).isEqualTo(adapter.getModelType());
+            assertThat(models.getFirst().confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+            return List.of(models.getFirst().toBuilder().catalogParameters(captured).build());
+        });
         var result = web.post().uri("/model-parameters/catalog").bodyValue(draft).exchange()
             .expectStatus().isOk().expectBody(ModelParameterProfile.class).returnResult()
             .getResponseBody();
         assertThat(result).isEqualTo(captured);
-        verifyNoInteractions(catalog);
-
         draft.getSpec().setCatalogParameters(result);
         web.post().uri("/model-parameters/resolve").bodyValue(draft).exchange()
             .expectStatus().isOk().expectBody()
-            .jsonPath("$.constraints.toolCalling").isEqualTo(true)
-            .jsonPath("$.constraints.structuredOutput").isEqualTo(true)
-            .jsonPath("$.constraints.reasoning.supported").isEqualTo(false);
+            .jsonPath("$.constraints.inputTokens").isEqualTo(8191)
+            .jsonPath("$.constraints.outputTokens").isEmpty();
     }
 
     @Test
-    void refreshesCatalogFieldsAndMappingsWhileMigratingKnownProviderEvidence() {
+    void refreshesCatalogFieldsAndMappingsUsingRecordedProviderEvidence() {
         var saved = savedModel();
         var captured = profile("test-model");
         captured.setConstraints(featureConstraints(true, false, true));
         captured.getConstraints().setOutputTokens(1024L);
         saved.getSpec().setCatalogParameters(captured);
         saved.getSpec().setDiscoverySource(DiscoverySource.REMOTE);
-        saved.getSpec().setCatalogMatch(provenance(List.of("parameters")));
         var evidence = Map.of(ModelFeature.TOOL_CALL, true, ModelFeature.STRUCTURED_OUTPUT, false,
             ModelFeature.REASONING, true);
+        captured.setFeatureEvidence(evidence);
         var updated = profile("test-model");
         updated.setFeatureEvidence(evidence);
         updated.setConstraints(featureConstraints(true, false, true));
@@ -148,13 +148,14 @@ class ModelParameterConsoleEndpointTest {
         assertThat(saved.getSpec().getCatalogParameters()).isSameAs(captured);
     }
 
-    @Test
-    void catalogAttributedFeaturesAreNotPromotedToRemoteEvidence() {
+    @ParameterizedTest
+    @EnumSource(value = DiscoverySource.class, names = {"REMOTE", "RULE"})
+    void catalogAttributedFeaturesAreNotPromotedToProviderEvidence(DiscoverySource source) {
         var saved = savedModel();
         var captured = profile("test-model");
         captured.setConstraints(featureConstraints(true, true, true));
         saved.getSpec().setCatalogParameters(captured);
-        saved.getSpec().setDiscoverySource(DiscoverySource.REMOTE);
+        saved.getSpec().setDiscoverySource(source);
         saved.getSpec().setFeatures(List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
             ModelFeature.REASONING));
         saved.getSpec().setCatalogMatch(provenance(List.of("parameters", "features.tool-call",
@@ -173,27 +174,7 @@ class ModelParameterConsoleEndpointTest {
     }
 
     @Test
-    void ruleDiscoveredCatalogValuesDoNotBecomeProviderEvidence() {
-        var saved = savedModel();
-        var captured = profile("test-model");
-        captured.setConstraints(featureConstraints(true, true, true));
-        saved.getSpec().setCatalogParameters(captured);
-        saved.getSpec().setDiscoverySource(DiscoverySource.RULE);
-        saved.getSpec().setCatalogMatch(provenance(List.of("parameters")));
-        var updated = profile("test-model");
-        updated.setConstraints(featureConstraints(false, false, false));
-        updated.setFeatureEvidence(Map.of());
-        when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> {
-            List<DiscoveredModel> models = invocation.getArgument(2);
-            assertThat(models.getFirst().featureEvidence()).isEmpty();
-            return List.of(models.getFirst().toBuilder().catalogParameters(updated).build());
-        });
-
-        assertThat(preview(saved)).isEqualTo(updated);
-    }
-
-    @Test
-    void explicitlyRecordedEvidenceTakesPrecedenceOverLegacyFeatureAttribution() {
+    void recordedProviderEvidenceDoesNotDependOnCatalogAttribution() {
         var saved = savedModel();
         var captured = profile("test-model");
         captured.setConstraints(featureConstraints(false, true, false));
@@ -243,7 +224,8 @@ class ModelParameterConsoleEndpointTest {
         var captured = profile("test-model");
         captured.setFeatureEvidence(Map.of(ModelFeature.TOOL_CALL, false));
         saved.getSpec().setCatalogParameters(captured);
-        when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(2));
+        when(catalog.enrich(any(), any(), any()))
+            .thenAnswer(invocation -> invocation.getArgument(2));
 
         assertThat(preview(saved)).isEqualTo(captured);
         assertThat(saved.getSpec().getCatalogParameters()).isSameAs(captured);
@@ -287,26 +269,33 @@ class ModelParameterConsoleEndpointTest {
             return List.of(models.getFirst().toBuilder().catalogParameters(updated).build());
         });
         web.post().uri("/model-parameters/catalog").bodyValue(draft).exchange()
-            .expectStatus().isOk().expectBody().jsonPath("$.adapterType").isEqualTo("openai-responses");
+            .expectStatus().isOk().expectBody()
+            .jsonPath("$.adapterType").isEqualTo("openai-responses");
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"modelId", "providerName", "baseUrl", "chatEndpointPath", "profileProviderType"})
+    @ValueSource(strings = {"modelId", "providerName", "baseUrl", "chatEndpointPath",
+        "profileProviderType", "profileBaseUrl"})
     void changedIdentityCannotReviveSavedCatalogParameters(String field) {
         var saved = savedModel();
         saved.getSpec().setCatalogParameters(profile("test-model"));
-        saved.getSpec().getCatalogParameters().setFeatureEvidence(Map.of(ModelFeature.TOOL_CALL, true));
+        saved.getSpec().getCatalogParameters()
+            .setFeatureEvidence(Map.of(ModelFeature.TOOL_CALL, true));
         var draft = model();
         draft.setMetadata(saved.getMetadata());
         switch (field) {
             case "modelId" -> draft.getSpec().setModelId("another-model");
             case "providerName" -> {
                 draft.getSpec().setProviderName("another-provider");
-                when(client.fetch(AiProvider.class, "another-provider")).thenReturn(Mono.just(provider));
+                when(client.fetch(AiProvider.class, "another-provider"))
+                    .thenReturn(Mono.just(provider));
             }
             case "baseUrl" -> provider.getSpec().setBaseUrl("https://another.example/v1");
             case "chatEndpointPath" -> provider.getSpec().setChatEndpointPath("/custom/chat");
-            case "profileProviderType" -> saved.getSpec().getCatalogParameters().setProviderType("deepseek");
+            case "profileProviderType" -> saved.getSpec().getCatalogParameters()
+                .setProviderType("deepseek");
+            case "profileBaseUrl" -> saved.getSpec().getCatalogParameters()
+                .setProviderBaseUrl(null);
             default -> throw new IllegalArgumentException(field);
         }
         when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> {

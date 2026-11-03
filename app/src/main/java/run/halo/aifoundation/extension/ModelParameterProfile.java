@@ -1,6 +1,5 @@
 package run.halo.aifoundation.extension;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Map;
 import lombok.Data;
@@ -18,8 +17,7 @@ public class ModelParameterProfile {
     @Schema(description = "Automatically derived or resolved parameter mappings")
     private ModelParameterMappings mappings;
     private ModelParameterConstraints constraints;
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Schema(description = "Explicit provider feature evidence, excluding catalog facts; "
-        + "null for legacy profiles, empty when no provider evidence was found")
-    private Map<ModelFeature, Boolean> featureEvidence;
+        + "empty when no provider evidence was found")
+    private Map<ModelFeature, Boolean> featureEvidence = Map.of();
 }

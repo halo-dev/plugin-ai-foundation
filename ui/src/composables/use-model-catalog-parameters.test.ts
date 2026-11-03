@@ -11,12 +11,20 @@ vi.mock('@/api', () => ({
 
 const profile: ModelParameterProfile = {
   providerType: 'openai',
+  providerBaseUrl: 'https://api.openai.com/v1',
   modelId: 'gpt-5',
   adapterType: 'openai-chat',
   constraints: { temperature: false, outputTokens: 128000 },
 }
 const scopes: EffectScope[] = []
-function setup(options: { initial?: ModelParameterProfile; ready?: boolean } = {}) {
+function setup(
+  options: {
+    initial?: ModelParameterProfile
+    ready?: boolean
+    modelType?: AiModel['spec']['modelType']
+    adapterType?: AiModel['spec']['adapterType']
+  } = {},
+) {
   const scope = effectScope()
   scopes.push(scope)
   const model = ref<AiModel>({
@@ -28,8 +36,8 @@ function setup(options: { initial?: ModelParameterProfile; ready?: boolean } = {
       modelId: 'gpt-5',
       displayName: 'GPT-5',
       enabled: true,
-      modelType: 'language',
-      adapterType: 'openai-chat',
+      modelType: options.modelType || 'language',
+      adapterType: options.adapterType || 'openai-chat',
     },
   })
   const providerType = ref(options.ready === false ? '' : 'openai')
@@ -99,6 +107,19 @@ describe('automatic model catalog parameters', () => {
     await expect(form.waitForCurrent()).resolves.toBe(true)
     expect(form.data.value).toBeUndefined()
   })
+
+  it.each([false, true])(
+    'rejects snapshots without a captured endpoint when ready is %s',
+    async (ready) => {
+      const incomplete = { ...profile, providerBaseUrl: undefined }
+      vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({
+        data: incomplete,
+      } as never)
+      const form = setup({ initial: incomplete, ready })
+      await form.waitForCurrent()
+      expect(form.data.value).toBeUndefined()
+    },
+  )
 
   it.each(['missing', 'failure'] as const)(
     'retains saved and previously loaded adapter snapshots after switching back with a %s result',
@@ -215,19 +236,52 @@ describe('automatic model catalog parameters', () => {
     },
   )
 
-  it('stops querying and removes language parameters when switching model type', async () => {
+  it('isolates model types and ignores the previous type response', async () => {
     const pending = deferred()
-    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockReturnValue(
-      pending.promise as never,
-    )
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters)
+      .mockReturnValueOnce(pending.promise as never)
+      .mockResolvedValue({ data: undefined } as never)
     const form = setup({ initial: profile })
     form.model.value.spec.modelType = 'embedding'
     pending.resolve({ data: profile })
     await form.waitForCurrent()
     await flushPromises()
-    expect(aiConsoleApiClient.model.getModelCatalogParameters).toHaveBeenCalledOnce()
+    expect(aiConsoleApiClient.model.getModelCatalogParameters).toHaveBeenCalledTimes(2)
     expect(form.data.value).toBeUndefined()
+    form.model.value.spec.modelType = 'language'
+    await form.waitForCurrent()
+    expect(form.data.value).toEqual(profile)
   })
+
+  it.each([
+    ['embedding', 'openai-embedding'],
+    ['image-generation', 'openai-image'],
+    ['rerank', 'rerank'],
+  ] as const)(
+    'loads and retains %s snapshots without changing provider mappings',
+    async (modelType, adapterType) => {
+      const nonChatProfile: ModelParameterProfile = {
+        ...profile,
+        adapterType,
+        mappings: {},
+        constraints: { contextTokens: 8191 },
+      }
+      vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValueOnce({
+        data: nonChatProfile,
+      } as never)
+      const form = setup({ modelType, adapterType })
+      await form.waitForCurrent()
+      expect(form.data.value).toEqual(nonChatProfile)
+      expect(form.model.value.spec.parameterMappings).toBeUndefined()
+      expect(form.data.value?.constraints?.outputTokens).toBeUndefined()
+      form.model.value.spec.modelId = 'another'
+      await form.waitForCurrent()
+      expect(form.data.value).toBeUndefined()
+      form.model.value.spec.modelId = 'gpt-5'
+      await form.waitForCurrent()
+      expect(form.data.value).toEqual(nonChatProfile)
+    },
+  )
 
   it('does not accept a profile for a different model or adapter', async () => {
     vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({

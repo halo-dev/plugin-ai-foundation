@@ -27,6 +27,24 @@ function mountFields(initial?: ModelParameterConstraints) {
 }
 
 describe('model parameter constraints', () => {
+  it.each(['embedding', 'rerank', 'image-generation'] as const)(
+    'shows only input and context limits for %s',
+    async (modelType) => {
+      const wrapper = mountFields()
+      await wrapper.setProps({ modelType, inherited: { inputTokens: 8191, outputTokens: 1536 } })
+      await settle()
+      expect(wrapper.findAll('input')).toHaveLength(2)
+      expect(wrapper.find('[name="constraint_outputTokens"]').exists()).toBe(false)
+      expect(wrapper.find('[name^="constraint_reasoning_"]').exists()).toBe(false)
+      expect(wrapper.get('[name="constraint_inputTokens"]').attributes('placeholder')).toBe(
+        'models.dev：8191',
+      )
+      expect(wrapper.props('modelValue')).toBeUndefined()
+      await wrapper.get('[name="constraint_inputTokens"]').setValue('4096')
+      await settle()
+      expect(wrapper.props('modelValue')).toEqual({ inputTokens: 4096 })
+    },
+  )
   it('shows inherited values without storing them as manual overrides', async () => {
     const wrapper = mountFields()
     await settle()

@@ -1,6 +1,7 @@
 import { aiConsoleApiClient } from '@/api'
-import type { ModelParameterProfile } from '@/api/generated'
+import type { AiModel, ModelParameterProfile } from '@/api/generated'
 import type { ModelFormState } from '@/types/form'
+import { reconcileModelCapabilities } from '@/utils/model-capability-changes'
 import ModelForm from '@/views/components/ModelForm.vue'
 import { defaultConfig, plugin as FormKitPlugin } from '@formkit/vue'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -18,11 +19,14 @@ vi.mock('@/composables/use-provider-types-fetch', () => ({
     data: ref([
       {
         providerType: 'openai',
-        supportedModelTypes: ['language'],
+        supportedModelTypes: ['language', 'embedding', 'image-generation', 'rerank'],
         supportedFeatures: ['tool-call', 'structured-output', 'reasoning', 'vision', 'audio-input'],
         adapters: [
           { adapterType: 'openai-chat', modelType: 'language', recommended: true },
           { adapterType: 'openai-responses', modelType: 'language' },
+          { adapterType: 'openai-embedding', modelType: 'embedding', recommended: true },
+          { adapterType: 'openai-image', modelType: 'image-generation', recommended: true },
+          { adapterType: 'rerank', modelType: 'rerank', recommended: true },
         ],
       },
     ]),
@@ -44,6 +48,7 @@ const formData = {
 }
 const profile: ModelParameterProfile = {
   providerType: 'openai',
+  providerBaseUrl: 'https://api.openai.com/v1',
   modelId: 'gpt-5',
   adapterType: 'openai-chat',
   constraints: { temperature: false, outputTokens: 128000 },
@@ -92,6 +97,59 @@ it('automatically looks up a newly entered model and waits before emitting a sav
   expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ catalogParameters: profile })
   expect(wrapper.vm.isSubmitting).toBe(false)
 })
+
+it.each([
+  ['embedding', 'openai-embedding'],
+  ['image-generation', 'openai-image'],
+  ['rerank', 'rerank'],
+] as const)(
+  'automatically persists %s catalog constraints and keeps manual mappings',
+  async (modelType, adapterType) => {
+    const nonChatProfile: ModelParameterProfile = {
+      providerType: 'openai',
+      providerBaseUrl: 'https://api.openai.com/v1',
+      modelId: 'test-model',
+      adapterType,
+      constraints: { inputTokens: 8191 },
+    }
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({
+      data: nonChatProfile,
+    } as never)
+    const state: ModelFormState = {
+      modelId: 'test-model',
+      displayName: 'Test',
+      enabled: true,
+      modelType,
+      adapterType,
+      parameterMappings:
+        modelType === 'embedding'
+          ? { embedding: { dimensions: { mode: 'UNSUPPORTED' } } }
+          : undefined,
+      parameterConstraints: { inputTokens: 4096 },
+    }
+    const wrapper = mount(ModelForm, {
+      props: { providerName: 'openai-one', providerType: 'openai', formState: state },
+      global: {
+        stubs: {
+          ...stubs,
+          AdvancedSettingsCollapsible: { template: '<section><slot/></section>' },
+        },
+      },
+    })
+    await flushPromises()
+    wrapper.findComponent({ name: 'FormKit' }).vm.$emit('submit', state)
+    await flushPromises()
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({
+      catalogParameters: nonChatProfile,
+      parameterConstraints: state.parameterConstraints,
+      parameterMappings: state.parameterMappings,
+    })
+    expect(
+      wrapper.findComponent({ name: 'ModelParameterConstraintFields' }).props('modelType'),
+    ).toBe(modelType)
+    wrapper.unmount()
+  },
+)
 
 it('cancels an in-flight save when the adapter changes and saves only the new catalog profile', async () => {
   const chat = deferredCatalog()
@@ -484,4 +542,167 @@ it('does not carry automatically filled features to a new model identity without
   await flushPromises()
   expect(featureField().attributes('modelvalue')).toBe('')
   wrapper.unmount()
+})
+
+function catalogImageSpec(
+  outputMediaTypes = ['image/png', 'image/jpeg', 'image/webp'],
+): AiModel['spec'] {
+  return {
+    providerName: 'openai-one',
+    modelId: 'gpt-image-1-mini',
+    displayName: 'GPT Image 1 Mini',
+    enabled: true,
+    modelType: 'image-generation',
+    adapterType: 'openai-image',
+    capabilities: {
+      imageGeneration: { outputMediaTypes },
+      sources: { imageGeneration: 'unknown' },
+    },
+    capabilitySources: { imageGeneration: 'unknown' },
+    catalogMatch: {
+      providerId: 'openai',
+      modelId: 'gpt-image-1-mini',
+      fields: ['imageGeneration.outputMediaTypes', 'parameters'],
+    },
+    catalogParameters: {
+      providerType: 'openai',
+      providerBaseUrl: 'https://api.openai.com/v1',
+      modelId: 'gpt-image-1-mini',
+      adapterType: 'openai-image',
+    },
+  }
+}
+
+it.each([
+  ['output format', 'textarea[name="imageGenerationOutputMediaTypes"]', 'image/jpeg', 1],
+  ['image count', 'input[name="imageGenerationMaxImagesPerCall"]', '2', 2],
+] as const)(
+  'preserves inherited image capabilities when editing only the %s',
+  async (field, selector, value, expectedCount) => {
+    const previous = catalogImageSpec()
+    const original = structuredClone(previous)
+    const wrapper = mountRealForm(previous, previous.providerName)
+    await settleForm()
+    await wrapper.get(selector).setValue(value)
+    await settleForm()
+    await wrapper.get('form').trigger('submit')
+    await settleForm()
+    const draft = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+    expect(draft).toBeDefined()
+    const saved = reconcileModelCapabilities(previous, { ...previous, ...draft })
+    expect(saved.capabilities?.imageGeneration?.textToImage).toBe(true)
+    expect(saved.capabilities?.imageGeneration?.maxImagesPerCall).toBe(expectedCount)
+    expect(saved.capabilities?.imageGeneration?.outputMediaTypes).toEqual(
+      field === 'output format'
+        ? ['image/jpeg']
+        : previous.capabilities?.imageGeneration?.outputMediaTypes,
+    )
+    expect(saved.capabilities?.sources?.imageGeneration).toBe('manual')
+    expect(saved.capabilitySources?.imageGeneration).toBe('manual')
+    expect(saved.catalogMatch?.fields).toEqual(
+      field === 'output format' ? ['parameters'] : previous.catalogMatch?.fields,
+    )
+    expect(saved.catalogParameters).toEqual(previous.catalogParameters)
+    expect(previous).toEqual(original)
+  },
+)
+
+it('keeps deliberately cleared image capabilities unknown while changing the output format', async () => {
+  const previous = catalogImageSpec()
+  previous.capabilities!.imageGeneration!.textToImage = true
+  previous.capabilities!.imageGeneration!.maxImagesPerCall = 1
+  const wrapper = mountRealForm(previous, previous.providerName)
+  await settleForm()
+  await wrapper.get('select[name="imageGenerationTextToImage"]').setValue('')
+  await wrapper.get('input[name="imageGenerationMaxImagesPerCall"]').setValue('')
+  await wrapper.get('textarea[name="imageGenerationOutputMediaTypes"]').setValue('image/jpeg')
+  await settleForm()
+  await wrapper.get('form').trigger('submit')
+  await settleForm()
+  const draft = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+  expect(draft).toBeDefined()
+  const saved = reconcileModelCapabilities(previous, { ...previous, ...draft })
+  expect(saved.capabilities?.imageGeneration?.textToImage).toBeUndefined()
+  expect(saved.capabilities?.imageGeneration?.maxImagesPerCall).toBeUndefined()
+  expect(saved.capabilities?.imageGeneration?.outputMediaTypes).toEqual(['image/jpeg'])
+  expect(saved.capabilities?.sources?.imageGeneration).toBe('manual')
+  expect(saved.capabilitySources?.imageGeneration).toBe('manual')
+})
+
+it('does not replace existing manual unknown capabilities when editing an image format', async () => {
+  const previous = catalogImageSpec()
+  previous.capabilitySources!.imageGeneration = 'manual'
+  previous.capabilities!.sources!.imageGeneration = 'manual'
+  const wrapper = mountRealForm(previous, previous.providerName)
+  await settleForm()
+  await wrapper.get('textarea[name="imageGenerationOutputMediaTypes"]').setValue('image/jpeg')
+  await settleForm()
+  await wrapper.get('form').trigger('submit')
+  await settleForm()
+  const draft = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+  expect(draft).toBeDefined()
+  const saved = reconcileModelCapabilities(previous, { ...previous, ...draft })
+  expect(saved.capabilities?.imageGeneration?.textToImage).toBeUndefined()
+  expect(saved.capabilities?.imageGeneration?.maxImagesPerCall).toBeUndefined()
+  expect(saved.capabilities?.imageGeneration?.outputMediaTypes).toEqual(['image/jpeg'])
+  expect(saved.capabilities?.sources?.imageGeneration).toBe('manual')
+  expect(saved.capabilitySources?.imageGeneration).toBe('manual')
+})
+
+it('leaves image capabilities unconfigured after clearing the last catalog field in the form', async () => {
+  const previous = catalogImageSpec()
+  const original = structuredClone(previous)
+  const wrapper = mountRealForm(previous, previous.providerName)
+  await settleForm()
+  await wrapper.get('textarea[name="imageGenerationOutputMediaTypes"]').setValue('')
+  await settleForm()
+  await wrapper.get('form').trigger('submit')
+  await settleForm()
+  const draft = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+  expect(draft).toBeDefined()
+  expect(draft.capabilities?.imageGeneration).toBeUndefined()
+  const saved = reconcileModelCapabilities(previous, { ...previous, ...draft })
+  expect(saved.capabilities?.imageGeneration).toBeUndefined()
+  expect(saved.capabilities?.sources?.imageGeneration).toBeUndefined()
+  expect(saved.capabilitySources?.imageGeneration).toBeUndefined()
+  expect(saved.catalogMatch?.fields).toEqual(['parameters'])
+  expect(saved.catalogParameters).toEqual(previous.catalogParameters)
+  expect(previous).toEqual(original)
+})
+
+it('keeps an explicit unsupported image choice when the catalog formats are cleared', async () => {
+  const previous = catalogImageSpec()
+  const wrapper = mountRealForm(previous, previous.providerName)
+  await settleForm()
+  await wrapper.get('textarea[name="imageGenerationOutputMediaTypes"]').setValue('')
+  await wrapper.get('select[name="imageGenerationTextToImage"]').setValue('false')
+  await settleForm()
+  await wrapper.get('form').trigger('submit')
+  await settleForm()
+  const draft = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+  expect(draft).toBeDefined()
+  const saved = reconcileModelCapabilities(previous, { ...previous, ...draft })
+  expect(saved.capabilities?.imageGeneration?.textToImage).toBe(false)
+  expect(saved.capabilities?.imageGeneration?.outputMediaTypes).toBeUndefined()
+  expect(saved.capabilitySources?.imageGeneration).toBe('manual')
+  expect(saved.catalogMatch?.fields).toEqual(['parameters'])
+})
+
+it('preserves explicit empty catalog formats when saving the unchanged image form', async () => {
+  const previous = catalogImageSpec([])
+  const wrapper = mountRealForm(previous, previous.providerName)
+  await settleForm()
+  expect(
+    wrapper.get<HTMLTextAreaElement>('textarea[name="imageGenerationOutputMediaTypes"]').element
+      .value,
+  ).toBe('')
+  await wrapper.get('form').trigger('submit')
+  await settleForm()
+  const draft = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+  expect(draft).toBeDefined()
+  const saved = reconcileModelCapabilities(previous, { ...previous, ...draft })
+  expect(saved.capabilities?.imageGeneration?.outputMediaTypes).toEqual([])
+  expect(saved.capabilitySources?.imageGeneration).toBe('unknown')
+  expect(saved.catalogMatch?.fields).toEqual(previous.catalogMatch?.fields)
+  expect(saved.catalogParameters).toEqual(previous.catalogParameters)
 })

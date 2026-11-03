@@ -214,7 +214,8 @@ class DashScopeProviderTest {
             .streamOptions(new ChatCompletionsOptions.StreamOptions(null, null, null)).build();
         var constrainedBody = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
             "requestBody", prompt, constrained, true);
-        assertThat(constrainedBody).doesNotContainKey("stream_options").containsEntry("stream", true);
+        assertThat(constrainedBody).doesNotContainKey("stream_options")
+            .containsEntry("stream", true);
 
         var explicit = defaults.mutate()
             .streamOptions(new ChatCompletionsOptions.StreamOptions(null, false, null)).build();

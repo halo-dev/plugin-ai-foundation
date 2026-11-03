@@ -103,12 +103,10 @@ function supportOverride(definition: ParameterDefinition) {
 function clearSupportOverride(definition: ParameterDefinition) {
   if (props.context !== 'model' || definition.domain !== 'language') return
   const reasoning = constraints.value?.reasoning
-  if (
-    supportOverride(definition) === undefined &&
-    (definition.parameter !== 'REASONING' ||
-      (reasoning?.toggle === undefined && reasoning?.efforts === undefined))
-  )
-    return
+  const hasReasoningOverride =
+    definition.parameter === 'REASONING' &&
+    (reasoning?.toggle !== undefined || reasoning?.efforts !== undefined)
+  if (supportOverride(definition) === undefined && !hasReasoningOverride) return
   const next = { ...constraints.value }
   switch (definition.parameter) {
     case 'TEMPERATURE':

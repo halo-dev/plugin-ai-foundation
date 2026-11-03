@@ -75,7 +75,7 @@ final class ModelsDevBundledCatalog {
         }
         var catalog = ModelsDevCatalog.parse(MAPPER.readTree(json))
             .retainProviders(ModelsDevProviderIdentity.catalogIds());
-        return new ModelsDevCatalogService.Snapshot(catalog, fetchedAt, null, false);
+        return new ModelsDevCatalogService.Snapshot(catalog, fetchedAt, null);
     }
 
     private static String sha256(byte[] bytes) {

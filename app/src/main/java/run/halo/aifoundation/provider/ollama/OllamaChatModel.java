@@ -31,13 +31,13 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.provider.support.JsonNodes;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 import run.halo.aifoundation.provider.transport.ProviderSseEvent;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
-import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 
 /** Ollama native {@code /api/chat} model with lossless thinking and tool-call history. */
 public final class OllamaChatModel implements ChatModel, ProviderStreamingChatModel {

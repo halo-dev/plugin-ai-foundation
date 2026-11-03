@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service.language;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -43,10 +44,12 @@ class LanguageModelParameterConstraintsTest {
             var constraints = new ModelParameterConstraints();
             constraints.setOutputTokens(100L);
             var chat = mock(ChatModel.class);
-            var model = model(chat, context(constraints, RuntimeParameterMappings.empty(), Map.of()));
+            var model = model(chat, context(constraints, RuntimeParameterMappings.empty(),
+                Map.of()));
             var request = GenerateTextRequest.builder().prompt("Hello")
                 .maxOutputTokens(prepared ? 50 : 101)
-                .prepareStep(prepared ? step -> PreparedStep.builder().maxOutputTokens(101).build() : null)
+                .prepareStep(prepared
+                    ? step -> PreparedStep.builder().maxOutputTokens(101).build() : null)
                 .build();
             StepVerifier.create(model.generateText(request))
                 .expectErrorMessage("maxOutputTokens must not exceed model limit 100")
@@ -66,9 +69,11 @@ class LanguageModelParameterConstraintsTest {
         var chat = mock(ChatModel.class);
         var model = model(chat, context(constraints, RuntimeParameterMappings.empty(), Map.of()));
         var request = GenerateTextRequest.builder().prompt("Hello").toolChoice(ToolChoice.none())
-            .prepareStep(step -> PreparedStep.builder().toolChoice(ToolChoice.auto()).build()).build();
+            .prepareStep(step -> PreparedStep.builder().toolChoice(ToolChoice.auto()).build())
+                .build();
         StepVerifier.create(model.generateText(request))
-            .expectErrorMessage("toolChoice auto is not supported by this model; allowed values: [none]")
+            .expectErrorMessage(
+                "toolChoice auto is not supported by this model; allowed values: [none]")
             .verify();
         constraints.setToolChoices(List.of());
         var validator = new LanguageModelParameterValidator(context(constraints,
@@ -76,6 +81,55 @@ class LanguageModelParameterConstraintsTest {
         assertThatThrownBy(() -> validator.validate(request))
             .hasMessageContaining("toolChoice none is not supported");
         verifyNoInteractions(chat);
+    }
+
+    @Test
+    void emptyToolChoiceUsesAutoWithoutMutatingCallerOptions() {
+        var constraints = new ModelParameterConstraints();
+        constraints.setToolChoices(List.of("auto"));
+        var validator = new LanguageModelParameterValidator(context(constraints,
+            RuntimeParameterMappings.empty(), Map.of()));
+        for (var choice : List.of(new ToolChoice(), ToolChoice.builder().build())) {
+            var request = GenerateTextRequest.builder().prompt("Hello").toolChoice(choice).build();
+
+            assertThatCode(() -> validator.validate(request)).doesNotThrowAnyException();
+            assertThat(choice.getType()).isNull();
+        }
+
+        constraints.setToolChoices(List.of());
+        var requestWithoutChoice = GenerateTextRequest.builder().prompt("Hello").build();
+        assertThatCode(() -> validator.validate(requestWithoutChoice))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void emptyToolChoiceStillRejectsDisallowedAutoForNormalStreamingAndPreparedRequests() {
+        for (var prepared : List.of(false, true)) {
+            for (var choice : List.of(new ToolChoice(), ToolChoice.builder().build())) {
+                var constraints = new ModelParameterConstraints();
+                constraints.setToolChoices(List.of("none"));
+                var chat = mock(ChatModel.class);
+                var model = model(chat, context(constraints, RuntimeParameterMappings.empty(),
+                    Map.of()));
+                var request = GenerateTextRequest.builder().prompt("Hello")
+                    .toolChoice(prepared ? ToolChoice.none() : choice)
+                    .prepareStep(prepared
+                        ? step -> PreparedStep.builder().toolChoice(choice).build() : null)
+                    .build();
+                var message = "toolChoice auto is not supported by this model; "
+                    + "allowed values: [none]";
+
+                StepVerifier.create(model.generateText(request))
+                    .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(IllegalArgumentException.class).hasMessage(message))
+                    .verify();
+                var errors = model.streamText(request).fullStream()
+                    .filter(part -> PartType.ERROR.equals(part.getType())).collectList().block();
+                assertThat(errors).singleElement()
+                    .satisfies(error -> assertThat(error.getErrorText()).isEqualTo(message));
+                verifyNoInteractions(chat);
+            }
+        }
     }
 
     @Test
@@ -89,7 +143,8 @@ class LanguageModelParameterConstraintsTest {
             ModelParameter.REASONING, new EffectiveParameterMappings.EffectiveMapping(
                 ModelParameterMappings.Mode.TEMPLATE, "reasoning.thinking-budget", null,
                 EffectiveParameterMappings.Source.CATALOG))), null, "model", "provider");
-        var validator = new LanguageModelParameterValidator(context(constraints, runtime, Map.of()));
+        var validator = new LanguageModelParameterValidator(
+            context(constraints, runtime, Map.of()));
         assertThatThrownBy(() -> validator.validate(GenerateTextRequest.builder().prompt("Hello")
             .reasoning(ReasoningOptions.effort(ReasoningOptions.Effort.LOW)).build()))
             .hasMessage("reasoning budget must be at least 512");
@@ -117,12 +172,14 @@ class LanguageModelParameterConstraintsTest {
         var constraints = new ModelParameterConstraints();
         constraints.setServiceTiers(List.of());
         for (var tier : List.of("auto", "default", "provider-specific-tier")) {
-            new LanguageModelParameterValidator(context(constraints, RuntimeParameterMappings.empty(),
+            new LanguageModelParameterValidator(context(constraints,
+                RuntimeParameterMappings.empty(),
                 Map.of())).validateRequestBody(Map.of("service_tier", tier));
         }
         for (var tier : List.of("flex", "priority", "fast", "ultrafast", "standby")) {
             assertThatThrownBy(() -> new LanguageModelParameterValidator(context(constraints,
-                RuntimeParameterMappings.empty(), Map.of())).validateRequestBody(Map.of("service_tier", tier)))
+                RuntimeParameterMappings.empty(), Map.of()))
+                    .validateRequestBody(Map.of("service_tier", tier)))
                 .hasMessageContaining("service_tier " + tier + " is not supported");
         }
         constraints.setServiceTiers(List.of("priority"));
@@ -142,7 +199,8 @@ class LanguageModelParameterConstraintsTest {
             .output(OutputSpec.json()).build()).block();
         var captor = ArgumentCaptor.forClass(Prompt.class);
         verify(chat).call(captor.capture());
-        assertThat(((ChatCompletionsOptions) captor.getValue().getOptions()).getResponseFormat()).isNull();
+        assertThat(((ChatCompletionsOptions) captor.getValue().getOptions()).getResponseFormat())
+            .isNull();
         assertThat(result.getWarnings()).anySatisfy(warning -> assertThat(warning.getCode())
             .isEqualTo("structured-output-prompt-guidance"));
     }

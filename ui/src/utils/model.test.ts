@@ -65,6 +65,7 @@ describe('createModelFromDiscovered', () => {
     discovered.catalogParameters = {
       modelId: 'example',
       providerType: 'openai',
+      providerBaseUrl: 'https://api.openai.com/v1',
       adapterType: 'openai-chat',
       constraints: { topP: false, outputTokens: 8192 },
     }
@@ -701,6 +702,86 @@ describe('remote capability import overrides', () => {
 })
 
 describe('catalog capability imports', () => {
+  it.each([
+    ['embedding', 'openai-embedding', 'openrouter-embedding'],
+    ['rerank', 'rerank', 'dashscope-compatible-rerank'],
+    ['image-generation', 'openai-image', 'openrouter-image'],
+  ] as const)(
+    'preserves %s catalog provenance without capability fields',
+    (modelType, adapterType, otherAdapter) => {
+      const model: DiscoveredModel = {
+        ...discoveredModel('catalog-model', modelType, [], adapterType),
+        catalogMatch: {
+          providerId: 'openai',
+          modelId: 'catalog-model',
+          fetchedAt: '2026-11-03T08:00:00Z',
+          fields: ['modelType', 'adapterType', 'parameters'],
+        },
+        catalogParameters: {
+          providerType: 'openai',
+          providerBaseUrl: 'https://api.openai.com/v1',
+          modelId: 'catalog-model',
+          adapterType,
+          constraints: { contextTokens: 4096 },
+        },
+      }
+      const before = structuredClone(model)
+      const imported = createModelFromDiscovered('provider', model)
+
+      expect(imported.spec.catalogMatch).toEqual(model.catalogMatch)
+      expect(imported.spec.catalogMatch).not.toBe(model.catalogMatch)
+      expect(imported.spec.catalogParameters).toEqual(model.catalogParameters)
+      expect(imported.spec.capabilities).toBeUndefined()
+      expect(model).toEqual(before)
+
+      const changedAdapter = createModelFromDiscovered('provider', model, {
+        adapterType: otherAdapter,
+      })
+      expect(changedAdapter.spec.catalogParameters).toBeUndefined()
+      expect(changedAdapter.spec.catalogMatch).toEqual({
+        ...model.catalogMatch,
+        fields: ['modelType'],
+      })
+
+      const overridden = createModelFromDiscovered('provider', model, {
+        modelType: AiModelSpecModelTypeEnum.Language,
+        adapterType: AiModelSpecAdapterTypeEnum.OpenaiChat,
+      })
+      expect(overridden.spec.catalogMatch).toBeUndefined()
+      expect(overridden.spec.catalogParameters).toBeUndefined()
+      expect(model).toEqual(before)
+    },
+  )
+
+  it('clears old image formats on adapter override without losing import identity', () => {
+    const model: DiscoveredModel = {
+      ...discoveredModel('image-model', 'image-generation', [], 'openai-image', {
+        capabilities: { imageGeneration: { outputMediaTypes: ['image/png'] } },
+        capabilitySources: { imageGeneration: 'unknown' },
+      }),
+      catalogMatch: {
+        providerId: 'openai',
+        modelId: 'image-model',
+        fetchedAt: '2026-11-03T08:00:00Z',
+        fields: ['imageGeneration.outputMediaTypes', 'adapterType', 'parameters'],
+      },
+      catalogParameters: {
+        providerType: 'openai',
+        providerBaseUrl: 'https://api.openai.com/v1',
+        modelId: 'image-model',
+        adapterType: 'openai-image',
+      },
+    }
+    const imported = createModelFromDiscovered('provider', model, {
+      adapterType: AiModelSpecAdapterTypeEnum.OpenrouterImage,
+    })
+
+    expect(imported.spec.catalogMatch).toEqual({ ...model.catalogMatch, fields: [] })
+    expect(imported.spec.capabilities?.imageGeneration?.outputMediaTypes).toBeUndefined()
+    expect(imported.spec.catalogParameters).toBeUndefined()
+    expect(model.capabilities?.imageGeneration?.outputMediaTypes).toEqual(['image/png'])
+  })
+
   function catalogModel() {
     return {
       ...discoveredModel(

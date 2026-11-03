@@ -10,7 +10,7 @@ public final class DiscoveryFeatureEvidence {
     private DiscoveryFeatureEvidence() {
     }
 
-    public static Map<ModelFeature, Boolean> booleans(Map<?, ?> node) {
+    public static Map<ModelFeature, Boolean> fromBooleanFields(Map<?, ?> node) {
         var evidence = new EnumMap<ModelFeature, Boolean>(ModelFeature.class);
         copy(node, evidence, ModelFeature.VISION, "supports_image_in");
         copy(node, evidence, ModelFeature.REASONING, "supports_reasoning", "reasoning");
@@ -29,7 +29,8 @@ public final class DiscoveryFeatureEvidence {
         }
     }
 
-    public static void declared(Map<ModelFeature, Boolean> evidence, Set<ModelFeature> features,
+    public static void recordDeclaredFeatures(Map<ModelFeature, Boolean> evidence,
+        Set<ModelFeature> features,
         ModelFeature... declaredFeatures) {
         for (var feature : declaredFeatures) {
             evidence.put(feature, features.contains(feature));

@@ -1,7 +1,7 @@
 package run.halo.aifoundation.provider.support;
 
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 import lombok.Builder;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
@@ -26,24 +26,16 @@ public record DiscoveredModel(
     public DiscoveredModel(String modelId, String displayName, ModelType modelType,
         Set<ModelFeature> features, AdapterType adapterType, DiscoverySource source,
         DiscoveryConfidence confidence, ModelCapabilities capabilities,
-        ModelCapabilitySources capabilitySources, Map<ModelFeature, Boolean> featureEvidence,
-        ModelCatalogMatch catalogMatch) {
-        this(modelId, displayName, modelType, features, adapterType, source, confidence,
-            capabilities, capabilitySources, featureEvidence, catalogMatch, null);
-    }
-    public DiscoveredModel(String modelId, String displayName, ModelType modelType,
-        Set<ModelFeature> features, AdapterType adapterType, DiscoverySource source,
-        DiscoveryConfidence confidence, ModelCapabilities capabilities,
         ModelCapabilitySources capabilitySources) {
         this(modelId, displayName, modelType, features, adapterType, source, confidence,
-            capabilities, capabilitySources, Map.of(), null);
+            capabilities, capabilitySources, Map.of(), null, null);
     }
 
     public DiscoveredModel(String modelId, String displayName, ModelType modelType,
         Set<ModelFeature> features, AdapterType adapterType, DiscoverySource source,
         DiscoveryConfidence confidence) {
         this(modelId, displayName, modelType, features, adapterType, source, confidence, null,
-            ModelCapabilitySources.unknown());
+            ModelCapabilitySources.unknown(), Map.of(), null, null);
     }
 
     public DiscoveredModel {

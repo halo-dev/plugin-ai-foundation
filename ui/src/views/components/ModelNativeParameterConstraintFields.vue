@@ -19,9 +19,10 @@ const listFields = [
 ] as const
 
 function options(inherited?: boolean) {
+  const inheritedLabel = inherited ? '支持' : '不支持'
   return [
     {
-      label: automaticValue(inherited === undefined ? undefined : inherited ? '支持' : '不支持'),
+      label: automaticValue(inherited === undefined ? undefined : inheritedLabel),
       value: '',
     },
     { label: '手动：支持', value: 'true' },
@@ -35,23 +36,28 @@ function automaticValue(value?: string) {
   return value === undefined ? '自动（未声明）' : `自动（models.dev：${value}）`
 }
 
-function update(key: keyof ModelParameterConstraints, value: unknown) {
+function update<Key extends keyof ModelParameterConstraints>(
+  key: Key,
+  value: ModelParameterConstraints[Key],
+) {
   const next = { ...constraints.value, [key]: value }
   if (value === undefined) delete next[key]
   constraints.value = Object.keys(next).length ? next : undefined
 }
 
 function booleanValue(value: unknown) {
-  return value === 'true' ? true : value === 'false' ? false : undefined
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return undefined
 }
 
 function listValue(value: unknown) {
-  return String(value || '').trim()
-    ? String(value)
-        .split(/[,\n]/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : undefined
+  const text = String(value || '').trim()
+  if (!text) return undefined
+  return text
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 </script>
 

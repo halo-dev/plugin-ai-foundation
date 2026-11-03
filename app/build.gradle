@@ -32,6 +32,19 @@ configurations.runtimeClasspath {
     exclude group: 'com.squareup.okio'
 }
 
+// Isolate TestKit's Gradle dependencies from the application's test runtime.
+sourceSets {
+    snapshotTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    snapshotTestImplementation.extendsFrom testImplementation
+    snapshotTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
 dependencies {
     implementation platform('run.halo.tools.platform:plugin:2.23.0')
     implementation platform("org.springframework.ai:spring-ai-bom:2.0.0")
@@ -46,10 +59,27 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    snapshotTestImplementation gradleTestKit()
 }
 
 test {
     useJUnitPlatform()
+}
+
+tasks.named('processSnapshotTestResources', ProcessResources) {
+    from(rootProject.file('gradle/models-dev-snapshot.gradle')) {
+        into 'gradle'
+    }
+}
+
+tasks.register('snapshotTest', Test) {
+    description = 'Verify models.dev snapshot maintenance tasks against the runtime parser'
+    group = 'verification'
+    testClassesDirs = sourceSets.snapshotTest.output.classesDirs
+    classpath = sourceSets.snapshotTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter tasks.named('test')
 }
 
 // Opt-in: exercises retained SQLite data rather than running during every plugin build.
@@ -166,4 +196,5 @@ tasks.register('verifyHostProvidedJackson') {
 
 tasks.named('check') {
     dependsOn tasks.named('verifyHostProvidedJackson')
+    dependsOn tasks.named('snapshotTest')
 }

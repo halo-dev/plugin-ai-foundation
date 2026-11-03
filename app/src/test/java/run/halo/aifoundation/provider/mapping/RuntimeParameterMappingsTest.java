@@ -105,8 +105,10 @@ class RuntimeParameterMappingsTest {
 
     @Test
     void compoundReasoningAppliesAllFieldsAtomically() {
-        var primary = reasoningValue("thinking.type", "enabled", ModelParameterMappings.ValueType.STRING);
-        var additional = reasoningValue("thinking.budget_tokens", "1024", ModelParameterMappings.ValueType.INTEGER);
+        var primary = reasoningValue("thinking.type", "enabled",
+            ModelParameterMappings.ValueType.STRING);
+        var additional = reasoningValue("thinking.budget_tokens", "1024",
+            ModelParameterMappings.ValueType.INTEGER);
         primary.setAdditionalValues(List.of(additional));
         var reasoning = new ModelParameterMappings.ReasoningMapping();
         reasoning.setHigh(primary);
@@ -117,7 +119,8 @@ class RuntimeParameterMappingsTest {
             Map.of(ModelParameter.REASONING, mapping)), null, "model", "provider");
         var target = new ParameterMappingTarget();
         runtime.applyReasoning(ReasoningOptions.effort(ReasoningOptions.Effort.HIGH), target);
-        assertThat(target.root()).containsEntry("thinking", Map.of("type", "enabled", "budget_tokens", 1024));
+        assertThat(target.root())
+            .containsEntry("thinking", Map.of("type", "enabled", "budget_tokens", 1024));
 
         additional.setValue("invalid integer");
         var untouched = new ParameterMappingTarget();
@@ -131,9 +134,12 @@ class RuntimeParameterMappingsTest {
 
     @Test
     void malformedCompoundMappingsFailBeforeAnyTargetMutation() {
-        for (var invalid : List.of("boolean", "overlap", "duplicate", "nested", "decimal", "missing")) {
-            var primary = reasoningValue("thinking.type", "enabled", ModelParameterMappings.ValueType.STRING);
-            var extra = reasoningValue("thinking.budget_tokens", "1024", ModelParameterMappings.ValueType.INTEGER);
+        for (var invalid : List.of("boolean", "overlap", "duplicate", "nested",
+            "decimal", "missing")) {
+            var primary = reasoningValue("thinking.type", "enabled",
+                ModelParameterMappings.ValueType.STRING);
+            var extra = reasoningValue("thinking.budget_tokens", "1024",
+                ModelParameterMappings.ValueType.INTEGER);
             switch (invalid) {
                 case "boolean" -> {
                     extra.setValueType(ModelParameterMappings.ValueType.BOOLEAN);

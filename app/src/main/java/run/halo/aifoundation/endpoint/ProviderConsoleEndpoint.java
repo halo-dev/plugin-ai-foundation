@@ -20,10 +20,10 @@ import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
-import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.catalog.ModelCatalogEnricher;
 import run.halo.aifoundation.catalog.ModelCatalogStatus;
 import run.halo.aifoundation.catalog.ModelsDevCatalogService;
+import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
@@ -64,7 +64,8 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
             .POST("model-catalog/refresh", request -> catalogService.refresh()
                     .flatMap(status -> ServerResponse.ok().bodyValue(status)),
                 builder -> builder.operationId("RefreshModelCatalog")
-                    .description("Refresh third-party capability metadata; never updates saved models.")
+                    .description("Refresh third-party capability metadata; "
+                        + "never updates saved models.")
                     .tag(tag)
                     .response(responseBuilder().implementation(ModelCatalogStatus.class)))
             .GET("providers", this::listProviders,

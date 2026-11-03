@@ -74,26 +74,23 @@ public class ModelCapabilityService {
                 result.setFileInput(true);
             }
         }
-        // Preserve legacy defaults for models without a catalog snapshot. For catalog imports,
-        // explicit lists (including empty ones) are authoritative; only absent values inherit.
-        var missingMediaTypes = result == null || result.getInputMediaTypes() == null;
-        if (result != null && Boolean.TRUE.equals(result.getImageInput())) {
-            if (missingMediaTypes || !catalogImport && result.getInputMediaTypes().isEmpty()) {
-                result.setInputMediaTypes(List.of("image/*"));
-            }
-            if (result.getInputSources() == null
-                || !catalogImport && result.getInputSources().isEmpty()) {
-                result.setInputSources(List.of(InputSource.DATA));
-            }
+        if (result == null) {
+            return null;
         }
-        if (result != null && hasAudioInput && Boolean.TRUE.equals(result.getFileInput())) {
-            if (!catalogImport || missingMediaTypes) {
-                appendDefault(result.getInputMediaTypes(), "audio/*", result::setInputMediaTypes);
-            }
-            if (result.getInputSources() == null
-                || !catalogImport && result.getInputSources().isEmpty()) {
-                result.setInputSources(List.of(InputSource.DATA));
-            }
+        // Catalog imports treat explicit lists, including empty ones, as the complete coverage.
+        var missingMediaTypes = result.getInputMediaTypes() == null;
+        var imageInput = Boolean.TRUE.equals(result.getImageInput());
+        var audioFileInput = hasAudioInput && Boolean.TRUE.equals(result.getFileInput());
+        if (imageInput && (missingMediaTypes
+            || (!catalogImport && result.getInputMediaTypes().isEmpty()))) {
+            result.setInputMediaTypes(List.of("image/*"));
+        }
+        if (audioFileInput && (!catalogImport || missingMediaTypes)) {
+            appendDefault(result.getInputMediaTypes(), "audio/*", result::setInputMediaTypes);
+        }
+        if ((imageInput || audioFileInput) && (result.getInputSources() == null
+            || (!catalogImport && result.getInputSources().isEmpty()))) {
+            result.setInputSources(List.of(InputSource.DATA));
         }
         return result;
     }

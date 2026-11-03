@@ -1,8 +1,8 @@
 package run.halo.aifoundation.extension;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Data;
 import java.util.List;
+import lombok.Data;
 
 /**
  * Administrator-owned mapping from provider-neutral request settings to registered templates.

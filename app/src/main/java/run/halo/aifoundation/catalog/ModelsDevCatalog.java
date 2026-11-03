@@ -3,112 +3,117 @@ package run.halo.aifoundation.catalog;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import run.halo.aifoundation.provider.support.ModelType;
 
-/** A compact, forward-compatible projection of the models.dev language catalog. */
+/** A compact, forward-compatible projection of the supported models.dev model types. */
 record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
 
     private static final Set<String> PROTOCOLS =
-        Set.of("chat-completions", "responses", "messages", "generate-content");
+        Set.of("chat-completions", "responses", "messages", "generate-content", "images",
+            "embeddings", "rerank");
+    private static final Set<String> MODEL_TYPES =
+        Set.of("chat", "image", "embedding", "reranking");
 
     static ModelsDevCatalog parse(JsonNode root) {
-        return parse(root, false);
-    }
-
-    /** Old caches remain useful for capabilities, but never manufacture v2 parameter controls. */
-    static ModelsDevCatalog parseLegacy(JsonNode root) {
-        return parse(root, true);
-    }
-
-    private static ModelsDevCatalog parse(JsonNode root, boolean legacy) {
         if (root == null || !root.isObject() || root.isEmpty()) {
             throw new IllegalArgumentException("Invalid models.dev catalog");
         }
         var providers = new LinkedHashMap<String, Map<String, Entry>>();
         root.fields().forEachRemaining(provider -> {
-            var value = provider.getValue();
-            var models = value.get("models");
-            if (!provider.getKey().equals(value.path("id").asText())
-                || models == null || !models.isObject()) {
-                throw new IllegalArgumentException("Invalid models.dev provider");
-            }
-            var entries = new LinkedHashMap<String, Entry>();
-            models.fields().forEachRemaining(model -> {
-                var node = model.getValue();
-                if (!model.getKey().equals(node.path("id").asText())) {
-                    throw new IllegalArgumentException("Invalid models.dev model identity");
-                }
-                // v2 enum values are open. An unfamiliar model type must not reject the feed.
-                if (!"chat".equals(node.path("type").asText(legacy ? "chat" : ""))) {
-                    return;
-                }
-                var output = strings(node.path("modalities").get("output"));
-                if (output != null && !output.contains("text")) {
-                    return;
-                }
-                var inputs = strings(node.path("modalities").get("input"));
-                if (legacy) {
-                    entries.put(model.getKey(), new Entry(bool(node, "tool_call"),
-                        bool(node, "structured_output"), bool(node, "reasoning"), inputs,
-                        node.path("provider").path("api").asText(null), null));
-                    return;
-                }
-                var capabilities = node.path("capabilities");
-                var projected = JsonNodeFactory.instance.objectNode();
-                for (var field : List.of("id", "type", "modalities")) {
-                    if (node.has(field)) {
-                        projected.set(field, node.get(field).deepCopy());
-                    }
-                }
-                var projectedCapabilities = project(capabilities, "structured_output", "temperature",
-                    "top_p", "top_k", "store", "stream_usage", "prompt_cache_key", "service_tier");
-                if (capabilities.has("tools")) {
-                    projectedCapabilities.set("tools", project(capabilities.path("tools"), "supported"));
-                }
-                if (capabilities.path("reasoning").isObject()) {
-                    var reasoning = capabilities.path("reasoning");
-                    var controls = project(reasoning, "supported", "toggle", "effort");
-                    if (reasoning.path("budget").isObject()) {
-                        controls.set("budget", project(reasoning.path("budget"), "min", "max"));
-                    }
-                    projectedCapabilities.set("reasoning", controls);
-                }
-                projected.set("capabilities", projectedCapabilities);
-                projected.set("limit", project(node.path("limit"), "context", "input", "output"));
-                var protocols = projected.putObject("api");
-                var api = node.path("api");
-                if (api.isObject()) {
-                    api.fields().forEachRemaining(protocol -> {
-                        if (PROTOCOLS.contains(protocol.getKey()) && protocol.getValue().isObject()) {
-                            var endpoint = protocol.getValue();
-                            var projectedEndpoint = project(endpoint, "base_url", "path");
-                            projectedEndpoint.set("compatibility",
-                                project(endpoint.path("compatibility"), "max_tokens_field"));
-                            var protocolCapabilities = endpoint.path("capabilities");
-                            var flags = project(protocolCapabilities, "store", "stream_usage",
-                                "prompt_cache_key", "service_tier");
-                            if (protocolCapabilities.has("tools")) {
-                                flags.set("tools", project(protocolCapabilities.path("tools"),
-                                    "strict", "choice"));
-                            }
-                            projectedEndpoint.set("capabilities", flags);
-                            protocols.set(protocol.getKey(), projectedEndpoint);
-                        }
-                    });
-                }
-                entries.put(model.getKey(), new Entry(bool(capabilities.path("tools"), "supported"),
-                    bool(capabilities, "structured_output"),
-                    bool(capabilities.path("reasoning"), "supported"), inputs, null, projected));
-            });
-            providers.put(provider.getKey(), Map.copyOf(entries));
+            providers.put(provider.getKey(), parseProvider(provider.getKey(), provider.getValue()));
         });
         if (providers.values().stream().allMatch(Map::isEmpty)) {
-            throw new IllegalArgumentException("Empty models.dev language catalog");
+            throw new IllegalArgumentException("Empty supported models.dev catalog");
         }
         return new ModelsDevCatalog(Map.copyOf(providers));
+    }
+
+    private static Map<String, Entry> parseProvider(String providerId, JsonNode provider) {
+        var models = provider.get("models");
+        if (!providerId.equals(provider.path("id").asText())
+            || models == null || !models.isObject()) {
+            throw new IllegalArgumentException("Invalid models.dev provider");
+        }
+        var entries = new LinkedHashMap<String, Entry>();
+        models.fields().forEachRemaining(model -> {
+            var entry = parseModel(model.getKey(), model.getValue());
+            if (entry != null) {
+                entries.put(model.getKey(), entry);
+            }
+        });
+        return Map.copyOf(entries);
+    }
+
+    private static Entry parseModel(String modelId, JsonNode model) {
+        if (!modelId.equals(model.path("id").asText())) {
+            throw new IllegalArgumentException("Invalid models.dev model identity");
+        }
+        // v2 enum values are open. An unfamiliar model type must not reject the feed.
+        var modelType = model.path("type").asText("");
+        if (!MODEL_TYPES.contains(modelType)) {
+            return null;
+        }
+        var outputs = strings(model.path("modalities").get("output"));
+        if ("chat".equals(modelType) && outputs != null && !outputs.contains("text")) {
+            return null;
+        }
+        var inputs = strings(model.path("modalities").get("input"));
+        var capabilities = model.path("capabilities");
+        var projected = project(model, "id", "type", "modalities");
+        projected.set("capabilities", projectModelCapabilities(capabilities));
+        projected.set("limit", project(model.path("limit"), "context", "input", "output"));
+        projected.set("api", projectProtocols(model.path("api")));
+        return new Entry(bool(capabilities.path("tools"), "supported"),
+            bool(capabilities, "structured_output"),
+            bool(capabilities.path("reasoning"), "supported"), inputs, projected);
+    }
+
+    private static ObjectNode projectModelCapabilities(JsonNode capabilities) {
+        var projected = project(capabilities, "structured_output", "temperature", "top_p", "top_k",
+            "store", "stream_usage", "prompt_cache_key", "service_tier");
+        if (capabilities.has("tools")) {
+            projected.set("tools", project(capabilities.path("tools"), "supported"));
+        }
+        var reasoning = capabilities.path("reasoning");
+        if (reasoning.isObject()) {
+            var controls = project(reasoning, "supported", "toggle", "effort");
+            if (reasoning.path("budget").isObject()) {
+                controls.set("budget", project(reasoning.path("budget"), "min", "max"));
+            }
+            projected.set("reasoning", controls);
+        }
+        return projected;
+    }
+
+    private static ObjectNode projectProtocols(JsonNode api) {
+        var protocols = JsonNodeFactory.instance.objectNode();
+        if (!api.isObject()) {
+            return protocols;
+        }
+        api.fields().forEachRemaining(protocol -> {
+            var endpoint = protocol.getValue();
+            if (!PROTOCOLS.contains(protocol.getKey()) || !endpoint.isObject()) {
+                return;
+            }
+            var projected = project(endpoint, "base_url", "path");
+            projected.set("compatibility",
+                project(endpoint.path("compatibility"), "max_tokens_field"));
+            var capabilities = endpoint.path("capabilities");
+            var projectedCapabilities = project(capabilities, "store", "stream_usage",
+                "prompt_cache_key", "service_tier");
+            if (capabilities.has("tools")) {
+                projectedCapabilities.set("tools", project(capabilities.path("tools"),
+                    "strict", "choice"));
+            }
+            projected.set("capabilities", projectedCapabilities);
+            protocols.set(protocol.getKey(), projected);
+        });
+        return protocols;
     }
 
     private static ObjectNode project(JsonNode source, String... fields) {
@@ -139,7 +144,7 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
         if (!value.isArray()) {
             throw new IllegalArgumentException("Invalid models.dev modalities");
         }
-        var result = new java.util.ArrayList<String>();
+        var result = new ArrayList<String>();
         for (var item : value) {
             if (!item.isTextual()) {
                 throw new IllegalArgumentException("Invalid models.dev modality");
@@ -172,21 +177,33 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
             var provider = root.putObject(id);
             provider.put("id", id);
             var models = provider.putObject("models");
-            entries.forEach((modelId, entry) -> {
-                if (entry.model() != null) {
-                    models.set(modelId, entry.model());
-                }
-            });
+            entries.forEach((modelId, entry) -> models.set(modelId, entry.model()));
         });
         return root;
     }
 
     record Entry(Boolean tools, Boolean structuredOutput, Boolean reasoning,
-                 List<String> inputs, String apiOverride, JsonNode model) {
+                 List<String> inputs, JsonNode model) {
+
+        boolean matchesModelType(ModelType type) {
+            if (type == null) {
+                return false;
+            }
+            var catalogType = switch (type) {
+                case LANGUAGE -> "chat";
+                case IMAGE_GENERATION -> "image";
+                case EMBEDDING -> "embedding";
+                case RERANK -> "reranking";
+            };
+            return catalogType.equals(model.path("type").asText());
+        }
+
+        List<String> outputs() {
+            return strings(model.path("modalities").get("output"));
+        }
 
         JsonNode api(String protocol) {
-            return model == null ? JsonNodeFactory.instance.missingNode()
-                : model.path("api").path(protocol);
+            return model.path("api").path(protocol);
         }
     }
 }

@@ -1,12 +1,13 @@
 package run.halo.aifoundation.provider.mapping;
 
-import java.util.List;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.extension.ModelParameterConstraints;
+import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -188,25 +189,27 @@ public class ParameterMappingValidator {
             return 0;
         }
         validateReasoningScalar(entry, descriptor, value);
+        var additionalValues = value.getAdditionalValues();
+        if (additionalValues == null) {
+            return 1;
+        }
+        if (additionalValues.size() > 8) {
+            throw invalid(entry, "Reasoning intent supports at most eight additional fields");
+        }
         var fields = new HashSet<String>();
         fields.add(value.getField());
-        if (value.getAdditionalValues() != null) {
-            if (value.getAdditionalValues().size() > 8) {
-                throw invalid(entry, "Reasoning intent supports at most eight additional fields");
+        for (var additional : additionalValues) {
+            if (additional == null || (additional.getAdditionalValues() != null
+                && !additional.getAdditionalValues().isEmpty())) {
+                throw invalid(entry, "Additional reasoning fields must be scalar values");
             }
-            for (var additional : value.getAdditionalValues()) {
-                if (additional == null || additional.getAdditionalValues() != null
-                    && !additional.getAdditionalValues().isEmpty()) {
-                    throw invalid(entry, "Additional reasoning fields must be scalar values");
-                }
-                validateReasoningScalar(entry, descriptor, additional);
-                if (fields.stream().anyMatch(field -> field.equals(additional.getField())
-                    || field.startsWith(additional.getField() + ".")
-                    || additional.getField().startsWith(field + "."))) {
-                    throw invalid(entry, "Reasoning fields must not overlap");
-                }
-                fields.add(additional.getField());
+            validateReasoningScalar(entry, descriptor, additional);
+            if (fields.stream().anyMatch(field -> field.equals(additional.getField())
+                || field.startsWith(additional.getField() + ".")
+                || additional.getField().startsWith(field + "."))) {
+                throw invalid(entry, "Reasoning fields must not overlap");
             }
+            fields.add(additional.getField());
         }
         return 1;
     }
@@ -214,16 +217,8 @@ public class ParameterMappingValidator {
     private void validateReasoningScalar(ModelParameterCatalog.ConfiguredSelection entry,
         ParameterMappingTemplateDescriptor descriptor,
         ModelParameterMappings.ReasoningValueMapping value) {
-        if (!StringUtils.hasText(value.getField())) {
-            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
-        }
-        if (value.getValueType() == null) {
-            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
-        }
-        if (value.getValue() == null) {
-            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
-        }
-        if (value.getValue().isBlank()) {
+        if (!StringUtils.hasText(value.getField()) || value.getValueType() == null
+            || !StringUtils.hasText(value.getValue())) {
             throw invalid(entry, "Each reasoning intent requires field, value type, and value");
         }
         validateField(entry, value.getField());
@@ -263,23 +258,11 @@ public class ParameterMappingValidator {
         if (value == null) {
             return null;
         }
-        if (value.getField() != null) {
-            value.setField(value.getField().trim());
-        }
-        if (value.getValue() != null) {
-            value.setValue(value.getValue().trim());
-        }
+        normalizeReasoningScalar(value);
         if (value.getAdditionalValues() != null) {
             // Nested additions are rejected by validation, not traversed recursively.
-            value.getAdditionalValues().stream().filter(java.util.Objects::nonNull)
-                .forEach(additional -> {
-                    if (additional.getField() != null) {
-                        additional.setField(additional.getField().trim());
-                    }
-                    if (additional.getValue() != null) {
-                        additional.setValue(additional.getValue().trim());
-                    }
-                });
+            value.getAdditionalValues().stream().filter(Objects::nonNull)
+                .forEach(this::normalizeReasoningScalar);
         }
         if (!StringUtils.hasText(value.getField()) && value.getValueType() == null
             && !StringUtils.hasText(value.getValue())
@@ -287,6 +270,15 @@ public class ParameterMappingValidator {
             return null;
         }
         return value;
+    }
+
+    private void normalizeReasoningScalar(ModelParameterMappings.ReasoningValueMapping value) {
+        if (value.getField() != null) {
+            value.setField(value.getField().trim());
+        }
+        if (value.getValue() != null) {
+            value.setValue(value.getValue().trim());
+        }
     }
 
     private void rejectIrrelevantDomains(ModelParameterMappings mappings, ModelType modelType) {

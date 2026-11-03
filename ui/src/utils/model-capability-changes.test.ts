@@ -36,6 +36,83 @@ function catalogSpec(): AiModel['spec'] {
 }
 
 describe('catalog capability edits', () => {
+  it.each([
+    ['embedding', 'openai-embedding'],
+    ['rerank', 'rerank'],
+    ['image-generation', 'openai-image'],
+  ] as const)('retains %s profiles during import and rename', (modelType, adapterType) => {
+    const previous: AiModel['spec'] = {
+      ...catalogSpec(),
+      modelType,
+      adapterType,
+      features: undefined,
+      capabilities: undefined,
+      catalogMatch: { providerId: 'openai', modelId: 'example', fields: ['parameters'] },
+      catalogParameters: {
+        providerType: 'openai',
+        providerBaseUrl: 'https://api.openai.com/v1',
+        modelId: 'example',
+        adapterType,
+        constraints: { contextTokens: 8191 },
+      },
+    }
+    const next = reconcileModelCapabilities(
+      previous,
+      { ...previous, displayName: 'Renamed' },
+      { importing: true },
+    )
+    expect(next.catalogParameters).toEqual(previous.catalogParameters)
+    for (const change of [{ modelId: 'other' }, { providerName: 'other' }]) {
+      const changed = reconcileModelCapabilities(previous, { ...previous, ...change })
+      expect(changed.catalogParameters).toBeUndefined()
+      expect(changed.catalogMatch).toBeUndefined()
+    }
+  })
+
+  it('preserves empty image coverage and manual image choices while removing stale adapter formats', () => {
+    const previous: AiModel['spec'] = {
+      ...catalogSpec(),
+      modelType: 'image-generation',
+      adapterType: 'openai-image',
+      features: undefined,
+      capabilities: { imageGeneration: { textToImage: true, outputMediaTypes: [] } },
+      capabilitySources: { imageGeneration: 'unknown' },
+      catalogMatch: {
+        providerId: 'openai',
+        modelId: 'example',
+        fields: ['imageGeneration.outputMediaTypes', 'parameters'],
+      },
+    }
+    const renamed = reconcileModelCapabilities(previous, {
+      ...previous,
+      displayName: 'Renamed',
+      capabilities: { imageGeneration: { textToImage: true } },
+      capabilitySources: { imageGeneration: 'manual' },
+    })
+    expect(renamed.capabilities?.imageGeneration?.outputMediaTypes).toEqual([])
+    expect(renamed.capabilitySources?.imageGeneration).toBe('unknown')
+    const switched = reconcileModelCapabilities(previous, {
+      ...previous,
+      adapterType: 'openrouter-image',
+    })
+    expect(switched.capabilities?.imageGeneration?.outputMediaTypes).toBeUndefined()
+    expect(switched.catalogMatch?.fields).toEqual(['parameters'])
+    const manual = reconcileModelCapabilities(previous, {
+      ...previous,
+      adapterType: 'openrouter-image',
+      capabilities: {
+        imageGeneration: { textToImage: true, outputMediaTypes: ['image/webp'], maskInput: false },
+      },
+    })
+    expect(manual.capabilities?.imageGeneration).toEqual({
+      textToImage: true,
+      maxImagesPerCall: 1,
+      outputMediaTypes: ['image/webp'],
+      maskInput: false,
+    })
+    expect(manual.capabilitySources?.imageGeneration).toBe('manual')
+    expect(manual.catalogMatch?.fields).toEqual(['parameters'])
+  })
   it('preserves the existing edit behavior for models without catalog metadata', () => {
     const previous = catalogSpec()
     delete previous.catalogMatch
@@ -44,6 +121,113 @@ describe('catalog capability edits', () => {
     const next: AiModel['spec'] = { ...previous, features: ['vision'] }
     expect(reconcileModelCapabilities(previous, next)).toEqual(next)
   })
+
+  it('restores inheritance when the last image field is cleared without mutating either input', () => {
+    const previous: AiModel['spec'] = {
+      ...catalogSpec(),
+      modelType: 'image-generation',
+      adapterType: 'openai-image',
+      capabilities: {
+        imageGeneration: { outputMediaTypes: ['image/png'] },
+        sources: { imageGeneration: 'unknown' },
+      },
+      capabilitySources: { imageGeneration: 'unknown' },
+      catalogMatch: {
+        providerId: 'openai',
+        modelId: 'example',
+        fields: ['imageGeneration.outputMediaTypes', 'parameters'],
+      },
+      catalogParameters: {
+        providerType: 'openai',
+        providerBaseUrl: 'https://api.openai.com/v1',
+        modelId: 'example',
+        adapterType: 'openai-image',
+      },
+    }
+    const next: AiModel['spec'] = {
+      ...previous,
+      capabilities: {
+        imageGeneration: { outputMediaTypes: undefined, textToImage: undefined },
+        sources: { imageGeneration: 'manual' },
+      },
+      capabilitySources: { imageGeneration: 'manual' },
+    }
+    const original = structuredClone(previous)
+    const draft = structuredClone(next)
+    const cleared = reconcileModelCapabilities(previous, next)
+
+    expect(cleared.capabilities).toBeUndefined()
+    expect(cleared.capabilitySources).toBeUndefined()
+    expect(cleared.catalogMatch).toEqual({ ...previous.catalogMatch, fields: ['parameters'] })
+    expect(cleared.catalogParameters).toEqual(previous.catalogParameters)
+    expect(reconcileModelCapabilities(cleared, { ...cleared, displayName: 'Renamed' })).toEqual({
+      ...cleared,
+      displayName: 'Renamed',
+    })
+    expect(previous).toEqual(original)
+    expect(next).toEqual(draft)
+
+    const switched = reconcileModelCapabilities(previous, {
+      ...previous,
+      adapterType: 'openrouter-image',
+    })
+    expect(switched.capabilities).toBeUndefined()
+    expect(switched.capabilitySources).toBeUndefined()
+    expect(switched.catalogMatch?.fields).toEqual([])
+  })
+
+  it('clears only image capabilities and both of their source locations', () => {
+    const previous: AiModel['spec'] = {
+      ...catalogSpec(),
+      modelType: 'image-generation',
+      adapterType: 'openai-image',
+      capabilities: { imageGeneration: { outputMediaTypes: ['image/png'] } },
+      catalogMatch: {
+        providerId: 'openai',
+        modelId: 'example',
+        fields: ['imageGeneration.outputMediaTypes'],
+      },
+    }
+    const next: AiModel['spec'] = {
+      ...previous,
+      capabilities: {
+        language: { imageInput: false },
+        sources: { language: 'remote', imageGeneration: 'manual' },
+      },
+      capabilitySources: { language: 'manual', imageGeneration: 'manual' },
+    }
+    const cleared = reconcileModelCapabilities(previous, next)
+    expect(cleared.capabilities).toEqual({
+      language: { imageInput: false },
+      sources: { language: 'remote' },
+    })
+    expect(cleared.capabilitySources).toEqual({ language: 'manual' })
+  })
+
+  it.each([{ textToImage: false }, { outputMediaTypes: [] }, { sizes: [] }])(
+    'keeps explicit image declarations when they are the only remaining fields: %j',
+    (imageGeneration) => {
+      const previous: AiModel['spec'] = {
+        ...catalogSpec(),
+        modelType: 'image-generation',
+        adapterType: 'openai-image',
+        capabilities: { imageGeneration: { outputMediaTypes: ['image/png'] } },
+        capabilitySources: { imageGeneration: 'unknown' },
+        catalogMatch: {
+          providerId: 'openai',
+          modelId: 'example',
+          fields: ['imageGeneration.outputMediaTypes'],
+        },
+      }
+      const next = reconcileModelCapabilities(previous, {
+        ...previous,
+        capabilities: { imageGeneration },
+      })
+      expect(next.capabilities?.imageGeneration).toMatchObject(imageGeneration)
+      expect(next.capabilitySources?.imageGeneration).toBe('manual')
+      expect(next.catalogMatch?.fields).toEqual([])
+    },
+  )
 
   it('changes vision without broadening the remaining audio formats', () => {
     const previous = catalogSpec()
@@ -174,6 +358,7 @@ describe('catalog capability edits', () => {
     previous.catalogParameters = {
       modelId: 'example',
       providerType: 'openai',
+      providerBaseUrl: 'https://api.openai.com/v1',
       adapterType: 'openai-chat',
       constraints: { temperature: false, outputTokens: 8192 },
     }
@@ -219,7 +404,7 @@ describe('catalog capability edits', () => {
     }
   })
 
-  it('rejects fresh profiles across provider names, types, configured endpoints and custom paths', () => {
+  it('rejects fresh profiles across provider names, types and configured endpoints', () => {
     const previous = catalogSpec()
     const next: AiModel['spec'] = {
       ...previous,
@@ -243,7 +428,6 @@ describe('catalog capability edits', () => {
     for (const provider of [
       { providerType: 'openailike' },
       { providerType: 'openai', baseUrl: 'https://other.example/v1' },
-      { providerType: 'openai', chatEndpointPath: '/custom/chat' },
     ]) {
       expect(
         reconcileModelCapabilities(previous, next, { provider }).catalogParameters,
@@ -254,6 +438,47 @@ describe('catalog capability edits', () => {
         provider: { providerType: 'openai', baseUrl: 'https://api.openai.com/v1' },
       }).catalogParameters,
     ).toEqual(next.catalogParameters)
+  })
+
+  it.each([undefined, { providerType: 'openai' }])(
+    'rejects catalog snapshots without a captured endpoint even before provider metadata loads',
+    (provider) => {
+      const previous = catalogSpec()
+      previous.catalogParameters = {
+        providerType: 'openai',
+        modelId: previous.modelId,
+        adapterType: previous.adapterType,
+        constraints: { temperature: false },
+      }
+      expect(
+        reconcileModelCapabilities(previous, previous, { provider }).catalogParameters,
+      ).toBeUndefined()
+    },
+  )
+
+  it.each([
+    ['language', 'openai-chat', false],
+    ['language', 'openai-responses', true],
+    ['language', 'deepseek-messages', true],
+    ['embedding', 'openai-embedding', true],
+    ['image-generation', 'openai-image', true],
+    ['rerank', 'rerank', true],
+  ] as const)('scopes chat path overrides for %s / %s', (modelType, adapterType, retained) => {
+    const previous: AiModel['spec'] = {
+      ...catalogSpec(),
+      modelType,
+      adapterType,
+      catalogParameters: {
+        providerType: 'openai',
+        providerBaseUrl: 'https://api.openai.com/v1',
+        modelId: 'example',
+        adapterType,
+      },
+    }
+    const next = reconcileModelCapabilities(previous, previous, {
+      provider: { providerType: 'openai', chatEndpointPath: '/custom/chat' },
+    })
+    expect(next.catalogParameters).toEqual(retained ? previous.catalogParameters : undefined)
   })
 
   it('does not infer a different provider type or endpoint from an unverified replacement profile', () => {
@@ -293,6 +518,7 @@ describe('parameter feature provenance', () => {
       previous.catalogMatch!.fields = features.map((feature) => `features.${feature}`)
       previous.catalogParameters = {
         providerType: 'openai',
+        providerBaseUrl: 'https://api.openai.com/v1',
         modelId: previous.modelId,
         adapterType: previous.adapterType,
         constraints: {
@@ -331,6 +557,7 @@ describe('parameter feature provenance', () => {
       ...previous,
       catalogParameters: {
         providerType: 'openai',
+        providerBaseUrl: 'https://api.openai.com/v1',
         modelId: previous.modelId,
         adapterType: previous.adapterType,
         constraints: { toolCalling: true },

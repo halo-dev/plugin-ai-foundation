@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -42,8 +43,6 @@ class LanguageModelMessagesDefaultOutputLimitTest {
 
     @Test
     void messagesRequiredDefaultRespectsSmallModelLimits() {
-        // OpenRouter's catalog includes Messages models with output limits below 4096,
-        // including UI-TARS 1.5 and Gemma 2 27B at 2048 tokens.
         for (var limit : List.of(1L, 2048L, 4000L)) {
             for (var prepared : List.of(false, true)) {
                 var probe = probe(AdapterType.OPENROUTER_MESSAGES, limit, Map.of());
@@ -56,7 +55,7 @@ class LanguageModelMessagesDefaultOutputLimitTest {
 
     @Test
     void largeAndUnknownLimitsRetainTheProtocolDefault() {
-        for (var limit : java.util.Arrays.asList(null, 8192L, Long.MAX_VALUE)) {
+        for (var limit : Arrays.asList(null, 8192L, Long.MAX_VALUE)) {
             for (var prepared : List.of(false, true)) {
                 var probe = probe(AdapterType.OPENROUTER_MESSAGES, limit, Map.of());
                 assertAccepted(probe, request(null, prepared));
@@ -89,11 +88,13 @@ class LanguageModelMessagesDefaultOutputLimitTest {
         var mappings = new RuntimeParameterMappings(new EffectiveParameterMappings(
             Map.of(ModelParameter.MAX_OUTPUT_TOKENS, unsupported)), null, "model", "provider");
         for (var prepared : List.of(false, true)) {
-            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(), options(), mappings);
+            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(),
+                options(), mappings);
             assertAccepted(accepted, request(1536, prepared));
             assertThat(accepted.bodies()).allSatisfy(body ->
                 assertThat(body).containsEntry("max_tokens", 2048));
-            var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(), options(), mappings);
+            var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(),
+                options(), mappings);
             assertRejected(rejected, request(5000, prepared),
                 "maxOutputTokens must not exceed model limit 2048");
         }
@@ -144,7 +145,8 @@ class LanguageModelMessagesDefaultOutputLimitTest {
                 var probe = probe(adapter, 2048L, Map.of());
                 assertAccepted(probe, request(null, prepared));
                 assertThat(probe.bodies()).allSatisfy(body -> assertThat(body)
-                    .doesNotContainKeys("max_tokens", "max_completion_tokens", "max_output_tokens"));
+                    .doesNotContainKeys("max_tokens", "max_completion_tokens",
+                        "max_output_tokens"));
             }
         }
     }
@@ -160,7 +162,8 @@ class LanguageModelMessagesDefaultOutputLimitTest {
     }
 
     private void assertRejected(WireProbe probe, GenerateTextRequest request, String message) {
-        StepVerifier.create(probe.model().generateText(request)).expectErrorMessage(message).verify();
+        StepVerifier.create(probe.model().generateText(request))
+            .expectErrorMessage(message).verify();
         var errors = probe.model().streamText(request).fullStream()
             .filter(part -> PartType.ERROR.equals(part.getType())).collectList().block();
         assertThat(errors).singleElement().satisfies(error ->
@@ -171,7 +174,9 @@ class LanguageModelMessagesDefaultOutputLimitTest {
     private GenerateTextRequest request(Integer tokens, boolean prepared) {
         return GenerateTextRequest.builder().prompt("Hello").maxRetries(0)
             .maxOutputTokens(prepared ? null : tokens)
-            .prepareStep(prepared ? step -> PreparedStep.builder().maxOutputTokens(tokens).build() : null)
+            .prepareStep(prepared
+                ? step -> PreparedStep.builder().maxOutputTokens(tokens).build()
+                : null)
             .build();
     }
 
@@ -207,9 +212,11 @@ class LanguageModelMessagesDefaultOutputLimitTest {
             ? new OpenRouterProvider() : new OpenAiProvider();
         var constraints = new ModelParameterConstraints();
         constraints.setOutputTokens(limit);
-        var context = new ModelRuntimeContext("model", "test-model", "provider", provider.getProviderType(),
+        var context = new ModelRuntimeContext("model", "test-model", "provider",
+            provider.getProviderType(),
             adapter, provider, mappings, nativeOptions, constraints);
-        var configuration = LanguageModelRuntimeConfiguration.from(context, ModelCapabilities.empty());
+        var configuration = LanguageModelRuntimeConfiguration
+            .from(context, ModelCapabilities.empty());
         var composition = LanguageModelRuntimeComposition.create(configuration,
             new LanguageModelRuntimeSupport(), null, null);
         return new WireProbe(new LanguageModelImpl(chat, composition, context), bodies);

@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import run.halo.aifoundation.extension.AiModel;
@@ -73,12 +74,12 @@ final class ModelOptionAssembler {
             spec.getFeatures() == null ? List.<ModelFeature>of() : spec.getFeatures());
         if (spec.getModelType() == ModelType.LANGUAGE && provider != null
             && providerType != null) {
-            // Saved catalog snapshots and manual constraints also govern runtime validation.
-            // Use those same facts when selecting models, including older inconsistent records.
+            // Model selection and runtime validation must use the same effective constraints.
             var constraints = parameterMappingResolver.resolveConstraints(
                 new ModelResolution(model, provider, providerType, null));
             applyFeature(features, ModelFeature.TOOL_CALL, constraints.getToolCalling());
-            applyFeature(features, ModelFeature.STRUCTURED_OUTPUT, constraints.getStructuredOutput());
+            applyFeature(features, ModelFeature.STRUCTURED_OUTPUT,
+                constraints.getStructuredOutput());
             if (constraints.getReasoning() != null) {
                 applyFeature(features, ModelFeature.REASONING,
                     constraints.getReasoning().getSupported());
@@ -87,7 +88,7 @@ final class ModelOptionAssembler {
         return List.copyOf(features);
     }
 
-    private void applyFeature(java.util.Set<ModelFeature> features, ModelFeature feature,
+    private void applyFeature(Set<ModelFeature> features, ModelFeature feature,
         Boolean supported) {
         if (Boolean.TRUE.equals(supported)) {
             features.add(feature);

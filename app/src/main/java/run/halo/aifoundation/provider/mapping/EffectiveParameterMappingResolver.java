@@ -2,12 +2,17 @@ package run.halo.aifoundation.provider.mapping;
 
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import run.halo.aifoundation.extension.ModelParameterConstraints;
-import run.halo.aifoundation.extension.ModelParameterProfile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.extension.ModelParameterMappings;
+import run.halo.aifoundation.extension.ModelParameterProfile;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping;
+import run.halo.aifoundation.provider.support.AdapterProtocol;
+import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.model.ModelResolution;
 
 @Component
@@ -34,7 +39,13 @@ public class EffectiveParameterMappingResolver {
     public EffectiveParameterMappings resolve(ModelResolution resolution) {
         var values = resolveMappings(resolution);
         var constraints = resolveConstraints(resolution, values);
-        var manual = resolution.model().getSpec().getParameterConstraints();
+        applyConstraints(values, constraints,
+            resolution.model().getSpec().getParameterConstraints());
+        return new EffectiveParameterMappings(values);
+    }
+
+    private void applyConstraints(EnumMap<ModelParameter, EffectiveMapping> values,
+        ModelParameterConstraints constraints, ModelParameterConstraints manual) {
         constrain(values, ModelParameter.TEMPERATURE, constraints.getTemperature(),
             manual != null && manual.getTemperature() != null);
         constrain(values, ModelParameter.TOP_P, constraints.getTopP(),
@@ -47,17 +58,16 @@ public class EffectiveParameterMappingResolver {
                     && manual.getReasoning().getSupported() != null);
             constrainReasoning(values, constraints.getReasoning());
         }
-        return new EffectiveParameterMappings(values);
     }
 
-    private EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping> resolveMappings(
+    private EnumMap<ModelParameter, EffectiveMapping> resolveMappings(
         ModelResolution resolution) {
         var modelType = resolution.model().getSpec().getModelType();
-        var values = new EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping>(
+        var values = new EnumMap<ModelParameter, EffectiveMapping>(
             ModelParameter.class);
         defaultMappings(resolution, modelType).forEach((parameter, mapping) -> {
             if (catalog.definition(parameter).modelType() == modelType) {
-                values.put(parameter, new EffectiveParameterMappings.EffectiveMapping(
+                values.put(parameter, new EffectiveMapping(
                     mapping.mode(), mapping.template(), null, null,
                     EffectiveParameterMappings.Source.BUILT_IN));
             }
@@ -82,7 +92,10 @@ public class EffectiveParameterMappingResolver {
 
     /** Resolves the same model configuration used by runtime and Console consumers. */
     public ModelParameterProfile resolveProfile(ModelResolution resolution) {
-        var effective = resolve(resolution);
+        var effective = resolveMappings(resolution);
+        var constraints = resolveConstraints(resolution, effective);
+        applyConstraints(effective, constraints,
+            resolution.model().getSpec().getParameterConstraints());
         var result = new ModelParameterProfile();
         result.setModelId(resolution.modelId());
         result.setProviderType(resolution.providerTypeName());
@@ -90,25 +103,26 @@ public class EffectiveParameterMappingResolver {
         result.setAdapterType(defaultMappingAdapter(resolution,
             resolution.model().getSpec().getModelType()));
         var mappings = new ModelParameterMappings();
-        effective.values().forEach((parameter, mapping) -> {
+        effective.forEach((parameter, mapping) -> {
             var selection = new ModelParameterMappings.Selection();
             selection.setMode(mapping.mode());
             selection.setTemplate(mapping.template());
             selection.setField(mapping.field());
-            var template = templates.get(mapping.template());
-            selection.setReasoningMapping(mapping.reasoningMapping() != null
-                ? mapping.reasoningMapping() : template != null ? template.defaultReasoningMapping() : null);
+            selection.setReasoningMapping(reasoningMapping(mapping));
             catalog.definition(parameter).write(mappings, selection);
         });
         result.setMappings(mappings);
-        result.setConstraints(resolveConstraints(resolution, resolveMappings(resolution)));
+        result.setConstraints(constraints);
         return result;
     }
 
     /** Returns only the captured catalog profile that still matches this model and endpoint. */
     public ModelParameterProfile applicableCatalogProfile(ModelResolution resolution) {
+        var adapter = defaultMappingAdapter(resolution,
+            resolution.model().getSpec().getModelType());
         var endpointPath = resolution.provider().getSpec().getChatEndpointPath();
-        if (endpointPath != null && !endpointPath.isBlank()) {
+        if (adapter != null && adapter.getProtocol() == AdapterProtocol.CHAT_COMPLETIONS
+            && endpointPath != null && !endpointPath.isBlank()) {
             return null;
         }
         var profile = resolution.model().getSpec().getCatalogParameters();
@@ -116,12 +130,11 @@ public class EffectiveParameterMappingResolver {
             || profile.getAdapterType() == null) {
             return null;
         }
-        return Objects.equals(profile.getModelId(), resolution.modelId())
+        var matchesIdentity = Objects.equals(profile.getModelId(), resolution.modelId())
             && Objects.equals(profile.getProviderType(), resolution.providerTypeName())
-            && (profile.getProviderBaseUrl() == null
-                || Objects.equals(profile.getProviderBaseUrl(), providerBaseUrl(resolution)))
-            && profile.getAdapterType() == defaultMappingAdapter(resolution,
-                resolution.model().getSpec().getModelType()) ? profile : null;
+            && Objects.equals(profile.getProviderBaseUrl(), providerBaseUrl(resolution))
+            && profile.getAdapterType() == adapter;
+        return matchesIdentity ? profile : null;
     }
 
     private String providerBaseUrl(ModelResolution resolution) {
@@ -135,7 +148,7 @@ public class EffectiveParameterMappingResolver {
     }
 
     private ModelParameterConstraints resolveConstraints(ModelResolution resolution,
-        java.util.Map<ModelParameter, EffectiveParameterMappings.EffectiveMapping> mappings) {
+        Map<ModelParameter, EffectiveMapping> mappings) {
         var profile = applicableCatalogProfile(resolution);
         var constraints = mergeConstraints(null, profile != null ? profile.getConstraints() : null);
         // An administrator mapping is an explicit override of the catalog's model facts.
@@ -153,11 +166,12 @@ public class EffectiveParameterMappingResolver {
                 default -> { }
             }
         });
-        return mergeConstraints(constraints, resolution.model().getSpec().getParameterConstraints());
+        return mergeConstraints(constraints,
+            resolution.model().getSpec().getParameterConstraints());
     }
 
     private void constrain(
-        EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping> mappings,
+        EnumMap<ModelParameter, EffectiveMapping> mappings,
         ModelParameter parameter, Boolean supported, boolean manual) {
         if (Boolean.FALSE.equals(supported) && mappings.containsKey(parameter)) {
             mappings.put(parameter, unsupported(manual ? EffectiveParameterMappings.Source.MODEL
@@ -166,15 +180,13 @@ public class EffectiveParameterMappingResolver {
     }
 
     private void constrainReasoning(
-        EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping> mappings,
+        EnumMap<ModelParameter, EffectiveMapping> mappings,
         ModelParameterConstraints.Reasoning constraints) {
         var current = mappings.get(ModelParameter.REASONING);
         if (current == null || current.mode() != ModelParameterMappings.Mode.TEMPLATE) {
             return;
         }
-        var template = templates.get(current.template());
-        var original = current.reasoningMapping() != null ? current.reasoningMapping()
-            : template != null ? template.defaultReasoningMapping() : null;
+        var original = reasoningMapping(current);
         if (original == null) {
             return;
         }
@@ -186,8 +198,16 @@ public class EffectiveParameterMappingResolver {
         filtered.setLow(allowedReasoningValue(original.getLow(), constraints));
         filtered.setMedium(allowedReasoningValue(original.getMedium(), constraints));
         filtered.setHigh(allowedReasoningValue(original.getHigh(), constraints));
-        mappings.put(ModelParameter.REASONING, new EffectiveParameterMappings.EffectiveMapping(
+        mappings.put(ModelParameter.REASONING, new EffectiveMapping(
             current.mode(), current.template(), current.field(), filtered, current.source()));
+    }
+
+    private ModelParameterMappings.ReasoningMapping reasoningMapping(EffectiveMapping mapping) {
+        if (mapping.reasoningMapping() != null) {
+            return mapping.reasoningMapping();
+        }
+        var template = templates.get(mapping.template());
+        return template != null ? template.defaultReasoningMapping() : null;
     }
 
     private ModelParameterMappings.ReasoningValueMapping allowedReasoningValue(
@@ -218,7 +238,8 @@ public class EffectiveParameterMappingResolver {
         result.setTopP(prefer(override.getTopP(), base.getTopP()));
         result.setTopK(prefer(override.getTopK(), base.getTopK()));
         result.setToolCalling(prefer(override.getToolCalling(), base.getToolCalling()));
-        result.setStructuredOutput(prefer(override.getStructuredOutput(), base.getStructuredOutput()));
+        result.setStructuredOutput(
+            prefer(override.getStructuredOutput(), base.getStructuredOutput()));
         result.setToolStrict(prefer(override.getToolStrict(), base.getToolStrict()));
         result.setStore(prefer(override.getStore(), base.getStore()));
         result.setStreamUsage(prefer(override.getStreamUsage(), base.getStreamUsage()));
@@ -228,19 +249,26 @@ public class EffectiveParameterMappingResolver {
         result.setOutputTokens(prefer(override.getOutputTokens(), base.getOutputTokens()));
         result.setToolChoices(prefer(override.getToolChoices(), base.getToolChoices()));
         result.setServiceTiers(prefer(override.getServiceTiers(), base.getServiceTiers()));
-        if (base.getReasoning() != null || override.getReasoning() != null) {
-            var left = base.getReasoning() != null ? base.getReasoning()
-                : new ModelParameterConstraints.Reasoning();
-            var right = override.getReasoning() != null ? override.getReasoning()
-                : new ModelParameterConstraints.Reasoning();
-            var reasoning = new ModelParameterConstraints.Reasoning();
-            reasoning.setSupported(prefer(right.getSupported(), left.getSupported()));
-            reasoning.setToggle(prefer(right.getToggle(), left.getToggle()));
-            reasoning.setEfforts(prefer(right.getEfforts(), left.getEfforts()));
-            reasoning.setBudgetMinimum(prefer(right.getBudgetMinimum(), left.getBudgetMinimum()));
-            reasoning.setBudgetMaximum(prefer(right.getBudgetMaximum(), left.getBudgetMaximum()));
-            result.setReasoning(reasoning);
+        result.setReasoning(
+            mergeReasoningConstraints(base.getReasoning(), override.getReasoning()));
+        return result;
+    }
+
+    private ModelParameterConstraints.Reasoning mergeReasoningConstraints(
+        ModelParameterConstraints.Reasoning base, ModelParameterConstraints.Reasoning override) {
+        if (base == null && override == null) {
+            return null;
         }
+        var inherited = base != null ? base : new ModelParameterConstraints.Reasoning();
+        var configured = override != null ? override : new ModelParameterConstraints.Reasoning();
+        var result = new ModelParameterConstraints.Reasoning();
+        result.setSupported(prefer(configured.getSupported(), inherited.getSupported()));
+        result.setToggle(prefer(configured.getToggle(), inherited.getToggle()));
+        result.setEfforts(prefer(configured.getEfforts(), inherited.getEfforts()));
+        result.setBudgetMinimum(
+            prefer(configured.getBudgetMinimum(), inherited.getBudgetMinimum()));
+        result.setBudgetMaximum(
+            prefer(configured.getBudgetMaximum(), inherited.getBudgetMaximum()));
         return result;
     }
 
@@ -248,8 +276,8 @@ public class EffectiveParameterMappingResolver {
         return override != null ? override : inherited;
     }
 
-    private java.util.Map<ModelParameter, DefaultParameterMapping> defaultMappings(
-        ModelResolution resolution, run.halo.aifoundation.provider.support.ModelType modelType) {
+    private Map<ModelParameter, DefaultParameterMapping> defaultMappings(
+        ModelResolution resolution, ModelType modelType) {
         var providerType = resolution.providerType();
         var adapterType = defaultMappingAdapter(resolution, modelType);
         if (adapterType == null) {
@@ -258,8 +286,8 @@ public class EffectiveParameterMappingResolver {
         return providerType.getDefaultParameterMappings(adapterType);
     }
 
-    private run.halo.aifoundation.provider.support.AdapterType defaultMappingAdapter(
-        ModelResolution resolution, run.halo.aifoundation.provider.support.ModelType modelType) {
+    private AdapterType defaultMappingAdapter(
+        ModelResolution resolution, ModelType modelType) {
         var providerType = resolution.providerType();
         var configured = resolution.model().getSpec().getAdapterType();
         if (configured == null) {
@@ -276,9 +304,9 @@ public class EffectiveParameterMappingResolver {
     }
 
     private void overlay(
-        EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping> target,
+        EnumMap<ModelParameter, EffectiveMapping> target,
         ModelParameterMappings mappings, EffectiveParameterMappings.Source source,
-        run.halo.aifoundation.provider.support.ModelType modelType) {
+        ModelType modelType) {
         for (var entry : catalog.selections(mappings)) {
             if (entry.definition().modelType() != modelType
                 || entry.selection().getMode() == null
@@ -286,16 +314,16 @@ public class EffectiveParameterMappingResolver {
                 continue;
             }
             var selection = entry.selection();
-            target.put(entry.parameter(), new EffectiveParameterMappings.EffectiveMapping(
+            target.put(entry.parameter(), new EffectiveMapping(
                 selection.getMode(), selection.getTemplate(), selection.getField(),
                 selection.getReasoningMapping(),
                 source));
         }
     }
 
-    private EffectiveParameterMappings.EffectiveMapping unsupported(
+    private EffectiveMapping unsupported(
         EffectiveParameterMappings.Source source) {
-        return new EffectiveParameterMappings.EffectiveMapping(
+        return new EffectiveMapping(
             ModelParameterMappings.Mode.UNSUPPORTED, null, null, null, source);
     }
 }

@@ -1,6 +1,10 @@
 package run.halo.aifoundation.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.CATALOG;
+import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.CLOCK;
+import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.NON_CHAT_CATALOG;
+import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.NOW;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -10,6 +14,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -23,25 +28,6 @@ import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
 class ModelsDevCatalogServiceTest {
-
-    static final Instant NOW = Instant.parse("2026-10-26T10:00:00Z");
-    static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
-    static final String CATALOG = """
-        {"openai":{"id":"openai","models":{"exact-model":{"id":"exact-model",
-          "type":"chat","description":"Unused display text","cost":{"input":999},
-          "capabilities":{"tools":{"supported":true},"structured_output":false,
-            "reasoning":{"supported":false},"temperature":false,"top_p":false,"top_k":false},
-          "limit":{"context":32768,"output":4096},
-          "api":{"responses":{"base_url":"https://api.openai.com/v1","sdk":{"aisdk":"unused-sdk"}},
-            "chat-completions":{"base_url":"https://api.openai.com/v1"}},
-          "modalities":{"input":["text","image/png","image/jpeg","application/pdf"],
-            "output":["text"]}}}}}
-        """;
-    static final String LEGACY_CATALOG = """
-        {"openai":{"id":"openai","models":{"exact-model":{"id":"exact-model",
-          "tool_call":true,"structured_output":false,"reasoning":false,
-          "modalities":{"input":["text","image"],"output":["text"]}}}}}
-        """;
 
     @TempDir
     Path directory;
@@ -78,7 +64,7 @@ class ModelsDevCatalogServiceTest {
                 : Mono.just(body.get())), CLOCK);
         service.refresh().block();
         var persisted = Files.readString(file);
-        for (var invalid : java.util.List.of("[]", "{}", "not json",
+        for (var invalid : List.of("[]", "{}", "not json",
             CATALOG.replace("\"supported\":true", "\"supported\":\"yes\""))) {
             body.set(invalid);
             assertThat(service.refresh().block().error()).isNotBlank();
@@ -94,7 +80,8 @@ class ModelsDevCatalogServiceTest {
     void noCacheOrCorruptCacheStillAllowsFallback() throws Exception {
         var file = directory.resolve("catalog.json");
         Files.writeString(file, "broken");
-        var service = new ModelsDevCatalogService(file, Mono.error(new IllegalStateException()), CLOCK);
+        var service = new ModelsDevCatalogService(file, Mono.error(new IllegalStateException()),
+            CLOCK);
         service.loadCache();
         assertThat(service.refresh().block().available()).isFalse();
         assertThat(service.snapshot()).isNull();
@@ -137,7 +124,8 @@ class ModelsDevCatalogServiceTest {
     void failedDiskWriteStillPublishesValidInMemoryCatalog() throws Exception {
         var parent = directory.resolve("not-a-directory");
         Files.writeString(parent, "file");
-        var service = new ModelsDevCatalogService(parent.resolve("catalog.json"), Mono.just(CATALOG), CLOCK);
+        var service = new ModelsDevCatalogService(parent.resolve("catalog.json"),
+            Mono.just(CATALOG), CLOCK);
         var status = service.refresh().block();
         assertThat(status.available()).isTrue();
         assertThat(status.error()).contains("本地缓存");
@@ -165,7 +153,7 @@ class ModelsDevCatalogServiceTest {
         assertThat(status.stale()).isFalse();
         assertThat(status.error()).isNull();
         var saved = new ObjectMapper().readTree(Files.readString(file));
-        assertThat(saved.path("version").asInt()).isEqualTo(2);
+        assertThat(saved.path("version").asInt()).isEqualTo(1);
         assertThat(saved.path("sourceUrl").asText()).isEqualTo(ModelsDevCatalogService.SOURCE_URL);
         assertThat(saved.path("etag").asText()).isEqualTo(etag);
         assertThat(saved.path("fetchedAt").asText()).isEqualTo(refreshedClock.instant().toString());
@@ -176,7 +164,7 @@ class ModelsDevCatalogServiceTest {
     }
 
     @Test
-    void rejectsNotModifiedWithoutSuccessfulVersionedSnapshot() {
+    void rejectsNotModifiedWithoutSuccessfulSnapshot() {
         var service = new ModelsDevCatalogService(directory.resolve("catalog.json"),
             ignored -> Mono.just(new ModelsDevCatalogService.Download(null, "\"unknown\"", true)),
             CLOCK);
@@ -185,29 +173,74 @@ class ModelsDevCatalogServiceTest {
     }
 
     @Test
-    void legacyCacheRemainsAvailableOfflineAndUpgradesOnlyAfterSuccessfulV2Response() throws Exception {
+    void rejectsInvalidCacheMetadataAndDownloadsWithoutItsEtag() throws Exception {
+        var mapper = new ObjectMapper();
+        var valid = mapper.createObjectNode();
+        valid.put("version", 1).put("sourceUrl", ModelsDevCatalogService.SOURCE_URL)
+            .put("fetchedAt", NOW.toString()).put("etag", "\"untrusted\"");
+        valid.set("catalog", mapper.readTree(CATALOG));
+        var missingVersion = valid.deepCopy();
+        missingVersion.remove("version");
+        for (var invalid : List.of(
+            missingVersion,
+            valid.deepCopy().put("version", 2),
+            valid.deepCopy().put("version", "1"),
+            valid.deepCopy().put("sourceUrl", "https://other.example/catalog.json"),
+            valid.deepCopy().put("fetchedAt", "invalid"))) {
+            var file = directory.resolve("catalog.json");
+            Files.writeString(file, invalid.toString());
+            var attempts = new AtomicInteger();
+            var service = new ModelsDevCatalogService(file, etag -> {
+                assertThat(etag).isNull();
+                attempts.incrementAndGet();
+                return Mono.just(new ModelsDevCatalogService.Download(CATALOG, "\"current\"",
+                    false));
+            }, CLOCK);
+            service.loadCache();
+            assertThat(service.snapshot()).isNull();
+            assertThat(service.status().stale()).isTrue();
+            var status = service.refreshIfStale().block();
+            assertThat(attempts).hasValue(1);
+            assertThat(status.available()).isTrue();
+            assertThat(status.error()).isNull();
+            assertThat(service.snapshot().etag()).isEqualTo("\"current\"");
+            assertThat(mapper.readTree(Files.readString(file)).path("version").asInt())
+                .isEqualTo(1);
+        }
+    }
+
+    @Test
+    void preservesNonChatModelsAndLimitsAcrossDiskRestore() throws Exception {
         var file = directory.resolve("catalog.json");
-        var legacy = "{\"fetchedAt\":\"" + NOW + "\",\"catalog\":" + LEGACY_CATALOG + "}";
-        Files.writeString(file, legacy);
-        var response = new AtomicReference<String>();
-        var attempted = new AtomicInteger();
+        var service = new ModelsDevCatalogService(file,
+            Mono.just(NON_CHAT_CATALOG), CLOCK);
+        assertThat(service.refresh().block().available()).isTrue();
+        var restored = new ModelsDevCatalogService(file, Mono.empty(), CLOCK);
+        restored.loadCache();
+        assertThat(restored.snapshot().catalog()).isEqualTo(service.snapshot().catalog());
+        assertThat(restored.snapshot().catalog().find("openai", "embedding-model")
+            .model().path("limit").path("input").asInt()).isEqualTo(8000);
+        assertThat(restored.snapshot().catalog().find("openai", "image-model").outputs())
+            .containsExactly("image/png", "image/jpeg", "image/webp");
+        assertThat(restored.snapshot().catalog().find("openrouter", "rerank-model")
+            .model().path("limit").path("input").asInt()).isEqualTo(4000);
+    }
+
+    @Test
+    void invalidCacheUsesBundledFallbackWithoutRewritingTheFile() throws Exception {
+        var file = directory.resolve("catalog.json");
+        var invalid = "{\"version\":999,\"fetchedAt\":\"" + NOW + "\",\"catalog\":" + CATALOG + "}";
+        Files.writeString(file, invalid);
+        var bundle = bundledSnapshot(NOW.minus(Duration.ofDays(1)));
         var service = new ModelsDevCatalogService(file, etag -> {
             assertThat(etag).isNull();
-            attempted.incrementAndGet();
-            return response.get() == null ? Mono.error(new IllegalStateException("offline"))
-                : Mono.just(new ModelsDevCatalogService.Download(response.get(), "\"v2\"", false));
-        }, CLOCK);
-        service.loadCache();
-        assertThat(service.status().stale()).isTrue();
-        assertThat(service.snapshot().legacy()).isTrue();
-        assertThat(service.snapshot().catalog().find("openai", "exact-model").model()).isNull();
-        assertThat(service.refreshIfStale().block().available()).isTrue();
-        assertThat(attempted).hasValue(1);
-        assertThat(Files.readString(file)).isEqualTo(legacy);
-        response.set(CATALOG);
-        assertThat(service.refreshIfStale().block().stale()).isFalse();
-        assertThat(service.snapshot().legacy()).isFalse();
-        assertThat(Files.readString(file)).contains("\"version\":2");
+            return Mono.error(new IllegalStateException("offline"));
+        }, CLOCK, () -> bundle);
+        var status = service.initialize().block();
+        assertThat(status.available()).isTrue();
+        assertThat(status.error()).contains("内置目录");
+        assertThat(service.snapshot()).isSameAs(bundle);
+        assertThat(Files.readString(file)).isEqualTo(invalid);
     }
 
     @Test
@@ -247,21 +280,22 @@ class ModelsDevCatalogServiceTest {
         assertThat(service.snapshot().catalog().providers()).containsOnlyKeys("openai");
         assertThat(Files.readString(file)).doesNotContain("unreviewed-provider");
 
-        // Restore a previous v2 cache that still contains providers we cannot identify safely.
-        var oldCache = mapper.createObjectNode();
-        oldCache.put("version", 2);
-        oldCache.put("sourceUrl", ModelsDevCatalogService.SOURCE_URL);
-        oldCache.put("fetchedAt", NOW.toString());
-        oldCache.set("catalog", source);
-        var oldFile = directory.resolve("previous-v2-cache.json");
-        Files.writeString(oldFile, oldCache.toString());
-        var restored = new ModelsDevCatalogService(oldFile, Mono.empty(), CLOCK);
+        // Disk data must pass the same provider filtering as a downloaded catalog.
+        var cached = mapper.createObjectNode();
+        cached.put("version", 1);
+        cached.put("sourceUrl", ModelsDevCatalogService.SOURCE_URL);
+        cached.put("fetchedAt", NOW.toString());
+        cached.set("catalog", source);
+        var cachedFile = directory.resolve("unfiltered-cache.json");
+        Files.writeString(cachedFile, cached.toString());
+        var restored = new ModelsDevCatalogService(cachedFile, Mono.empty(), CLOCK);
         restored.loadCache();
         assertThat(restored.snapshot().catalog().providers()).containsOnlyKeys("openai");
     }
 
     @Test
-    void stillValidatesUnselectedProvidersBeforeReplacingTheLastSuccessfulSnapshot() throws Exception {
+    void stillValidatesUnselectedProvidersBeforeReplacingTheLastSuccessfulSnapshot()
+        throws Exception {
         var body = new AtomicReference<>(CATALOG);
         var service = new ModelsDevCatalogService(directory.resolve("catalog.json"),
             Mono.defer(() -> Mono.just(body.get())), CLOCK);
@@ -276,7 +310,8 @@ class ModelsDevCatalogServiceTest {
     }
 
     @Test
-    void offlineFirstStartupLoadsBundleOnlyAfterRemoteFailureAndKeepsItsFetchTime() throws Exception {
+    void offlineFirstStartupLoadsBundleOnlyAfterRemoteFailureAndKeepsItsFetchTime()
+        throws Exception {
         var attempts = new AtomicInteger();
         var loaded = new AtomicInteger();
         var bundle = bundledSnapshot(NOW.minus(Duration.ofDays(3)));
@@ -324,9 +359,10 @@ class ModelsDevCatalogServiceTest {
     }
 
     @Test
-    void newerV2BundleWinsOverOlderV2CacheWithoutRewritingTheCache() throws Exception {
+    void newerBundleWinsOverOlderCacheWithoutRewritingTheCache() throws Exception {
         var file = directory.resolve("catalog.json");
-        new ModelsDevCatalogService(file, Mono.just(CATALOG), Clock.offset(CLOCK, Duration.ofDays(-5)))
+        new ModelsDevCatalogService(file, Mono.just(CATALOG), Clock.offset(CLOCK,
+            Duration.ofDays(-5)))
             .refresh().block();
         var persisted = Files.readString(file);
         var bundle = bundledSnapshot(NOW.minus(Duration.ofDays(2)));
@@ -338,23 +374,12 @@ class ModelsDevCatalogServiceTest {
     }
 
     @Test
-    void v2BundleWinsOverNewerLegacyCache() throws Exception {
-        var file = directory.resolve("catalog.json");
-        Files.writeString(file, "{\"fetchedAt\":\"" + NOW + "\",\"catalog\":" + LEGACY_CATALOG + "}");
-        var bundle = bundledSnapshot(NOW.minus(Duration.ofDays(3)));
-        var service = new ModelsDevCatalogService(file,
-            ignored -> Mono.error(new IllegalStateException("offline")), CLOCK, () -> bundle);
-        service.initialize().block(Duration.ofSeconds(5));
-        assertThat(service.snapshot()).isSameAs(bundle);
-        assertThat(service.snapshot().legacy()).isFalse();
-    }
-
-    @Test
     void successfulRemoteResponseTakesPriorityWithoutLoadingBundle() throws Exception {
         var bundle = bundledSnapshot(NOW.plus(Duration.ofDays(1)));
         var loaded = new AtomicInteger();
         var service = new ModelsDevCatalogService(directory.resolve("catalog.json"),
-            ignored -> Mono.just(new ModelsDevCatalogService.Download(CATALOG, "\"remote\"", false)),
+            ignored -> Mono.just(new ModelsDevCatalogService.Download(CATALOG, "\"remote\"",
+                false)),
             CLOCK, () -> {
                 loaded.incrementAndGet();
                 return bundle;
@@ -390,7 +415,8 @@ class ModelsDevCatalogServiceTest {
             assertThat(sentEtag).isEqualTo(etag);
             return Mono.just(new ModelsDevCatalogService.Download(null, null, true));
         }, CLOCK, () -> {
-            throw new AssertionError("A successful revalidation must not load the bundled fallback");
+            throw new AssertionError(
+                "A successful revalidation must not load the bundled fallback");
         });
         var status = service.initialize().block(Duration.ofSeconds(5));
         assertThat(status.error()).isNull();
@@ -399,7 +425,8 @@ class ModelsDevCatalogServiceTest {
     }
 
     @Test
-    void subsequentRemoteFailureCannotReplaceSuccessfulSnapshotWithOlderOrCorruptBundle() throws Exception {
+    void subsequentRemoteFailureCannotReplaceSuccessfulSnapshotWithOlderOrCorruptBundle()
+        throws Exception {
         var online = new AtomicInteger();
         var bundle = new AtomicReference<>(bundledSnapshot(NOW.minus(Duration.ofDays(1))));
         var service = new ModelsDevCatalogService(directory.resolve("catalog.json"), ignored ->
@@ -463,6 +490,6 @@ class ModelsDevCatalogServiceTest {
     private ModelsDevCatalogService.Snapshot bundledSnapshot(Instant fetchedAt) throws Exception {
         var catalog = ModelsDevCatalog.parse(new ObjectMapper().readTree(CATALOG))
             .retainProviders(ModelsDevProviderIdentity.catalogIds());
-        return new ModelsDevCatalogService.Snapshot(catalog, fetchedAt, null, false);
+        return new ModelsDevCatalogService.Snapshot(catalog, fetchedAt, null);
     }
 }

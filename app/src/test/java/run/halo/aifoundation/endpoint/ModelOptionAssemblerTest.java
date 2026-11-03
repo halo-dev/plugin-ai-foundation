@@ -35,7 +35,8 @@ class ModelOptionAssemblerTest {
 
     @BeforeEach
     void setUp() {
-        when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getSupportedAdapterTypes())
+            .thenReturn(List.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.recommendAdapterType(ModelType.LANGUAGE))
             .thenReturn(Optional.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
@@ -154,7 +155,8 @@ class ModelOptionAssemblerTest {
             .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
         catalogConstraints.setToolCalling(false);
         assertThat(assembler.toOptions(List.of(model), Map.of(), Map.of(), query(List.of()))
-            .getFirst().getFeatures()).containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
+            .getFirst().getFeatures())
+            .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
     }
 
     private List<ModelOption> options(List<ModelFeature> required) {

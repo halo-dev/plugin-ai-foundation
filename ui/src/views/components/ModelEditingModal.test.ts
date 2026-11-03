@@ -198,6 +198,7 @@ it('changing a saved catalog model from Responses to Chat must drop Responses-on
 it('automatically loads catalog parameters in the draft and preserves manual overrides until save', async () => {
   const catalogParameters = {
     providerType: 'openai',
+    providerBaseUrl: 'https://api.openai.com/v1',
     modelId: 'example',
     adapterType: 'openai-chat' as const,
     constraints: { temperature: false, outputTokens: 8192 },
@@ -295,6 +296,7 @@ it('waits for catalog loading before saving an existing model', async () => {
 
   const catalogParameters = {
     providerType: 'openai',
+    providerBaseUrl: 'https://api.openai.com/v1',
     modelId: 'waiting',
     adapterType: 'openai-chat',
     constraints: { outputTokens: 8192 },

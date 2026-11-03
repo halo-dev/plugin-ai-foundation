@@ -51,7 +51,8 @@ public class AiModel extends AbstractExtension {
         private ModelCapabilities capabilities;
         @Schema(description = "Source of fine-grained model capabilities by domain")
         private ModelCapabilitySources capabilitySources = ModelCapabilitySources.unknown();
-        @Schema(description = "Third-party catalog provenance captured at import; never refreshed automatically")
+        @Schema(description = "Third-party catalog provenance captured at import; "
+            + "never refreshed automatically")
         private ModelCatalogMatch catalogMatch;
         @Schema(description = "Model-specific parameter mapping overrides")
         private ModelParameterMappings parameterMappings;

@@ -2,6 +2,9 @@ package run.halo.aifoundation.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.CATALOG;
+import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.CLOCK;
+import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.provider;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
@@ -41,7 +44,8 @@ class ModelCatalogCompatibilityTest {
                 case MANUAL -> PublishedSource.MANUAL;
                 case UNKNOWN -> PublishedSource.UNKNOWN;
             };
-            assertThat(JsonUtils.jsonToObject(JsonUtils.objectToJson(source), PublishedSource.class))
+            assertThat(JsonUtils.jsonToObject(JsonUtils.objectToJson(source),
+                PublishedSource.class))
                 .isEqualTo(published);
         }
     }
@@ -49,13 +53,13 @@ class ModelCatalogCompatibilityTest {
     @Test
     void catalogSnapshotCanBeReadAndResavedWithoutProvenanceByPublishedReader() {
         var service = new ModelsDevCatalogService(directory.resolve("catalog.json"),
-            Mono.just(ModelsDevCatalogServiceTest.CATALOG), ModelsDevCatalogServiceTest.CLOCK);
+            Mono.just(CATALOG), CLOCK);
         assertThat(service.refresh().block().available()).isTrue();
         var discovered = DiscoveredModel.builder().modelId("exact-model")
             .modelType(ModelType.LANGUAGE).adapterType(AdapterType.OPENAI_RESPONSES)
             .features(Set.of(ModelFeature.STREAMING)).source(DiscoverySource.RULE).build();
         var result = new ModelCatalogEnricher(service).enrich(
-            ModelCatalogEnricherTest.provider(null), new OpenAiProvider(), List.of(discovered))
+            provider(null), new OpenAiProvider(), List.of(discovered))
             .getFirst();
         var model = new AiModel();
         var spec = new AiModel.AiModelSpec();
@@ -72,8 +76,10 @@ class ModelCatalogCompatibilityTest {
         var json = JsonUtils.objectToJson(model);
         var legacy = JsonUtils.jsonToObject(json, PublishedModel.class);
         assertThat(legacy.spec().capabilitySources().language()).isEqualTo(PublishedSource.UNKNOWN);
-        assertThat(legacy.spec().capabilities().sources().language()).isEqualTo(PublishedSource.UNKNOWN);
-        assertThat(legacy.spec().capabilities().language()).isEqualTo(result.capabilities().getLanguage());
+        assertThat(legacy.spec().capabilities().sources().language())
+            .isEqualTo(PublishedSource.UNKNOWN);
+        assertThat(legacy.spec().capabilities().language())
+            .isEqualTo(result.capabilities().getLanguage());
         assertThat(legacy.spec().modelId()).isEqualTo("exact-model");
         assertThat(json).contains("\"catalogMatch\"").doesNotContain("\"catalog\"");
 
@@ -82,7 +88,7 @@ class ModelCatalogCompatibilityTest {
         assertThat(new ModelCapabilityService().effectiveCapabilities(restored, null).getLanguage())
             .isEqualTo(result.capabilities().getLanguage());
 
-        // Negative control: this reader would have rejected the original PR's enum addition.
+        // Published readers reject unknown capability source values.
         assertThatThrownBy(() -> JsonUtils.jsonToObject(
             json.replace("\"unknown\"", "\"catalog\""), PublishedModel.class))
             .hasRootCauseInstanceOf(IllegalArgumentException.class);
@@ -137,7 +143,8 @@ class ModelCatalogCompatibilityTest {
         @JsonCreator
         public static PublishedSource fromValue(String value) {
             return Arrays.stream(values()).filter(source -> source.value.equals(value)).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unsupported capability source: " + value));
+                .orElseThrow(() -> new IllegalArgumentException(
+                    "Unsupported capability source: " + value));
         }
     }
 }

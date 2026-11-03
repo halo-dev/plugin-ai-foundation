@@ -32,6 +32,24 @@ const provider = computed(() =>
 )
 const providerType = computed(() => provider.value?.spec.providerType)
 const providerMappings = computed(() => provider.value?.spec.parameterMappings)
+const formState = computed<ModelFormState>(() => {
+  const spec = props.model.spec
+  return {
+    modelId: spec.modelId,
+    displayName: spec.displayName,
+    enabled: spec.enabled,
+    modelType: spec.modelType,
+    features: spec.features,
+    adapterType: spec.adapterType,
+    capabilities: spec.capabilities,
+    capabilitySources: spec.capabilitySources,
+    catalogMatch: spec.catalogMatch,
+    catalogParameters: spec.catalogParameters,
+    parameterConstraints: spec.parameterConstraints,
+    parameterMappings: spec.parameterMappings,
+    nativeOptions: spec.nativeOptions,
+  }
+})
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ModelFormState) => {
@@ -59,7 +77,7 @@ const { mutate, isPending } = useMutation({
               props.model.spec.discoverySource || AiModelSpecDiscoverySourceEnum.Manual,
             discoveryConfidence:
               props.model.spec.discoveryConfidence || AiModelSpecDiscoveryConfidenceEnum.High,
-          } as AiModel['spec'],
+          },
           { provider: provider.value?.spec },
         ),
       },
@@ -92,21 +110,7 @@ function onSubmit(data: ModelFormState) {
       :provider-type="providerType || ''"
       :inherited-mappings="providerMappings"
       :model-name="model.metadata.name"
-      :form-state="{
-        modelId: model.spec.modelId,
-        displayName: model.spec.displayName,
-        enabled: model.spec.enabled,
-        modelType: model.spec.modelType,
-        features: model.spec.features,
-        adapterType: model.spec.adapterType,
-        capabilities: model.spec.capabilities,
-        capabilitySources: model.spec.capabilitySources,
-        catalogMatch: model.spec.catalogMatch,
-        catalogParameters: model.spec.catalogParameters,
-        parameterConstraints: model.spec.parameterConstraints,
-        parameterMappings: model.spec.parameterMappings,
-        nativeOptions: model.spec.nativeOptions,
-      }"
+      :form-state="formState"
       @submit="onSubmit"
     />
     <template #footer>

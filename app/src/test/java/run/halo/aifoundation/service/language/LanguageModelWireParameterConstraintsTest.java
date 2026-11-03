@@ -3,6 +3,7 @@ package run.halo.aifoundation.service.language;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -37,8 +38,8 @@ import run.halo.aifoundation.provider.deepseek.DeepSeekMessagesModel;
 import run.halo.aifoundation.provider.deepseek.DeepSeekProvider;
 import run.halo.aifoundation.provider.kimi.KimiChatModel;
 import run.halo.aifoundation.provider.kimi.KimiProvider;
-import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.provider.ollama.OllamaChatModel;
@@ -51,13 +52,13 @@ import run.halo.aifoundation.provider.openrouter.OpenRouterChatModel;
 import run.halo.aifoundation.provider.openrouter.OpenRouterProvider;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
-import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
 import run.halo.aifoundation.provider.support.ModelType;
+import run.halo.aifoundation.provider.support.NativeModelOptionsValidator;
 import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 import run.halo.aifoundation.provider.transport.ProviderHttpException;
-import run.halo.aifoundation.service.model.ModelRuntimeContext;
-import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.aifoundation.schema.OutputSpec;
+import run.halo.aifoundation.service.model.ModelResolution;
+import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 class LanguageModelWireParameterConstraintsTest {
 
@@ -101,7 +102,8 @@ class LanguageModelWireParameterConstraintsTest {
     @Test
     void nativeSamplingRemainsAvailableForSupportedAndUnknownModelFacts() {
         for (var adapter : samplingAdapters()) {
-            for (var constraints : List.of(samplingConstraints(true), new ModelParameterConstraints())) {
+            for (var constraints : List.of(samplingConstraints(true),
+                new ModelParameterConstraints())) {
                 var probe = probe(context(adapter, constraints, RuntimeParameterMappings.empty(),
                     samplingOptions(adapter, samplingValues())));
                 assertAccepted(probe, request(null, false, null));
@@ -131,20 +133,31 @@ class LanguageModelWireParameterConstraintsTest {
                 model.setSpec(spec);
                 var profile = new ModelParameterProfile();
                 profile.setProviderType("openai");
+                profile.setProviderBaseUrl("https://api.openai.com/v1");
                 profile.setModelId("test-model");
                 profile.setAdapterType(AdapterType.OPENAI_CHAT);
                 profile.setConstraints(samplingConstraints(false));
                 spec.setCatalogParameters(profile);
+
+                var resolver = new EffectiveParameterMappingResolver();
+                var resolution = new ModelResolution(model, provider, new OpenAiProvider(), null);
+                assertThat(resolver.applicableCatalogProfile(resolution)).isSameAs(profile);
+                var catalogConstraints = resolver.resolveConstraints(resolution);
+                assertThat(catalogConstraints.getTemperature()).isFalse();
+                assertThat(catalogConstraints.getTopP()).isFalse();
+                assertThat(catalogConstraints.getTopK()).isFalse();
+
                 var overrides = new ModelParameterMappings();
                 var language = new ModelParameterMappings.LanguageMappings();
                 language.setTemperature(selection("chat.temperature"));
                 language.setTopP(selection("chat.top-p"));
                 language.setTopK(selection("chat.top-k"));
                 overrides.setLanguage(language);
-                if (modelOverride) spec.setParameterMappings(overrides);
-                else providerSpec.setParameterMappings(overrides);
-                var resolver = new EffectiveParameterMappingResolver();
-                var resolution = new ModelResolution(model, provider, new OpenAiProvider(), null);
+                if (modelOverride) {
+                    spec.setParameterMappings(overrides);
+                } else {
+                    providerSpec.setParameterMappings(overrides);
+                }
                 var resolved = resolver.resolveProfile(resolution);
                 assertThat(resolved.getConstraints().getTemperature()).isNull();
                 assertThat(resolved.getConstraints().getTopP()).isNull();
@@ -181,7 +194,8 @@ class LanguageModelWireParameterConstraintsTest {
                     + " requests native structured output, which is not supported by this model");
             }
             for (var allowed : List.of(new ModelParameterConstraints(), structuredSupport())) {
-                var probe = probe(context(adapter, allowed, RuntimeParameterMappings.empty(), nativeOptions));
+                var probe = probe(context(adapter, allowed, RuntimeParameterMappings.empty(),
+                    nativeOptions));
                 assertAccepted(probe, request(null, false, null));
             }
         }
@@ -193,12 +207,14 @@ class LanguageModelWireParameterConstraintsTest {
             var constraints = new ModelParameterConstraints();
             constraints.setStructuredOutput(false);
             for (var prepared : List.of(false, true)) {
-                var probe = probe(context(adapter, constraints, RuntimeParameterMappings.empty(), Map.of()));
+                var probe = probe(context(adapter, constraints, RuntimeParameterMappings.empty(),
+                    Map.of()));
                 var request = request(null, prepared, null);
                 request.setOutput(OutputSpec.json());
                 assertAccepted(probe, request);
                 assertThat(probe.bodies()).allSatisfy(body -> {
-                    assertThat(body).doesNotContainKeys("response_format", "format", "output_config");
+                    assertThat(body)
+                        .doesNotContainKeys("response_format", "format", "output_config");
                     if (body.get("text") instanceof Map<?, ?> text) {
                         assertThat(text.containsKey("format")).isFalse();
                     }
@@ -216,7 +232,8 @@ class LanguageModelWireParameterConstraintsTest {
             var nativeOptions = adapter == AdapterType.OPENAI_CHAT
                 ? Map.<String, Object>of("response_format", format)
                 : Map.<String, Object>of("text", Map.of("format", format));
-            assertAccepted(probe(context(adapter, constraints, RuntimeParameterMappings.empty(), nativeOptions)),
+            assertAccepted(probe(context(adapter, constraints, RuntimeParameterMappings.empty(),
+                nativeOptions)),
                 request(null, false, null));
         }
     }
@@ -240,12 +257,15 @@ class LanguageModelWireParameterConstraintsTest {
         var constraints = new ModelParameterConstraints();
         constraints.setStore(false);
         for (var adapter : List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_RESPONSES)) {
-            for (var nativeOptions : List.of(Map.<String, Object>of(), Map.<String, Object>of("store", false))) {
+            for (var nativeOptions : List.of(Map.<String, Object>of(),
+                Map.<String, Object>of("store", false))) {
                 for (var prepared : List.of(false, true)) {
-                    var probe = probe(context(adapter, constraints, RuntimeParameterMappings.empty(), nativeOptions));
+                    var probe = probe(context(adapter, constraints,
+                        RuntimeParameterMappings.empty(), nativeOptions));
                     assertAccepted(probe, request(null, prepared, null));
                     assertThat(probe.bodies()).allSatisfy(body -> {
-                        if (adapter == AdapterType.OPENAI_RESPONSES || nativeOptions.containsKey("store")) {
+                        if (adapter == AdapterType.OPENAI_RESPONSES
+                            || nativeOptions.containsKey("store")) {
                             assertThat(body).containsEntry("store", false);
                         }
                     });
@@ -268,10 +288,12 @@ class LanguageModelWireParameterConstraintsTest {
                     default -> "priority";
                 };
                 for (var prepared : List.of(false, true)) {
-                    assertRejected(probe(context(adapter, constraints, RuntimeParameterMappings.empty(),
+                    assertRejected(probe(context(adapter, constraints,
+                        RuntimeParameterMappings.empty(),
                             Map.of(field, value))), request(null, prepared, null),
                         field.equals("service_tier")
-                            ? "service_tier priority is not supported by this model; allowed values: []"
+                            ? "service_tier priority is not supported by this model; "
+                                + "allowed values: []"
                             : field + " is not supported by this model");
                 }
             }
@@ -369,7 +391,8 @@ class LanguageModelWireParameterConstraintsTest {
             assertRejected(rejected, request(null, prepared, null),
                 "options.num_predict must not exceed model limit 100");
             var accepted = probe(context(AdapterType.OLLAMA_CHAT, outputLimit(),
-                mapping(ModelParameter.MAX_OUTPUT_TOKENS, "ollama.num-predict", null), nativeOptions));
+                mapping(ModelParameter.MAX_OUTPUT_TOKENS, "ollama.num-predict", null),
+                nativeOptions));
             assertAccepted(accepted, request(50, prepared, null));
             assertThat(accepted.bodies()).allSatisfy(body -> {
                 var options = (Map<?, ?>) body.get("options");
@@ -383,13 +406,16 @@ class LanguageModelWireParameterConstraintsTest {
     void ollamaUnboundedOutputCannotBypassAnExplicitModelLimit() {
         for (var unlimited : List.of(-1, -2)) {
             for (var prepared : List.of(false, true)) {
-                var nativeOptions = Map.<String, Object>of("options", Map.of("num_predict", unlimited));
+                var nativeOptions = Map.<String, Object>of("options",
+                    Map.of("num_predict", unlimited));
                 var rejected = probe(context(AdapterType.OLLAMA_CHAT, outputLimit(),
                     RuntimeParameterMappings.empty(), nativeOptions));
                 assertRejected(rejected, request(null, prepared, null),
-                    "options.num_predict must specify a finite output limit when the model limit is 100");
+                    "options.num_predict must specify a finite output limit "
+                        + "when the model limit is 100");
                 var accepted = probe(context(AdapterType.OLLAMA_CHAT, outputLimit(),
-                    mapping(ModelParameter.MAX_OUTPUT_TOKENS, "ollama.num-predict", null), nativeOptions));
+                    mapping(ModelParameter.MAX_OUTPUT_TOKENS, "ollama.num-predict", null),
+                    nativeOptions));
                 assertAccepted(accepted, request(50, prepared, null));
                 assertThat(accepted.bodies()).allSatisfy(body ->
                     assertThat(((Map<?, ?>) body.get("options")).get("num_predict")).isEqualTo(50));
@@ -410,11 +436,13 @@ class LanguageModelWireParameterConstraintsTest {
                 Map.of("think", "low")));
             assertAccepted(accepted, request(null, prepared,
                 ReasoningOptions.effort(ReasoningOptions.Effort.HIGH)));
-            assertThat(accepted.bodies()).allSatisfy(body -> assertThat(body).containsEntry("think", "high"));
+            assertThat(accepted.bodies()).allSatisfy(body ->
+                assertThat(body).containsEntry("think", "high"));
         }
         constraints.getReasoning().setToggle(false);
         assertRejected(probe(context(AdapterType.OLLAMA_CHAT, constraints,
-                RuntimeParameterMappings.empty(), Map.of("think", true))), request(null, false, null),
+                RuntimeParameterMappings.empty(), Map.of("think", true))),
+                    request(null, false, null),
             "think value true is not supported by this model");
     }
 
@@ -435,7 +463,8 @@ class LanguageModelWireParameterConstraintsTest {
                 ? Map.<String, Object>of("reasoning", Map.of("effort", "low", "max_tokens", 1))
                 : Map.<String, Object>of("reasoning_effort", "low", "thinking_budget", 1);
             for (var prepared : List.of(false, true)) {
-                var probe = probe(context(adapter, reasoningConstraints(), mappings, nativeOptions));
+                var probe = probe(context(adapter, reasoningConstraints(), mappings,
+                    nativeOptions));
                 assertAccepted(probe, request(null, prepared,
                     ReasoningOptions.effort(ReasoningOptions.Effort.HIGH)));
                 assertThat(probe.bodies()).allSatisfy(body -> {
@@ -471,7 +500,8 @@ class LanguageModelWireParameterConstraintsTest {
                 assertThat(bounded.bodies()).allSatisfy(body ->
                     assertThat(new BigDecimal(option.wireValue(body).toString()))
                         .isEqualByComparingTo("4096"));
-                for (var budget : List.of(new BigInteger("18446744073709555712"), new BigDecimal("8192.5"))) {
+                for (var budget : List.of(new BigInteger("18446744073709555712"),
+                    new BigDecimal("8192.5"))) {
                     var unknown = probe(context(option.adapter(), new ModelParameterConstraints(),
                         RuntimeParameterMappings.empty(), option.nativeOptions(budget)));
                     assertAccepted(unknown, request(null, prepared, null));
@@ -489,7 +519,8 @@ class LanguageModelWireParameterConstraintsTest {
             NativeModelOptionsValidator.validate(nativeOptions);
             for (var prepared : List.of(false, true)) {
                 assertRejected(probe(context(option.adapter(), reasoningBudgetConstraints(),
-                        RuntimeParameterMappings.empty(), nativeOptions)), request(null, prepared, null),
+                        RuntimeParameterMappings.empty(), nativeOptions)),
+                            request(null, prepared, null),
                     "reasoning budget must not exceed 8192");
             }
         }
@@ -506,18 +537,21 @@ class LanguageModelWireParameterConstraintsTest {
         var probe = probe(context(AdapterType.OPENAI_CHAT, null,
             RuntimeParameterMappings.empty(), Map.of("max_tokens", 5000)));
         assertAccepted(probe, request(null, false, null));
-        assertThat(probe.bodies()).allSatisfy(body -> assertThat(body).containsEntry("max_tokens", 5000));
+        assertThat(probe.bodies()).allSatisfy(body ->
+            assertThat(body).containsEntry("max_tokens", 5000));
     }
 
     @Test
     void internalValidationPreservesToolContextAndIsAbsentWithoutConstraints() {
-        var options = ChatCompletionsOptions.builder().toolContext(Map.of("existing", "value")).build();
+        var options = ChatCompletionsOptions.builder()
+            .toolContext(Map.of("existing", "value")).build();
         var validator = new LanguageModelParameterValidator(context(AdapterType.OPENAI_CHAT,
             outputLimit(), RuntimeParameterMappings.empty(), Map.of()));
         var decorated = (ChatCompletionsOptions) validator.withRequestValidation(options);
         assertThat(decorated.getToolContext()).containsEntry("existing", "value");
         assertThat(options.getToolContext()).containsOnlyKeys("existing");
-        assertThatThrownBy(() -> ProviderRequestValidation.validate(decorated, Map.of("max_tokens", 101)))
+        assertThatThrownBy(() ->
+            ProviderRequestValidation.validate(decorated, Map.of("max_tokens", 101)))
             .hasMessage("max_tokens must not exceed model limit 100");
         var unconstrained = new LanguageModelParameterValidator(context(AdapterType.OPENAI_CHAT,
             null, RuntimeParameterMappings.empty(), Map.of()));
@@ -525,7 +559,8 @@ class LanguageModelWireParameterConstraintsTest {
     }
 
     private void assertRejected(WireProbe probe, GenerateTextRequest request, String message) {
-        StepVerifier.create(probe.model().generateText(request)).expectErrorMessage(message).verify();
+        StepVerifier.create(probe.model().generateText(request))
+            .expectErrorMessage(message).verify();
         var errors = probe.model().streamText(request).fullStream()
             .filter(part -> PartType.ERROR.equals(part.getType())).collectList().block();
         assertThat(errors).singleElement().satisfies(error ->
@@ -539,15 +574,17 @@ class LanguageModelWireParameterConstraintsTest {
             return Mono.empty();
         }).block();
         probe.model().streamText(request).fullStream().collectList().block();
-        // The fake HTTP exchange returns 400 after capture; reaching it proves pre-send validation passed.
+        // A captured request proves pre-send validation passed; the fake exchange then returns 400.
         assertThat(probe.bodies()).hasSize(2).allSatisfy(body ->
             assertThat(body.toString()).doesNotContain("ProviderRequestValidation", "existing"));
     }
 
-    private GenerateTextRequest request(Integer tokens, boolean prepared, ReasoningOptions reasoning) {
+    private GenerateTextRequest request(Integer tokens, boolean prepared,
+        ReasoningOptions reasoning) {
         return GenerateTextRequest.builder().prompt("Hello").maxRetries(0)
             .maxOutputTokens(prepared ? null : tokens).reasoning(reasoning)
-            .prepareStep(prepared ? step -> PreparedStep.builder().maxOutputTokens(tokens).build() : null)
+            .prepareStep(prepared
+                ? step -> PreparedStep.builder().maxOutputTokens(tokens).build() : null)
             .build();
     }
 
@@ -557,7 +594,7 @@ class LanguageModelWireParameterConstraintsTest {
             var output = new MockClientHttpRequest(request.method(), request.url());
             return request.writeTo(output, ExchangeStrategies.withDefaults())
                 .then(Mono.defer(output::getBodyAsString)).flatMap(body -> Mono.fromCallable(() -> {
-                    bodies.add(JSON.readValue(body, new com.fasterxml.jackson.core.type.TypeReference<>() { }));
+                    bodies.add(JSON.readValue(body, new TypeReference<>() { }));
                     return ClientResponse.create(HttpStatus.BAD_REQUEST)
                         .header("Content-Type", "application/json")
                         .body("{\"error\":{\"message\":\"wire probe captured\"}}").build();
@@ -593,7 +630,8 @@ class LanguageModelWireParameterConstraintsTest {
             case OLLAMA_CHAT -> new OllamaProvider();
             default -> new OpenAiProvider();
         };
-        return new ModelRuntimeContext("model", "test-model", "provider", provider.getProviderType(),
+        return new ModelRuntimeContext("model", "test-model", "provider",
+            provider.getProviderType(),
             adapter, provider, mappings, nativeOptions, constraints);
     }
 
@@ -625,23 +663,28 @@ class LanguageModelWireParameterConstraintsTest {
     }
 
     private Map<?, ?> samplingBody(AdapterType adapter, Map<String, Object> body) {
-        return adapter == AdapterType.OLLAMA_CHAT && body.get("options") instanceof Map<?, ?> options
+        return adapter == AdapterType.OLLAMA_CHAT
+            && body.get("options") instanceof Map<?, ?> options
             ? options : adapter == AdapterType.OLLAMA_CHAT ? Map.of() : body;
     }
 
     private RuntimeParameterMappings unsupportedSampling() {
-        var values = new EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping>(ModelParameter.class);
-        for (var parameter : List.of(ModelParameter.TEMPERATURE, ModelParameter.TOP_P, ModelParameter.TOP_K)) {
+        var values = new EnumMap<ModelParameter, EffectiveParameterMappings.EffectiveMapping>(
+            ModelParameter.class);
+        for (var parameter : List.of(ModelParameter.TEMPERATURE, ModelParameter.TOP_P,
+            ModelParameter.TOP_K)) {
             values.put(parameter, new EffectiveParameterMappings.EffectiveMapping(
                 ModelParameterMappings.Mode.UNSUPPORTED, null, null,
                 EffectiveParameterMappings.Source.CATALOG));
         }
-        return new RuntimeParameterMappings(new EffectiveParameterMappings(values), null, "model", "provider");
+        return new RuntimeParameterMappings(new EffectiveParameterMappings(values), null, "model",
+            "provider");
     }
 
     private GenerateTextRequest samplingRequest(boolean prepared) {
         return GenerateTextRequest.builder().prompt("Hello").maxRetries(0)
-            .temperature(prepared ? null : 0.7).topP(prepared ? null : 0.9).topK(prepared ? null : 40)
+            .temperature(prepared ? null : 0.7)
+                .topP(prepared ? null : 0.9).topK(prepared ? null : 40)
             .prepareStep(prepared ? step -> PreparedStep.builder()
                 .temperature(0.7).topP(0.9).topK(40).build() : null).build();
     }
@@ -654,7 +697,8 @@ class LanguageModelWireParameterConstraintsTest {
     }
 
     private Map<String, Object> structuredOptions(AdapterType adapter) {
-        var schema = Map.of("type", "object", "properties", Map.of("answer", Map.of("type", "string")));
+        var schema = Map.of("type", "object",
+            "properties", Map.of("answer", Map.of("type", "string")));
         return switch (adapter) {
             case OPENAI_CHAT -> Map.of("response_format", Map.of("type", "json_schema",
                 "json_schema", Map.of("name", "answer", "schema", schema)));
@@ -718,9 +762,11 @@ class LanguageModelWireParameterConstraintsTest {
     }
 
     private List<ReasoningBudgetOptionCase> reasoningBudgetOptions() {
-        return List.of(new ReasoningBudgetOptionCase(AdapterType.OPENAI_CHAT, null, "thinking_budget"),
+        return List.of(new ReasoningBudgetOptionCase(AdapterType.OPENAI_CHAT, null,
+            "thinking_budget"),
             new ReasoningBudgetOptionCase(AdapterType.OPENAI_RESPONSES, "reasoning", "max_tokens"),
-            new ReasoningBudgetOptionCase(AdapterType.DASHSCOPE_MESSAGES, "thinking", "budget_tokens"));
+            new ReasoningBudgetOptionCase(AdapterType.DASHSCOPE_MESSAGES, "thinking",
+                "budget_tokens"));
     }
 
     private record ReasoningBudgetOptionCase(AdapterType adapter, String parent, String field) {

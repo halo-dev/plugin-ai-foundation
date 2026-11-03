@@ -17,7 +17,6 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -34,13 +33,14 @@ import reactor.core.publisher.Flux;
 import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.JsonNodes;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 import run.halo.aifoundation.provider.support.ReasoningProviderMetadata;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
-import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 
 /** Reusable Anthropic Messages wire model with provider-owned policy hooks. */
 public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatModel {

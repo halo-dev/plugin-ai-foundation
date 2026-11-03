@@ -2,6 +2,7 @@ import groovy.json.JsonGenerator
 import org.gradle.api.GradleException
 
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
@@ -16,6 +17,22 @@ import java.util.zip.GZIPOutputStream
 
 /** A strict reader keeps duplicate keys and invalid JSON from silently changing the catalog. */
 class ModelsDevSnapshotJson {
+    private static final int MAX_DEPTH = 256
+    private static final char OBJECT_START = '{'
+    private static final char OBJECT_END = '}'
+    private static final char ARRAY_START = '['
+    private static final char ARRAY_END = ']'
+    private static final char QUOTE = '"'
+    private static final char ESCAPE = '\\'
+    private static final char COLON = ':'
+    private static final char COMMA = ','
+    private static final char MINUS = '-'
+    private static final char ZERO = '0'
+    private static final char NINE = '9'
+    private static final char SPACE = ' '
+    private static final Set<Character> WHITESPACE = [' ' as char, '\t' as char,
+        '\n' as char, '\r' as char] as Set
+
     private final String source
     private int position
     private int depth
@@ -25,104 +42,140 @@ class ModelsDevSnapshotJson {
     }
 
     Object read() {
-        def result = value()
-        whitespace()
+        def result = readValue()
+        skipWhitespace()
         require(position == source.length(), 'Unexpected content after JSON value')
         return result
     }
 
-    private Object value() {
-        whitespace()
+    private Object readValue() {
+        skipWhitespace()
         require(position < source.length(), 'Unexpected end of JSON')
-        require(++depth <= 256, 'JSON nesting exceeds the supported depth')
+        require(++depth <= MAX_DEPTH, 'JSON nesting exceeds the supported depth')
         try {
-            int token = source.charAt(position)
-            if (token == 123) return object()
-            if (token == 91) return array()
-            if (token == 34) return string()
+            char token = source.charAt(position)
+            switch (token) {
+                case OBJECT_START:
+                    return readObject()
+                case ARRAY_START:
+                    return readArray()
+                case QUOTE:
+                    return readString()
+            }
             for (String literal : ['true', 'false', 'null']) {
                 if (source.startsWith(literal, position)) {
                     position += literal.length()
                     return literal == 'null' ? null : literal == 'true'
                 }
             }
-            if (token == 45 || (token >= 48 && token <= 57)) return number()
+            if (token == MINUS || (token >= ZERO && token <= NINE)) {
+                return readNumber()
+            }
             throw new GradleException('Invalid JSON value')
         } finally {
             depth--
         }
     }
 
-    private Map<String, Object> object() {
+    private Map<String, Object> readObject() {
         position++
         def result = new LinkedHashMap<String, Object>()
-        whitespace()
-        if (consume(125)) return result
+        skipWhitespace()
+        if (consume(OBJECT_END)) {
+            return result
+        }
         while (true) {
-            whitespace()
-            require(position < source.length() && source.charAt(position) == 34, 'Expected JSON object key')
-            String key = string()
+            skipWhitespace()
+            require(position < source.length() && source.charAt(position) == QUOTE,
+                'Expected JSON object key')
+            String key = readString()
             require(!result.containsKey(key), "Duplicate JSON key: ${key}")
-            whitespace()
-            require(consume(58), 'Expected colon after JSON object key')
-            result.put(key, value())
-            whitespace()
-            if (consume(125)) return result
-            require(consume(44), 'Expected comma between JSON object entries')
+            skipWhitespace()
+            require(consume(COLON), 'Expected colon after JSON object key')
+            result.put(key, readValue())
+            skipWhitespace()
+            if (consume(OBJECT_END)) {
+                return result
+            }
+            require(consume(COMMA), 'Expected comma between JSON object entries')
         }
     }
 
-    private List<Object> array() {
+    private List<Object> readArray() {
         position++
         def result = new ArrayList<Object>()
-        whitespace()
-        if (consume(93)) return result
+        skipWhitespace()
+        if (consume(ARRAY_END)) {
+            return result
+        }
         while (true) {
-            result.add(value())
-            whitespace()
-            if (consume(93)) return result
-            require(consume(44), 'Expected comma between JSON array values')
+            result.add(readValue())
+            skipWhitespace()
+            if (consume(ARRAY_END)) {
+                return result
+            }
+            require(consume(COMMA), 'Expected comma between JSON array values')
         }
     }
 
-    private String string() {
+    private String readString() {
         position++
         def result = new StringBuilder()
         while (position < source.length()) {
-            int character = source.charAt(position++)
-            if (character == 34) return result.toString()
-            require(character >= 32, 'Unescaped control character in JSON string')
-            if (character != 92) {
-                result.append((char) character)
+            char character = source.charAt(position++)
+            if (character == QUOTE) {
+                return result.toString()
+            }
+            require(character >= SPACE, 'Unescaped control character in JSON string')
+            if (character != ESCAPE) {
+                result.append(character)
                 continue
             }
-            require(position < source.length(), 'Unterminated JSON escape')
-            int escape = source.charAt(position++)
-            switch (escape) {
-                case 34: case 92: case 47: result.append((char) escape); break
-                case 98: result.append((char) 8); break
-                case 102: result.append((char) 12); break
-                case 110: result.append((char) 10); break
-                case 114: result.append((char) 13); break
-                case 116: result.append((char) 9); break
-                case 117:
-                    require(position + 4 <= source.length(), 'Incomplete JSON Unicode escape')
-                    String hex = source.substring(position, position + 4)
-                    require(hex ==~ /[0-9a-fA-F]{4}/, 'Invalid JSON Unicode escape')
-                    result.append((char) Integer.parseInt(hex, 16))
-                    position += 4
-                    break
-                default: throw new GradleException('Invalid JSON string escape')
-            }
+            result.append(readEscape())
         }
         throw new GradleException('Unterminated JSON string')
     }
 
-    private ModelsDevSnapshotNumber number() {
+    private char readEscape() {
+        require(position < source.length(), 'Unterminated JSON escape')
+        char escape = source.charAt(position++)
+        switch (escape) {
+            case QUOTE:
+            case ESCAPE:
+            case '/' as char:
+                return escape
+            case 'b' as char:
+                return '\b' as char
+            case 'f' as char:
+                return '\f' as char
+            case 'n' as char:
+                return '\n' as char
+            case 'r' as char:
+                return '\r' as char
+            case 't' as char:
+                return '\t' as char
+            case 'u' as char:
+                return readUnicodeEscape()
+            default:
+                throw new GradleException('Invalid JSON string escape')
+        }
+    }
+
+    private char readUnicodeEscape() {
+        require(position + 4 <= source.length(), 'Incomplete JSON Unicode escape')
+        String hex = source.substring(position, position + 4)
+        require(hex ==~ /[0-9a-fA-F]{4}/, 'Invalid JSON Unicode escape')
+        position += 4
+        return (char) Integer.parseInt(hex, 16)
+    }
+
+    private ModelsDevSnapshotNumber readNumber() {
         int start = position
         while (position < source.length()) {
-            int character = source.charAt(position)
-            if (character == 44 || character == 93 || character == 125 || character in [32, 9, 10, 13]) break
+            char character = source.charAt(position)
+            if (character in [COMMA, ARRAY_END, OBJECT_END] || character in WHITESPACE) {
+                break
+            }
             position++
         }
         String text = source.substring(start, position)
@@ -130,11 +183,13 @@ class ModelsDevSnapshotJson {
         return new ModelsDevSnapshotNumber(text)
     }
 
-    private void whitespace() {
-        while (position < source.length() && (int) source.charAt(position) in [32, 9, 10, 13]) position++
+    private void skipWhitespace() {
+        while (position < source.length() && source.charAt(position) in WHITESPACE) {
+            position++
+        }
     }
 
-    private boolean consume(int expected) {
+    private boolean consume(char expected) {
         if (position < source.length() && source.charAt(position) == expected) {
             position++
             return true
@@ -143,7 +198,9 @@ class ModelsDevSnapshotJson {
     }
 
     private static void require(boolean condition, String message) {
-        if (!condition) throw new GradleException(message)
+        if (!condition) {
+            throw new GradleException(message)
+        }
     }
 }
 
@@ -156,7 +213,9 @@ class ModelsDevSnapshotNumber {
     }
 
     @Override
-    String toString() { literal }
+    String toString() {
+        return literal
+    }
 }
 
 class ModelsDevSnapshot {
@@ -165,7 +224,10 @@ class ModelsDevSnapshot {
     static final String METADATA_NAME = 'metadata.json'
     static final int MAX_BYTES = 16 * 1024 * 1024
     static final int MAX_METADATA_BYTES = 16 * 1024
-    private static final def JSON_STRINGS = new JsonGenerator.Options().disableUnicodeEscaping().build()
+    private static final Set<String> SUPPORTED_MODEL_TYPES =
+        ['chat', 'image', 'embedding', 'reranking'] as Set
+    private static final JsonGenerator JSON_STRINGS =
+        new JsonGenerator.Options().disableUnicodeEscaping().build()
 
     static Map verify(Path directory) {
         def metadata = parse(readFile(directory.resolve(METADATA_NAME), MAX_METADATA_BYTES))
@@ -224,8 +286,10 @@ class ModelsDevSnapshot {
         connection.setRequestProperty('Accept-Encoding', 'gzip')
         connection.setRequestProperty('User-Agent', 'halo-ai-foundation-models-dev-snapshot/2')
         try {
-            require(connection.responseCode == 200, "Snapshot download requires HTTP 200; received ${connection.responseCode}")
-            String encoding = (connection.getHeaderField('Content-Encoding') ?: 'identity').trim().toLowerCase(Locale.ROOT)
+            require(connection.responseCode == 200,
+                "Snapshot download requires HTTP 200; received ${connection.responseCode}")
+            String encoding = (connection.getHeaderField('Content-Encoding') ?: 'identity')
+                .trim().toLowerCase(Locale.ROOT)
             require(encoding in ['', 'identity', 'gzip'], "Unsupported response content encoding: ${encoding}")
             return connection.inputStream.withCloseable { stream ->
                 decode(readLimited(stream, MAX_BYTES, 'Downloaded snapshot'), encoding == 'gzip')
@@ -251,7 +315,9 @@ class ModelsDevSnapshot {
         require(bytes.length <= MAX_BYTES, 'Snapshot exceeds the 16 MiB limit')
         boolean gzip = compressed != null ? compressed : bytes.length >= 2 &&
             (bytes[0] & 0xff) == 0x1f && (bytes[1] & 0xff) == 0x8b
-        if (!gzip) return bytes
+        if (!gzip) {
+            return bytes
+        }
         return new GZIPInputStream(new ByteArrayInputStream(bytes)).withCloseable {
             readLimited(it, MAX_BYTES, 'Decompressed snapshot')
         }
@@ -267,24 +333,62 @@ class ModelsDevSnapshot {
     private static Map validateCatalog(Object document) {
         require(document instanceof Map && !document.isEmpty(), 'Catalog must be a nonempty provider object')
         int modelCount = 0
-        boolean openAiChat = false
+        boolean usableOpenAiChat = false
         document.each { providerId, provider ->
-            require(nonempty(providerId) && provider instanceof Map, 'Catalog provider must have an ID and object value')
+            require(nonempty(providerId) && provider instanceof Map,
+                'Catalog provider must have an ID and object value')
             require(provider.id == providerId, "Provider ID does not match its key: ${providerId}")
             require(provider.models instanceof Map, "Provider models must be an object: ${providerId}")
             provider.models.each { modelId, model ->
                 require(nonempty(modelId) && model instanceof Map, "Invalid model in provider ${providerId}")
                 require(model.id == modelId, "Model ID does not match its key: ${providerId}/${modelId}")
                 require(nonempty(model.type), "Model type must be a string: ${providerId}/${modelId}")
+                boolean usable = validateRuntimeModel(model, "${providerId}/${modelId}")
                 modelCount++
-                openAiChat |= providerId == 'openai' && model.type == 'chat'
+                usableOpenAiChat |= providerId == 'openai' && model.type == 'chat' && usable
             }
         }
-        require(openAiChat, 'Catalog must contain at least one openai chat model')
+        require(usableOpenAiChat, 'Catalog must contain at least one usable openai chat model')
         return [providerCount: document.size(), modelCount: modelCount]
     }
 
-    private static boolean nonempty(Object value) { value instanceof String && !value.isBlank() }
+    /** Match ModelsDevCatalog.parseModel so a verified snapshot can be used by the runtime. */
+    private static boolean validateRuntimeModel(Map model, String modelPath) {
+        if (!(model.type in SUPPORTED_MODEL_TYPES)) {
+            return false
+        }
+        def modalities = objectFields(model.modalities)
+        validateStringList(modalities.output, "${modelPath}.modalities.output")
+        if (model.type == 'chat' && modalities.output != null && !modalities.output.contains('text')) {
+            return false
+        }
+        validateStringList(modalities.input, "${modelPath}.modalities.input")
+
+        def capabilities = objectFields(model.capabilities)
+        def tools = objectFields(capabilities.tools)
+        def reasoning = objectFields(capabilities.reasoning)
+        validateBoolean(tools.supported, "${modelPath}.capabilities.tools.supported")
+        validateBoolean(capabilities.structured_output, "${modelPath}.capabilities.structured_output")
+        validateBoolean(reasoning.supported, "${modelPath}.capabilities.reasoning.supported")
+        return true
+    }
+
+    private static Map objectFields(Object value) {
+        return value instanceof Map ? value : Collections.emptyMap()
+    }
+
+    private static void validateStringList(Object value, String field) {
+        require(value == null || (value instanceof List && value.every { it instanceof String }),
+            "${field} must be an array of strings or null")
+    }
+
+    private static void validateBoolean(Object value, String field) {
+        require(value == null || value instanceof Boolean, "${field} must be a boolean or null")
+    }
+
+    private static boolean nonempty(Object value) {
+        return value instanceof String && !value.isBlank()
+    }
 
     private static boolean integerEquals(Object value, int expected) {
         return value instanceof ModelsDevSnapshotNumber && value.literal == expected.toString()
@@ -295,7 +399,7 @@ class ModelsDevSnapshot {
         writeJson(document, builder)
         def encoded = StandardCharsets.UTF_8.newEncoder()
             .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
-            .encode(java.nio.CharBuffer.wrap(builder))
+            .encode(CharBuffer.wrap(builder))
         byte[] bytes = new byte[encoded.remaining()]
         encoded.get(bytes)
         require(bytes.length <= MAX_BYTES, 'Canonical snapshot exceeds the 16 MiB limit')
@@ -307,7 +411,9 @@ class ModelsDevSnapshot {
             builder.append('{')
             boolean first = true
             new TreeMap(value).each { key, child ->
-                if (!first) builder.append(',')
+                if (!first) {
+                    builder.append(',')
+                }
                 first = false
                 builder.append(JSON_STRINGS.toJson(key)).append(':')
                 writeJson(child, builder)
@@ -316,7 +422,9 @@ class ModelsDevSnapshot {
         } else if (value instanceof List) {
             builder.append('[')
             value.eachWithIndex { child, index ->
-                if (index) builder.append(',')
+                if (index > 0) {
+                    builder.append(',')
+                }
                 writeJson(child, builder)
             }
             builder.append(']')
@@ -399,10 +507,15 @@ class ModelsDevSnapshot {
             replaced.reverseEach { destination ->
                 Path backup = backups[destination]
                 try {
-                    if (backup == null) Files.deleteIfExists(destination)
-                    else move(backup, destination)
+                    if (backup == null) {
+                        Files.deleteIfExists(destination)
+                    } else {
+                        move(backup, destination)
+                    }
                 } catch (Throwable rollbackFailure) {
-                    if (backup != null) retainedBackups.add(backup)
+                    if (backup != null) {
+                        retainedBackups.add(backup)
+                    }
                     failure.addSuppressed(rollbackFailure)
                 }
             }
@@ -414,7 +527,9 @@ class ModelsDevSnapshot {
     }
 
     private static void require(boolean condition, String message) {
-        if (!condition) throw new GradleException(message)
+        if (!condition) {
+            throw new GradleException(message)
+        }
     }
 }
 

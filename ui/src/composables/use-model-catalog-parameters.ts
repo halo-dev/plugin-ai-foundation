@@ -2,6 +2,11 @@ import { aiConsoleApiClient } from '@/api'
 import type { AiModel, ModelParameterProfile } from '@/api/generated'
 import { computed, onScopeDispose, shallowReactive, shallowRef, watch, type Ref } from 'vue'
 
+interface CatalogRequest {
+  controller: AbortController
+  promise: Promise<void>
+}
+
 export function useModelCatalogParameters(
   model: Readonly<Ref<AiModel | undefined>>,
   providerType: Readonly<Ref<string>>,
@@ -11,15 +16,39 @@ export function useModelCatalogParameters(
   const snapshots = shallowReactive(new Map<string, ModelParameterProfile>())
   const initialSnapshot = shallowRef<{
     providerName?: string
+    modelType?: AiModel['spec']['modelType']
     profile?: ModelParameterProfile
   }>()
-  function snapshotKey(providerName: string, type: string, modelId: string, adapterType: string) {
-    return JSON.stringify([providerName, type, modelId, 'language', adapterType])
+  function snapshotKey(
+    providerName: string,
+    type: string,
+    modelId: string,
+    modelType: AiModel['spec']['modelType'],
+    adapterType: string,
+  ) {
+    return JSON.stringify([providerName, type, modelId, modelType, adapterType])
   }
-  function retainSnapshot(providerName: string | undefined, profile?: ModelParameterProfile) {
-    if (providerName && profile?.providerType && profile.modelId && profile.adapterType) {
+  function retainSnapshot(
+    providerName: string | undefined,
+    modelType: AiModel['spec']['modelType'] | undefined,
+    profile?: ModelParameterProfile,
+  ) {
+    if (
+      providerName &&
+      modelType &&
+      profile?.providerType &&
+      profile.providerBaseUrl &&
+      profile.modelId &&
+      profile.adapterType
+    ) {
       snapshots.set(
-        snapshotKey(providerName, profile.providerType, profile.modelId, profile.adapterType),
+        snapshotKey(
+          providerName,
+          profile.providerType,
+          profile.modelId,
+          modelType,
+          profile.adapterType,
+        ),
         profile,
       )
     }
@@ -28,29 +57,42 @@ export function useModelCatalogParameters(
     initialProfile,
     (profile) => {
       const providerName = model.value?.spec.providerName
-      initialSnapshot.value = { providerName, profile }
-      retainSnapshot(providerName, profile)
+      const modelType = model.value?.spec.modelType
+      initialSnapshot.value = { providerName, modelType, profile }
+      retainSnapshot(providerName, modelType, profile)
     },
     { immediate: true },
   )
 
   const data = computed(() => {
     const spec = model.value?.spec
-    if (!spec?.providerName || spec.modelType !== 'language') return undefined
+    if (!spec?.providerName || !spec.modelType) return undefined
     if (providerType.value && spec.adapterType) {
       return snapshots.get(
-        snapshotKey(spec.providerName, providerType.value, spec.modelId, spec.adapterType),
+        snapshotKey(
+          spec.providerName,
+          providerType.value,
+          spec.modelId,
+          spec.modelType,
+          spec.adapterType,
+        ),
       )
     }
     // Before provider metadata supplies the identity, only the original snapshot is safe.
-    const profile = initialSnapshot.value?.profile
-    return !ready.value &&
-      spec.providerName === initialSnapshot.value?.providerName &&
-      profile?.modelId === spec.modelId &&
-      (!providerType.value || profile.providerType === providerType.value) &&
-      (!spec.adapterType || profile.adapterType === spec.adapterType)
-      ? profile
-      : undefined
+    const initial = initialSnapshot.value
+    const profile = initial?.profile
+    if (
+      ready.value ||
+      !profile?.providerBaseUrl ||
+      spec.providerName !== initial?.providerName ||
+      spec.modelType !== initial?.modelType ||
+      profile.modelId !== spec.modelId ||
+      (providerType.value && profile.providerType !== providerType.value) ||
+      (spec.adapterType && profile.adapterType !== spec.adapterType)
+    ) {
+      return undefined
+    }
+    return profile
   })
   const identity = computed(() => {
     const spec = model.value?.spec
@@ -64,7 +106,32 @@ export function useModelCatalogParameters(
     ])
   })
   let disposed = false
-  let currentRequest: { controller: AbortController; promise: Promise<void> } | undefined
+  let currentRequest: CatalogRequest | undefined
+
+  async function loadProfile(
+    request: CatalogRequest,
+    draft: AiModel,
+    expectedProviderType: string,
+  ) {
+    try {
+      const { data: profile } = await aiConsoleApiClient.model.getModelCatalogParameters(
+        { aiModel: draft },
+        { signal: request.controller.signal, timeout: 10_000 },
+      )
+      if (disposed || currentRequest !== request || request.controller.signal.aborted) return
+      if (
+        !profile?.providerBaseUrl ||
+        profile.providerType !== expectedProviderType ||
+        profile.modelId !== draft.spec.modelId ||
+        profile.adapterType !== draft.spec.adapterType
+      ) {
+        return
+      }
+      retainSnapshot(draft.spec.providerName, draft.spec.modelType, profile)
+    } catch {
+      // A missing or unavailable catalog must not erase a valid saved snapshot.
+    }
+  }
 
   watch(
     identity,
@@ -78,36 +145,17 @@ export function useModelCatalogParameters(
         !providerType.value ||
         !draft?.spec.providerName ||
         !draft.spec.modelId ||
-        draft.spec.modelType !== 'language' ||
+        !draft.spec.modelType ||
         !draft.spec.adapterType
       ) {
         return
       }
-      const expectedProviderType = providerType.value
-      const request = { controller: new AbortController(), promise: Promise.resolve() }
+      const request: CatalogRequest = {
+        controller: new AbortController(),
+        promise: Promise.resolve(),
+      }
       currentRequest = request
-      request.promise = (async () => {
-        try {
-          const { data: profile } = await aiConsoleApiClient.model.getModelCatalogParameters(
-            { aiModel: draft },
-            { signal: request.controller.signal, timeout: 10_000 },
-          )
-          if (
-            disposed ||
-            currentRequest !== request ||
-            request.controller.signal.aborted ||
-            !profile ||
-            profile.providerType !== expectedProviderType ||
-            profile.modelId !== draft.spec.modelId ||
-            profile.adapterType !== draft.spec.adapterType
-          ) {
-            return
-          }
-          retainSnapshot(draft.spec.providerName, profile)
-        } catch {
-          // A missing or unavailable catalog must not erase a valid saved snapshot.
-        }
-      })()
+      request.promise = loadProfile(request, draft, providerType.value)
     },
     { immediate: true, flush: 'sync' },
   )

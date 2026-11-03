@@ -5,6 +5,8 @@ import { computed } from 'vue'
 
 const props = defineProps<{ match: ModelCatalogMatch }>()
 const labels: Record<string, string> = {
+  modelType: '模型类型',
+  adapterType: '调用接口',
   'features.tool-call': '工具调用',
   'features.structured-output': '结构化输出',
   'features.reasoning': '推理',
@@ -14,6 +16,8 @@ const labels: Record<string, string> = {
   'language.fileInput': '文件输入',
   'language.inputMediaTypes': '媒体类型',
   'language.inputSources': '输入来源',
+  'imageGeneration.outputMediaTypes': '图片输出格式',
+  parameters: '模型参数',
 }
 const fields = computed(() =>
   [...new Set(props.match.fields?.map((field) => labels[field] || field))].join('、'),

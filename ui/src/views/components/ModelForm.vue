@@ -38,7 +38,6 @@ import {
   featuresWithConstraints,
   parameterFeatures,
   withFeatureSupport,
-  type ParameterFeature,
 } from '@/utils/model-feature-support'
 import {
   mappingsForModelType,
@@ -502,14 +501,13 @@ function buildCapabilitySources(
 }
 
 function sourceFor(
-  domain: keyof ModelCapabilitySources,
+  domain: 'language' | 'imageGeneration',
   nextDomain?: LanguageCapability | ImageGenerationCapability,
 ) {
   if (!nextDomain) {
     return undefined
   }
-  const previousDomain =
-    props.formState?.capabilities?.[domain as keyof NonNullable<AiModel['spec']['capabilities']>]
+  const previousDomain = props.formState?.capabilities?.[domain]
   const previousSource =
     props.formState?.capabilitySources?.[domain] || props.formState?.capabilities?.sources?.[domain]
   if (sameJson(previousDomain, nextDomain)) {
@@ -549,11 +547,12 @@ function onFeatureChange(feature: AiModelSpecFeaturesEnum, event: Event) {
   if (input.checked) features.add(feature)
   else features.delete(feature)
   featureBaseline.value = [...features]
-  if (!parameterFeatures.includes(feature as ParameterFeature)) return
+  const parameterFeature = parameterFeatures.find((item) => item === feature)
+  if (!parameterFeature) return
   // Only a checkbox interaction creates an override; FormKit value sync must not do so.
   parameterConstraints.value = withFeatureSupport(
     parameterConstraints.value,
-    feature as ParameterFeature,
+    parameterFeature,
     input.checked,
   )
 }
@@ -659,12 +658,13 @@ function sameJson(a: unknown, b: unknown) {
       />
     </AdvancedSettingsCollapsible>
 
-    <AdvancedSettingsCollapsible v-if="isLanguageCapabilityVisible" title="Token 限制">
+    <AdvancedSettingsCollapsible title="Token 限制">
       <p v-if="inheritedParametersError" class=":uno: text-xs text-red-600">
         暂时无法获取继承配置，请稍后重试。
       </p>
       <ModelParameterConstraintFields
         v-model="parameterConstraints"
+        :model-type="selectedModelType"
         :inherited="inheritedParameters?.constraints"
       />
     </AdvancedSettingsCollapsible>

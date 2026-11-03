@@ -3,6 +3,7 @@ package run.halo.aifoundation.provider;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -28,10 +29,10 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsNa
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptionsFactory;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
-import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -56,8 +57,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
 
     @Override
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
-        var defaults =
-            new java.util.EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
+        var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes()));
         var reasoningTemplate = defaultReasoningMappingTemplate();
         if (reasoningTemplate != null && !reasoningTemplate.isBlank()) {
@@ -85,8 +85,7 @@ public abstract class AbstractAiProviderType implements AiProviderType {
     @Override
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
         AdapterType adapterType) {
-        var defaults = new java.util.EnumMap<ModelParameter, DefaultParameterMapping>(
-            ModelParameter.class);
+        var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(getDefaultParameterMappings());
         if (adapterType == null || adapterType.getModelType() != ModelType.LANGUAGE) {
             return Map.copyOf(defaults);
@@ -310,13 +309,14 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         if (model == null || model.modelType() != ModelType.LANGUAGE || node == null) {
             return model;
         }
-        var evidence = new java.util.EnumMap<ModelFeature, Boolean>(ModelFeature.class);
+        var evidence = new EnumMap<ModelFeature, Boolean>(ModelFeature.class);
         if (node.get("features") instanceof Collection<?>) {
-            DiscoveryFeatureEvidence.declared(evidence, explicitFeatures(node, ModelType.LANGUAGE),
-                ModelFeature.VISION, ModelFeature.AUDIO_INPUT, ModelFeature.TOOL_CALL,
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(evidence,
+                explicitFeatures(node, ModelType.LANGUAGE), ModelFeature.VISION,
+                ModelFeature.AUDIO_INPUT, ModelFeature.TOOL_CALL,
                 ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
         }
-        evidence.putAll(DiscoveryFeatureEvidence.booleans(node));
+        evidence.putAll(DiscoveryFeatureEvidence.fromBooleanFields(node));
         var features = new LinkedHashSet<>(model.features());
         evidence.forEach((feature, enabled) -> {
             if (enabled) {
@@ -424,7 +424,8 @@ public abstract class AbstractAiProviderType implements AiProviderType {
             "jsonschema")) {
             features.add(ModelFeature.STRUCTURED_OUTPUT);
         }
-        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "tools", "functioncalling", "toolcall")) {
+        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS,
+            "tools", "functioncalling", "toolcall")) {
             features.add(ModelFeature.TOOL_CALL);
         }
         return Set.copyOf(features);
