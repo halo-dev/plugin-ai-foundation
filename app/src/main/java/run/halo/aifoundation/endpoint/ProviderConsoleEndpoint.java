@@ -343,7 +343,8 @@ public class ProviderConsoleEndpoint implements CustomEndpoint {
                         : providerType.recommendAdapterType(dm).orElse(null),
                     dm.capabilities(),
                     dm.capabilitySources(),
-                    dm.catalogMatch()
+                    dm.catalogMatch(),
+                    dm.catalogParameters()
                 ))
                 .toList()
             )

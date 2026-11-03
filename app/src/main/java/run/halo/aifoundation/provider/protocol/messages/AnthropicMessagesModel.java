@@ -40,6 +40,7 @@ import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 
 /** Reusable Anthropic Messages wire model with provider-owned policy hooks. */
 public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatModel {
@@ -164,6 +165,7 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             body.put("stream", true);
         }
         profile.customizeRequest(body, prompt, options, stream);
+        ProviderRequestValidation.validate(options, body);
         return body;
     }
 

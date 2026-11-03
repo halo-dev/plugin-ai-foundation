@@ -34,6 +34,7 @@ import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 
 /** Reusable Responses adapter using stateless canonical message replay. */
 public class ResponsesModel implements ChatModel, ProviderStreamingChatModel {
@@ -174,6 +175,7 @@ public class ResponsesModel implements ChatModel, ProviderStreamingChatModel {
             body.put("stream_options", Map.of("include_obfuscation", false));
         }
         profile.customizeRequestBody(body, options, stream);
+        ProviderRequestValidation.validate(options, body);
         return body;
     }
 

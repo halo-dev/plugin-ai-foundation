@@ -19,6 +19,7 @@ import reactor.core.publisher.Flux;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
@@ -41,7 +42,8 @@ class ModelOptionConsoleEndpointTest {
             .thenReturn(Map.of("openai", openAiType, "ollama", ollamaType));
 
         var endpoint = new ModelOptionConsoleEndpoint(client, providerClientCache,
-            new ModelOptionAssembler(new ModelCapabilityService(), new ModelCapabilityMatcher()));
+            new ModelOptionAssembler(new ModelCapabilityService(), new ModelCapabilityMatcher(),
+                new EffectiveParameterMappingResolver()));
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()
             .build();

@@ -39,18 +39,30 @@ public class ModelCatalogEnricher {
             var entry = snapshot.catalog().find(providerId, model.modelId());
             if (entry == null || model.modelType() != ModelType.LANGUAGE
                 || model.source() == DiscoverySource.MANUAL
-                || source(model) == CapabilitySource.MANUAL
-                || (entry.apiOverride() != null && !ModelsDevProviderIdentity
-                    .normalize(entry.apiOverride()).equals(ModelsDevProviderIdentity.endpoint(provider, type)))) {
+                || source(model) == CapabilitySource.MANUAL) {
                 return model;
             }
             var adapter = model.adapterType() != null ? model.adapterType()
                 : type.recommendAdapterType(model).orElse(null);
             if (adapter == null || adapter.getModelType() != ModelType.LANGUAGE
-                || !type.getSupportedAdapterTypes().contains(adapter)) {
+                || !type.getSupportedAdapterTypes().contains(adapter)
+                || !ModelsDevProviderIdentity.matches(provider, type, entry, adapter)) {
                 return model;
             }
-            return supplement(model, entry, type, adapter, providerId, snapshot);
+            var supplemented = supplement(model, entry, type, adapter, providerId, snapshot);
+            var parameters = ModelCatalogParameterMapper.map(provider, type, model, entry, adapter);
+            if (parameters == null) {
+                return supplemented;
+            }
+            var fields = new ArrayList<>(supplemented.catalogMatch() == null
+                ? List.<String>of() : supplemented.catalogMatch().fields());
+            fields.add("parameters");
+            return supplemented.toBuilder().catalogParameters(parameters)
+                .catalogMatch(new ModelCatalogMatch(providerId, model.modelId(), snapshot.fetchedAt(),
+                    List.copyOf(fields)))
+                .confidence(supplemented.confidence() == DiscoveryConfidence.LOW
+                    ? DiscoveryConfidence.MEDIUM : supplemented.confidence())
+                .build();
         }).toList();
     }
 
@@ -75,14 +87,16 @@ public class ModelCatalogEnricher {
                 language.setInputMediaTypes(null);
                 language.setInputSources(null);
             }
-            var image = (providerImage != null ? providerImage : entry.inputs().contains("image"))
+            var imageTypes = imageTypes(entry.inputs());
+            var audioTypes = audioTypes(entry.inputs());
+            var image = (providerImage != null ? providerImage : !imageTypes.isEmpty())
                 && supported.contains(ModelFeature.VISION);
-            var audio = (providerAudio != null ? providerAudio : entry.inputs().contains("audio"))
+            var audio = (providerAudio != null ? providerAudio : !audioTypes.isEmpty())
                 && supported.contains(ModelFeature.AUDIO_INPUT)
                 && adapter.getProtocol() == AdapterProtocol.CHAT_COMPLETIONS;
             // The generic Responses adapter represents PDF as input_file. Chat Completions
             // cannot represent arbitrary files; video and attachment alone enable nothing.
-            var pdf = entry.inputs().contains("pdf")
+            var pdf = (entry.inputs().contains("pdf") || entry.inputs().contains("application/pdf"))
                 && adapter.getProtocol() == AdapterProtocol.RESPONSES;
             feature(model, features, fields, supported, ModelFeature.VISION, image);
             feature(model, features, fields, supported, ModelFeature.AUDIO_INPUT, audio);
@@ -100,11 +114,13 @@ public class ModelCatalogEnricher {
             if (language.getInputMediaTypes() == null) {
                 var mediaTypes = new ArrayList<String>();
                 if (image && Boolean.TRUE.equals(language.getImageInput())) {
-                    mediaTypes.addAll(List.of("image/png", "image/jpeg"));
+                    mediaTypes.addAll(imageTypes.isEmpty() ? List.of("image/png", "image/jpeg")
+                        : imageTypes);
                 }
                 if (Boolean.TRUE.equals(language.getFileInput())) {
                     if (audio) {
-                        mediaTypes.addAll(List.of("audio/wav", "audio/mpeg"));
+                        mediaTypes.addAll(audioTypes.isEmpty() ? List.of("audio/wav", "audio/mpeg")
+                            : audioTypes);
                     }
                     if (pdf) {
                         mediaTypes.add("application/pdf");
@@ -120,7 +136,8 @@ public class ModelCatalogEnricher {
             }
         }
         if (fields.isEmpty()) {
-            return model;
+            return features.equals(model.features()) ? model
+                : model.toBuilder().features(Set.copyOf(features)).build();
         }
         // Keep the published enum stable: older readers reject unknown source values.
         // Per-field catalog attribution belongs exclusively to catalogMatch.
@@ -183,6 +200,32 @@ public class ModelCatalogEnricher {
             features.remove(feature);
         }
         fields.add("features." + feature.getValue());
+    }
+
+    private List<String> imageTypes(List<String> inputs) {
+        var types = new LinkedHashSet<String>();
+        for (var input : inputs) {
+            if ("image".equals(input)) {
+                types.addAll(List.of("image/png", "image/jpeg"));
+            } else if (input.startsWith("image/") && !input.contains("*")) {
+                types.add(input);
+            }
+        }
+        return List.copyOf(types);
+    }
+
+    private List<String> audioTypes(List<String> inputs) {
+        var types = new LinkedHashSet<String>();
+        for (var input : inputs) {
+            // The Chat Completions adapter currently serializes only wav and mp3 input_audio.
+            switch (input) {
+                case "audio" -> types.addAll(List.of("audio/wav", "audio/mpeg"));
+                case "audio/wav", "audio/x-wav" -> types.add("audio/wav");
+                case "audio/mpeg", "audio/mp3" -> types.add("audio/mpeg");
+                default -> { }
+            }
+        }
+        return List.copyOf(types);
     }
 
     private CapabilitySource source(DiscoveredModel model) {

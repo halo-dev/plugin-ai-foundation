@@ -266,6 +266,7 @@ export function createModelFromDiscovered(
     discoveryConfidence: model.confidence || AiModelSpecDiscoveryConfidenceEnum.Low,
     ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
+    catalogParameters: model.catalogParameters,
   } as AiModel['spec']
 
   return {

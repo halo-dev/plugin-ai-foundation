@@ -1,5 +1,6 @@
 import type {
   DefaultParameterMappingInfo,
+  ModelParameterConstraints,
   ModelParameterDefinitionInfo,
   ModelParameterMappings,
   ParameterMappingTemplateInfo,
@@ -137,6 +138,52 @@ describe('ParameterMappingFields', () => {
     })
   })
 
+  it('keeps inherited reasoning details out of the form and preserves them when customizing', async () => {
+    const inherited: ModelParameterMappings = {
+      language: {
+        reasoning: {
+          mode: 'TEMPLATE',
+          template: 'reasoning.effort',
+          reasoningMapping: {
+            low: {
+              field: 'thinking.budget_tokens',
+              valueType: 'INTEGER',
+              value: '1024',
+              additionalValues: [{ field: 'thinking.type', valueType: 'STRING', value: 'enabled' }],
+            },
+          },
+        },
+      },
+    }
+    const wrapper = mount(ParameterMappingFields, {
+      props: {
+        context: 'model' as const,
+        modelType: 'language' as const,
+        adapterType: 'openai-chat',
+        definitions: [reasoningDefinition],
+        templates: [reasoningTemplate],
+        inheritedMappings: inherited,
+        'onUpdate:modelValue': (value) => wrapper.setProps({ modelValue: value }),
+      },
+      global: { plugins: [[FormKitPlugin, defaultConfig()]] },
+    })
+    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('thinking.budget_tokens = 1024')
+    expect(wrapper.text()).not.toContain('推理模式说明')
+    await wrapper.get('select').setValue('__reasoning_custom__')
+    await settleFormKit()
+    expect(wrapper.text()).not.toContain('仅在调用方选择')
+    await wrapper.get('input[name="reasoningMappingValue_low"]').setValue('2048')
+    await settleFormKit()
+    expect(wrapper.props('modelValue')?.language?.reasoning?.reasoningMapping?.low).toEqual({
+      field: 'thinking.budget_tokens',
+      valueType: 'INTEGER',
+      value: '2048',
+      additionalValues: [{ field: 'thinking.type', valueType: 'STRING', value: 'enabled' }],
+    })
+    expect(inherited.language?.reasoning?.reasoningMapping?.low?.value).toBe('1024')
+  })
+
   it('edits fixed reasoning intents as independent field and value mappings', async () => {
     const wrapper = mountReasoningHost()
     await wrapper.get('select').setValue('__reasoning_custom__')
@@ -208,7 +255,168 @@ describe('ParameterMappingFields', () => {
     expect(wrapper.findAll('.card-wrapper')).toHaveLength(5)
     expect(wrapper.text()).toContain('Top K')
   })
+
+  it.each(['temperature', 'topP', 'topK'] as const)(
+    'edits the existing %s support override through its single mapping control',
+    async (field) => {
+      const definition = languageDefinitions.find((entry) => entry.field === field)!
+      const wrapper = mountModelMapping(definition, { [field]: false, outputTokens: 4096 })
+      await settleFormKit()
+      const select = wrapper.get<HTMLSelectElement>('select')
+      expect(select.get('option[value="__unsupported__"]').attributes('selected')).toBeDefined()
+      expect(wrapper.props('constraints')).toEqual({ [field]: false, outputTokens: 4096 })
+      expect(wrapper.props('modelValue')).toBeUndefined()
+
+      await select.setValue(`chat.${field}`)
+      await settleFormKit()
+      expect(wrapper.props('constraints')).toEqual({ outputTokens: 4096 })
+      expect(wrapper.props('modelValue')?.language?.[field]).toEqual({
+        mode: 'TEMPLATE',
+        template: `chat.${field}`,
+      })
+      await select.setValue('__inherit__')
+      await settleFormKit()
+      expect(wrapper.props('modelValue')).toBeUndefined()
+      expect(wrapper.props('constraints')).toEqual({ outputTokens: 4096 })
+    },
+  )
+
+  it('preserves an existing positive support override until the user changes its mapping', async () => {
+    const wrapper = mountModelMapping(languageDefinitions[2]!, { topP: true })
+    await settleFormKit()
+    expect(wrapper.get<HTMLSelectElement>('select').element.value).toBe('__existing_support__')
+    expect(wrapper.props('constraints')).toEqual({ topP: true })
+    await wrapper.get('select').setValue('__inherit__')
+    await settleFormKit()
+    expect(wrapper.props('constraints')).toBeUndefined()
+    expect(wrapper.props('modelValue')).toBeUndefined()
+  })
+
+  it('clears the old reasoning support flag without discarding budgets or custom intent fields', async () => {
+    const mappings: ModelParameterMappings = {
+      language: {
+        reasoning: {
+          mode: 'TEMPLATE',
+          template: 'reasoning.effort',
+          reasoningMapping: {
+            low: { field: 'custom.reasoning', valueType: 'STRING', value: 'minimal' },
+          },
+        },
+      },
+    }
+    const wrapper = mountModelMapping(
+      reasoningDefinition!,
+      {
+        topP: false,
+        reasoning: { supported: false, toggle: false, budgetMaximum: 4096 },
+      },
+      mappings,
+    )
+    await settleFormKit()
+    expect(wrapper.get('option[value="__unsupported__"]').attributes('selected')).toBeDefined()
+    expect(wrapper.find('input[name="reasoningMappingField_low"]').exists()).toBe(false)
+    await wrapper.get('select').setValue('__reasoning_custom__')
+    await settleFormKit()
+    expect(wrapper.props('constraints')).toEqual({
+      topP: false,
+      reasoning: { budgetMaximum: 4096 },
+    })
+    expect(wrapper.props('modelValue')?.language?.reasoning).toEqual(mappings.language?.reasoning)
+    expect(
+      wrapper.get<HTMLInputElement>('input[name="reasoningMappingField_low"]').element.value,
+    ).toBe('custom.reasoning')
+  })
+
+  it.each(['field', 'value', 'valueType', 'toggle', 'inherit', 'unsupported'] as const)(
+    'clears obsolete reasoning controls only when its custom %s changes',
+    async (change) => {
+      const constraints = {
+        toolCalling: false,
+        reasoning: {
+          supported: true,
+          toggle: false,
+          efforts: ['low'],
+          budgetMinimum: 1024,
+          budgetMaximum: 8192,
+        },
+      }
+      const wrapper = mountModelMapping(reasoningDefinition!, constraints, {
+        language: {
+          reasoning: {
+            mode: 'TEMPLATE',
+            template: 'reasoning.effort',
+            reasoningMapping: {
+              low: {
+                field: 'reasoning_effort',
+                valueType: 'STRING',
+                value: 'low',
+                additionalValues: [
+                  { field: 'thinking.type', valueType: 'STRING', value: 'enabled' },
+                ],
+              },
+            },
+          },
+        },
+      })
+      await settleFormKit()
+      expect(wrapper.props('constraints')).toEqual(constraints)
+      const original = JSON.parse(JSON.stringify(wrapper.props('modelValue')))
+      await wrapper.get('input[name="reasoningMappingValue_low"]').setValue('low')
+      await settleFormKit()
+      expect(wrapper.props('constraints')).toEqual(constraints)
+      expect(wrapper.props('modelValue')).toEqual(original)
+      if (change === 'toggle') {
+        await wrapper.get('input[name="reasoningMappingEnabled_low"]').setValue(false)
+      } else if (change === 'valueType') {
+        await wrapper.get('select[name="reasoningMappingValueType_low"]').setValue('BOOLEAN')
+      } else if (change === 'inherit' || change === 'unsupported') {
+        await wrapper.get('select').setValue(`__${change}__`)
+      } else {
+        await wrapper
+          .get(`input[name="reasoningMapping${change === 'field' ? 'Field' : 'Value'}_low"]`)
+          .setValue(change === 'field' ? 'custom.effort' : 'max')
+      }
+      await settleFormKit()
+      expect(wrapper.props('constraints')).toEqual({
+        toolCalling: false,
+        reasoning: { budgetMinimum: 1024, budgetMaximum: 8192 },
+      })
+    },
+  )
 })
+
+function mountModelMapping(
+  definition: ModelParameterDefinitionInfo,
+  constraints?: ModelParameterConstraints,
+  modelValue?: ModelParameterMappings,
+) {
+  const wrapper = mount(ParameterMappingFields, {
+    props: {
+      context: 'model' as const,
+      modelType: 'language' as const,
+      adapterType: 'openai-chat',
+      definitions: [definition],
+      templates:
+        definition.parameter === 'REASONING'
+          ? [reasoningTemplate]
+          : [
+              {
+                ...temperatureTemplate,
+                parameter: definition.parameter,
+                id: `chat.${definition.field}`,
+                displayName: definition.field,
+                defaultField: definition.field,
+              },
+            ],
+      constraints,
+      modelValue,
+      'onUpdate:modelValue': (value) => wrapper.setProps({ modelValue: value }),
+      'onUpdate:constraints': (value) => wrapper.setProps({ constraints: value }),
+    },
+    global: { plugins: [[FormKitPlugin, defaultConfig()]] },
+  })
+  return wrapper
+}
 
 function mountHost() {
   return mount(

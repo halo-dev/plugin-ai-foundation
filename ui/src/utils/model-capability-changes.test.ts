@@ -169,4 +169,188 @@ describe('catalog capability edits', () => {
     })
     expect(switched.capabilities?.language?.inputMediaTypes || []).not.toContain('application/pdf')
   })
+  it('keeps catalog parameter snapshots on rename and removes them across model boundaries', () => {
+    const previous = catalogSpec()
+    previous.catalogParameters = {
+      modelId: 'example',
+      providerType: 'openai',
+      adapterType: 'openai-chat',
+      constraints: { temperature: false, outputTokens: 8192 },
+    }
+    expect(
+      reconcileModelCapabilities(previous, { ...previous, displayName: 'Renamed' })
+        .catalogParameters,
+    ).toEqual(previous.catalogParameters)
+    for (const change of [
+      { modelId: 'different' },
+      { providerName: 'different' },
+      { adapterType: 'openai-responses' as const },
+      { modelType: 'embedding' as const },
+    ]) {
+      expect(
+        reconcileModelCapabilities(previous, { ...previous, ...change }).catalogParameters,
+      ).toBeUndefined()
+    }
+  })
+
+  it('preserves a newly matched profile after changing protocol or model ID', () => {
+    const previous = catalogSpec()
+    previous.catalogParameters = {
+      modelId: previous.modelId,
+      providerType: 'openai',
+      providerBaseUrl: 'https://api.openai.com/v1',
+      adapterType: 'openai-chat',
+    }
+    for (const change of [
+      { adapterType: 'openai-responses' as const },
+      { modelId: 'another-model' },
+    ]) {
+      const next = { ...previous, ...change }
+      next.catalogParameters = {
+        ...previous.catalogParameters,
+        modelId: next.modelId,
+        adapterType: next.adapterType,
+        constraints: { temperature: false },
+      }
+      expect(
+        reconcileModelCapabilities(previous, next, { provider: { providerType: 'openai' } })
+          .catalogParameters,
+      ).toEqual(next.catalogParameters)
+    }
+  })
+
+  it('rejects fresh profiles across provider names, types, configured endpoints and custom paths', () => {
+    const previous = catalogSpec()
+    const next: AiModel['spec'] = {
+      ...previous,
+      adapterType: 'openai-responses',
+      catalogParameters: {
+        providerType: 'openai',
+        modelId: previous.modelId,
+        adapterType: 'openai-responses',
+        providerBaseUrl: 'https://api.openai.com/v1',
+      },
+    }
+    expect(
+      reconcileModelCapabilities(
+        previous,
+        { ...next, providerName: 'another-provider' },
+        {
+          provider: { providerType: 'openai' },
+        },
+      ).catalogParameters,
+    ).toBeUndefined()
+    for (const provider of [
+      { providerType: 'openailike' },
+      { providerType: 'openai', baseUrl: 'https://other.example/v1' },
+      { providerType: 'openai', chatEndpointPath: '/custom/chat' },
+    ]) {
+      expect(
+        reconcileModelCapabilities(previous, next, { provider }).catalogParameters,
+      ).toBeUndefined()
+    }
+    expect(
+      reconcileModelCapabilities(previous, next, {
+        provider: { providerType: 'openai', baseUrl: 'https://api.openai.com/v1' },
+      }).catalogParameters,
+    ).toEqual(next.catalogParameters)
+  })
+
+  it('does not infer a different provider type or endpoint from an unverified replacement profile', () => {
+    const previous = catalogSpec()
+    previous.catalogParameters = {
+      providerType: 'openai',
+      modelId: previous.modelId,
+      adapterType: 'openai-chat',
+      providerBaseUrl: 'https://api.openai.com/v1',
+    }
+    for (const profileChange of [
+      { providerType: 'openailike' },
+      { providerBaseUrl: 'https://other.example/v1' },
+    ]) {
+      expect(
+        reconcileModelCapabilities(previous, {
+          ...previous,
+          adapterType: 'openai-responses',
+          catalogParameters: {
+            ...previous.catalogParameters,
+            adapterType: 'openai-responses',
+            ...profileChange,
+          },
+        }).catalogParameters,
+      ).toBeUndefined()
+    }
+  })
+})
+
+describe('parameter feature provenance', () => {
+  it.each([false, true])(
+    'keeps imported manual %s choices above catalog constraints',
+    (supported) => {
+      const previous = catalogSpec()
+      const features = ['tool-call', 'structured-output', 'reasoning'] as const
+      previous.features = supported ? [] : [...features]
+      previous.catalogMatch!.fields = features.map((feature) => `features.${feature}`)
+      previous.catalogParameters = {
+        providerType: 'openai',
+        modelId: previous.modelId,
+        adapterType: previous.adapterType,
+        constraints: {
+          toolCalling: !supported,
+          structuredOutput: !supported,
+          reasoning: { supported: !supported },
+        },
+        featureEvidence: {},
+      }
+      const imported = reconcileModelCapabilities(
+        previous,
+        {
+          ...previous,
+          features: supported ? [...features] : [],
+        },
+        { importing: true },
+      )
+      expect(imported.features).toEqual(supported ? features : [])
+      expect(imported.parameterConstraints).toEqual({
+        toolCalling: supported,
+        structuredOutput: supported,
+        reasoning: { supported },
+      })
+      expect(imported.catalogMatch?.fields).toEqual([])
+      expect(imported.capabilitySources?.language).toBe('manual')
+      expect(previous.parameterConstraints).toBeUndefined()
+    },
+  )
+
+  it('removes obsolete catalog attribution when the fresh profile contains provider evidence', () => {
+    const previous = catalogSpec()
+    previous.features = []
+    previous.capabilitySources = { language: 'remote' }
+    previous.catalogMatch!.fields = ['features.tool-call']
+    const next = reconcileModelCapabilities(previous, {
+      ...previous,
+      catalogParameters: {
+        providerType: 'openai',
+        modelId: previous.modelId,
+        adapterType: previous.adapterType,
+        constraints: { toolCalling: true },
+        featureEvidence: { 'tool-call': true },
+      },
+    })
+    expect(next.features).toContain('tool-call')
+    expect(next.catalogMatch?.fields).not.toContain('features.tool-call')
+    expect(next.capabilitySources?.language).toBe('remote')
+  })
+
+  it('records a manual constraint even when the checkbox ends at its original value', () => {
+    const previous = catalogSpec()
+    previous.features = ['reasoning']
+    previous.catalogMatch!.fields = ['features.reasoning']
+    const next = reconcileModelCapabilities(previous, {
+      ...previous,
+      parameterConstraints: { reasoning: { supported: true } },
+    })
+    expect(next.catalogMatch?.fields).toEqual([])
+    expect(next.capabilitySources?.language).toBe('manual')
+  })
 })

@@ -196,6 +196,35 @@ class DashScopeProviderTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void chatProfilePreservesExplicitStreamUsageOptions() {
+        var defaults = ChatCompletionsOptions.builder()
+            .baseUrl("https://example.com/compatible-mode/v1")
+            .apiKey("test-key")
+            .model("qwen3.8-max")
+            .build();
+        var model = new DashScopeChatModel(defaults, WebClient.builder());
+        var prompt = new Prompt("Hello");
+
+        var defaultBody = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, defaults, true);
+        assertThat(defaultBody).containsEntry("stream_options", Map.of("include_usage", true));
+
+        // streamUsage=false resolves to an explicit empty object to omit the extension.
+        var constrained = defaults.mutate()
+            .streamOptions(new ChatCompletionsOptions.StreamOptions(null, null, null)).build();
+        var constrainedBody = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, constrained, true);
+        assertThat(constrainedBody).doesNotContainKey("stream_options").containsEntry("stream", true);
+
+        var explicit = defaults.mutate()
+            .streamOptions(new ChatCompletionsOptions.StreamOptions(null, false, null)).build();
+        var explicitBody = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
+            "requestBody", prompt, explicit, true);
+        assertThat(explicitBody).containsEntry("stream_options", Map.of("include_usage", false));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void chatUsesDashScopeMultimodalContentShapes() {
         var options = ChatCompletionsOptions.builder()
             .baseUrl("https://example.com/compatible-mode/v1")

@@ -1,6 +1,7 @@
 package run.halo.aifoundation.endpoint;
 
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -9,20 +10,27 @@ import org.springframework.util.StringUtils;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
+import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.capability.CapabilityMatchResult;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
+import run.halo.aifoundation.service.model.ModelResolution;
 
 @Component
 final class ModelOptionAssembler {
 
     private final ModelCapabilityService capabilityService;
     private final ModelCapabilityMatcher capabilityMatcher;
+    private final EffectiveParameterMappingResolver parameterMappingResolver;
 
     ModelOptionAssembler(ModelCapabilityService capabilityService,
-        ModelCapabilityMatcher capabilityMatcher) {
+        ModelCapabilityMatcher capabilityMatcher,
+        EffectiveParameterMappingResolver parameterMappingResolver) {
         this.capabilityService = capabilityService;
         this.capabilityMatcher = capabilityMatcher;
+        this.parameterMappingResolver = parameterMappingResolver;
     }
 
     List<ModelOption> toOptions(List<AiModel> models, Map<String, AiProvider> providers,
@@ -47,7 +55,7 @@ final class ModelOptionAssembler {
             .modelId(spec.getModelId())
             .displayName(displayName(spec.getDisplayName(), spec.getModelId()))
             .modelType(spec.getModelType())
-            .features(spec.getFeatures() == null ? List.of() : spec.getFeatures())
+            .features(effectiveFeatures(model, provider, providerType))
             .capabilities(capabilities)
             .capabilitySources(capabilities.getSources())
             .enabled(spec.isEnabled())
@@ -56,6 +64,36 @@ final class ModelOptionAssembler {
             .unavailableDetails(unavailableDetails(capabilityMatch))
             .provider(toProviderSummary(spec.getProviderName(), provider, providerTypes))
             .build();
+    }
+
+    private List<ModelFeature> effectiveFeatures(AiModel model, AiProvider provider,
+        AiProviderType providerType) {
+        var spec = model.getSpec();
+        var features = new LinkedHashSet<>(
+            spec.getFeatures() == null ? List.<ModelFeature>of() : spec.getFeatures());
+        if (spec.getModelType() == ModelType.LANGUAGE && provider != null
+            && providerType != null) {
+            // Saved catalog snapshots and manual constraints also govern runtime validation.
+            // Use those same facts when selecting models, including older inconsistent records.
+            var constraints = parameterMappingResolver.resolveConstraints(
+                new ModelResolution(model, provider, providerType, null));
+            applyFeature(features, ModelFeature.TOOL_CALL, constraints.getToolCalling());
+            applyFeature(features, ModelFeature.STRUCTURED_OUTPUT, constraints.getStructuredOutput());
+            if (constraints.getReasoning() != null) {
+                applyFeature(features, ModelFeature.REASONING,
+                    constraints.getReasoning().getSupported());
+            }
+        }
+        return List.copyOf(features);
+    }
+
+    private void applyFeature(java.util.Set<ModelFeature> features, ModelFeature feature,
+        Boolean supported) {
+        if (Boolean.TRUE.equals(supported)) {
+            features.add(feature);
+        } else if (Boolean.FALSE.equals(supported)) {
+            features.remove(feature);
+        }
     }
 
     private ModelOptionProvider toProviderSummary(String referencedProviderName,

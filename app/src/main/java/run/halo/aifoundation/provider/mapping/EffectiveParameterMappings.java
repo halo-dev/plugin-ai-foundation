@@ -32,6 +32,7 @@ public record EffectiveParameterMappings(Map<ModelParameter, EffectiveMapping> v
 
     public enum Source {
         BUILT_IN,
+        CATALOG,
         PROVIDER,
         MODEL
     }

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useSavedModelParameters } from '@/composables/use-model-parameters'
 import { useChatWorkbench } from '@/composables/workbench/use-chat-workbench'
 import { useEmbeddingTest } from '@/composables/workbench/use-embedding-test'
 import { useImageGenerationTest } from '@/composables/workbench/use-image-generation-test'
@@ -36,7 +37,16 @@ const {
   refetch,
 } = useWorkbenchModels()
 
-const languageSettings = useLanguageGenerationSettings()
+const {
+  data: parameterProfile,
+  isFetching: parametersFetching,
+  isError: parametersError,
+} = useSavedModelParameters(computed(() => selectedModel.value?.name))
+const languageSettings = useLanguageGenerationSettings({
+  profile: parameterProfile,
+  isFetching: parametersFetching,
+  isError: parametersError,
+})
 const {
   systemPrompt,
   temperature,
@@ -67,6 +77,7 @@ const {
   outputError,
   chatHeadersText,
   chatHeadersError,
+  parameterError,
 } = languageSettings
 
 const shouldAutoScroll = shallowRef(true)
@@ -385,6 +396,8 @@ function distanceToConversationBottom(element: HTMLElement) {
       </section>
 
       <ParameterSidebar
+        :parameter-profile="parameterProfile"
+        :parameter-error="parameterError"
         :mode="testMode === 'rag' ? 'chat' : testMode"
         :system-prompt="systemPrompt"
         :temperature="temperature"

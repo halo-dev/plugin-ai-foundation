@@ -22,6 +22,9 @@ import type { ModelCapabilitySources } from './model-capability-sources';
 // May contain unused imports in some cases
 // @ts-ignore
 import type { ModelCatalogMatch } from './model-catalog-match';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelParameterProfile } from './model-parameter-profile';
 
 /**
  * 
@@ -53,6 +56,12 @@ export interface DiscoveredModelItem {
      * @memberof DiscoveredModelItem
      */
     'catalogMatch'?: ModelCatalogMatch;
+    /**
+     * 
+     * @type {ModelParameterProfile}
+     * @memberof DiscoveredModelItem
+     */
+    'catalogParameters'?: ModelParameterProfile;
     /**
      * 
      * @type {string}

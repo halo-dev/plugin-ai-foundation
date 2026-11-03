@@ -55,6 +55,10 @@ public class AiModel extends AbstractExtension {
         private ModelCatalogMatch catalogMatch;
         @Schema(description = "Model-specific parameter mapping overrides")
         private ModelParameterMappings parameterMappings;
+        @Schema(description = "Model-specific automatic configuration captured from the catalog")
+        private ModelParameterProfile catalogParameters;
+        @Schema(description = "Administrator overrides of model parameter constraints")
+        private ModelParameterConstraints parameterConstraints;
         @Schema(
             description = "Provider-native non-secret options configured by the model administrator",
             additionalProperties = Schema.AdditionalPropertiesValue.TRUE

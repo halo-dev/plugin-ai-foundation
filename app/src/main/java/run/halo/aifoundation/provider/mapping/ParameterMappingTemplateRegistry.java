@@ -290,7 +290,7 @@ public class ParameterMappingTemplateRegistry {
                     value("enable_thinking", ValueType.BOOLEAN, "false"), null, null, null)),
             reasoningTemplate("reasoning.thinking-type", "OpenAI 请求体", "thinking.type",
                 Set.of(AdapterType.DOUBAO_CHAT, AdapterType.ERNIE_CHAT,
-                    AdapterType.MIMO_CHAT),
+                    AdapterType.KIMI_CHAT, AdapterType.MIMO_CHAT),
                 ParameterMappingApplicator.rootObject("thinking", "type"),
                 reasoning(value("thinking.type", ValueType.STRING, "enabled"),
                     value("thinking.type", ValueType.STRING, "disabled"), null, null, null)),

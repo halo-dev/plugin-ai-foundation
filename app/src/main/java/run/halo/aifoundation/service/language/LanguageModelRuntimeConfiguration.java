@@ -2,6 +2,7 @@ package run.halo.aifoundation.service.language;
 
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
+import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.service.model.ModelRuntimeContext;
 
 public record LanguageModelRuntimeConfiguration(
@@ -13,6 +14,21 @@ public record LanguageModelRuntimeConfiguration(
     public LanguageModelRuntimeConfiguration {
         providerOptions = providerOptions != null
             ? providerOptions : LanguageModelProviderOptions.defaults();
+        var constraints = context != null ? context.parameterConstraints() : null;
+        if (constraints != null) {
+            providerOptions = new LanguageModelProviderOptions(
+                providerOptions.reasoningHistorySupported(),
+                providerOptions.streamToolCallsForReasoning(),
+                providerOptions.requestHeadersSupported(), providerOptions.seedSupported(),
+                providerOptions.nativeStrictToolSchemas()
+                    && !Boolean.FALSE.equals(constraints.getToolStrict()),
+                Boolean.FALSE.equals(constraints.getStructuredOutput())
+                    ? StructuredOutputSupport.PROMPT_ONLY : providerOptions.structuredOutputSupport(),
+                providerOptions.chatOptionsFactory(), providerOptions.toolCallingChatOptionsFactory(),
+                providerOptions.structuredOutputChatOptionsFactory(),
+                providerOptions.reasoningControlOptions(), providerOptions.reasoningContentExtractor(),
+                providerOptions.nativeOptionsApplicator(), providerOptions.additionalMediaUrlSchemes());
+        }
         modelCapabilities = modelCapabilities != null
             ? modelCapabilities : ModelCapabilities.empty();
     }

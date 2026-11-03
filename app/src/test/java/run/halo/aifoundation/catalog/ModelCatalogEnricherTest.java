@@ -106,7 +106,8 @@ class ModelCatalogEnricherTest {
 
     @Test
     void catalogOverridesAdapterDefaultsButCannotEnableUnsupportedFeaturesOrFiles() {
-        var enricher = enricher(ModelsDevCatalogServiceTest.CATALOG.replace("\"reasoning\":false", "\"reasoning\":true"));
+        var enricher = enricher(ModelsDevCatalogServiceTest.CATALOG
+            .replace("\"reasoning\":{\"supported\":false}", "\"reasoning\":{\"supported\":true}"));
         var type = new OpenAiProvider() {
             @Override
             public List<ModelFeature> getSupportedFeatures(AdapterType adapter) {
@@ -150,7 +151,7 @@ class ModelCatalogEnricherTest {
     @Test
     void positiveProviderImageEvidenceWinsOverCatalogTextOnlyInput() {
         var enricher = enricher(ModelsDevCatalogServiceTest.CATALOG
-            .replace("[\"text\",\"image\",\"pdf\"]", "[\"text\"]"));
+            .replace("[\"text\",\"image/png\",\"image/jpeg\",\"application/pdf\"]", "[\"text\"]"));
         var model = discovered().toBuilder().source(DiscoverySource.REMOTE)
             .features(Set.of(ModelFeature.VISION)).build();
         var result = enricher.enrich(provider(null), new OpenAiProvider(), List.of(model)).getFirst();
@@ -163,7 +164,8 @@ class ModelCatalogEnricherTest {
     void catalogWithoutReplayEvidencePreservesProviderDefaultAndExplicitFalse() {
         var enricher = enricher("""
             {"deepseek":{"id":"deepseek","models":{"deepseek-chat":{
-              "id":"deepseek-chat","reasoning":true,
+              "id":"deepseek-chat","type":"chat","capabilities":{"reasoning":{"supported":true}},
+              "api":{"chat-completions":{"base_url":"https://api.deepseek.com"}},
               "modalities":{"input":["text"],"output":["text"]}}}}}
             """);
         var provider = provider(null);
@@ -188,6 +190,59 @@ class ModelCatalogEnricherTest {
             .build();
         var preserved = enricher.enrich(provider, type, List.of(explicit)).getFirst();
         assertThat(preserved.capabilities().getLanguage().getReasoningHistory()).isFalse();
+    }
+
+    @Test
+    void attachesParametersEvenWhenAllCapabilitiesAlreadyHaveProviderEvidence() {
+        var model = discovered().toBuilder().source(DiscoverySource.REMOTE)
+            .featureEvidence(Map.of(ModelFeature.TOOL_CALL, true, ModelFeature.REASONING, false,
+                ModelFeature.STRUCTURED_OUTPUT, false, ModelFeature.VISION, false,
+                ModelFeature.AUDIO_INPUT, false))
+            .capabilities(ModelCapabilities.builder().language(LanguageCapability.builder()
+                .imageInput(false).fileInput(false).inputMediaTypes(List.of())
+                .inputSources(List.of()).build()).build())
+            .capabilitySources(ModelCapabilitySources.builder().language(CapabilitySource.REMOTE).build())
+            .build();
+        var result = enricher(ModelsDevCatalogServiceTest.CATALOG)
+            .enrich(provider(null), new OpenAiProvider(), List.of(model)).getFirst();
+        assertThat(result.catalogParameters()).isNotNull();
+        assertThat(result.catalogMatch().fields()).containsExactly("parameters");
+        assertThat(result.capabilities()).isEqualTo(model.capabilities());
+    }
+
+    @Test
+    void concreteMimeTypesArePreservedAndIntersectedWithAdapterRepresentations() {
+        var body = ModelsDevCatalogServiceTest.CATALOG.replace(
+            "[\"text\",\"image/png\",\"image/jpeg\",\"application/pdf\"]",
+            "[\"text\",\"image/webp\",\"audio/mp3\",\"audio/flac\",\"application/pdf\",\"video/mp4\"]");
+        var type = new OpenAiProvider() {
+            @Override
+            public List<ModelFeature> getSupportedFeatures(AdapterType adapter) {
+                return List.of(ModelFeature.VISION, ModelFeature.AUDIO_INPUT);
+            }
+        };
+        var enricher = enricher(body);
+        var chat = enricher.enrich(provider(null), type,
+            List.of(discovered().toBuilder().adapterType(AdapterType.OPENAI_CHAT).build())).getFirst();
+        assertThat(chat.capabilities().getLanguage().getInputMediaTypes())
+            .containsExactly("image/webp", "audio/mpeg");
+        var responses = enricher.enrich(provider(null), type, List.of(discovered())).getFirst();
+        assertThat(responses.capabilities().getLanguage().getInputMediaTypes())
+            .containsExactly("image/webp", "application/pdf");
+    }
+
+    @Test
+    void matchingAnotherProtocolDoesNotAuthorizeCatalogParametersForSelectedAdapter() {
+        var body = ModelsDevCatalogServiceTest.CATALOG.replace(
+            "\"responses\":{\"base_url\":\"https://api.openai.com/v1\"",
+            "\"responses\":{\"base_url\":\"https://private.example/v1\"");
+        var enricher = enricher(body);
+        var model = discovered();
+        assertThat(enricher.enrich(provider(null), new OpenAiProvider(), List.of(model)))
+            .containsExactly(model);
+        var chat = model.toBuilder().adapterType(AdapterType.OPENAI_CHAT).build();
+        assertThat(enricher.enrich(provider(null), new OpenAiProvider(), List.of(chat))
+            .getFirst().catalogParameters()).isNotNull();
     }
 
     private ModelCatalogEnricher enricher(String body) {

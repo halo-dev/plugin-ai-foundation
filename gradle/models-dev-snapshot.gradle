@@ -1,0 +1,447 @@
+import groovy.json.JsonGenerator
+import org.gradle.api.GradleException
+
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.StandardCharsets
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
+
+/** A strict reader keeps duplicate keys and invalid JSON from silently changing the catalog. */
+class ModelsDevSnapshotJson {
+    private final String source
+    private int position
+    private int depth
+
+    ModelsDevSnapshotJson(String source) {
+        this.source = source
+    }
+
+    Object read() {
+        def result = value()
+        whitespace()
+        require(position == source.length(), 'Unexpected content after JSON value')
+        return result
+    }
+
+    private Object value() {
+        whitespace()
+        require(position < source.length(), 'Unexpected end of JSON')
+        require(++depth <= 256, 'JSON nesting exceeds the supported depth')
+        try {
+            int token = source.charAt(position)
+            if (token == 123) return object()
+            if (token == 91) return array()
+            if (token == 34) return string()
+            for (String literal : ['true', 'false', 'null']) {
+                if (source.startsWith(literal, position)) {
+                    position += literal.length()
+                    return literal == 'null' ? null : literal == 'true'
+                }
+            }
+            if (token == 45 || (token >= 48 && token <= 57)) return number()
+            throw new GradleException('Invalid JSON value')
+        } finally {
+            depth--
+        }
+    }
+
+    private Map<String, Object> object() {
+        position++
+        def result = new LinkedHashMap<String, Object>()
+        whitespace()
+        if (consume(125)) return result
+        while (true) {
+            whitespace()
+            require(position < source.length() && source.charAt(position) == 34, 'Expected JSON object key')
+            String key = string()
+            require(!result.containsKey(key), "Duplicate JSON key: ${key}")
+            whitespace()
+            require(consume(58), 'Expected colon after JSON object key')
+            result.put(key, value())
+            whitespace()
+            if (consume(125)) return result
+            require(consume(44), 'Expected comma between JSON object entries')
+        }
+    }
+
+    private List<Object> array() {
+        position++
+        def result = new ArrayList<Object>()
+        whitespace()
+        if (consume(93)) return result
+        while (true) {
+            result.add(value())
+            whitespace()
+            if (consume(93)) return result
+            require(consume(44), 'Expected comma between JSON array values')
+        }
+    }
+
+    private String string() {
+        position++
+        def result = new StringBuilder()
+        while (position < source.length()) {
+            int character = source.charAt(position++)
+            if (character == 34) return result.toString()
+            require(character >= 32, 'Unescaped control character in JSON string')
+            if (character != 92) {
+                result.append((char) character)
+                continue
+            }
+            require(position < source.length(), 'Unterminated JSON escape')
+            int escape = source.charAt(position++)
+            switch (escape) {
+                case 34: case 92: case 47: result.append((char) escape); break
+                case 98: result.append((char) 8); break
+                case 102: result.append((char) 12); break
+                case 110: result.append((char) 10); break
+                case 114: result.append((char) 13); break
+                case 116: result.append((char) 9); break
+                case 117:
+                    require(position + 4 <= source.length(), 'Incomplete JSON Unicode escape')
+                    String hex = source.substring(position, position + 4)
+                    require(hex ==~ /[0-9a-fA-F]{4}/, 'Invalid JSON Unicode escape')
+                    result.append((char) Integer.parseInt(hex, 16))
+                    position += 4
+                    break
+                default: throw new GradleException('Invalid JSON string escape')
+            }
+        }
+        throw new GradleException('Unterminated JSON string')
+    }
+
+    private ModelsDevSnapshotNumber number() {
+        int start = position
+        while (position < source.length()) {
+            int character = source.charAt(position)
+            if (character == 44 || character == 93 || character == 125 || character in [32, 9, 10, 13]) break
+            position++
+        }
+        String text = source.substring(start, position)
+        require(text ==~ /-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/, 'Invalid JSON number')
+        return new ModelsDevSnapshotNumber(text)
+    }
+
+    private void whitespace() {
+        while (position < source.length() && (int) source.charAt(position) in [32, 9, 10, 13]) position++
+    }
+
+    private boolean consume(int expected) {
+        if (position < source.length() && source.charAt(position) == expected) {
+            position++
+            return true
+        }
+        return false
+    }
+
+    private static void require(boolean condition, String message) {
+        if (!condition) throw new GradleException(message)
+    }
+}
+
+/** Preserve all numeric fields without narrowing or changing their JSON representation. */
+class ModelsDevSnapshotNumber {
+    final String literal
+
+    ModelsDevSnapshotNumber(String literal) {
+        this.literal = literal
+    }
+
+    @Override
+    String toString() { literal }
+}
+
+class ModelsDevSnapshot {
+    static final String SOURCE_URL = 'https://models.dev/experimental/v2.0/api.json'
+    static final String SNAPSHOT_NAME = 'api-v2.json.gz'
+    static final String METADATA_NAME = 'metadata.json'
+    static final int MAX_BYTES = 16 * 1024 * 1024
+    static final int MAX_METADATA_BYTES = 16 * 1024
+    private static final def JSON_STRINGS = new JsonGenerator.Options().disableUnicodeEscaping().build()
+
+    static Map verify(Path directory) {
+        def metadata = parse(readFile(directory.resolve(METADATA_NAME), MAX_METADATA_BYTES))
+        require(metadata instanceof Map, 'Snapshot metadata must be an object')
+        require(integerEquals(metadata.schemaVersion, 2), 'Snapshot metadata schemaVersion must be 2')
+        require(metadata.sourceUrl == SOURCE_URL, 'Snapshot metadata sourceUrl must be the fixed v2 HTTPS URL')
+        require(metadata.sha256 instanceof String && metadata.sha256 ==~ /[0-9a-f]{64}/,
+            'Snapshot metadata sha256 must be a lowercase SHA-256 digest')
+        require(metadata.fetchedAt instanceof String && metadata.fetchedAt.endsWith('Z'),
+            'Snapshot metadata fetchedAt must be UTC')
+        try {
+            Instant.parse(metadata.fetchedAt)
+        } catch (RuntimeException failure) {
+            throw new GradleException('Invalid snapshot metadata fetchedAt', failure)
+        }
+        byte[] raw = decode(readFile(directory.resolve(SNAPSHOT_NAME), MAX_BYTES), true)
+        def document = parse(raw)
+        def counts = validateCatalog(document)
+        require(Arrays.equals(canonical(document), raw), 'Saved snapshot is not canonical JSON')
+        require(sha256(raw) == metadata.sha256, 'Snapshot SHA-256 does not match metadata')
+        counts.each { key, count ->
+            require(integerEquals(metadata[key], count), "Snapshot metadata ${key} does not match catalog")
+        }
+        return metadata
+    }
+
+    static Map update(Path directory, Path input) {
+        byte[] raw = input == null ? download() : decode(readFile(input, MAX_BYTES), null)
+        def document = parse(raw)
+        def counts = validateCatalog(document)
+        byte[] canonicalBytes = canonical(document)
+        String digest = sha256(canonicalBytes)
+        Map existing = null
+        try {
+            existing = verify(directory)
+        } catch (GradleException | IOException ignored) {
+            // An invalid previous copy can be replaced only after the new data has been validated.
+        }
+        if (existing != null && (existing.sha256 == digest || equivalent(document,
+            parse(decode(readFile(directory.resolve(SNAPSHOT_NAME), MAX_BYTES), true))))) {
+            return [metadata: existing, changed: false]
+        }
+        def metadata = [schemaVersion: 2, sourceUrl: SOURCE_URL,
+            fetchedAt: Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(), sha256: digest,
+            providerCount: counts.providerCount, modelCount: counts.modelCount]
+        replace(directory, compress(canonicalBytes), canonical(metadata))
+        return [metadata: metadata, changed: true]
+    }
+
+    private static byte[] download() {
+        HttpURLConnection connection = (HttpURLConnection) new URI(SOURCE_URL).toURL().openConnection()
+        connection.instanceFollowRedirects = false
+        connection.connectTimeout = 30_000
+        connection.readTimeout = 30_000
+        connection.setRequestProperty('Accept', 'application/json')
+        connection.setRequestProperty('Accept-Encoding', 'gzip')
+        connection.setRequestProperty('User-Agent', 'halo-ai-foundation-models-dev-snapshot/2')
+        try {
+            require(connection.responseCode == 200, "Snapshot download requires HTTP 200; received ${connection.responseCode}")
+            String encoding = (connection.getHeaderField('Content-Encoding') ?: 'identity').trim().toLowerCase(Locale.ROOT)
+            require(encoding in ['', 'identity', 'gzip'], "Unsupported response content encoding: ${encoding}")
+            return connection.inputStream.withCloseable { stream ->
+                decode(readLimited(stream, MAX_BYTES, 'Downloaded snapshot'), encoding == 'gzip')
+            }
+        } catch (IOException failure) {
+            throw new GradleException('Snapshot download failed; existing files were preserved', failure)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private static byte[] readFile(Path path, int limit) {
+        return Files.newInputStream(path).withCloseable { readLimited(it, limit, path.toString()) }
+    }
+
+    private static byte[] readLimited(InputStream stream, int limit, String label) {
+        byte[] bytes = stream.readNBytes(limit + 1)
+        require(bytes.length <= limit, "${label} exceeds the ${limit}-byte limit")
+        return bytes
+    }
+
+    private static byte[] decode(byte[] bytes, Boolean compressed) {
+        require(bytes.length <= MAX_BYTES, 'Snapshot exceeds the 16 MiB limit')
+        boolean gzip = compressed != null ? compressed : bytes.length >= 2 &&
+            (bytes[0] & 0xff) == 0x1f && (bytes[1] & 0xff) == 0x8b
+        if (!gzip) return bytes
+        return new GZIPInputStream(new ByteArrayInputStream(bytes)).withCloseable {
+            readLimited(it, MAX_BYTES, 'Decompressed snapshot')
+        }
+    }
+
+    private static Object parse(byte[] bytes) {
+        String text = StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes)).toString()
+        return new ModelsDevSnapshotJson(text).read()
+    }
+
+    private static Map validateCatalog(Object document) {
+        require(document instanceof Map && !document.isEmpty(), 'Catalog must be a nonempty provider object')
+        int modelCount = 0
+        boolean openAiChat = false
+        document.each { providerId, provider ->
+            require(nonempty(providerId) && provider instanceof Map, 'Catalog provider must have an ID and object value')
+            require(provider.id == providerId, "Provider ID does not match its key: ${providerId}")
+            require(provider.models instanceof Map, "Provider models must be an object: ${providerId}")
+            provider.models.each { modelId, model ->
+                require(nonempty(modelId) && model instanceof Map, "Invalid model in provider ${providerId}")
+                require(model.id == modelId, "Model ID does not match its key: ${providerId}/${modelId}")
+                require(nonempty(model.type), "Model type must be a string: ${providerId}/${modelId}")
+                modelCount++
+                openAiChat |= providerId == 'openai' && model.type == 'chat'
+            }
+        }
+        require(openAiChat, 'Catalog must contain at least one openai chat model')
+        return [providerCount: document.size(), modelCount: modelCount]
+    }
+
+    private static boolean nonempty(Object value) { value instanceof String && !value.isBlank() }
+
+    private static boolean integerEquals(Object value, int expected) {
+        return value instanceof ModelsDevSnapshotNumber && value.literal == expected.toString()
+    }
+
+    private static byte[] canonical(Object document) {
+        def builder = new StringBuilder()
+        writeJson(document, builder)
+        def encoded = StandardCharsets.UTF_8.newEncoder()
+            .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
+            .encode(java.nio.CharBuffer.wrap(builder))
+        byte[] bytes = new byte[encoded.remaining()]
+        encoded.get(bytes)
+        require(bytes.length <= MAX_BYTES, 'Canonical snapshot exceeds the 16 MiB limit')
+        return bytes
+    }
+
+    private static void writeJson(Object value, StringBuilder builder) {
+        if (value instanceof Map) {
+            builder.append('{')
+            boolean first = true
+            new TreeMap(value).each { key, child ->
+                if (!first) builder.append(',')
+                first = false
+                builder.append(JSON_STRINGS.toJson(key)).append(':')
+                writeJson(child, builder)
+            }
+            builder.append('}')
+        } else if (value instanceof List) {
+            builder.append('[')
+            value.eachWithIndex { child, index ->
+                if (index) builder.append(',')
+                writeJson(child, builder)
+            }
+            builder.append(']')
+        } else if (value instanceof ModelsDevSnapshotNumber) {
+            builder.append(value.literal)
+        } else {
+            builder.append(JSON_STRINGS.toJson(value))
+        }
+    }
+
+    private static boolean equivalent(Object left, Object right) {
+        if (left instanceof ModelsDevSnapshotNumber && right instanceof ModelsDevSnapshotNumber) {
+            return new BigDecimal(left.literal).compareTo(new BigDecimal(right.literal)) == 0
+        }
+        if (left instanceof Map && right instanceof Map) {
+            return left.keySet() == right.keySet() && left.every { key, value -> equivalent(value, right[key]) }
+        }
+        if (left instanceof List && right instanceof List) {
+            return left.size() == right.size() && (0..<left.size()).every { equivalent(left[it], right[it]) }
+        }
+        return left == right
+    }
+
+    private static byte[] compress(byte[] raw) {
+        def output = new ByteArrayOutputStream()
+        new GZIPOutputStream(output).withCloseable { it.write(raw) }
+        byte[] bytes = output.toByteArray()
+        require(bytes.length <= MAX_BYTES, 'Compressed snapshot exceeds the 16 MiB limit')
+        return bytes
+    }
+
+    private static String sha256(byte[] bytes) {
+        return MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString()
+    }
+
+    private static Path stage(Path directory, byte[] payload) {
+        Path temporary = Files.createTempFile(directory, '.models-dev-', '.tmp')
+        try {
+            new FileOutputStream(temporary.toFile()).withCloseable { stream ->
+                stream.write(payload)
+                stream.flush()
+                stream.channel.force(true)
+            }
+            return temporary
+        } catch (Throwable failure) {
+            Files.deleteIfExists(temporary)
+            throw failure
+        }
+    }
+
+    private static void move(Path source, Path destination) {
+        try {
+            Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    private static void replace(Path directory, byte[] snapshot, byte[] metadata) {
+        Files.createDirectories(directory)
+        def staged = new LinkedHashMap<Path, Path>()
+        def backups = new LinkedHashMap<Path, Path>()
+        def replaced = new ArrayList<Path>()
+        def retainedBackups = new HashSet<Path>()
+        try {
+            [(SNAPSHOT_NAME): snapshot, (METADATA_NAME): metadata].each { name, bytes ->
+                Path destination = directory.resolve(name)
+                staged[destination] = stage(directory, bytes)
+                if (Files.exists(destination)) {
+                    Path backup = stage(directory, new byte[0])
+                    backups[destination] = backup
+                    Files.copy(destination, backup, StandardCopyOption.REPLACE_EXISTING)
+                }
+            }
+            staged.each { destination, temporary ->
+                move(temporary, destination)
+                replaced.add(destination)
+            }
+        } catch (Throwable failure) {
+            replaced.reverseEach { destination ->
+                Path backup = backups[destination]
+                try {
+                    if (backup == null) Files.deleteIfExists(destination)
+                    else move(backup, destination)
+                } catch (Throwable rollbackFailure) {
+                    if (backup != null) retainedBackups.add(backup)
+                    failure.addSuppressed(rollbackFailure)
+                }
+            }
+            throw new GradleException('Could not replace models.dev snapshot resources', failure)
+        } finally {
+            staged.values().each { Files.deleteIfExists(it) }
+            backups.values().findAll { !retainedBackups.contains(it) }.each { Files.deleteIfExists(it) }
+        }
+    }
+
+    private static void require(boolean condition, String message) {
+        if (!condition) throw new GradleException(message)
+    }
+}
+
+def snapshotDirectory = rootProject.file(providers.gradleProperty('modelsDevSnapshotOutputDir')
+    .getOrElse('app/src/main/resources/models-dev')).toPath()
+def snapshotInput = providers.gradleProperty('modelsDevSnapshotInput').orNull
+def snapshotInputPath = snapshotInput == null ? null : rootProject.file(snapshotInput).toPath()
+
+tasks.register('updateModelsDevSnapshot') {
+    group = 'maintenance'
+    description = 'Download and update the bundled models.dev v2 snapshot.'
+    outputs.upToDateWhen { false }
+    doLast {
+        def result = ModelsDevSnapshot.update(snapshotDirectory, snapshotInputPath)
+        def metadata = result.metadata
+        logger.lifecycle("${result.changed ? 'Updated' : 'Unchanged'} models.dev snapshot: " +
+            "${metadata.providerCount} providers, ${metadata.modelCount} models, SHA-256 ${metadata.sha256}")
+    }
+}
+
+tasks.register('verifyModelsDevSnapshot') {
+    group = 'verification'
+    description = 'Verify the bundled models.dev v2 snapshot without network access.'
+    outputs.upToDateWhen { false }
+    doLast {
+        def metadata = ModelsDevSnapshot.verify(snapshotDirectory)
+        logger.lifecycle("Verified models.dev snapshot: ${metadata.providerCount} providers, " +
+            "${metadata.modelCount} models, SHA-256 ${metadata.sha256}")
+    }
+}

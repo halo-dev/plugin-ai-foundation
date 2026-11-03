@@ -18,7 +18,6 @@ import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
-import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
@@ -129,7 +128,7 @@ public class ZhiPuProvider extends AbstractAiProviderType {
         return switch (resolved.adapterType()) {
             case ZHIPU_CHAT -> new ZhiPuChatModel(options, webClientBuilder(provider));
             case ZHIPU_MESSAGES -> new ZhiPuMessagesModel(options.mutate()
-                .baseUrl(ProviderUris.withoutTrailingPath(options.getBaseUrl(), "/api/paas/v4"))
+                .baseUrl(new ZhiPuEndpointResolver(options.getBaseUrl()).messagesBaseUrl())
                 .build(), webClientBuilder(provider));
             default -> throw new IllegalArgumentException(
                 "Unsupported Zhipu language adapter: " + resolved.adapterType());

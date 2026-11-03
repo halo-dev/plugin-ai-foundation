@@ -16,6 +16,7 @@ import {
   ProviderTypeInfoSupportedFeaturesEnum,
   ProviderTypeInfoSupportedModelTypesEnum,
 } from '@/api/generated'
+import type { DiscoveredModel } from '@/composables/use-models-fetch'
 import { describe, expect, it } from 'vitest'
 import {
   adapterOptionsForProviderType,
@@ -54,6 +55,30 @@ describe('findProviderTypeForModel', () => {
 })
 
 describe('createModelFromDiscovered', () => {
+  it('persists catalog parameters only with the matching discovered model adapter', () => {
+    const discovered: DiscoveredModel = discoveredModel(
+      'example',
+      AiModelSpecModelTypeEnum.Language,
+      [],
+      DiscoveredModelItemAdapterTypeEnum.OpenaiChat,
+    )
+    discovered.catalogParameters = {
+      modelId: 'example',
+      providerType: 'openai',
+      adapterType: 'openai-chat',
+      constraints: { topP: false, outputTokens: 8192 },
+    }
+    expect(createModelFromDiscovered('provider', discovered).spec.catalogParameters).toEqual(
+      discovered.catalogParameters,
+    )
+    expect(
+      createModelFromDiscovered('provider', discovered, {
+        modelType: AiModelSpecModelTypeEnum.Language,
+        adapterType: AiModelSpecAdapterTypeEnum.OpenaiResponses,
+      }).spec.catalogParameters,
+    ).toBeUndefined()
+  })
+
   it('uses backend adapter recommendation when present', () => {
     expect(
       createModelFromDiscovered(

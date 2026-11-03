@@ -6,6 +6,7 @@ import lombok.Builder;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
 import run.halo.aifoundation.catalog.ModelCatalogMatch;
+import run.halo.aifoundation.extension.ModelParameterProfile;
 
 @Builder(toBuilder = true)
 public record DiscoveredModel(
@@ -19,8 +20,17 @@ public record DiscoveredModel(
     ModelCapabilities capabilities,
     ModelCapabilitySources capabilitySources,
     Map<ModelFeature, Boolean> featureEvidence,
-    ModelCatalogMatch catalogMatch
+    ModelCatalogMatch catalogMatch,
+    ModelParameterProfile catalogParameters
 ) {
+    public DiscoveredModel(String modelId, String displayName, ModelType modelType,
+        Set<ModelFeature> features, AdapterType adapterType, DiscoverySource source,
+        DiscoveryConfidence confidence, ModelCapabilities capabilities,
+        ModelCapabilitySources capabilitySources, Map<ModelFeature, Boolean> featureEvidence,
+        ModelCatalogMatch catalogMatch) {
+        this(modelId, displayName, modelType, features, adapterType, source, confidence,
+            capabilities, capabilitySources, featureEvidence, catalogMatch, null);
+    }
     public DiscoveredModel(String modelId, String displayName, ModelType modelType,
         Set<ModelFeature> features, AdapterType adapterType, DiscoverySource source,
         DiscoveryConfidence confidence, ModelCapabilities capabilities,

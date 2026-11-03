@@ -66,7 +66,7 @@ class ModelConsoleModelValidator {
         return normalizeAdapterType(model, type)
             .then(Mono.defer(() -> validateAdapterType(model, providerType, type)))
             .then(Mono.defer(() -> validateFeatures(model, providerType, type)))
-            .then(Mono.defer(() -> validateParameterMappings(model)))
+            .then(Mono.defer(() -> validateParameterMappings(model, providerType)))
             .then(Mono.defer(() -> validateNativeOptions(model, type)));
     }
 
@@ -85,11 +85,24 @@ class ModelConsoleModelValidator {
         return Mono.empty();
     }
 
-    private Mono<Void> validateParameterMappings(AiModel model) {
+    private Mono<Void> validateParameterMappings(AiModel model, String providerType) {
         try {
             var spec = model.getSpec();
             parameterMappingValidator.validateModel(spec.getParameterMappings(),
                 spec.getModelType(), spec.getAdapterType());
+            parameterMappingValidator.validateConstraints(spec.getParameterConstraints());
+            var profile = spec.getCatalogParameters();
+            if (profile != null) {
+                if (!java.util.Objects.equals(profile.getModelId(), spec.getModelId())
+                    || !java.util.Objects.equals(profile.getProviderType(), providerType)
+                    || profile.getAdapterType() != spec.getAdapterType()) {
+                    spec.setCatalogParameters(null);
+                } else {
+                    parameterMappingValidator.validateModel(profile.getMappings(),
+                        spec.getModelType(), spec.getAdapterType());
+                    parameterMappingValidator.validateConstraints(profile.getConstraints());
+                }
+            }
             return Mono.empty();
         } catch (IllegalArgumentException e) {
             return badRequest(e.getMessage());

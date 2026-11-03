@@ -24,7 +24,13 @@ import type { ModelCapabilitySources } from './model-capability-sources';
 import type { ModelCatalogMatch } from './model-catalog-match';
 // May contain unused imports in some cases
 // @ts-ignore
+import type { ModelParameterConstraints } from './model-parameter-constraints';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { ModelParameterMappings } from './model-parameter-mappings';
+// May contain unused imports in some cases
+// @ts-ignore
+import type { ModelParameterProfile } from './model-parameter-profile';
 
 /**
  * 
@@ -56,6 +62,12 @@ export interface AiModelSpec {
      * @memberof AiModelSpec
      */
     'catalogMatch'?: ModelCatalogMatch;
+    /**
+     * 
+     * @type {ModelParameterProfile}
+     * @memberof AiModelSpec
+     */
+    'catalogParameters'?: ModelParameterProfile;
     /**
      * How reliable the discovered model profile is
      * @type {string}
@@ -104,6 +116,12 @@ export interface AiModelSpec {
      * @memberof AiModelSpec
      */
     'nativeOptions'?: { [key: string]: any; };
+    /**
+     * 
+     * @type {ModelParameterConstraints}
+     * @memberof AiModelSpec
+     */
+    'parameterConstraints'?: ModelParameterConstraints;
     /**
      * 
      * @type {ModelParameterMappings}

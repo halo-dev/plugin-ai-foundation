@@ -19,6 +19,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 
 /** Encodes Spring AI prompts into the Chat Completions request contract. */
 final class ChatCompletionsRequestEncoder {
@@ -43,10 +44,14 @@ final class ChatCompletionsRequestEncoder {
         putOptions(body, options);
         putTools(body, options);
         if (stream) {
-            body.put(Fields.STREAM_OPTIONS, streamOptions(options.getStreamOptions()));
+            var streamOptions = streamOptions(options.getStreamOptions());
+            if (!streamOptions.isEmpty()) {
+                body.put(Fields.STREAM_OPTIONS, streamOptions);
+            }
             body.put(Fields.STREAM, true);
         }
         profile.customizeRequest(body, prompt, options, stream);
+        ProviderRequestValidation.validate(options, body);
         return body;
     }
 
@@ -294,8 +299,8 @@ final class ChatCompletionsRequestEncoder {
             return Map.of(Fields.INCLUDE_USAGE, true);
         }
         var body = new LinkedHashMap<String, Object>();
-        body.put(Fields.INCLUDE_OBFUSCATION, Boolean.TRUE.equals(options.includeObfuscation()));
-        body.put(Fields.INCLUDE_USAGE, Boolean.TRUE.equals(options.includeUsage()));
+        putIfPresent(body, Fields.INCLUDE_OBFUSCATION, options.includeObfuscation());
+        putIfPresent(body, Fields.INCLUDE_USAGE, options.includeUsage());
         if (options.additionalProperties() != null) {
             body.putAll(options.additionalProperties());
         }

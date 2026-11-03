@@ -37,6 +37,7 @@ import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 import run.halo.aifoundation.provider.transport.ProviderSseEvent;
 import run.halo.aifoundation.service.language.stream.ProviderStreamPart;
 import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 
 /** Ollama native {@code /api/chat} model with lossless thinking and tool-call history. */
 public final class OllamaChatModel implements ChatModel, ProviderStreamingChatModel {
@@ -184,6 +185,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             body.put("options", Map.copyOf(options));
         }
         body.put("stream", stream);
+        ProviderRequestValidation.validate(runtime.options(), body);
         return body;
     }
 

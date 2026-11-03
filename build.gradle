@@ -2,6 +2,8 @@ plugins {
     id "com.vanniktech.maven.publish" version "0.36.0" apply false
 }
 
+apply from: 'gradle/models-dev-snapshot.gradle'
+
 // Root build.gradle — parent project only
 // Subprojects: api, app
 subprojects {

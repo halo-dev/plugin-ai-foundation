@@ -61,6 +61,7 @@ import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.provider.ollama.OllamaChatOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.AdapterProtocol;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
@@ -130,6 +131,8 @@ public class LanguageModelImpl implements LanguageModel {
     private final ReasoningContentExtractor reasoningExtractor;
     private final LanguageModelRuntimeSupport runtimeSupport;
     private final RuntimeParameterMappings parameterMappings;
+    private final LanguageModelParameterValidator parameterValidator;
+    private final Integer messagesDefaultOutputTokens;
     private final String modelName;
     private final String providerName;
     private final int maxMultiStepLimit;
@@ -193,6 +196,12 @@ public class LanguageModelImpl implements LanguageModel {
         this.approvalResolver = composition.approvalResolver();
         this.runtimeSupport = composition.runtimeSupport();
         this.parameterMappings = context.parameterMappings();
+        this.parameterValidator = new LanguageModelParameterValidator(context);
+        var outputLimit = context.parameterConstraints() != null
+            ? context.parameterConstraints().getOutputTokens() : null;
+        this.messagesDefaultOutputTokens = context.adapterType() != null
+            && context.adapterType().getProtocol() == AdapterProtocol.MESSAGES
+            && outputLimit != null && outputLimit > 0 ? (int) Math.min(4096L, outputLimit) : null;
         this.modelName = context.modelName();
         this.providerName = context.providerName();
         this.maxMultiStepLimit = maxMultiStepLimit;
@@ -271,7 +280,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request,
         LanguageModelGenerationRun run) {
-        if (hasTools(request)) {
+        if (hasTools(request) || request != null && request.getPrepareStep() != null) {
             return streamTextWithTools(request, run);
         }
         if (hasStructuredOutput(request)) {
@@ -1327,6 +1336,7 @@ public class LanguageModelImpl implements LanguageModel {
         var stepRequest = applyPreparedStep(baseRequest, prepared);
         validateActiveTools(baseRequest, prepared);
         requestValidator.validateTools(stepRequest);
+        parameterValidator.validate(stepRequest);
         List<ModelMessage> executionMessages = prepared.getMessages() != null
             ? new ArrayList<>(prepared.getMessages())
             : new ArrayList<>(nullSafe(currentExecutionMessages));
@@ -1442,6 +1452,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     private void validateRequest(GenerateTextRequest request) {
         requestValidator.validate(request);
+        parameterValidator.validate(request);
     }
 
     private void assertToolCallingSupported(GenerateTextRequest request) {
@@ -1476,16 +1487,37 @@ public class LanguageModelImpl implements LanguageModel {
             parameterMappings.apply(entry.getKey(), value, target);
         }
         if (options instanceof OllamaChatOptions ollamaOptions) {
-            return applyOllamaMappedValues(ollamaOptions, target, request);
+            var mapped = applyOllamaMappedValues(ollamaOptions, target, request);
+            return parameterValidator.withRequestValidation(mapped);
         }
         if (!(options instanceof ChatCompletionsOptions openAiOptions)) {
-            return options;
+            return parameterValidator.withRequestValidation(options);
         }
         var builder = openAiOptions.mutate();
+        parameterValidator.applyNativeConstraints(builder);
         applyOpenAiMappedValues(builder, target.root());
         applyOpenAiUnsupportedValues(builder);
         applyMappedChatReasoning(builder, request);
-        return builder.build();
+        return parameterValidator.withRequestValidation(
+            applyMessagesDefaultOutputTokens(builder.build()));
+    }
+
+    private ChatCompletionsOptions applyMessagesDefaultOutputTokens(ChatCompletionsOptions options) {
+        if (messagesDefaultOutputTokens == null || hasOutputTokenValue(options)
+            || chatModel.getOptions() instanceof ChatCompletionsOptions defaults
+                && hasOutputTokenValue(defaults)) {
+            return options;
+        }
+        // Messages requires max_tokens. Bound only the protocol's implicit 4096-token default;
+        // caller and administrator values must still reach the normal model-limit validation.
+        return options.mutate().maxTokens(messagesDefaultOutputTokens).build();
+    }
+
+    private boolean hasOutputTokenValue(ChatCompletionsOptions options) {
+        var extra = options.getExtraBody();
+        return options.getMaxTokens() != null || options.getMaxCompletionTokens() != null
+            || extra != null && (extra.containsKey("max_tokens")
+                || extra.containsKey("max_completion_tokens"));
     }
 
     private OllamaChatOptions applyOllamaMappedValues(OllamaChatOptions options,
@@ -1555,8 +1587,8 @@ public class LanguageModelImpl implements LanguageModel {
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
             .context(request.getContext())
-            .output(request.getOutput())
-            .tools(request.getTools())
+            .output(parameterValidator.nativeOutput(request.getOutput()))
+            .tools(parameterValidator.nativeTools(request.getTools()))
             .toolChoice(request.getToolChoice())
             .stopWhen(request.getStopWhen())
             .prepareStep(request.getPrepareStep())

@@ -1,6 +1,12 @@
 package run.halo.aifoundation.provider.mapping;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 
@@ -78,9 +84,153 @@ public final class RuntimeParameterMappings {
         if (descriptor == null || value == null) {
             return false;
         }
-        descriptor.applicator().apply(value.typedValue(), value.getField(), target);
+        // Apply to an isolated target first so a malformed compound mapping cannot partly write.
+        var staged = new ParameterMappingTarget();
+        for (var item : reasoningValues(value)) {
+            descriptor.applicator().apply(typedReasoningValue(item), item.getField(), staged);
+        }
+        merge(target.root(), staged.root());
+        merge(target.parameters(), staged.parameters());
+        merge(target.options(), staged.options());
         target.recordAppliedParameter(ModelParameter.REASONING);
         return true;
+    }
+
+    public void validateReasoning(ReasoningOptions reasoning,
+        ModelParameterConstraints.Reasoning constraints) {
+        var value = reasoningValue(reasoning);
+        if (value == null || constraints == null) {
+            return;
+        }
+        for (var item : reasoningValues(value)) {
+            var field = item.getField();
+            if (!reasoningFieldAllowed(field, item.getValue(), constraints)) {
+                throw new IllegalArgumentException("reasoning value for " + field
+                    + " is not supported by this model");
+            }
+            if (field == null || !(field.endsWith("budget_tokens")
+                || field.endsWith("thinking_budget") || field.equals("reasoning.max_tokens"))) {
+                continue;
+            }
+            var typed = typedReasoningValue(item);
+            if (!(typed instanceof Number budget)) {
+                throw new IllegalArgumentException("reasoning budget must be numeric");
+            }
+            validateBudget(budget, constraints);
+        }
+    }
+
+    public static void validateBudget(long budget, ModelParameterConstraints.Reasoning constraints) {
+        validateBudget(BigDecimal.valueOf(budget), constraints);
+    }
+
+    public static void validateBudget(Number budget, ModelParameterConstraints.Reasoning constraints) {
+        if (constraints == null) {
+            return;
+        }
+        if (Boolean.FALSE.equals(constraints.getSupported())) {
+            throw new IllegalArgumentException("reasoning budget is not supported by this model");
+        }
+        if (constraints.getBudgetMinimum() == null && constraints.getBudgetMaximum() == null) {
+            return;
+        }
+        // Native options can retain arbitrary-precision numbers; narrowing them can hide a violated limit.
+        var value = new BigDecimal(budget.toString());
+        if (constraints.getBudgetMinimum() != null
+            && value.compareTo(BigDecimal.valueOf(constraints.getBudgetMinimum())) < 0) {
+            throw new IllegalArgumentException("reasoning budget must be at least "
+                + constraints.getBudgetMinimum());
+        }
+        if (constraints.getBudgetMaximum() != null
+            && value.compareTo(BigDecimal.valueOf(constraints.getBudgetMaximum())) > 0) {
+            throw new IllegalArgumentException("reasoning budget must not exceed "
+                + constraints.getBudgetMaximum());
+        }
+    }
+
+    /** Tests native controls only; unrecognized fields and absent facts remain unknown. */
+    public static boolean reasoningFieldAllowed(String field, Object value,
+        ModelParameterConstraints.Reasoning constraints) {
+        if (constraints == null || field == null) {
+            return true;
+        }
+        var effort = field.equals("reasoning_effort") || field.equals("reasoning.effort")
+            || field.equals("output_config.effort")
+            || field.equals("think") && value instanceof String
+                && !List.of("true", "false").contains(value);
+        var toggle = field.equals("enable_thinking") || field.equals("thinking.type")
+            || field.equals("reasoning.enabled") || field.equals("think") && !effort;
+        if (!effort && !toggle) {
+            return true;
+        }
+        if (Boolean.FALSE.equals(constraints.getSupported())) {
+            return false;
+        }
+        if (toggle && Boolean.FALSE.equals(constraints.getToggle())) {
+            return false;
+        }
+        return !effort || constraints.getEfforts() == null
+            || constraints.getEfforts().contains(String.valueOf(value));
+    }
+
+    private List<ModelParameterMappings.ReasoningValueMapping> reasoningValues(
+        ModelParameterMappings.ReasoningValueMapping value) {
+        var values = new ArrayList<ModelParameterMappings.ReasoningValueMapping>();
+        values.add(value);
+        if (value.getAdditionalValues() != null) {
+            if (value.getAdditionalValues().size() > 8) {
+                throw new IllegalArgumentException("reasoning mapping permits at most 8 additional values");
+            }
+            values.addAll(value.getAdditionalValues());
+        }
+        var fields = new HashSet<String>();
+        for (var index = 0; index < values.size(); index++) {
+            var item = values.get(index);
+            if (item == null || item.getField() == null || item.getField().isBlank()) {
+                throw new IllegalArgumentException("reasoning mapping field must not be blank");
+            }
+            if (index > 0 && item.getAdditionalValues() != null
+                && !item.getAdditionalValues().isEmpty()) {
+                throw new IllegalArgumentException("reasoning mapping additional values cannot be nested");
+            }
+            if (fields.stream().anyMatch(field -> field.equals(item.getField())
+                || field.startsWith(item.getField() + ".")
+                || item.getField().startsWith(field + "."))) {
+                throw new IllegalArgumentException("reasoning mapping fields must not overlap: "
+                    + item.getField());
+            }
+            fields.add(item.getField());
+            typedReasoningValue(item);
+        }
+        return values;
+    }
+
+    private Object typedReasoningValue(ModelParameterMappings.ReasoningValueMapping value) {
+        if (value.getValueType() == null || value.getValue() == null) {
+            throw new IllegalArgumentException("reasoning mapping value and type are required");
+        }
+        if (value.getValueType() == ModelParameterMappings.ValueType.BOOLEAN
+            && !List.of("true", "false").contains(value.getValue())) {
+            throw new IllegalArgumentException("reasoning mapping boolean must be true or false");
+        }
+        var typed = value.typedValue();
+        if (typed instanceof Double number && !Double.isFinite(number)) {
+            throw new IllegalArgumentException("reasoning mapping decimal must be finite");
+        }
+        return typed;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void merge(Map<String, Object> target, Map<String, Object> values) {
+        values.forEach((key, value) -> {
+            if (value instanceof Map<?, ?> nested && target.get(key) instanceof Map<?, ?> existing) {
+                var merged = new LinkedHashMap<>((Map<String, Object>) existing);
+                merge(merged, (Map<String, Object>) nested);
+                target.put(key, merged);
+            } else {
+                target.put(key, value);
+            }
+        });
     }
 
     private ModelParameterMappings.ReasoningValueMapping reasoningValue(

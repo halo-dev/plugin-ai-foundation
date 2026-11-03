@@ -24,15 +24,14 @@ const queryClient = useQueryClient()
 const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
 const form = useTemplateRef<InstanceType<typeof ModelForm>>('form')
 
-const providerName = props.model.spec.providerName
+const providerName = computed(() => props.model.spec.providerName)
 
 const { data: providers } = useProvidersFetch()
-const providerType = computed(() => {
-  return providers.value?.find((p) => p.metadata.name === providerName)?.spec.providerType
-})
-const providerMappings = computed(() => {
-  return providers.value?.find((p) => p.metadata.name === providerName)?.spec.parameterMappings
-})
+const provider = computed(() =>
+  providers.value?.find((p) => p.metadata.name === providerName.value),
+)
+const providerType = computed(() => provider.value?.spec.providerType)
+const providerMappings = computed(() => provider.value?.spec.parameterMappings)
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ModelFormState) => {
@@ -40,23 +39,29 @@ const { mutate, isPending } = useMutation({
       name: props.model.metadata.name,
       aiModel: {
         ...props.model,
-        spec: reconcileModelCapabilities(props.model.spec, {
-          ...props.model.spec,
-          modelId: formState.modelId,
-          displayName: formState.displayName,
-          enabled: formState.enabled,
-          modelType: formState.modelType,
-          features: formState.features?.length ? formState.features : undefined,
-          capabilities: formState.capabilities,
-          capabilitySources: formState.capabilitySources,
-          parameterMappings: formState.parameterMappings,
-          nativeOptions: formState.nativeOptions,
-          adapterType: formState.adapterType || props.model.spec.adapterType,
-          discoverySource:
-            props.model.spec.discoverySource || AiModelSpecDiscoverySourceEnum.Manual,
-          discoveryConfidence:
-            props.model.spec.discoveryConfidence || AiModelSpecDiscoveryConfidenceEnum.High,
-        } as AiModel['spec']),
+        spec: reconcileModelCapabilities(
+          props.model.spec,
+          {
+            ...props.model.spec,
+            modelId: formState.modelId,
+            displayName: formState.displayName,
+            enabled: formState.enabled,
+            modelType: formState.modelType,
+            features: formState.features?.length ? formState.features : undefined,
+            capabilities: formState.capabilities,
+            capabilitySources: formState.capabilitySources,
+            parameterMappings: formState.parameterMappings,
+            parameterConstraints: formState.parameterConstraints,
+            catalogParameters: formState.catalogParameters,
+            nativeOptions: formState.nativeOptions,
+            adapterType: formState.adapterType || props.model.spec.adapterType,
+            discoverySource:
+              props.model.spec.discoverySource || AiModelSpecDiscoverySourceEnum.Manual,
+            discoveryConfidence:
+              props.model.spec.discoveryConfidence || AiModelSpecDiscoveryConfidenceEnum.High,
+          } as AiModel['spec'],
+          { provider: provider.value?.spec },
+        ),
       },
     })
   },
@@ -83,6 +88,7 @@ function onSubmit(data: ModelFormState) {
   >
     <ModelForm
       ref="form"
+      :provider-name="providerName"
       :provider-type="providerType || ''"
       :inherited-mappings="providerMappings"
       :model-name="model.metadata.name"
@@ -96,6 +102,8 @@ function onSubmit(data: ModelFormState) {
         capabilities: model.spec.capabilities,
         capabilitySources: model.spec.capabilitySources,
         catalogMatch: model.spec.catalogMatch,
+        catalogParameters: model.spec.catalogParameters,
+        parameterConstraints: model.spec.parameterConstraints,
         parameterMappings: model.spec.parameterMappings,
         nativeOptions: model.spec.nativeOptions,
       }"
@@ -103,7 +111,13 @@ function onSubmit(data: ModelFormState) {
     />
     <template #footer>
       <VSpace>
-        <VButton type="secondary" :loading="isPending" @click="form?.submit()"> 保存 </VButton>
+        <VButton
+          type="secondary"
+          :loading="isPending || form?.isSubmitting"
+          @click="form?.submit()"
+        >
+          保存
+        </VButton>
         <VButton @click="modal?.close()">取消</VButton>
       </VSpace>
     </template>

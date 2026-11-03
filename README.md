@@ -96,6 +96,12 @@ cd ui && pnpm install && pnpm dev
 
 # 运行测试
 ./gradlew test
+
+# 更新随插件发布的 models.dev v2 副本
+./gradlew updateModelsDevSnapshot
+
+# 离线校验本地 models.dev 副本
+./gradlew verifyModelsDevSnapshot
 ```
 
 构建完成后，插件 JAR 文件位于 `app/build/libs/` 目录。

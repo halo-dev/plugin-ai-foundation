@@ -29,6 +29,6 @@ public class ModelRuntimeContextResolver {
         resolution.providerType().validateNativeModelOptions(model);
         return new ModelRuntimeContext(modelName, resolution.modelId(), providerName,
             resolution.providerTypeName(), model.adapterType(), resolution.providerType(), mappings,
-            model.nativeOptions());
+            model.nativeOptions(), mappingResolver.resolveProfile(resolution).getConstraints());
     }
 }
