@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { reactive } from 'vue'
 import { createDecisionClient, type DecisionRequest } from './decision'
 import { AIUIError, AIUIProtocolError, isAbortError } from './errors'
 
@@ -35,6 +36,46 @@ describe('decision client', () => {
     expect(fetch.mock.calls[0]?.[1].headers.get('X-Request')).toBe('example')
   })
 
+  it.each(['question IDs', 'question types', 'options', 'levels'] as const)(
+    'validates the submitted request after reactive %s change',
+    async (edit) => {
+      const input = reactive({
+        state: 'message',
+        questions: {
+          spam: { type: 'YES_NO', instructions: 'Spam?' },
+          route: { type: 'CHOICE', instructions: 'Route?', options: { a: 'A', b: 'B' } },
+          rating: { type: 'SCORE', instructions: 'Rating?', levels: ['low', 'high'] },
+        } as DecisionRequest['questions'],
+      })
+      const payload = {
+        model: 'jev-version',
+        answers: {
+          spam: { type: 'YES_NO', probability: 0.12 },
+          route: { type: 'CHOICE', choice: 'b', probabilities: { a: 0.2, b: 0.8 } },
+          rating: { type: 'SCORE', score: 1, probabilities: { '0': 0.2, '1': 0.8 } },
+        },
+      }
+      const fetch = vi.fn().mockResolvedValue(Response.json(payload))
+      const pending = createDecisionClient({ api: '/decision', fetch }).decide(input)
+
+      if (edit === 'question IDs') {
+        delete input.questions.spam
+      } else if (edit === 'question types') {
+        input.questions.spam = { type: 'SCORE', instructions: 'Spam?', levels: ['no', 'yes'] }
+      } else if (edit === 'options') {
+        const question = input.questions.route
+        if (question?.type !== 'CHOICE') throw new Error('Expected a choice question')
+        question.options.c = 'C'
+      } else {
+        const question = input.questions.rating
+        if (question?.type !== 'SCORE') throw new Error('Expected a score question')
+        question.levels.push('highest')
+      }
+
+      await expect(pending).resolves.toEqual(payload)
+    },
+  )
+
   it.each([
     { model: 'jev', answers: {} },
     { model: 'jev', answers: { spam: { type: 'YES_NO', probability: 2 } } },
@@ -53,7 +94,9 @@ describe('decision client', () => {
       api: '/decision',
       fetch: vi.fn().mockResolvedValue(new Response('', { status: 429 })),
     })
-    await expect(client.decide(request)).rejects.toMatchObject<Partial<AIUIError>>({ status: 429 })
+    await expect(client.decide(request)).rejects.toMatchObject({
+      status: 429,
+    } satisfies Partial<AIUIError>)
   })
 
   it('reports malformed JSON as a protocol error', async () => {
