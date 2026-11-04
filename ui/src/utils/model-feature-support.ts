@@ -31,6 +31,23 @@ export function withFeatureSupport(
   }
 }
 
+export function filterFeatureSupport(
+  constraints: ModelParameterConstraints | undefined,
+  supportedFeatures: readonly AiModelSpecFeaturesEnum[] | undefined,
+): ModelParameterConstraints | undefined {
+  if (!constraints || !supportedFeatures) return constraints
+  const result = { ...constraints }
+  if (!supportedFeatures.includes('tool-call')) delete result.toolCalling
+  if (!supportedFeatures.includes('structured-output')) delete result.structuredOutput
+  if (!supportedFeatures.includes('reasoning') && result.reasoning) {
+    const reasoning = { ...result.reasoning }
+    delete reasoning.supported
+    if (Object.keys(reasoning).length) result.reasoning = reasoning
+    else delete result.reasoning
+  }
+  return Object.keys(result).length ? result : undefined
+}
+
 // Administrator reasoning mappings replace catalog reasoning constraints in the runtime resolver.
 export function featureConstraints(
   profile?: ModelParameterProfile,
@@ -55,6 +72,7 @@ export function featureConstraints(
 export function featuresWithConstraints(
   features: readonly AiModelSpecFeaturesEnum[] | undefined,
   constraints?: ModelParameterConstraints,
+  supportedFeatures?: readonly AiModelSpecFeaturesEnum[],
 ): AiModelSpecFeaturesEnum[] {
   const result = new Set(features)
   for (const feature of parameterFeatures) {
@@ -62,5 +80,5 @@ export function featuresWithConstraints(
     if (supported === true) result.add(feature)
     if (supported === false) result.delete(feature)
   }
-  return [...result]
+  return [...result].filter((feature) => !supportedFeatures || supportedFeatures.includes(feature))
 }

@@ -31,11 +31,13 @@ import {
   defaultModelTypeForProviderType,
   defaultParameterMappingsForAdapter,
   modelFeatureOptionsForProviderType,
+  modelSupportedFeaturesForProviderType,
   modelTypeOptionsForProviderType,
 } from '@/utils/model'
 import {
   featureConstraints,
   featuresWithConstraints,
+  filterFeatureSupport,
   parameterFeatures,
   withFeatureSupport,
 } from '@/utils/model-feature-support'
@@ -348,13 +350,14 @@ watch(
   },
 )
 
+const supportedFeatures = computed(() =>
+  modelSupportedFeaturesForProviderType(selectedProviderType.value, selectedAdapterType.value),
+)
+
 watch(
-  [featureBaseline, effectiveFeatureConstraints, featureOptions],
-  ([features, constraints, options]) => {
-    const allowedFeatures = new Set(options.map((option) => option.value))
-    selectedFeatures.value = featuresWithConstraints(features, constraints).filter(
-      (feature) => !selectedProviderType.value || allowedFeatures.has(feature),
-    )
+  [featureBaseline, effectiveFeatureConstraints, supportedFeatures],
+  ([features, constraints, supported]) => {
+    selectedFeatures.value = featuresWithConstraints(features, constraints, supported)
   },
   { immediate: true },
 )
@@ -394,7 +397,11 @@ async function onSubmit(data: ModelFormRawState) {
   const submittedIdentity = formIdentity.value
   try {
     if (!(await waitForCatalogParameters()) || submittedIdentity !== formIdentity.value) return
-    const features = featuresWithConstraints(data.features, effectiveFeatureConstraints.value)
+    const features = featuresWithConstraints(
+      data.features,
+      effectiveFeatureConstraints.value,
+      supportedFeatures.value,
+    )
     const capabilities = buildCapabilities({ ...data, features })
     const capabilitySources = buildCapabilitySources(capabilities)
     if (capabilities && capabilitySources) {
@@ -410,7 +417,10 @@ async function onSubmit(data: ModelFormRawState) {
       capabilities,
       capabilitySources,
       parameterMappings: normalizedMappings,
-      parameterConstraints: parameterConstraints.value,
+      parameterConstraints: filterFeatureSupport(
+        parameterConstraints.value,
+        supportedFeatures.value,
+      ),
       catalogParameters: catalogParameters.value,
       nativeOptions,
     })

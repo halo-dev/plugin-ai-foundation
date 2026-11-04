@@ -1,5 +1,6 @@
 import type {
   AiModel,
+  AiModelSpecFeaturesEnum,
   AiProvider,
   ImageGenerationCapability,
   LanguageCapability,
@@ -8,6 +9,7 @@ import {
   featureConstraints,
   featureSupport,
   featuresWithConstraints,
+  filterFeatureSupport,
   parameterFeatures,
   withFeatureSupport,
 } from './model-feature-support'
@@ -72,7 +74,11 @@ function matchesCatalogIdentity(
 export function reconcileModelCapabilities(
   previous: CapabilitySnapshot,
   next: ModelSpec,
-  options: { importing?: boolean; provider?: CatalogProvider } = {},
+  options: {
+    importing?: boolean
+    provider?: CatalogProvider
+    supportedFeatures?: readonly AiModelSpecFeaturesEnum[]
+  } = {},
 ): ModelSpec {
   const spec = { ...next }
   const invalidCatalogParameters =
@@ -94,6 +100,10 @@ export function reconcileModelCapabilities(
         )
       }
     }
+    spec.parameterConstraints = filterFeatureSupport(
+      spec.parameterConstraints,
+      options.supportedFeatures,
+    )
     const features = featuresWithConstraints(
       spec.features,
       featureConstraints(
@@ -102,6 +112,7 @@ export function reconcileModelCapabilities(
         options.provider?.parameterMappings,
         spec.parameterMappings,
       ),
+      options.supportedFeatures,
     )
     spec.features = features.length || spec.features !== undefined ? features : undefined
   }

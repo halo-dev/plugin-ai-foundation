@@ -311,10 +311,15 @@ async function handleImport() {
   try {
     const results = await Promise.allSettled(
       data.map(async (model) => {
-        const newModel = createModelFromDiscovered(providerName.value, model, {
-          ...profileFor(model),
-          parameterConstraints: manualFeatureConstraints(model),
-        })
+        const newModel = createModelFromDiscovered(
+          providerName.value,
+          model,
+          {
+            ...profileFor(model),
+            parameterConstraints: manualFeatureConstraints(model),
+          },
+          selectedProviderType.value,
+        )
 
         await aiConsoleApiClient.model.createModel({
           aiModel: newModel,

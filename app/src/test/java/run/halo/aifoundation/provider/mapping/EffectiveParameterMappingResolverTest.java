@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterConstraints;
@@ -16,6 +18,7 @@ import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.extension.ModelParameterProfile;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.app.extension.Metadata;
@@ -28,6 +31,8 @@ class EffectiveParameterMappingResolverTest {
 
     @BeforeEach
     void setUp() {
+        when(providerType.getSupportedFeatures(AdapterType.OPENAI_RESPONSES))
+            .thenReturn(List.of(ModelFeature.values()));
         when(providerType.getDefaultBaseUrl()).thenReturn("https://api.openai.com");
         var defaults = Map.of(
             ModelParameter.MAX_OUTPUT_TOKENS,
@@ -220,6 +225,39 @@ class EffectiveParameterMappingResolverTest {
         assertThat(effective.getHigh().getValue()).isEqualTo("high");
         assertThat(resolution.model().getSpec().getParameterMappings().getLanguage()
             .getReasoning().getReasoningMapping()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void limitsStoredSupportDeclarationsToAdapterCapabilities(boolean manual) {
+        when(providerType.getSupportedFeatures(AdapterType.OPENAI_RESPONSES))
+            .thenReturn(List.of(ModelFeature.STREAMING));
+        var resolution = resolution(null, null);
+        var constraints = new ModelParameterConstraints();
+        constraints.setToolCalling(true);
+        constraints.setStructuredOutput(true);
+        constraints.setOutputTokens(2048L);
+        var reasoning = new ModelParameterConstraints.Reasoning();
+        reasoning.setSupported(true);
+        reasoning.setBudgetMinimum(512L);
+        constraints.setReasoning(reasoning);
+        if (manual) {
+            resolution.model().getSpec().setParameterConstraints(constraints);
+        } else {
+            var profile = catalogProfile();
+            profile.setConstraints(constraints);
+            resolution.model().getSpec().setCatalogParameters(profile);
+        }
+
+        var effective = resolver.resolveConstraints(resolution);
+        assertThat(effective.getToolCalling()).isFalse();
+        assertThat(effective.getStructuredOutput()).isFalse();
+        assertThat(effective.getReasoning().getSupported()).isFalse();
+        assertThat(effective.getOutputTokens()).isEqualTo(2048L);
+        assertThat(effective.getReasoning().getBudgetMinimum()).isEqualTo(512L);
+        assertThat(resolver.resolveProfile(resolution).getConstraints()).isEqualTo(effective);
+        assertThat(constraints.getToolCalling()).isTrue();
+        assertThat(reasoning.getSupported()).isTrue();
     }
 
     @Test

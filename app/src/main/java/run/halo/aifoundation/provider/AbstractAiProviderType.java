@@ -420,12 +420,15 @@ public abstract class AbstractAiProviderType implements AiProviderType {
         if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "audio", "audioinput")) {
             features.add(ModelFeature.AUDIO_INPUT);
         }
-        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS, "structuredoutput", "structuredoutputs",
-            "jsonschema")) {
+        if (fieldsContainAnyToken(node, CAPABILITY_FIELDS,
+            "structuredoutput", "structured-output", "structured_output",
+            "structuredoutputs", "structured-outputs", "structured_outputs",
+            "jsonschema", "json-schema", "json_schema")) {
             features.add(ModelFeature.STRUCTURED_OUTPUT);
         }
         if (fieldsContainAnyToken(node, CAPABILITY_FIELDS,
-            "tools", "functioncalling", "toolcall")) {
+            "tools", "functioncalling", "function-calling", "function_calling",
+            "toolcall", "tool-call", "tool_call")) {
             features.add(ModelFeature.TOOL_CALL);
         }
         return Set.copyOf(features);

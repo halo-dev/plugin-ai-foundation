@@ -3,8 +3,10 @@ import { aiConsoleApiClient } from '@/api'
 import type { AiModel } from '@/api/generated'
 import { AiModelSpecDiscoveryConfidenceEnum, AiModelSpecDiscoverySourceEnum } from '@/api/generated'
 import { QK_MODELS } from '@/composables/use-models-fetch'
+import { useProviderTypesFetch } from '@/composables/use-provider-types-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import type { ModelFormState } from '@/types/form'
+import { modelSupportedFeaturesForProviderType } from '@/utils/model'
 import { reconcileModelCapabilities } from '@/utils/model-capability-changes'
 import {
   featureSupport,
@@ -36,6 +38,10 @@ const provider = computed(() =>
   providers.value?.find((p) => p.metadata.name === providerName.value),
 )
 const providerType = computed(() => provider.value?.spec.providerType)
+const { data: providerTypes } = useProviderTypesFetch()
+const providerTypeInfo = computed(() =>
+  providerTypes.value?.find((type) => type.providerType === providerType.value),
+)
 const providerMappings = computed(() => provider.value?.spec.parameterMappings)
 const formState = computed<ModelFormState>(() => {
   const spec = props.model.spec
@@ -102,7 +108,13 @@ const { mutate, isPending } = useMutation({
             discoveryConfidence:
               props.model.spec.discoveryConfidence || AiModelSpecDiscoveryConfidenceEnum.High,
           },
-          { provider: provider.value?.spec },
+          {
+            provider: provider.value?.spec,
+            supportedFeatures: modelSupportedFeaturesForProviderType(
+              providerTypeInfo.value,
+              formState.adapterType || props.model.spec.adapterType,
+            ),
+          },
         ),
       },
     })

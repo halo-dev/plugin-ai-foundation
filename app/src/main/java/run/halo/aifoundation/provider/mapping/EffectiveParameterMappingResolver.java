@@ -12,6 +12,7 @@ import run.halo.aifoundation.extension.ModelParameterProfile;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping;
 import run.halo.aifoundation.provider.support.AdapterProtocol;
 import run.halo.aifoundation.provider.support.AdapterType;
+import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.model.ModelResolution;
 
@@ -166,8 +167,32 @@ public class EffectiveParameterMappingResolver {
                 default -> { }
             }
         });
-        return mergeConstraints(constraints,
+        var result = mergeConstraints(constraints,
             resolution.model().getSpec().getParameterConstraints());
+        restrictToAdapterCapabilities(resolution, result);
+        return result;
+    }
+
+    private void restrictToAdapterCapabilities(ModelResolution resolution,
+        ModelParameterConstraints constraints) {
+        if (resolution.model().getSpec().getModelType() != ModelType.LANGUAGE) {
+            return;
+        }
+        var adapter = defaultMappingAdapter(resolution, ModelType.LANGUAGE);
+        var supported = resolution.providerType().getSupportedFeatures(adapter);
+        if (Boolean.TRUE.equals(constraints.getToolCalling())
+            && !supported.contains(ModelFeature.TOOL_CALL)) {
+            constraints.setToolCalling(false);
+        }
+        if (Boolean.TRUE.equals(constraints.getStructuredOutput())
+            && !supported.contains(ModelFeature.STRUCTURED_OUTPUT)) {
+            constraints.setStructuredOutput(false);
+        }
+        var reasoning = constraints.getReasoning();
+        if (reasoning != null && Boolean.TRUE.equals(reasoning.getSupported())
+            && !supported.contains(ModelFeature.REASONING)) {
+            reasoning.setSupported(false);
+        }
     }
 
     private void constrain(

@@ -59,9 +59,9 @@ function deferred() {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({
-    data: undefined,
-  } as never)
+  vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockRejectedValue(
+    new Error('offline'),
+  )
 })
 afterEach(() => {
   scopes.splice(0).forEach((scope) => scope.stop())
@@ -103,6 +103,10 @@ describe('automatic model catalog parameters', () => {
   })
 
   it('does not invent configuration when the catalog has no match', async () => {
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({
+      status: 204,
+      data: '',
+    } as never)
     const form = setup()
     await expect(form.waitForCurrent()).resolves.toBe(true)
     expect(form.data.value).toBeUndefined()
@@ -121,37 +125,106 @@ describe('automatic model catalog parameters', () => {
     },
   )
 
-  it.each(['missing', 'failure'] as const)(
-    'retains saved and previously loaded adapter snapshots after switching back with a %s result',
-    async (result) => {
-      const responsesProfile: ModelParameterProfile = {
-        ...profile,
-        adapterType: 'openai-responses',
-        constraints: { outputTokens: 8192 },
-      }
-      vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters)
-        .mockResolvedValueOnce({ data: undefined } as never)
-        .mockResolvedValueOnce({ data: responsesProfile } as never)
-      const form = setup({ initial: profile })
-      await form.waitForCurrent()
-      expect(form.data.value).toEqual(profile)
-      form.model.value.spec.adapterType = 'openai-responses'
-      await form.waitForCurrent()
-      expect(form.data.value).toEqual(responsesProfile)
+  it('retains saved and previously loaded adapter snapshots after switching back with a failed request', async () => {
+    const responsesProfile: ModelParameterProfile = {
+      ...profile,
+      adapterType: 'openai-responses',
+      constraints: { outputTokens: 8192 },
+    }
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ data: responsesProfile } as never)
+    const form = setup({ initial: profile })
+    await form.waitForCurrent()
+    expect(form.data.value).toEqual(profile)
+    form.model.value.spec.adapterType = 'openai-responses'
+    await form.waitForCurrent()
+    expect(form.data.value).toEqual(responsesProfile)
 
-      if (result === 'failure') {
-        vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockRejectedValue(
-          new Error('offline'),
-        )
-      }
-      form.model.value.spec.adapterType = 'openai-chat'
-      await expect(form.waitForCurrent()).resolves.toBe(true)
-      expect(form.data.value).toEqual(profile)
-      form.model.value.spec.adapterType = 'openai-responses'
-      await expect(form.waitForCurrent()).resolves.toBe(true)
-      expect(form.data.value).toEqual(responsesProfile)
-    },
-  )
+    form.model.value.spec.adapterType = 'openai-chat'
+    await expect(form.waitForCurrent()).resolves.toBe(true)
+    expect(form.data.value).toEqual(profile)
+    form.model.value.spec.adapterType = 'openai-responses'
+    await expect(form.waitForCurrent()).resolves.toBe(true)
+    expect(form.data.value).toEqual(responsesProfile)
+  })
+
+  it('clears an unmatched saved snapshot without reviving the initial fallback', async () => {
+    const pending = deferred()
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockReturnValueOnce(
+      pending.promise as never,
+    )
+    const form = setup({ initial: profile })
+    expect(form.data.value).toEqual(profile)
+
+    pending.resolve({ status: 204, data: '' })
+    await form.waitForCurrent()
+    expect(form.data.value).toBeUndefined()
+
+    form.ready.value = false
+    form.providerType.value = ''
+    expect(form.data.value).toBeUndefined()
+    form.providerType.value = 'openai'
+    form.ready.value = true
+    await form.waitForCurrent()
+    expect(form.data.value).toBeUndefined()
+  })
+
+  it('evicts only the unmatched model snapshot when switching between cached models', async () => {
+    const other = { ...profile, modelId: 'other' }
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ data: other } as never)
+      .mockResolvedValueOnce({ status: 204, data: '' } as never)
+    const form = setup({ initial: profile })
+    await form.waitForCurrent()
+    form.model.value.spec.modelId = 'other'
+    await form.waitForCurrent()
+    expect(form.data.value).toEqual(other)
+
+    form.model.value.spec.modelId = 'gpt-5'
+    await form.waitForCurrent()
+    expect(form.data.value).toBeUndefined()
+    form.model.value.spec.modelId = 'other'
+    await form.waitForCurrent()
+    expect(form.data.value).toEqual(other)
+    form.model.value.spec.modelId = 'gpt-5'
+    await form.waitForCurrent()
+    expect(form.data.value).toBeUndefined()
+  })
+
+  it('ignores a late no-match response after the same identity has a newer snapshot', async () => {
+    const pending = deferred()
+    const fresh = { ...profile, constraints: { outputTokens: 4096 } }
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters)
+      .mockReturnValueOnce(pending.promise as never)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ data: fresh } as never)
+    const form = setup({ initial: profile })
+    form.model.value.spec.modelId = 'other'
+    form.model.value.spec.modelId = 'gpt-5'
+    await form.waitForCurrent()
+
+    pending.resolve({ status: 204, data: '' })
+    await flushPromises()
+    expect(form.data.value).toEqual(fresh)
+  })
+
+  it('does not restore an evicted snapshot from an older successful request', async () => {
+    const pending = deferred()
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters)
+      .mockReturnValueOnce(pending.promise as never)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ status: 204, data: '' } as never)
+    const form = setup({ initial: profile })
+    form.model.value.spec.modelId = 'other'
+    form.model.value.spec.modelId = 'gpt-5'
+    await form.waitForCurrent()
+
+    pending.resolve({ data: profile })
+    await flushPromises()
+    expect(form.data.value).toBeUndefined()
+  })
 
   it('keeps saved and loaded snapshots isolated between providers with the same model ID', async () => {
     const responsesProfile: ModelParameterProfile = {

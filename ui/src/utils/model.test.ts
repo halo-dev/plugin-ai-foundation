@@ -55,6 +55,43 @@ describe('findProviderTypeForModel', () => {
 })
 
 describe('createModelFromDiscovered', () => {
+  it('applies the target adapter boundary to imported feature overrides', () => {
+    const discovered = discoveredModel(
+      'legacy-gitee',
+      AiModelSpecModelTypeEnum.Language,
+      ['tool-call', 'structured-output', 'reasoning'],
+      DiscoveredModelItemAdapterTypeEnum.GiteeChat,
+    )
+    const providerType = providerTypeInfo('gitee-moark', 'Gitee', {
+      adapters: [
+        {
+          adapterType: 'gitee-messages',
+          modelType: 'language',
+          supportedFeatures: ['streaming', 'structured-output'],
+        },
+      ],
+    })
+    const imported = createModelFromDiscovered(
+      'gitee-test',
+      discovered,
+      {
+        adapterType: 'gitee-messages',
+        features: ['structured-output'],
+        parameterConstraints: {
+          toolCalling: true,
+          reasoning: { supported: true, budgetMinimum: 512 },
+          outputTokens: 2048,
+        },
+      },
+      providerType,
+    )
+    expect(imported.spec.features).toEqual(['structured-output'])
+    expect(imported.spec.parameterConstraints).toEqual({
+      reasoning: { budgetMinimum: 512 },
+      outputTokens: 2048,
+    })
+  })
+
   it('persists catalog parameters only with the matching discovered model adapter', () => {
     const discovered: DiscoveredModel = discoveredModel(
       'example',
@@ -337,6 +374,13 @@ describe('provider type model options', () => {
     )
     expect(modelFeatureOptionsForProviderType(undefined).map((item) => item.value)).toContain(
       AiModelSpecFeaturesEnum.ToolCall,
+    )
+    const providerType = providerTypeInfo('openai', 'OpenAI', { supportedFeatures: undefined })
+    expect(modelFeatureOptionsForProviderType(providerType).map((item) => item.value)).toContain(
+      AiModelSpecFeaturesEnum.ToolCall,
+    )
+    expect(modelFeatureOptionsForProviderType({ ...providerType, supportedFeatures: [] })).toEqual(
+      [],
     )
   })
 

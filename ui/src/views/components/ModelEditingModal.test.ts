@@ -16,7 +16,10 @@ vi.mock('@/api', () => ({
 }))
 vi.mock('@/composables/use-providers-fetch', () => ({
   useProvidersFetch: () => ({
-    data: ref([{ metadata: { name: 'openai-test' }, spec: { providerType: 'openai' } }]),
+    data: ref([
+      { metadata: { name: 'openai-test' }, spec: { providerType: 'openai' } },
+      { metadata: { name: 'gitee-test' }, spec: { providerType: 'gitee-moark' } },
+    ]),
   }),
 }))
 vi.mock('@/composables/use-provider-types-fetch', () => ({
@@ -42,6 +45,23 @@ vi.mock('@/composables/use-provider-types-fetch', () => ({
           { adapterType: 'openai-responses', modelType: 'language', supportedFeatures: ['vision'] },
         ],
       },
+      {
+        providerType: 'gitee-moark',
+        supportedModelTypes: ['language'],
+        adapters: [
+          {
+            adapterType: 'gitee-chat',
+            modelType: 'language',
+            supportedFeatures: ['streaming', 'tool-call', 'structured-output', 'reasoning'],
+            recommended: true,
+          },
+          {
+            adapterType: 'gitee-messages',
+            modelType: 'language',
+            supportedFeatures: ['streaming', 'structured-output'],
+          },
+        ],
+      },
     ]),
   }),
 }))
@@ -58,6 +78,83 @@ beforeEach(() => {
   vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({
     data: undefined,
   } as never)
+})
+
+it('removes unsupported legacy feature overrides when switching adapters', async () => {
+  const saved: AiModel = {
+    apiVersion: 'aifoundation.halo.run/v1alpha1',
+    kind: 'AiModel',
+    metadata: { name: 'legacy-gitee' },
+    spec: {
+      providerName: 'gitee-test',
+      modelId: 'legacy-gitee',
+      displayName: 'Legacy',
+      enabled: true,
+      modelType: 'language',
+      adapterType: 'gitee-chat',
+      features: ['tool-call', 'structured-output', 'reasoning'],
+      parameterConstraints: { outputTokens: 2048, reasoning: { budgetMinimum: 512 } },
+    },
+  }
+  const wrapper = mount(ModelEditingModal, {
+    props: { model: saved },
+    global: {
+      stubs: {
+        VModal: { template: '<div><slot/><slot name="footer"/></div>' },
+        FormKit: {
+          name: 'FormKit',
+          props: ['modelValue', 'options'],
+          emits: ['submit', 'input'],
+          template: '<div><slot/></div>',
+        },
+        AdvancedSettingsCollapsible: { template: '<section><slot/></section>' },
+        ParameterMappingFields: true,
+        ModelParameterConstraintFields: true,
+        ModelNativeParameterConstraintFields: true,
+        ModelCatalogProvenance: true,
+      },
+    },
+  })
+  try {
+    await flushPromises()
+    wrapper
+      .findAllComponents({ name: 'FormKit' })
+      .find((component) => component.attributes('name') === 'adapterType')!
+      .vm.$emit('input', 'gitee-messages')
+    await flushPromises()
+    const features = wrapper
+      .findAllComponents({ name: 'FormKit' })
+      .find((component) => component.attributes('name') === 'features')!
+    expect(features.props('modelValue')).toEqual(['structured-output'])
+    expect(
+      features.props('options').map((option: { value: string }) => option.value),
+    ).not.toContain('tool-call')
+    wrapper.findComponent({ name: 'FormKit' }).vm.$emit('submit', {
+      ...saved.spec,
+      features: features.props('modelValue'),
+    })
+    await flushPromises()
+    const submitted = wrapper.findComponent({ name: 'ModelForm' }).emitted('submit')![0]![0]
+    expect(submitted).toMatchObject({
+      adapterType: 'gitee-messages',
+      features: ['structured-output'],
+      parameterConstraints: {
+        outputTokens: 2048,
+        structuredOutput: true,
+        reasoning: { budgetMinimum: 512 },
+      },
+    })
+    const after = vi.mocked(aiConsoleApiClient.model.updateModel).mock.calls[0]![0]!.aiModel
+    expect(after.spec.features).toEqual(['structured-output'])
+    expect(after.spec.parameterConstraints).toEqual({
+      outputTokens: 2048,
+      structuredOutput: true,
+      reasoning: { budgetMinimum: 512 },
+    })
+    expect(saved.spec.features).toEqual(['tool-call', 'structured-output', 'reasoning'])
+  } finally {
+    wrapper.unmount()
+  }
 })
 
 it('actual edit form and modal must invalidate obsolete text-only catalog media attribution', async () => {

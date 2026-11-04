@@ -35,12 +35,19 @@ export function modelFeatureOptionsForProviderType(
   providerType: ProviderTypeInfo | undefined,
   adapterType?: string,
 ) {
-  if (!providerType) {
+  const supportedFeatures = modelSupportedFeaturesForProviderType(providerType, adapterType)
+  if (!supportedFeatures) {
     return [...MODEL_FEATURE_OPTIONS]
   }
-  const adapter = providerType.adapters?.find((item) => item.adapterType === adapterType)
-  const supportedFeatures = adapter?.supportedFeatures ?? providerType.supportedFeatures ?? []
   return MODEL_FEATURE_OPTIONS.filter((item) => supportedFeatures.includes(item.value))
+}
+
+export function modelSupportedFeaturesForProviderType(
+  providerType: ProviderTypeInfo | undefined,
+  adapterType?: string,
+) {
+  const adapter = providerType?.adapters?.find((item) => item.adapterType === adapterType)
+  return adapter?.supportedFeatures ?? providerType?.supportedFeatures
 }
 
 export function defaultModelTypeForProviderType(
@@ -252,6 +259,7 @@ export function createModelFromDiscovered(
   providerName: string,
   model: DiscoveredModel,
   override?: DiscoveredModelProfileOverride,
+  providerType?: ProviderTypeInfo,
 ): AiModel {
   const modelType = override?.modelType || model.modelType || AiModelSpecModelTypeEnum.Language
   const adapterType =
@@ -277,7 +285,10 @@ export function createModelFromDiscovered(
     metadata: {
       name: '',
     },
-    spec: reconcileModelCapabilities(model, spec, { importing: true }),
+    spec: reconcileModelCapabilities(model, spec, {
+      importing: true,
+      supportedFeatures: modelSupportedFeaturesForProviderType(providerType, adapterType),
+    }),
   }
 }
 

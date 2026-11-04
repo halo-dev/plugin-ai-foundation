@@ -9,12 +9,15 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.extension.ModelParameterProfile;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.gitee.GiteeProvider;
 import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.ModelFeature;
@@ -35,6 +38,8 @@ class ModelOptionAssemblerTest {
 
     @BeforeEach
     void setUp() {
+        when(providerType.getSupportedFeatures(AdapterType.OPENAI_RESPONSES))
+            .thenReturn(List.of(ModelFeature.values()));
         when(providerType.getSupportedAdapterTypes())
             .thenReturn(List.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.recommendAdapterType(ModelType.LANGUAGE))
@@ -117,6 +122,38 @@ class ModelOptionAssemblerTest {
         assertThat(options(List.of(ModelFeature.TOOL_CALL)).getFirst().getFeatures())
             .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
         assertThat(options(List.of(ModelFeature.STRUCTURED_OUTPUT))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void excludesUnsupportedAdapterFeaturesFromStoredOverrides(boolean manual) {
+        var gitee = new GiteeProvider();
+        provider.getSpec().setProviderType("gitee-moark");
+        model.getSpec().setAdapterType(AdapterType.GITEE_MESSAGES);
+        model.getSpec().setFeatures(List.of(ModelFeature.TOOL_CALL, ModelFeature.REASONING));
+        var profile = model.getSpec().getCatalogParameters();
+        profile.setProviderType("gitee-moark");
+        profile.setProviderBaseUrl(gitee.getDefaultBaseUrl());
+        profile.setAdapterType(AdapterType.GITEE_MESSAGES);
+        var constraints = new ModelParameterConstraints();
+        constraints.setToolCalling(true);
+        constraints.setStructuredOutput(true);
+        constraints.setReasoning(reasoning(true));
+        if (manual) {
+            model.getSpec().setParameterConstraints(constraints);
+        } else {
+            profile.setConstraints(constraints);
+        }
+
+        for (var required : List.of(ModelFeature.TOOL_CALL, ModelFeature.REASONING)) {
+            assertThat(assembler.toOptions(List.of(model), Map.of("provider", provider),
+                Map.of("gitee-moark", gitee), query(List.of(required)))).isEmpty();
+        }
+        assertThat(assembler.toOptions(List.of(model), Map.of("provider", provider),
+            Map.of("gitee-moark", gitee), query(List.of(ModelFeature.STRUCTURED_OUTPUT)))
+            .getFirst().getFeatures()).containsExactly(ModelFeature.STRUCTURED_OUTPUT);
+        assertThat(constraints.getToolCalling()).isTrue();
+        assertThat(constraints.getReasoning().getSupported()).isTrue();
     }
 
     @Test

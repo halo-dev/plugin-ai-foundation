@@ -1,7 +1,7 @@
 import type { ModelParameterConstraints } from '@/api/generated'
 import { defaultConfig, plugin as FormKitPlugin } from '@formkit/vue'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import ModelParameterConstraintFields from './ModelParameterConstraintFields.vue'
 
@@ -95,24 +95,26 @@ describe('model parameter constraints', () => {
     await minimum.setValue('0')
     await maximum.setValue('0')
     await maximum.trigger('blur')
-    await settle()
-
-    const errors = wrapper.findAll('[data-message-type="validation"]')
-    expect(errors).toHaveLength(1)
-    expect(errors[0]?.text()).toContain('推理预算上限（Token）')
+    await vi.waitFor(() => {
+      const errors = wrapper.findAll('[data-message-type="validation"]')
+      expect(errors).toHaveLength(1)
+      expect(errors[0]?.text()).toContain('推理预算上限（Token）')
+    })
     expect(minimum.attributes('min')).toBe('0')
     expect(maximum.attributes('min')).toBe('1')
 
     await maximum.setValue('1')
-    await settle()
-    expect(wrapper.findAll('[data-message-type="validation"]')).toHaveLength(0)
-    expect(wrapper.props('modelValue')).toEqual({
-      reasoning: { budgetMinimum: 0, budgetMaximum: 1 },
+    await vi.waitFor(() => {
+      expect(wrapper.findAll('[data-message-type="validation"]')).toHaveLength(0)
+      expect(wrapper.props('modelValue')).toEqual({
+        reasoning: { budgetMinimum: 0, budgetMaximum: 1 },
+      })
     })
 
     await maximum.setValue('')
-    await settle()
-    expect(wrapper.findAll('[data-message-type="validation"]')).toHaveLength(0)
-    expect(wrapper.props('modelValue')).toEqual({ reasoning: { budgetMinimum: 0 } })
+    await vi.waitFor(() => {
+      expect(wrapper.findAll('[data-message-type="validation"]')).toHaveLength(0)
+      expect(wrapper.props('modelValue')).toEqual({ reasoning: { budgetMinimum: 0 } })
+    })
   })
 })

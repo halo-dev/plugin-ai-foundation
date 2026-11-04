@@ -3,6 +3,7 @@ import type { AiModel, ModelParameterProfile } from '@/api/generated'
 import { computed, onScopeDispose, shallowReactive, shallowRef, watch, type Ref } from 'vue'
 
 interface CatalogRequest {
+  key: string
   controller: AbortController
   promise: Promise<void>
 }
@@ -15,6 +16,7 @@ export function useModelCatalogParameters(
 ) {
   const snapshots = shallowReactive(new Map<string, ModelParameterProfile>())
   const initialSnapshot = shallowRef<{
+    key?: string
     providerName?: string
     modelType?: AiModel['spec']['modelType']
     profile?: ModelParameterProfile
@@ -41,16 +43,15 @@ export function useModelCatalogParameters(
       profile.modelId &&
       profile.adapterType
     ) {
-      snapshots.set(
-        snapshotKey(
-          providerName,
-          profile.providerType,
-          profile.modelId,
-          modelType,
-          profile.adapterType,
-        ),
-        profile,
+      const key = snapshotKey(
+        providerName,
+        profile.providerType,
+        profile.modelId,
+        modelType,
+        profile.adapterType,
       )
+      snapshots.set(key, profile)
+      return key
     }
   }
   watch(
@@ -58,8 +59,12 @@ export function useModelCatalogParameters(
     (profile) => {
       const providerName = model.value?.spec.providerName
       const modelType = model.value?.spec.modelType
-      initialSnapshot.value = { providerName, modelType, profile }
-      retainSnapshot(providerName, modelType, profile)
+      initialSnapshot.value = {
+        providerName,
+        modelType,
+        profile,
+        key: retainSnapshot(providerName, modelType, profile),
+      }
     },
     { immediate: true },
   )
@@ -114,11 +119,16 @@ export function useModelCatalogParameters(
     expectedProviderType: string,
   ) {
     try {
-      const { data: profile } = await aiConsoleApiClient.model.getModelCatalogParameters(
+      const { data: profile, status } = await aiConsoleApiClient.model.getModelCatalogParameters(
         { aiModel: draft },
         { signal: request.controller.signal, timeout: 10_000 },
       )
       if (disposed || currentRequest !== request || request.controller.signal.aborted) return
+      if (status === 204) {
+        snapshots.delete(request.key)
+        if (initialSnapshot.value?.key === request.key) initialSnapshot.value = undefined
+        return
+      }
       if (
         !profile?.providerBaseUrl ||
         profile.providerType !== expectedProviderType ||
@@ -129,7 +139,7 @@ export function useModelCatalogParameters(
       }
       retainSnapshot(draft.spec.providerName, draft.spec.modelType, profile)
     } catch {
-      // A missing or unavailable catalog must not erase a valid saved snapshot.
+      // A failed request must not erase a valid saved snapshot.
     }
   }
 
@@ -151,6 +161,13 @@ export function useModelCatalogParameters(
         return
       }
       const request: CatalogRequest = {
+        key: snapshotKey(
+          draft.spec.providerName,
+          providerType.value,
+          draft.spec.modelId,
+          draft.spec.modelType,
+          draft.spec.adapterType,
+        ),
         controller: new AbortController(),
         promise: Promise.resolve(),
       }

@@ -36,6 +36,39 @@ function catalogSpec(): AiModel['spec'] {
 }
 
 describe('catalog capability edits', () => {
+  it('does not restore feature overrides unsupported by the target adapter', () => {
+    const previous: AiModel['spec'] = {
+      ...catalogSpec(),
+      adapterType: 'gitee-chat',
+      features: ['tool-call', 'structured-output', 'reasoning'],
+      catalogMatch: undefined,
+    }
+    const constraints = {
+      toolCalling: true,
+      structuredOutput: true,
+      outputTokens: 2048,
+      reasoning: { supported: true, budgetMinimum: 512 },
+    }
+    const next = reconcileModelCapabilities(
+      previous,
+      {
+        ...previous,
+        adapterType: 'gitee-messages',
+        features: ['structured-output'],
+        parameterConstraints: constraints,
+      },
+      { supportedFeatures: ['streaming', 'structured-output'] },
+    )
+    expect(next.features).toEqual(['structured-output'])
+    expect(next.parameterConstraints).toEqual({
+      structuredOutput: true,
+      outputTokens: 2048,
+      reasoning: { budgetMinimum: 512 },
+    })
+    expect(constraints.toolCalling).toBe(true)
+    expect(constraints.reasoning.supported).toBe(true)
+  })
+
   it.each([
     ['embedding', 'openai-embedding'],
     ['rerank', 'rerank'],

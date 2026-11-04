@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.capability.CapabilitySource;
 import run.halo.aifoundation.capability.ImageGenerationCapability;
@@ -110,6 +112,27 @@ class ModelCatalogEnricherTest {
         assertThat(result.capabilitySources().getLanguage()).isEqualTo(CapabilitySource.REMOTE);
         assertThat(result.catalogMatch().fields())
             .doesNotContain("features.tool-call", "language.imageInput");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-", "_", ""})
+    void preservesProviderFeatureAliasesOverCatalogDisagreement(String separator) {
+        var type = new OpenAiProvider() {
+            DiscoveredModel declaredModel() {
+                return modelProfile(Map.of("type", "language", "features", List.of(
+                    "tool" + separator + "call", "structured" + separator + "output")),
+                    "exact-model");
+            }
+        };
+        var model = type.declaredModel();
+        var result = enricher(CATALOG).enrich(provider(null), type, List.of(model)).getFirst();
+
+        assertThat(result.catalogMatch()).isNotNull();
+        assertThat(result.features())
+            .contains(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT);
+        assertThat(result.featureEvidence())
+            .containsEntry(ModelFeature.TOOL_CALL, true)
+            .containsEntry(ModelFeature.STRUCTURED_OUTPUT, true);
     }
 
     @Test
