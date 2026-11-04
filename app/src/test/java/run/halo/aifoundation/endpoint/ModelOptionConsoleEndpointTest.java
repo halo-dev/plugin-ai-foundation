@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import run.halo.aifoundation.capability.DecisionCapability;
@@ -393,6 +395,33 @@ class ModelOptionConsoleEndpointTest {
             {"decision":{"questionTypes":["BOX"]}}
             """))
             .exchange().expectStatus().isBadRequest();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"10.9", "10.0000000000000001", "4294967298", "-4294967294",
+        "2147483648", "0", "-1", "1e20", "\"10\"", "true"})
+    void capabilityLimitsRejectFractionsOverflowAndNonPositiveNumbers(String value) {
+        for (var requirement : integerCapabilityRequirements(value)) {
+            webTestClient.get().uri(capabilitiesUri(requirement))
+                .exchange().expectStatus().isBadRequest();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1", "10", "10.0", "1e1", "2147483647", "null"})
+    void capabilityLimitsAcceptExactPositiveIntegersAndUnspecifiedValues(String value) {
+        mockData(List.of(), List.of());
+        for (var requirement : integerCapabilityRequirements(value)) {
+            webTestClient.get().uri(capabilitiesUri(requirement))
+                .exchange().expectStatus().isOk().expectBody().json("[]");
+        }
+    }
+
+    private List<String> integerCapabilityRequirements(String value) {
+        return List.of(
+            "{\"decision\":{\"maxChoiceOptions\":%s}}".formatted(value),
+            "{\"decision\":{\"maxScoreLevels\":%s}}".formatted(value),
+            "{\"imageGeneration\":{\"maxImagesPerCall\":%s}}".formatted(value));
     }
 
     private ModelOption option(List<ModelOption> options, String name) {

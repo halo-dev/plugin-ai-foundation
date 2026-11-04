@@ -8,9 +8,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -18,12 +21,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import run.halo.aifoundation.chat.GenerationTimeouts;
 import run.halo.aifoundation.decision.DecisionAnswer;
 import run.halo.aifoundation.decision.DecisionQuestion;
 import run.halo.aifoundation.decision.DecisionQuestionType;
 import run.halo.aifoundation.decision.DecisionRequest;
 import run.halo.aifoundation.decision.DecisionResponse;
 import run.halo.aifoundation.decision.DecisionUsage;
+import run.halo.aifoundation.exception.DecisionTimeoutException;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.typesafe.TypeSafeProvider;
 import run.halo.aifoundation.service.decision.DecisionModelImpl;
@@ -33,12 +38,41 @@ import run.halo.aifoundation.service.observation.UsageCallStart;
 import run.halo.aifoundation.service.observation.UsageCallTerminal;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 import run.halo.aifoundation.service.observation.UsageExecutionRecord;
+import run.halo.aifoundation.service.observation.UsageObservation;
 import run.halo.aifoundation.service.observation.UsageQuality;
 import run.halo.aifoundation.service.observation.UsageStatus;
 import run.halo.aifoundation.service.observation.UsageUnitKind;
 import run.halo.aifoundation.service.usage.UsageStatisticsService;
 
 class AuditedDecisionModelTest {
+    @Test
+    void recordsTotalTimeoutForBothExecutionAndCall() {
+        var call = pendingCall();
+        var request = timedRequest();
+
+        StepVerifier.withVirtualTime(() -> call.model().decide(request))
+            .thenAwait(Duration.ofSeconds(5))
+            .expectError(DecisionTimeoutException.class)
+            .verify();
+
+        assertThat(call.providerCancelled()).isTrue();
+        assertStatus(call, UsageStatus.TIMED_OUT, "TIMEOUT");
+    }
+
+    @Test
+    void recordsSubscriberCancellationForBothExecutionAndCall() {
+        var call = pendingCall();
+        var request = timedRequest();
+
+        StepVerifier.withVirtualTime(() -> call.model().decide(request))
+            .thenAwait(Duration.ofSeconds(1))
+            .thenCancel()
+            .verify();
+
+        assertThat(call.providerCancelled()).isTrue();
+        assertStatus(call, UsageStatus.CANCELLED, null);
+    }
+
     @ParameterizedTest
     @MethodSource("invalidResponseUsage")
     void recordsFailedValidationWithReportedUsageAndActualModel(DecisionUsage usage,
@@ -141,5 +175,51 @@ class AuditedDecisionModelTest {
         assertThat(record.getValue().usage().accountedTotalTokens())
             .isEqualTo(hasUsage ? 15L : null);
         verify(statistics).finishCall(eq(session), any());
+    }
+
+    private static DecisionRequest timedRequest() {
+        return DecisionRequest.builder().state("message")
+            .questions(Map.of("q", DecisionQuestion.yesNo("Is it urgent?")))
+            .metadata(Map.of())
+            .timeouts(GenerationTimeouts.builder().totalTimeout(Duration.ofSeconds(5)).build())
+            .build();
+    }
+
+    private static PendingCall pendingCall() {
+        var statistics = mock(UsageObservation.class);
+        var context = new ModelCallContext(ModelType.DECISION,
+            "decision-resource", "provider", "typesafe", "jev-latest");
+        var descriptor = mock(UsageCallDescriptor.class);
+        var start = new UsageCallStart("decision-call", 1, Instant.now(), "plugin", "1",
+            "stack", null, "decision.decide", "decision", "decision-resource",
+            "provider", "typesafe", "jev-latest", false);
+        var session = new UsageCallSession(statistics, start, Clock.systemUTC());
+        when(statistics.describeCall(context, "decision.decide", false, Map.of()))
+            .thenReturn(descriptor);
+        when(statistics.beginCall(descriptor)).thenReturn(session);
+        var cancelled = new AtomicBoolean();
+        var runtime = new DecisionModelImpl(ignored -> Mono.<DecisionResponse>never()
+            .doOnCancel(() -> cancelled.set(true)), new UsageExecutionObserver(),
+            new TypeSafeProvider().decisionCapabilities());
+        var model = new AuditedDecisionModel(runtime, context,
+            mock(CallerPluginAuditRecorder.class), statistics);
+        return new PendingCall(model, statistics, session, cancelled);
+    }
+
+    private static void assertStatus(PendingCall call, UsageStatus status, String errorType) {
+        var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
+        verify(call.statistics()).recordExecution(eq(call.session()), execution.capture());
+        assertThat(execution.getValue().status()).isEqualTo(status);
+        assertThat(execution.getValue().error() == null ? null : execution.getValue().error().type())
+            .isEqualTo(errorType);
+        var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
+        verify(call.statistics()).finishCall(eq(call.session()), terminal.capture());
+        assertThat(terminal.getValue().status()).isEqualTo(status);
+        assertThat(terminal.getValue().error() == null ? null : terminal.getValue().error().type())
+            .isEqualTo(errorType);
+    }
+
+    private record PendingCall(AuditedDecisionModel model, UsageObservation statistics,
+                               UsageCallSession session, AtomicBoolean providerCancelled) {
     }
 }

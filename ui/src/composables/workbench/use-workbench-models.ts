@@ -108,7 +108,10 @@ export function useWorkbenchModels(): WorkbenchModels {
   )
 
   watch(testMode, () => {
-    selectedModelName.value = activeModels.value[0]?.name
+    const candidates = activeModels.value
+    if (!candidates.some((model) => model.name === selectedModelName.value)) {
+      selectedModelName.value = candidates[0]?.name
+    }
   })
 
   return {

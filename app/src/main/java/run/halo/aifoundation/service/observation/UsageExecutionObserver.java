@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import run.halo.aifoundation.service.decision.DecisionResponseValidationException;
+import run.halo.aifoundation.provider.support.DecisionResponseValidationException;
 
 @Component
 public class UsageExecutionObserver {

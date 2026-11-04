@@ -12,6 +12,7 @@ import run.halo.aifoundation.decision.DecisionQuestionType;
 import run.halo.aifoundation.decision.DecisionRequest;
 import run.halo.aifoundation.decision.DecisionResponse;
 import run.halo.aifoundation.decision.DecisionUsage;
+import run.halo.aifoundation.provider.support.DecisionResponseValidationException;
 import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
@@ -98,6 +99,15 @@ public class SystemOneDecisionClient implements ProviderDecisionClient {
     }
 
     private static DecisionResponse decode(Map<String, Object> body) {
+        try {
+            return decodeResponse(body);
+        } catch (IllegalStateException error) {
+            var model = body.get("model") instanceof String value && !value.isBlank() ? value : null;
+            throw new DecisionResponseValidationException(error, model, reportedUsage(body.get("usage")));
+        }
+    }
+
+    private static DecisionResponse decodeResponse(Map<String, Object> body) {
         var answers = new LinkedHashMap<String, DecisionAnswer>();
         object(body.get("answers")).forEach((id, raw) -> answers.put(id, answer(object(raw))));
         DecisionUsage usage = null;
@@ -106,6 +116,23 @@ public class SystemOneDecisionClient implements ProviderDecisionClient {
             usage = new DecisionUsage(tokens(raw.get("input_tokens")), tokens(raw.get("output_tokens")));
         }
         return new DecisionResponse(string(body.get("model")), answers, usage);
+    }
+
+    private static DecisionUsage reportedUsage(Object raw) {
+        if (!(raw instanceof Map<?, ?> usage)) {
+            return null;
+        }
+        return new DecisionUsage(reportedTokens(usage.get("input_tokens")),
+            reportedTokens(usage.get("output_tokens")));
+    }
+
+    private static Integer reportedTokens(Object raw) {
+        try {
+            return tokens(raw);
+        } catch (IllegalStateException ignored) {
+            // A malformed counter must not discard another valid counter in a failed response.
+            return null;
+        }
     }
 
     private static DecisionAnswer answer(Map<String, Object> raw) {

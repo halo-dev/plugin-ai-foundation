@@ -7,9 +7,9 @@ import run.halo.aifoundation.chat.LanguageModelUsage;
 import run.halo.aifoundation.decision.DecisionUsage;
 import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.image.ImageUsage;
+import run.halo.aifoundation.provider.support.DecisionResponseValidationException;
 import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.rerank.RerankUsage;
-import run.halo.aifoundation.service.decision.DecisionResponseValidationException;
 
 public record NormalizedUsage(
     Long inputTokens,

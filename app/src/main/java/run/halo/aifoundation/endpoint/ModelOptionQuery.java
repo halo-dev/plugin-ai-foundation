@@ -1,5 +1,6 @@
 package run.halo.aifoundation.endpoint;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +20,7 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.index.query.Queries;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 record ModelOptionQuery(
@@ -32,7 +34,9 @@ record ModelOptionQuery(
     String keyword
 ) {
 
-    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder()
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+        .build();
 
     static ModelOptionQuery from(ServerRequest request) {
         var modelType = parseModelType(single(request, "modelType", false));
@@ -291,7 +295,12 @@ record ModelOptionQuery(
             return null;
         }
         if (value instanceof Number number) {
-            var intValue = number.intValue();
+            final int intValue;
+            try {
+                intValue = new BigDecimal(number.toString()).intValueExact();
+            } catch (NumberFormatException | ArithmeticException e) {
+                throw badRequest(path + " must be an integer between 1 and " + Integer.MAX_VALUE);
+            }
             if (intValue < 1) {
                 throw badRequest(path + " must be positive");
             }

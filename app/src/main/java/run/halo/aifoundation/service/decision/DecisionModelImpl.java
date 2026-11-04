@@ -9,6 +9,7 @@ import run.halo.aifoundation.decision.DecisionRequest;
 import run.halo.aifoundation.decision.DecisionResponse;
 import run.halo.aifoundation.exception.DecisionCancelledException;
 import run.halo.aifoundation.exception.DecisionTimeoutException;
+import run.halo.aifoundation.provider.support.DecisionResponseValidationException;
 import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.service.observation.NormalizedUsage;
 import run.halo.aifoundation.service.observation.UsageExecutionObserver;
@@ -47,22 +48,26 @@ public class DecisionModelImpl implements DecisionModel {
             DecisionValidation.request(request);
             DecisionValidation.capabilities(request, capabilities);
             checkCancellation(request);
-            var call = observer.observe(UsageUnitKind.DECISION, 0,
-                    () -> client.decide(request)
-                        .switchIfEmpty(Mono.error(new IllegalStateException("Empty decision response")))
-                        .doOnNext(response -> {
-                            try {
-                                DecisionValidation.response(request, response);
-                            } catch (IllegalStateException error) {
-                                throw new DecisionResponseValidationException(error, response);
-                            }
-                        }),
-                    response -> NormalizedUsage.from(response.getUsage()), DecisionResponse::getModel)
-                .doOnNext(response -> checkCancellation(request));
             var timeout = request.getTimeouts() == null ? null
                 : request.getTimeouts().getTotalTimeout();
-            return timeout == null ? call : call.timeout(timeout)
-                .onErrorMap(TimeoutException.class, error -> new DecisionTimeoutException(timeout, error));
+            return observer.observe(UsageUnitKind.DECISION, 0,
+                    () -> {
+                        var call = client.decide(request)
+                            .switchIfEmpty(Mono.error(new IllegalStateException("Empty decision response")))
+                            .doOnNext(response -> {
+                                try {
+                                    DecisionValidation.response(request, response);
+                                } catch (IllegalStateException error) {
+                                    throw new DecisionResponseValidationException(error,
+                                        response.getModel(), response.getUsage());
+                                }
+                            });
+                        return timeout == null ? call : call.timeout(timeout)
+                            .onErrorMap(TimeoutException.class,
+                                error -> new DecisionTimeoutException(timeout, error));
+                    },
+                    response -> NormalizedUsage.from(response.getUsage()), DecisionResponse::getModel)
+                .doOnNext(response -> checkCancellation(request));
         });
     }
 
