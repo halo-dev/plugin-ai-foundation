@@ -104,11 +104,28 @@ describe('decision client', () => {
       api: '/decision',
       fetch: vi.fn().mockResolvedValue(new Response('{invalid json')),
     })
-    await expect(client.decide(request)).rejects.toMatchObject({
+    await expect(
+      client.decide(request, { signal: new AbortController().signal }),
+    ).rejects.toMatchObject({
       name: 'AIUIProtocolError',
       message: 'Decision endpoint returned invalid JSON',
       cause: expect.any(SyntaxError),
     })
+  })
+
+  it('preserves response body cancellation from a custom fetch without an explicit signal', async () => {
+    const error = new DOMException('Cancelled', 'AbortError')
+    const body = new ReadableStream({
+      start(controller) {
+        controller.error(error)
+      },
+    })
+    const client = createDecisionClient({
+      api: '/decision',
+      fetch: vi.fn().mockResolvedValue(new Response(body)),
+    })
+
+    await expect(client.decide(request)).rejects.toBe(error)
   })
 
   it('preserves cancellation before receiving response headers', async () => {

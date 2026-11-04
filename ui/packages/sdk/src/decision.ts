@@ -57,6 +57,7 @@ export function createDecisionClient(options: DecisionClientOptions) {
       request: DecisionRequest,
       callOptions: { signal?: AbortSignal } = {},
     ): Promise<DecisionResponse> {
+      const signal = callOptions.signal
       const body = JSON.stringify(request)
       const requestSnapshot: DecisionRequest = JSON.parse(body)
       const headers = new Headers(options.headers)
@@ -65,7 +66,7 @@ export function createDecisionClient(options: DecisionClientOptions) {
         method: 'POST',
         headers,
         credentials: options.credentials,
-        signal: callOptions.signal,
+        signal,
         body,
       })
       if (!response.ok) {
@@ -78,7 +79,7 @@ export function createDecisionClient(options: DecisionClientOptions) {
       try {
         result = await response.json()
       } catch (cause) {
-        if (isAbortError(cause)) throw cause
+        if (signal?.aborted || isAbortError(cause)) throw cause
         throw new AIUIProtocolError('Decision endpoint returned invalid JSON', { cause })
       }
       validateDecisionResponse(result, requestSnapshot)

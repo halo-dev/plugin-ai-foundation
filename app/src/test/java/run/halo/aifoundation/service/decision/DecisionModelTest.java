@@ -6,11 +6,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.chat.GenerationTimeouts;
@@ -153,6 +162,118 @@ class DecisionModelTest {
         timed.setTimeouts(GenerationTimeouts.builder().totalTimeout(Duration.ofSeconds(1)).build());
         StepVerifier.withVirtualTime(() -> model.decide(timed)).thenAwait(Duration.ofSeconds(1))
             .expectError(DecisionTimeoutException.class).verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"questions", "types", "options", "levels"})
+    void validatesResponsesAgainstTheSubmittedQuestions(String changed) {
+        var options = new LinkedHashMap<>(Map.of("a", "A", "b", "B"));
+        var levels = new ArrayList<>(List.of("low", "high"));
+        var choice = DecisionQuestion.choice("Choose", options);
+        var score = DecisionQuestion.score("Rate", levels);
+        var request = DecisionRequest.builder().state("message")
+            .questions(Map.of("route", choice, "rating", score)).build();
+        var response = new DecisionResponse("model", Map.of(
+            "route", DecisionAnswer.builder().type(DecisionQuestionType.CHOICE).choice("b").build(),
+            "rating", DecisionAnswer.builder().type(DecisionQuestionType.SCORE).score(1.0).build()), null);
+        var pending = Sinks.<DecisionResponse>one();
+        when(client.decide(any())).thenReturn(pending.asMono());
+
+        StepVerifier.create(model.decide(request)).then(() -> {
+            switch (changed) {
+                case "questions" -> request.setQuestions(Map.of("other", DecisionQuestion.yesNo("Other?")));
+                case "types" -> {
+                    choice.setType(DecisionQuestionType.YES_NO);
+                    score.setType(DecisionQuestionType.YES_NO);
+                }
+                case "options" -> options.remove("b");
+                case "levels" -> levels.removeLast();
+                default -> throw new IllegalArgumentException("Unexpected edit: " + changed);
+            }
+            pending.tryEmitValue(response);
+        }).expectNext(response).verifyComplete();
+    }
+
+    @Test
+    void rejectsAChoiceAddedAfterTheRequestWasSubmitted() {
+        var options = new LinkedHashMap<>(Map.of("a", "A", "b", "B"));
+        var request = DecisionRequest.builder().state("message")
+            .questions(Map.of("q", DecisionQuestion.choice("Choose", options))).build();
+        var pending = Sinks.<DecisionResponse>one();
+        when(client.decide(any())).thenReturn(pending.asMono());
+
+        StepVerifier.create(model.decide(request)).then(() -> {
+            options.put("c", "C");
+            pending.tryEmitValue(new DecisionResponse("model", Map.of("q",
+                DecisionAnswer.builder().type(DecisionQuestionType.CHOICE).choice("c").build()), null));
+        }).expectError(IllegalStateException.class).verify();
+    }
+
+    @Test
+    void snapshotsTheCurrentRequestOnEachSubscription() {
+        var submitted = new ArrayList<DecisionRequest>();
+        var response = yesNoResponse();
+        when(client.decide(any())).thenAnswer(invocation -> {
+            submitted.add(invocation.getArgument(0));
+            return Mono.just(response);
+        });
+        var request = request();
+        var call = model.decide(request);
+
+        request.setState("first");
+        request.getQuestions().get("q").setInstructions("First?");
+        StepVerifier.create(call).expectNext(response).verifyComplete();
+        request.setState("second");
+        request.getQuestions().get("q").setInstructions("Second?");
+        StepVerifier.create(call).expectNext(response).verifyComplete();
+
+        assertThat(submitted).extracting(DecisionRequest::getState).containsExactly("first", "second");
+        assertThat(submitted).extracting(value -> value.getQuestions().get("q").getInstructions())
+            .containsExactly("First?", "Second?");
+    }
+
+    @Test
+    void isolatesNestedStateWithoutLosingNumericPrecision() {
+        var decimal = new BigDecimal("1.0000000000000000001");
+        var integer = new BigInteger("123456789012345678901234567890");
+        var entry = new LinkedHashMap<String, Object>(Map.of("decimal", decimal, "integer", integer));
+        var entries = new ArrayList<>(List.of(entry));
+        var request = request();
+        request.setState(Map.of("entries", entries));
+        var submitted = new AtomicReference<DecisionRequest>();
+        var pending = Sinks.<DecisionResponse>one();
+        when(client.decide(any())).thenAnswer(invocation -> {
+            submitted.set(invocation.getArgument(0));
+            return pending.asMono();
+        });
+        var response = yesNoResponse();
+
+        StepVerifier.create(model.decide(request)).then(() -> {
+            entry.put("decimal", BigDecimal.ZERO);
+            entries.clear();
+            assertThat(submitted.get().getState()).isEqualTo(Map.of("entries",
+                List.of(Map.of("decimal", decimal, "integer", integer))));
+            pending.tryEmitValue(response);
+        }).expectNext(response).verifyComplete();
+    }
+
+    @Test
+    void observesTheOriginalCancellationSignalWhileTheRequestIsPending() {
+        var cancelled = new AtomicBoolean();
+        var request = request();
+        request.setCancellationToken(cancelled::get);
+        var pending = Sinks.<DecisionResponse>one();
+        when(client.decide(any())).thenReturn(pending.asMono());
+
+        StepVerifier.create(model.decide(request)).then(() -> {
+            cancelled.set(true);
+            pending.tryEmitValue(yesNoResponse());
+        }).expectError(DecisionCancelledException.class).verify();
+    }
+
+    private static DecisionResponse yesNoResponse() {
+        return new DecisionResponse("model", Map.of("q",
+            DecisionAnswer.builder().type(DecisionQuestionType.YES_NO).probability(0.5).build()), null);
     }
 
     @Test

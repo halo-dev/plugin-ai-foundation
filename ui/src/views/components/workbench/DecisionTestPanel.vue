@@ -129,6 +129,7 @@ function resultSummary(key: number) {
         <FormKit
           type="textarea"
           aria-label="待判断的内容"
+          :delay="0"
           :rows="inputExpanded ? 10 : 3"
           :placeholder="
             stateFormat === 'json' ? '输入 JSON 对象、数组或字符串…' : '输入需要判断的文本…'

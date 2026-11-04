@@ -2,7 +2,7 @@ import { DecisionAnswerTypeEnum, DecisionQuestionTypeEnum } from '@/api/generate
 import type { DecisionQuestionDraft } from '@/utils/decision-workbench'
 import { defaultConfig, plugin as FormKitPlugin } from '@formkit/vue'
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import DecisionQuestionEditor from './DecisionQuestionEditor.vue'
 import DecisionResults from './DecisionResults.vue'
@@ -12,6 +12,7 @@ const mounted: ReturnType<typeof mount>[] = []
 afterEach(() => {
   mounted.forEach((wrapper) => wrapper.unmount())
   mounted.length = 0
+  vi.useRealTimers()
 })
 
 function question(key: number): DecisionQuestionDraft {
@@ -63,6 +64,26 @@ function mountPanel() {
 }
 
 describe('DecisionTestPanel', () => {
+  it('runs with the latest content when clicked immediately after editing', async () => {
+    const wrapper = mountPanel()
+    const run = vi.fn(() => wrapper.props('stateText'))
+    await wrapper.setProps({
+      'onUpdate:stateText': (value: string) => wrapper.setProps({ stateText: value }),
+      onRun: run,
+    })
+    vi.useFakeTimers()
+
+    const input = wrapper.get('textarea[aria-label="待判断的内容"]')
+    await input.setValue('最新的待判断内容')
+    await vi.advanceTimersByTimeAsync(5)
+    await input.trigger('blur')
+    const button = wrapper.findAll('button').find((item) => item.text() === '运行全部问题')!
+    await button.trigger('click')
+
+    expect(run).toHaveBeenCalledOnce()
+    expect(run).toHaveReturnedWith('最新的待判断内容')
+  })
+
   it('switches the editor and answer together and retains the submitted question after edits', async () => {
     const wrapper = mountPanel()
     expect(wrapper.getComponent(DecisionQuestionEditor).props('question').id).toBe('q1')

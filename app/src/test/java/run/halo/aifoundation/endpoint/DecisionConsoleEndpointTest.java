@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,11 +23,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
+import run.halo.aifoundation.decision.DecisionAnswer;
 import run.halo.aifoundation.decision.DecisionModel;
+import run.halo.aifoundation.decision.DecisionQuestionType;
 import run.halo.aifoundation.decision.DecisionRequest;
 import run.halo.aifoundation.decision.DecisionResponse;
+import run.halo.aifoundation.provider.typesafe.TypeSafeProvider;
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.StackWalkingCallerPluginResolver;
+import run.halo.aifoundation.service.decision.DecisionModelImpl;
+import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 import run.halo.app.extension.ReactiveExtensionClient;
 
 class DecisionConsoleEndpointTest {
@@ -55,6 +61,29 @@ class DecisionConsoleEndpointTest {
         verify(model).decide(request.capture());
         assertThat(request.getValue().getState()).isEqualTo(Map.of("comment", "hello"));
         assertThat(request.getValue().getMetadata()).containsEntry("source", "console-test");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1.0000000000000000001", "1e-400"})
+    void preservesJsonNumberPrecisionThroughRequestSnapshot(String number) {
+        var submitted = new AtomicReference<DecisionRequest>();
+        var response = new DecisionResponse("jev-version", Map.of("q",
+            DecisionAnswer.builder().type(DecisionQuestionType.YES_NO).probability(0.5).build()), null);
+        var model = new DecisionModelImpl(request -> {
+            submitted.set(request);
+            return Mono.just(response);
+        }, new UsageExecutionObserver(), new TypeSafeProvider().decisionCapabilities());
+        when(service.decisionModel("configured-model")).thenReturn(Mono.just(model));
+
+        client.post().uri("/models/configured-model/test-decision")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("state", "{\"amounts\":[%s]}".formatted(number), "stateFormat", "JSON",
+                "questions", Map.of("q", Map.of("type", "YES_NO",
+                    "instructions", "Above the threshold?"))))
+            .exchange().expectStatus().isOk();
+
+        assertThat(submitted.get().getState())
+            .isEqualTo(Map.of("amounts", List.of(new BigDecimal(number))));
     }
 
     @ParameterizedTest

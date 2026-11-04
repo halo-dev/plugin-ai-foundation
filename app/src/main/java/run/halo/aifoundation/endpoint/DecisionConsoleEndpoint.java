@@ -24,12 +24,15 @@ import run.halo.aifoundation.decision.DecisionResponse;
 import run.halo.aifoundation.service.decision.DecisionValidation;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @RequiredArgsConstructor
 public class DecisionConsoleEndpoint implements CustomEndpoint {
-    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder()
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+        .build();
     private final AiModelService modelService;
 
     @Override
