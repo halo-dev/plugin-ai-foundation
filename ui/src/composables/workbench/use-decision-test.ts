@@ -1,7 +1,19 @@
 import { aiConsoleApiClient } from '@/api'
 import { DecisionQuestionTypeEnum, type DecisionResponse, type ModelOption } from '@/api/generated'
-import { buildDecisionRequest, type DecisionQuestionDraft } from '@/utils/decision-workbench'
-import { getCurrentScope, onScopeDispose, ref, shallowRef, watch, type ComputedRef } from 'vue'
+import {
+  buildDecisionRequest,
+  type DecisionQuestionDraft,
+  type DecisionTestSnapshot,
+} from '@/utils/decision-workbench'
+import {
+  computed,
+  getCurrentScope,
+  onScopeDispose,
+  ref,
+  shallowRef,
+  watch,
+  type ComputedRef,
+} from 'vue'
 
 export function useDecisionTest(selectedModel: ComputedRef<ModelOption | undefined>) {
   const stateText = shallowRef('这篇文章很有帮助！请问如何配置插件？')
@@ -12,24 +24,44 @@ export function useDecisionTest(selectedModel: ComputedRef<ModelOption | undefin
       id: 'spam',
       type: DecisionQuestionTypeEnum.YesNo,
       instructions: '这条评论是否为垃圾广告？',
-      criteria: '',
+      options: [
+        { key: 'normal', label: '正常评论' },
+        { key: 'spam', label: '垃圾广告' },
+      ],
+      levels: ['没有广告特征', '疑似广告', '明确的垃圾广告'],
     },
     {
       key: 2,
       id: 'intent',
       type: DecisionQuestionTypeEnum.Choice,
-      instructions: '评论的主要意图是什么？',
-      criteria: 'question=提问\nfeedback=反馈\nother=其他',
+      instructions: '判断评论是否在寻求插件配置方面的帮助。',
+      options: [
+        { key: 'question', label: '提问' },
+        { key: 'feedback', label: '反馈' },
+        { key: 'other', label: '其他' },
+      ],
+      levels: ['未寻求帮助', '间接表达求助意图', '明确提出配置问题'],
     },
     {
       key: 3,
       id: 'relevance',
       type: DecisionQuestionTypeEnum.Score,
-      instructions: '评论与插件配置主题有多相关？',
-      criteria: '无关\n部分相关\n高度相关',
+      instructions: '判断评论与插件配置主题是否相关。',
+      options: [
+        { key: 'unrelated', label: '无关' },
+        { key: 'partially_related', label: '部分相关' },
+        { key: 'related', label: '高度相关' },
+      ],
+      levels: ['无关', '部分相关', '高度相关'],
     },
   ])
   const result = shallowRef<DecisionResponse>()
+  const resultSnapshot = shallowRef<DecisionTestSnapshot>()
+  const isResultStale = computed(() => {
+    const previous = resultSnapshot.value
+    if (!result.value || !previous) return false
+    return JSON.stringify(previous) !== JSON.stringify(currentSnapshot())
+  })
   const error = shallowRef('')
   const isLoading = shallowRef(false)
   let nextKey = 4
@@ -48,6 +80,7 @@ export function useDecisionTest(selectedModel: ComputedRef<ModelOption | undefin
     () => {
       cancel()
       result.value = undefined
+      resultSnapshot.value = undefined
       error.value = ''
     },
   )
@@ -59,8 +92,13 @@ export function useDecisionTest(selectedModel: ComputedRef<ModelOption | undefin
       key,
       id: `question_${key}`,
       type: DecisionQuestionTypeEnum.YesNo,
-      instructions: '',
-      criteria: '',
+      instructions: '这条评论是否表达了正面评价？',
+      options: [
+        { key: 'negative', label: '负面评价' },
+        { key: 'neutral', label: '中性评价' },
+        { key: 'positive', label: '正面评价' },
+      ],
+      levels: ['负面评价', '中性评价', '正面评价'],
     })
   }
 
@@ -72,21 +110,42 @@ export function useDecisionTest(selectedModel: ComputedRef<ModelOption | undefin
     questions.value = questions.value.filter((item) => item.key !== key)
   }
 
+  function currentSnapshot(): DecisionTestSnapshot {
+    return {
+      stateText: stateText.value,
+      stateFormat: stateFormat.value,
+      questions: questions.value.map((question) => ({
+        ...question,
+        options: question.options.map((option) => ({ ...option })),
+        levels: [...question.levels],
+      })),
+    }
+  }
+
   async function run() {
     const name = selectedModel.value?.name
     if (!name || isLoading.value) return
     error.value = ''
     result.value = undefined
+    resultSnapshot.value = undefined
     const runId = ++sequence
     try {
-      const request = buildDecisionRequest(stateText.value, stateFormat.value, questions.value)
+      const snapshot = currentSnapshot()
+      const request = buildDecisionRequest(
+        snapshot.stateText,
+        snapshot.stateFormat,
+        snapshot.questions,
+      )
       controller = new AbortController()
       isLoading.value = true
       const { data } = await aiConsoleApiClient.model.testModelDecision(
         { name, testDecisionRequest: request },
         { signal: controller.signal },
       )
-      if (runId === sequence) result.value = data
+      if (runId === sequence) {
+        resultSnapshot.value = snapshot
+        result.value = data
+      }
     } catch (cause) {
       if (runId === sequence) error.value = (cause as Error).message || '决策请求失败'
     } finally {
@@ -102,6 +161,8 @@ export function useDecisionTest(selectedModel: ComputedRef<ModelOption | undefin
     stateFormat,
     questions,
     result,
+    resultSnapshot,
+    isResultStale,
     error,
     isLoading,
     run,

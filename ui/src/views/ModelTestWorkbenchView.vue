@@ -120,6 +120,8 @@ const {
   stateFormat,
   questions: decisionQuestions,
   result: decisionResult,
+  resultSnapshot: decisionResultSnapshot,
+  isResultStale: isDecisionResultStale,
   error: decisionError,
   isLoading: isDecisionTesting,
 } = decisionTest
@@ -346,6 +348,8 @@ function distanceToConversationBottom(element: HTMLElement) {
           v-model:state-format="stateFormat"
           :questions="decisionQuestions"
           :result="decisionResult"
+          :result-snapshot="decisionResultSnapshot"
+          :is-result-stale="isDecisionResultStale"
           :error="decisionError"
           :is-loading="isDecisionTesting"
           :disabled="!selectedModel"

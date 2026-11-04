@@ -4,12 +4,24 @@ import {
   type TestDecisionRequest,
 } from '@/api/generated'
 
+export interface DecisionChoiceDraft {
+  key: string
+  label: string
+}
+
 export interface DecisionQuestionDraft {
   key: number
   id: string
   type: DecisionQuestionTypeEnum
   instructions: string
-  criteria: string
+  options: DecisionChoiceDraft[]
+  levels: string[]
+}
+
+export interface DecisionTestSnapshot {
+  stateText: string
+  stateFormat: 'text' | 'json'
+  questions: DecisionQuestionDraft[]
 }
 
 export const DECISION_QUESTION_TYPES = [
@@ -44,18 +56,9 @@ export function buildDecisionRequest(
     ids.add(id)
     if (!draft.instructions.trim()) throw new Error(`请填写问题「${id}」的判断说明`)
     const question: DecisionQuestion = { type: draft.type, instructions: draft.instructions.trim() }
-    const lines = draft.criteria
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
     if (draft.type === DecisionQuestionTypeEnum.Choice) {
-      if (lines.length < 2) throw new Error(`问题「${id}」至少需要两个选项`)
-      const options = lines.map((line) => {
-        const separator = line.indexOf('=')
-        return separator < 0
-          ? [line, line]
-          : [line.slice(0, separator).trim(), line.slice(separator + 1).trim()]
-      })
+      if (draft.options.length < 2) throw new Error(`问题「${id}」至少需要两个选项`)
+      const options = draft.options.map(({ key, label }) => [key.trim(), label.trim()])
       if (
         options.some(([key]) => !key) ||
         new Set(options.map(([key]) => key)).size !== options.length
@@ -64,8 +67,10 @@ export function buildDecisionRequest(
       }
       question.options = Object.fromEntries(options)
     } else if (draft.type === DecisionQuestionTypeEnum.Score) {
-      if (lines.length < 2) throw new Error(`问题「${id}」至少需要两个评分等级`)
-      question.levels = lines
+      if (draft.levels.length < 2) throw new Error(`问题「${id}」至少需要两个评分等级`)
+      const levels = draft.levels.map((level) => level.trim())
+      if (levels.some((level) => !level)) throw new Error(`问题「${id}」的评分等级不能为空`)
+      question.levels = levels
     }
     entries.push([id, question])
   }
