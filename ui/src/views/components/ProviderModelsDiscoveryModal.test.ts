@@ -1,6 +1,12 @@
 import { aiConsoleApiClient } from '@/api'
-import type { AiProvider, ModelCatalogStatus, ProviderTypeInfo } from '@/api/generated'
+import type {
+  AiProvider,
+  ModelCatalogStatus,
+  ModelParameterConstraints,
+  ProviderTypeInfo,
+} from '@/api/generated'
 import type { DiscoveredModel } from '@/composables/use-models-fetch'
+import { featureConstraints, featuresWithConstraints } from '@/utils/model-feature-support'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
@@ -89,6 +95,19 @@ function model(id: string, features: DiscoveredModel['features']): DiscoveredMod
   }
 }
 
+function mountDiscovery() {
+  const provider: AiProvider = {
+    apiVersion: 'aifoundation.halo.run/v1alpha1',
+    kind: 'AiProvider',
+    metadata: { name: 'openai-prod' },
+    spec: { providerType: 'openai', displayName: 'OpenAI', enabled: true },
+  }
+  return mount(ProviderModelsDiscoveryModal, {
+    props: { provider },
+    global: { stubs: { SearchInput: true }, directives: { tooltip: tooltipStub } },
+  })
+}
+
 describe('discovery catalog refresh', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -121,16 +140,7 @@ describe('discovery catalog refresh', () => {
   })
 
   it('updates untouched recommendations, preserves manual deselection, and imports only on request', async () => {
-    const provider: AiProvider = {
-      apiVersion: 'aifoundation.halo.run/v1alpha1',
-      kind: 'AiProvider',
-      metadata: { name: 'openai-prod' },
-      spec: { providerType: 'openai', displayName: 'OpenAI', enabled: true },
-    }
-    const wrapper = mount(ProviderModelsDiscoveryModal, {
-      props: { provider },
-      global: { stubs: { SearchInput: true }, directives: { tooltip: tooltipStub } },
-    })
+    const wrapper = mountDiscovery()
     const buttons = (label: string) =>
       wrapper.findAll('button').filter((button) => button.text() === label)
     await wrapper.findAll('input[type="checkbox"]')[0].setValue(true)
@@ -140,7 +150,7 @@ describe('discovery catalog refresh', () => {
     await flushPromises()
 
     expect(buttons('工具调用')[0].attributes('aria-pressed')).toBe('false')
-    expect(buttons('推理')[0].attributes('aria-pressed')).toBe('false')
+    expect(buttons('推理')[0].attributes('aria-pressed')).toBe('true')
     expect(buttons('推理')[1].attributes('aria-pressed')).toBe('true')
     expect(aiConsoleApiClient.model.createModel).not.toHaveBeenCalled()
     expect(aiConsoleApiClient.model.updateModel).not.toHaveBeenCalled()
@@ -150,7 +160,11 @@ describe('discovery catalog refresh', () => {
     expect(aiConsoleApiClient.model.createModel).toHaveBeenCalledTimes(2)
     expect(
       vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel.spec.features,
-    ).toEqual([])
+    ).toEqual(['reasoning'])
+    expect(
+      vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel.spec
+        .parameterConstraints,
+    ).toEqual({ toolCalling: false })
     expect(
       vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[1][0].aiModel.spec.features,
     ).toEqual(['reasoning'])
@@ -159,17 +173,7 @@ describe('discovery catalog refresh', () => {
 
   it('applies a background catalog update after the initial discovery finishes', async () => {
     isLoadingModels.value = true
-    const wrapper = mount(ProviderModelsDiscoveryModal, {
-      props: {
-        provider: {
-          apiVersion: 'aifoundation.halo.run/v1alpha1',
-          kind: 'AiProvider',
-          metadata: { name: 'openai-prod' },
-          spec: { providerType: 'openai', displayName: 'OpenAI', enabled: true },
-        },
-      },
-      global: { stubs: { SearchInput: true }, directives: { tooltip: tooltipStub } },
-    })
+    const wrapper = mountDiscovery()
     catalogStatus.value = { available: true, fetchedAt: '2026-10-26T11:00:00Z' }
     await flushPromises()
     expect(refetchModels).not.toHaveBeenCalled()
@@ -181,4 +185,76 @@ describe('discovery catalog refresh', () => {
     expect(aiConsoleApiClient.model.updateModel).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+
+  it('keeps a deliberate choice after toggling back to the original recommendation', async () => {
+    models.value = { models: [model('edited', ['tool-call'])] }
+    refetchModels.mockImplementation(async () => {
+      models.value = { models: [model('edited', ['tool-call', 'reasoning'])] }
+    })
+    const wrapper = mountDiscovery()
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    const toolButton = wrapper.findAll('button').find((button) => button.text() === '工具调用')!
+    await toolButton.trigger('click')
+    await toolButton.trigger('click')
+    await wrapper.get('button[aria-label="刷新能力目录"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '导入 1 个模型')!
+      .trigger('click')
+    await flushPromises()
+
+    const imported = vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel
+    expect(imported.spec.features).toEqual(['tool-call', 'reasoning'])
+    expect(imported.spec.parameterConstraints).toEqual({ toolCalling: true })
+    wrapper.unmount()
+  })
+
+  it.each([
+    { feature: 'tool-call', label: '工具调用', constraints: { toolCalling: false } },
+    { feature: 'structured-output', label: '结构化输出', constraints: { structuredOutput: false } },
+    { feature: 'reasoning', label: '推理', constraints: { reasoning: { supported: false } } },
+  ] as const)(
+    'persists an explicit $feature choice when refreshed recommendations agree',
+    async ({ feature, label, constraints }) => {
+      const supportedFeatures = ['tool-call', 'structured-output', 'reasoning'] as const
+      providerTypes.value[0].supportedFeatures = [...supportedFeatures]
+      providerTypes.value[0].adapters![0].supportedFeatures = [...supportedFeatures]
+      models.value = { models: [model('edited', [feature])] }
+      refetchModels.mockImplementation(async () => {
+        models.value = { models: [model('edited', [])] }
+      })
+      const wrapper = mountDiscovery()
+      await wrapper.get('input[type="checkbox"]').setValue(true)
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === label)!
+        .trigger('click')
+      await wrapper.get('button[aria-label="刷新能力目录"]').trigger('click')
+      await flushPromises()
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === '导入 1 个模型')!
+        .trigger('click')
+      await flushPromises()
+
+      const imported = vi.mocked(aiConsoleApiClient.model.createModel).mock.calls[0][0].aiModel
+      expect(imported.spec.parameterConstraints).toEqual(constraints)
+      const laterRecommendations: ModelParameterConstraints = {
+        toolCalling: true,
+        structuredOutput: true,
+        reasoning: { supported: true },
+      }
+      expect(
+        featuresWithConstraints(
+          imported.spec.features,
+          featureConstraints(
+            { constraints: laterRecommendations },
+            imported.spec.parameterConstraints,
+          ),
+        ),
+      ).not.toContain(feature)
+      wrapper.unmount()
+    },
+  )
 })

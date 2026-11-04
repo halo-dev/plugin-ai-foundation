@@ -6,6 +6,11 @@ import { QK_MODELS } from '@/composables/use-models-fetch'
 import { useProvidersFetch } from '@/composables/use-providers-fetch'
 import type { ModelFormState } from '@/types/form'
 import { reconcileModelCapabilities } from '@/utils/model-capability-changes'
+import {
+  featureSupport,
+  parameterFeatures,
+  withFeatureSupport,
+} from '@/utils/model-feature-support'
 import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, useTemplateRef } from 'vue'
@@ -45,11 +50,30 @@ const formState = computed<ModelFormState>(() => {
     capabilitySources: spec.capabilitySources,
     catalogMatch: spec.catalogMatch,
     catalogParameters: spec.catalogParameters,
-    parameterConstraints: spec.parameterConstraints,
+    parameterConstraints: parameterConstraintsForEdit(spec),
     parameterMappings: spec.parameterMappings,
     nativeOptions: spec.nativeOptions,
   }
 })
+
+function parameterConstraintsForEdit(spec: AiModel['spec']) {
+  let constraints = spec.parameterConstraints
+  if (
+    spec.modelType !== 'language' ||
+    spec.catalogParameters ||
+    spec.catalogMatch ||
+    !spec.features
+  ) {
+    return constraints
+  }
+  // Before catalog profiles, saved feature selections were the only record of these choices.
+  for (const feature of parameterFeatures) {
+    if (featureSupport(feature, constraints) === undefined) {
+      constraints = withFeatureSupport(constraints, feature, spec.features.includes(feature))
+    }
+  }
+  return constraints
+}
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (formState: ModelFormState) => {

@@ -87,4 +87,32 @@ describe('model parameter constraints', () => {
       reasoning: { supported: true, budgetMinimum: 1024, budgetMaximum: 16000 },
     })
   })
+
+  it('allows a zero budget minimum but requires a positive budget maximum', async () => {
+    const wrapper = mountFields()
+    const minimum = wrapper.get('input[name="constraint_reasoning_budgetMinimum"]')
+    const maximum = wrapper.get('input[name="constraint_reasoning_budgetMaximum"]')
+    await minimum.setValue('0')
+    await maximum.setValue('0')
+    await maximum.trigger('blur')
+    await settle()
+
+    const errors = wrapper.findAll('[data-message-type="validation"]')
+    expect(errors).toHaveLength(1)
+    expect(errors[0]?.text()).toContain('推理预算上限（Token）')
+    expect(minimum.attributes('min')).toBe('0')
+    expect(maximum.attributes('min')).toBe('1')
+
+    await maximum.setValue('1')
+    await settle()
+    expect(wrapper.findAll('[data-message-type="validation"]')).toHaveLength(0)
+    expect(wrapper.props('modelValue')).toEqual({
+      reasoning: { budgetMinimum: 0, budgetMaximum: 1 },
+    })
+
+    await maximum.setValue('')
+    await settle()
+    expect(wrapper.findAll('[data-message-type="validation"]')).toHaveLength(0)
+    expect(wrapper.props('modelValue')).toEqual({ reasoning: { budgetMinimum: 0 } })
+  })
 })

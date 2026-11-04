@@ -122,6 +122,7 @@ export interface DiscoveredModelProfileOverride {
   modelType?: AiModel['spec']['modelType']
   adapterType?: AiModel['spec']['adapterType']
   features?: NonNullable<AiModel['spec']['features']>
+  parameterConstraints?: AiModel['spec']['parameterConstraints']
 }
 
 export interface DiscoveredModelProfile {
@@ -267,6 +268,7 @@ export function createModelFromDiscovered(
     ...(adapterType ? { adapterType } : {}),
     ...discoveredCapabilityFields(model, modelType, override),
     catalogParameters: model.catalogParameters,
+    parameterConstraints: override?.parameterConstraints,
   } as AiModel['spec']
 
   return {

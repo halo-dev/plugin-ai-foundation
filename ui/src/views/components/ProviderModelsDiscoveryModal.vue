@@ -5,6 +5,7 @@ import type {
   AiModelSpecAdapterTypeEnum,
   AiModelSpecFeaturesEnum,
   AiProvider,
+  ModelParameterConstraints,
 } from '@/api/generated'
 import {
   QK_MODELS,
@@ -28,9 +29,9 @@ import {
   modelImportFailureMessage,
   modelTypeOptionsForProviderType,
   summarizeModelImportResults,
-  syncDiscoveredModelProfiles,
   type DiscoveredModelProfiles,
 } from '@/utils/model'
+import { parameterFeatures, withFeatureSupport } from '@/utils/model-feature-support'
 import {
   Toast,
   VButton,
@@ -68,6 +69,7 @@ const { data: models, isLoading, refetch: refetchModels } = useDiscoverModelsFet
 const isRefreshingCatalog = ref(false)
 const { data: catalogStatus, refetch: refetchCatalogStatus } = useModelCatalogStatusFetch()
 const editedModelIds = ref(new Set<string>())
+const featureChoices = ref<Record<string, Partial<Record<AiModelSpecFeaturesEnum, boolean>>>>({})
 
 async function refreshCatalog() {
   if (isRefreshingCatalog.value || isImporting.value) return
@@ -180,12 +182,23 @@ function adapterOptionsFor(model: DiscoveredModel) {
   return adapterOptionsForProviderType(selectedProviderType.value, profileFor(model).modelType)
 }
 
+function featuresWithChoices(modelId: string, recommended: AiModelSpecFeaturesEnum[] = []) {
+  const features = new Set(recommended)
+  const choices = featureChoices.value[modelId] || {}
+  for (const feature of Object.keys(choices) as AiModelSpecFeaturesEnum[]) {
+    if (choices[feature]) features.add(feature)
+    else features.delete(feature)
+  }
+  return [...features]
+}
+
 function setModelType(model: DiscoveredModel, event: Event) {
   editedModelIds.value.add(model.modelId)
   const current = profileFor(model)
   const next = discoveredModelProfileForProviderType(selectedProviderType.value, model, {
     ...current,
     modelType: (event.target as HTMLSelectElement).value as AiModel['spec']['modelType'],
+    features: featuresWithChoices(model.modelId, current.features),
   })
   profileOverrides.value = {
     ...profileOverrides.value,
@@ -201,6 +214,7 @@ function setAdapterType(model: DiscoveredModel, event: Event) {
     [model.modelId]: discoveredModelProfileForProviderType(selectedProviderType.value, model, {
       ...current,
       adapterType: (event.target as HTMLSelectElement).value as AiModelSpecAdapterTypeEnum,
+      features: featuresWithChoices(model.modelId, current.features),
     }),
   }
 }
@@ -217,8 +231,12 @@ function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum)
   if (!featureOptionsFor(model).some((item) => item.value === feature)) {
     return
   }
-  editedModelIds.value.add(model.modelId)
   const profile = profileFor(model)
+  const enabled = !profile.features.includes(feature)
+  featureChoices.value[model.modelId] = {
+    ...featureChoices.value[model.modelId],
+    [feature]: enabled,
+  }
   let features = profile.features
   if (!profile.features.includes(feature)) {
     features = [...profile.features, feature]
@@ -232,6 +250,19 @@ function toggleFeature(model: DiscoveredModel, feature: AiModelSpecFeaturesEnum)
       features,
     },
   }
+}
+
+function manualFeatureConstraints(model: DiscoveredModel) {
+  if (profileFor(model).modelType !== 'language') return undefined
+  let constraints: ModelParameterConstraints | undefined
+  const supportedFeatures = featureOptionsFor(model).map((option) => option.value)
+  for (const feature of parameterFeatures) {
+    const enabled = featureChoices.value[model.modelId]?.[feature]
+    if (enabled !== undefined && supportedFeatures.includes(feature)) {
+      constraints = withFeatureSupport(constraints, feature, enabled)
+    }
+  }
+  return constraints
 }
 
 function capabilitySourceLabels(model: DiscoveredModel) {
@@ -280,7 +311,10 @@ async function handleImport() {
   try {
     const results = await Promise.allSettled(
       data.map(async (model) => {
-        const newModel = createModelFromDiscovered(providerName.value, model, profileFor(model))
+        const newModel = createModelFromDiscovered(providerName.value, model, {
+          ...profileFor(model),
+          parameterConstraints: manualFeatureConstraints(model),
+        })
 
         await aiConsoleApiClient.model.createModel({
           aiModel: newModel,
@@ -311,10 +345,17 @@ async function handleImport() {
 watch(
   [allModels, selectedProviderType],
   ([items, providerType]) => {
-    const editedProfiles = Object.fromEntries(
-      Object.entries(profileOverrides.value).filter(([id]) => editedModelIds.value.has(id)),
-    )
-    const nextProfiles = syncDiscoveredModelProfiles(items, providerType, editedProfiles)
+    const nextProfiles: DiscoveredModelProfiles = {}
+    for (const model of items) {
+      const previous = editedModelIds.value.has(model.modelId)
+        ? profileOverrides.value[model.modelId]
+        : undefined
+      nextProfiles[model.modelId] = discoveredModelProfileForProviderType(providerType, model, {
+        modelType: previous?.modelType || model.modelType,
+        adapterType: previous?.adapterType || model.adapterType,
+        features: featuresWithChoices(model.modelId, model.features),
+      })
+    }
     selectedModels.value = new Set(
       [...selectedModels.value].filter((id) => items.some((item) => item.modelId === id)),
     )

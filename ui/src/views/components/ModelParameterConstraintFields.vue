@@ -16,8 +16,8 @@ const tokenFields = computed(() =>
   allTokenFields.filter((field) => props.modelType === 'language' || field.key !== 'outputTokens'),
 )
 const reasoningNumbers = [
-  { key: 'budgetMinimum', label: '推理预算下限（Token）' },
-  { key: 'budgetMaximum', label: '推理预算上限（Token）' },
+  { key: 'budgetMinimum', label: '推理预算下限（Token）', min: 0 },
+  { key: 'budgetMaximum', label: '推理预算上限（Token）', min: 1 },
 ] as const
 type ReasoningBudgetField = (typeof reasoningNumbers)[number]['key']
 
@@ -63,9 +63,9 @@ function inheritedNumber(value?: number) {
           type="number"
           :name="`constraint_reasoning_${field.key}`"
           :label="field.label"
-          min="0"
+          :min="field.min"
           step="1"
-          validation="min:0|number"
+          :validation="`min:${field.min}|number`"
           :placeholder="inheritedNumber(inherited?.reasoning?.[field.key])"
           :model-value="constraints?.reasoning?.[field.key]"
           @input="updateReasoning(field.key, numberValue($event))"

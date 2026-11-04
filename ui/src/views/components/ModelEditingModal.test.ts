@@ -201,7 +201,7 @@ it('automatically loads catalog parameters in the draft and preserves manual ove
     providerBaseUrl: 'https://api.openai.com/v1',
     modelId: 'example',
     adapterType: 'openai-chat' as const,
-    constraints: { temperature: false, outputTokens: 8192 },
+    constraints: { temperature: false, outputTokens: 8192, toolCalling: true },
   }
   vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({
     data: catalogParameters,
@@ -250,7 +250,94 @@ it('automatically loads catalog parameters in the draft and preserves manual ove
   expect(after.spec.catalogParameters).toEqual(catalogParameters)
   expect(after.spec.parameterConstraints).toEqual(saved.spec.parameterConstraints)
   expect(after.spec.parameterMappings).toEqual(saved.spec.parameterMappings)
+  expect(after.spec.features).toEqual(['tool-call'])
 })
+
+it.each([
+  { label: 'enabled', supported: true, manual: undefined },
+  { label: 'disabled', supported: false, manual: undefined },
+  {
+    label: 'explicit overrides',
+    supported: true,
+    manual: { toolCalling: false, outputTokens: 2048 },
+  },
+])(
+  'preserves saved $label feature choices when first loading catalog parameters',
+  async ({ supported, manual }) => {
+    const features = ['tool-call', 'structured-output', 'reasoning'] as const
+    const saved: AiModel = {
+      apiVersion: 'aifoundation.halo.run/v1alpha1',
+      kind: 'AiModel',
+      metadata: { name: 'legacy-manual' },
+      spec: {
+        providerName: 'openai-test',
+        modelId: 'legacy-manual',
+        displayName: 'Legacy manual',
+        enabled: true,
+        modelType: 'language',
+        adapterType: 'openai-chat',
+        features: supported ? [...features] : [],
+        parameterConstraints: manual,
+      },
+    }
+    const catalogParameters = {
+      providerType: 'openai',
+      providerBaseUrl: 'https://api.openai.com/v1',
+      modelId: 'legacy-manual',
+      adapterType: 'openai-chat' as const,
+      constraints: {
+        toolCalling: !supported,
+        structuredOutput: !supported,
+        reasoning: { supported: !supported },
+        outputTokens: 8192,
+      },
+    }
+    vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockResolvedValue({
+      data: catalogParameters,
+    } as never)
+    const wrapper = mount(ModelEditingModal, {
+      props: { model: saved },
+      global: {
+        stubs: {
+          VModal: { template: '<div><slot/><slot name="footer"/></div>' },
+          VButton: { template: '<button><slot/></button>' },
+          FormKit: {
+            name: 'FormKit',
+            props: ['modelValue'],
+            emits: ['submit', 'input'],
+            template: '<div><slot/></div>',
+          },
+          ParameterMappingFields: true,
+          ModelCatalogProvenance: true,
+        },
+      },
+    })
+    await flushPromises()
+    const featureInput = wrapper
+      .findAllComponents({ name: 'FormKit' })
+      .find((component) => component.attributes('name') === 'features')!
+    const expectedFeatures = supported
+      ? features.filter((feature) => feature !== 'tool-call' || manual?.toolCalling !== false)
+      : []
+    expect(featureInput.props('modelValue')).toEqual(expectedFeatures)
+    wrapper.findComponent({ name: 'FormKit' }).vm.$emit('submit', {
+      ...saved.spec,
+      displayName: 'Renamed only',
+    })
+    await flushPromises()
+    const after = vi.mocked(aiConsoleApiClient.model.updateModel).mock.calls[0]![0]!.aiModel
+    expect(after.spec.features || []).toEqual(expectedFeatures)
+    expect(after.spec.parameterConstraints).toEqual({
+      toolCalling: supported,
+      structuredOutput: supported,
+      reasoning: { supported },
+      ...manual,
+    })
+    expect(after.spec.catalogParameters).toEqual(catalogParameters)
+    expect(saved.spec.parameterConstraints).toEqual(manual)
+    wrapper.unmount()
+  },
+)
 
 it('waits for catalog loading before saving an existing model', async () => {
   let resolveCatalog!: (value: unknown) => void
