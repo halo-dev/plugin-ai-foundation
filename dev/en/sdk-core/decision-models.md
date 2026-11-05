@@ -5,8 +5,6 @@
 Decision models answer closed questions about shared text or JSON state. Consumer plugins own thresholds
 and subsequent actions. `DecisionModel` is provider-neutral. Provider adapters share model resolution,
 the workbench, and usage recording.
-These APIs are new in the development build and require matching plugin and
-Java/npm SDK versions; the published `1.0.0` API does not include them.
 
 ## Configure decision models
 
@@ -92,8 +90,3 @@ const result = await client.decide({
 The client supports custom fetch, headers and AbortSignal and validates typed response probabilities.
 It targets your endpoint, not the administrator-only Console test API. That test API accepts a string
 `state` plus `stateFormat: TEXT | JSON`; the server parses JSON before inference.
-
-Existing APIs and persisted values are preserved, and new AiModelService methods have compatible defaults.
-Older releases/clients cannot recognize the new model and adapter enum values: update consuming SDKs,
-and remove decision resources/default slots before downgrading. Automated tests cover the protocol,
-runtime and workbench; evaluate Chinese/domain-specific accuracy and thresholds with your own data.
