@@ -36,6 +36,63 @@ function catalogSpec(): AiModel['spec'] {
 }
 
 describe('catalog capability edits', () => {
+  it.each(['language', 'image-generation'] as const)(
+    'clears stale %s parameter attribution without losing import identity',
+    (modelType) => {
+      const previous: AiModel['spec'] = {
+        ...catalogSpec(),
+        modelType,
+        adapterType: modelType === 'language' ? 'openai-chat' : 'openai-image',
+        catalogMatch: {
+          providerId: 'openai',
+          modelId: 'example',
+          fields: ['parameters', 'adapterType'],
+        },
+      }
+      previous.catalogParameters = {
+        providerType: 'openai',
+        providerBaseUrl: 'https://api.openai.com/v1',
+        modelId: 'example',
+        adapterType: previous.adapterType,
+      }
+      const adapterType = modelType === 'language' ? 'openai-responses' : 'openrouter-image'
+      for (const catalogParameters of [undefined, previous.catalogParameters]) {
+        const draft: AiModel['spec'] = { ...previous, adapterType, catalogParameters }
+        const original = structuredClone(previous)
+        const next = reconcileModelCapabilities(previous, draft)
+        expect(next.catalogParameters).toBeUndefined()
+        expect(next.catalogMatch).toEqual({ ...previous.catalogMatch, fields: [] })
+        expect(previous).toEqual(original)
+        expect(draft.catalogParameters).toBe(catalogParameters)
+      }
+      const matched = reconcileModelCapabilities(previous, {
+        ...previous,
+        adapterType,
+        catalogParameters: { ...previous.catalogParameters, adapterType },
+      })
+      expect(matched.catalogMatch?.fields).toEqual(['parameters'])
+      expect(matched.catalogParameters?.adapterType).toBe(adapterType)
+    },
+  )
+
+  it('clears missing parameter attribution while retaining precise media coverage', () => {
+    const previous = catalogSpec()
+    previous.catalogMatch!.fields!.push('parameters', 'adapterType')
+    const original = structuredClone(previous)
+    const next = reconcileModelCapabilities(previous, { ...previous, catalogParameters: undefined })
+
+    expect(next.catalogMatch).toEqual({
+      ...previous.catalogMatch,
+      fields: previous.catalogMatch!.fields!.filter((field) => field !== 'parameters'),
+    })
+    expect(next.capabilities?.language?.inputMediaTypes).toEqual([
+      'image/png',
+      'audio/wav',
+      'audio/mpeg',
+    ])
+    expect(previous).toEqual(original)
+  })
+
   it('does not restore feature overrides unsupported by the target adapter', () => {
     const previous: AiModel['spec'] = {
       ...catalogSpec(),
@@ -129,7 +186,7 @@ describe('catalog capability edits', () => {
       adapterType: 'openrouter-image',
     })
     expect(switched.capabilities?.imageGeneration?.outputMediaTypes).toBeUndefined()
-    expect(switched.catalogMatch?.fields).toEqual(['parameters'])
+    expect(switched.catalogMatch?.fields).toEqual([])
     const manual = reconcileModelCapabilities(previous, {
       ...previous,
       adapterType: 'openrouter-image',
@@ -144,7 +201,7 @@ describe('catalog capability edits', () => {
       maskInput: false,
     })
     expect(manual.capabilitySources?.imageGeneration).toBe('manual')
-    expect(manual.catalogMatch?.fields).toEqual(['parameters'])
+    expect(manual.catalogMatch?.fields).toEqual([])
   })
   it('preserves the existing edit behavior for models without catalog metadata', () => {
     const previous = catalogSpec()

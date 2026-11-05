@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
@@ -19,8 +20,10 @@ import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterConstraints;
+import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.extension.ModelParameterProfile;
 import run.halo.aifoundation.provider.gitee.GiteeProvider;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -32,13 +35,14 @@ import run.halo.app.extension.ReactiveExtensionClient;
 class ModelConsoleModelValidatorTest {
 
     private final GiteeProvider type = spy(new GiteeProvider());
+    private AiProvider provider;
     private ModelConsoleModelValidator validator;
 
     @BeforeEach
     void setup() {
         var client = mock(ReactiveExtensionClient.class);
         var cache = mock(ProviderClientCache.class);
-        var provider = new AiProvider();
+        provider = new AiProvider();
         var spec = new AiProvider.AiProviderSpec();
         var providerType = type.getProviderType();
         spec.setProviderType(providerType);
@@ -46,7 +50,8 @@ class ModelConsoleModelValidatorTest {
         when(client.fetch(AiProvider.class, "provider")).thenReturn(Mono.just(provider));
         when(cache.getProviderTypeMap()).thenReturn(Map.of(providerType, type));
         validator = new ModelConsoleModelValidator(client, cache,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
+            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+            new EffectiveParameterMappingResolver());
     }
 
     @ParameterizedTest
@@ -129,6 +134,87 @@ class ModelConsoleModelValidatorTest {
         StepVerifier.create(validator.validate(model)).verifyComplete();
 
         assertThat(model.getSpec().getCatalogParameters()).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource({", 64", "65536, "})
+    void rejectsConflictingInheritedReasoningBudget(Long minimum, Long maximum) {
+        var model = budgetModel(minimum, maximum);
+
+        StepVerifier.create(validator.validate(model))
+            .expectErrorSatisfies(error -> {
+                assertThat(error).isInstanceOf(ResponseStatusException.class);
+                var response = (ResponseStatusException) error;
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                assertThat(response.getReason()).isEqualTo("reasoning budget minimum exceeds maximum");
+            })
+            .verify();
+    }
+
+    @ParameterizedTest
+    @CsvSource({", 128", "32768, ", "0, 64", ", "})
+    void acceptsValidInheritedReasoningBudget(Long minimum, Long maximum) {
+        var model = budgetModel(minimum, maximum);
+
+        StepVerifier.create(validator.validate(model)).verifyComplete();
+
+        var manual = model.getSpec().getParameterConstraints().getReasoning();
+        assertThat(manual.getBudgetMinimum()).isEqualTo(minimum);
+        assertThat(manual.getBudgetMaximum()).isEqualTo(maximum);
+        var catalog = model.getSpec().getCatalogParameters().getConstraints().getReasoning();
+        assertThat(catalog.getBudgetMinimum()).isEqualTo(128L);
+        assertThat(catalog.getBudgetMaximum()).isEqualTo(32768L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void administratorReasoningMappingReplacesCatalogBudget(boolean providerMapping) {
+        var model = budgetModel(null, 64L);
+        var mappings = new ModelParameterMappings();
+        var language = new ModelParameterMappings.LanguageMappings();
+        var reasoning = new ModelParameterMappings.Selection();
+        reasoning.setMode(ModelParameterMappings.Mode.UNSUPPORTED);
+        language.setReasoning(reasoning);
+        mappings.setLanguage(language);
+        if (providerMapping) {
+            provider.getSpec().setParameterMappings(mappings);
+        } else {
+            model.getSpec().setParameterMappings(mappings);
+        }
+
+        StepVerifier.create(validator.validate(model)).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"endpoint", "chatPath", "adapter"})
+    void ignoresInapplicableCatalogBudget(String changed) {
+        var model = budgetModel(null, 64L);
+        switch (changed) {
+            case "endpoint" -> provider.getSpec().setBaseUrl("https://example.test/v1");
+            case "chatPath" -> provider.getSpec().setChatEndpointPath("/custom/chat");
+            case "adapter" -> model.getSpec().setAdapterType(AdapterType.GITEE_MESSAGES);
+            default -> throw new IllegalArgumentException(changed);
+        }
+
+        StepVerifier.create(validator.validate(model)).verifyComplete();
+    }
+
+    private AiModel budgetModel(Long minimum, Long maximum) {
+        var model = model();
+        model.getSpec().setAdapterType(AdapterType.GITEE_CHAT);
+        var catalog = new ModelParameterConstraints();
+        var inherited = new ModelParameterConstraints.Reasoning();
+        inherited.setBudgetMinimum(128L);
+        inherited.setBudgetMaximum(32768L);
+        catalog.setReasoning(inherited);
+        setConstraints(model, catalog, true);
+        var manual = new ModelParameterConstraints();
+        var configured = new ModelParameterConstraints.Reasoning();
+        configured.setBudgetMinimum(minimum);
+        configured.setBudgetMaximum(maximum);
+        manual.setReasoning(configured);
+        model.getSpec().setParameterConstraints(manual);
+        return model;
     }
 
     private AiModel model() {

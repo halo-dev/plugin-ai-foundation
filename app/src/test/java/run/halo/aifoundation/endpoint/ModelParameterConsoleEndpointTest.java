@@ -54,7 +54,8 @@ class ModelParameterConsoleEndpointTest {
         when(cache.getProviderTypeMap()).thenReturn(Map.of("openai", type));
         when(cache.getProviderType("openai")).thenReturn(type);
         var validator = new ModelConsoleModelValidator(client, cache,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
+            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+            new EffectiveParameterMappingResolver());
         var endpoint = new ModelParameterConsoleEndpoint(client, cache,
             new EffectiveParameterMappingResolver(), validator, catalog);
         web = WebTestClient.bindToRouterFunction(endpoint.endpoint()).build();

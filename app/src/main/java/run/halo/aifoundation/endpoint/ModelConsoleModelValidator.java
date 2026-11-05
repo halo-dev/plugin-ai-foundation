@@ -13,6 +13,7 @@ import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
@@ -20,6 +21,7 @@ import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderModelResolver;
+import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.app.extension.ReactiveExtensionClient;
 
 @Component
@@ -29,6 +31,7 @@ class ModelConsoleModelValidator {
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
     private final ParameterMappingValidator parameterMappingValidator;
+    private final EffectiveParameterMappingResolver parameterMappingResolver;
 
     Mono<Void> validate(AiModel model) {
         if (model.getSpec() == null) {
@@ -71,6 +74,7 @@ class ModelConsoleModelValidator {
             .then(Mono.defer(() -> validateAdapterType(model, providerType, type)))
             .then(Mono.defer(() -> validateFeatures(model, providerType, type)))
             .then(Mono.defer(() -> validateParameterMappings(model, providerType, type)))
+            .then(Mono.defer(() -> validateEffectiveConstraints(model, provider, type)))
             .then(Mono.defer(() -> validateNativeOptions(model, type)));
     }
 
@@ -111,6 +115,18 @@ class ModelConsoleModelValidator {
                 spec.getModelType(), spec.getAdapterType());
             parameterMappingValidator.validateConstraints(profile.getConstraints());
             validateConstraintFeatures(profile.getConstraints(), spec, providerType, type);
+            return Mono.empty();
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
+        }
+    }
+
+    private Mono<Void> validateEffectiveConstraints(AiModel model, AiProvider provider,
+        AiProviderType type) {
+        try {
+            var resolution = new ModelResolution(model, provider, type, null);
+            parameterMappingValidator.validateConstraints(
+                parameterMappingResolver.resolveConstraints(resolution));
             return Mono.empty();
         } catch (IllegalArgumentException e) {
             return badRequest(e.getMessage());

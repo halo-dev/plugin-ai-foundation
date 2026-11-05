@@ -135,9 +135,8 @@ export function reconcileModelCapabilities(
     spec.catalogMatch = {
       ...previous.catalogMatch,
       fields: previous.catalogMatch.fields?.filter((field) => {
-        if (spec.modelType === 'language') return true
         if (field === 'adapterType' && spec.adapterType !== previous.adapterType) return false
-        return field !== 'parameters' || !invalidCatalogParameters
+        return field !== 'parameters' || !!spec.catalogParameters
       }),
     }
   }
@@ -192,7 +191,7 @@ function reconcileLanguageCapabilities(
     if (language[key] === undefined && before?.[key]?.length === 0) language[key] = []
   }
   const edited = new Set(languageFields.filter((key) => !sameValue(before?.[key], language[key])))
-  let fields = [...(previous.catalogMatch?.fields || [])]
+  let fields = [...(spec.catalogMatch?.fields || [])]
   if (spec.adapterType !== previous.adapterType) {
     for (const key of languageFields) {
       if (fields.includes(`language.${key}`) && !edited.has(key)) delete language[key]
@@ -280,7 +279,7 @@ function reconcileLanguageCapabilities(
   spec.capabilitySources = sources
   // Keep the import identity even if every field was overridden: precise media lists must
   // not fall back to the pre-catalog audio wildcard. Only fields still attributed are shown.
-  if (previous.catalogMatch) spec.catalogMatch = { ...previous.catalogMatch, fields }
+  if (spec.catalogMatch) spec.catalogMatch = { ...spec.catalogMatch, fields }
   return spec
 }
 
