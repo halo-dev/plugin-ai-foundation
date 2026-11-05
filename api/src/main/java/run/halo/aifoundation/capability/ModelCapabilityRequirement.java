@@ -20,6 +20,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ModelCapabilityRequirement {
 
+    private DecisionCapability decision;
+
+    /** Retains the constructor published before decision requirements were introduced. */
+    public ModelCapabilityRequirement(LanguageCapability language,
+        ImageGenerationCapability imageGeneration) {
+        this(null, language, imageGeneration);
+    }
+
     /**
      * Required language capabilities. All non-null fields must be satisfied.
      */

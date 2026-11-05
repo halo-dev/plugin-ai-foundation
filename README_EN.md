@@ -10,6 +10,7 @@ ecosystem.
 
 ## Features
 
+- **Decision models**: Provider-neutral probability, choice, and score APIs with a decision workbench.
 - **Multiple AI providers**: Built-in support for OpenAI, OpenRouter, DeepSeek, Moonshot Kimi,
   SiliconFlow, Alibaba Cloud Model Studio, Doubao, ERNIE, Zhipu AI, Ollama, OpenAI-compatible
   providers, AIHubMix, Gitee AI, MiniMax, Tencent Cloud TokenHub, and Xiaomi MiMo

@@ -3,6 +3,7 @@ package run.halo.aifoundation;
 import org.pf4j.ExtensionPoint;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.decision.DecisionModel;
 import run.halo.aifoundation.embedding.EmbeddingModel;
 import run.halo.aifoundation.image.ImageGenerationModel;
 import run.halo.aifoundation.rerank.RerankingModel;
@@ -16,6 +17,19 @@ import run.halo.aifoundation.rerank.RerankingModel;
  * {@code AiModel.metadata.name}, not the provider type or provider-side model id.
  */
 public interface AiModelService extends ExtensionPoint {
+
+    /** Resolves the configured default decision model. */
+    default Mono<DecisionModel> decisionModel() {
+        return decisionModel(null);
+    }
+
+    /**
+     * Resolves a decision model by {@code AiModel.metadata.name}; null/blank selects the default.
+     * The default method preserves compatibility with implementations compiled before this API.
+     */
+    default Mono<DecisionModel> decisionModel(String modelName) {
+        return Mono.error(new UnsupportedOperationException("Decision models are not supported"));
+    }
 
     /**
      * Resolves the configured default language model.

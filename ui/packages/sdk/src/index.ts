@@ -6,6 +6,16 @@ export {
   lastAssistantMessageIsCompleteWithToolCalls,
 } from './chat'
 export type { ChatInit, ChatStateAdapter, SendMessageInput } from './chat'
+export { createDecisionClient } from './decision'
+export type {
+  DecisionAnswer,
+  DecisionClientOptions,
+  DecisionJsonValue,
+  DecisionQuestion,
+  DecisionRequest,
+  DecisionResponse,
+  DecisionState,
+} from './decision'
 export { AIUIError, AIUIProtocolError, AIUISchemaValidationError, isProtocolError } from './errors'
 export type { AIUISchemaValidationErrorOptions, AIUISchemaValidationTarget } from './errors'
 export { filePartFromFile, filePartsFromFiles } from './files'
@@ -15,6 +25,7 @@ export { applyUIMessageChunk, createUIMessageReducer, messageText } from './mess
 export type { CreateReducerOptions, UIMessageReducerState } from './message-reducer'
 export { fromOpenAPIRequestArgs } from './openapi'
 export type { OpenAPIRequestArgs } from './openapi'
+export { fixJson } from './partial-json'
 export {
   AIUIMessageValidationError,
   assertValidUIMessages,
@@ -27,7 +38,6 @@ export type {
   ValidateUIMessagesOptions,
 } from './persistence'
 export { parsePartialJson, toJsonSchema, validateFinalValue, validateRuntimeSchema } from './schema'
-export { fixJson } from './partial-json'
 export type {
   DataPartSchemas,
   MessageMetadataSchema,

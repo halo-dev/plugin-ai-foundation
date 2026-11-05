@@ -41,7 +41,7 @@ formSchema:
       modelType: image-generation
 ```
 
-`modelType` 支持 `language`、`embedding`、`rerank` 和 `image-generation`。
+`modelType` 支持 `language`、`embedding`、`rerank`、`image-generation` 和 `decision`。
 
 ## 按常用能力提醒
 

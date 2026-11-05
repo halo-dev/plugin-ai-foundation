@@ -1,5 +1,6 @@
 package run.halo.aifoundation.endpoint;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -8,15 +9,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.server.ResponseStatusException;
+import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.capability.ImageGenerationCapability;
 import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilityRequirement;
+import run.halo.aifoundation.decision.DecisionQuestionType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.index.query.Queries;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 record ModelOptionQuery(
@@ -30,7 +34,9 @@ record ModelOptionQuery(
     String keyword
 ) {
 
-    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder()
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+        .build();
 
     static ModelOptionQuery from(ServerRequest request) {
         var modelType = parseModelType(single(request, "modelType", false));
@@ -185,8 +191,9 @@ record ModelOptionQuery(
         } catch (JacksonException e) {
             throw badRequest("requiredCapabilities must be valid JSON");
         }
-        rejectUnknownKeys(root, "requiredCapabilities", List.of("language", "imageGeneration"));
+        rejectUnknownKeys(root, "requiredCapabilities", List.of("language", "imageGeneration", "decision"));
         return ModelCapabilityRequirement.builder()
+            .decision(parseDecisionCapability(asMap(root.get("decision"), "decision")))
             .language(parseLanguageCapability(asMap(root.get("language"), "language")))
             .imageGeneration(parseImageGenerationCapability(
                 asMap(root.get("imageGeneration"), "imageGeneration")))
@@ -208,6 +215,37 @@ record ModelOptionQuery(
                 "language.inputMediaTypes"))
             .inputSources(inputSources(value.get("inputSources"), "language.inputSources"))
             .build();
+    }
+
+    private static DecisionCapability parseDecisionCapability(Map<?, ?> value) {
+        if (value == null) {
+            return null;
+        }
+        rejectUnknownKeys(value, "decision", List.of("questionTypes", "structuredState",
+            "maxChoiceOptions", "maxScoreLevels", "choiceProbabilities", "choiceConfidence",
+            "scoreProbabilities", "scoreConfidence", "scoreLegend"));
+        var types = stringList(value.get("questionTypes"), "decision.questionTypes");
+        var builder = DecisionCapability.builder()
+            .structuredState(booleanValue(value.get("structuredState"), "decision.structuredState"))
+            .maxChoiceOptions(integerValue(value.get("maxChoiceOptions"), "decision.maxChoiceOptions"))
+            .maxScoreLevels(integerValue(value.get("maxScoreLevels"), "decision.maxScoreLevels"))
+            .choiceProbabilities(booleanValue(value.get("choiceProbabilities"),
+                "decision.choiceProbabilities"))
+            .choiceConfidence(booleanValue(value.get("choiceConfidence"), "decision.choiceConfidence"))
+            .scoreProbabilities(booleanValue(value.get("scoreProbabilities"),
+                "decision.scoreProbabilities"))
+            .scoreConfidence(booleanValue(value.get("scoreConfidence"), "decision.scoreConfidence"))
+            .scoreLegend(booleanValue(value.get("scoreLegend"), "decision.scoreLegend"));
+        if (types != null) {
+            builder.questionTypes(types.stream().map(type -> {
+                try {
+                    return DecisionQuestionType.valueOf(type);
+                } catch (IllegalArgumentException error) {
+                    throw badRequest("Unsupported decision question type: " + type);
+                }
+            }).toList());
+        }
+        return builder.build();
     }
 
     private static ImageGenerationCapability parseImageGenerationCapability(Map<?, ?> value) {
@@ -257,7 +295,12 @@ record ModelOptionQuery(
             return null;
         }
         if (value instanceof Number number) {
-            var intValue = number.intValue();
+            final int intValue;
+            try {
+                intValue = new BigDecimal(number.toString()).intValueExact();
+            } catch (NumberFormatException | ArithmeticException e) {
+                throw badRequest(path + " must be an integer between 1 and " + Integer.MAX_VALUE);
+            }
             if (intValue < 1) {
                 throw badRequest(path + " must be positive");
             }

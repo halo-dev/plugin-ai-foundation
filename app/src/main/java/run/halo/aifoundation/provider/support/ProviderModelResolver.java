@@ -38,6 +38,7 @@ public final class ProviderModelResolver {
             return false;
         }
         return switch (modelType) {
+            case DECISION -> false;
             case LANGUAGE -> adapterType == AdapterType.OPENAI_CHAT;
             case EMBEDDING -> adapterType == AdapterType.OPENAI_EMBEDDING;
             case IMAGE_GENERATION -> adapterType == AdapterType.OPENAI_IMAGE;

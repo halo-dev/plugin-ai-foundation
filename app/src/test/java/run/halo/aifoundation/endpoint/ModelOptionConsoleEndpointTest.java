@@ -14,14 +14,19 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
+import run.halo.aifoundation.capability.DecisionCapability;
+import run.halo.aifoundation.decision.DecisionQuestionType;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
+import run.halo.aifoundation.provider.typesafe.TypeSafeProvider;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.capability.ModelCapabilityService;
 import run.halo.app.extension.Metadata;
@@ -322,6 +327,101 @@ class ModelOptionConsoleEndpointTest {
             query = prefixQuery + "&" + query;
         }
         return URI.create("/model-options?" + query);
+    }
+
+    @Test
+    void decisionOutputCapabilitiesDistinguishSupportedUnsupportedAndUnknown() {
+        var labelProvider = providerType("Label provider", null);
+        when(labelProvider.decisionCapabilities()).thenReturn(DecisionCapability.builder()
+            .questionTypes(List.of(DecisionQuestionType.CHOICE, DecisionQuestionType.SCORE))
+            .choiceProbabilities(false).choiceConfidence(false).scoreProbabilities(false)
+            .scoreConfidence(false).scoreLegend(false).build());
+        var unknownProvider = providerType("Unknown provider", null);
+        when(unknownProvider.decisionCapabilities()).thenReturn(new DecisionCapability(
+            List.of(DecisionQuestionType.CHOICE), false, 2, null));
+        when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of(
+            "typesafe", new TypeSafeProvider(), "label-only", labelProvider, "unknown", unknownProvider));
+        mockData(List.of(
+                model("jev", "typesafe", "jev-latest", "Jev", ModelType.DECISION, true, List.of()),
+                model("label", "label-only", "labels", "Labels", ModelType.DECISION, true, List.of()),
+                model("unknown", "unknown", "unknown", "Unknown", ModelType.DECISION, true, List.of())),
+            List.of(
+                provider("typesafe", "TypeSafe", "typesafe", true, AiProvider.AiProviderStatus.Phase.OK),
+                provider("label-only", "Labels", "label-only", true, AiProvider.AiProviderStatus.Phase.OK),
+                provider("unknown", "Unknown", "unknown", true, AiProvider.AiProviderStatus.Phase.OK)));
+
+        webTestClient.get().uri("/model-options?modelType=decision")
+            .exchange().expectStatus().isOk().expectBodyList(ModelOption.class).hasSize(3);
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"choiceProbabilities":true,"choiceConfidence":true,
+              "scoreProbabilities":true,"scoreConfidence":true,"scoreLegend":true}}
+            """))
+            .exchange().expectStatus().isOk().expectBodyList(ModelOption.class)
+            .value(options -> assertThat(options).extracting(ModelOption::getName).containsExactly("jev"));
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"choiceProbabilities":false}}
+            """))
+            .exchange().expectStatus().isOk().expectBodyList(ModelOption.class)
+            .value(options -> assertThat(options).extracting(ModelOption::getName).containsExactly("label"));
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"scoreConfidence":"true"}}
+            """))
+            .exchange().expectStatus().isBadRequest();
+    }
+
+    @Test
+    void decisionOptionsExposeAdapterLimitsAndFilterRequiredCapabilities() {
+        when(providerClientCache.getProviderTypeMap())
+            .thenReturn(Map.of("typesafe", new TypeSafeProvider()));
+        mockData(List.of(model("decision-resource", "typesafe-prod", "jev-latest", "Jev",
+                ModelType.DECISION, true, List.of())),
+            List.of(provider("typesafe-prod", "TypeSafe", "typesafe", true,
+                AiProvider.AiProviderStatus.Phase.UNKNOWN)));
+
+        webTestClient.get().uri(capabilitiesUri("modelType=decision", """
+            {"decision":{"questionTypes":["YES_NO","SCORE"],"structuredState":true,"maxScoreLevels":10}}
+            """))
+            .exchange().expectStatus().isOk().expectBody()
+            .jsonPath("$[0].name").isEqualTo("decision-resource")
+            .jsonPath("$[0].capabilities.decision.maxChoiceOptions").isEqualTo(255)
+            .jsonPath("$[0].capabilities.sources.decision").isEqualTo("built-in");
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"maxScoreLevels":11}}
+            """))
+            .exchange().expectStatus().isOk().expectBody().json("[]");
+
+        webTestClient.get().uri(capabilitiesUri("""
+            {"decision":{"questionTypes":["BOX"]}}
+            """))
+            .exchange().expectStatus().isBadRequest();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"10.9", "10.0000000000000001", "4294967298", "-4294967294",
+        "2147483648", "0", "-1", "1e20", "\"10\"", "true"})
+    void capabilityLimitsRejectFractionsOverflowAndNonPositiveNumbers(String value) {
+        for (var requirement : integerCapabilityRequirements(value)) {
+            webTestClient.get().uri(capabilitiesUri(requirement))
+                .exchange().expectStatus().isBadRequest();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1", "10", "10.0", "1e1", "2147483647", "null"})
+    void capabilityLimitsAcceptExactPositiveIntegersAndUnspecifiedValues(String value) {
+        mockData(List.of(), List.of());
+        for (var requirement : integerCapabilityRequirements(value)) {
+            webTestClient.get().uri(capabilitiesUri(requirement))
+                .exchange().expectStatus().isOk().expectBody().json("[]");
+        }
+    }
+
+    private List<String> integerCapabilityRequirements(String value) {
+        return List.of(
+            "{\"decision\":{\"maxChoiceOptions\":%s}}".formatted(value),
+            "{\"decision\":{\"maxScoreLevels\":%s}}".formatted(value),
+            "{\"imageGeneration\":{\"maxImagesPerCall\":%s}}".formatted(value));
     }
 
     private ModelOption option(List<ModelOption> options, String name) {

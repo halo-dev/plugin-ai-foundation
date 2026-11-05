@@ -27,7 +27,7 @@ selector using the repository's current public contracts.
 
 ## SDK surfaces
 
-[SDK Core](./sdk-core/README.md) resolves language, embedding, reranking, and image models and
+[SDK Core](./sdk-core/README.md) resolves language, embedding, reranking, image, and decision models and
 provides text generation, multimodal input, structured output, tools, RAG, middleware,
 cancellation, lifecycle, and the Java UI Message bridge.
 

@@ -7,6 +7,36 @@ import {
 } from './capabilities'
 
 describe('capability helpers', () => {
+  it('shows only declared decision diagnostics and preserves false filter values', () => {
+    expect(
+      capabilitySummaryLabels({
+        decision: {
+          questionTypes: ['CHOICE', 'SCORE'],
+          choiceProbabilities: false,
+          scoreProbabilities: true,
+          choiceConfidence: undefined,
+          scoreConfidence: false,
+        },
+      }),
+    ).toEqual(['单选', '评分', '概率分布'])
+    expect(
+      normalizeRequiredCapabilities({
+        decision: {
+          choiceProbabilities: false,
+          scoreConfidence: true,
+        },
+      }),
+    ).toBe('{"decision":{"choiceProbabilities":false,"scoreConfidence":true}}')
+    expect(
+      capabilityUnavailableDetailsLabel({
+        unavailableDetails: [
+          { path: 'decision.choiceProbabilities' },
+          { path: 'decision.scoreConfidence' },
+        ],
+      } as ModelOption),
+    ).toBe('缺少能力：单选概率分布、评分置信度')
+  })
+
   it('normalizes structured required capabilities into JSON', () => {
     expect(
       normalizeRequiredCapabilities({

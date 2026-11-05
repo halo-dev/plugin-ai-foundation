@@ -14,11 +14,13 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.capability.CapabilitySource;
+import run.halo.aifoundation.capability.DecisionCapability;
 import run.halo.aifoundation.capability.ImageGenerationCapability;
 import run.halo.aifoundation.capability.InputSource;
 import run.halo.aifoundation.capability.LanguageCapability;
 import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.capability.ModelCapabilitySources;
+import run.halo.aifoundation.decision.DecisionQuestionType;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.provider.AbstractAiProviderType;
 import run.halo.aifoundation.provider.mapping.DefaultParameterMapping;
@@ -33,6 +35,7 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
+import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
@@ -61,7 +64,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public String getDescription() {
-        return "AIHubMix 原生网关适配，支持 Responses、Chat、嵌入、重排与模型路由图片预测。";
+        return "AIHubMix 原生网关适配，支持 Responses、Chat、嵌入、重排、图片预测与决策模型。";
     }
 
     @Override
@@ -98,7 +101,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
     public List<AdapterType> getSupportedAdapterTypes() {
         return List.of(AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
             AdapterType.AIHUBMIX_MESSAGES, AdapterType.AIHUBMIX_EMBEDDING,
-            AdapterType.RERANK, AdapterType.AIHUBMIX_IMAGE);
+            AdapterType.RERANK, AdapterType.AIHUBMIX_IMAGE, AdapterType.AIHUBMIX_SYSTEM_ONE);
     }
 
     @Override
@@ -176,6 +179,39 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         return new AiHubMixImageGenerationClient(new ImageGenerationClientOptions(
             getProviderType(), resolveBaseUrl(provider), apiKey, modelId,
             AiHubMixHeaders.DEFAULTS), imageWebClientBuilder(provider));
+    }
+
+    @Override
+    public DecisionCapability decisionCapabilities() {
+        return DecisionCapability.builder()
+            .questionTypes(List.of(DecisionQuestionType.YES_NO, DecisionQuestionType.CHOICE,
+                DecisionQuestionType.SCORE))
+            .structuredState(true).maxChoiceOptions(255).maxScoreLevels(10)
+            .choiceProbabilities(true).choiceConfidence(true)
+            .scoreProbabilities(true).scoreConfidence(true).scoreLegend(true)
+            .build();
+    }
+
+    @Override
+    public ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey,
+        ProviderModelRef model) {
+        var resolved = resolveModel(model);
+        if (resolved.adapterType() != AdapterType.AIHUBMIX_SYSTEM_ONE) {
+            throw new IllegalArgumentException(
+                "Unsupported AIHubMix decision adapter: " + resolved.adapterType());
+        }
+        validateNativeModelOptions(resolved);
+        return new AiHubMixDecisionClient(resolveBaseUrl(provider), apiKey, resolved.modelId(),
+            webClientBuilder(provider));
+    }
+
+    @Override
+    public void validateNativeModelOptions(ProviderModelRef model) {
+        super.validateNativeModelOptions(model);
+        if (model.modelType() == ModelType.DECISION
+            && model.nativeOptions() != null && !model.nativeOptions().isEmpty()) {
+            throw new IllegalArgumentException("AIHubMix decision models do not accept native options");
+        }
     }
 
     @Override
@@ -263,6 +299,9 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         }
         if (modelId.isBlank()) {
             return null;
+        }
+        if (type(node, "decision")) {
+            return typedModel(modelId, ModelType.DECISION, AdapterType.AIHUBMIX_SYSTEM_ONE);
         }
         if (type(node, "embedding")) {
             return typedModel(modelId, ModelType.EMBEDDING, AdapterType.AIHUBMIX_EMBEDDING);

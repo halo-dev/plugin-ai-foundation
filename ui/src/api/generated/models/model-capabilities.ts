@@ -15,6 +15,9 @@
 
 // May contain unused imports in some cases
 // @ts-ignore
+import type { DecisionCapability } from './decision-capability';
+// May contain unused imports in some cases
+// @ts-ignore
 import type { ImageGenerationCapability } from './image-generation-capability';
 // May contain unused imports in some cases
 // @ts-ignore
@@ -29,6 +32,12 @@ import type { ModelCapabilitySources } from './model-capability-sources';
  * @interface ModelCapabilities
  */
 export interface ModelCapabilities {
+    /**
+     * 
+     * @type {DecisionCapability}
+     * @memberof ModelCapabilities
+     */
+    'decision'?: DecisionCapability;
     /**
      * 
      * @type {ImageGenerationCapability}

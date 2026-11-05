@@ -33,6 +33,22 @@ class ProviderTypeConsoleEndpointTest {
         .build();
 
     @Test
+    void listProviderTypesExposesAiHubMixDecisionAdapter() {
+        when(providerClientCache.getProviderTypeMap())
+            .thenReturn(Map.of("aihubmix", new AiHubMixProvider()));
+
+        webTestClient.get().uri("/provider-types")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$[0].supportedModelTypes[4]").isEqualTo("decision")
+            .jsonPath("$[0].adapters[?(@.adapterType == 'aihubmix-system-one')].modelType")
+            .isEqualTo("decision")
+            .jsonPath("$[0].adapters[?(@.adapterType == 'aihubmix-system-one')].displayName")
+            .isEqualTo("System One");
+    }
+
+    @Test
     void listProviderTypes_includesXiaomiMiMoMetadata() {
         when(providerClientCache.getProviderTypeMap())
             .thenReturn(Map.of("mimo", new MiMoProvider()));
