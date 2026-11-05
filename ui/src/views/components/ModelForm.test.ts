@@ -1,5 +1,6 @@
 import { aiConsoleApiClient } from '@/api'
 import type { AiModel, ModelParameterProfile } from '@/api/generated'
+import { useModelParameters } from '@/composables/use-model-parameters'
 import type { ModelFormState } from '@/types/form'
 import { reconcileModelCapabilities } from '@/utils/model-capability-changes'
 import ModelForm from '@/views/components/ModelForm.vue'
@@ -12,11 +13,38 @@ vi.mock('@/api', () => ({
   aiConsoleApiClient: { model: { getModelCatalogParameters: vi.fn() } },
 }))
 vi.mock('@/composables/use-model-parameters', () => ({
-  useModelParameters: () => ({ data: ref(undefined), isError: ref(false) }),
+  useModelParameters: vi.fn(() => ({ data: ref(undefined), isError: ref(false) })),
 }))
 vi.mock('@/composables/use-provider-types-fetch', () => ({
   useProviderTypesFetch: () => ({
     data: ref([
+      {
+        providerType: 'aihubmix',
+        supportedModelTypes: ['language', 'decision'],
+        adapters: [
+          { adapterType: 'aihubmix-responses', modelType: 'language', recommended: true },
+          { adapterType: 'aihubmix-system-one', modelType: 'decision', recommended: true },
+        ],
+        parameterDefinitions: [
+          {
+            parameter: 'TEMPERATURE',
+            domain: 'language',
+            field: 'temperature',
+            displayName: '温度',
+            description: '',
+            modelType: 'language',
+            common: true,
+          },
+        ],
+      },
+      {
+        providerType: 'typesafe',
+        supportedModelTypes: ['decision'],
+        adapters: [
+          { adapterType: 'typesafe-system-one', modelType: 'decision', recommended: true },
+        ],
+        parameterDefinitions: [],
+      },
       {
         providerType: 'openai',
         supportedModelTypes: ['language', 'embedding', 'image-generation', 'rerank'],
@@ -260,9 +288,9 @@ async function settleForm() {
 }
 
 const realForms: { unmount: () => void }[] = []
-function mountRealForm(formState: ModelFormState, providerName?: string) {
+function mountRealForm(formState: ModelFormState, providerName?: string, providerType = 'openai') {
   const wrapper = mount(ModelForm, {
-    props: { providerType: 'openai', formState, providerName },
+    props: { providerType, formState, providerName },
     global: {
       plugins: [
         [
@@ -705,4 +733,92 @@ it('preserves explicit empty catalog formats when saving the unchanged image for
   expect(saved.capabilitySources?.imageGeneration).toBe('unknown')
   expect(saved.catalogMatch?.fields).toEqual(previous.catalogMatch?.fields)
   expect(saved.catalogParameters).toEqual(previous.catalogParameters)
+})
+
+it.each(['aihubmix', 'typesafe'] as const)(
+  'does not fetch or submit language parameter configuration for %s decision models',
+  async (providerType) => {
+    const state: ModelFormState = {
+      modelId: 'jev-1.14',
+      displayName: 'Jev',
+      enabled: true,
+      modelType: 'decision',
+      adapterType: providerType === 'aihubmix' ? 'aihubmix-system-one' : 'typesafe-system-one',
+      parameterMappings: { language: { reasoning: { mode: 'TEMPLATE', reasoningMapping: {} } } },
+      parameterConstraints: {
+        temperature: false,
+        inputTokens: 8192,
+        reasoning: { supported: true },
+      },
+    }
+    const wrapper = mount(ModelForm, {
+      props: { providerName: 'decision-provider', providerType, formState: state },
+      global: {
+        stubs: {
+          ...stubs,
+          AdvancedSettingsCollapsible: { template: '<section><slot/></section>' },
+        },
+      },
+    })
+    await flushPromises()
+    expect(aiConsoleApiClient.model.getModelCatalogParameters).not.toHaveBeenCalled()
+    expect(
+      vi.mocked(useModelParameters).mock.calls.every(([model]) => model.value === undefined),
+    ).toBe(true)
+    expect(wrapper.findComponent({ name: 'ParameterMappingFields' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ModelParameterConstraintFields' }).exists()).toBe(false)
+    wrapper.findComponent({ name: 'FormKit' }).vm.$emit('submit', state)
+    await flushPromises()
+    const submitted = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+    expect(submitted).toMatchObject({ modelType: 'decision', adapterType: state.adapterType })
+    expect(submitted.parameterMappings).toBeUndefined()
+    expect(submitted.parameterConstraints).toBeUndefined()
+    expect(submitted.catalogParameters).toBeUndefined()
+    expect(wrapper.vm.isSubmitting).toBe(false)
+    wrapper.unmount()
+  },
+)
+
+it('can switch to decision and save while a previous language catalog request is pending', async () => {
+  const catalog = deferredCatalog()
+  vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mockReturnValue(
+    catalog.promise as never,
+  )
+  const state: ModelFormState = {
+    modelId: 'jev-1.14',
+    displayName: 'Jev',
+    enabled: true,
+    modelType: 'language',
+    adapterType: 'aihubmix-responses',
+    parameterMappings: { language: { temperature: { mode: 'UNSUPPORTED' } } },
+    parameterConstraints: { inputTokens: 1000, reasoning: { budgetMaximum: 4096 } },
+  }
+  const wrapper = mountRealForm(state, 'aihubmix-one', 'aihubmix')
+  await settleForm()
+  const signal = vi.mocked(aiConsoleApiClient.model.getModelCatalogParameters).mock.calls[0]![1]
+    ?.signal
+  await wrapper.get('select[name="modelType"]').setValue('decision')
+  await settleForm()
+  expect(signal?.aborted).toBe(true)
+  expect(aiConsoleApiClient.model.getModelCatalogParameters).toHaveBeenCalledOnce()
+  await wrapper.get('form').trigger('submit')
+  await settleForm()
+  const submitted = wrapper.emitted('submit')?.[0]?.[0] as ModelFormState
+  expect(submitted).toMatchObject({ modelType: 'decision', adapterType: 'aihubmix-system-one' })
+  expect(submitted.parameterMappings).toBeUndefined()
+  expect(submitted.parameterConstraints).toBeUndefined()
+  expect(submitted.catalogParameters).toBeUndefined()
+  catalog.resolve({ data: profile })
+  await flushPromises()
+  expect(wrapper.emitted('submit')).toHaveLength(1)
+  await wrapper.get('select[name="modelType"]').setValue('language')
+  await settleForm()
+  await wrapper.get('form').trigger('submit')
+  await settleForm()
+  expect(wrapper.emitted('submit')?.[1]?.[0]).toMatchObject({
+    modelType: 'language',
+    adapterType: 'aihubmix-responses',
+    parameterMappings: state.parameterMappings,
+    parameterConstraints: state.parameterConstraints,
+  })
 })

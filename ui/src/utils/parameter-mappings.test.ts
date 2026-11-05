@@ -67,6 +67,15 @@ describe('parameter mapping controls', () => {
     })
   })
 
+  it('drops all previous mappings for decision models, including before metadata loads', () => {
+    const mappings: ModelParameterMappings = {
+      language: { reasoning: { mode: 'TEMPLATE', reasoningMapping: {} } },
+      embedding: { dimensions: { mode: 'UNSUPPORTED' } },
+    }
+    expect(mappingsForModelType(mappings, 'decision', [maxTokens, dimensions])).toBeUndefined()
+    expect(mappingsForModelType(mappings, 'decision', undefined)).toBeUndefined()
+  })
+
   it('preserves mappings while the parameter catalog is unavailable', () => {
     const mappings: ModelParameterMappings = {
       language: { maxOutputTokens: { mode: 'UNSUPPORTED' } },

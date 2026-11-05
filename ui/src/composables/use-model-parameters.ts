@@ -1,5 +1,5 @@
 import { aiConsoleApiClient, aiCoreApiClient } from '@/api'
-import type { AiModel } from '@/api/generated'
+import type { AiModel, ModelOption } from '@/api/generated'
 import { useQuery } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
 
@@ -17,7 +17,10 @@ export function useModelParameters(model: Readonly<Ref<AiModel | undefined>>) {
   })
 }
 
-export function useSavedModelParameters(name: Readonly<Ref<string | undefined>>) {
+export function useSavedModelParameters(selectedModel: Readonly<Ref<ModelOption | undefined>>) {
+  const name = computed(() =>
+    selectedModel.value?.modelType === 'decision' ? undefined : selectedModel.value?.name,
+  )
   const model = useQuery({
     queryKey: ['plugin:ai-foundation:model-parameter-source', name],
     enabled: computed(() => Boolean(name.value)),

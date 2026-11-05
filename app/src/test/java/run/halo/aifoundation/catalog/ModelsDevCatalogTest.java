@@ -12,6 +12,24 @@ class ModelsDevCatalogTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
+    void upstreamDecisionEntriesDoNotRejectTheSupportedCatalog() throws Exception {
+        var catalog = ModelsDevCatalog.parse(MAPPER.readTree("""
+            {"openrouter":{"id":"openrouter","models":{
+              "chat":{"id":"chat","type":"chat"},
+              "typesafe/jev-1.14":{"id":"typesafe/jev-1.14","type":"decision",
+                "modalities":{"input":["text","image/png"],"output":["decision"]},
+                "limit":{"context":262144},
+                "api":{"systemone":{"base_url":"https://openrouter.ai/api/v1",
+                  "compatibility":{"media_input":"state"}}}}
+            }}}
+            """));
+
+        assertThat(catalog.find("openrouter", "chat")).isNotNull();
+        assertThat(catalog.find("openrouter", "typesafe/jev-1.14")).isNull();
+        assertThat(ModelsDevCatalog.parse(catalog.toJson())).isEqualTo(catalog);
+    }
+
+    @Test
     void decisionModelsDoNotMatchCatalogTypes() throws Exception {
         var catalog = ModelsDevCatalog.parse(MAPPER.readTree("""
             {"openai":{"id":"openai","models":{

@@ -44,7 +44,7 @@ const {
   data: parameterProfile,
   isFetching: parametersFetching,
   isError: parametersError,
-} = useSavedModelParameters(computed(() => selectedModel.value?.name))
+} = useSavedModelParameters(selectedModel)
 const languageSettings = useLanguageGenerationSettings({
   profile: parameterProfile,
   isFetching: parametersFetching,

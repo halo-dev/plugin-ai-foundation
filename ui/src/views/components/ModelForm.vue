@@ -124,8 +124,11 @@ const selectedAdapterDescription = computed(
 const parameterMappings = ref(props.formState?.parameterMappings)
 const parameterConstraints = ref(props.formState?.parameterConstraints)
 const modelId = shallowRef(props.formState?.modelId || '')
+const isDecisionModel = computed(
+  () => selectedModelType.value === AiModelSpecModelTypeEnum.Decision,
+)
 const modelDraft = computed<AiModel | undefined>(() =>
-  props.providerName
+  props.providerName && !isDecisionModel.value
     ? {
         apiVersion: 'aifoundation.halo.run/v1alpha1',
         kind: 'AiModel',
@@ -417,10 +420,10 @@ async function onSubmit(data: ModelFormRawState) {
       capabilities,
       capabilitySources,
       parameterMappings: normalizedMappings,
-      parameterConstraints: filterFeatureSupport(
-        parameterConstraints.value,
-        supportedFeatures.value,
-      ),
+      parameterConstraints:
+        data.modelType === AiModelSpecModelTypeEnum.Decision
+          ? undefined
+          : filterFeatureSupport(parameterConstraints.value, supportedFeatures.value),
       catalogParameters: catalogParameters.value,
       nativeOptions,
     })
@@ -649,7 +652,7 @@ function sameJson(a: unknown, b: unknown) {
       :value="formState?.enabled ?? true"
     />
 
-    <AdvancedSettingsCollapsible title="参数映射">
+    <AdvancedSettingsCollapsible v-if="!isDecisionModel" title="参数映射">
       <p class=":uno: mb-3 text-xs text-gray-500">
         未配置的参数使用供应商覆盖、模型目录和内置默认值。
       </p>
@@ -668,7 +671,7 @@ function sameJson(a: unknown, b: unknown) {
       />
     </AdvancedSettingsCollapsible>
 
-    <AdvancedSettingsCollapsible title="Token 限制">
+    <AdvancedSettingsCollapsible v-if="!isDecisionModel" title="Token 限制">
       <p v-if="inheritedParametersError" class=":uno: text-xs text-red-600">
         暂时无法获取继承配置，请稍后重试。
       </p>
