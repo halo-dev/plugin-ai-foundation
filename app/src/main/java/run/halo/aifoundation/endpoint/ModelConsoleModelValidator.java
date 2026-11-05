@@ -1,7 +1,9 @@
 package run.halo.aifoundation.endpoint;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -9,13 +11,17 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
+import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
+import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderClientCache;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderModelResolver;
+import run.halo.aifoundation.service.model.ModelResolution;
 import run.halo.app.extension.ReactiveExtensionClient;
 
 @Component
@@ -25,6 +31,7 @@ class ModelConsoleModelValidator {
     private final ReactiveExtensionClient client;
     private final ProviderClientCache providerClientCache;
     private final ParameterMappingValidator parameterMappingValidator;
+    private final EffectiveParameterMappingResolver parameterMappingResolver;
 
     Mono<Void> validate(AiModel model) {
         if (model.getSpec() == null) {
@@ -66,7 +73,8 @@ class ModelConsoleModelValidator {
         return normalizeAdapterType(model, type)
             .then(Mono.defer(() -> validateAdapterType(model, providerType, type)))
             .then(Mono.defer(() -> validateFeatures(model, providerType, type)))
-            .then(Mono.defer(() -> validateParameterMappings(model)))
+            .then(Mono.defer(() -> validateParameterMappings(model, providerType, type)))
+            .then(Mono.defer(() -> validateEffectiveConstraints(model, provider, type)))
             .then(Mono.defer(() -> validateNativeOptions(model, type)));
     }
 
@@ -85,14 +93,71 @@ class ModelConsoleModelValidator {
         return Mono.empty();
     }
 
-    private Mono<Void> validateParameterMappings(AiModel model) {
+    private Mono<Void> validateParameterMappings(AiModel model, String providerType,
+        AiProviderType type) {
         try {
             var spec = model.getSpec();
             parameterMappingValidator.validateModel(spec.getParameterMappings(),
                 spec.getModelType(), spec.getAdapterType());
+            parameterMappingValidator.validateConstraints(spec.getParameterConstraints());
+            validateConstraintFeatures(spec.getParameterConstraints(), spec, providerType, type);
+            var profile = spec.getCatalogParameters();
+            if (profile == null) {
+                return Mono.empty();
+            }
+            if (!Objects.equals(profile.getModelId(), spec.getModelId())
+                || !Objects.equals(profile.getProviderType(), providerType)
+                || profile.getAdapterType() != spec.getAdapterType()) {
+                spec.setCatalogParameters(null);
+                return Mono.empty();
+            }
+            parameterMappingValidator.validateModel(profile.getMappings(),
+                spec.getModelType(), spec.getAdapterType());
+            parameterMappingValidator.validateConstraints(profile.getConstraints());
+            validateConstraintFeatures(profile.getConstraints(), spec, providerType, type);
             return Mono.empty();
         } catch (IllegalArgumentException e) {
             return badRequest(e.getMessage());
+        }
+    }
+
+    private Mono<Void> validateEffectiveConstraints(AiModel model, AiProvider provider,
+        AiProviderType type) {
+        try {
+            var resolution = new ModelResolution(model, provider, type, null);
+            parameterMappingValidator.validateConstraints(
+                parameterMappingResolver.resolveConstraints(resolution));
+            return Mono.empty();
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
+        }
+    }
+
+    private void validateConstraintFeatures(ModelParameterConstraints constraints,
+        AiModel.AiModelSpec spec, String providerType, AiProviderType type) {
+        if (constraints == null) {
+            return;
+        }
+        var supportedFeatures = type.getSupportedFeatures(spec.getAdapterType());
+        var unsupportedFeatures = new ArrayList<ModelFeature>();
+        if (Boolean.TRUE.equals(constraints.getToolCalling())
+            && !supportedFeatures.contains(ModelFeature.TOOL_CALL)) {
+            unsupportedFeatures.add(ModelFeature.TOOL_CALL);
+        }
+        if (Boolean.TRUE.equals(constraints.getStructuredOutput())
+            && !supportedFeatures.contains(ModelFeature.STRUCTURED_OUTPUT)) {
+            unsupportedFeatures.add(ModelFeature.STRUCTURED_OUTPUT);
+        }
+        if (constraints.getReasoning() != null
+            && Boolean.TRUE.equals(constraints.getReasoning().getSupported())
+            && !supportedFeatures.contains(ModelFeature.REASONING)) {
+            unsupportedFeatures.add(ModelFeature.REASONING);
+        }
+        if (!unsupportedFeatures.isEmpty()) {
+            throw new IllegalArgumentException("Model parameter constraints declare features "
+                + unsupportedFeatures + " that are not supported by provider type '" + providerType
+                + "' and adapter '" + spec.getAdapterType().getValue()
+                + "'. Supported features: " + supportedFeatures);
         }
     }
 

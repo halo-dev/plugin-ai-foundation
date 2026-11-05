@@ -2,6 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
+vi.mock('@/composables/use-model-parameters', () => ({
+  useModelParameters: () => ({ data: ref(undefined), isError: ref(false) }),
+}))
+
 const formKitStub = {
   name: 'FormKit',
   props: ['label', 'name', 'options', 'value', 'help'],

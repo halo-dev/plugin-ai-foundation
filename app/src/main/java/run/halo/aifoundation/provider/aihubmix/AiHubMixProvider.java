@@ -29,6 +29,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
@@ -39,9 +40,9 @@ import run.halo.aifoundation.provider.support.ProviderDecisionClient;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
-import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -332,6 +333,17 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     private DiscoveredModel languageModel(String modelId, Map<?, ?> node) {
         var features = languageFeatures(node);
+        var hasDeclaredFeatures = node.get("features") != null;
+        var hasDeclaredInputs = node.get("input_modalities") != null;
+        var evidence = DiscoveryFeatureEvidence.fromBooleanFields(node);
+        if (hasDeclaredFeatures) {
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(evidence, features,
+                ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+        }
+        if (hasDeclaredInputs) {
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(evidence, features, ModelFeature.VISION,
+                ModelFeature.AUDIO_INPUT);
+        }
         var inputs = tokens(node.get("input_modalities"));
         var mediaTypes = new ArrayList<String>();
         if (inputs.contains("image")) {
@@ -340,23 +352,27 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         if (inputs.contains("pdf")) {
             mediaTypes.add("application/pdf");
         }
-        var capability = LanguageCapability.builder()
-            .imageInput(inputs.contains("image"))
-            .fileInput(inputs.contains("pdf"))
-            .reasoningHistory(features.contains(ModelFeature.REASONING))
-            .inputMediaTypes(List.copyOf(mediaTypes))
-            .inputSources(mediaTypes.isEmpty() ? List.of()
-                : List.of(InputSource.DATA, InputSource.URL))
-            .build();
+        var capability = LanguageCapability.builder();
+        if (hasDeclaredFeatures) {
+            capability.reasoningHistory(features.contains(ModelFeature.REASONING));
+        }
+        if (hasDeclaredInputs) {
+            capability.imageInput(inputs.contains("image"))
+                .fileInput(inputs.contains("pdf"))
+                .inputMediaTypes(List.copyOf(mediaTypes))
+                .inputSources(mediaTypes.isEmpty() ? List.of()
+                    : List.of(InputSource.DATA, InputSource.URL));
+        }
         return DiscoveredModel.builder()
             .modelId(modelId)
             .displayName(modelId)
             .modelType(ModelType.LANGUAGE)
             .features(features)
+            .featureEvidence(evidence)
             .adapterType(AdapterType.AIHUBMIX_RESPONSES)
             .source(DiscoverySource.REMOTE)
             .confidence(DiscoveryConfidence.HIGH)
-            .capabilities(ModelCapabilities.builder().language(capability).build())
+            .capabilities(ModelCapabilities.builder().language(capability.build()).build())
             .capabilitySources(ModelCapabilitySources.builder()
                 .language(CapabilitySource.REMOTE)
                 .build())

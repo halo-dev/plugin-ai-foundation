@@ -27,16 +27,17 @@ import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.DiscoveryConfidence;
+import run.halo.aifoundation.provider.support.DiscoveryFeatureEvidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
-import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
@@ -318,6 +319,18 @@ public class OpenRouterProvider extends AbstractAiProviderType {
         if (reasoning) {
             features.add(ModelFeature.REASONING);
         }
+        var evidence = DiscoveryFeatureEvidence.fromBooleanFields(node);
+        var hasDeclaredParameters = node.get("supported_parameters") instanceof List<?>;
+        if (hasDeclaredParameters) {
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(evidence, features,
+                ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+        }
+        var hasDeclaredInputs = node.get("architecture") instanceof Map<?, ?> architecture
+            && architecture.get("input_modalities") instanceof List<?>;
+        if (hasDeclaredInputs) {
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(evidence, features, ModelFeature.VISION,
+                ModelFeature.AUDIO_INPUT);
+        }
         var mediaTypes = new ArrayList<String>();
         inputs.forEach(input -> {
             switch (input) {
@@ -329,23 +342,27 @@ public class OpenRouterProvider extends AbstractAiProviderType {
                 }
             }
         });
-        var capability = LanguageCapability.builder()
-            .imageInput(inputs.contains("image"))
-            .fileInput(containsAny(inputs, "file", "audio", "video"))
-            .reasoningHistory(reasoning)
-            .inputMediaTypes(List.copyOf(mediaTypes))
-            .inputSources(mediaTypes.isEmpty() ? List.of()
-                : List.of(InputSource.DATA, InputSource.URL))
-            .build();
+        var capability = LanguageCapability.builder();
+        if (hasDeclaredParameters) {
+            capability.reasoningHistory(reasoning);
+        }
+        if (hasDeclaredInputs) {
+            capability.imageInput(inputs.contains("image"))
+                .fileInput(containsAny(inputs, "file", "audio", "video"))
+                .inputMediaTypes(List.copyOf(mediaTypes))
+                .inputSources(mediaTypes.isEmpty() ? List.of()
+                    : List.of(InputSource.DATA, InputSource.URL));
+        }
         return DiscoveredModel.builder()
             .modelId(modelId)
             .displayName(stringValue(node, "name"))
             .modelType(ModelType.LANGUAGE)
             .features(Set.copyOf(features))
+            .featureEvidence(evidence)
             .adapterType(AdapterType.OPENROUTER_CHAT)
             .source(DiscoverySource.REMOTE)
             .confidence(DiscoveryConfidence.HIGH)
-            .capabilities(ModelCapabilities.builder().language(capability).build())
+            .capabilities(ModelCapabilities.builder().language(capability.build()).build())
             .capabilitySources(ModelCapabilitySources.builder()
                 .language(CapabilitySource.REMOTE)
                 .build())
@@ -404,11 +421,12 @@ public class OpenRouterProvider extends AbstractAiProviderType {
 
     private List<String> outputMediaTypes(Object descriptor) {
         if (!(descriptor instanceof Map<?, ?> values)) {
-            return List.of();
+            return null;
         }
         if (!(values.get("values") instanceof Iterable<?> formats)) {
-            return List.of();
+            return null;
         }
+        // An absent enumeration is unknown; a declared empty range remains authoritative.
         var mediaTypes = new ArrayList<String>();
         for (var format : formats) {
             var mediaType = imageMediaType(format);

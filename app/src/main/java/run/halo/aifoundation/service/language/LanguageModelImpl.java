@@ -48,6 +48,7 @@ import run.halo.aifoundation.exception.AiGenerationTimeoutException;
 import run.halo.aifoundation.exception.StructuredOutputSchemaException;
 import run.halo.aifoundation.exception.StructuredOutputTerminationException;
 import run.halo.aifoundation.exception.StructuredOutputValidationException;
+import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
@@ -61,6 +62,7 @@ import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.provider.ollama.OllamaChatOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import run.halo.aifoundation.provider.support.AdapterProtocol;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ProviderOptionMapMerger;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
@@ -130,6 +132,8 @@ public class LanguageModelImpl implements LanguageModel {
     private final ReasoningContentExtractor reasoningExtractor;
     private final LanguageModelRuntimeSupport runtimeSupport;
     private final RuntimeParameterMappings parameterMappings;
+    private final LanguageModelParameterValidator parameterValidator;
+    private final Integer messagesDefaultOutputTokens;
     private final String modelName;
     private final String providerName;
     private final int maxMultiStepLimit;
@@ -193,6 +197,8 @@ public class LanguageModelImpl implements LanguageModel {
         this.approvalResolver = composition.approvalResolver();
         this.runtimeSupport = composition.runtimeSupport();
         this.parameterMappings = context.parameterMappings();
+        this.parameterValidator = new LanguageModelParameterValidator(context);
+        this.messagesDefaultOutputTokens = resolveMessagesDefaultOutputTokens(context);
         this.modelName = context.modelName();
         this.providerName = context.providerName();
         this.maxMultiStepLimit = maxMultiStepLimit;
@@ -271,7 +277,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     private Flux<TextStreamPart> streamTextParts(GenerateTextRequest request,
         LanguageModelGenerationRun run) {
-        if (hasTools(request)) {
+        if (hasTools(request) || request != null && request.getPrepareStep() != null) {
             return streamTextWithTools(request, run);
         }
         if (hasStructuredOutput(request)) {
@@ -330,7 +336,8 @@ public class LanguageModelImpl implements LanguageModel {
                         .steps(List.of(step))
                         .responseMessages(responseMessages(List.of(step)))
                         .build();
-                    parts.add(TextStreamPart.finishStep(0, finishReason, null, null, run.warnings(), null,
+                    parts.add(TextStreamPart.finishStep(0, finishReason, null, null,
+                        run.warnings(), null,
                         null, Map.of()));
                     parts.add(TextStreamPart.finish(finishReason, null, null));
                     return run.stepFinish(0, step, List.of(step))
@@ -373,7 +380,8 @@ public class LanguageModelImpl implements LanguageModel {
                 stopWhen, run);
             return run.start()
                 .then(resumeApprovedTools(request, messages, executionMessages, run))
-                .flatMapMany(resumedApprovals -> Flux.concat(Flux.just(TextStreamPart.start(messageId)),
+                .flatMapMany(resumedApprovals ->
+                    Flux.concat(Flux.just(TextStreamPart.start(messageId)),
                     Flux.fromIterable(resumedApprovals.content().stream()
                         .map(this::streamPartFromContent)
                         .toList()),
@@ -473,7 +481,8 @@ public class LanguageModelImpl implements LanguageModel {
             PreparedInvocation prepared;
             try {
                 checkCancellation(loop.request());
-                prepared = prepareInvocation(loop.request(), loop.messages(), loop.executionMessages(),
+                prepared = prepareInvocation(loop.request(), loop.messages(),
+                    loop.executionMessages(),
                     loop.completedSteps(), null, stepIndex, loop.stopWhen());
             } catch (RuntimeException e) {
                 return recordUsageFailure(e)
@@ -592,7 +601,8 @@ public class LanguageModelImpl implements LanguageModel {
             .orElse(null);
     }
 
-    private Flux<TextStreamPart> mapToolStreamResponse(GenerateTextRequest request, ChatResponse response,
+    private Flux<TextStreamPart> mapToolStreamResponse(GenerateTextRequest request,
+        ChatResponse response,
         StreamStepAccumulator accumulator) {
         var parts = new ArrayList<TextStreamPart>();
         accumulator.accept(response);
@@ -652,7 +662,8 @@ public class LanguageModelImpl implements LanguageModel {
         }
 
         var toolCalls = accumulator.toolCalls();
-        var toolExecutionAllowed = accumulator.stepIndex + 1 < resolvedStepLimit(prepared.request());
+        var toolExecutionAllowed = accumulator.stepIndex + 1
+            < resolvedStepLimit(prepared.request());
         var request = new ToolStepCoordinator.ToolStepRequest(toolCalls,
             prepared.request(), accumulator.stepIndex, prepared.executionMessages(),
             accumulator.providerMetadata(), loop.run(), approvalResolver::approvalId,
@@ -686,7 +697,8 @@ public class LanguageModelImpl implements LanguageModel {
         var toolResults = toolStep.execution();
         var recordedToolCalls = toolStep.recordedToolCalls();
         var approvalRequests = toolStep.approvalRequests();
-        approvalRequests.forEach(approval -> parts.add(TextStreamPart.toolApprovalRequest(approval)));
+        approvalRequests.forEach(approval ->
+            parts.add(TextStreamPart.toolApprovalRequest(approval)));
         toolResults.results().forEach(result -> parts.add(TextStreamPart.toolResult(result)));
         toolResults.errors().stream()
             .filter(error -> !toolStep.inputErrorCallIds().contains(error.getToolCallId()))
@@ -743,12 +755,16 @@ public class LanguageModelImpl implements LanguageModel {
                 return run.error(enriched, accumulator.stepIndex, completedSteps)
                     .thenMany(Flux.fromIterable(parts));
             }
-                parts.add(TextStreamPart.finishStep(accumulator.stepIndex, accumulator.finishReason(),
-                    accumulator.rawFinishReason, accumulator.usage(), warnings, accumulator.request(),
+                parts.add(TextStreamPart.finishStep(accumulator.stepIndex,
+                    accumulator.finishReason(),
+                    accumulator.rawFinishReason, accumulator.usage(), warnings,
+                        accumulator.request(),
                     generationStep.getResponse(), accumulator.providerMetadata()));
-                parts.add(TextStreamPart.finish(accumulator.finishReason(), accumulator.rawFinishReason,
+                parts.add(TextStreamPart.finish(accumulator.finishReason(),
+                    accumulator.rawFinishReason,
                     totalUsage.usage()));
-            return run.stepFinish(accumulator.stepIndex, generationStep, List.copyOf(completedSteps))
+            return run.stepFinish(accumulator.stepIndex, generationStep,
+                List.copyOf(completedSteps))
                 .then(run.finish(resultFromSteps(completedSteps, totalUsage.usage())))
                 .thenMany(Flux.fromIterable(parts));
         }
@@ -844,7 +860,8 @@ public class LanguageModelImpl implements LanguageModel {
         }
         return Mono.defer(() -> {
             checkCancellation(baseRequest);
-            var prepared = prepareInvocation(baseRequest, messages, executionMessages, state.steps, null,
+            var prepared = prepareInvocation(baseRequest, messages, executionMessages,
+                state.steps, null,
                 stepIndex, stopWhen);
             var stepRequest = prepared.request();
             var preparedStopWhen = prepared.stopWhen();
@@ -995,7 +1012,8 @@ public class LanguageModelImpl implements LanguageModel {
             .map(ReasoningPart::getText)
             .filter(this::hasText)
             .collect(Collectors.joining());
-        var usage = state.steps.isEmpty() ? null : state.steps.get(state.steps.size() - 1).getUsage();
+        var usage = state.steps.isEmpty()
+            ? null : state.steps.get(state.steps.size() - 1).getUsage();
         StructuredOutput structuredOutput = null;
         if (hasStructuredOutput(request)) {
             var outputSourceText = state.steps.isEmpty() ? text
@@ -1150,7 +1168,8 @@ public class LanguageModelImpl implements LanguageModel {
             responseMapper.mapResponseMetadata(response, text, reasoning, toolCalls));
     }
 
-    private GenerationResponseMetadata sanitizeResponseMessages(GenerationResponseMetadata response) {
+    private GenerationResponseMetadata sanitizeResponseMessages(
+        GenerationResponseMetadata response) {
         return messageHistoryAssembler.sanitize(response);
     }
 
@@ -1258,7 +1277,8 @@ public class LanguageModelImpl implements LanguageModel {
                     approvalToolCallIds.put(part.getApprovalId(), part.getToolCallId());
                 } else if (PartType.isToolApprovalResponse(part.getType())) {
                     approvalResponseMessageIndexes.put(part.getApprovalId(), index);
-                } else if (PartType.isToolResponse(part.getType()) && part.getToolCallId() != null) {
+                } else if (PartType.isToolResponse(part.getType())
+                    && part.getToolCallId() != null) {
                     resolvedToolCallIds.add(part.getToolCallId());
                 }
             }
@@ -1327,10 +1347,12 @@ public class LanguageModelImpl implements LanguageModel {
         var stepRequest = applyPreparedStep(baseRequest, prepared);
         validateActiveTools(baseRequest, prepared);
         requestValidator.validateTools(stepRequest);
+        parameterValidator.validate(stepRequest);
         List<ModelMessage> executionMessages = prepared.getMessages() != null
             ? new ArrayList<>(prepared.getMessages())
             : new ArrayList<>(nullSafe(currentExecutionMessages));
-        List<org.springframework.ai.chat.messages.Message> providerMessages = prepared.getMessages() != null
+        List<org.springframework.ai.chat.messages.Message> providerMessages =
+            prepared.getMessages() != null
             ? buildMessages(stepRequest)
             : new ArrayList<>(currentMessages);
         var stopWhen = prepared.getStopWhen() != null ? prepared.getStopWhen() : currentStopWhen;
@@ -1349,7 +1371,8 @@ public class LanguageModelImpl implements LanguageModel {
         return GenerateTextRequest.builder()
             .system(prepared.getMessages() != null ? null : request.getSystem())
             .prompt(prepared.getMessages() != null ? null : request.getPrompt())
-            .messages(prepared.getMessages() != null ? prepared.getMessages() : request.getMessages())
+            .messages(prepared.getMessages() != null
+                ? prepared.getMessages() : request.getMessages())
             .maxOutputTokens(prepared.getMaxOutputTokens() != null
                 ? prepared.getMaxOutputTokens()
                 : request.getMaxOutputTokens())
@@ -1393,7 +1416,8 @@ public class LanguageModelImpl implements LanguageModel {
             .toolChoice(prepared.getToolChoice() != null
                 ? prepared.getToolChoice()
                 : request.getToolChoice())
-            .stopWhen(prepared.getStopWhen() != null ? prepared.getStopWhen() : request.getStopWhen())
+            .stopWhen(prepared.getStopWhen() != null
+                ? prepared.getStopWhen() : request.getStopWhen())
             .prepareStep(request.getPrepareStep())
             .lifecycle(request.getLifecycle())
             .toolCallRepair(request.getToolCallRepair())
@@ -1416,7 +1440,8 @@ public class LanguageModelImpl implements LanguageModel {
             .collect(Collectors.toSet());
         for (var name : prepared.getActiveTools()) {
             if (!names.contains(name)) {
-                throw new IllegalArgumentException("prepareStep activeTools references unknown tool: "
+                throw new IllegalArgumentException(
+                    "prepareStep activeTools references unknown tool: "
                     + name);
             }
         }
@@ -1442,6 +1467,7 @@ public class LanguageModelImpl implements LanguageModel {
 
     private void validateRequest(GenerateTextRequest request) {
         requestValidator.validate(request);
+        parameterValidator.validate(request);
     }
 
     private void assertToolCallingSupported(GenerateTextRequest request) {
@@ -1469,23 +1495,60 @@ public class LanguageModelImpl implements LanguageModel {
         for (var entry : parameterMappings.values().entrySet()) {
             var mapping = entry.getValue();
             if (mapping == null
-                || mapping.mode() != run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+                || mapping.mode() != ModelParameterMappings.Mode.TEMPLATE) {
                 continue;
             }
             var value = languageParameterValue(entry.getKey(), mappedRequest);
             parameterMappings.apply(entry.getKey(), value, target);
         }
         if (options instanceof OllamaChatOptions ollamaOptions) {
-            return applyOllamaMappedValues(ollamaOptions, target, request);
+            var mapped = applyOllamaMappedValues(ollamaOptions, target, request);
+            return parameterValidator.withRequestValidation(mapped);
         }
         if (!(options instanceof ChatCompletionsOptions openAiOptions)) {
-            return options;
+            return parameterValidator.withRequestValidation(options);
         }
         var builder = openAiOptions.mutate();
+        parameterValidator.applyNativeConstraints(builder);
         applyOpenAiMappedValues(builder, target.root());
         applyOpenAiUnsupportedValues(builder);
         applyMappedChatReasoning(builder, request);
-        return builder.build();
+        return parameterValidator.withRequestValidation(
+            applyMessagesDefaultOutputTokens(builder.build()));
+    }
+
+    private ChatCompletionsOptions applyMessagesDefaultOutputTokens(
+        ChatCompletionsOptions options) {
+        if (messagesDefaultOutputTokens == null || hasOutputTokenValue(options)) {
+            return options;
+        }
+        if (chatModel.getOptions() instanceof ChatCompletionsOptions defaults
+            && hasOutputTokenValue(defaults)) {
+            return options;
+        }
+        // Messages requires max_tokens. Bound only the protocol's implicit 4096-token default;
+        // caller and administrator values must still reach the normal model-limit validation.
+        return options.mutate().maxTokens(messagesDefaultOutputTokens).build();
+    }
+
+    private static Integer resolveMessagesDefaultOutputTokens(ModelRuntimeContext context) {
+        if (context.adapterType() == null
+            || context.adapterType().getProtocol() != AdapterProtocol.MESSAGES
+            || context.parameterConstraints() == null) {
+            return null;
+        }
+        var outputLimit = context.parameterConstraints().getOutputTokens();
+        if (outputLimit == null || outputLimit <= 0) {
+            return null;
+        }
+        return (int) Math.min(4096L, outputLimit);
+    }
+
+    private boolean hasOutputTokenValue(ChatCompletionsOptions options) {
+        var extra = options.getExtraBody();
+        return options.getMaxTokens() != null || options.getMaxCompletionTokens() != null
+            || extra != null && (extra.containsKey("max_tokens")
+                || extra.containsKey("max_completion_tokens"));
     }
 
     private OllamaChatOptions applyOllamaMappedValues(OllamaChatOptions options,
@@ -1555,8 +1618,8 @@ public class LanguageModelImpl implements LanguageModel {
             .headers(request.getHeaders())
             .metadata(request.getMetadata())
             .context(request.getContext())
-            .output(request.getOutput())
-            .tools(request.getTools())
+            .output(parameterValidator.nativeOutput(request.getOutput()))
+            .tools(parameterValidator.nativeTools(request.getTools()))
             .toolChoice(request.getToolChoice())
             .stopWhen(request.getStopWhen())
             .prepareStep(request.getPrepareStep())
@@ -1686,12 +1749,12 @@ public class LanguageModelImpl implements LanguageModel {
     }
 
     private boolean shouldClearMappedParameter(ModelParameter parameter,
-        run.halo.aifoundation.provider.mapping.EffectiveParameterMappings.EffectiveMapping mapping) {
+        EffectiveParameterMappings.EffectiveMapping mapping) {
         if (mapping == null) {
             return false;
         }
         if (mapping.mode()
-            != run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE) {
+            != ModelParameterMappings.Mode.TEMPLATE) {
             return false;
         }
         return true;
@@ -1713,7 +1776,7 @@ public class LanguageModelImpl implements LanguageModel {
             case PARALLEL_TOOL_CALLS -> builder.parallelToolCalls(null);
             case REASONING -> builder.reasoningEffort(null);
             default -> {
-                // Parameters serialized exclusively through extraBody have no native field to clear.
+                // Parameters sent only through extraBody have no native field to clear.
             }
         }
     }
@@ -1721,7 +1784,7 @@ public class LanguageModelImpl implements LanguageModel {
     private void applyOpenAiUnsupportedValues(ChatCompletionsOptions.Builder builder) {
         parameterMappings.values().forEach((parameter, mapping) -> {
             if (mapping == null
-                || mapping.mode() != run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED) {
+                || mapping.mode() != ModelParameterMappings.Mode.UNSUPPORTED) {
                 return;
             }
             switch (parameter) {
@@ -1759,7 +1822,8 @@ public class LanguageModelImpl implements LanguageModel {
             Supplier<Mono<ChatResponse>> timedInvocation =
                 () -> withStepTimeout(invocation.get(), request);
             return usageExecutionObserver.observe(UsageUnitKind.GENERATION_STEP, stepIndex,
-                timedInvocation, response -> NormalizedUsage.from(response.getMetadata().getUsage()),
+                timedInvocation, response ->
+                    NormalizedUsage.from(response.getMetadata().getUsage()),
                 this::responseModel);
         });
         var maxRetries = maxRetries(request);
@@ -1987,7 +2051,8 @@ public class LanguageModelImpl implements LanguageModel {
     private StructuredOutputValidationException enrichStructuredOutputFailure(
         GenerateTextRequest request, StreamStepAccumulator accumulator,
         StructuredOutputValidationException error) {
-        return structuredOutputHandler.enrich(error, request.getOutput(), accumulator.text.toString(),
+        return structuredOutputHandler.enrich(error, request.getOutput(),
+            accumulator.text.toString(),
             accumulator.stepIndex, accumulator.usage(), accumulator.response(),
             accumulator.finishReason(), accumulator.rawFinishReason);
     }
@@ -2020,7 +2085,8 @@ public class LanguageModelImpl implements LanguageModel {
                 structuredOutput = structuredOutputHandler.parse(request.getOutput(),
                     builder.finalStepText(), diagnosticId(builder.response()));
             } catch (StructuredOutputValidationException e) {
-                throw structuredOutputHandler.enrich(e, request.getOutput(), builder.finalStepText(),
+                throw structuredOutputHandler.enrich(e, request.getOutput(),
+                    builder.finalStepText(),
                     builder.currentStepIndex(), builder.usage(), builder.response(),
                     builder.finishReason(), builder.rawFinishReason());
             }
@@ -2085,7 +2151,8 @@ public class LanguageModelImpl implements LanguageModel {
             .map(GenerationStep::getText)
             .filter(this::hasContent)
             .collect(Collectors.joining());
-        var reasoning = finalStep != null ? nullSafe(finalStep.getReasoning()) : List.<ReasoningPart>of();
+        var reasoning = finalStep != null
+            ? nullSafe(finalStep.getReasoning()) : List.<ReasoningPart>of();
         var reasoningText = reasoning.stream()
             .map(ReasoningPart::getText)
             .filter(this::hasText)
@@ -2285,7 +2352,8 @@ public class LanguageModelImpl implements LanguageModel {
                 parts.add(TextStreamPart.reasoningStart(state.reasoningId));
             }
             parts.add(TextStreamPart.reasoningDelta(state.reasoningId, reasoning,
-                reasoningProviderMetadata(reasoning, response.getResult().getOutput().getMetadata())));
+                reasoningProviderMetadata(reasoning,
+                    response.getResult().getOutput().getMetadata())));
         }
         if (hasContent(text)) {
             state.text.append(text);
@@ -2369,7 +2437,8 @@ public class LanguageModelImpl implements LanguageModel {
     private ReasoningContentExtractor.Extraction streamExtraction(ChatResponse response) {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
-        return reasoningExtractor.extract(responseMapper.extractText(response), outputMetadata(output));
+        return reasoningExtractor.extract(responseMapper.extractText(response),
+            outputMetadata(output));
     }
 
     private String extractReasoning(ChatResponse response) {
@@ -2441,7 +2510,7 @@ public class LanguageModelImpl implements LanguageModel {
                 return;
             }
             if (mapping.mode()
-                != run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED) {
+                != ModelParameterMappings.Mode.UNSUPPORTED) {
                 return;
             }
             if (languageParameterValue(parameter, request) == null) {
@@ -2459,9 +2528,9 @@ public class LanguageModelImpl implements LanguageModel {
         }
         var mapping = parameterMappings.get(ModelParameter.REASONING);
         var unsupported = mapping == null || mapping.mode()
-            == run.halo.aifoundation.extension.ModelParameterMappings.Mode.UNSUPPORTED;
+            == ModelParameterMappings.Mode.UNSUPPORTED;
         var cannotExpress = mapping != null && mapping.mode()
-            == run.halo.aifoundation.extension.ModelParameterMappings.Mode.TEMPLATE
+            == ModelParameterMappings.Mode.TEMPLATE
             && !parameterMappings.canApplyReasoning(reasoning);
         if (!unsupported && !cannotExpress) {
             return;
@@ -2547,7 +2616,8 @@ public class LanguageModelImpl implements LanguageModel {
         private String finishReason;
 
         void accept(ChatResponse response) {
-            if (UsageTelemetry.safely(() -> NormalizedUsage.from(response.getMetadata().getUsage()).quality()
+            if (UsageTelemetry.safely(() -> NormalizedUsage.from(response.getMetadata().getUsage())
+                .quality()
                 != run.halo.aifoundation.service.observation.UsageQuality.MISSING, false)) {
                 usageResponse = response;
             }

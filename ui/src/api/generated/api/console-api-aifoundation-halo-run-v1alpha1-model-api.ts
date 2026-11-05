@@ -26,6 +26,8 @@ import type { AiModel } from '../models';
 // @ts-ignore
 import type { DecisionResponse } from '../models';
 // @ts-ignore
+import type { ModelParameterProfile } from '../models';
+// @ts-ignore
 import type { TestCompletionStreamRequest } from '../models';
 // @ts-ignore
 import type { TestDecisionRequest } from '../models';
@@ -140,6 +142,49 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             };
         },
         /**
+         * Preview cached catalog parameters for the selected model and adapter.
+         * @param {AiModel} aiModel 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getModelCatalogParameters: async (aiModel: AiModel, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'aiModel' is not null or undefined
+            assertParamExists('getModelCatalogParameters', 'aiModel', aiModel)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/model-parameters/catalog`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(aiModel, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * List all AI models.
          * @param {Array<string>} [labelSelector] Label selector for filtering models
          * @param {Array<string>} [fieldSelector] Field selector for filtering models (e.g., spec.providerName&#x3D;openai)
@@ -180,6 +225,49 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Resolve model parameter mappings and constraints without inference.
+         * @param {AiModel} aiModel 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resolveModelParameters: async (aiModel: AiModel, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'aiModel' is not null or undefined
+            assertParamExists('resolveModelParameters', 'aiModel', aiModel)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/model-parameters/resolve`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(aiModel, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -669,6 +757,18 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Preview cached catalog parameters for the selected model and adapter.
+         * @param {AiModel} aiModel 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getModelCatalogParameters(aiModel: AiModel, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ModelParameterProfile>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getModelCatalogParameters(aiModel, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.getModelCatalogParameters']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * List all AI models.
          * @param {Array<string>} [labelSelector] Label selector for filtering models
          * @param {Array<string>} [fieldSelector] Field selector for filtering models (e.g., spec.providerName&#x3D;openai)
@@ -679,6 +779,18 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             const localVarAxiosArgs = await localVarAxiosParamCreator.listModels(labelSelector, fieldSelector, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.listModels']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Resolve model parameter mappings and constraints without inference.
+         * @param {AiModel} aiModel 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async resolveModelParameters(aiModel: AiModel, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ModelParameterProfile>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resolveModelParameters(aiModel, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.resolveModelParameters']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -832,6 +944,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
             return localVarFp.deleteModel(requestParameters.name, options).then((request) => request(axios, basePath));
         },
         /**
+         * Preview cached catalog parameters for the selected model and adapter.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelCatalogParametersRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getModelCatalogParameters(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelCatalogParametersRequest, options?: RawAxiosRequestConfig): AxiosPromise<ModelParameterProfile> {
+            return localVarFp.getModelCatalogParameters(requestParameters.aiModel, options).then((request) => request(axios, basePath));
+        },
+        /**
          * List all AI models.
          * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -839,6 +960,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
          */
         listModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<Array<AiModel>> {
             return localVarFp.listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Resolve model parameter mappings and constraints without inference.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiResolveModelParametersRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resolveModelParameters(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiResolveModelParametersRequest, options?: RawAxiosRequestConfig): AxiosPromise<ModelParameterProfile> {
+            return localVarFp.resolveModelParameters(requestParameters.aiModel, options).then((request) => request(axios, basePath));
         },
         /**
          * Test prompt completion with plain text stream response.
@@ -953,6 +1083,20 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiDeleteModelRequest
 }
 
 /**
+ * Request parameters for getModelCatalogParameters operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelCatalogParametersRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelCatalogParametersRequest {
+    /**
+     * 
+     * @type {AiModel}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelCatalogParameters
+     */
+    readonly aiModel: AiModel
+}
+
+/**
  * Request parameters for listModels operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
  * @export
  * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest
@@ -971,6 +1115,20 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest 
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModels
      */
     readonly fieldSelector?: Array<string>
+}
+
+/**
+ * Request parameters for resolveModelParameters operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiResolveModelParametersRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiResolveModelParametersRequest {
+    /**
+     * 
+     * @type {AiModel}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiResolveModelParameters
+     */
+    readonly aiModel: AiModel
 }
 
 /**
@@ -1227,6 +1385,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
     }
 
     /**
+     * Preview cached catalog parameters for the selected model and adapter.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelCatalogParametersRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
+     */
+    public getModelCatalogParameters(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiGetModelCatalogParametersRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).getModelCatalogParameters(requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
      * List all AI models.
      * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -1235,6 +1404,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
      */
     public listModels(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiListModelsRequest = {}, options?: RawAxiosRequestConfig) {
         return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).listModels(requestParameters.labelSelector, requestParameters.fieldSelector, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Resolve model parameter mappings and constraints without inference.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiResolveModelParametersRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
+     */
+    public resolveModelParameters(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiResolveModelParametersRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).resolveModelParameters(requestParameters.aiModel, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

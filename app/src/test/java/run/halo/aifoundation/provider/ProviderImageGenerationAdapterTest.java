@@ -1,7 +1,7 @@
 package run.halo.aifoundation.provider;
 
-import run.halo.aifoundation.provider.aihubmix.AiHubMixProvider;
 import run.halo.aifoundation.provider.aihubmix.AiHubMixImageGenerationClient;
+import run.halo.aifoundation.provider.aihubmix.AiHubMixProvider;
 
 import run.halo.aifoundation.provider.openai.OpenAiProvider;
 import run.halo.aifoundation.provider.openai.OpenAiImageGenerationClient;
@@ -113,7 +113,8 @@ class ProviderImageGenerationAdapterTest {
 
                     var textToImage = models.get(2);
                     assertThat(textToImage.modelId()).isEqualTo("openrouter-image-create");
-                    assertImageDiscovery(textToImage, null, List.of());
+                    // Missing output_format is unknown, not an explicit empty format range.
+                    assertImageDiscovery(textToImage, null, null);
                     assertThat(textToImage.capabilities()
                         .getImageGeneration()
                         .getTextToImage()).isTrue();

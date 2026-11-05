@@ -1,9 +1,12 @@
 package run.halo.aifoundation.provider.mapping;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -67,6 +70,43 @@ public class ParameterMappingValidator {
         }
         for (var entry : catalog.selections(mappings)) {
             validateSelection(entry, List.of(adapterType), modelType);
+        }
+    }
+
+    public void validateConstraints(ModelParameterConstraints constraints) {
+        if (constraints == null) {
+            return;
+        }
+        positive("contextTokens", constraints.getContextTokens());
+        positive("inputTokens", constraints.getInputTokens());
+        positive("outputTokens", constraints.getOutputTokens());
+        validateValues("toolChoices", constraints.getToolChoices());
+        validateValues("serviceTiers", constraints.getServiceTiers());
+        var reasoning = constraints.getReasoning();
+        if (reasoning != null) {
+            validateValues("reasoning.efforts", reasoning.getEfforts());
+            var minimum = reasoning.getBudgetMinimum();
+            var maximum = reasoning.getBudgetMaximum();
+            if (minimum != null && minimum < 0) {
+                throw new IllegalArgumentException("reasoning.budgetMinimum must not be negative");
+            }
+            positive("reasoning.budgetMaximum", maximum);
+            if (minimum != null && maximum != null && minimum > maximum) {
+                throw new IllegalArgumentException("reasoning budget minimum exceeds maximum");
+            }
+        }
+    }
+
+    private void positive(String name, Long value) {
+        if (value != null && value <= 0) {
+            throw new IllegalArgumentException(name + " must be positive");
+        }
+    }
+
+    private void validateValues(String name, List<String> values) {
+        if (values != null && (values.size() > 64 || values.stream()
+            .anyMatch(value -> !StringUtils.hasText(value) || value.length() > 128))) {
+            throw new IllegalArgumentException(name + " requires at most 64 nonempty values");
         }
     }
 
@@ -148,16 +188,37 @@ public class ParameterMappingValidator {
         if (value == null) {
             return 0;
         }
-        if (!StringUtils.hasText(value.getField())) {
-            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
+        validateReasoningScalar(entry, descriptor, value);
+        var additionalValues = value.getAdditionalValues();
+        if (additionalValues == null) {
+            return 1;
         }
-        if (value.getValueType() == null) {
-            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
+        if (additionalValues.size() > 8) {
+            throw invalid(entry, "Reasoning intent supports at most eight additional fields");
         }
-        if (value.getValue() == null) {
-            throw invalid(entry, "Each reasoning intent requires field, value type, and value");
+        var fields = new HashSet<String>();
+        fields.add(value.getField());
+        for (var additional : additionalValues) {
+            if (additional == null || (additional.getAdditionalValues() != null
+                && !additional.getAdditionalValues().isEmpty())) {
+                throw invalid(entry, "Additional reasoning fields must be scalar values");
+            }
+            validateReasoningScalar(entry, descriptor, additional);
+            if (fields.stream().anyMatch(field -> field.equals(additional.getField())
+                || field.startsWith(additional.getField() + ".")
+                || additional.getField().startsWith(field + "."))) {
+                throw invalid(entry, "Reasoning fields must not overlap");
+            }
+            fields.add(additional.getField());
         }
-        if (value.getValue().isBlank()) {
+        return 1;
+    }
+
+    private void validateReasoningScalar(ModelParameterCatalog.ConfiguredSelection entry,
+        ParameterMappingTemplateDescriptor descriptor,
+        ModelParameterMappings.ReasoningValueMapping value) {
+        if (!StringUtils.hasText(value.getField()) || value.getValueType() == null
+            || !StringUtils.hasText(value.getValue())) {
             throw invalid(entry, "Each reasoning intent requires field, value type, and value");
         }
         validateField(entry, value.getField());
@@ -174,12 +235,11 @@ public class ParameterMappingValidator {
             throw invalid(entry, "Reasoning value does not match " + value.getValueType());
         }
         if (value.getValueType() != ModelParameterMappings.ValueType.BOOLEAN) {
-            return 1;
+            return;
         }
         if (!"true".equals(value.getValue()) && !"false".equals(value.getValue())) {
             throw invalid(entry, "Boolean reasoning values must be true or false");
         }
-        return 1;
     }
 
     private void normalizeReasoningMapping(ModelParameterMappings.ReasoningMapping mapping) {
@@ -198,17 +258,27 @@ public class ParameterMappingValidator {
         if (value == null) {
             return null;
         }
+        normalizeReasoningScalar(value);
+        if (value.getAdditionalValues() != null) {
+            // Nested additions are rejected by validation, not traversed recursively.
+            value.getAdditionalValues().stream().filter(Objects::nonNull)
+                .forEach(this::normalizeReasoningScalar);
+        }
+        if (!StringUtils.hasText(value.getField()) && value.getValueType() == null
+            && !StringUtils.hasText(value.getValue())
+            && (value.getAdditionalValues() == null || value.getAdditionalValues().isEmpty())) {
+            return null;
+        }
+        return value;
+    }
+
+    private void normalizeReasoningScalar(ModelParameterMappings.ReasoningValueMapping value) {
         if (value.getField() != null) {
             value.setField(value.getField().trim());
         }
         if (value.getValue() != null) {
             value.setValue(value.getValue().trim());
         }
-        if (!StringUtils.hasText(value.getField()) && value.getValueType() == null
-            && !StringUtils.hasText(value.getValue())) {
-            return null;
-        }
-        return value;
     }
 
     private void rejectIrrelevantDomains(ModelParameterMappings mappings, ModelType modelType) {

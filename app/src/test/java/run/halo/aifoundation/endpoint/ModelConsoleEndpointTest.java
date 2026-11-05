@@ -42,6 +42,7 @@ import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 import run.halo.aifoundation.provider.AiProviderType;
+import run.halo.aifoundation.provider.mapping.EffectiveParameterMappingResolver;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTemplateRegistry;
 import run.halo.aifoundation.provider.mapping.ParameterMappingValidator;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -101,7 +102,8 @@ class ModelConsoleEndpointTest {
         }).when(mockType).validateNativeModelOptions(any());
 
         var modelValidator = new ModelConsoleModelValidator(client, providerClientCache,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()));
+            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+            new EffectiveParameterMappingResolver());
         var endpoint = new ModelConsoleEndpoint(client, aiModelService, modelValidator);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
             .configureClient()

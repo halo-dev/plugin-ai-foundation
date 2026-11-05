@@ -58,6 +58,36 @@ class ParameterMappingValidatorTest {
         assertThat(value.getValue()).isEqualTo("invalid");
     }
 
+    @Test
+    void validatesCompoundIntentsWithoutAllowingNestedOrOverlappingFields() {
+        var selection = new ModelParameterMappings.Selection();
+        selection.setMode(ModelParameterMappings.Mode.TEMPLATE);
+        selection.setTemplate("reasoning.effort");
+        var value = new ModelParameterMappings.ReasoningValueMapping();
+        value.setField("reasoning_effort");
+        value.setValueType(ModelParameterMappings.ValueType.STRING);
+        value.setValue("high");
+        var toggle = new ModelParameterMappings.ReasoningValueMapping();
+        toggle.setField(" thinking.type ");
+        toggle.setValueType(ModelParameterMappings.ValueType.STRING);
+        toggle.setValue("enabled");
+        value.setAdditionalValues(List.of(toggle));
+        var reasoning = new ModelParameterMappings.ReasoningMapping();
+        reasoning.setHigh(value);
+        selection.setReasoningMapping(reasoning);
+        var mappings = reasoningMappings(selection);
+
+        validator.validateProvider(mappings, providerType());
+        assertThat(toggle.getField()).isEqualTo("thinking.type");
+        toggle.setField("reasoning_effort.child");
+        assertThatThrownBy(() -> validator.validateProvider(mappings, providerType()))
+            .hasMessageContaining("must not overlap");
+        toggle.setField("thinking.type");
+        toggle.setAdditionalValues(List.of(value));
+        assertThatThrownBy(() -> validator.validateProvider(mappings, providerType()))
+            .hasMessageContaining("must be scalar values");
+    }
+
     private AiProviderType providerType() {
         var providerType = mock(AiProviderType.class);
         when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(AdapterType.OPENAI_CHAT));

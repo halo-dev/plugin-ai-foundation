@@ -31,6 +31,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.provider.support.JsonNodes;
+import run.halo.aifoundation.provider.support.ProviderRequestValidation;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
@@ -184,6 +185,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             body.put("options", Map.copyOf(options));
         }
         body.put("stream", stream);
+        ProviderRequestValidation.validate(runtime.options(), body);
         return body;
     }
 

@@ -26,10 +26,6 @@ final class DashScopeChatProfile implements ChatCompletionsProfile {
         if (maxTokens != null) {
             body.put("max_completion_tokens", maxTokens);
         }
-        // Model Studio reports stream usage only when explicitly requested.
-        if (stream) {
-            body.put("stream_options", Map.of("include_usage", true));
-        }
     }
 
     @Override

@@ -10,7 +10,7 @@ public final class ZhiPuMessagesModel extends AnthropicMessagesModel {
 
     public ZhiPuMessagesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new StandardAnthropicMessagesProfile(
-            "zhipuai", "zhipu-messages", "/api/anthropic/v1/messages",
+            "zhipuai", "zhipu-messages", "/messages",
             StandardAnthropicMessagesProfile.Authentication.X_API_KEY));
     }
 }

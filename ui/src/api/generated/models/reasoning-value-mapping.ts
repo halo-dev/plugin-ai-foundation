@@ -21,6 +21,12 @@
  */
 export interface ReasoningValueMapping {
     /**
+     * Additional fields applied atomically with this reasoning intent
+     * @type {Array<ReasoningValueMapping>}
+     * @memberof ReasoningValueMapping
+     */
+    'additionalValues'?: Array<ReasoningValueMapping>;
+    /**
      * Constrained native request field/path
      * @type {string}
      * @memberof ReasoningValueMapping

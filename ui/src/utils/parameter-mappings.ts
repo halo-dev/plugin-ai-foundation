@@ -1,4 +1,5 @@
 import type {
+  AiModelSpecModelTypeEnum,
   DefaultParameterMappingInfo,
   ModelParameterDefinitionInfo,
   ModelParameterDefinitionInfoDomainEnum,
@@ -8,7 +9,7 @@ import type {
 } from '@/api/generated'
 
 export type MappingContext = 'provider' | 'model'
-export type MappingModelType = 'language' | 'embedding' | 'rerank' | 'image-generation'
+export type MappingModelType = AiModelSpecModelTypeEnum
 
 export interface ParameterDefinition extends ModelParameterDefinitionInfo {
   parameter: string
@@ -35,6 +36,7 @@ export function mappingsForModelType(
   modelType: MappingModelType,
   definitions: ModelParameterDefinitionInfo[] | undefined,
 ) {
+  if (modelType === 'decision') return undefined
   const domain = parameterDefinitionsForModelType(definitions, modelType)[0]?.domain
   if (!domain) return mappings
   if (!mappings?.[domain]) return undefined

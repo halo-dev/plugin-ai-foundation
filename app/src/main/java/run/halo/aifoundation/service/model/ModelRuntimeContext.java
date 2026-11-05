@@ -1,6 +1,7 @@
 package run.halo.aifoundation.service.model;
 
 import java.util.Map;
+import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.provider.support.AdapterType;
@@ -16,13 +17,21 @@ public record ModelRuntimeContext(
     AdapterType adapterType,
     AiProviderType providerDefinition,
     RuntimeParameterMappings parameterMappings,
-    Map<String, Object> nativeOptions
+    Map<String, Object> nativeOptions,
+    ModelParameterConstraints parameterConstraints
 ) {
 
     public ModelRuntimeContext {
         parameterMappings = parameterMappings != null
             ? parameterMappings : RuntimeParameterMappings.empty();
         nativeOptions = nativeOptions == null ? Map.of() : Map.copyOf(nativeOptions);
+    }
+
+    public ModelRuntimeContext(String modelName, String modelId, String providerName,
+        String providerType, AdapterType adapterType, AiProviderType providerDefinition,
+        RuntimeParameterMappings parameterMappings, Map<String, Object> nativeOptions) {
+        this(modelName, modelId, providerName, providerType, adapterType, providerDefinition,
+            parameterMappings, nativeOptions, null);
     }
 
     public static ModelRuntimeContext unresolved(String providerType) {

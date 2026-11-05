@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { ModelParameterProfile } from '@/api/generated'
 import type { OutputMode, ReasoningEffort, ReasoningMode } from '@/utils/model-test-workbench'
 import RiSettings3Line from '~icons/ri/settings-3-line'
 import ChatParameterPanel from './ChatParameterPanel.vue'
@@ -9,6 +10,8 @@ type ImageResponseFormat = 'DEFAULT' | 'URL' | 'BASE64'
 
 defineProps<{
   mode: 'chat' | 'embedding' | 'rerank' | 'image'
+  parameterProfile?: ModelParameterProfile
+  parameterError?: string
   systemPrompt?: string
   temperature?: number
   topP?: number
@@ -115,6 +118,8 @@ const emit = defineEmits<{
     <div class=":uno: flex-1 overflow-y-auto px-4 py-3">
       <ChatParameterPanel
         v-if="mode === 'chat'"
+        :parameter-profile="parameterProfile"
+        :parameter-error="parameterError"
         :system-prompt="systemPrompt"
         :temperature="temperature"
         :top-p="topP"

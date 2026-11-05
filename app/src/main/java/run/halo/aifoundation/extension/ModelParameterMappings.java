@@ -1,6 +1,7 @@
 package run.halo.aifoundation.extension;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -93,6 +94,9 @@ public class ModelParameterMappings {
 
         @Schema(description = "Scalar request value encoded as text")
         private String value;
+
+        @Schema(description = "Additional fields applied atomically with this reasoning intent")
+        private List<ReasoningValueMapping> additionalValues;
 
         public Object typedValue() {
             if (valueType == null || value == null) {

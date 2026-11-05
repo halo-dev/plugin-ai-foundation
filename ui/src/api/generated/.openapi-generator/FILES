@@ -53,13 +53,17 @@ models/language-mappings.ts
 models/metadata.ts
 models/model-capabilities.ts
 models/model-capability-sources.ts
+models/model-catalog-match.ts
+models/model-catalog-status.ts
 models/model-message-part.ts
 models/model-message.ts
 models/model-option-provider.ts
 models/model-option-unavailable-detail.ts
 models/model-option.ts
+models/model-parameter-constraints.ts
 models/model-parameter-definition-info.ts
 models/model-parameter-mappings.ts
+models/model-parameter-profile.ts
 models/move-operation.ts
 models/normalized-usage.ts
 models/output-spec.ts
@@ -69,6 +73,7 @@ models/provider-type-info.ts
 models/reasoning-mapping.ts
 models/reasoning-options.ts
 models/reasoning-value-mapping.ts
+models/reasoning.ts
 models/remove-operation.ts
 models/replace-operation.ts
 models/rerank-mappings.ts

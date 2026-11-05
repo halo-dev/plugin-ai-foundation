@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import reactor.netty.transport.ProxyProvider.Proxy;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.extension.AiProvider;
@@ -188,6 +190,42 @@ class AbstractAiProviderTypeTest {
             ModelFeature.STREAMING, ModelFeature.TOOL_CALL);
         assertThat(profile.source()).isEqualTo(DiscoverySource.RULE);
         assertThat(profile.confidence()).isEqualTo(DiscoveryConfidence.LOW);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "tool-call, structured-output",
+        "tool_call, structured_output",
+        "toolcall, structuredoutput",
+        "function-calling, json-schema",
+        "function_calling, json_schema",
+        "functioncalling, jsonschema",
+        "TOOL-CALL, STRUCTURED-OUTPUT",
+        "tools, structured-outputs",
+        "tools, structured_outputs"
+    })
+    void modelProfile_recognizesDeclaredFeatureAliases(String tools, String structuredOutput) {
+        var profile = new TestProviderType().modelProfile(Map.of(
+            "type", "language", "features", List.of(tools, structuredOutput)), "opaque-model");
+
+        assertThat(profile.features())
+            .contains(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT);
+        assertThat(profile.featureEvidence())
+            .containsEntry(ModelFeature.TOOL_CALL, true)
+            .containsEntry(ModelFeature.STRUCTURED_OUTPUT, true);
+    }
+
+    @Test
+    void modelProfile_explicitFalseOverridesFeatureAliases() {
+        var profile = new TestProviderType().modelProfile(Map.of(
+            "type", "language", "features", List.of("tool-call", "structured-output"),
+            "tool_call", false, "structured_output", false), "opaque-model");
+
+        assertThat(profile.features())
+            .doesNotContain(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT);
+        assertThat(profile.featureEvidence())
+            .containsEntry(ModelFeature.TOOL_CALL, false)
+            .containsEntry(ModelFeature.STRUCTURED_OUTPUT, false);
     }
 
     @Test

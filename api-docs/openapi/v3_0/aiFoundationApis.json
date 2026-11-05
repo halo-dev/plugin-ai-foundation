@@ -481,6 +481,44 @@
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/DefaultModelSlot" ]
       }
     },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/model-catalog" : {
+      "get" : {
+        "description" : "Read the locally cached models.dev catalog status.",
+        "operationId" : "GetModelCatalogStatus",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModelCatalogStatus"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/model-catalog/refresh" : {
+      "post" : {
+        "description" : "Refresh third-party capability metadata; never updates saved models.",
+        "operationId" : "RefreshModelCatalog",
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModelCatalogStatus"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Provider" ]
+      }
+    },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/model-options" : {
       "get" : {
         "description" : "List aggregated AI model options for selectors.",
@@ -558,6 +596,67 @@
           }
         },
         "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/ModelOption" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/model-parameters/catalog" : {
+      "post" : {
+        "description" : "Preview cached catalog parameters for the selected model and adapter.",
+        "operationId" : "GetModelCatalogParameters",
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AiModel"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModelParameterProfile"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "204" : {
+            "description" : "No exact catalog match"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
+      }
+    },
+    "/apis/console.api.aifoundation.halo.run/v1alpha1/model-parameters/resolve" : {
+      "post" : {
+        "description" : "Resolve model parameter mappings and constraints without inference.",
+        "operationId" : "ResolveModelParameters",
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AiModel"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "default" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModelParameterProfile"
+                }
+              }
+            },
+            "description" : "default response"
+          }
+        },
+        "tags" : [ "console.api.aifoundation.halo.run/v1alpha1/Model" ]
       }
     },
     "/apis/console.api.aifoundation.halo.run/v1alpha1/models" : {
@@ -1869,6 +1968,12 @@
           "capabilitySources" : {
             "$ref" : "#/components/schemas/ModelCapabilitySources"
           },
+          "catalogMatch" : {
+            "$ref" : "#/components/schemas/ModelCatalogMatch"
+          },
+          "catalogParameters" : {
+            "$ref" : "#/components/schemas/ModelParameterProfile"
+          },
           "discoveryConfidence" : {
             "type" : "string",
             "description" : "How reliable the discovered model profile is",
@@ -1909,6 +2014,9 @@
             "type" : "object",
             "additionalProperties" : true,
             "description" : "Provider-native non-secret options configured by the model administrator"
+          },
+          "parameterConstraints" : {
+            "$ref" : "#/components/schemas/ModelParameterConstraints"
           },
           "parameterMappings" : {
             "$ref" : "#/components/schemas/ModelParameterMappings"
@@ -2324,6 +2432,12 @@
           },
           "capabilitySources" : {
             "$ref" : "#/components/schemas/ModelCapabilitySources"
+          },
+          "catalogMatch" : {
+            "$ref" : "#/components/schemas/ModelCatalogMatch"
+          },
+          "catalogParameters" : {
+            "$ref" : "#/components/schemas/ModelParameterProfile"
           },
           "confidence" : {
             "type" : "string",
@@ -2772,6 +2886,55 @@
           }
         }
       },
+      "ModelCatalogMatch" : {
+        "type" : "object",
+        "properties" : {
+          "fetchedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "fields" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "modelId" : {
+            "type" : "string"
+          },
+          "providerId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ModelCatalogStatus" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "fetchedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lastAttemptAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "refreshing" : {
+            "type" : "boolean"
+          },
+          "sourceUrl" : {
+            "type" : "string"
+          },
+          "stale" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "ModelMessage" : {
         "type" : "object",
         "properties" : {
@@ -2963,6 +3126,66 @@
         },
         "description" : "Structured details for unavailable options"
       },
+      "ModelParameterConstraints" : {
+        "type" : "object",
+        "properties" : {
+          "contextTokens" : {
+            "type" : "integer",
+            "description" : "Maximum context tokens; not a generation default",
+            "format" : "int64"
+          },
+          "inputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "outputTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "promptCacheKey" : {
+            "type" : "boolean"
+          },
+          "reasoning" : {
+            "$ref" : "#/components/schemas/Reasoning"
+          },
+          "serviceTiers" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "store" : {
+            "type" : "boolean"
+          },
+          "streamUsage" : {
+            "type" : "boolean"
+          },
+          "structuredOutput" : {
+            "type" : "boolean"
+          },
+          "temperature" : {
+            "type" : "boolean"
+          },
+          "toolCalling" : {
+            "type" : "boolean"
+          },
+          "toolChoices" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "toolStrict" : {
+            "type" : "boolean"
+          },
+          "topK" : {
+            "type" : "boolean"
+          },
+          "topP" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "ModelParameterDefinitionInfo" : {
         "type" : "object",
         "properties" : {
@@ -3007,7 +3230,40 @@
             "$ref" : "#/components/schemas/RerankMappings"
           }
         },
-        "description" : "Administrator overrides for provider-neutral parameter mappings"
+        "description" : "Automatically derived or resolved parameter mappings"
+      },
+      "ModelParameterProfile" : {
+        "type" : "object",
+        "properties" : {
+          "adapterType" : {
+            "type" : "string",
+            "enum" : [ "openai-chat", "openai-responses", "openai-embedding", "openai-image", "deepseek-chat", "deepseek-responses", "deepseek-messages", "dashscope-chat", "dashscope-responses", "dashscope-messages", "dashscope-embedding", "dashscope-compatible-rerank", "dashscope-native-rerank", "doubao-responses", "doubao-chat", "doubao-embedding", "ernie-responses", "ernie-chat", "ernie-messages", "ernie-embedding", "gitee-responses", "gitee-chat", "gitee-messages", "gitee-embedding", "tokenhub-chat", "tokenhub-embedding", "kimi-chat", "minimax-messages", "minimax-chat", "minimax-responses", "openrouter-chat", "openrouter-responses", "openrouter-messages", "openrouter-embedding", "siliconflow-chat", "siliconflow-messages", "siliconflow-embedding", "mimo-responses", "mimo-chat", "mimo-messages", "zhipu-chat", "zhipu-messages", "zhipu-embedding", "aihubmix-responses", "aihubmix-chat", "aihubmix-messages", "aihubmix-embedding", "openrouter-image", "dashscope-image", "doubao-image", "ernie-image", "gitee-image", "minimax-image", "siliconflow-image", "zhipu-image", "aihubmix-image", "anthropic-messages", "gemini-generate-content", "gemini-embed-content", "rerank", "ollama-chat", "ollama-openai-chat", "ollama-responses", "ollama-messages", "ollama-embedding", "ollama-image", "typesafe-system-one", "aihubmix-system-one" ]
+          },
+          "constraints" : {
+            "$ref" : "#/components/schemas/ModelParameterConstraints"
+          },
+          "featureEvidence" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "boolean",
+              "description" : "Explicit provider feature evidence, excluding catalog facts; empty when no provider evidence was found"
+            },
+            "description" : "Explicit provider feature evidence, excluding catalog facts; empty when no provider evidence was found"
+          },
+          "mappings" : {
+            "$ref" : "#/components/schemas/ModelParameterMappings"
+          },
+          "modelId" : {
+            "type" : "string"
+          },
+          "providerBaseUrl" : {
+            "type" : "string",
+            "description" : "Provider endpoint captured with the catalog configuration"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        }
       },
       "MoveOperation" : {
         "required" : [ "from", "op", "path" ],
@@ -3144,6 +3400,9 @@
       "ProviderModelDiscoveryResponse" : {
         "type" : "object",
         "properties" : {
+          "catalog" : {
+            "$ref" : "#/components/schemas/ModelCatalogStatus"
+          },
           "models" : {
             "type" : "array",
             "items" : {
@@ -3258,6 +3517,31 @@
           }
         }
       },
+      "Reasoning" : {
+        "type" : "object",
+        "properties" : {
+          "budgetMaximum" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "budgetMinimum" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "efforts" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "supported" : {
+            "type" : "boolean"
+          },
+          "toggle" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "ReasoningMapping" : {
         "type" : "object",
         "properties" : {
@@ -3298,6 +3582,13 @@
       "ReasoningValueMapping" : {
         "type" : "object",
         "properties" : {
+          "additionalValues" : {
+            "type" : "array",
+            "description" : "Additional fields applied atomically with this reasoning intent",
+            "items" : {
+              "$ref" : "#/components/schemas/ReasoningValueMapping"
+            }
+          },
           "field" : {
             "type" : "string",
             "description" : "Constrained native request field/path"

@@ -36,7 +36,9 @@ public class ModelCapabilityService {
         var imageGeneration = copy(explicit == null ? null : explicit.getImageGeneration());
 
         if (spec.getModelType() == ModelType.LANGUAGE) {
-            language = applyLanguageDefaults(language, spec.getFeatures(), providerType);
+            // Catalog imports keep precise coverage even after individual fields are edited.
+            language = applyLanguageDefaults(language, spec.getFeatures(), providerType,
+                spec.getCatalogMatch() != null);
         }
         if (spec.getModelType() == ModelType.IMAGE_GENERATION
             && sources.getImageGeneration() != CapabilitySource.MANUAL) {
@@ -52,7 +54,8 @@ public class ModelCapabilityService {
     }
 
     private LanguageCapability applyLanguageDefaults(LanguageCapability language,
-        List<ModelFeature> features, @Nullable AiProviderType providerType) {
+        List<ModelFeature> features, @Nullable AiProviderType providerType,
+        boolean catalogImport) {
         var result = language;
         var hasVision = features != null && features.contains(ModelFeature.VISION);
         var hasAudioInput = features != null && features.contains(ModelFeature.AUDIO_INPUT);
@@ -76,19 +79,23 @@ public class ModelCapabilityService {
                 result.setFileInput(true);
             }
         }
-        if (result != null && Boolean.TRUE.equals(result.getImageInput())) {
-            if (result.getInputMediaTypes() == null || result.getInputMediaTypes().isEmpty()) {
-                result.setInputMediaTypes(List.of("image/*"));
-            }
-            if (result.getInputSources() == null || result.getInputSources().isEmpty()) {
-                result.setInputSources(List.of(InputSource.DATA));
-            }
+        if (result == null) {
+            return null;
         }
-        if (result != null && hasAudioInput && Boolean.TRUE.equals(result.getFileInput())) {
+        // Catalog imports treat explicit lists, including empty ones, as the complete coverage.
+        var missingMediaTypes = result.getInputMediaTypes() == null;
+        var imageInput = Boolean.TRUE.equals(result.getImageInput());
+        var audioFileInput = hasAudioInput && Boolean.TRUE.equals(result.getFileInput());
+        if (imageInput && (missingMediaTypes
+            || (!catalogImport && result.getInputMediaTypes().isEmpty()))) {
+            result.setInputMediaTypes(List.of("image/*"));
+        }
+        if (audioFileInput && (!catalogImport || missingMediaTypes)) {
             appendDefault(result.getInputMediaTypes(), "audio/*", result::setInputMediaTypes);
-            if (result.getInputSources() == null || result.getInputSources().isEmpty()) {
-                result.setInputSources(List.of(InputSource.DATA));
-            }
+        }
+        if ((imageInput || audioFileInput) && (result.getInputSources() == null
+            || (!catalogImport && result.getInputSources().isEmpty()))) {
+            result.setInputSources(List.of(InputSource.DATA));
         }
         return result;
     }

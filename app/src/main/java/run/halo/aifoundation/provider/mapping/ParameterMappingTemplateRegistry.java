@@ -84,13 +84,15 @@ public class ParameterMappingTemplateRegistry {
         AdapterType adapterType) {
         return templates.values().stream()
             .filter(template -> template.parameter() == parameter)
-            .filter(template -> adapterType == null || template.adapterTypes().contains(adapterType))
+            .filter(template -> adapterType == null
+                || template.adapterTypes().contains(adapterType))
             .toList();
     }
 
     private List<ParameterMappingTemplateDescriptor> scalarTemplates() {
         return List.of(
-            template("openai.max-tokens", "max_tokens", ModelParameter.MAX_OUTPUT_TOKENS, OPENAI_CHAT),
+            template("openai.max-tokens", "max_tokens",
+                ModelParameter.MAX_OUTPUT_TOKENS, OPENAI_CHAT),
             template("openai.max-completion-tokens", "max_completion_tokens",
                 ModelParameter.MAX_OUTPUT_TOKENS, OPENAI_CHAT),
             template("ollama.num-predict", "num_predict", ModelParameter.MAX_OUTPUT_TOKENS,
@@ -131,7 +133,8 @@ public class ParameterMappingTemplateRegistry {
                 Set.of(AdapterType.OPENROUTER_IMAGE, AdapterType.DOUBAO_IMAGE,
                     AdapterType.ERNIE_IMAGE, AdapterType.MINIMAX_IMAGE,
                     AdapterType.SILICONFLOW_IMAGE)),
-            template("image.response-format.openai", "response_format", ModelParameter.RESPONSE_FORMAT,
+            template("image.response-format.openai", "response_format",
+                ModelParameter.RESPONSE_FORMAT,
                 Set.of(AdapterType.OPENAI_IMAGE, AdapterType.DOUBAO_IMAGE,
                     AdapterType.ERNIE_IMAGE, AdapterType.GITEE_IMAGE,
                     AdapterType.ZHIPU_IMAGE, AdapterType.AIHUBMIX_IMAGE,
@@ -161,7 +164,8 @@ public class ParameterMappingTemplateRegistry {
             template("image.siliconflow.image-size", "image_size", ModelParameter.IMAGE_SIZE,
                 Set.of(AdapterType.SILICONFLOW_IMAGE)),
             template("image.minimax.dimensions", "width / height", ModelParameter.IMAGE_SIZE,
-                Set.of(AdapterType.MINIMAX_IMAGE), ParameterMappingTemplateRegistry::applyDimensions)
+                Set.of(AdapterType.MINIMAX_IMAGE),
+                    ParameterMappingTemplateRegistry::applyDimensions)
         );
     }
 
@@ -290,7 +294,7 @@ public class ParameterMappingTemplateRegistry {
                     value("enable_thinking", ValueType.BOOLEAN, "false"), null, null, null)),
             reasoningTemplate("reasoning.thinking-type", "OpenAI 请求体", "thinking.type",
                 Set.of(AdapterType.DOUBAO_CHAT, AdapterType.ERNIE_CHAT,
-                    AdapterType.MIMO_CHAT),
+                    AdapterType.KIMI_CHAT, AdapterType.MIMO_CHAT),
                 ParameterMappingApplicator.rootObject("thinking", "type"),
                 reasoning(value("thinking.type", ValueType.STRING, "enabled"),
                     value("thinking.type", ValueType.STRING, "disabled"), null, null, null)),
