@@ -136,7 +136,9 @@ export const ModelParameterProfileAdapterTypeEnum = {
     OllamaResponses: 'ollama-responses',
     OllamaMessages: 'ollama-messages',
     OllamaEmbedding: 'ollama-embedding',
-    OllamaImage: 'ollama-image'
+    OllamaImage: 'ollama-image',
+    TypesafeSystemOne: 'typesafe-system-one',
+    AihubmixSystemOne: 'aihubmix-system-one'
 } as const;
 
 export type ModelParameterProfileAdapterTypeEnum = typeof ModelParameterProfileAdapterTypeEnum[keyof typeof ModelParameterProfileAdapterTypeEnum];

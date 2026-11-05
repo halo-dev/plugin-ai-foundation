@@ -12,6 +12,24 @@ class ModelsDevCatalogTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
+    void decisionModelsDoNotMatchCatalogTypes() throws Exception {
+        var catalog = ModelsDevCatalog.parse(MAPPER.readTree("""
+            {"openai":{"id":"openai","models":{
+              "chat":{"id":"chat","type":"chat"},
+              "image":{"id":"image","type":"image"},
+              "embedding":{"id":"embedding","type":"embedding"},
+              "rerank":{"id":"rerank","type":"reranking"}
+            }}}
+            """));
+
+        for (var modelId : new String[] {"chat", "image", "embedding", "rerank"}) {
+            assertThat(catalog.find("openai", modelId).matchesModelType(ModelType.DECISION))
+                .as(modelId)
+                .isFalse();
+        }
+    }
+
+    @Test
     void retainsNonChatTypesAndTheirProtocolsThroughCompactCacheRoundTrip() throws Exception {
         var catalog = ModelsDevCatalog.parse(MAPPER.readTree("""
             {"openai":{"id":"openai","models":{

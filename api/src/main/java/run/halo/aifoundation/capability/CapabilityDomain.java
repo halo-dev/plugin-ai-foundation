@@ -21,7 +21,10 @@ public enum CapabilityDomain {
     /**
      * Image generation capabilities, including generation modes and output controls.
      */
-    IMAGE_GENERATION("imageGeneration");
+    IMAGE_GENERATION("imageGeneration"),
+
+    /** Decision question types, structured input support, and option limits. */
+    DECISION("decision");
 
     /**
      * Stable serialized value used in resource specs, API payloads, and selector filters.

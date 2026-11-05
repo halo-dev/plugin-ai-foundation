@@ -72,6 +72,7 @@ public class DefaultModelSlotConsoleEndpoint implements CustomEndpoint {
 
     private Mono<Void> validateSlots(DefaultModelSlots slots) {
         return Flux.concat(List.of(
+                validateSlot("decisionModelName", slots.getDecisionModelName(), ModelType.DECISION),
                 validateSlot("languageModelName", slots.getLanguageModelName(), ModelType.LANGUAGE),
                 validateSlot("embeddingModelName", slots.getEmbeddingModelName(), ModelType.EMBEDDING),
                 validateSlot("rerankModelName", slots.getRerankModelName(), ModelType.RERANK),

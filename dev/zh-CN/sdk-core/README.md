@@ -28,7 +28,8 @@ ExtensionGetter
 6. [图像生成](./image-generation.md)
 7. [Middleware、步骤控制与生命周期](./middleware-and-lifecycle.md)
 8. [错误处理](./error-handling.md)
-9. [完整公开 API 索引](./api-reference.md)
+9. [决策模型](./decision-models.md)
+10. [完整公开 API 索引](./api-reference.md)
 
 ## API 入口速览
 

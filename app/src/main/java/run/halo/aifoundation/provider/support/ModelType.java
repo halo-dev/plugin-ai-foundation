@@ -13,7 +13,8 @@ public enum ModelType {
     LANGUAGE("language"),
     EMBEDDING("embedding"),
     RERANK("rerank"),
-    IMAGE_GENERATION("image-generation");
+    IMAGE_GENERATION("image-generation"),
+    DECISION("decision");
 
     private final String value;
 

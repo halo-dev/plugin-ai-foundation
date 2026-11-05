@@ -136,10 +136,10 @@ public final class UsageCallSession {
         var resolvedUsage = executionUsage == null ? NormalizedUsage.missing() : executionUsage;
         var resolvedResponseModelId = responseModelId;
         var resolvedStepCount = stepCount;
+        if (!StringUtils.hasText(resolvedResponseModelId)) {
+            resolvedResponseModelId = latestResponseModelId.get();
+        }
         if (start.streaming()) {
-            if (!StringUtils.hasText(resolvedResponseModelId)) {
-                resolvedResponseModelId = latestResponseModelId.get();
-            }
             resolvedStepCount = Math.max(resolvedStepCount, observedGenerationSteps.get());
         }
         pendingTerminal = new UsageCallTerminal(start, completedAt, status, error,

@@ -24,9 +24,13 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { AiModel } from '../models';
 // @ts-ignore
+import type { DecisionResponse } from '../models';
+// @ts-ignore
 import type { ModelParameterProfile } from '../models';
 // @ts-ignore
 import type { TestCompletionStreamRequest } from '../models';
+// @ts-ignore
+import type { TestDecisionRequest } from '../models';
 // @ts-ignore
 import type { TestEmbeddingRequest } from '../models';
 // @ts-ignore
@@ -311,6 +315,53 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiAxiosParamCreator = fu
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
             localVarRequestOptions.data = serializeDataIfNeeded(testCompletionStreamRequest, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Evaluate typed questions against a shared text or JSON state.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestDecisionRequest} testDecisionRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelDecision: async (name: string, testDecisionRequest: TestDecisionRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('testModelDecision', 'name', name)
+            // verify required parameter 'testDecisionRequest' is not null or undefined
+            assertParamExists('testModelDecision', 'testDecisionRequest', testDecisionRequest)
+            const localVarPath = `/apis/console.api.aifoundation.halo.run/v1alpha1/models/{name}/test-decision`
+                .replace(`{${"name"}}`, encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(testDecisionRequest, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -756,6 +807,19 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp = function(configur
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Evaluate typed questions against a shared text or JSON state.
+         * @param {string} name Model name (AiModel.metadata.name)
+         * @param {TestDecisionRequest} testDecisionRequest 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async testModelDecision(name: string, testDecisionRequest: TestDecisionRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DecisionResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.testModelDecision(name, testDecisionRequest, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiAifoundationHaloRunV1alpha1ModelApi.testModelDecision']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Test embedding generation with embedding settings and diagnostics.
          * @param {string} name Model name (AiModel.metadata.name)
          * @param {TestEmbeddingRequest} testEmbeddingRequest 
@@ -914,6 +978,15 @@ export const ConsoleApiAifoundationHaloRunV1alpha1ModelApiFactory = function (co
          */
         testModelCompletionStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelCompletionStreamRequest, options?: RawAxiosRequestConfig): AxiosPromise<string> {
             return localVarFp.testModelCompletionStream(requestParameters.name, requestParameters.testCompletionStreamRequest, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Evaluate typed questions against a shared text or JSON state.
+         * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecisionRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        testModelDecision(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecisionRequest, options?: RawAxiosRequestConfig): AxiosPromise<DecisionResponse> {
+            return localVarFp.testModelDecision(requestParameters.name, requestParameters.testDecisionRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * Test embedding generation with embedding settings and diagnostics.
@@ -1077,6 +1150,27 @@ export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelCompletio
      * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelCompletionStream
      */
     readonly testCompletionStreamRequest: TestCompletionStreamRequest
+}
+
+/**
+ * Request parameters for testModelDecision operation in ConsoleApiAifoundationHaloRunV1alpha1ModelApi.
+ * @export
+ * @interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecisionRequest
+ */
+export interface ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecisionRequest {
+    /**
+     * Model name (AiModel.metadata.name)
+     * @type {string}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecision
+     */
+    readonly name: string
+
+    /**
+     * 
+     * @type {TestDecisionRequest}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecision
+     */
+    readonly testDecisionRequest: TestDecisionRequest
 }
 
 /**
@@ -1332,6 +1426,17 @@ export class ConsoleApiAifoundationHaloRunV1alpha1ModelApi extends BaseAPI {
      */
     public testModelCompletionStream(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelCompletionStreamRequest, options?: RawAxiosRequestConfig) {
         return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelCompletionStream(requestParameters.name, requestParameters.testCompletionStreamRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Evaluate typed questions against a shared text or JSON state.
+     * @param {ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecisionRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiAifoundationHaloRunV1alpha1ModelApi
+     */
+    public testModelDecision(requestParameters: ConsoleApiAifoundationHaloRunV1alpha1ModelApiTestModelDecisionRequest, options?: RawAxiosRequestConfig) {
+        return ConsoleApiAifoundationHaloRunV1alpha1ModelApiFp(this.configuration).testModelDecision(requestParameters.name, requestParameters.testDecisionRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

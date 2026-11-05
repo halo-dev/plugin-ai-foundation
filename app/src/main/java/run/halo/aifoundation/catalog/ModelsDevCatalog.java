@@ -194,8 +194,9 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
                 case IMAGE_GENERATION -> "image";
                 case EMBEDDING -> "embedding";
                 case RERANK -> "reranking";
+                case DECISION -> null;
             };
-            return catalogType.equals(model.path("type").asText());
+            return catalogType != null && catalogType.equals(model.path("type").asText());
         }
 
         List<String> outputs() {
