@@ -9,9 +9,8 @@ import lombok.NoArgsConstructor;
 /**
  * Provider-neutral generated file returned by a model invocation.
  *
- * <p>Providers may return either a URL or base64 content. AI Foundation exposes the provider value
- * as-is and does not download generated URLs. Consumer plugins decide whether to persist,
- * proxy, transform, or discard the returned file.
+ * <p>Providers may return either a URL or base64 content. AI Foundation exposes the provider value as-is and does not
+ * download generated URLs. Consumer plugins decide whether to persist, proxy, transform, or discard the returned file.
  */
 @Data
 @Builder(buildMethodName = "uncheckedBuild")
@@ -19,39 +18,25 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GeneratedFile {
 
-    /**
-     * Optional provider or Halo-side file identifier.
-     */
+    /** Optional provider or Halo-side file identifier. */
     private String id;
 
-    /**
-     * Provider-returned file URL. The runtime does not download it into {@link #base64}.
-     */
+    /** Provider-returned file URL. The runtime does not download it into {@link #base64}. */
     private String url;
 
-    /**
-     * Base64 encoded file content returned by the provider.
-     */
+    /** Base64 encoded file content returned by the provider. */
     private String base64;
 
-    /**
-     * Media type such as {@code image/png}, when available.
-     */
+    /** Media type such as {@code image/png}, when available. */
     private String mediaType;
 
-    /**
-     * Optional filename returned by the provider or chosen by the caller.
-     */
+    /** Optional filename returned by the provider or chosen by the caller. */
     private String filename;
 
-    /**
-     * Optional display title for UI message file parts or caller UIs.
-     */
+    /** Optional display title for UI message file parts or caller UIs. */
     private String title;
 
-    /**
-     * Sanitized provider or caller metadata associated with this file.
-     */
+    /** Sanitized provider or caller metadata associated with this file. */
     private Map<String, Object> metadata;
 
     /**
@@ -75,10 +60,10 @@ public class GeneratedFile {
      */
     public static GeneratedFile url(String url, String mediaType, String filename) {
         return GeneratedFile.builder()
-            .url(url)
-            .mediaType(mediaType)
-            .filename(filename)
-            .build();
+                .url(url)
+                .mediaType(mediaType)
+                .filename(filename)
+                .build();
     }
 
     /**
@@ -102,10 +87,10 @@ public class GeneratedFile {
      */
     public static GeneratedFile base64(String base64, String mediaType, String filename) {
         return GeneratedFile.builder()
-            .base64(base64)
-            .mediaType(mediaType)
-            .filename(filename)
-            .build();
+                .base64(base64)
+                .mediaType(mediaType)
+                .filename(filename)
+                .build();
     }
 
     /**
@@ -128,8 +113,7 @@ public class GeneratedFile {
 
     private GeneratedFile validate() {
         if (hasText(url) == hasText(base64)) {
-            throw new IllegalArgumentException(
-                "generated file must set exactly one of url or base64");
+            throw new IllegalArgumentException("generated file must set exactly one of url or base64");
         }
         return this;
     }
@@ -138,16 +122,13 @@ public class GeneratedFile {
         return value != null && !value.isBlank();
     }
 
-    /**
-     * Validating builder for {@link GeneratedFile}.
-     */
+    /** Validating builder for {@link GeneratedFile}. */
     public static class GeneratedFileBuilder {
         /**
          * Builds and validates a generated file value.
          *
          * @return validated generated file
-         * @throws IllegalArgumentException when neither or both of {@link #url} and {@link #base64}
-         *                                  are set
+         * @throws IllegalArgumentException when neither or both of {@link #url} and {@link #base64} are set
          */
         public GeneratedFile build() {
             return uncheckedBuild().validate();

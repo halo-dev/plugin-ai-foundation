@@ -27,8 +27,7 @@ public final class ChatCompletionsOptionsFactory {
         structuredOutputSupport = builder.structuredOutputSupport;
     }
 
-    public static Builder builder(String providerType,
-        ReasoningControlOptions reasoningControlOptions) {
+    public static Builder builder(String providerType, ReasoningControlOptions reasoningControlOptions) {
         return new Builder(providerType, reasoningControlOptions);
     }
 
@@ -45,38 +44,36 @@ public final class ChatCompletionsOptionsFactory {
         return builder.build();
     }
 
-    public ChatCompletionsOptions toolCalling(GenerateTextRequest request,
-        List<ToolCallback> toolCallbacks, Set<String> toolNames) {
+    public ChatCompletionsOptions toolCalling(
+            GenerateTextRequest request, List<ToolCallback> toolCallbacks, Set<String> toolNames) {
         var builder = baseBuilder(request).toolCallbacks(toolCallbacks);
         if (nativeStrictToolSchemas) {
             ChatCompletionsToolCallingOptions.applyNativeTools(builder, request);
         }
         applyCommonOptions(builder, request);
-        ChatCompletionsToolCallingOptions.applyToolChoice(
-            builder, request.getToolChoice(), toolNames);
+        ChatCompletionsToolCallingOptions.applyToolChoice(builder, request.getToolChoice(), toolNames);
         ChatCompletionsStructuredOutputOptions.apply(builder, request, structuredOutputSupport);
         return builder.build();
     }
 
-    private void applyCommonOptions(ChatCompletionsOptions.Builder builder,
-        GenerateTextRequest request) {
+    private void applyCommonOptions(ChatCompletionsOptions.Builder builder, GenerateTextRequest request) {
         reasoningControlOptions.validate(providerType, request);
         ChatCompletionsExtraBodyOptions.apply(builder, request, extraBodyCustomizer);
     }
 
     private static ChatCompletionsOptions.Builder baseBuilder(GenerateTextRequest request) {
         return ChatCompletionsOptions.builder()
-            .temperature(request.getTemperature())
-            .topP(request.getTopP())
-            .presencePenalty(request.getPresencePenalty())
-            .frequencyPenalty(request.getFrequencyPenalty())
-            .maxTokens(request.getMaxOutputTokens())
-            .seed(request.getSeed())
-            .stop(request.getStopSequences())
-            .logprobs(logprobs(request))
-            .topLogprobs(request.getTopLogprobs())
-            .parallelToolCalls(request.getParallelToolCalls())
-            .customHeaders(headers(request));
+                .temperature(request.getTemperature())
+                .topP(request.getTopP())
+                .presencePenalty(request.getPresencePenalty())
+                .frequencyPenalty(request.getFrequencyPenalty())
+                .maxTokens(request.getMaxOutputTokens())
+                .seed(request.getSeed())
+                .stop(request.getStopSequences())
+                .logprobs(logprobs(request))
+                .topLogprobs(request.getTopLogprobs())
+                .parallelToolCalls(request.getParallelToolCalls())
+                .customHeaders(headers(request));
     }
 
     private static Boolean logprobs(GenerateTextRequest request) {
@@ -102,13 +99,12 @@ public final class ChatCompletionsOptionsFactory {
         private final ReasoningControlOptions reasoningControlOptions;
         private BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer;
         private boolean nativeStrictToolSchemas;
-        private StructuredOutputSupport structuredOutputSupport =
-            StructuredOutputSupport.JSON_SCHEMA;
+        private StructuredOutputSupport structuredOutputSupport = StructuredOutputSupport.JSON_SCHEMA;
 
         private Builder(String providerType, ReasoningControlOptions reasoningControlOptions) {
             this.providerType = requireProviderType(providerType);
-            this.reasoningControlOptions = Objects.requireNonNull(
-                reasoningControlOptions, "Reasoning control options must not be null");
+            this.reasoningControlOptions =
+                    Objects.requireNonNull(reasoningControlOptions, "Reasoning control options must not be null");
         }
 
         private static String requireProviderType(String providerType) {
@@ -121,8 +117,7 @@ public final class ChatCompletionsOptionsFactory {
             return providerType;
         }
 
-        public Builder extraBodyCustomizer(
-            BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
+        public Builder extraBodyCustomizer(BiConsumer<Map<String, Object>, GenerateTextRequest> extraBodyCustomizer) {
             this.extraBodyCustomizer = extraBodyCustomizer;
             return this;
         }
@@ -132,10 +127,9 @@ public final class ChatCompletionsOptionsFactory {
             return this;
         }
 
-        public Builder structuredOutputSupport(
-            StructuredOutputSupport structuredOutputSupport) {
-            this.structuredOutputSupport = Objects.requireNonNull(
-                structuredOutputSupport, "Structured output support must not be null");
+        public Builder structuredOutputSupport(StructuredOutputSupport structuredOutputSupport) {
+            this.structuredOutputSupport =
+                    Objects.requireNonNull(structuredOutputSupport, "Structured output support must not be null");
             return this;
         }
 

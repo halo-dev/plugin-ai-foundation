@@ -7,8 +7,7 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesModel;
 /** Default Xiaomi MiMo Responses model with native reasoning replay. */
 public final class MiMoResponsesModel extends ResponsesModel {
 
-    public MiMoResponsesModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public MiMoResponsesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new MiMoResponsesProfile());
     }
 }

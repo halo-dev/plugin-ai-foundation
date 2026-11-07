@@ -20,37 +20,42 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
     private final CallerPluginAuditRecorder auditRecorder;
     private final UsageObservation usageStatistics;
 
-    public AuditedEmbeddingModel(EmbeddingModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
+    public AuditedEmbeddingModel(
+            EmbeddingModel delegate,
+            ModelCallContext context,
+            CallerPluginAuditRecorder auditRecorder,
+            UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
-        this.auditRecorder = Objects.requireNonNull(auditRecorder,
-            "auditRecorder must not be null");
-        this.usageStatistics = Objects.requireNonNull(usageStatistics,
-            "usageStatistics must not be null");
+        this.auditRecorder = Objects.requireNonNull(auditRecorder, "auditRecorder must not be null");
+        this.usageStatistics = Objects.requireNonNull(usageStatistics, "usageStatistics must not be null");
     }
 
     @Override
     public Mono<EmbeddingResponse> embed(List<String> inputs) {
         auditRecorder.recordModelInvocation(context, UsageOperation.EMBEDDING_EMBED);
-        return record(UsageOperation.EMBEDDING_EMBED, null, () -> delegate.embed(inputs),
-            AuditedEmbeddingModel::succeed);
+        return record(
+                UsageOperation.EMBEDDING_EMBED, null, () -> delegate.embed(inputs), AuditedEmbeddingModel::succeed);
     }
 
     @Override
     public Mono<EmbeddingResponse> embed(EmbeddingRequest request) {
         auditRecorder.recordModelInvocation(context, UsageOperation.EMBEDDING_EMBED);
-        return record(UsageOperation.EMBEDDING_EMBED,
-            request == null ? null : request.getMetadata(), () -> delegate.embed(request),
-            AuditedEmbeddingModel::succeed);
+        return record(
+                UsageOperation.EMBEDDING_EMBED,
+                request == null ? null : request.getMetadata(),
+                () -> delegate.embed(request),
+                AuditedEmbeddingModel::succeed);
     }
 
     @Override
     public Mono<float[]> embedQuery(String text) {
         auditRecorder.recordModelInvocation(context, UsageOperation.EMBEDDING_EMBED_QUERY);
-        return record(UsageOperation.EMBEDDING_EMBED_QUERY, null, () -> delegate.embedQuery(text),
-            (session, result) -> session.succeed(
-                null, result == null ? 0 : 1));
+        return record(
+                UsageOperation.EMBEDDING_EMBED_QUERY,
+                null,
+                () -> delegate.embedQuery(text),
+                (session, result) -> session.succeed(null, result == null ? 0 : 1));
     }
 
     @Override
@@ -63,10 +68,12 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
         return delegate.supportsParallelCalls();
     }
 
-    private <T> Mono<T> record(String operation, Map<String, Object> metadata,
-        Supplier<Mono<T>> invocation, BiConsumer<UsageCallSession, T> success) {
-        return UsageCallRecorder.record(usageStatistics, context, operation, false, metadata,
-            invocation, 1, success);
+    private <T> Mono<T> record(
+            String operation,
+            Map<String, Object> metadata,
+            Supplier<Mono<T>> invocation,
+            BiConsumer<UsageCallSession, T> success) {
+        return UsageCallRecorder.record(usageStatistics, context, operation, false, metadata, invocation, 1, success);
     }
 
     private static void succeed(UsageCallSession session, EmbeddingResponse response) {
@@ -74,8 +81,8 @@ public class AuditedEmbeddingModel implements EmbeddingModel {
             session.succeed(null, 0);
             return;
         }
-        var responseModel = response.getResponse() == null
-            ? null : response.getResponse().getModel();
+        var responseModel =
+                response.getResponse() == null ? null : response.getResponse().getModel();
         session.succeed(responseModel, 1);
     }
 }

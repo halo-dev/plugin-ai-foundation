@@ -32,8 +32,9 @@ class UsageDurabilityRegressionTest {
         var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(directory));
         store.initialize();
         store.close();
-        assertThatThrownBy(store::initialize).isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("closed");
+        assertThatThrownBy(store::initialize)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("closed");
         store.close();
     }
 
@@ -42,19 +43,41 @@ class UsageDurabilityRegressionTest {
         var connections = new java.util.ArrayList<Connection>();
         var queries = new UsageStatisticsQueryRepository() {
             @Override
-            UsageSummary summary(Connection connection, UsageQuery query, boolean complete)
-                throws SQLException {
+            UsageSummary summary(Connection connection, UsageQuery query, boolean complete) throws SQLException {
                 connections.add(connection);
                 return super.summary(connection, query, complete);
             }
         };
         try (var store = storeWithQueries(new UsageDatabasePaths(directory), queries)) {
             store.initialize();
-            var query = new UsageQuery(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60),
-                null, null, null, null, null, null, null, null, null);
+            var query = new UsageQuery(
+                    Instant.now().minusSeconds(60),
+                    Instant.now().plusSeconds(60),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
             assertThat(store.summary(query, true).callCount()).isZero();
-            store.startCall(new UsageCallStart("new-commit", 1, Instant.now(), "plugin", "1", "test",
-                null, "language.generateText", "LANGUAGE", "model", "provider", "openai", "gpt", false));
+            store.startCall(new UsageCallStart(
+                    "new-commit",
+                    1,
+                    Instant.now(),
+                    "plugin",
+                    "1",
+                    "test",
+                    null,
+                    "language.generateText",
+                    "LANGUAGE",
+                    "model",
+                    "provider",
+                    "openai",
+                    "gpt",
+                    false));
             assertThat(store.summary(query, true).callCount()).isEqualTo(1);
             assertThat(connections.get(1)).isSameAs(connections.getFirst());
         }
@@ -68,8 +91,7 @@ class UsageDurabilityRegressionTest {
         var connections = new java.util.ArrayList<Connection>();
         var queries = new UsageStatisticsQueryRepository() {
             @Override
-            UsageSummary summary(Connection connection, UsageQuery query, boolean complete)
-                throws SQLException {
+            UsageSummary summary(Connection connection, UsageQuery query, boolean complete) throws SQLException {
                 connections.add(connection);
                 if (connections.size() == 1) {
                     connection.close();
@@ -80,8 +102,18 @@ class UsageDurabilityRegressionTest {
         };
         try (var store = storeWithQueries(new UsageDatabasePaths(directory), queries)) {
             store.initialize();
-            var query = new UsageQuery(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60),
-                null, null, null, null, null, null, null, null, null);
+            var query = new UsageQuery(
+                    Instant.now().minusSeconds(60),
+                    Instant.now().plusSeconds(60),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
             assertThatThrownBy(() -> store.summary(query, true)).isInstanceOf(IllegalStateException.class);
             assertThat(store.summary(query, true).callCount()).isZero();
             assertThat(connections.get(1)).isNotSameAs(connections.getFirst());
@@ -93,15 +125,29 @@ class UsageDurabilityRegressionTest {
         var paths = new UsageDatabasePaths(directory);
         try (var store = new SqliteUsageStatisticsStore(paths)) {
             store.initialize();
-            store.startCall(new UsageCallStart("existing", 1, Instant.now(), "plugin", "1", "test",
-                null, "language.generateText", "LANGUAGE", "model", "provider", "openai", "gpt", false));
+            store.startCall(new UsageCallStart(
+                    "existing",
+                    1,
+                    Instant.now(),
+                    "plugin",
+                    "1",
+                    "test",
+                    null,
+                    "language.generateText",
+                    "LANGUAGE",
+                    "model",
+                    "provider",
+                    "openai",
+                    "gpt",
+                    false));
         }
         try (var reopened = new SqliteUsageStatisticsStore(paths)) {
             reopened.initialize();
             assertThat(reopened.getCall("existing")).isPresent();
-            try (var connection = new org.sqlite.JDBC().connect("jdbc:sqlite:" + paths.database(),
-                new java.util.Properties()); var statement = connection.createStatement();
-                var rows = statement.executeQuery("""
+            try (var connection = new org.sqlite.JDBC()
+                            .connect("jdbc:sqlite:" + paths.database(), new java.util.Properties());
+                    var statement = connection.createStatement();
+                    var rows = statement.executeQuery("""
                     EXPLAIN QUERY PLAN SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens),
                     SUM(cache_read_input_tokens), SUM(cache_creation_input_tokens),
                     SUM(reasoning_output_tokens), SUM(accounted_total_tokens),
@@ -113,8 +159,7 @@ class UsageDurabilityRegressionTest {
                     GROUP BY (started_at_ms / 3600000), status, usage_quality, complete
                     """)) {
                 assertThat(rows.next()).isTrue();
-                assertThat(rows.getString("detail"))
-                    .contains("COVERING INDEX idx_calls_filtered_hour");
+                assertThat(rows.getString("detail")).contains("COVERING INDEX idx_calls_filtered_hour");
                 while (rows.next()) {
                     assertThat(rows.getString("detail")).doesNotContain("TEMP B-TREE");
                 }
@@ -128,32 +173,45 @@ class UsageDurabilityRegressionTest {
         var entered = new java.util.concurrent.CountDownLatch(1);
         var active = new java.util.concurrent.atomic.AtomicReference<Connection>();
         org.mockito.Mockito.doAnswer(invocation -> {
-            var connection = (Connection) invocation.getArgument(0);
-            active.set(connection);
-            entered.countDown();
-            try (var statement = connection.createStatement()) {
-                statement.executeQuery("""
+                    var connection = (Connection) invocation.getArgument(0);
+                    active.set(connection);
+                    entered.countDown();
+                    try (var statement = connection.createStatement()) {
+                        statement.executeQuery("""
                     WITH RECURSIVE numbers(n) AS (
                       VALUES(0) UNION ALL SELECT n + 1 FROM numbers WHERE n < 1000000000
                     ) SELECT SUM(n) FROM numbers
                     """);
-            }
-            return null;
-        }).when(queries).summary(org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
+                    }
+                    return null;
+                })
+                .when(queries)
+                .summary(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyBoolean());
         var store = storeWithQueries(new UsageDatabasePaths(directory), queries);
         store.initialize();
-        var query = new UsageQuery(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60),
-            null, null, null, null, null, null, null, null, null);
+        var query = new UsageQuery(
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(60),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         var reader = java.util.concurrent.CompletableFuture.runAsync(() -> store.summary(query, true));
         try {
             assertThat(entered.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
             Thread.sleep(100);
             assertThat(reader.isDone()).isFalse();
-            java.util.concurrent.CompletableFuture.runAsync(store::close)
-                .get(3, java.util.concurrent.TimeUnit.SECONDS);
+            java.util.concurrent.CompletableFuture.runAsync(store::close).get(3, java.util.concurrent.TimeUnit.SECONDS);
             assertThatThrownBy(() -> reader.get(2, java.util.concurrent.TimeUnit.SECONDS))
-                .isInstanceOf(java.util.concurrent.ExecutionException.class);
+                    .isInstanceOf(java.util.concurrent.ExecutionException.class);
             assertThat(active.get().isClosed()).isTrue();
         } finally {
             if (active.get() instanceof org.sqlite.SQLiteConnection sqlite && !sqlite.isClosed()) {
@@ -166,13 +224,19 @@ class UsageDurabilityRegressionTest {
     @Test
     void closePersistsBurstAndCachedMetadataWithoutDuplicatingCalls() {
         var paths = new UsageDatabasePaths(directory);
-        var service = new UsageStatisticsService(new SqliteUsageStatisticsStore(paths),
-            mock(CallerPluginResolver.class));
+        var service =
+                new UsageStatisticsService(new SqliteUsageStatisticsStore(paths), mock(CallerPluginResolver.class));
         service.initialize();
         try {
-            var descriptor = new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
-                "model", "provider", "openai", "gpt"), "language.streamText", true, null,
-                CallerPluginInfo.builder().pluginName("plugin").detectionSource("test").build());
+            var descriptor = new UsageCallDescriptor(
+                    new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt"),
+                    "language.streamText",
+                    true,
+                    null,
+                    CallerPluginInfo.builder()
+                            .pluginName("plugin")
+                            .detectionSource("test")
+                            .build());
             for (int i = 0; i < 1501; i++) {
                 var session = service.beginCall(descriptor);
                 session.succeedProjection();
@@ -185,19 +249,30 @@ class UsageDurabilityRegressionTest {
         assertThat(service.health().writeFailures()).isZero();
         try (var reopened = new SqliteUsageStatisticsStore(paths)) {
             reopened.initialize();
-            var query = new UsageQuery(Instant.now().minusSeconds(3600), Instant.now().plusSeconds(60),
-                null, null, null, null, null, null, null, null, null);
+            var query = new UsageQuery(
+                    Instant.now().minusSeconds(3600),
+                    Instant.now().plusSeconds(60),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
             var summary = reopened.summary(query, true);
             assertThat(summary.callCount()).isEqualTo(1501);
             assertThat(summary.accountedTotalTokens()).isNull();
             assertThat(summary.missingUsageCalls()).isEqualTo(1501);
             assertThat(summary.usageCoverage()).isZero();
-            assertThat(reopened.listCalls(query, 1, null).items()).singleElement()
-                .satisfies(call -> {
-                    assertThat(call.responseModelId()).isEqualTo("gpt");
-                    assertThat(call.stepCount()).isEqualTo(1);
-                    assertThat(call.attemptCount()).isZero();
-                });
+            assertThat(reopened.listCalls(query, 1, null).items())
+                    .singleElement()
+                    .satisfies(call -> {
+                        assertThat(call.responseModelId()).isEqualTo("gpt");
+                        assertThat(call.stepCount()).isEqualTo(1);
+                        assertThat(call.attemptCount()).isZero();
+                    });
         }
     }
 
@@ -210,26 +285,40 @@ class UsageDurabilityRegressionTest {
             field.setAccessible(true);
             var connection = (Connection) field.get(store);
             var autoCommits = new AtomicInteger();
-            var proxy = (Connection) Proxy.newProxyInstance(getClass().getClassLoader(),
-                new Class<?>[] {Connection.class}, (ignored, method, arguments) -> {
-                    if (method.getName().equals("rollback")) {
-                        throw new SQLException("Injected rollback failure");
-                    }
-                    if (method.getName().equals("setAutoCommit") && Boolean.TRUE.equals(arguments[0])) {
-                        autoCommits.incrementAndGet();
-                    }
-                    try {
-                        return method.invoke(connection, arguments);
-                    } catch (InvocationTargetException error) {
-                        throw error.getCause();
-                    }
-                });
+            var proxy = (Connection) Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Connection.class}, (ignored, method, arguments) -> {
+                        if (method.getName().equals("rollback")) {
+                            throw new SQLException("Injected rollback failure");
+                        }
+                        if (method.getName().equals("setAutoCommit") && Boolean.TRUE.equals(arguments[0])) {
+                            autoCommits.incrementAndGet();
+                        }
+                        try {
+                            return method.invoke(connection, arguments);
+                        } catch (InvocationTargetException error) {
+                            throw error.getCause();
+                        }
+                    });
             field.set(store, proxy);
-            var start = new UsageCallStart("rollback", 1, Instant.now(), "plugin", "1", "test",
-                null, "language.generateText", "LANGUAGE", "model", "provider", "openai", "gpt", false);
-            assertThatThrownBy(() -> store.writeBatch(List.of(() -> store.startCall(start),
-                    () -> { throw new IllegalStateException("Injected write failure"); })))
-                .isInstanceOf(IllegalStateException.class);
+            var start = new UsageCallStart(
+                    "rollback",
+                    1,
+                    Instant.now(),
+                    "plugin",
+                    "1",
+                    "test",
+                    null,
+                    "language.generateText",
+                    "LANGUAGE",
+                    "model",
+                    "provider",
+                    "openai",
+                    "gpt",
+                    false);
+            assertThatThrownBy(() -> store.writeBatch(List.of(() -> store.startCall(start), () -> {
+                        throw new IllegalStateException("Injected write failure");
+                    })))
+                    .isInstanceOf(IllegalStateException.class);
             assertThat(autoCommits.get()).isZero();
             assertThat(connection.isClosed()).isTrue();
             assertThat(store.getCall(start.id())).isEmpty();

@@ -12,9 +12,9 @@ import run.halo.aifoundation.rerank.RerankingModel;
  * Cross-plugin entry point for resolving AI models managed by plugin-ai-foundation.
  *
  * <p>Consumer plugins should obtain this service through
- * {@code ExtensionGetter.getEnabledExtension(AiModelService.class)} because Halo plugins use
- * isolated Spring application contexts. The {@code modelName} parameters refer to
- * {@code AiModel.metadata.name}, not the provider type or provider-side model id.
+ * {@code ExtensionGetter.getEnabledExtension(AiModelService.class)} because Halo plugins use isolated Spring
+ * application contexts. The {@code modelName} parameters refer to {@code AiModel.metadata.name}, not the provider type
+ * or provider-side model id.
  */
 public interface AiModelService extends ExtensionPoint {
 
@@ -24,8 +24,8 @@ public interface AiModelService extends ExtensionPoint {
     }
 
     /**
-     * Resolves a decision model by {@code AiModel.metadata.name}; null/blank selects the default.
-     * The default method preserves compatibility with implementations compiled before this API.
+     * Resolves a decision model by {@code AiModel.metadata.name}; null/blank selects the default. The default method
+     * preserves compatibility with implementations compiled before this API.
      */
     default Mono<DecisionModel> decisionModel(String modelName) {
         return Mono.error(new UnsupportedOperationException("Decision models are not supported"));
@@ -39,8 +39,8 @@ public interface AiModelService extends ExtensionPoint {
     Mono<LanguageModel> languageModel();
 
     /**
-     * Resolves an enabled language model by {@code AiModel.metadata.name}. When {@code modelName}
-     * is {@code null} or blank, resolves the configured default language model.
+     * Resolves an enabled language model by {@code AiModel.metadata.name}. When {@code modelName} is {@code null} or
+     * blank, resolves the configured default language model.
      *
      * @param modelName Halo model resource name, or {@code null}/blank for the default slot
      * @return a resolved language model
@@ -55,8 +55,8 @@ public interface AiModelService extends ExtensionPoint {
     Mono<EmbeddingModel> embeddingModel();
 
     /**
-     * Resolves an enabled embedding model by {@code AiModel.metadata.name}. When {@code modelName}
-     * is {@code null} or blank, resolves the configured default embedding model.
+     * Resolves an enabled embedding model by {@code AiModel.metadata.name}. When {@code modelName} is {@code null} or
+     * blank, resolves the configured default embedding model.
      *
      * @param modelName Halo model resource name, or {@code null}/blank for the default slot
      * @return a resolved embedding model
@@ -71,8 +71,8 @@ public interface AiModelService extends ExtensionPoint {
     Mono<RerankingModel> rerankingModel();
 
     /**
-     * Resolves an enabled reranking model by {@code AiModel.metadata.name}. When {@code modelName}
-     * is {@code null} or blank, resolves the configured default reranking model.
+     * Resolves an enabled reranking model by {@code AiModel.metadata.name}. When {@code modelName} is {@code null} or
+     * blank, resolves the configured default reranking model.
      *
      * @param modelName Halo model resource name, or {@code null}/blank for the default slot
      * @return a resolved reranking model
@@ -87,9 +87,8 @@ public interface AiModelService extends ExtensionPoint {
     Mono<ImageGenerationModel> imageGenerationModel();
 
     /**
-     * Resolves an enabled image generation model by {@code AiModel.metadata.name}. When
-     * {@code modelName} is {@code null} or blank, resolves the configured default image generation
-     * model.
+     * Resolves an enabled image generation model by {@code AiModel.metadata.name}. When {@code modelName} is
+     * {@code null} or blank, resolves the configured default image generation model.
      *
      * @param modelName Halo model resource name, or {@code null}/blank for the default slot
      * @return a resolved image generation model

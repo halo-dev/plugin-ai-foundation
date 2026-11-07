@@ -70,8 +70,7 @@ final class Fields {
     static final String VERBOSITY = "verbosity";
     static final String VOICE = "voice";
 
-    private Fields() {
-    }
+    private Fields() {}
 }
 
 final class Values {
@@ -87,6 +86,5 @@ final class Values {
     static final String TEXT = "text";
     static final String WAV = "wav";
 
-    private Values() {
-    }
+    private Values() {}
 }

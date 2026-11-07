@@ -1,10 +1,5 @@
 package run.halo.aifoundation.provider.protocol.chatcompletions;
 
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsModel;
-
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
-import run.halo.aifoundation.provider.protocol.chatcompletions.StandardChatCompletionsProfile;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -25,63 +20,61 @@ class ChatCompletionsStructuredOutputRequestBodyTest {
     void omittedAndFalseStrictValuesRemainDisabled() {
         var schema = openObjectSchema();
 
-        assertThat(jsonSchema(requestBody(OutputSpec.object(schema))).get("strict")).isEqualTo(false);
+        assertThat(jsonSchema(requestBody(OutputSpec.object(schema))).get("strict"))
+                .isEqualTo(false);
         assertThat(jsonSchema(requestBody(OutputSpec.builder()
-            .type(run.halo.aifoundation.schema.OutputType.OBJECT)
-            .schema(schema)
-            .strict(false)
-            .build())).get("strict")).isEqualTo(false);
+                                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                                .schema(schema)
+                                .strict(false)
+                                .build()))
+                        .get("strict"))
+                .isEqualTo(false);
     }
 
     @Test
     void strictClosedSchemaEnablesNativeStrictMode() {
         var output = OutputSpec.builder()
-            .type(run.halo.aifoundation.schema.OutputType.OBJECT)
-            .schema(closedObjectSchema())
-            .strict(true)
-            .build();
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                .schema(closedObjectSchema())
+                .strict(true)
+                .build();
 
         var responseFormat = jsonSchema(requestBody(output));
 
-        assertThat(responseFormat).containsEntry("strict", true)
-            .containsEntry("name", "structured_output")
-            .containsEntry("schema", closedObjectSchema());
+        assertThat(responseFormat)
+                .containsEntry("strict", true)
+                .containsEntry("name", "structured_output")
+                .containsEntry("schema", closedObjectSchema());
     }
 
     @Test
     void nameAndDescriptionArePreserved() {
         var output = OutputSpec.builder()
-            .type(run.halo.aifoundation.schema.OutputType.OBJECT)
-            .name("link_metadata")
-            .description("Recognized link metadata")
-            .schema(openObjectSchema())
-            .build();
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                .name("link_metadata")
+                .description("Recognized link metadata")
+                .schema(openObjectSchema())
+                .build();
 
         assertThat(jsonSchema(requestBody(output)))
-            .containsEntry("name", "link_metadata")
-            .containsEntry("description", "Recognized link metadata")
-            .containsEntry("strict", false);
+                .containsEntry("name", "link_metadata")
+                .containsEntry("description", "Recognized link metadata")
+                .containsEntry("strict", false);
     }
 
     @Test
     void pluginLinksStyleOptionalSchemaRemainsNonStrict() {
         var schema = Map.<String, Object>of(
-            "type", "object",
-            "properties", Map.of(
-                "isLinkApplication", Map.of("type", "boolean"),
-                "url", Map.of("anyOf", List.of(
-                    Map.of("type", "string"),
-                    Map.of("type", "null")
-                ))
-            ),
-            "required", List.of("isLinkApplication")
-        );
+                "type", "object",
+                "properties",
+                        Map.of(
+                                "isLinkApplication", Map.of("type", "boolean"),
+                                "url", Map.of("anyOf", List.of(Map.of("type", "string"), Map.of("type", "null")))),
+                "required", List.of("isLinkApplication"));
 
         var responseFormat = jsonSchema(requestBody(OutputSpec.object(schema)));
 
-        assertThat(responseFormat)
-            .containsEntry("strict", false)
-            .containsEntry("schema", schema);
+        assertThat(responseFormat).containsEntry("strict", false).containsEntry("schema", schema);
     }
 
     @Test
@@ -95,60 +88,64 @@ class ChatCompletionsStructuredOutputRequestBodyTest {
 
     @Test
     void rawJsonUsesJsonObjectMode() {
-        assertThat(requestBody(OutputSpec.json()).get("response_format"))
-            .isEqualTo(Map.of("type", "json_object"));
+        assertThat(requestBody(OutputSpec.json()).get("response_format")).isEqualTo(Map.of("type", "json_object"));
     }
 
     @Test
     void invalidNameFailsLocally() {
         var output = OutputSpec.builder()
-            .type(run.halo.aifoundation.schema.OutputType.OBJECT)
-            .name("invalid name")
-            .schema(openObjectSchema())
-            .build();
+                .type(run.halo.aifoundation.schema.OutputType.OBJECT)
+                .name("invalid name")
+                .schema(openObjectSchema())
+                .build();
 
         assertThatThrownBy(() -> requestBody(output))
-            .isInstanceOfSatisfying(StructuredOutputSchemaException.class,
-                error -> assertThat(error.getValidationPath()).isEqualTo("$.name"));
+                .isInstanceOfSatisfying(
+                        StructuredOutputSchemaException.class,
+                        error -> assertThat(error.getValidationPath()).isEqualTo("$.name"));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void extraBodyCannotReplaceCanonicalInvocationFields() {
         var options = ChatCompletionsOptions.builder()
-            .baseUrl("http://localhost/v1")
-            .apiKey("sk-test")
-            .model("gpt-test")
-            .extraBody(Map.of(
-                "model", "injected-model",
-                "messages", List.of(Map.of("role", "user", "content", "injected")),
-                "stream", false))
-            .build();
+                .baseUrl("http://localhost/v1")
+                .apiKey("sk-test")
+                .model("gpt-test")
+                .extraBody(Map.of(
+                        "model",
+                        "injected-model",
+                        "messages",
+                        List.of(Map.of("role", "user", "content", "injected")),
+                        "stream",
+                        false))
+                .build();
         var model = new ChatCompletionsModel(options, WebClient.builder(), chatProfile());
         var prompt = new Prompt(List.of(new UserMessage("Actual message")), options);
 
-        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
-            "requestBody", prompt, options, true);
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model, "requestBody", prompt, options, true);
 
         assertThat(body).containsEntry("model", "gpt-test").containsEntry("stream", true);
         assertThat((List<Map<String, Object>>) body.get("messages"))
-            .singleElement()
-            .satisfies(message -> assertThat(message).containsEntry("content", "Actual message"));
+                .singleElement()
+                .satisfies(message -> assertThat(message).containsEntry("content", "Actual message"));
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> requestBody(OutputSpec output) {
-        var request = GenerateTextRequest.builder().prompt("Generate output").output(output).build();
+        var request = GenerateTextRequest.builder()
+                .prompt("Generate output")
+                .output(output)
+                .build();
         var builder = ChatCompletionsOptions.builder()
-            .baseUrl("http://localhost/v1")
-            .apiKey("sk-test")
-            .model("gpt-test");
+                .baseUrl("http://localhost/v1")
+                .apiKey("sk-test")
+                .model("gpt-test");
         ChatCompletionsStructuredOutputOptions.apply(builder, request);
         var options = builder.build();
         var model = new ChatCompletionsModel(options, WebClient.builder(), chatProfile());
         var prompt = new Prompt(List.of(new UserMessage("Generate output")), options);
-        return (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
-            "requestBody", prompt, options, false);
+        return (Map<String, Object>) ReflectionTestUtils.invokeMethod(model, "requestBody", prompt, options, false);
     }
 
     @SuppressWarnings("unchecked")
@@ -159,19 +156,19 @@ class ChatCompletionsStructuredOutputRequestBodyTest {
     }
 
     private Map<String, Object> openObjectSchema() {
-        return Map.of(
-            "type", "object",
-            "properties", Map.of("title", Map.of("type", "string"))
-        );
+        return Map.of("type", "object", "properties", Map.of("title", Map.of("type", "string")));
     }
 
     private Map<String, Object> closedObjectSchema() {
         return Map.of(
-            "type", "object",
-            "additionalProperties", false,
-            "properties", Map.of("title", Map.of("type", "string")),
-            "required", List.of("title")
-        );
+                "type",
+                "object",
+                "additionalProperties",
+                false,
+                "properties",
+                Map.of("title", Map.of("type", "string")),
+                "required",
+                List.of("title"));
     }
 
     private StandardChatCompletionsProfile chatProfile() {

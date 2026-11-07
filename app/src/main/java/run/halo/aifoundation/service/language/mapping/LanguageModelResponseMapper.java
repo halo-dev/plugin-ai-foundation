@@ -46,13 +46,11 @@ public final class LanguageModelResponseMapper {
     }
 
     public boolean isFinish(String rawFinishReason) {
-        return rawFinishReason != null && !rawFinishReason.isBlank()
-            && !"null".equalsIgnoreCase(rawFinishReason);
+        return rawFinishReason != null && !rawFinishReason.isBlank() && !"null".equalsIgnoreCase(rawFinishReason);
     }
 
     public FinishReason mapFinishReason(String rawFinishReason) {
-        if (rawFinishReason == null || rawFinishReason.isBlank()
-            || "null".equalsIgnoreCase(rawFinishReason)) {
+        if (rawFinishReason == null || rawFinishReason.isBlank() || "null".equalsIgnoreCase(rawFinishReason)) {
             return FinishReason.UNKNOWN;
         }
         return switch (rawFinishReason.trim().toLowerCase()) {
@@ -78,18 +76,18 @@ public final class LanguageModelResponseMapper {
             return null;
         }
         return LanguageModelUsage.builder()
-            .inputTokens(input)
-            .outputTokens(output)
-            .reasoningTokens(usageReasoningTokens(usage))
-            .totalTokens(total)
-            .raw(usage.getNativeUsage())
-            .build();
+                .inputTokens(input)
+                .outputTokens(output)
+                .reasoningTokens(usageReasoningTokens(usage))
+                .totalTokens(total)
+                .raw(usage.getNativeUsage())
+                .build();
     }
 
     private Integer usageReasoningTokens(Usage usage) {
         if (usage instanceof ProviderUsage typed
-            && typed.reasoningTokens() != null
-            && typed.reasoningTokens() <= Integer.MAX_VALUE) {
+                && typed.reasoningTokens() != null
+                && typed.reasoningTokens() <= Integer.MAX_VALUE) {
             return typed.reasoningTokens().intValue();
         }
         return reasoningTokens(usage.getNativeUsage());
@@ -155,20 +153,20 @@ public final class LanguageModelResponseMapper {
     public GenerationRequestMetadata mapRequestMetadata(ChatResponse response) {
         var metadata = response.getMetadata();
         return GenerationRequestMetadata.builder()
-            .model(metadata != null ? metadata.getModel() : null)
-            .metadata(Map.of("providerType", providerType))
-            .build();
+                .model(metadata != null ? metadata.getModel() : null)
+                .metadata(Map.of("providerType", providerType))
+                .build();
     }
 
-    public GenerationResponseMetadata mapResponseMetadata(ChatResponse response, String text,
-        List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
+    public GenerationResponseMetadata mapResponseMetadata(
+            ChatResponse response, String text, List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
         var metadata = response.getMetadata();
         return GenerationResponseMetadata.builder()
-            .id(metadata != null ? metadata.getId() : null)
-            .model(metadata != null ? metadata.getModel() : null)
-            .messages(messageMapper.responseMessages(text, reasoning, toolCalls))
-            .metadata(mapMetadata(response))
-            .build();
+                .id(metadata != null ? metadata.getId() : null)
+                .model(metadata != null ? metadata.getModel() : null)
+                .messages(messageMapper.responseMessages(text, reasoning, toolCalls))
+                .metadata(mapMetadata(response))
+                .build();
     }
 
     public List<ReasoningPart> reasoningParts(String reasoning) {
@@ -176,9 +174,9 @@ public final class LanguageModelResponseMapper {
             return List.of();
         }
         return List.of(ReasoningPart.builder()
-            .text(reasoning)
-            .providerMetadata(Map.of())
-            .build());
+                .text(reasoning)
+                .providerMetadata(Map.of())
+                .build());
     }
 
     public Map<String, Object> sanitizedRawDiagnostic(ChatResponse response) {
@@ -201,8 +199,7 @@ public final class LanguageModelResponseMapper {
             var sanitized = new LinkedHashMap<String, Object>();
             map.forEach((key, nestedValue) -> {
                 var keyString = key != null ? key.toString() : "";
-                sanitized.put(keyString, isSensitiveKey(keyString) ? "[REDACTED]"
-                    : sanitizeValue(nestedValue));
+                sanitized.put(keyString, isSensitiveKey(keyString) ? "[REDACTED]" : sanitizeValue(nestedValue));
             });
             return sanitized;
         }
@@ -221,14 +218,14 @@ public final class LanguageModelResponseMapper {
             var code = map.get("code");
             var message = map.get("message");
             return GenerationWarning.builder()
-                .code(code != null ? code.toString() : null)
-                .message(message != null ? message.toString() : null)
-                .providerMetadata((Map<String, Object>) sanitizeValue(map))
-                .build();
+                    .code(code != null ? code.toString() : null)
+                    .message(message != null ? message.toString() : null)
+                    .providerMetadata((Map<String, Object>) sanitizeValue(map))
+                    .build();
         }
         return GenerationWarning.builder()
-            .message(value != null ? value.toString() : null)
-            .build();
+                .message(value != null ? value.toString() : null)
+                .build();
     }
 
     private Map<String, Object> responseMetadataValues(ChatResponse response) {
@@ -245,16 +242,14 @@ public final class LanguageModelResponseMapper {
         if (response.getMetadata() == null) {
             return;
         }
-        response.getMetadata().entrySet()
-            .forEach(entry -> values.put(entry.getKey(), sanitizeValue(entry.getValue())));
+        response.getMetadata().entrySet().forEach(entry -> values.put(entry.getKey(), sanitizeValue(entry.getValue())));
     }
 
     private void appendOutputMetadata(Map<String, Object> values, ChatResponse response) {
         var result = response.getResult();
         var output = result != null ? result.getOutput() : null;
         if (output != null && output.getMetadata() != null) {
-            output.getMetadata()
-                .forEach((key, value) -> values.put(key, sanitizeValue(value)));
+            output.getMetadata().forEach((key, value) -> values.put(key, sanitizeValue(value)));
         }
     }
 
@@ -282,9 +277,9 @@ public final class LanguageModelResponseMapper {
     private List<Map<String, Object>> metadataItems(Object value) {
         if (value instanceof Collection<?> collection) {
             return collection.stream()
-                .filter(Map.class::isInstance)
-                .map(item -> (Map<String, Object>) sanitizeValue(item))
-                .toList();
+                    .filter(Map.class::isInstance)
+                    .map(item -> (Map<String, Object>) sanitizeValue(item))
+                    .toList();
         }
         if (value instanceof Map<?, ?> map) {
             return List.of((Map<String, Object>) sanitizeValue(map));
@@ -311,15 +306,15 @@ public final class LanguageModelResponseMapper {
             return null;
         }
         try {
-            var completionTokenDetails = nativeUsage.getClass()
-                .getMethod("completionTokenDetails")
-                .invoke(nativeUsage);
+            var completionTokenDetails =
+                    nativeUsage.getClass().getMethod("completionTokenDetails").invoke(nativeUsage);
             if (completionTokenDetails == null) {
                 return null;
             }
-            var value = completionTokenDetails.getClass()
-                .getMethod("reasoningTokens")
-                .invoke(completionTokenDetails);
+            var value = completionTokenDetails
+                    .getClass()
+                    .getMethod("reasoningTokens")
+                    .invoke(completionTokenDetails);
             return value instanceof Integer integer ? integer : null;
         } catch (ReflectiveOperationException ignored) {
             return null;
@@ -339,9 +334,7 @@ public final class LanguageModelResponseMapper {
     }
 
     private List<GenerationWarning> mapWarningCollection(Collection<?> collection) {
-        return collection.stream()
-            .map(this::mapWarning)
-            .toList();
+        return collection.stream().map(this::mapWarning).toList();
     }
 
     private boolean isRawDiagnosticKey(String key) {
@@ -352,11 +345,11 @@ public final class LanguageModelResponseMapper {
     private boolean isSensitiveKey(String key) {
         var normalized = key.toLowerCase();
         return normalized.contains("apikey")
-            || normalized.contains("api_key")
-            || normalized.contains("authorization")
-            || normalized.contains("token")
-            || normalized.contains("secret")
-            || normalized.contains("password");
+                || normalized.contains("api_key")
+                || normalized.contains("authorization")
+                || normalized.contains("token")
+                || normalized.contains("secret")
+                || normalized.contains("password");
     }
 
     private boolean isNormalizedMetadataKey(String key) {
@@ -364,8 +357,7 @@ public final class LanguageModelResponseMapper {
             return false;
         }
         return switch (key) {
-            case "providerType", "id", "model", "reasoning", "reasoningContent",
-                "reasoning_content" -> true;
+            case "providerType", "id", "model", "reasoning", "reasoningContent", "reasoning_content" -> true;
             default -> false;
         };
     }

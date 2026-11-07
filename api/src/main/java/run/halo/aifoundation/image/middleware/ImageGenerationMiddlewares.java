@@ -12,26 +12,22 @@ import run.halo.aifoundation.image.ImageGenerationModel;
 import run.halo.aifoundation.image.ImageGenerationRequests;
 import run.halo.aifoundation.image.ImageGenerationResults;
 
-/**
- * Helpers for composing image generation middleware.
- */
+/** Helpers for composing image generation middleware. */
 public final class ImageGenerationMiddlewares {
 
-    private ImageGenerationMiddlewares() {
-    }
+    private ImageGenerationMiddlewares() {}
 
     /**
      * Wraps a model with model-level middleware.
      *
-     * <p>Middleware is applied in list order. Request-level middleware attached to
-     * {@link GenerateImageRequest} runs inside model-level middleware and also preserves list order.
+     * <p>Middleware is applied in list order. Request-level middleware attached to {@link GenerateImageRequest} runs
+     * inside model-level middleware and also preserves list order.
      *
      * @param model base model
      * @param middleware model-level middleware
      * @return wrapped image generation model
      */
-    public static ImageGenerationModel wrap(ImageGenerationModel model,
-        List<ImageGenerationMiddleware> middleware) {
+    public static ImageGenerationModel wrap(ImageGenerationModel model, List<ImageGenerationMiddleware> middleware) {
         Objects.requireNonNull(model, "model must not be null");
         var chain = List.copyOf(Objects.requireNonNull(middleware, "middleware must not be null"));
         if (chain.isEmpty()) {
@@ -50,8 +46,7 @@ public final class ImageGenerationMiddlewares {
      * @param middleware model-level middleware
      * @return wrapped image generation model
      */
-    public static ImageGenerationModel wrap(ImageGenerationModel model,
-        ImageGenerationMiddleware... middleware) {
+    public static ImageGenerationModel wrap(ImageGenerationModel model, ImageGenerationMiddleware... middleware) {
         return wrap(model, List.of(middleware));
     }
 
@@ -62,8 +57,8 @@ public final class ImageGenerationMiddlewares {
      * @param request request that may contain request-level middleware
      * @return image generation result
      */
-    public static Mono<GenerateImageResult> applyRequestMiddleware(ImageGenerationModel model,
-        GenerateImageRequest request) {
+    public static Mono<GenerateImageResult> applyRequestMiddleware(
+            ImageGenerationModel model, GenerateImageRequest request) {
         return generate(model, request, requestMiddleware(request));
     }
 
@@ -91,14 +86,13 @@ public final class ImageGenerationMiddlewares {
      * @param mapper request mapper
      * @return request mapping middleware
      */
-    public static ImageGenerationMiddleware mapRequest(
-        Function<GenerateImageRequest, GenerateImageRequest> mapper) {
+    public static ImageGenerationMiddleware mapRequest(Function<GenerateImageRequest, GenerateImageRequest> mapper) {
         Objects.requireNonNull(mapper, "mapper must not be null");
         return new ImageGenerationMiddleware() {
             @Override
             public Mono<GenerateImageRequest> transformRequest(ImageGenerationContext context) {
-                return Mono.fromSupplier(() -> Objects.requireNonNull(
-                    mapper.apply(context.request()), "mapped request must not be null"));
+                return Mono.fromSupplier(() ->
+                        Objects.requireNonNull(mapper.apply(context.request()), "mapped request must not be null"));
             }
         };
     }
@@ -109,77 +103,81 @@ public final class ImageGenerationMiddlewares {
      * @param mapper result mapper
      * @return result mapping middleware
      */
-    public static ImageGenerationMiddleware mapResult(
-        Function<GenerateImageResult, GenerateImageResult> mapper) {
+    public static ImageGenerationMiddleware mapResult(Function<GenerateImageResult, GenerateImageResult> mapper) {
         Objects.requireNonNull(mapper, "mapper must not be null");
         return new ImageGenerationMiddleware() {
             @Override
-            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context,
-                GenerateImageNext next) {
+            public Mono<GenerateImageResult> wrapGenerate(ImageGenerationContext context, GenerateImageNext next) {
                 return next.generate(context.request())
-                    .map(result -> Objects.requireNonNull(mapper.apply(result),
-                        "mapped result must not be null"));
+                        .map(result -> Objects.requireNonNull(mapper.apply(result), "mapped result must not be null"));
             }
         };
     }
 
-    private static Mono<GenerateImageResult> generate(ImageGenerationModel model,
-        GenerateImageRequest request, List<ImageGenerationMiddleware> middleware) {
+    private static Mono<GenerateImageResult> generate(
+            ImageGenerationModel model, GenerateImageRequest request, List<ImageGenerationMiddleware> middleware) {
         Objects.requireNonNull(model, "model must not be null");
-        var effectiveRequest = request != null ? request : GenerateImageRequest.builder().build();
+        var effectiveRequest =
+                request != null ? request : GenerateImageRequest.builder().build();
         return generateAt(model, effectiveRequest, middleware, 0)
-            .switchIfEmpty(Mono.error(() -> new ImageGenerationException(
-                "Image generation returned no images", modelName(model), providerName(model),
-                providerType(model))))
-            .map(result -> ImageGenerationResults.requireImages(result, modelName(model),
-                providerName(model), providerType(model)));
+                .switchIfEmpty(Mono.error(() -> new ImageGenerationException(
+                        "Image generation returned no images",
+                        modelName(model),
+                        providerName(model),
+                        providerType(model))))
+                .map(result -> ImageGenerationResults.requireImages(
+                        result, modelName(model), providerName(model), providerType(model)));
     }
 
-    private static Mono<GenerateImageResult> generateAt(ImageGenerationModel model,
-        GenerateImageRequest request, List<ImageGenerationMiddleware> middleware, int index) {
+    private static Mono<GenerateImageResult> generateAt(
+            ImageGenerationModel model,
+            GenerateImageRequest request,
+            List<ImageGenerationMiddleware> middleware,
+            int index) {
         return Mono.defer(() -> {
             ImageGenerationRequests.requireValidShape(request);
             if (index >= middleware.size()) {
                 return model.generateImage(ImageGenerationRequests.withoutMiddleware(request));
             }
             var current = middleware.get(index);
-            return current.wrapGenerate(new ImageGenerationContext(model, request),
-                nextRequest -> generateAt(model, nextRequest, middleware, index + 1));
+            return current.wrapGenerate(
+                    new ImageGenerationContext(model, request),
+                    nextRequest -> generateAt(model, nextRequest, middleware, index + 1));
         });
     }
 
     private static List<ImageGenerationMiddleware> requestMiddleware(GenerateImageRequest request) {
-        if (request == null || request.getMiddleware() == null || request.getMiddleware().isEmpty()) {
+        if (request == null
+                || request.getMiddleware() == null
+                || request.getMiddleware().isEmpty()) {
             return List.of();
         }
         return List.copyOf(request.getMiddleware());
     }
 
-    private static GenerateImageRequest mergeDefaults(GenerateImageRequest request,
-        GenerateImageRequest defaults) {
+    private static GenerateImageRequest mergeDefaults(GenerateImageRequest request, GenerateImageRequest defaults) {
         return ImageGenerationRequests.builderFrom(request)
-            .n(request.getN() != null ? request.getN() : defaults.getN())
-            .size(request.getSize() != null ? request.getSize() : defaults.getSize())
-            .aspectRatio(request.getAspectRatio() != null
-                ? request.getAspectRatio()
-                : defaults.getAspectRatio())
-            .negativePrompt(request.getNegativePrompt() != null
-                ? request.getNegativePrompt()
-                : defaults.getNegativePrompt())
-            .seed(request.getSeed() != null ? request.getSeed() : defaults.getSeed())
-            .responseFormat(request.getResponseFormat() != null
-                ? request.getResponseFormat()
-                : defaults.getResponseFormat())
-            .headers(request.getHeaders() != null ? request.getHeaders() : defaults.getHeaders())
-            .maxRetries(request.getMaxRetries() != null
-                ? request.getMaxRetries()
-                : defaults.getMaxRetries())
-            .maxParallelCalls(request.getMaxParallelCalls() != null
-                ? request.getMaxParallelCalls()
-                : defaults.getMaxParallelCalls())
-            .metadata(request.getMetadata() != null ? request.getMetadata() : defaults.getMetadata())
-            .context(request.getContext() != null ? request.getContext() : defaults.getContext())
-            .build();
+                .n(request.getN() != null ? request.getN() : defaults.getN())
+                .size(request.getSize() != null ? request.getSize() : defaults.getSize())
+                .aspectRatio(request.getAspectRatio() != null ? request.getAspectRatio() : defaults.getAspectRatio())
+                .negativePrompt(
+                        request.getNegativePrompt() != null
+                                ? request.getNegativePrompt()
+                                : defaults.getNegativePrompt())
+                .seed(request.getSeed() != null ? request.getSeed() : defaults.getSeed())
+                .responseFormat(
+                        request.getResponseFormat() != null
+                                ? request.getResponseFormat()
+                                : defaults.getResponseFormat())
+                .headers(request.getHeaders() != null ? request.getHeaders() : defaults.getHeaders())
+                .maxRetries(request.getMaxRetries() != null ? request.getMaxRetries() : defaults.getMaxRetries())
+                .maxParallelCalls(
+                        request.getMaxParallelCalls() != null
+                                ? request.getMaxParallelCalls()
+                                : defaults.getMaxParallelCalls())
+                .metadata(request.getMetadata() != null ? request.getMetadata() : defaults.getMetadata())
+                .context(request.getContext() != null ? request.getContext() : defaults.getContext())
+                .build();
     }
 
     private static String modelName(ImageGenerationModel model) {
@@ -198,8 +196,7 @@ public final class ImageGenerationMiddlewares {
         private final ImageGenerationModel delegate;
         private final List<ImageGenerationMiddleware> middleware;
 
-        private WrappedImageGenerationModel(ImageGenerationModel delegate,
-            List<ImageGenerationMiddleware> middleware) {
+        private WrappedImageGenerationModel(ImageGenerationModel delegate, List<ImageGenerationMiddleware> middleware) {
             this.delegate = delegate;
             this.middleware = middleware;
         }

@@ -25,18 +25,13 @@ public final class UIMessageStreamOptions<M> {
     private Supplier<M> metadataSupplier;
     private UIMessageMetadataMerger<M> metadataMerger = UIMessageMetadataMerger.defaults();
     private Function<Throwable, String> errorHandler = error -> DEFAULT_ERROR_TEXT;
-    private Consumer<Throwable> readErrorHandler = error -> {
-    };
+    private Consumer<Throwable> readErrorHandler = error -> {};
     private CancellationToken cancellationToken;
     private boolean terminateOnError;
-    private Consumer<UIMessageStreamFinish<M>> finishHandler = finish -> {
-    };
-    private Consumer<UIMessageStreamWriter> execute = writer -> {
-    };
+    private Consumer<UIMessageStreamFinish<M>> finishHandler = finish -> {};
+    private Consumer<UIMessageStreamWriter> execute = writer -> {};
 
-    /**
-     * Creates options with null metadata as the default.
-     */
+    /** Creates options with null metadata as the default. */
     public UIMessageStreamOptions() {
         this.metadataSupplier = () -> null;
     }
@@ -47,8 +42,7 @@ public final class UIMessageStreamOptions<M> {
      * @return default map-metadata options
      */
     public static UIMessageStreamOptions<Map<String, Object>> defaults() {
-        return new UIMessageStreamOptions<Map<String, Object>>()
-            .metadataSupplier(Map::of);
+        return new UIMessageStreamOptions<Map<String, Object>>().metadataSupplier(Map::of);
     }
 
     /**
@@ -81,8 +75,7 @@ public final class UIMessageStreamOptions<M> {
      * @return this options object
      */
     public UIMessageStreamOptions<M> originalMessages(List<UIMessage<M>> messages) {
-        this.originalMessages = List.copyOf(Objects.requireNonNull(messages,
-            "messages must not be null"));
+        this.originalMessages = List.copyOf(Objects.requireNonNull(messages, "messages must not be null"));
         return this;
     }
 
@@ -93,8 +86,7 @@ public final class UIMessageStreamOptions<M> {
      * @return this options object
      */
     public UIMessageStreamOptions<M> generateMessageId(Supplier<String> generator) {
-        this.messageIdGenerator = Objects.requireNonNull(generator,
-            "generator must not be null");
+        this.messageIdGenerator = Objects.requireNonNull(generator, "generator must not be null");
         return this;
     }
 
@@ -127,8 +119,7 @@ public final class UIMessageStreamOptions<M> {
      * @return this options object
      */
     public UIMessageStreamOptions<M> onError(Function<Throwable, String> errorHandler) {
-        this.errorHandler = Objects.requireNonNull(errorHandler,
-            "errorHandler must not be null");
+        this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler must not be null");
         return this;
     }
 
@@ -139,8 +130,7 @@ public final class UIMessageStreamOptions<M> {
      * @return this options object
      */
     public UIMessageStreamOptions<M> onReadError(Consumer<Throwable> readErrorHandler) {
-        this.readErrorHandler = Objects.requireNonNull(readErrorHandler,
-            "readErrorHandler must not be null");
+        this.readErrorHandler = Objects.requireNonNull(readErrorHandler, "readErrorHandler must not be null");
         return this;
     }
 
@@ -151,8 +141,7 @@ public final class UIMessageStreamOptions<M> {
      * @return this options object
      */
     public UIMessageStreamOptions<M> cancellationToken(CancellationToken cancellationToken) {
-        this.cancellationToken = Objects.requireNonNull(cancellationToken,
-            "cancellationToken must not be null");
+        this.cancellationToken = Objects.requireNonNull(cancellationToken, "cancellationToken must not be null");
         return this;
     }
 
@@ -174,8 +163,7 @@ public final class UIMessageStreamOptions<M> {
      * @return this options object
      */
     public UIMessageStreamOptions<M> onFinish(Consumer<UIMessageStreamFinish<M>> finishHandler) {
-        this.finishHandler = Objects.requireNonNull(finishHandler,
-            "finishHandler must not be null");
+        this.finishHandler = Objects.requireNonNull(finishHandler, "finishHandler must not be null");
         return this;
     }
 

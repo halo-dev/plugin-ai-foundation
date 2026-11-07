@@ -5,8 +5,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.ApplicationContext;
@@ -21,18 +21,15 @@ class ProviderClientCacheTest {
         var applicationContext = mock(ApplicationContext.class);
         var providerType = mock(AiProviderType.class);
         var provider = provider();
-        var chat = new ProviderModelRef("same-model", ModelType.LANGUAGE,
-            AdapterType.OPENAI_CHAT);
-        var messages = new ProviderModelRef("same-model", ModelType.LANGUAGE,
-            AdapterType.ANTHROPIC_MESSAGES);
+        var chat = new ProviderModelRef("same-model", ModelType.LANGUAGE, AdapterType.OPENAI_CHAT);
+        var messages = new ProviderModelRef("same-model", ModelType.LANGUAGE, AdapterType.ANTHROPIC_MESSAGES);
         var chatClient = mock(ChatModel.class);
         var messagesClient = mock(ChatModel.class);
 
-        when(applicationContext.getBeansOfType(AiProviderType.class))
-            .thenReturn(Map.of("testProvider", providerType));
+        when(applicationContext.getBeansOfType(AiProviderType.class)).thenReturn(Map.of("testProvider", providerType));
         when(providerType.getProviderType()).thenReturn("test");
         when(providerType.getSupportedAdapterTypes())
-            .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.ANTHROPIC_MESSAGES));
+                .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.ANTHROPIC_MESSAGES));
         when(providerType.buildChatModel(provider, "secret", chat)).thenReturn(chatClient);
         when(providerType.buildChatModel(provider, "secret", messages)).thenReturn(messagesClient);
 

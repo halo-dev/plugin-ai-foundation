@@ -49,17 +49,20 @@ public class AiProviderReconciler implements Reconciler<Reconciler.Request> {
 
     private void deleteAssociatedModels(String providerName) {
         var listOptions = ListOptions.builder()
-            .fieldQuery(Queries.equal("spec.providerName", providerName))
-            .build();
+                .fieldQuery(Queries.equal("spec.providerName", providerName))
+                .build();
         var models = client.listAll(AiModel.class, listOptions, Sort.unsorted());
         for (AiModel model : models) {
             try {
                 client.delete(model);
-                log.debug("Deleted model {} for provider {}",
-                    model.getMetadata().getName(), providerName);
+                log.debug(
+                        "Deleted model {} for provider {}", model.getMetadata().getName(), providerName);
             } catch (Exception e) {
-                log.error("Failed to delete model {} for provider {}: {}",
-                    model.getMetadata().getName(), providerName, e.getMessage());
+                log.error(
+                        "Failed to delete model {} for provider {}: {}",
+                        model.getMetadata().getName(),
+                        providerName,
+                        e.getMessage());
                 throw e;
             }
         }

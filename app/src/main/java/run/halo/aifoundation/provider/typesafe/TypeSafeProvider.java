@@ -27,12 +27,17 @@ public class TypeSafeProvider extends AbstractAiProviderType {
     @Override
     public DecisionCapability decisionCapabilities() {
         return DecisionCapability.builder()
-            .questionTypes(List.of(DecisionQuestionType.YES_NO, DecisionQuestionType.CHOICE,
-                DecisionQuestionType.SCORE))
-            .structuredState(true).maxChoiceOptions(255).maxScoreLevels(10)
-            .choiceProbabilities(true).choiceConfidence(true)
-            .scoreProbabilities(true).scoreConfidence(true).scoreLegend(true)
-            .build();
+                .questionTypes(
+                        List.of(DecisionQuestionType.YES_NO, DecisionQuestionType.CHOICE, DecisionQuestionType.SCORE))
+                .structuredState(true)
+                .maxChoiceOptions(255)
+                .maxScoreLevels(10)
+                .choiceProbabilities(true)
+                .choiceConfidence(true)
+                .scoreProbabilities(true)
+                .scoreConfidence(true)
+                .scoreLegend(true)
+                .build();
     }
 
     @Override
@@ -96,12 +101,11 @@ public class TypeSafeProvider extends AbstractAiProviderType {
     }
 
     @Override
-    public ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    public ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey, ProviderModelRef model) {
         var resolved = resolveModel(model);
         validateNativeModelOptions(resolved);
-        return new TypeSafeDecisionClient(resolveBaseUrl(provider), apiKey, resolved.modelId(),
-            discoveryWebClientBuilder(provider));
+        return new TypeSafeDecisionClient(
+                resolveBaseUrl(provider), apiKey, resolved.modelId(), discoveryWebClientBuilder(provider));
     }
 
     @Override
@@ -113,31 +117,42 @@ public class TypeSafeProvider extends AbstractAiProviderType {
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
-        var endpoint = ProviderUris.withoutTrailingPath(resolveBaseUrl(provider), "/v1")
-            + "/v1/models";
+        var endpoint = ProviderUris.withoutTrailingPath(resolveBaseUrl(provider), "/v1") + "/v1/models";
         var diagnostics = ProviderDiagnostics.create(getProviderType(), "models");
-        return discoveryWebClientBuilder(provider).build().get().uri(endpoint)
-            .headers(headers -> headers.setBearerAuth(apiKey))
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response, getProviderType(),
-                        "models", diagnostics);
-                }
-                return response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() { });
-            })
-            .switchIfEmpty(Mono.error(new IllegalStateException("Empty TypeSafe model catalog")))
-            .map(body -> {
-                if (!(body.get("models") instanceof List<?> models)) {
-                    throw new IllegalStateException("TypeSafe model catalog is missing models");
-                }
-                return models.stream().map(entry -> {
-                    if (!(entry instanceof Map<?, ?> item)
-                        || !(item.get("name") instanceof String name) || name.isBlank()) {
-                        throw new IllegalStateException("Invalid TypeSafe model catalog entry");
+        return discoveryWebClientBuilder(provider)
+                .build()
+                .get()
+                .uri(endpoint)
+                .headers(headers -> headers.setBearerAuth(apiKey))
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(
+                                response, getProviderType(), "models", diagnostics);
                     }
-                    return new DiscoveredModel(name, name, ModelType.DECISION, Set.of(),
-                        AdapterType.TYPESAFE_SYSTEM_ONE, DiscoverySource.REMOTE, DiscoveryConfidence.HIGH);
-                }).toList();
-            });
+                    return response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {});
+                })
+                .switchIfEmpty(Mono.error(new IllegalStateException("Empty TypeSafe model catalog")))
+                .map(body -> {
+                    if (!(body.get("models") instanceof List<?> models)) {
+                        throw new IllegalStateException("TypeSafe model catalog is missing models");
+                    }
+                    return models.stream()
+                            .map(entry -> {
+                                if (!(entry instanceof Map<?, ?> item)
+                                        || !(item.get("name") instanceof String name)
+                                        || name.isBlank()) {
+                                    throw new IllegalStateException("Invalid TypeSafe model catalog entry");
+                                }
+                                return new DiscoveredModel(
+                                        name,
+                                        name,
+                                        ModelType.DECISION,
+                                        Set.of(),
+                                        AdapterType.TYPESAFE_SYSTEM_ONE,
+                                        DiscoverySource.REMOTE,
+                                        DiscoveryConfidence.HIGH);
+                            })
+                            .toList();
+                });
     }
 }

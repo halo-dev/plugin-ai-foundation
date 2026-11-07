@@ -41,16 +41,17 @@ public final class LanguageModelMessageMapper {
         return switch (message.getRole()) {
             case SYSTEM -> new SystemMessage(textContent(message));
             case ASSISTANT -> assistantMessage(message);
-            case USER -> UserMessage.builder()
-                .text(textContent(message))
-                .media(mediaContent(message))
-                .build();
+            case USER ->
+                UserMessage.builder()
+                        .text(textContent(message))
+                        .media(mediaContent(message))
+                        .build();
             case TOOL -> toolResponseMessage(message);
         };
     }
 
-    public ToolResponseMessage toolResponseMessage(List<ToolCall> toolCalls,
-        List<ToolResult> results, List<ToolError> errors) {
+    public ToolResponseMessage toolResponseMessage(
+            List<ToolCall> toolCalls, List<ToolResult> results, List<ToolError> errors) {
         var resultsByCallId = indexByToolCallId(results, ToolResult::getToolCallId, "result");
         var errorsByCallId = indexByToolCallId(errors, ToolError::getToolCallId, "error");
         var responses = new ArrayList<ToolResponseMessage.ToolResponse>();
@@ -59,85 +60,79 @@ public final class LanguageModelMessageMapper {
             var result = resultsByCallId.remove(callId);
             var error = errorsByCallId.remove(callId);
             if ((result == null) == (error == null)) {
-                throw new IllegalStateException(
-                    "Expected exactly one tool response for tool call: " + callId);
+                throw new IllegalStateException("Expected exactly one tool response for tool call: " + callId);
             }
-            responses.add(result != null
-                ? new ToolResponseMessage.ToolResponse(callId, result.getToolName(),
-                    writeJson(result.getResult()))
-                : new ToolResponseMessage.ToolResponse(callId, error.getToolName(),
-                    error.getErrorText()));
+            responses.add(
+                    result != null
+                            ? new ToolResponseMessage.ToolResponse(
+                                    callId, result.getToolName(), writeJson(result.getResult()))
+                            : new ToolResponseMessage.ToolResponse(callId, error.getToolName(), error.getErrorText()));
         }
         if (!resultsByCallId.isEmpty() || !errorsByCallId.isEmpty()) {
-            throw new IllegalStateException(
-                "Tool responses contain ids without matching assistant tool calls");
+            throw new IllegalStateException("Tool responses contain ids without matching assistant tool calls");
         }
         return ToolResponseMessage.builder().responses(responses).build();
     }
 
-    private <T> Map<String, T> indexByToolCallId(List<T> values,
-        Function<T, String> idExtractor, String responseType) {
+    private <T> Map<String, T> indexByToolCallId(List<T> values, Function<T, String> idExtractor, String responseType) {
         var valuesByCallId = new LinkedHashMap<String, T>();
         for (var value : nullSafe(values)) {
             var callId = idExtractor.apply(value);
             if (valuesByCallId.putIfAbsent(callId, value) != null) {
-                throw new IllegalStateException(
-                    "Duplicate tool " + responseType + " for tool call: " + callId);
+                throw new IllegalStateException("Duplicate tool " + responseType + " for tool call: " + callId);
             }
         }
         return valuesByCallId;
     }
 
-    public List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
-        List<ToolCall> toolCalls) {
+    public List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning, List<ToolCall> toolCalls) {
         return responseMessages(text, reasoning, toolCalls, List.of());
     }
 
-    public List<ModelMessage> responseMessages(String text, List<ReasoningPart> reasoning,
-        List<ToolCall> toolCalls, List<ToolApprovalRequest> approvals) {
+    public List<ModelMessage> responseMessages(
+            String text, List<ReasoningPart> reasoning, List<ToolCall> toolCalls, List<ToolApprovalRequest> approvals) {
         var parts = new ArrayList<ModelMessagePart>();
         nullSafe(reasoning).stream().map(ModelMessagePart::reasoning).forEach(parts::add);
         if (hasContent(text)) {
             parts.add(ModelMessagePart.text(text));
         }
         nullSafe(toolCalls).stream().map(ModelMessagePart::toolCall).forEach(parts::add);
-        nullSafe(approvals).stream()
-            .map(ModelMessagePart::toolApprovalRequest)
-            .forEach(parts::add);
+        nullSafe(approvals).stream().map(ModelMessagePart::toolApprovalRequest).forEach(parts::add);
         return parts.isEmpty() ? List.of() : List.of(ModelMessage.assistant(parts));
     }
 
     public boolean hasProviderToolResponse(ModelMessage message) {
-        return message != null && message.getContent() != null
-            && message.getContent().stream().anyMatch(part -> PartType.isToolResponse(part.getType()));
+        return message != null
+                && message.getContent() != null
+                && message.getContent().stream().anyMatch(part -> PartType.isToolResponse(part.getType()));
     }
 
     private String textContent(ModelMessage message) {
         return message.getContent().stream()
-            .filter(part -> PartType.isText(part.getType()))
-            .map(ModelMessagePart::getText)
-            .reduce("", String::concat);
+                .filter(part -> PartType.isText(part.getType()))
+                .map(ModelMessagePart::getText)
+                .reduce("", String::concat);
     }
 
     private AssistantMessage assistantMessage(ModelMessage message) {
         var toolCalls = message.getContent().stream()
-            .filter(part -> PartType.isToolCall(part.getType()))
-            .map(part -> new AssistantMessage.ToolCall(part.getToolCallId(), "function",
-                part.getToolName(), writeJson(part.getInput())))
-            .toList();
+                .filter(part -> PartType.isToolCall(part.getType()))
+                .map(part -> new AssistantMessage.ToolCall(
+                        part.getToolCallId(), "function", part.getToolName(), writeJson(part.getInput())))
+                .toList();
         return AssistantMessage.builder()
-            .content(textContent(message))
-            .properties(assistantProperties(message))
-            .toolCalls(toolCalls)
-            .media(mediaContent(message))
-            .build();
+                .content(textContent(message))
+                .properties(assistantProperties(message))
+                .toolCalls(toolCalls)
+                .media(mediaContent(message))
+                .build();
     }
 
     private List<Media> mediaContent(ModelMessage message) {
         return message.getContent().stream()
-            .filter(part -> PartType.isImage(part.getType()) || PartType.isFile(part.getType()))
-            .map(this::mediaContent)
-            .toList();
+                .filter(part -> PartType.isImage(part.getType()) || PartType.isFile(part.getType()))
+                .map(this::mediaContent)
+                .toList();
     }
 
     private Media mediaContent(ModelMessagePart part) {
@@ -145,8 +140,7 @@ public final class LanguageModelMessageMapper {
         if (content == null) {
             throw new InvalidMediaContentException("media content must not be null");
         }
-        var builder = Media.builder()
-            .mimeType(mediaType(content));
+        var builder = Media.builder().mimeType(mediaType(content));
         if (hasText(content.getFilename())) {
             builder.name(content.getFilename());
         }
@@ -155,8 +149,12 @@ public final class LanguageModelMessageMapper {
         } else if (content.isUrl()) {
             builder.data(mediaUri(content));
         } else {
-            throw new InvalidMediaContentException("media content must set exactly one of url or data",
-                content.getMediaType(), content.getFilename(), null, null);
+            throw new InvalidMediaContentException(
+                    "media content must set exactly one of url or data",
+                    content.getMediaType(),
+                    content.getFilename(),
+                    null,
+                    null);
         }
         return builder.build();
     }
@@ -165,8 +163,13 @@ public final class LanguageModelMessageMapper {
         try {
             return MimeTypeUtils.parseMimeType(content.getMediaType());
         } catch (IllegalArgumentException e) {
-            throw new InvalidMediaContentException("media type must be a valid MIME type",
-                content.getMediaType(), content.getFilename(), null, null, e);
+            throw new InvalidMediaContentException(
+                    "media type must be a valid MIME type",
+                    content.getMediaType(),
+                    content.getFilename(),
+                    null,
+                    null,
+                    e);
         }
     }
 
@@ -174,8 +177,8 @@ public final class LanguageModelMessageMapper {
         try {
             return URI.create(content.getUrl());
         } catch (IllegalArgumentException e) {
-            throw new InvalidMediaContentException("media URL must be a valid URI",
-                content.getMediaType(), content.getFilename(), null, null, e);
+            throw new InvalidMediaContentException(
+                    "media URL must be a valid URI", content.getMediaType(), content.getFilename(), null, null, e);
         }
     }
 
@@ -186,39 +189,39 @@ public final class LanguageModelMessageMapper {
             properties.put("reasoningContent", reasoningContent);
         }
         message.getContent().stream()
-            .filter(part -> PartType.isReasoning(part.getType()))
-            .forEach(part -> {
-                if (hasText(part.getSignature())) {
-                    properties.put("reasoningSignature", part.getSignature());
-                }
-                if (part.getProviderMetadata() != null
-                    && !part.getProviderMetadata().isEmpty()) {
-                    properties.put("reasoningProviderMetadata", part.getProviderMetadata());
-                }
-            });
+                .filter(part -> PartType.isReasoning(part.getType()))
+                .forEach(part -> {
+                    if (hasText(part.getSignature())) {
+                        properties.put("reasoningSignature", part.getSignature());
+                    }
+                    if (part.getProviderMetadata() != null
+                            && !part.getProviderMetadata().isEmpty()) {
+                        properties.put("reasoningProviderMetadata", part.getProviderMetadata());
+                    }
+                });
         return properties.isEmpty() ? Map.of() : Map.copyOf(properties);
     }
 
     private ToolResponseMessage toolResponseMessage(ModelMessage message) {
         var responses = message.getContent().stream()
-            .filter(part -> PartType.isToolResponse(part.getType()))
-            .map(part -> new ToolResponseMessage.ToolResponse(part.getToolCallId(),
-                part.getToolName(), PartType.isToolError(part.getType())
-                ? part.getErrorText()
-                : writeJson(part.getResult())))
-            .toList();
+                .filter(part -> PartType.isToolResponse(part.getType()))
+                .map(part -> new ToolResponseMessage.ToolResponse(
+                        part.getToolCallId(),
+                        part.getToolName(),
+                        PartType.isToolError(part.getType()) ? part.getErrorText() : writeJson(part.getResult())))
+                .toList();
         return ToolResponseMessage.builder().responses(responses).build();
     }
 
     private String reasoningContent(List<ModelMessagePart> parts) {
         return parts.stream()
-            .filter(part -> PartType.isReasoning(part.getType()))
-            .map(part -> {
-                var metadataReasoning = reasoningContent(part.getProviderMetadata());
-                return hasContent(metadataReasoning) ? metadataReasoning : part.getText();
-            })
-            .filter(LanguageModelMessageMapper::hasContent)
-            .collect(Collectors.joining());
+                .filter(part -> PartType.isReasoning(part.getType()))
+                .map(part -> {
+                    var metadataReasoning = reasoningContent(part.getProviderMetadata());
+                    return hasContent(metadataReasoning) ? metadataReasoning : part.getText();
+                })
+                .filter(LanguageModelMessageMapper::hasContent)
+                .collect(Collectors.joining());
     }
 
     private String reasoningContent(Map<String, Object> metadata) {

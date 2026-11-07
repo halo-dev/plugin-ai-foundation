@@ -3,8 +3,7 @@ package run.halo.aifoundation.provider.ollama;
 /** Canonical Ollama native and OpenAI-compatible endpoint resolution. */
 final class OllamaEndpoints {
 
-    private OllamaEndpoints() {
-    }
+    private OllamaEndpoints() {}
 
     static String nativeUrl(String baseUrl, String resource) {
         var base = trim(baseUrl);

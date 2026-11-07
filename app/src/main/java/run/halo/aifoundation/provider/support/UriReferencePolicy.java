@@ -7,9 +7,9 @@ import java.util.Locale;
 /**
  * Classifies URI-like references by their leading protocol marker.
  *
- * <p>The policy deliberately does not parse or validate a URI. Provider protocols sometimes use
- * opaque references such as {@code data:} and {@code ms://}; validation remains the responsibility
- * of the provider that owns the wire contract.
+ * <p>The policy deliberately does not parse or validate a URI. Provider protocols sometimes use opaque references such
+ * as {@code data:} and {@code ms://}; validation remains the responsibility of the provider that owns the wire
+ * contract.
  */
 public final class UriReferencePolicy {
 
@@ -27,9 +27,9 @@ public final class UriReferencePolicy {
             throw new IllegalArgumentException("At least one URI reference prefix is required");
         }
         var normalized = Arrays.stream(prefixes)
-            .map(UriReferencePolicy::normalizePrefix)
-            .distinct()
-            .toList();
+                .map(UriReferencePolicy::normalizePrefix)
+                .distinct()
+                .toList();
         return new UriReferencePolicy(normalized);
     }
 

@@ -43,18 +43,17 @@ import run.halo.aifoundation.service.language.stream.ProviderStreamingChatModel;
 public final class OllamaChatModel implements ChatModel, ProviderStreamingChatModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final Set<String> TOP_LEVEL_MODEL_NATIVE_OPTIONS = Set.of(
-        "options", "keep_alive", "think", "logprobs", "top_logprobs");
-    private static final Set<String> NON_RUNTIME_OPTION_FIELDS = Set.of(
-        "model", "format", "keep_alive", "truncate");
+    private static final Set<String> TOP_LEVEL_MODEL_NATIVE_OPTIONS =
+            Set.of("options", "keep_alive", "think", "logprobs", "top_logprobs");
+    private static final Set<String> NON_RUNTIME_OPTION_FIELDS = Set.of("model", "format", "keep_alive", "truncate");
 
     private final String baseUrl;
     private final String apiKey;
     private final OllamaChatOptions defaultOptions;
     private final WebClient webClient;
 
-    public OllamaChatModel(String baseUrl, String apiKey, OllamaChatOptions defaultOptions,
-        WebClient.Builder webClientBuilder) {
+    public OllamaChatModel(
+            String baseUrl, String apiKey, OllamaChatOptions defaultOptions, WebClient.Builder webClientBuilder) {
         this.baseUrl = java.util.Objects.requireNonNull(baseUrl);
         this.apiKey = apiKey;
         this.defaultOptions = java.util.Objects.requireNonNull(defaultOptions);
@@ -73,26 +72,26 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         var diagnostics = ProviderDiagnostics.create("ollama", "ollama-chat");
         var url = OllamaEndpoints.nativeUrl(baseUrl, "/chat");
         diagnostics.request(url, body, false);
-        return webClient.method(HttpMethod.POST)
-            .uri(URI.create(url))
-            .headers(headers -> applyHeaders(headers, runtime))
-            .bodyValue(body)
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response, "ollama", "chat",
-                        diagnostics);
-                }
-                return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> response(data, diagnostics.invocationId()));
-            })
-            .block(Duration.ofSeconds(60));
+        return webClient
+                .method(HttpMethod.POST)
+                .uri(URI.create(url))
+                .headers(headers -> applyHeaders(headers, runtime))
+                .bodyValue(body)
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(response, "ollama", "chat", diagnostics);
+                    }
+                    return ProviderHttpResponseSupport.body(response, diagnostics)
+                            .map(data -> response(data, diagnostics.invocationId()));
+                })
+                .block(Duration.ofSeconds(60));
     }
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
         return streamParts(prompt)
-            .ofType(ProviderStreamPart.ChatResponsePart.class)
-            .map(ProviderStreamPart.ChatResponsePart::response);
+                .ofType(ProviderStreamPart.ChatResponsePart.class)
+                .map(ProviderStreamPart.ChatResponsePart::response);
     }
 
     @Override
@@ -104,22 +103,23 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             var url = OllamaEndpoints.nativeUrl(baseUrl, "/chat");
             diagnostics.request(url, body, true);
             var state = new StreamState(diagnostics.invocationId());
-            return webClient.method(HttpMethod.POST)
-                .uri(URI.create(url))
-                .headers(headers -> applyHeaders(headers, runtime))
-                .bodyValue(body)
-                .exchangeToFlux(response -> {
-                    if (!response.statusCode().is2xxSuccessful()) {
-                        return ProviderHttpResponseSupport.errorFlux(response, "ollama",
-                            "chat-stream", diagnostics);
-                    }
-                    diagnostics.responseStatus(response.statusCode().value());
-                    return response.bodyToFlux(String.class)
-                        .filter(OllamaChatModel::hasContent)
-                        .doOnNext(line -> diagnostics.streamEvent(
-                            new ProviderSseEvent("ndjson", line, null, null)))
-                        .concatMapIterable(state::accept);
-                });
+            return webClient
+                    .method(HttpMethod.POST)
+                    .uri(URI.create(url))
+                    .headers(headers -> applyHeaders(headers, runtime))
+                    .bodyValue(body)
+                    .exchangeToFlux(response -> {
+                        if (!response.statusCode().is2xxSuccessful()) {
+                            return ProviderHttpResponseSupport.errorFlux(
+                                    response, "ollama", "chat-stream", diagnostics);
+                        }
+                        diagnostics.responseStatus(response.statusCode().value());
+                        return response.bodyToFlux(String.class)
+                                .filter(OllamaChatModel::hasContent)
+                                .doOnNext(line ->
+                                        diagnostics.streamEvent(new ProviderSseEvent("ndjson", line, null, null)))
+                                .concatMapIterable(state::accept);
+                    });
         });
     }
 
@@ -134,22 +134,25 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         }
         var merged = builder.build();
         ToolCallingChatOptions.validateToolCallbacks(merged.getToolCallbacks());
-        return new RuntimeOptions(merged, merged.nativeOptions(),
-            contextMap(merged, OllamaChatOptionsSupport.MODEL_NATIVE_OPTIONS_CONTEXT_KEY),
-            stringMap(merged, OllamaChatOptionsSupport.REQUEST_HEADERS_CONTEXT_KEY));
+        return new RuntimeOptions(
+                merged,
+                merged.nativeOptions(),
+                contextMap(merged, OllamaChatOptionsSupport.MODEL_NATIVE_OPTIONS_CONTEXT_KEY),
+                stringMap(merged, OllamaChatOptionsSupport.REQUEST_HEADERS_CONTEXT_KEY));
     }
 
-    private Map<String, Object> requestBody(List<Message> messages, RuntimeOptions runtime,
-        boolean stream) {
+    private Map<String, Object> requestBody(List<Message> messages, RuntimeOptions runtime, boolean stream) {
         var modelNativeOptions = runtime.modelNativeOptions();
         rejectUnknownModelNativeOptions(modelNativeOptions);
         var body = new LinkedHashMap<String, Object>();
         body.put("model", runtime.options().getModel());
-        body.put("messages", messages.stream()
-            .flatMap(message -> messageBodies(message).stream())
-            .toList());
+        body.put(
+                "messages",
+                messages.stream()
+                        .flatMap(message -> messageBodies(message).stream())
+                        .toList());
         if (runtime.options().getToolCallbacks() != null
-            && !runtime.options().getToolCallbacks().isEmpty()) {
+                && !runtime.options().getToolCallbacks().isEmpty()) {
             body.put("tools", tools(runtime.options().getToolCallbacks()));
         }
         if (runtime.options().getKeepAlive() != null) {
@@ -195,20 +198,23 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             body.put("role", "user");
             body.put("content", valueOrEmpty(user.getText()));
             if (user.getMedia() != null && !user.getMedia().isEmpty()) {
-                var images = user.getMedia().stream().map(media -> {
-                    var mime = media.getMimeType() != null
-                        ? media.getMimeType().toString() : "application/octet-stream";
-                    if (!mime.startsWith("image/")) {
-                        throw new IllegalArgumentException(
-                            "Ollama native chat accepts only image media, received: " + mime);
-                    }
-                    if (!(media.getData() instanceof byte[] bytes)) {
-                        throw new IllegalArgumentException(
-                            "Ollama native chat requires base64-backed image data; URL media "
-                                + "is not downloaded implicitly");
-                    }
-                    return Base64.getEncoder().encodeToString(bytes);
-                }).toList();
+                var images = user.getMedia().stream()
+                        .map(media -> {
+                            var mime = media.getMimeType() != null
+                                    ? media.getMimeType().toString()
+                                    : "application/octet-stream";
+                            if (!mime.startsWith("image/")) {
+                                throw new IllegalArgumentException(
+                                        "Ollama native chat accepts only image media, received: " + mime);
+                            }
+                            if (!(media.getData() instanceof byte[] bytes)) {
+                                throw new IllegalArgumentException(
+                                        "Ollama native chat requires base64-backed image data; URL media "
+                                                + "is not downloaded implicitly");
+                            }
+                            return Base64.getEncoder().encodeToString(bytes);
+                        })
+                        .toList();
                 body.put("images", images);
             }
             return List.of(body);
@@ -222,22 +228,26 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
                 body.put("thinking", reasoning);
             }
             if (assistant.getToolCalls() != null && !assistant.getToolCalls().isEmpty()) {
-                body.put("tool_calls", assistant.getToolCalls().stream()
-                    .map(this::toolCallBody).toList());
+                body.put(
+                        "tool_calls",
+                        assistant.getToolCalls().stream()
+                                .map(this::toolCallBody)
+                                .toList());
             }
             return List.of(body);
         }
         if (message instanceof ToolResponseMessage toolResponse) {
-            return toolResponse.getResponses().stream().map(response -> {
-                var body = new LinkedHashMap<String, Object>();
-                body.put("role", "tool");
-                body.put("tool_name", response.name());
-                body.put("content", valueOrEmpty(response.responseData()));
-                return Map.copyOf(body);
-            }).toList();
+            return toolResponse.getResponses().stream()
+                    .map(response -> {
+                        var body = new LinkedHashMap<String, Object>();
+                        body.put("role", "tool");
+                        body.put("tool_name", response.name());
+                        body.put("content", valueOrEmpty(response.responseData()));
+                        return Map.copyOf(body);
+                    })
+                    .toList();
         }
-        return List.of(Map.of("role", message.getMessageType().getValue(),
-            "content", valueOrEmpty(message.getText())));
+        return List.of(Map.of("role", message.getMessageType().getValue(), "content", valueOrEmpty(message.getText())));
     }
 
     private Map<String, Object> toolCallBody(AssistantMessage.ToolCall call) {
@@ -248,14 +258,16 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
     }
 
     private List<Map<String, Object>> tools(List<ToolCallback> callbacks) {
-        return callbacks.stream().map(callback -> {
-            var definition = callback.getToolDefinition();
-            var function = new LinkedHashMap<String, Object>();
-            function.put("name", definition.name());
-            function.put("description", definition.description());
-            function.put("parameters", parseJson(definition.inputSchema()));
-            return Map.<String, Object>of("type", "function", "function", function);
-        }).toList();
+        return callbacks.stream()
+                .map(callback -> {
+                    var definition = callback.getToolDefinition();
+                    var function = new LinkedHashMap<String, Object>();
+                    function.put("name", definition.name());
+                    function.put("description", definition.description());
+                    function.put("parameters", parseJson(definition.inputSchema()));
+                    return Map.<String, Object>of("type", "function", "function", function);
+                })
+                .toList();
     }
 
     private ChatResponse response(String data, String diagnosticId) {
@@ -272,17 +284,19 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         var message = root.path("message");
         var properties = responseProperties(root, message);
         var output = AssistantMessage.builder()
-            .content(message.path("content").asText(""))
-            .properties(properties)
-            .toolCalls(toolCalls(message.path("tool_calls")))
-            .build();
-        var generation = new Generation(output, ChatGenerationMetadata.builder()
-            .finishReason(text(root, "done_reason"))
-            .metadata(properties)
-            .build());
+                .content(message.path("content").asText(""))
+                .properties(properties)
+                .toolCalls(toolCalls(message.path("tool_calls")))
+                .build();
+        var generation = new Generation(
+                output,
+                ChatGenerationMetadata.builder()
+                        .finishReason(text(root, "done_reason"))
+                        .metadata(properties)
+                        .build());
         var metadata = ChatResponseMetadata.builder()
-            .model(text(root, "model"))
-            .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
+                .model(text(root, "model"))
+                .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
         var usage = usage(root);
         if (usage != null) {
             metadata.usage(usage);
@@ -308,14 +322,16 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         var fallbackIndex = 0;
         for (var node : nodes) {
             var function = node.path("function");
-            var index = function.path("index").isInt()
-                ? function.path("index").asInt() : fallbackIndex;
+            var index = function.path("index").isInt() ? function.path("index").asInt() : fallbackIndex;
             var id = text(node, "id");
             if (!hasContent(id)) {
                 id = "ollama-tool-" + index;
             }
-            calls.add(new AssistantMessage.ToolCall(id, "function", text(function, "name"),
-                writeJson(OBJECT_MAPPER.convertValue(function.path("arguments"), Object.class))));
+            calls.add(new AssistantMessage.ToolCall(
+                    id,
+                    "function",
+                    text(function, "name"),
+                    writeJson(OBJECT_MAPPER.convertValue(function.path("arguments"), Object.class))));
             fallbackIndex++;
         }
         return List.copyOf(calls);
@@ -328,21 +344,24 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             return null;
         }
         var nativeUsage = new LinkedHashMap<String, Object>();
-        for (var field : List.of("prompt_eval_count", "eval_count", "total_duration",
-            "load_duration", "prompt_eval_duration", "eval_duration")) {
+        for (var field : List.of(
+                "prompt_eval_count",
+                "eval_count",
+                "total_duration",
+                "load_duration",
+                "prompt_eval_duration",
+                "eval_duration")) {
             if (root.path(field).isNumber()) {
                 nativeUsage.put(field, root.path(field).numberValue());
             }
         }
-        return run.halo.aifoundation.provider.usage.ProviderUsage.ollama(root,
-            Map.copyOf(nativeUsage));
+        return run.halo.aifoundation.provider.usage.ProviderUsage.ollama(root, Map.copyOf(nativeUsage));
     }
 
     private Map<String, Object> timingMetadata(JsonNode root) {
         var values = new LinkedHashMap<String, Object>();
         put(values, "createdAt", text(root, "created_at"));
-        for (var field : List.of("total_duration", "load_duration", "prompt_eval_duration",
-            "eval_duration")) {
+        for (var field : List.of("total_duration", "load_duration", "prompt_eval_duration", "eval_duration")) {
             if (root.path(field).isNumber()) {
                 values.put(field, root.path(field).longValue());
             }
@@ -350,8 +369,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         return Map.copyOf(values);
     }
 
-    private void applyHeaders(org.springframework.http.HttpHeaders headers,
-        RuntimeOptions runtime) {
+    private void applyHeaders(org.springframework.http.HttpHeaders headers, RuntimeOptions runtime) {
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (hasContent(apiKey)) {
             headers.setBearerAuth(apiKey);
@@ -363,12 +381,11 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(TOP_LEVEL_MODEL_NATIVE_OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported Ollama model-native option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException(
+                    "Unsupported Ollama model-native option(s): " + String.join(", ", unknown));
         }
         if (values.get("options") != null && !(values.get("options") instanceof Map<?, ?>)) {
-            throw new IllegalArgumentException(
-                "Ollama model-native option 'options' must be an object");
+            throw new IllegalArgumentException("Ollama model-native option 'options' must be an object");
         }
     }
 
@@ -380,7 +397,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             return;
         }
         throw new IllegalArgumentException(
-            "Ollama think must be a boolean or a non-empty string configured for the model");
+                "Ollama think must be a boolean or a non-empty string configured for the model");
     }
 
     @SuppressWarnings("unchecked")
@@ -480,8 +497,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
                 var parts = new ArrayList<ProviderStreamPart>();
                 for (var index = 0; index < calls.size(); index++) {
                     var call = calls.get(index);
-                    parts.add(new ProviderStreamPart.ToolInputStartPart(index, call.id(),
-                        call.name()));
+                    parts.add(new ProviderStreamPart.ToolInputStartPart(index, call.id(), call.name()));
                     parts.add(new ProviderStreamPart.ToolInputDeltaPart(index, call.arguments()));
                     parts.add(new ProviderStreamPart.ToolInputEndPart(index));
                 }
@@ -489,8 +505,7 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
                 var reasoning = message.path("thinking").asText("");
                 var done = root.path("done").asBoolean(false);
                 if (hasResponseContent(content, reasoning, calls, done)) {
-                    parts.add(new ProviderStreamPart.ChatResponsePart(
-                        chatResponse(root, diagnosticId)));
+                    parts.add(new ProviderStreamPart.ChatResponsePart(chatResponse(root, diagnosticId)));
                 }
                 return List.copyOf(parts);
             } catch (JsonProcessingException e) {
@@ -498,8 +513,8 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
             }
         }
 
-        private boolean hasResponseContent(String content, String reasoning,
-            List<AssistantMessage.ToolCall> calls, boolean done) {
+        private boolean hasResponseContent(
+                String content, String reasoning, List<AssistantMessage.ToolCall> calls, boolean done) {
             if (hasContent(content)) {
                 return true;
             }
@@ -513,10 +528,9 @@ public final class OllamaChatModel implements ChatModel, ProviderStreamingChatMo
         }
     }
 
-    private record RuntimeOptions(OllamaChatOptions options,
-                                  Map<String, Object> nativeOptions,
-                                  Map<String, Object> modelNativeOptions,
-                                  Map<String, String> requestHeaders) {
-    }
-
+    private record RuntimeOptions(
+            OllamaChatOptions options,
+            Map<String, Object> nativeOptions,
+            Map<String, Object> modelNativeOptions,
+            Map<String, String> requestHeaders) {}
 }

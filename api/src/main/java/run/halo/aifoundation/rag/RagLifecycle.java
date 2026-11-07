@@ -2,9 +2,7 @@ package run.halo.aifoundation.rag;
 
 import reactor.core.publisher.Mono;
 
-/**
- * Lightweight callbacks for observing RAG middleware execution.
- */
+/** Lightweight callbacks for observing RAG middleware execution. */
 public interface RagLifecycle {
 
     default Mono<Void> onRetrievalStart(RagLifecycleEvent event) {

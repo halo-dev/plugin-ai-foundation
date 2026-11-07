@@ -26,19 +26,20 @@ class UsageErrorTest {
     @MethodSource("timeouts")
     void classifiesDirectAndWrappedTimeoutsWithoutLeakingTheirMessage(Throwable timeout) {
         assertThat(UsageError.from(timeout).type()).isEqualTo("TIMEOUT");
-        assertThat(UsageError.from(new IllegalStateException("wrapper", timeout)).type())
-            .isEqualTo("TIMEOUT");
+        assertThat(UsageError.from(new IllegalStateException("wrapper", timeout))
+                        .type())
+                .isEqualTo("TIMEOUT");
         assertThat(UsageError.from(timeout).toString()).doesNotContain("private");
     }
 
     static Stream<Throwable> timeouts() {
         return Stream.of(
-            new AiGenerationTimeoutException("tool", "private prompt"),
-            new EmbeddingTimeoutException(Duration.ofSeconds(1), null),
-            new RerankTimeoutException(Duration.ofSeconds(1), null),
-            new java.util.concurrent.TimeoutException("private"),
-            new java.net.SocketTimeoutException("private"),
-            new java.net.http.HttpTimeoutException("private"));
+                new AiGenerationTimeoutException("tool", "private prompt"),
+                new EmbeddingTimeoutException(Duration.ofSeconds(1), null),
+                new RerankTimeoutException(Duration.ofSeconds(1), null),
+                new java.util.concurrent.TimeoutException("private"),
+                new java.net.SocketTimeoutException("private"),
+                new java.net.http.HttpTimeoutException("private"));
     }
 
     private static final class SecretBearingException extends RuntimeException {

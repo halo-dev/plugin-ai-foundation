@@ -7,9 +7,7 @@ import lombok.Value;
 import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.message.ModelMessage;
 
-/**
- * Immutable provider-neutral snapshot for a tool input start callback.
- */
+/** Immutable provider-neutral snapshot for a tool input start callback. */
 @Value
 public class ToolInputStartContext {
     String toolCallId;
@@ -21,9 +19,14 @@ public class ToolInputStartContext {
     CancellationToken cancellationToken;
 
     @Builder
-    public ToolInputStartContext(String toolCallId, String toolName, Integer stepIndex,
-        List<ModelMessage> messages, Map<String, Object> requestContext,
-        Map<String, Object> providerMetadata, CancellationToken cancellationToken) {
+    public ToolInputStartContext(
+            String toolCallId,
+            String toolName,
+            Integer stepIndex,
+            List<ModelMessage> messages,
+            Map<String, Object> requestContext,
+            Map<String, Object> providerMetadata,
+            CancellationToken cancellationToken) {
         this.toolCallId = toolCallId;
         this.toolName = toolName;
         this.stepIndex = stepIndex;

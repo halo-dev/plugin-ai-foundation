@@ -25,9 +25,8 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
     // Images and videos accept public URLs, Base64 data URLs, and references to files
     // uploaded through TokenHub (ms://).
     private static final UriReferencePolicy MEDIA_REFERENCE =
-        UriReferencePolicy.allowing("http://", "https://", "data:", "ms://");
-    private static final UriReferencePolicy HTTP_ONLY =
-        UriReferencePolicy.allowing("http://", "https://");
+            UriReferencePolicy.allowing("http://", "https://", "data:", "ms://");
+    private static final UriReferencePolicy HTTP_ONLY = UriReferencePolicy.allowing("http://", "https://");
     private static final String REASONING_DETAILS = "reasoningDetails";
 
     @Override
@@ -41,8 +40,8 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         validateMaxTokens(body);
         validateSampling(body);
         validateStops(body.get("stop"));
@@ -57,19 +56,15 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         var mimeType = mimeType(media);
         var reference = mediaReference(media, mimeType);
         if (mimeType.startsWith("image/")) {
-            return Map.of("type", "image_url", "image_url",
-                Map.of("url", mediaUrl(reference, "image")));
+            return Map.of("type", "image_url", "image_url", Map.of("url", mediaUrl(reference, "image")));
         }
         if (mimeType.startsWith("video/")) {
-            return Map.of("type", "video_url", "video_url",
-                Map.of("url", mediaUrl(reference, "video")));
+            return Map.of("type", "video_url", "video_url", Map.of("url", mediaUrl(reference, "video")));
         }
         if (mimeType.startsWith("audio/")) {
-            throw new IllegalArgumentException(
-                "TokenHub Chat does not document audio input; received: " + mimeType);
+            throw new IllegalArgumentException("TokenHub Chat does not document audio input; received: " + mimeType);
         }
-        return Map.of("type", "file_url", "file_url",
-            Map.of("url", httpReference(reference, "file")));
+        return Map.of("type", "file_url", "file_url", Map.of("url", httpReference(reference, "file")));
     }
 
     @Override
@@ -93,8 +88,7 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         if (metadata == null) {
             return;
         }
-        var details = ReasoningProviderMetadata.values(metadata, providerType())
-            .get(REASONING_DETAILS);
+        var details = ReasoningProviderMetadata.values(metadata, providerType()).get(REASONING_DETAILS);
         if (details != null) {
             body.put("reasoning_details", details);
         }
@@ -106,8 +100,7 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         for (var field : List.of("max_tokens", "max_completion_tokens")) {
             var value = body.get(field);
             if (value != null && !positiveInteger(value)) {
-                throw new IllegalArgumentException(
-                    "TokenHub " + field + " must be a positive integer");
+                throw new IllegalArgumentException("TokenHub " + field + " must be a positive integer");
             }
         }
     }
@@ -135,13 +128,13 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
             return;
         }
         if (!Boolean.TRUE.equals(logprobs)) {
-            throw new IllegalArgumentException(
-                "TokenHub top_logprobs requires logprobs to be enabled");
+            throw new IllegalArgumentException("TokenHub top_logprobs requires logprobs to be enabled");
         }
-        if (!(topLogprobs instanceof Number number) || !integer(number.doubleValue())
-            || number.doubleValue() < 0 || number.doubleValue() > 20) {
-            throw new IllegalArgumentException(
-                "TokenHub top_logprobs must be an integer between 0 and 20");
+        if (!(topLogprobs instanceof Number number)
+                || !integer(number.doubleValue())
+                || number.doubleValue() < 0
+                || number.doubleValue() > 20) {
+            throw new IllegalArgumentException("TokenHub top_logprobs must be an integer between 0 and 20");
         }
     }
 
@@ -154,13 +147,11 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         }
         var type = thinking.get("type");
         if (type == null || !List.of("enabled", "disabled", "adaptive").contains(type)) {
-            throw new IllegalArgumentException(
-                "TokenHub thinking.type must be enabled, disabled, or adaptive");
+            throw new IllegalArgumentException("TokenHub thinking.type must be enabled, disabled, or adaptive");
         }
         var budget = thinking.get("budget_tokens");
         if (budget != null && !positiveInteger(budget)) {
-            throw new IllegalArgumentException(
-                "TokenHub thinking.budget_tokens must be a positive integer");
+            throw new IllegalArgumentException("TokenHub thinking.budget_tokens must be a positive integer");
         }
     }
 
@@ -169,11 +160,9 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
             return;
         }
         // TokenHub documents different ranges per model, from none/minimal up to xhigh/max.
-        if (!List.of("none", "minimal", "low", "medium", "high", "xhigh", "max")
-            .contains(value)) {
+        if (!List.of("none", "minimal", "low", "medium", "high", "xhigh", "max").contains(value)) {
             throw new IllegalArgumentException(
-                "TokenHub reasoning_effort must be none, minimal, low, medium, high, xhigh, "
-                    + "or max");
+                    "TokenHub reasoning_effort must be none, minimal, low, medium, high, xhigh, " + "or max");
         }
     }
 
@@ -182,10 +171,9 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
             return;
         }
         var count = body.get("n");
-        if (count != null && !(count instanceof Number number && number.intValue() == 1
-            && integer(number.doubleValue()))) {
-            throw new IllegalArgumentException(
-                "TokenHub requires n=1 while thinking mode is enabled");
+        if (count != null
+                && !(count instanceof Number number && number.intValue() == 1 && integer(number.doubleValue()))) {
+            throw new IllegalArgumentException("TokenHub requires n=1 while thinking mode is enabled");
         }
     }
 
@@ -230,15 +218,15 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
             return reference;
         }
         throw new IllegalArgumentException(
-            "TokenHub " + kind + " input must use an HTTP(S) URL; data URLs are not accepted");
+                "TokenHub " + kind + " input must use an HTTP(S) URL; data URLs are not accepted");
     }
 
     private String mediaUrl(String reference, String kind) {
         if (MEDIA_REFERENCE.allows(reference)) {
             return reference;
         }
-        throw new IllegalArgumentException("TokenHub " + kind
-            + " input must use an HTTP(S) URL, an ms:// file reference, or a data URL");
+        throw new IllegalArgumentException(
+                "TokenHub " + kind + " input must use an HTTP(S) URL, an ms:// file reference, or a data URL");
     }
 
     private String dataUrl(String mimeType, byte[] bytes) {
@@ -253,10 +241,8 @@ final class TokenHubChatProfile implements ChatCompletionsProfile {
         if (value == null) {
             return;
         }
-        if (!(value instanceof Number number) || number.doubleValue() < minimum
-            || number.doubleValue() > maximum) {
-            throw new IllegalArgumentException("TokenHub " + field + " must be between "
-                + minimum + " and " + maximum);
+        if (!(value instanceof Number number) || number.doubleValue() < minimum || number.doubleValue() > maximum) {
+            throw new IllegalArgumentException("TokenHub " + field + " must be between " + minimum + " and " + maximum);
         }
     }
 

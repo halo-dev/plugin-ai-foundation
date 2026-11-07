@@ -5,12 +5,7 @@ import java.util.List;
 
 /** Provider-profile normalization result for a non-standard Responses output item. */
 public record ResponsesProviderOutput(
-    List<String> text,
-    List<String> reasoning,
-    List<JsonNode> sources,
-    List<JsonNode> files,
-    boolean preserveItem
-) {
+        List<String> text, List<String> reasoning, List<JsonNode> sources, List<JsonNode> files, boolean preserveItem) {
     public ResponsesProviderOutput {
         text = text == null ? List.of() : List.copyOf(text);
         reasoning = reasoning == null ? List.of() : List.copyOf(reasoning);

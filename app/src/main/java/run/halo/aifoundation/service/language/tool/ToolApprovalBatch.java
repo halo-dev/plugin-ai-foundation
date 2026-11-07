@@ -7,13 +7,12 @@ import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 
 public record ToolApprovalBatch(
-    List<ToolCall> toolCalls,
-    List<ToolCall> executableCalls,
-    List<ToolCall> pendingExternalCalls,
-    List<ToolApprovalRequest> approvalRequests,
-    List<ToolError> errors,
-    List<GenerationWarning> warnings
-) {
+        List<ToolCall> toolCalls,
+        List<ToolCall> executableCalls,
+        List<ToolCall> pendingExternalCalls,
+        List<ToolApprovalRequest> approvalRequests,
+        List<ToolError> errors,
+        List<GenerationWarning> warnings) {
     public boolean hasPendingExternalCalls() {
         return !pendingExternalCalls.isEmpty();
     }

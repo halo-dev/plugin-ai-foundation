@@ -25,12 +25,9 @@ public class CallerPluginAuditRecorder {
         if (!caller.isDetected() || caller.getPluginName() == null) {
             return;
         }
-        callerPluginResolver.resolveCurrentCaller()
-            .doOnNext(callerPluginObservationRegistry::record)
-            .subscribe(
-                ignored -> {
-                },
-                error -> log.debug("Failed to record caller plugin information.", error)
-            );
+        callerPluginResolver
+                .resolveCurrentCaller()
+                .doOnNext(callerPluginObservationRegistry::record)
+                .subscribe(ignored -> {}, error -> log.debug("Failed to record caller plugin information.", error));
     }
 }

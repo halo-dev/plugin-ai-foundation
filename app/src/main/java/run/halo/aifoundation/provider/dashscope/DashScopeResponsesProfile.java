@@ -11,8 +11,13 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesProfile;
 final class DashScopeResponsesProfile implements ResponsesProfile {
 
     private static final Set<String> BUILTIN_TOOL_TYPES = Set.of(
-        "web_search", "web_extractor", "code_interpreter", "web_search_image",
-        "image_search", "file_search", "mcp");
+            "web_search",
+            "web_extractor",
+            "code_interpreter",
+            "web_search_image",
+            "image_search",
+            "file_search",
+            "mcp");
 
     @Override
     public String providerType() {
@@ -25,8 +30,7 @@ final class DashScopeResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         // The runtime replays canonical messages and does not rely on provider-side response state.
         body.putIfAbsent("store", false);
         appendBuiltinTools(body);
@@ -61,7 +65,6 @@ final class DashScopeResponsesProfile implements ResponsesProfile {
         if (type instanceof String text && BUILTIN_TOOL_TYPES.contains(text)) {
             return;
         }
-        throw new IllegalArgumentException(
-            "Unsupported DashScope Responses built-in tool type: " + type);
+        throw new IllegalArgumentException("Unsupported DashScope Responses built-in tool type: " + type);
     }
 }

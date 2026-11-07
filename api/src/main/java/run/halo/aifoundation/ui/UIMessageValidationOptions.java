@@ -13,10 +13,8 @@ import java.util.Objects;
  */
 public final class UIMessageValidationOptions<M> {
     private final List<UIMessageMetadataValidator<M>> metadataValidators = new ArrayList<>();
-    private final Map<String, List<UIMessageDataValidator<M>>> dataValidators =
-        new LinkedHashMap<>();
-    private final Map<String, List<UIMessageToolValidator<M>>> namedToolValidators =
-        new LinkedHashMap<>();
+    private final Map<String, List<UIMessageDataValidator<M>>> dataValidators = new LinkedHashMap<>();
+    private final Map<String, List<UIMessageToolValidator<M>>> namedToolValidators = new LinkedHashMap<>();
     private final List<UIMessageToolValidator<M>> toolValidators = new ArrayList<>();
 
     /**
@@ -25,8 +23,7 @@ public final class UIMessageValidationOptions<M> {
      * @param validator metadata validator
      * @return this options object
      */
-    public UIMessageValidationOptions<M> metadataValidator(
-        UIMessageMetadataValidator<M> validator) {
+    public UIMessageValidationOptions<M> metadataValidator(UIMessageMetadataValidator<M> validator) {
         metadataValidators.add(Objects.requireNonNull(validator, "validator must not be null"));
         return this;
     }
@@ -38,13 +35,13 @@ public final class UIMessageValidationOptions<M> {
      * @param validator data validator
      * @return this options object
      */
-    public UIMessageValidationOptions<M> dataValidator(String name,
-        UIMessageDataValidator<M> validator) {
+    public UIMessageValidationOptions<M> dataValidator(String name, UIMessageDataValidator<M> validator) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("data validator name must not be blank");
         }
-        dataValidators.computeIfAbsent(name, ignored -> new ArrayList<>())
-            .add(Objects.requireNonNull(validator, "validator must not be null"));
+        dataValidators
+                .computeIfAbsent(name, ignored -> new ArrayList<>())
+                .add(Objects.requireNonNull(validator, "validator must not be null"));
         return this;
     }
 
@@ -66,13 +63,13 @@ public final class UIMessageValidationOptions<M> {
      * @param validator tool validator
      * @return this options object
      */
-    public UIMessageValidationOptions<M> toolValidator(String toolName,
-        UIMessageToolValidator<M> validator) {
+    public UIMessageValidationOptions<M> toolValidator(String toolName, UIMessageToolValidator<M> validator) {
         if (toolName == null || toolName.isBlank()) {
             throw new IllegalArgumentException("tool validator name must not be blank");
         }
-        namedToolValidators.computeIfAbsent(toolName, ignored -> new ArrayList<>())
-            .add(Objects.requireNonNull(validator, "validator must not be null"));
+        namedToolValidators
+                .computeIfAbsent(toolName, ignored -> new ArrayList<>())
+                .add(Objects.requireNonNull(validator, "validator must not be null"));
         return this;
     }
 

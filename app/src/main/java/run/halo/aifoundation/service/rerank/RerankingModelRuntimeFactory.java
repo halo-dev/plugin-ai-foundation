@@ -14,9 +14,8 @@ public class RerankingModelRuntimeFactory {
         this.usageExecutionObserver = usageExecutionObserver;
     }
 
-    public RerankingModel create(ProviderRerankingClient client,
-        RerankingModelRuntimeConfiguration configuration) {
-        return new RerankingModelImpl(client, configuration.providerOptions(),
-            configuration.context(), usageExecutionObserver);
+    public RerankingModel create(ProviderRerankingClient client, RerankingModelRuntimeConfiguration configuration) {
+        return new RerankingModelImpl(
+                client, configuration.providerOptions(), configuration.context(), usageExecutionObserver);
     }
 }

@@ -4,9 +4,7 @@ import reactor.core.publisher.Mono;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 
-/**
- * Next generation step in an image generation middleware chain.
- */
+/** Next generation step in an image generation middleware chain. */
 @FunctionalInterface
 public interface GenerateImageNext {
 

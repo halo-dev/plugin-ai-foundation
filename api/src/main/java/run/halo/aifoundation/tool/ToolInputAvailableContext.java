@@ -7,9 +7,7 @@ import lombok.Value;
 import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.message.ModelMessage;
 
-/**
- * Immutable provider-neutral snapshot for normalized tool input availability.
- */
+/** Immutable provider-neutral snapshot for normalized tool input availability. */
 @Value
 public class ToolInputAvailableContext {
     String toolCallId;
@@ -22,9 +20,15 @@ public class ToolInputAvailableContext {
     CancellationToken cancellationToken;
 
     @Builder
-    public ToolInputAvailableContext(String toolCallId, String toolName, Map<String, Object> input,
-        Integer stepIndex, List<ModelMessage> messages, Map<String, Object> requestContext,
-        Map<String, Object> providerMetadata, CancellationToken cancellationToken) {
+    public ToolInputAvailableContext(
+            String toolCallId,
+            String toolName,
+            Map<String, Object> input,
+            Integer stepIndex,
+            List<ModelMessage> messages,
+            Map<String, Object> requestContext,
+            Map<String, Object> providerMetadata,
+            CancellationToken cancellationToken) {
         this.toolCallId = toolCallId;
         this.toolName = toolName;
         this.input = immutableMap(input);

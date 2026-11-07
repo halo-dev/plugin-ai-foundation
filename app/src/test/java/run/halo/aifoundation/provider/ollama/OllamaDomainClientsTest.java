@@ -23,11 +23,10 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
 @ProviderContractSource(
-    provider = "ollama",
-    officialDocumentation = "https://docs.ollama.com/api/embed; "
-        + "https://docs.ollama.com/api/openai-compatibility",
-    retrievedAt = "2026-08-25"
-)
+        provider = "ollama",
+        officialDocumentation =
+                "https://docs.ollama.com/api/embed; " + "https://docs.ollama.com/api/openai-compatibility",
+        retrievedAt = "2026-08-25")
 class OllamaDomainClientsTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -37,13 +36,13 @@ class OllamaDomainClientsTest {
         var warnings = new ArrayList<run.halo.aifoundation.embedding.EmbeddingWarning>();
         var request = EmbeddingRequest.builder().dimensions(384).build();
         var nativeOptions = Map.<String, Object>of(
-            "truncate", false,
-            "options", Map.of("num_gpu", 1, "num_thread", 8, "use_mmap", true));
+                "truncate", false, "options", Map.of("num_gpu", 1, "num_thread", 8, "use_mmap", true));
 
-        var options = (OllamaEmbeddingOptions) OllamaEmbeddingOptionsFactory.build(request,
-            new EmbeddingModelProviderOptions(OllamaEmbeddingOptionsFactory::build)
-                .withNativeOptions(nativeOptions),
-            warnings);
+        var options = (OllamaEmbeddingOptions) OllamaEmbeddingOptionsFactory.build(
+                request,
+                new EmbeddingModelProviderOptions(OllamaEmbeddingOptionsFactory::build)
+                        .withNativeOptions(nativeOptions),
+                warnings);
 
         assertThat(options.getDimensions()).isEqualTo(384);
         assertThat(options.getTruncate()).isFalse();
@@ -59,8 +58,7 @@ class OllamaDomainClientsTest {
         var requestBody = new AtomicReference<Map<String, Object>>();
         var authorization = new AtomicReference<String>();
         var traceHeader = new AtomicReference<String>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/api/embed", exchange -> {
             try (exchange) {
                 requestBody.set(OBJECT_MAPPER.readValue(exchange.getRequestBody(), Map.class));
@@ -78,27 +76,26 @@ class OllamaDomainClientsTest {
         server.start();
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
-            var defaults = new OllamaEmbeddingOptions(
-                "embeddinggemma", null, null, Map.of());
-            var model = new OllamaEmbeddingModel(baseUrl, "secret", defaults,
-                WebClient.builder());
-            var requested = new OllamaEmbeddingOptions(null, 384, false,
-                Map.of("num_thread", 8));
+            var defaults = new OllamaEmbeddingOptions("embeddinggemma", null, null, Map.of());
+            var model = new OllamaEmbeddingModel(baseUrl, "secret", defaults, WebClient.builder());
+            var requested = new OllamaEmbeddingOptions(null, 384, false, Map.of("num_thread", 8));
 
-            var response = model.call(new org.springframework.ai.embedding.EmbeddingRequest(
-                List.of("first", "second"), requested), Map.of("X-Trace", "trace-1"));
+            var response = model.call(
+                    new org.springframework.ai.embedding.EmbeddingRequest(List.of("first", "second"), requested),
+                    Map.of("X-Trace", "trace-1"));
 
             assertThat(authorization.get()).isEqualTo("Bearer secret");
             assertThat(traceHeader.get()).isEqualTo("trace-1");
-            assertThat(requestBody.get()).containsEntry("model", "embeddinggemma")
-                .containsEntry("input", List.of("first", "second"))
-                .containsEntry("dimensions", 384)
-                .containsEntry("truncate", false)
-                .doesNotContainKey("keep_alive");
-            assertThat((Map<String, Object>) requestBody.get().get("options"))
-                .containsEntry("num_thread", 8);
-            assertThat(response.getResults()).extracting(result -> result.getOutput().length)
-                .containsExactly(2, 2);
+            assertThat(requestBody.get())
+                    .containsEntry("model", "embeddinggemma")
+                    .containsEntry("input", List.of("first", "second"))
+                    .containsEntry("dimensions", 384)
+                    .containsEntry("truncate", false)
+                    .doesNotContainKey("keep_alive");
+            assertThat((Map<String, Object>) requestBody.get().get("options")).containsEntry("num_thread", 8);
+            assertThat(response.getResults())
+                    .extracting(result -> result.getOutput().length)
+                    .containsExactly(2, 2);
             assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(7);
         } finally {
             server.stop(0);
@@ -110,8 +107,7 @@ class OllamaDomainClientsTest {
     void imageClientOwnsExperimentalRequestAndResponseContract() throws Exception {
         var requestBody = new AtomicReference<Map<String, Object>>();
         var authorization = new AtomicReference<String>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v1/images/generations", exchange -> {
             try (exchange) {
                 requestBody.set(OBJECT_MAPPER.readValue(exchange.getRequestBody(), Map.class));
@@ -128,27 +124,33 @@ class OllamaDomainClientsTest {
         server.start();
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
-            var client = new OllamaImageGenerationClient(new ImageGenerationClientOptions(
-                "ollama", baseUrl, "secret", "x/z-image-turbo", null), WebClient.builder());
-            var request = GenerateImageRequest.builder().prompt("Halo mascot")
-                .n(1).size("1024x1024").responseFormat(ImageResponseFormat.BASE64).build();
+            var client = new OllamaImageGenerationClient(
+                    new ImageGenerationClientOptions("ollama", baseUrl, "secret", "x/z-image-turbo", null),
+                    WebClient.builder());
+            var request = GenerateImageRequest.builder()
+                    .prompt("Halo mascot")
+                    .n(1)
+                    .size("1024x1024")
+                    .responseFormat(ImageResponseFormat.BASE64)
+                    .build();
 
             StepVerifier.create(client.generateImage(request))
-                .assertNext(result -> {
-                    assertThat(result.getImages()).singleElement().satisfies(image -> {
-                        assertThat(image.isBase64()).isTrue();
-                        assertThat(image.getBase64()).isEqualTo("aW1hZ2U=");
-                    });
-                    assertThat(result.getUsage().getInputTokens()).isEqualTo(12);
-                })
-                .verifyComplete();
+                    .assertNext(result -> {
+                        assertThat(result.getImages()).singleElement().satisfies(image -> {
+                            assertThat(image.isBase64()).isTrue();
+                            assertThat(image.getBase64()).isEqualTo("aW1hZ2U=");
+                        });
+                        assertThat(result.getUsage().getInputTokens()).isEqualTo(12);
+                    })
+                    .verifyComplete();
 
             assertThat(authorization.get()).isEqualTo("Bearer secret");
-            assertThat(requestBody.get()).containsEntry("model", "x/z-image-turbo")
-                .containsEntry("prompt", "Halo mascot")
-                .containsEntry("n", 1)
-                .containsEntry("size", "1024x1024")
-                .containsEntry("response_format", "b64_json");
+            assertThat(requestBody.get())
+                    .containsEntry("model", "x/z-image-turbo")
+                    .containsEntry("prompt", "Halo mascot")
+                    .containsEntry("n", 1)
+                    .containsEntry("size", "1024x1024")
+                    .containsEntry("response_format", "b64_json");
         } finally {
             server.stop(0);
         }
@@ -156,36 +158,39 @@ class OllamaDomainClientsTest {
 
     @Test
     void imageClientRejectsUndocumentedUrlResponses() {
-        var client = new OllamaImageGenerationClient(new ImageGenerationClientOptions(
-            "ollama", "https://example.com/v1", "secret", "image-model", null),
-            WebClient.builder());
+        var client = new OllamaImageGenerationClient(
+                new ImageGenerationClientOptions("ollama", "https://example.com/v1", "secret", "image-model", null),
+                WebClient.builder());
 
         assertThatThrownBy(() -> client.requestBody(GenerateImageRequest.builder()
-            .prompt("Halo mascot")
-            .responseFormat(ImageResponseFormat.URL)
-            .build()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("BASE64");
+                        .prompt("Halo mascot")
+                        .responseFormat(ImageResponseFormat.URL)
+                        .build()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("BASE64");
     }
 
     @Test
     void imageClientForwardsConfiguredNativeOptionsWithoutOverridingPortableFields() {
-        var client = new OllamaImageGenerationClient(new ImageGenerationClientOptions(
-            "ollama", "https://example.com/v1", "secret", "configured-model", null),
-            WebClient.builder());
+        var client = new OllamaImageGenerationClient(
+                new ImageGenerationClientOptions(
+                        "ollama", "https://example.com/v1", "secret", "configured-model", null),
+                WebClient.builder());
         var request = GenerateImageRequest.builder()
-            .prompt("Halo mascot")
-            .size("1024x1024")
-            .build();
+                .prompt("Halo mascot")
+                .size("1024x1024")
+                .build();
 
-        var body = client.requestBody(request, Map.of(
-            "provider_extension", true,
-            "model", "ignored-model",
-            "size", "ignored-size"));
+        var body = client.requestBody(
+                request,
+                Map.of(
+                        "provider_extension", true,
+                        "model", "ignored-model",
+                        "size", "ignored-size"));
 
         assertThat(body)
-            .containsEntry("provider_extension", true)
-            .containsEntry("model", "configured-model")
-            .containsEntry("size", "1024x1024");
+                .containsEntry("provider_extension", true)
+                .containsEntry("model", "configured-model")
+                .containsEntry("size", "1024x1024");
     }
 }

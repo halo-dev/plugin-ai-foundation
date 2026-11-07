@@ -20,8 +20,7 @@ import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
 /** Shared System One wire protocol for direct providers and gateways. */
 public class SystemOneDecisionClient implements ProviderDecisionClient {
-    private static final ParameterizedTypeReference<Map<String, Object>> JSON =
-        new ParameterizedTypeReference<>() { };
+    private static final ParameterizedTypeReference<Map<String, Object>> JSON = new ParameterizedTypeReference<>() {};
 
     private final String providerType;
     private final URI endpoint;
@@ -30,8 +29,13 @@ public class SystemOneDecisionClient implements ProviderDecisionClient {
     private final String model;
     private final WebClient client;
 
-    public SystemOneDecisionClient(String providerType, String baseUrl, String apiKey, String model,
-        Map<String, String> headers, WebClient.Builder builder) {
+    public SystemOneDecisionClient(
+            String providerType,
+            String baseUrl,
+            String apiKey,
+            String model,
+            Map<String, String> headers,
+            WebClient.Builder builder) {
         this.providerType = providerType;
         this.endpoint = URI.create(ProviderUris.withoutTrailingPath(baseUrl, "/v1") + "/v1/systemone");
         this.headers = Map.copyOf(headers);
@@ -48,18 +52,21 @@ public class SystemOneDecisionClient implements ProviderDecisionClient {
             var body = Map.of("model", model, "state", request.getState(), "questions", questions);
             var diagnostics = ProviderDiagnostics.create(providerType, "decision");
             diagnostics.request(endpoint.toString(), body, false);
-            return client.post().uri(endpoint).headers(requestHeaders -> {
-                    headers.forEach(requestHeaders::set);
-                    requestHeaders.setBearerAuth(apiKey);
-                })
-                .bodyValue(body).exchangeToMono(response -> {
-                    if (!response.statusCode().is2xxSuccessful()) {
-                        return ProviderHttpResponseSupport.errorMono(response, providerType,
-                            "decision", diagnostics);
-                    }
-                    diagnostics.responseStatus(response.statusCode().value());
-                    return response.bodyToMono(JSON).map(SystemOneDecisionClient::decode);
-                });
+            return client.post()
+                    .uri(endpoint)
+                    .headers(requestHeaders -> {
+                        headers.forEach(requestHeaders::set);
+                        requestHeaders.setBearerAuth(apiKey);
+                    })
+                    .bodyValue(body)
+                    .exchangeToMono(response -> {
+                        if (!response.statusCode().is2xxSuccessful()) {
+                            return ProviderHttpResponseSupport.errorMono(
+                                    response, providerType, "decision", diagnostics);
+                        }
+                        diagnostics.responseStatus(response.statusCode().value());
+                        return response.bodyToMono(JSON).map(SystemOneDecisionClient::decode);
+                    });
         });
     }
 
@@ -122,8 +129,7 @@ public class SystemOneDecisionClient implements ProviderDecisionClient {
         if (!(raw instanceof Map<?, ?> usage)) {
             return null;
         }
-        return new DecisionUsage(reportedTokens(usage.get("input_tokens")),
-            reportedTokens(usage.get("output_tokens")));
+        return new DecisionUsage(reportedTokens(usage.get("input_tokens")), reportedTokens(usage.get("output_tokens")));
     }
 
     private static Integer reportedTokens(Object raw) {
@@ -139,16 +145,19 @@ public class SystemOneDecisionClient implements ProviderDecisionClient {
         var answer = DecisionAnswer.builder();
         switch (string(raw.get("type"))) {
             case "noul" -> answer.type(DecisionQuestionType.YES_NO).probability(number(raw.get("noul")));
-            case "choice" -> answer.type(DecisionQuestionType.CHOICE)
-                .choice(string(raw.get("choice")))
-                .probabilities(probabilities(raw.get("probabilities")))
-                .confidence(number(raw.get("confidence")));
+            case "choice" ->
+                answer.type(DecisionQuestionType.CHOICE)
+                        .choice(string(raw.get("choice")))
+                        .probabilities(probabilities(raw.get("probabilities")))
+                        .confidence(number(raw.get("confidence")));
             case "score" -> {
                 var legend = new LinkedHashMap<String, String>();
                 object(raw.get("legend")).forEach((key, value) -> legend.put(key, string(value)));
-                answer.type(DecisionQuestionType.SCORE).score(number(raw.get("score")))
-                    .probabilities(probabilities(raw.get("probabilities")))
-                    .confidence(number(raw.get("confidence"))).legend(legend);
+                answer.type(DecisionQuestionType.SCORE)
+                        .score(number(raw.get("score")))
+                        .probabilities(probabilities(raw.get("probabilities")))
+                        .confidence(number(raw.get("confidence")))
+                        .legend(legend);
             }
             default -> throw new IllegalStateException("Unsupported System One answer type");
         }

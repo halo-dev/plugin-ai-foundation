@@ -11,8 +11,7 @@ import run.halo.aifoundation.provider.support.MediaContentSources;
 /** MiniMax Responses request constraints from the provider's current contract. */
 final class MiniMaxResponsesProfile implements ResponsesProfile {
 
-    private static final Set<String> REASONING_EFFORTS =
-        Set.of("none", "minimal", "low", "medium", "high");
+    private static final Set<String> REASONING_EFFORTS = Set.of("none", "minimal", "low", "medium", "high");
     private static final Set<String> TOOL_CHOICES = Set.of("auto", "none");
 
     @Override
@@ -26,8 +25,7 @@ final class MiniMaxResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         range(body.get("temperature"), "temperature", 0d, 1d);
         range(body.get("top_p"), "top_p", 0d, 1d);
         validateToolChoice(body.get("tool_choice"));
@@ -44,8 +42,7 @@ final class MiniMaxResponsesProfile implements ResponsesProfile {
         if (mime.startsWith("video/")) {
             return mediaPart("input_video", "video_url", media);
         }
-        throw new IllegalArgumentException(
-            "MiniMax Responses supports image and video media, received: " + mime);
+        throw new IllegalArgumentException("MiniMax Responses supports image and video media, received: " + mime);
     }
 
     private void validateToolChoice(Object value) {
@@ -55,8 +52,7 @@ final class MiniMaxResponsesProfile implements ResponsesProfile {
         if (TOOL_CHOICES.contains(value)) {
             return;
         }
-        throw new IllegalArgumentException(
-            "MiniMax Responses tool_choice must be auto or none");
+        throw new IllegalArgumentException("MiniMax Responses tool_choice must be auto or none");
     }
 
     private void validateReasoning(Object value) {
@@ -71,7 +67,7 @@ final class MiniMaxResponsesProfile implements ResponsesProfile {
             return;
         }
         throw new IllegalArgumentException(
-            "MiniMax Responses reasoning effort must be none, minimal, low, medium, or high");
+                "MiniMax Responses reasoning effort must be none, minimal, low, medium, or high");
     }
 
     private void rejectUndocumented(Map<String, Object> body) {
@@ -79,15 +75,12 @@ final class MiniMaxResponsesProfile implements ResponsesProfile {
             if (!body.containsKey(field)) {
                 continue;
             }
-            throw new IllegalArgumentException(
-                "MiniMax Responses does not document request field: " + field);
+            throw new IllegalArgumentException("MiniMax Responses does not document request field: " + field);
         }
     }
 
     private Map<String, Object> mediaPart(String type, String sourceField, Media media) {
-        return Map.of(
-            "type", type,
-            sourceField, MediaContentSources.urlOrDataUrl(media, "MiniMax Responses media"));
+        return Map.of("type", type, sourceField, MediaContentSources.urlOrDataUrl(media, "MiniMax Responses media"));
     }
 
     private void range(Object value, String field, double minimum, double maximum) {
@@ -108,7 +101,7 @@ final class MiniMaxResponsesProfile implements ResponsesProfile {
     }
 
     private IllegalArgumentException rangeError(String field, double minimum, double maximum) {
-        return new IllegalArgumentException("MiniMax Responses " + field + " must be between "
-            + minimum + " and " + maximum);
+        return new IllegalArgumentException(
+                "MiniMax Responses " + field + " must be between " + minimum + " and " + maximum);
     }
 }

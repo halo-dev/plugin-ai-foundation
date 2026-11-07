@@ -16,13 +16,16 @@ public class ModelParameterConstraints {
     private Boolean store;
     private Boolean streamUsage;
     private Boolean promptCacheKey;
+
     @Schema(description = "Maximum context tokens; not a generation default")
     private Long contextTokens;
+
     private Long inputTokens;
     private Long outputTokens;
     private List<String> toolChoices;
     /** Additional service tiers; absence from this list does not exclude native auto/default. */
     private List<String> serviceTiers;
+
     private Reasoning reasoning;
 
     @Data

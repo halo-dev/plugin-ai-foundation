@@ -28,24 +28,21 @@ class AuditedEmbeddingModelTest {
     private final CallerPluginAuditRecorder auditRecorder = mock(CallerPluginAuditRecorder.class);
     private final EmbeddingModel delegate = mock(EmbeddingModel.class);
     private final ModelCallContext context = new ModelCallContext(
-        ModelType.EMBEDDING,
-        "default-embedding",
-        "openai-provider",
-        "openai",
-        "text-embedding-3-small"
-    );
+            ModelType.EMBEDDING, "default-embedding", "openai-provider", "openai", "text-embedding-3-small");
     private final UsageStatisticsService statistics = mock(UsageStatisticsService.class);
-    private final AuditedEmbeddingModel model = new AuditedEmbeddingModel(delegate, context,
-        auditRecorder, statistics);
+    private final AuditedEmbeddingModel model = new AuditedEmbeddingModel(delegate, context, auditRecorder, statistics);
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void assemblesAllEmbeddingOverloadsOnceBeforeSubscription(boolean enabled) {
         var descriptor = mock(UsageCallDescriptor.class);
         var session = mock(UsageCallSession.class);
-        when(statistics.describeCall(org.mockito.ArgumentMatchers.eq(context), any(),
-            org.mockito.ArgumentMatchers.eq(false), org.mockito.ArgumentMatchers.isNull()))
-            .thenReturn(enabled ? descriptor : null);
+        when(statistics.describeCall(
+                        org.mockito.ArgumentMatchers.eq(context),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq(false),
+                        org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(enabled ? descriptor : null);
         when(statistics.beginCall(descriptor)).thenReturn(session);
         var executions = new AtomicInteger();
         var inputs = List.of("hello");
@@ -84,7 +81,7 @@ class AuditedEmbeddingModelTest {
     @ValueSource(booleans = {true, false})
     void synchronousDelegateFailureDoesNotCreateSession(boolean enabled) {
         when(statistics.describeCall(context, "embedding.embed", false, null))
-            .thenReturn(enabled ? mock(UsageCallDescriptor.class) : null);
+                .thenReturn(enabled ? mock(UsageCallDescriptor.class) : null);
         var request = EmbeddingRequest.builder().inputs(List.of("hello")).build();
         var failure = new IllegalStateException("invalid request");
         when(delegate.embed(request)).thenThrow(failure);
@@ -100,9 +97,8 @@ class AuditedEmbeddingModelTest {
         var response = Mono.just(EmbeddingResponse.builder().build());
         when(delegate.embed(inputs)).thenReturn(response);
         when(statistics.describeCall(context, "embedding.embed", false, null))
-            .thenReturn(mock(UsageCallDescriptor.class));
-        when(statistics.beginCall(org.mockito.ArgumentMatchers.any()))
-            .thenReturn(mock(UsageCallSession.class));
+                .thenReturn(mock(UsageCallDescriptor.class));
+        when(statistics.beginCall(org.mockito.ArgumentMatchers.any())).thenReturn(mock(UsageCallSession.class));
 
         assertThat(model.embed(inputs).block()).isSameAs(response.block());
 
@@ -115,9 +111,8 @@ class AuditedEmbeddingModelTest {
         var response = Mono.just(new float[] {1f});
         when(delegate.embedQuery("hello")).thenReturn(response);
         when(statistics.describeCall(context, "embedding.embedQuery", false, null))
-            .thenReturn(mock(UsageCallDescriptor.class));
-        when(statistics.beginCall(org.mockito.ArgumentMatchers.any()))
-            .thenReturn(mock(UsageCallSession.class));
+                .thenReturn(mock(UsageCallDescriptor.class));
+        when(statistics.beginCall(org.mockito.ArgumentMatchers.any())).thenReturn(mock(UsageCallSession.class));
 
         assertThat(model.embedQuery("hello").block()).isSameAs(response.block());
 

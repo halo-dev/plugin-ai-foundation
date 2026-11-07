@@ -9,10 +9,9 @@ import lombok.NoArgsConstructor;
 /**
  * Fine-grained capability values for image generation models.
  *
- * <p>Boolean values are tri-state: {@code true}, {@code false}, or {@code null} for unknown.
- * Unknown semantic capabilities are treated as unsupported when a request requires them. Optional
- * settings such as sizes or output media types describe known provider support and do not imply a
- * global upload or storage policy.
+ * <p>Boolean values are tri-state: {@code true}, {@code false}, or {@code null} for unknown. Unknown semantic
+ * capabilities are treated as unsupported when a request requires them. Optional settings such as sizes or output media
+ * types describe known provider support and do not imply a global upload or storage policy.
  */
 @Data
 @Builder
@@ -20,40 +19,28 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ImageGenerationCapability {
 
-    /**
-     * Whether the model can generate images from text without input images.
-     */
+    /** Whether the model can generate images from text without input images. */
     private Boolean textToImage;
 
-    /**
-     * Whether the model can generate or edit images using caller-provided input images.
-     */
+    /** Whether the model can generate or edit images using caller-provided input images. */
     private Boolean imageToImage;
 
-    /**
-     * Whether the model supports a separate mask image for masked editing.
-     */
+    /** Whether the model supports a separate mask image for masked editing. */
     private Boolean maskInput;
 
     /**
-     * Maximum number of images that can be requested in a single provider call. When a request asks
-     * for more images, the runtime may split it into multiple controlled provider calls.
+     * Maximum number of images that can be requested in a single provider call. When a request asks for more images,
+     * the runtime may split it into multiple controlled provider calls.
      */
     private Integer maxImagesPerCall;
 
-    /**
-     * Supported size strings such as {@code 1024x1024}, when known.
-     */
+    /** Supported size strings such as {@code 1024x1024}, when known. */
     private List<String> sizes;
 
-    /**
-     * Supported aspect ratio strings such as {@code 16:9}, when known.
-     */
+    /** Supported aspect ratio strings such as {@code 16:9}, when known. */
     private List<String> aspectRatios;
 
-    /**
-     * Media type patterns the provider may return for generated files, such as {@code image/png}.
-     */
+    /** Media type patterns the provider may return for generated files, such as {@code image/png}. */
     private List<String> outputMediaTypes;
 
     /**

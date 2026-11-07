@@ -49,17 +49,17 @@ class StackWalkingCallerPluginResolverTest {
         org.mockito.Mockito.verifyNoInteractions(client);
 
         StepVerifier.create(ConsumerPluginCaller.resolve(resolver))
-            .assertNext(info -> {
-                assertThat(info.isDetected()).isTrue();
-                assertThat(info.getDetectionSource()).isEqualTo("stack-classloader");
-                assertThat(info.getPluginName()).isEqualTo("consumer-plugin");
-                assertThat(info.getDisplayName()).isEqualTo("Consumer Plugin");
-                assertThat(info.getDescription()).isEqualTo("Calls AI Foundation in tests.");
-                assertThat(info.getVersion()).isEqualTo("1.2.3");
-                assertThat(info.getAuthorName()).isEqualTo("Halo");
-                assertThat(info.getRepo()).isEqualTo("https://github.com/example/consumer-plugin");
-            })
-            .verifyComplete();
+                .assertNext(info -> {
+                    assertThat(info.isDetected()).isTrue();
+                    assertThat(info.getDetectionSource()).isEqualTo("stack-classloader");
+                    assertThat(info.getPluginName()).isEqualTo("consumer-plugin");
+                    assertThat(info.getDisplayName()).isEqualTo("Consumer Plugin");
+                    assertThat(info.getDescription()).isEqualTo("Calls AI Foundation in tests.");
+                    assertThat(info.getVersion()).isEqualTo("1.2.3");
+                    assertThat(info.getAuthorName()).isEqualTo("Halo");
+                    assertThat(info.getRepo()).isEqualTo("https://github.com/example/consumer-plugin");
+                })
+                .verifyComplete();
     }
 
     @Test
@@ -88,12 +88,12 @@ class StackWalkingCallerPluginResolverTest {
         var resolver = new StackWalkingCallerPluginResolver(client, provider);
 
         StepVerifier.create(resolver.resolveCurrentCaller())
-            .assertNext(info -> {
-                assertThat(info.isDetected()).isFalse();
-                assertThat(info.getDetectionSource()).isEqualTo("none");
-                assertThat(info.getPluginName()).isNull();
-            })
-            .verifyComplete();
+                .assertNext(info -> {
+                    assertThat(info.isDetected()).isFalse();
+                    assertThat(info.getDetectionSource()).isEqualTo("none");
+                    assertThat(info.getPluginName()).isNull();
+                })
+                .verifyComplete();
     }
 
     @SuppressWarnings("unchecked")

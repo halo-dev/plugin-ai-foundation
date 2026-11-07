@@ -25,12 +25,11 @@ class FallbackModelDiscoveryTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("providersUsingModelsFallback")
-    void identifierOnlyCatalogUsesProviderContractWithoutInspectingModelId(
-        AiProviderType providerType, String basePath) throws Exception {
+    void identifierOnlyCatalogUsesProviderContractWithoutInspectingModelId(AiProviderType providerType, String basePath)
+            throws Exception {
         var authorization = new AtomicReference<String>();
         var requestPath = new AtomicReference<String>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext(basePath + "/models", exchange -> {
             try (exchange) {
                 authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -48,19 +47,22 @@ class FallbackModelDiscoveryTest {
         server.start();
 
         try {
-            var provider = provider(providerType,
-                "http://127.0.0.1:" + server.getAddress().getPort() + basePath);
+            var provider = provider(
+                    providerType, "http://127.0.0.1:" + server.getAddress().getPort() + basePath);
             StepVerifier.create(providerType.discoverModels(provider, "test-key"))
-                .assertNext(models -> assertThat(models).singleElement().satisfies(model -> {
-                    assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
-                    assertThat(model.adapterType())
-                        .isEqualTo(providerType.recommendAdapterType(ModelType.LANGUAGE).orElseThrow());
-                    assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
-                    assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
-                    assertThat(model.features()).containsExactlyInAnyOrderElementsOf(
-                        providerType.getSupportedFeatures(model.adapterType()));
-                }))
-                .verifyComplete();
+                    .assertNext(models -> assertThat(models).singleElement().satisfies(model -> {
+                        assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
+                        assertThat(model.adapterType())
+                                .isEqualTo(providerType
+                                        .recommendAdapterType(ModelType.LANGUAGE)
+                                        .orElseThrow());
+                        assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
+                        assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
+                        assertThat(model.features())
+                                .containsExactlyInAnyOrderElementsOf(
+                                        providerType.getSupportedFeatures(model.adapterType()));
+                    }))
+                    .verifyComplete();
             assertThat(authorization.get()).isEqualTo("Bearer test-key");
             assertThat(requestPath.get()).isEqualTo(basePath + "/models");
         } finally {
@@ -70,10 +72,9 @@ class FallbackModelDiscoveryTest {
 
     static Stream<Arguments> providersUsingModelsFallback() {
         return Stream.of(
-            Arguments.of(new OpenAiLikeProvider(), "/v1"),
-            Arguments.of(new DouBaoProvider(), "/api/v3"),
-            Arguments.of(new ZhiPuProvider(), "/api/paas/v4")
-        );
+                Arguments.of(new OpenAiLikeProvider(), "/v1"),
+                Arguments.of(new DouBaoProvider(), "/api/v3"),
+                Arguments.of(new ZhiPuProvider(), "/api/paas/v4"));
     }
 
     private AiProvider provider(AiProviderType providerType, String baseUrl) {

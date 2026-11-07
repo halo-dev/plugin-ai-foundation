@@ -7,25 +7,17 @@ import java.util.Optional;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**
- * Supported source kind for caller-provided media input.
- */
+/** Supported source kind for caller-provided media input. */
 @Getter
 @RequiredArgsConstructor
 public enum InputSource {
-    /**
-     * Media content is provided as bytes or base64 data by the caller.
-     */
+    /** Media content is provided as bytes or base64 data by the caller. */
     DATA("data"),
 
-    /**
-     * Media content is provided as a URL for providers that support native URL input.
-     */
+    /** Media content is provided as a URL for providers that support native URL input. */
     URL("url");
 
-    /**
-     * Stable serialized value used in capability payloads and selector filters.
-     */
+    /** Stable serialized value used in capability payloads and selector filters. */
     private final String value;
 
     @JsonValue
@@ -42,8 +34,7 @@ public enum InputSource {
      */
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static InputSource fromValue(String value) {
-        return find(value)
-            .orElseThrow(() -> new IllegalArgumentException("Unsupported input source: " + value));
+        return find(value).orElseThrow(() -> new IllegalArgumentException("Unsupported input source: " + value));
     }
 
     /**
@@ -57,8 +48,7 @@ public enum InputSource {
             return Optional.empty();
         }
         return Arrays.stream(values())
-            .filter(source -> source.value.equals(value))
-            .findFirst();
+                .filter(source -> source.value.equals(value))
+                .findFirst();
     }
-
 }

@@ -21,15 +21,11 @@ public final class UIMessageStreamReaderOptions<M> {
     private Supplier<String> messageIdGenerator = () -> "msg_" + UUID.randomUUID();
     private Supplier<M> metadataSupplier;
     private UIMessageMetadataMerger<M> metadataMerger = UIMessageMetadataMerger.defaults();
-    private Function<Throwable, String> errorHandler =
-        error -> UIMessageStreamOptions.DEFAULT_ERROR_TEXT;
-    private Consumer<Throwable> onError = error -> {
-    };
+    private Function<Throwable, String> errorHandler = error -> UIMessageStreamOptions.DEFAULT_ERROR_TEXT;
+    private Consumer<Throwable> onError = error -> {};
     private boolean terminateOnError;
 
-    /**
-     * Creates options with null metadata as the default.
-     */
+    /** Creates options with null metadata as the default. */
     public UIMessageStreamReaderOptions() {
         this.metadataSupplier = () -> null;
     }
@@ -40,8 +36,7 @@ public final class UIMessageStreamReaderOptions<M> {
      * @return default map-metadata reader options
      */
     public static UIMessageStreamReaderOptions<Map<String, Object>> defaults() {
-        return new UIMessageStreamReaderOptions<Map<String, Object>>()
-            .metadataSupplier(Map::of);
+        return new UIMessageStreamReaderOptions<Map<String, Object>>().metadataSupplier(Map::of);
     }
 
     /**
@@ -73,8 +68,7 @@ public final class UIMessageStreamReaderOptions<M> {
      * @return this options object
      */
     public UIMessageStreamReaderOptions<M> originalMessages(List<UIMessage<M>> messages) {
-        this.originalMessages = List.copyOf(Objects.requireNonNull(messages,
-            "messages must not be null"));
+        this.originalMessages = List.copyOf(Objects.requireNonNull(messages, "messages must not be null"));
         return this;
     }
 
@@ -85,8 +79,7 @@ public final class UIMessageStreamReaderOptions<M> {
      * @return this options object
      */
     public UIMessageStreamReaderOptions<M> messageIdGenerator(Supplier<String> generator) {
-        this.messageIdGenerator = Objects.requireNonNull(generator,
-            "generator must not be null");
+        this.messageIdGenerator = Objects.requireNonNull(generator, "generator must not be null");
         return this;
     }
 

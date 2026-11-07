@@ -19,24 +19,24 @@ class ProviderHttpClientFactoryTest {
     @Test
     void imageLimitDefaultsToSixtyFourMegabytes() {
         assertThat(ProviderHttpClientFactory.imageMaxInMemorySize(provider(null)))
-            .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE)
-            .isEqualTo(64 * 1024 * 1024);
+                .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE)
+                .isEqualTo(64 * 1024 * 1024);
         assertThat(ProviderHttpClientFactory.imageMaxInMemorySize(null))
-            .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE);
+                .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE);
     }
 
     @Test
     void imageLimitHonoursConfiguredLimit() {
         assertThat(ProviderHttpClientFactory.imageMaxInMemorySize(provider(8 * 1024 * 1024)))
-            .isEqualTo(8 * 1024 * 1024);
+                .isEqualTo(8 * 1024 * 1024);
     }
 
     @Test
     void imageLimitFallsBackToDefaultForNonPositiveLimit() {
         assertThat(ProviderHttpClientFactory.imageMaxInMemorySize(provider(0)))
-            .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE);
+                .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE);
         assertThat(ProviderHttpClientFactory.imageMaxInMemorySize(provider(-1)))
-            .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE);
+                .isEqualTo(ProviderHttpClientFactory.IMAGE_DEFAULT_MAX_IN_MEMORY_SIZE);
     }
 
     @Test
@@ -70,8 +70,7 @@ class ProviderHttpClientFactoryTest {
         var provider = provider(limit);
         var server = startPayloadServer(payloadOfLength(limit + 1024));
         try {
-            assertThatThrownBy(() -> readBody(provider, server))
-                .hasRootCauseInstanceOf(DataBufferLimitException.class);
+            assertThatThrownBy(() -> readBody(provider, server)).hasRootCauseInstanceOf(DataBufferLimitException.class);
         } finally {
             server.stop(0);
         }
@@ -79,17 +78,17 @@ class ProviderHttpClientFactoryTest {
 
     private static String readBody(AiProvider provider, HttpServer server) {
         return clientFor(provider, server)
-            .post()
-            .uri("/images/generations")
-            .retrieve()
-            .bodyToMono(String.class)
-            .block();
+                .post()
+                .uri("/images/generations")
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
     }
 
     private static WebClient clientFor(AiProvider provider, HttpServer server) {
         return ProviderHttpClientFactory.imageWebClientBuilder(provider)
-            .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
-            .build();
+                .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
+                .build();
     }
 
     private static AiProvider provider(Integer maxInMemorySize) {
@@ -110,8 +109,7 @@ class ProviderHttpClientFactoryTest {
     }
 
     private static HttpServer startPayloadServer(String payload) throws IOException {
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/images/generations", exchange -> {
             try (exchange) {
                 var bytes = payload.getBytes(StandardCharsets.UTF_8);

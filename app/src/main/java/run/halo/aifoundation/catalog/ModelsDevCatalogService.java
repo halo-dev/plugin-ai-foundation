@@ -54,25 +54,29 @@ public class ModelsDevCatalogService {
 
     @Autowired
     public ModelsDevCatalogService(PluginsRootGetter pluginsRootGetter) {
-        this(pluginsRootGetter.get().resolve("ai-foundation/models-dev-cache.json"),
-            downloader(WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(HttpClient.create()
-                    .compress(true).followRedirect(false).responseTimeout(REQUEST_TIMEOUT)))
-                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(MAX_BYTES))
-                .build()), Clock.systemUTC(), ModelsDevBundledCatalog::load);
+        this(
+                pluginsRootGetter.get().resolve("ai-foundation/models-dev-cache.json"),
+                downloader(WebClient.builder()
+                        .clientConnector(new ReactorClientHttpConnector(HttpClient.create()
+                                .compress(true)
+                                .followRedirect(false)
+                                .responseTimeout(REQUEST_TIMEOUT)))
+                        .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(MAX_BYTES))
+                        .build()),
+                Clock.systemUTC(),
+                ModelsDevBundledCatalog::load);
     }
 
     ModelsDevCatalogService(Path cacheFile, Mono<String> download, Clock clock) {
         this(cacheFile, ignored -> download.map(body -> new Download(body, null, false)), clock);
     }
 
-    ModelsDevCatalogService(Path cacheFile, Function<String, Mono<Download>> download,
-        Clock clock) {
+    ModelsDevCatalogService(Path cacheFile, Function<String, Mono<Download>> download, Clock clock) {
         this(cacheFile, download, clock, () -> null);
     }
 
-    ModelsDevCatalogService(Path cacheFile, Function<String, Mono<Download>> download, Clock clock,
-        Supplier<Snapshot> bundledCatalog) {
+    ModelsDevCatalogService(
+            Path cacheFile, Function<String, Mono<Download>> download, Clock clock, Supplier<Snapshot> bundledCatalog) {
         this.cacheFile = cacheFile;
         this.download = download;
         this.clock = clock;
@@ -93,8 +97,7 @@ public class ModelsDevCatalogService {
                 if (!response.statusCode().is2xxSuccessful()) {
                     return response.createException().flatMap(Mono::error);
                 }
-                return response.bodyToMono(String.class)
-                    .map(body -> new Download(body, receivedEtag, false));
+                return response.bodyToMono(String.class).map(body -> new Download(body, receivedEtag, false));
             });
         };
     }
@@ -102,18 +105,18 @@ public class ModelsDevCatalogService {
     @PostConstruct
     void start() {
         synchronization = initialize()
-            .thenMany(Flux.interval(REFRESH_INTERVAL))
-            .concatMap(ignored -> refreshIfStale())
-            .takeUntilOther(stopped.asMono())
-            .subscribe(ignored -> { }, failure ->
-                log.warn("models.dev background synchronization stopped", failure));
+                .thenMany(Flux.interval(REFRESH_INTERVAL))
+                .concatMap(ignored -> refreshIfStale())
+                .takeUntilOther(stopped.asMono())
+                .subscribe(
+                        ignored -> {}, failure -> log.warn("models.dev background synchronization stopped", failure));
     }
 
     Mono<ModelCatalogStatus> initialize() {
         // A cache can serve discovery immediately, but never suppress the startup remote check.
         return Mono.fromRunnable(this::loadCache)
-            .subscribeOn(Schedulers.boundedElastic())
-            .then(Mono.defer(this::refresh));
+                .subscribeOn(Schedulers.boundedElastic())
+                .then(Mono.defer(this::refresh));
     }
 
     Mono<ModelCatalogStatus> refreshIfStale() {
@@ -125,20 +128,26 @@ public class ModelsDevCatalogService {
             return inFlight;
         }
         inFlight = Mono.defer(() -> {
-                lastAttemptAt = clock.instant();
-                var current = snapshot;
-                return download.apply(current == null ? null : current.etag())
-                    .timeout(REQUEST_TIMEOUT)
-                    .switchIfEmpty(Mono.error(new IllegalArgumentException("Empty catalog")));
-            })
-            .publishOn(Schedulers.boundedElastic())
-            .map(this::accept)
-            .onErrorResume(this::recoverFromFailure)
-            .takeUntilOther(stopped.asMono())
-            .doOnTerminate(this::clearInFlight)
-            .map(status -> new ModelCatalogStatus(status.sourceUrl(), status.fetchedAt(),
-                status.lastAttemptAt(), status.available(), status.stale(), false, status.error()))
-            .cache();
+                    lastAttemptAt = clock.instant();
+                    var current = snapshot;
+                    return download.apply(current == null ? null : current.etag())
+                            .timeout(REQUEST_TIMEOUT)
+                            .switchIfEmpty(Mono.error(new IllegalArgumentException("Empty catalog")));
+                })
+                .publishOn(Schedulers.boundedElastic())
+                .map(this::accept)
+                .onErrorResume(this::recoverFromFailure)
+                .takeUntilOther(stopped.asMono())
+                .doOnTerminate(this::clearInFlight)
+                .map(status -> new ModelCatalogStatus(
+                        status.sourceUrl(),
+                        status.fetchedAt(),
+                        status.lastAttemptAt(),
+                        status.available(),
+                        status.stale(),
+                        false,
+                        status.error()))
+                .cache();
         return inFlight;
     }
 
@@ -175,7 +184,9 @@ public class ModelsDevCatalogService {
             persist(next);
         } catch (IOException failure) {
             error = "目录已更新，但本地缓存保存失败";
-            log.warn("Could not persist models.dev cache ({})", failure.getClass().getSimpleName());
+            log.warn(
+                    "Could not persist models.dev cache ({})",
+                    failure.getClass().getSimpleName());
         }
         return status();
     }
@@ -186,15 +197,15 @@ public class ModelsDevCatalogService {
             if (current == null || current.etag() == null) {
                 throw new IllegalArgumentException("Catalog not modified without a cached ETag");
             }
-            return new Snapshot(current.catalog(), clock.instant(),
-                response.etag() == null ? current.etag() : response.etag());
+            return new Snapshot(
+                    current.catalog(), clock.instant(), response.etag() == null ? current.etag() : response.etag());
         }
         var body = response.body();
         if (body == null || body.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) {
             throw new IllegalArgumentException("Empty or oversized catalog");
         }
-        var catalog = ModelsDevCatalog.parse(MAPPER.readTree(body))
-            .retainProviders(ModelsDevProviderIdentity.catalogIds());
+        var catalog =
+                ModelsDevCatalog.parse(MAPPER.readTree(body)).retainProviders(ModelsDevProviderIdentity.catalogIds());
         return new Snapshot(catalog, clock.instant(), response.etag());
     }
 
@@ -208,16 +219,17 @@ public class ModelsDevCatalogService {
             }
             var root = MAPPER.readTree(Files.readString(cacheFile));
             var version = root.path("version");
-            if (!version.isIntegralNumber() || !version.canConvertToInt()
-                || version.intValue() != CACHE_FORMAT_VERSION) {
+            if (!version.isIntegralNumber()
+                    || !version.canConvertToInt()
+                    || version.intValue() != CACHE_FORMAT_VERSION) {
                 throw new IllegalArgumentException("Unsupported catalog cache version");
             }
             if (!SOURCE_URL.equals(root.path("sourceUrl").asText())) {
                 throw new IllegalArgumentException("Invalid catalog cache source");
             }
             var fetchedAt = Instant.parse(root.path("fetchedAt").asText());
-            var catalog = ModelsDevCatalog.parse(root.get("catalog"))
-                .retainProviders(ModelsDevProviderIdentity.catalogIds());
+            var catalog =
+                    ModelsDevCatalog.parse(root.get("catalog")).retainProviders(ModelsDevProviderIdentity.catalogIds());
             selectFallback(new Snapshot(catalog, fetchedAt, root.path("etag").asText(null)), false);
         } catch (IOException | RuntimeException failure) {
             error = "本地目录缓存不可用，将重新同步";
@@ -229,8 +241,9 @@ public class ModelsDevCatalogService {
         try {
             selectFallback(bundledCatalog.get(), true);
         } catch (RuntimeException failure) {
-            log.warn("Could not read bundled models.dev catalog ({})",
-                failure.getClass().getSimpleName());
+            log.warn(
+                    "Could not read bundled models.dev catalog ({})",
+                    failure.getClass().getSimpleName());
         }
     }
 
@@ -259,8 +272,7 @@ public class ModelsDevCatalogService {
             }
             envelope.set("catalog", current.catalog().toJson());
             Files.writeString(temporary, MAPPER.writeValueAsString(envelope));
-            Files.move(temporary, cacheFile, StandardCopyOption.ATOMIC_MOVE,
-                StandardCopyOption.REPLACE_EXISTING);
+            Files.move(temporary, cacheFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -268,10 +280,14 @@ public class ModelsDevCatalogService {
 
     public ModelCatalogStatus status() {
         var current = snapshot;
-        return new ModelCatalogStatus(SOURCE_URL, current == null ? null : current.fetchedAt(),
-            lastAttemptAt, current != null,
-            current == null || !current.fetchedAt().plus(REFRESH_INTERVAL).isAfter(clock.instant()),
-            inFlight != null, error);
+        return new ModelCatalogStatus(
+                SOURCE_URL,
+                current == null ? null : current.fetchedAt(),
+                lastAttemptAt,
+                current != null,
+                current == null || !current.fetchedAt().plus(REFRESH_INTERVAL).isAfter(clock.instant()),
+                inFlight != null,
+                error);
     }
 
     Snapshot snapshot() {
@@ -286,9 +302,7 @@ public class ModelsDevCatalogService {
         }
     }
 
-    record Snapshot(ModelsDevCatalog catalog, Instant fetchedAt, String etag) {
-    }
+    record Snapshot(ModelsDevCatalog catalog, Instant fetchedAt, String etag) {}
 
-    record Download(String body, String etag, boolean notModified) {
-    }
+    record Download(String body, String etag, boolean notModified) {}
 }

@@ -6,8 +6,7 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesModel;
 
 public final class GiteeResponsesModel extends ResponsesModel {
 
-    public GiteeResponsesModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public GiteeResponsesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new GiteeResponsesProfile());
     }
 }

@@ -10,13 +10,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Lightweight JSON Schema generation for Java records and simple POJOs.
- */
+/** Lightweight JSON Schema generation for Java records and simple POJOs. */
 public final class StructuredSchema {
 
-    private StructuredSchema() {
-    }
+    private StructuredSchema() {}
 
     public static Map<String, Object> fromClass(Class<?> type) {
         if (type == null) {
@@ -25,9 +22,7 @@ public final class StructuredSchema {
         return schemaForType(type);
     }
 
-    /**
-     * Derives a typed schema helper from a Java record or simple POJO.
-     */
+    /** Derives a typed schema helper from a Java record or simple POJO. */
     public static JsonSchema schema(Class<?> type) {
         return JsonSchema.fromMap(fromClass(type));
     }
@@ -46,15 +41,21 @@ public final class StructuredSchema {
                 }
                 return schema;
             }
-            if (clazz == Integer.class || clazz == int.class
-                || clazz == Long.class || clazz == long.class
-                || clazz == Short.class || clazz == short.class
-                || clazz == Byte.class || clazz == byte.class) {
+            if (clazz == Integer.class
+                    || clazz == int.class
+                    || clazz == Long.class
+                    || clazz == long.class
+                    || clazz == Short.class
+                    || clazz == short.class
+                    || clazz == Byte.class
+                    || clazz == byte.class) {
                 return Map.of("type", "integer");
             }
-            if (clazz == Double.class || clazz == double.class
-                || clazz == Float.class || clazz == float.class
-                || Number.class.isAssignableFrom(clazz)) {
+            if (clazz == Double.class
+                    || clazz == double.class
+                    || clazz == Float.class
+                    || clazz == float.class
+                    || Number.class.isAssignableFrom(clazz)) {
                 return Map.of("type", "number");
             }
             if (clazz == Boolean.class || clazz == boolean.class) {
@@ -72,8 +73,7 @@ public final class StructuredSchema {
             var raw = parameterizedType.getRawType();
             if (raw instanceof Class<?> rawClass && List.class.isAssignableFrom(rawClass)) {
                 var args = parameterizedType.getActualTypeArguments();
-                return Map.of("type", "array", "items", args.length > 0 ? schemaForType(args[0])
-                    : Map.of());
+                return Map.of("type", "array", "items", args.length > 0 ? schemaForType(args[0]) : Map.of());
             }
         }
         return Map.of();

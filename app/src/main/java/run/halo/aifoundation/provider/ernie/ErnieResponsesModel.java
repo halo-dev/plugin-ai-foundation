@@ -6,8 +6,7 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesModel;
 
 public final class ErnieResponsesModel extends ResponsesModel {
 
-    public ErnieResponsesModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public ErnieResponsesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new ErnieResponsesProfile());
     }
 }

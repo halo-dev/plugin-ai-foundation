@@ -5,9 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 
-/**
- * A non-successful provider HTTP response with its status and structured error body preserved.
- */
+/** A non-successful provider HTTP response with its status and structured error body preserved. */
 public final class ProviderHttpException extends IllegalStateException {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -19,8 +17,7 @@ public final class ProviderHttpException extends IllegalStateException {
     private final String responseBody;
     private final Object errorBody;
 
-    public ProviderHttpException(String providerType, String operation, int statusCode,
-        String responseBody) {
+    public ProviderHttpException(String providerType, String operation, int statusCode, String responseBody) {
         super(message(providerType, operation, statusCode, responseBody));
         this.providerType = providerType;
         this.operation = operation;
@@ -49,14 +46,12 @@ public final class ProviderHttpException extends IllegalStateException {
         return errorBody;
     }
 
-    private static String message(String providerType, String operation, int statusCode,
-        String body) {
+    private static String message(String providerType, String operation, int statusCode, String body) {
         var redacted = AiFoundationDiagnostics.redactSensitiveText(body != null ? body : "");
         if (redacted.length() > MAX_MESSAGE_BODY_LENGTH) {
             redacted = redacted.substring(0, MAX_MESSAGE_BODY_LENGTH) + "…";
         }
-        return providerType + " " + operation + " request failed: status=" + statusCode
-            + ", body=" + redacted;
+        return providerType + " " + operation + " request failed: status=" + statusCode + ", body=" + redacted;
     }
 
     private static Object parseBody(String body) {

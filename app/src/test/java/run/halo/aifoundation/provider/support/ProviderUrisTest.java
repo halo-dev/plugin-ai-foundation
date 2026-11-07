@@ -9,16 +9,14 @@ class ProviderUrisTest {
     @Test
     void removesAllTrailingSlashes() {
         assertThat(ProviderUris.withoutTrailingSlashes("https://example.com/v1///"))
-            .isEqualTo("https://example.com/v1");
+                .isEqualTo("https://example.com/v1");
     }
 
     @Test
     void preservesOtherValues() {
         assertThat(ProviderUris.withoutTrailingSlashes("https://example.com/v1"))
-            .isEqualTo("https://example.com/v1");
-        assertThat(ProviderUris.withoutTrailingSlashes(""))
-            .isEmpty();
-        assertThat(ProviderUris.withoutTrailingSlashes(null))
-            .isNull();
+                .isEqualTo("https://example.com/v1");
+        assertThat(ProviderUris.withoutTrailingSlashes("")).isEmpty();
+        assertThat(ProviderUris.withoutTrailingSlashes(null)).isNull();
     }
 }

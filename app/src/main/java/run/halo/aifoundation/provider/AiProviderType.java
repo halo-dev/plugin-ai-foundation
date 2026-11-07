@@ -107,20 +107,20 @@ public interface AiProviderType {
     }
 
     default List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
-        if (adapterType == null || adapterType.getModelType() != ModelType.LANGUAGE
-            || !getSupportedAdapterTypes().contains(adapterType)) {
+        if (adapterType == null
+                || adapterType.getModelType() != ModelType.LANGUAGE
+                || !getSupportedAdapterTypes().contains(adapterType)) {
             return List.of();
         }
         return getSupportedFeatures();
     }
 
-    default java.util.Map<ModelParameter, DefaultParameterMapping>
-        getDefaultParameterMappings() {
+    default java.util.Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         return ProviderParameterMappingDefaults.forAdapters(getSupportedAdapterTypes());
     }
 
-    default java.util.Map<ModelParameter, DefaultParameterMapping>
-        getDefaultParameterMappings(AdapterType adapterType) {
+    default java.util.Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
+            AdapterType adapterType) {
         return getDefaultParameterMappings();
     }
 
@@ -130,8 +130,7 @@ public interface AiProviderType {
         return null;
     }
 
-    default ProviderDecisionClient buildDecisionClient(
-        AiProvider provider, String apiKey, ProviderModelRef model) {
+    default ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey, ProviderModelRef model) {
         return null;
     }
 
@@ -158,8 +157,7 @@ public interface AiProviderType {
         return null;
     }
 
-    default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    default EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, ProviderModelRef model) {
         return buildEmbeddingModel(provider, apiKey, model.modelId());
     }
 
@@ -168,24 +166,22 @@ public interface AiProviderType {
     }
 
     @Nullable
-    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
         return null;
     }
 
-    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    default ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, ProviderModelRef model) {
         return buildRerankingClient(provider, apiKey, model.modelId());
     }
 
     @Nullable
-    default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
+    default ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
         return null;
     }
 
-    default ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, ProviderModelRef model) {
+    default ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, ProviderModelRef model) {
         return buildImageGenerationClient(provider, apiKey, model.modelId());
     }
 

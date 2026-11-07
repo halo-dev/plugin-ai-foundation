@@ -7,10 +7,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.util.Assert;
@@ -25,20 +23,18 @@ import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpRequest;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpTransport;
 import run.halo.aifoundation.provider.support.embedding.IndexedEmbeddingDecoder;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 
 /** AIHubMix-owned dense embedding client. */
-public final class AiHubMixEmbeddingModel
-    implements ProviderEmbeddingModel, RequestHeaderAwareEmbeddingModel {
+public final class AiHubMixEmbeddingModel implements ProviderEmbeddingModel, RequestHeaderAwareEmbeddingModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String INVALID_INPUT =
-        "AIHubMix embedding input must contain 1 to 2048 non-blank strings";
+    private static final String INVALID_INPUT = "AIHubMix embedding input must contain 1 to 2048 non-blank strings";
 
     private final AiHubMixEmbeddingOptions defaults;
     private final EmbeddingHttpTransport transport;
 
-    AiHubMixEmbeddingModel(AiHubMixEmbeddingOptions defaults,
-        WebClient.Builder webClientBuilder) {
+    AiHubMixEmbeddingModel(AiHubMixEmbeddingOptions defaults, WebClient.Builder webClientBuilder) {
         this.defaults = defaults;
         this.transport = new EmbeddingHttpTransport("aihubmix", webClientBuilder);
     }
@@ -49,11 +45,10 @@ public final class AiHubMixEmbeddingModel
     }
 
     @Override
-    public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request,
-        Map<String, String> headers) {
+    public EmbeddingResponse call(
+            org.springframework.ai.embedding.EmbeddingRequest request, Map<String, String> headers) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
-        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(),
-            request.getOptions(), headers));
+        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(), request.getOptions(), headers));
     }
 
     @Override
@@ -64,11 +59,11 @@ public final class AiHubMixEmbeddingModel
         var body = requestBody(input, options);
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + "/embeddings";
         var exchange = EmbeddingHttpRequest.builder(url, body)
-            .adapterType("aihubmix-embedding")
-            .apiKey(options.apiKey())
-            .headers(options.customHeaders())
-            .timeout(options.timeout())
-            .build();
+                .adapterType("aihubmix-embedding")
+                .apiKey(options.apiKey())
+                .headers(options.customHeaders())
+                .timeout(options.timeout())
+                .build();
         return response(transport.post(exchange), options.model());
     }
 
@@ -76,8 +71,10 @@ public final class AiHubMixEmbeddingModel
     public float[] embed(Document document) {
         Assert.notNull(document, "Document must not be null");
         var response = call(new org.springframework.ai.embedding.EmbeddingRequest(
-            List.of(document.getFormattedContent(MetadataMode.EMBED)), defaults));
-        return response.getResults().isEmpty() ? new float[0] : response.getResult().getOutput();
+                List.of(document.getFormattedContent(MetadataMode.EMBED)), defaults));
+        return response.getResults().isEmpty()
+                ? new float[0]
+                : response.getResult().getOutput();
     }
 
     private Object embeddingInput(ProviderEmbeddingRequest request) {
@@ -106,15 +103,13 @@ public final class AiHubMixEmbeddingModel
 
     private Map<String, String> multimodalItem(EmbeddingContent content) {
         if (content == null) {
-            throw new IllegalArgumentException(
-                "AIHubMix multimodal embedding input must not contain null");
+            throw new IllegalArgumentException("AIHubMix multimodal embedding input must not contain null");
         }
         return switch (content.getType()) {
             case TEXT -> Map.of("text", content.getText());
-            case IMAGE -> Map.of("image", MediaContentSources.urlOrBase64(content.getMedia(),
-                "AIHubMix embedding image"));
-            case VIDEO -> throw new IllegalArgumentException(
-                "AIHubMix Jina embeddings do not document video input");
+            case IMAGE ->
+                Map.of("image", MediaContentSources.urlOrBase64(content.getMedia(), "AIHubMix embedding image"));
+            case VIDEO -> throw new IllegalArgumentException("AIHubMix Jina embeddings do not document video input");
         };
     }
 
@@ -132,8 +127,7 @@ public final class AiHubMixEmbeddingModel
             return;
         }
         if (options.dimensions() < 1) {
-            throw new IllegalArgumentException(
-                "AIHubMix embedding dimensions must be positive");
+            throw new IllegalArgumentException("AIHubMix embedding dimensions must be positive");
         }
     }
 
@@ -144,8 +138,7 @@ public final class AiHubMixEmbeddingModel
         return value.isBlank();
     }
 
-    private Map<String, Object> requestBody(Object input,
-        AiHubMixEmbeddingOptions options) {
+    private Map<String, Object> requestBody(Object input, AiHubMixEmbeddingOptions options) {
         validateOptions(options);
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.model());
@@ -159,19 +152,18 @@ public final class AiHubMixEmbeddingModel
     private EmbeddingResponse response(String data, String requestedModel) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
-            var values = IndexedEmbeddingDecoder.decode(root.path("data"), value ->
-                IndexedEmbeddingDecoder.floatArrayOrBase64(value,
-                    "AIHubMix embedding vector has an invalid shape"));
+            var values = IndexedEmbeddingDecoder.decode(
+                    root.path("data"),
+                    value -> IndexedEmbeddingDecoder.floatArrayOrBase64(
+                            value, "AIHubMix embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var rawUsage = JsonNodes.isAbsent(usage)
-                ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
+            var rawUsage = JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadataValues = new LinkedHashMap<String, Object>();
             put(metadataValues, "id", text(root.path("id")));
             put(metadataValues, "provider", text(root.path("provider")));
-            var model = hasText(text(root.path("model"))) ? text(root.path("model"))
-                : requestedModel;
-            var metadata = new EmbeddingResponseMetadata(model,
-                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), metadataValues);
+            var model = hasText(text(root.path("model"))) ? text(root.path("model")) : requestedModel;
+            var metadata = new EmbeddingResponseMetadata(
+                    model, ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), metadataValues);
             return new EmbeddingResponse(values, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse AIHubMix embedding response", e);
@@ -191,5 +183,4 @@ public final class AiHubMixEmbeddingModel
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
-
 }

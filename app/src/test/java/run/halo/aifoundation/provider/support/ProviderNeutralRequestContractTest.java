@@ -15,14 +15,11 @@ class ProviderNeutralRequestContractTest {
     @Test
     void publicRequestsDoNotExposeProviderSpecificOptions() {
         var requestTypes = List.of(
-            GenerateTextRequest.class,
-            EmbeddingRequest.class,
-            RerankRequest.class,
-            GenerateImageRequest.class);
+                GenerateTextRequest.class, EmbeddingRequest.class, RerankRequest.class, GenerateImageRequest.class);
 
         assertThat(requestTypes)
-            .allSatisfy(type -> assertThat(type.getMethods())
-                .extracting(Method::getName)
-                .noneMatch(name -> name.toLowerCase().contains("provideroption")));
+                .allSatisfy(type -> assertThat(type.getMethods())
+                        .extracting(Method::getName)
+                        .noneMatch(name -> name.toLowerCase().contains("provideroption")));
     }
 }

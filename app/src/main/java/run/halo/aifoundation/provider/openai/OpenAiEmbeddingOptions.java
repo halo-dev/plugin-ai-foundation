@@ -6,11 +6,17 @@ import java.util.Map;
 import org.springframework.ai.embedding.EmbeddingOptions;
 import run.halo.aifoundation.provider.support.ProviderHeaders;
 
-record OpenAiEmbeddingOptions(String baseUrl, String apiKey, String model, Integer dimensions,
-                              String encodingFormat, String user,
-                              Map<String, Object> extraBody,
-                              Map<String, String> customHeaders, Duration timeout)
-    implements run.halo.aifoundation.provider.support.ParameterMappedEmbeddingOptions {
+record OpenAiEmbeddingOptions(
+        String baseUrl,
+        String apiKey,
+        String model,
+        Integer dimensions,
+        String encodingFormat,
+        String user,
+        Map<String, Object> extraBody,
+        Map<String, String> customHeaders,
+        Duration timeout)
+        implements run.halo.aifoundation.provider.support.ParameterMappedEmbeddingOptions {
 
     OpenAiEmbeddingOptions {
         extraBody = extraBody == null ? Map.of() : Map.copyOf(extraBody);
@@ -35,8 +41,7 @@ record OpenAiEmbeddingOptions(String baseUrl, String apiKey, String model, Integ
             headers.putAll(request.customHeaders());
         }
         if (requestHeaders != null) {
-            requestHeaders.forEach((name, header) ->
-                ProviderHeaders.putIfValid(headers, name, header));
+            requestHeaders.forEach((name, header) -> ProviderHeaders.putIfValid(headers, name, header));
         }
         var merged = new MutableOptions(this);
         merged.apply(value);
@@ -50,8 +55,8 @@ record OpenAiEmbeddingOptions(String baseUrl, String apiKey, String model, Integ
         if (mappedBody != null) {
             merged.putAll(mappedBody);
         }
-        return new OpenAiEmbeddingOptions(baseUrl, apiKey, model, null, encodingFormat, user,
-            Map.copyOf(merged), customHeaders, timeout);
+        return new OpenAiEmbeddingOptions(
+                baseUrl, apiKey, model, null, encodingFormat, user, Map.copyOf(merged), customHeaders, timeout);
     }
 
     private static boolean text(String value) {
@@ -118,8 +123,8 @@ record OpenAiEmbeddingOptions(String baseUrl, String apiKey, String model, Integ
         }
 
         private OpenAiEmbeddingOptions toOptions(Map<String, String> headers) {
-            return new OpenAiEmbeddingOptions(baseUrl, apiKey, model, dimensions, encodingFormat,
-                user, extraBody, headers, timeout);
+            return new OpenAiEmbeddingOptions(
+                    baseUrl, apiKey, model, dimensions, encodingFormat, user, extraBody, headers, timeout);
         }
     }
 }

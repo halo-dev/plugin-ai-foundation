@@ -9,27 +9,19 @@ class ProviderOptionMapMergerTest {
 
     @Test
     void mergesNestedObjectsAtLeafLevelWithoutMutatingSources() {
-        var base = Map.<String, Object>of(
-            "reasoning", Map.of("summary", "auto", "effort", "low"),
-            "store", false);
-        var overrides = Map.<String, Object>of(
-            "reasoning", Map.of("effort", "high"));
+        var base = Map.<String, Object>of("reasoning", Map.of("summary", "auto", "effort", "low"), "store", false);
+        var overrides = Map.<String, Object>of("reasoning", Map.of("effort", "high"));
 
         var merged = ProviderOptionMapMerger.merge(base, overrides);
 
-        assertThat(nested(merged, "reasoning"))
-            .containsEntry("summary", "auto")
-            .containsEntry("effort", "high");
-        assertThat(nested(base, "reasoning"))
-            .containsEntry("summary", "auto")
-            .containsEntry("effort", "low");
+        assertThat(nested(merged, "reasoning")).containsEntry("summary", "auto").containsEntry("effort", "high");
+        assertThat(nested(base, "reasoning")).containsEntry("summary", "auto").containsEntry("effort", "low");
     }
 
     @Test
     void replacesNonObjectValuesInsteadOfGuessingTheirShape() {
         var merged = ProviderOptionMapMerger.merge(
-            Map.of("reasoning", Map.of("effort", "low")),
-            Map.of("reasoning", "disabled"));
+                Map.of("reasoning", Map.of("effort", "low")), Map.of("reasoning", "disabled"));
 
         assertThat(merged).containsEntry("reasoning", "disabled");
     }

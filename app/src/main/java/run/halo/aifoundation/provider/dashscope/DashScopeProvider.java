@@ -27,19 +27,17 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
-import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
 @Component
 public class DashScopeProvider extends AbstractAiProviderType {
 
-    private static final String DEFAULT_BASE_URL =
-        "https://dashscope.aliyuncs.com/compatible-mode/v1";
+    private static final String DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
     private static final int DISCOVERY_PAGE_SIZE = 100;
 
     @Override
@@ -89,11 +87,14 @@ public class DashScopeProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.DASHSCOPE_CHAT, AdapterType.DASHSCOPE_RESPONSES,
-            AdapterType.DASHSCOPE_MESSAGES,
-            AdapterType.DASHSCOPE_EMBEDDING,
-            AdapterType.DASHSCOPE_NATIVE_RERANK, AdapterType.DASHSCOPE_COMPATIBLE_RERANK,
-            AdapterType.DASHSCOPE_IMAGE);
+        return List.of(
+                AdapterType.DASHSCOPE_CHAT,
+                AdapterType.DASHSCOPE_RESPONSES,
+                AdapterType.DASHSCOPE_MESSAGES,
+                AdapterType.DASHSCOPE_EMBEDDING,
+                AdapterType.DASHSCOPE_NATIVE_RERANK,
+                AdapterType.DASHSCOPE_COMPATIBLE_RERANK,
+                AdapterType.DASHSCOPE_IMAGE);
     }
 
     @Override
@@ -105,8 +106,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
     public List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
         return switch (adapterType) {
             case DASHSCOPE_CHAT -> ProviderFeatureSets.ALL;
-            case DASHSCOPE_RESPONSES, DASHSCOPE_MESSAGES ->
-                ProviderFeatureSets.VISION_REASONING;
+            case DASHSCOPE_RESPONSES, DASHSCOPE_MESSAGES -> ProviderFeatureSets.VISION_REASONING;
             case DASHSCOPE_NATIVE_RERANK -> List.of(ModelFeature.VISION);
             default -> List.of();
         };
@@ -146,10 +146,11 @@ public class DashScopeProvider extends AbstractAiProviderType {
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
         var endpoints = endpoints(provider);
-        var options = chatCompletionsOptions(provider, apiKey, modelId, Map.of()).mutate()
-            .baseUrl(endpoints.compatibleBaseUrl())
-            .endpointPath("/chat/completions")
-            .build();
+        var options = chatCompletionsOptions(provider, apiKey, modelId, Map.of())
+                .mutate()
+                .baseUrl(endpoints.compatibleBaseUrl())
+                .endpointPath("/chat/completions")
+                .build();
         return new DashScopeChatModel(options, webClientBuilder(provider));
     }
 
@@ -157,80 +158,84 @@ public class DashScopeProvider extends AbstractAiProviderType {
     public ChatModel buildChatModel(AiProvider provider, String apiKey, ProviderModelRef model) {
         var resolved = resolveModel(model);
         var endpoints = endpoints(provider);
-        var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of()).mutate()
-            .baseUrl(endpoints.compatibleBaseUrl())
-            .build();
+        var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of())
+                .mutate()
+                .baseUrl(endpoints.compatibleBaseUrl())
+                .build();
         return switch (resolved.adapterType()) {
-            case DASHSCOPE_CHAT -> new DashScopeChatModel(options.mutate()
-                .endpointPath("/chat/completions").build(), webClientBuilder(provider));
-            case DASHSCOPE_RESPONSES -> new DashScopeResponsesModel(options,
-                webClientBuilder(provider));
-            case DASHSCOPE_MESSAGES -> new DashScopeMessagesModel(options.mutate()
-                .baseUrl(endpoints.messagesBaseUrl()).build(), webClientBuilder(provider));
-            default -> throw new IllegalArgumentException(
-                "Unsupported DashScope language adapter: " + resolved.adapterType());
+            case DASHSCOPE_CHAT ->
+                new DashScopeChatModel(
+                        options.mutate().endpointPath("/chat/completions").build(), webClientBuilder(provider));
+            case DASHSCOPE_RESPONSES -> new DashScopeResponsesModel(options, webClientBuilder(provider));
+            case DASHSCOPE_MESSAGES ->
+                new DashScopeMessagesModel(
+                        options.mutate().baseUrl(endpoints.messagesBaseUrl()).build(), webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException("Unsupported DashScope language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = DashScopeEmbeddingOptions.builder()
-            .baseUrl(endpoints(provider).nativeBaseUrl())
-            .apiKey(apiKey)
-            .model(modelId)
-            .outputType(DashScopeEmbeddingOptions.OutputType.DENSE)
-            .build();
+                .baseUrl(endpoints(provider).nativeBaseUrl())
+                .apiKey(apiKey)
+                .model(modelId)
+                .outputType(DashScopeEmbeddingOptions.OutputType.DENSE)
+                .build();
         return new DashScopeEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
-        return new DashScopeRerankingClient(resolveBaseUrl(provider), modelId, apiKey,
-            webClientBuilder(provider), DashScopeRerankingClient.RequestFormat.NATIVE);
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
+        return new DashScopeRerankingClient(
+                resolveBaseUrl(provider),
+                modelId,
+                apiKey,
+                webClientBuilder(provider),
+                DashScopeRerankingClient.RequestFormat.NATIVE);
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, ProviderModelRef model) {
         var resolved = resolveModel(model);
-        var requestFormat = switch (resolved.adapterType()) {
-            case DASHSCOPE_COMPATIBLE_RERANK ->
-                DashScopeRerankingClient.RequestFormat.COMPATIBLE;
-            case DASHSCOPE_NATIVE_RERANK -> DashScopeRerankingClient.RequestFormat.NATIVE;
-            default -> throw new IllegalArgumentException(
-                "Unsupported DashScope rerank adapter: " + resolved.adapterType());
-        };
-        return new DashScopeRerankingClient(resolveBaseUrl(provider), resolved.modelId(), apiKey,
-            webClientBuilder(provider), requestFormat);
+        var requestFormat =
+                switch (resolved.adapterType()) {
+                    case DASHSCOPE_COMPATIBLE_RERANK -> DashScopeRerankingClient.RequestFormat.COMPATIBLE;
+                    case DASHSCOPE_NATIVE_RERANK -> DashScopeRerankingClient.RequestFormat.NATIVE;
+                    default ->
+                        throw new IllegalArgumentException(
+                                "Unsupported DashScope rerank adapter: " + resolved.adapterType());
+                };
+        return new DashScopeRerankingClient(
+                resolveBaseUrl(provider), resolved.modelId(), apiKey, webClientBuilder(provider), requestFormat);
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new DashScopeImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new DashScopeImageGenerationClient(
+                new ImageGenerationClientOptions(getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+                imageWebClientBuilder(provider));
     }
 
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, StructuredOutputSupport.JSON_SCHEMA);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, StructuredOutputSupport.JSON_SCHEMA);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(true)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
@@ -241,25 +246,23 @@ public class DashScopeProvider extends AbstractAiProviderType {
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         return discoveryPage(provider, apiKey, 1)
-            .expand(page -> page.hasNext()
-                ? discoveryPage(provider, apiKey, page.pageNumber() + 1) : Mono.empty())
-            .flatMapIterable(DiscoveryPage::models)
-            .collectList();
+                .expand(page -> page.hasNext() ? discoveryPage(provider, apiKey, page.pageNumber() + 1) : Mono.empty())
+                .flatMapIterable(DiscoveryPage::models)
+                .collectList();
     }
 
-    private Mono<DiscoveryPage> discoveryPage(AiProvider provider, String apiKey,
-        int pageNumber) {
-        var url = endpoints(provider).modelCatalogUrl() + "?page_no=" + pageNumber
-            + "&page_size=" + DISCOVERY_PAGE_SIZE;
+    private Mono<DiscoveryPage> discoveryPage(AiProvider provider, String apiKey, int pageNumber) {
+        var url =
+                endpoints(provider).modelCatalogUrl() + "?page_no=" + pageNumber + "&page_size=" + DISCOVERY_PAGE_SIZE;
         return getDiscoveryJson(provider, apiKey, ignored -> URI.create(url), null)
-            .map(json -> {
-                var output = json.get("output") instanceof Map<?, ?> value ? value : Map.of();
-                var nodes = output.get("models") instanceof List<?> value ? value : List.of();
-                var models = discoveredModels(nodes);
-                var total = integerValue(output.get("total"), models.size());
-                var pageSize = integerValue(output.get("page_size"), DISCOVERY_PAGE_SIZE);
-                return new DiscoveryPage(pageNumber, pageSize, total, models);
-            });
+                .map(json -> {
+                    var output = json.get("output") instanceof Map<?, ?> value ? value : Map.of();
+                    var nodes = output.get("models") instanceof List<?> value ? value : List.of();
+                    var models = discoveredModels(nodes);
+                    var total = integerValue(output.get("total"), models.size());
+                    var pageSize = integerValue(output.get("page_size"), DISCOVERY_PAGE_SIZE);
+                    return new DiscoveryPage(pageNumber, pageSize, total, models);
+                });
     }
 
     private List<DiscoveredModel> discoveredModels(List<?> nodes) {
@@ -287,20 +290,18 @@ public class DashScopeProvider extends AbstractAiProviderType {
         }
         var features = dashScopeFeatures(node, modelType);
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(stringValue(node, "name"))
-            .modelType(modelType)
-            .features(features)
-            .adapterType(discoveredAdapterType(modelType).orElse(null))
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .build();
+                .modelId(modelId)
+                .displayName(stringValue(node, "name"))
+                .modelType(modelType)
+                .features(features)
+                .adapterType(discoveredAdapterType(modelType).orElse(null))
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .build();
     }
 
     private Optional<AdapterType> discoveredAdapterType(ModelType modelType) {
-        return modelType == ModelType.RERANK
-            ? Optional.empty()
-            : recommendAdapterType(modelType);
+        return modelType == ModelType.RERANK ? Optional.empty() : recommendAdapterType(modelType);
     }
 
     private ModelType dashScopeModelType(Map<?, ?> node) {
@@ -354,8 +355,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
         var normalized = new LinkedHashSet<String>();
         for (var item : values) {
             if (item != null) {
-                normalized.add(item.toString().replace("_", "")
-                    .replace("-", "").toLowerCase(Locale.ROOT));
+                normalized.add(item.toString().replace("_", "").replace("-", "").toLowerCase(Locale.ROOT));
             }
         }
         return Set.copyOf(normalized);
@@ -363,8 +363,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
 
     private boolean contains(Set<String> values, String... candidates) {
         for (var candidate : candidates) {
-            var normalized = candidate.replace("_", "").replace("-", "")
-                .toLowerCase(Locale.ROOT);
+            var normalized = candidate.replace("_", "").replace("-", "").toLowerCase(Locale.ROOT);
             if (values.contains(normalized)) {
                 return true;
             }
@@ -393,19 +392,16 @@ public class DashScopeProvider extends AbstractAiProviderType {
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        defaults.put(ModelParameter.TOP_N,
-            DefaultParameterMapping.template("rerank.top-n"));
+        defaults.put(ModelParameter.TOP_N, DefaultParameterMapping.template("rerank.top-n"));
         return Map.copyOf(defaults);
     }
 
     @Override
-    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(
-        AdapterType adapterType) {
+    public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings(AdapterType adapterType) {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings(adapterType));
         if (adapterType == AdapterType.DASHSCOPE_NATIVE_RERANK) {
-            defaults.put(ModelParameter.TOP_N,
-                DefaultParameterMapping.template("rerank.parameters.top-n"));
+            defaults.put(ModelParameter.TOP_N, DefaultParameterMapping.template("rerank.parameters.top-n"));
         }
         return Map.copyOf(defaults);
     }
@@ -414,8 +410,7 @@ public class DashScopeProvider extends AbstractAiProviderType {
         return new DashScopeEndpointResolver(resolveBaseUrl(provider));
     }
 
-    private record DiscoveryPage(int pageNumber, int pageSize, int total,
-                                 List<DiscoveredModel> models) {
+    private record DiscoveryPage(int pageNumber, int pageSize, int total, List<DiscoveredModel> models) {
         boolean hasNext() {
             return pageNumber * pageSize < total;
         }

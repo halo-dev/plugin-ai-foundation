@@ -11,8 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class UsageSqliteJdbc {
 
-    private UsageSqliteJdbc() {
-    }
+    private UsageSqliteJdbc() {}
 
     static void putMeta(Connection connection, String key, String value) throws SQLException {
         try (var statement = connection.prepareStatement("""
@@ -26,8 +25,7 @@ final class UsageSqliteJdbc {
     }
 
     static long longMeta(Connection connection, String key, long fallback) throws SQLException {
-        try (var statement = connection.prepareStatement(
-            "SELECT value FROM ai_statistics_meta WHERE key = ?")) {
+        try (var statement = connection.prepareStatement("SELECT value FROM ai_statistics_meta WHERE key = ?")) {
             statement.setString(1, key);
             try (var rows = statement.executeQuery()) {
                 return rows.next() ? Long.parseLong(rows.getString(1)) : fallback;
@@ -45,8 +43,7 @@ final class UsageSqliteJdbc {
         return row.wasNull() ? null : value;
     }
 
-    static void setLong(PreparedStatement statement, int index, Long value)
-        throws SQLException {
+    static void setLong(PreparedStatement statement, int index, Long value) throws SQLException {
         if (value == null) {
             statement.setObject(index, null);
         } else {

@@ -7,8 +7,7 @@ public final class DecisionResponseValidationException extends IllegalStateExcep
     private final String responseModel;
     private final DecisionUsage usage;
 
-    public DecisionResponseValidationException(IllegalStateException cause,
-        String responseModel, DecisionUsage usage) {
+    public DecisionResponseValidationException(IllegalStateException cause, String responseModel, DecisionUsage usage) {
         super(cause.getMessage(), cause);
         this.responseModel = responseModel;
         this.usage = usage;

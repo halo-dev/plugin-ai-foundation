@@ -6,8 +6,7 @@ package run.halo.aifoundation.ui;
  * @param toolCallId stable tool call id
  * @param inputTextDelta incremental tool input text
  */
-public record ToolInputDeltaChunk(String toolCallId, String inputTextDelta)
-    implements UIMessageChunk {
+public record ToolInputDeltaChunk(String toolCallId, String inputTextDelta) implements UIMessageChunk {
 
     @Override
     public String type() {

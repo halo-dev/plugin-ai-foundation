@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import run.halo.aifoundation.capability.CapabilitySource;
 import run.halo.aifoundation.capability.ImageGenerationCapability;
@@ -32,58 +31,77 @@ class ModelCapabilityServiceTest {
     void catalogMediaCoverageIsNotExpandedByLegacyFeatureDefaults() {
         var model = model(ModelType.LANGUAGE);
         model.getSpec().setFeatures(List.of(ModelFeature.AUDIO_INPUT, ModelFeature.VISION));
-        model.getSpec().setCapabilities(ModelCapabilities.builder()
-            .language(LanguageCapability.builder().imageInput(true).fileInput(true)
-                .reasoningHistory(false)
-                .inputMediaTypes(List.of("image/png", "audio/wav"))
-                .inputSources(List.of(InputSource.DATA)).build()).build());
-        model.getSpec().setCapabilitySources(ModelCapabilitySources.builder()
-            .language(CapabilitySource.UNKNOWN).build());
-        model.getSpec().setCatalogMatch(new ModelCatalogMatch("openai", "model", null,
-            List.of("language.inputMediaTypes")));
+        model.getSpec()
+                .setCapabilities(ModelCapabilities.builder()
+                        .language(LanguageCapability.builder()
+                                .imageInput(true)
+                                .fileInput(true)
+                                .reasoningHistory(false)
+                                .inputMediaTypes(List.of("image/png", "audio/wav"))
+                                .inputSources(List.of(InputSource.DATA))
+                                .build())
+                        .build());
+        model.getSpec()
+                .setCapabilitySources(ModelCapabilitySources.builder()
+                        .language(CapabilitySource.UNKNOWN)
+                        .build());
+        model.getSpec()
+                .setCatalogMatch(new ModelCatalogMatch("openai", "model", null, List.of("language.inputMediaTypes")));
 
         var capabilities = service.effectiveCapabilities(model, null);
-        assertThat(capabilities.getLanguage().getInputMediaTypes())
-            .containsExactly("image/png", "audio/wav");
+        assertThat(capabilities.getLanguage().getInputMediaTypes()).containsExactly("image/png", "audio/wav");
         assertThat(capabilities.getLanguage().getInputSources()).containsExactly(InputSource.DATA);
         assertThat(capabilities.getLanguage().getReasoningHistory()).isFalse();
 
         // Changing an unrelated feature marks the language domain manual, but leaves the
         // catalog's precise media coverage intact.
-        model.getSpec().setCapabilitySources(ModelCapabilitySources.builder()
-            .language(CapabilitySource.MANUAL).build());
+        model.getSpec()
+                .setCapabilitySources(ModelCapabilitySources.builder()
+                        .language(CapabilitySource.MANUAL)
+                        .build());
         assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
-            .containsExactly("image/png", "audio/wav");
+                .containsExactly("image/png", "audio/wav");
 
         // Editing a media field removes its attribution, not the precise coverage contract.
         model.getSpec().setCatalogMatch(new ModelCatalogMatch("openai", "model", null, List.of()));
         assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
-            .containsExactly("image/png", "audio/wav");
-        assertThat(matcher.match(service.effectiveCapabilities(model, null),
-            ModelCapabilityRequirement.builder().language(LanguageCapability.builder()
-                .fileInput(true).inputMediaTypes(List.of("audio/ogg"))
-                .inputSources(List.of(InputSource.DATA)).build()).build()).matched()).isFalse();
+                .containsExactly("image/png", "audio/wav");
+        assertThat(matcher.match(
+                                service.effectiveCapabilities(model, null),
+                                ModelCapabilityRequirement.builder()
+                                        .language(LanguageCapability.builder()
+                                                .fileInput(true)
+                                                .inputMediaTypes(List.of("audio/ogg"))
+                                                .inputSources(List.of(InputSource.DATA))
+                                                .build())
+                                        .build())
+                        .matched())
+                .isFalse();
 
         // A pre-catalog reader drops the optional provenance. Its existing audio default is
         // deliberately unchanged; decoding compatibility does not promise downgrade parity.
         model.getSpec().setCatalogMatch(null);
         assertThat(service.effectiveCapabilities(model, null).getLanguage().getInputMediaTypes())
-            .containsExactly("image/png", "audio/wav", "audio/*");
+                .containsExactly("image/png", "audio/wav", "audio/*");
     }
 
     @Test
     void catalogImportsDefaultAbsentCoverageButPreserveExplicitEmptyLists() {
         var model = model(ModelType.LANGUAGE);
         model.getSpec().setFeatures(List.of(ModelFeature.VISION, ModelFeature.AUDIO_INPUT));
-        model.getSpec().setCatalogMatch(new ModelCatalogMatch("openai", "model", null,
-            List.of("language.inputMediaTypes")));
+        model.getSpec()
+                .setCatalogMatch(new ModelCatalogMatch("openai", "model", null, List.of("language.inputMediaTypes")));
         var defaults = service.effectiveCapabilities(model, null).getLanguage();
         assertThat(defaults.getInputMediaTypes()).containsExactly("image/*", "audio/*");
         assertThat(defaults.getInputSources()).containsExactly(InputSource.DATA);
 
-        model.getSpec().setCapabilities(ModelCapabilities.builder()
-            .language(LanguageCapability.builder().inputMediaTypes(List.of())
-                .inputSources(List.of()).build()).build());
+        model.getSpec()
+                .setCapabilities(ModelCapabilities.builder()
+                        .language(LanguageCapability.builder()
+                                .inputMediaTypes(List.of())
+                                .inputSources(List.of())
+                                .build())
+                        .build());
         var explicit = service.effectiveCapabilities(model, null).getLanguage();
         assertThat(explicit.getInputMediaTypes()).isEmpty();
         assertThat(explicit.getInputSources()).isEmpty();
@@ -99,23 +117,25 @@ class ModelCapabilityServiceTest {
         assertThat(capabilities.getLanguage().getImageInput()).isTrue();
         assertThat(capabilities.getLanguage().getInputMediaTypes()).containsExactly("image/*");
         assertThat(capabilities.getLanguage().getInputSources()).containsExactly(InputSource.DATA);
-        assertThat(matcher.match(capabilities,
-            ModelCapabilityRequirement.languageImageInput("image/png", InputSource.DATA))
-            .matched()).isTrue();
+        assertThat(matcher.match(
+                                capabilities,
+                                ModelCapabilityRequirement.languageImageInput("image/png", InputSource.DATA))
+                        .matched())
+                .isTrue();
     }
 
     @Test
     void effectiveCapabilities_keepManualDomainUntouched() {
         var model = model(ModelType.LANGUAGE);
         model.getSpec().setFeatures(List.of(ModelFeature.VISION));
-        model.getSpec().setCapabilities(ModelCapabilities.builder()
-            .language(LanguageCapability.builder()
-                .imageInput(false)
-                .build())
-            .build());
-        model.getSpec().setCapabilitySources(ModelCapabilitySources.builder()
-            .language(CapabilitySource.MANUAL)
-            .build());
+        model.getSpec()
+                .setCapabilities(ModelCapabilities.builder()
+                        .language(LanguageCapability.builder().imageInput(false).build())
+                        .build());
+        model.getSpec()
+                .setCapabilitySources(ModelCapabilitySources.builder()
+                        .language(CapabilitySource.MANUAL)
+                        .build());
 
         var capabilities = service.effectiveCapabilities(model, null);
 
@@ -126,23 +146,25 @@ class ModelCapabilityServiceTest {
     @Test
     void effectiveCapabilities_defaultsImageInputDetailsWhenImageInputIsExplicit() {
         var model = model(ModelType.LANGUAGE);
-        model.getSpec().setCapabilities(ModelCapabilities.builder()
-            .language(LanguageCapability.builder()
-                .imageInput(true)
-                .build())
-            .build());
-        model.getSpec().setCapabilitySources(ModelCapabilitySources.builder()
-            .language(CapabilitySource.MANUAL)
-            .build());
+        model.getSpec()
+                .setCapabilities(ModelCapabilities.builder()
+                        .language(LanguageCapability.builder().imageInput(true).build())
+                        .build());
+        model.getSpec()
+                .setCapabilitySources(ModelCapabilitySources.builder()
+                        .language(CapabilitySource.MANUAL)
+                        .build());
 
         var capabilities = service.effectiveCapabilities(model, null);
 
         assertThat(capabilities.getLanguage().getImageInput()).isTrue();
         assertThat(capabilities.getLanguage().getInputMediaTypes()).containsExactly("image/*");
         assertThat(capabilities.getLanguage().getInputSources()).containsExactly(InputSource.DATA);
-        assertThat(matcher.match(capabilities,
-            ModelCapabilityRequirement.languageImageInput("image/png", InputSource.DATA))
-            .matched()).isTrue();
+        assertThat(matcher.match(
+                                capabilities,
+                                ModelCapabilityRequirement.languageImageInput("image/png", InputSource.DATA))
+                        .matched())
+                .isTrue();
     }
 
     @Test
@@ -155,15 +177,17 @@ class ModelCapabilityServiceTest {
         assertThat(capabilities.getLanguage().getFileInput()).isTrue();
         assertThat(capabilities.getLanguage().getInputMediaTypes()).containsExactly("audio/*");
         assertThat(capabilities.getLanguage().getInputSources()).containsExactly(InputSource.DATA);
-        assertThat(matcher.match(capabilities,
-            ModelCapabilityRequirement.builder()
-                .language(LanguageCapability.builder()
-                    .fileInput(true)
-                    .inputMediaTypes(List.of("audio/wav"))
-                    .inputSources(List.of(InputSource.DATA))
-                    .build())
-                .build())
-            .matched()).isTrue();
+        assertThat(matcher.match(
+                                capabilities,
+                                ModelCapabilityRequirement.builder()
+                                        .language(LanguageCapability.builder()
+                                                .fileInput(true)
+                                                .inputMediaTypes(List.of("audio/wav"))
+                                                .inputSources(List.of(InputSource.DATA))
+                                                .build())
+                                        .build())
+                        .matched())
+                .isTrue();
     }
 
     @Test
@@ -182,7 +206,7 @@ class ModelCapabilityServiceTest {
         var model = model(ModelType.IMAGE_GENERATION);
         var providerType = mock(AiProviderType.class);
         when(providerType.recommendAdapterType(ModelType.IMAGE_GENERATION))
-            .thenReturn(java.util.Optional.of(AdapterType.OPENAI_IMAGE));
+                .thenReturn(java.util.Optional.of(AdapterType.OPENAI_IMAGE));
 
         var capabilities = service.effectiveCapabilities(model, providerType);
 
@@ -193,10 +217,10 @@ class ModelCapabilityServiceTest {
     void effectiveCapabilities_inheritsProviderReasoningHistoryDefault() {
         var model = model(ModelType.LANGUAGE);
         var providerType = mock(AiProviderType.class);
-        when(providerType.languageModelProviderOptions()).thenReturn(
-            LanguageModelProviderOptions.builder()
-                .reasoningHistorySupported(true)
-                .build());
+        when(providerType.languageModelProviderOptions())
+                .thenReturn(LanguageModelProviderOptions.builder()
+                        .reasoningHistorySupported(true)
+                        .build());
 
         var capabilities = service.effectiveCapabilities(model, providerType);
 
@@ -206,16 +230,17 @@ class ModelCapabilityServiceTest {
     @Test
     void effectiveCapabilities_modelReasoningHistoryOverridesProviderDefault() {
         var model = model(ModelType.LANGUAGE);
-        model.getSpec().setCapabilities(ModelCapabilities.builder()
-            .language(LanguageCapability.builder()
-                .reasoningHistory(false)
-                .build())
-            .build());
+        model.getSpec()
+                .setCapabilities(ModelCapabilities.builder()
+                        .language(LanguageCapability.builder()
+                                .reasoningHistory(false)
+                                .build())
+                        .build());
         var providerType = mock(AiProviderType.class);
-        when(providerType.languageModelProviderOptions()).thenReturn(
-            LanguageModelProviderOptions.builder()
-                .reasoningHistorySupported(true)
-                .build());
+        when(providerType.languageModelProviderOptions())
+                .thenReturn(LanguageModelProviderOptions.builder()
+                        .reasoningHistorySupported(true)
+                        .build());
 
         var capabilities = service.effectiveCapabilities(model, providerType);
 
@@ -226,8 +251,7 @@ class ModelCapabilityServiceTest {
     void effectiveCapabilities_inheritsUnsupportedProviderReasoningHistoryDefault() {
         var model = model(ModelType.LANGUAGE);
         var providerType = mock(AiProviderType.class);
-        when(providerType.languageModelProviderOptions())
-            .thenReturn(LanguageModelProviderOptions.defaults());
+        when(providerType.languageModelProviderOptions()).thenReturn(LanguageModelProviderOptions.defaults());
 
         var capabilities = service.effectiveCapabilities(model, providerType);
 
@@ -238,23 +262,21 @@ class ModelCapabilityServiceTest {
     void matcher_treatsUnknownAsUnsupportedAndUsesMediaCoverage() {
         var unknown = ModelCapabilities.empty();
         var imageWildcard = ModelCapabilities.builder()
-            .language(LanguageCapability.builder()
-                .imageInput(true)
-                .inputMediaTypes(List.of("image/*"))
-                .inputSources(List.of(InputSource.DATA))
-                .build())
-            .build();
-        var requiredPng = ModelCapabilityRequirement.languageImageInput("image/png",
-            InputSource.DATA);
-        var requiredWildcard = ModelCapabilityRequirement.languageImageInput("image/*",
-            InputSource.DATA);
+                .language(LanguageCapability.builder()
+                        .imageInput(true)
+                        .inputMediaTypes(List.of("image/*"))
+                        .inputSources(List.of(InputSource.DATA))
+                        .build())
+                .build();
+        var requiredPng = ModelCapabilityRequirement.languageImageInput("image/png", InputSource.DATA);
+        var requiredWildcard = ModelCapabilityRequirement.languageImageInput("image/*", InputSource.DATA);
         var pngOnly = ModelCapabilities.builder()
-            .language(LanguageCapability.builder()
-                .imageInput(true)
-                .inputMediaTypes(List.of("image/png"))
-                .inputSources(List.of(InputSource.DATA))
-                .build())
-            .build();
+                .language(LanguageCapability.builder()
+                        .imageInput(true)
+                        .inputMediaTypes(List.of("image/png"))
+                        .inputSources(List.of(InputSource.DATA))
+                        .build())
+                .build();
 
         assertThat(matcher.match(unknown, requiredPng).matched()).isFalse();
         assertThat(matcher.match(imageWildcard, requiredPng).matched()).isTrue();
@@ -264,26 +286,26 @@ class ModelCapabilityServiceTest {
     @Test
     void matcher_requiresAllImageGenerationConditions() {
         var capabilities = ModelCapabilities.builder()
-            .imageGeneration(ImageGenerationCapability.builder()
-                .textToImage(true)
-                .maxImagesPerCall(2)
-                .outputMediaTypes(List.of("image/png"))
-                .build())
-            .build();
+                .imageGeneration(ImageGenerationCapability.builder()
+                        .textToImage(true)
+                        .maxImagesPerCall(2)
+                        .outputMediaTypes(List.of("image/png"))
+                        .build())
+                .build();
         var requirement = ModelCapabilityRequirement.builder()
-            .imageGeneration(ImageGenerationCapability.builder()
-                .textToImage(true)
-                .maxImagesPerCall(3)
-                .outputMediaTypes(List.of("image/png"))
-                .build())
-            .build();
+                .imageGeneration(ImageGenerationCapability.builder()
+                        .textToImage(true)
+                        .maxImagesPerCall(3)
+                        .outputMediaTypes(List.of("image/png"))
+                        .build())
+                .build();
 
         var result = matcher.match(capabilities, requirement);
 
         assertThat(result.matched()).isFalse();
         assertThat(result.issues())
-            .extracting(CapabilityMatchIssue::path)
-            .containsExactly("imageGeneration.maxImagesPerCall");
+                .extracting(CapabilityMatchIssue::path)
+                .containsExactly("imageGeneration.maxImagesPerCall");
     }
 
     private AiModel model(ModelType type) {

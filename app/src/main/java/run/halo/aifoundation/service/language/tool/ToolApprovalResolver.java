@@ -28,13 +28,12 @@ public final class ToolApprovalResolver {
                     requests.put(part.getApprovalId(), new PendingApproval(part));
                 } else if (PartType.isToolApprovalResponse(part.getType())) {
                     responses.add(new ResponseEntry(part, messageIndex));
-                } else if (PartType.isToolResponse(part.getType())
-                    && part.getToolCallId() != null) {
+                } else if (PartType.isToolResponse(part.getType()) && part.getToolCallId() != null) {
                     resolvedToolCallIds.add(part.getToolCallId());
                     requests.values().stream()
-                        .filter(request -> part.getToolCallId().equals(request.toolCallId()))
-                        .map(PendingApproval::approvalId)
-                        .forEach(consumedApprovalIds::add);
+                            .filter(request -> part.getToolCallId().equals(request.toolCallId()))
+                            .map(PendingApproval::approvalId)
+                            .forEach(consumedApprovalIds::add);
                 }
             }
         }
@@ -43,22 +42,24 @@ public final class ToolApprovalResolver {
         for (var response : responses) {
             var request = requests.get(response.approvalId());
             if (request == null) {
-                throw new IllegalArgumentException("tool approval response references unknown approval: "
-                    + response.approvalId());
+                throw new IllegalArgumentException(
+                        "tool approval response references unknown approval: " + response.approvalId());
             }
-            if (response.toolCallId() != null && !response.toolCallId().isBlank()
-                && !response.toolCallId().equals(request.toolCallId())) {
-                throw new IllegalArgumentException("tool approval response toolCallId does not match request: "
-                    + response.approvalId());
+            if (response.toolCallId() != null
+                    && !response.toolCallId().isBlank()
+                    && !response.toolCallId().equals(request.toolCallId())) {
+                throw new IllegalArgumentException(
+                        "tool approval response toolCallId does not match request: " + response.approvalId());
             }
-            if (response.toolName() != null && !response.toolName().isBlank()
-                && !response.toolName().equals(request.toolName())) {
-                throw new IllegalArgumentException("tool approval response toolName does not match request: "
-                    + response.approvalId());
+            if (response.toolName() != null
+                    && !response.toolName().isBlank()
+                    && !response.toolName().equals(request.toolName())) {
+                throw new IllegalArgumentException(
+                        "tool approval response toolName does not match request: " + response.approvalId());
             }
             if (consumedApprovalIds.contains(response.approvalId())
-                || resolvedToolCallIds.contains(request.toolCallId())
-                || hasProviderContinuationAfter(safeMessages, response.messageIndex())) {
+                    || resolvedToolCallIds.contains(request.toolCallId())
+                    || hasProviderContinuationAfter(safeMessages, response.messageIndex())) {
                 continue;
             }
             unresolved.add(new ResolvedApproval(request, response));
@@ -82,8 +83,7 @@ public final class ToolApprovalResolver {
         return parts != null ? List.copyOf(parts) : List.of();
     }
 
-    private static boolean hasProviderContinuationAfter(List<ModelMessage> messages,
-        int messageIndex) {
+    private static boolean hasProviderContinuationAfter(List<ModelMessage> messages, int messageIndex) {
         for (var index = messageIndex + 1; index < messages.size(); index++) {
             var message = messages.get(index);
             if (message == null || message.getRole() == null) {
@@ -98,8 +98,7 @@ public final class ToolApprovalResolver {
                         return true;
                     }
                 }
-                default -> {
-                }
+                default -> {}
             }
         }
         return false;
@@ -107,9 +106,9 @@ public final class ToolApprovalResolver {
 
     private static boolean hasAssistantProviderContent(ModelMessage message) {
         return nullSafe(message.getContent()).stream()
-            .anyMatch(part -> PartType.isText(part.getType())
-                || PartType.isReasoning(part.getType())
-                || PartType.isToolCall(part.getType()));
+                .anyMatch(part -> PartType.isText(part.getType())
+                        || PartType.isReasoning(part.getType())
+                        || PartType.isToolCall(part.getType()));
     }
 
     public record ApprovalResolution(List<ResolvedApproval> approvals) {
@@ -121,74 +120,84 @@ public final class ToolApprovalResolver {
     public record ResolvedApproval(PendingApproval request, ResponseEntry response) {
         public ToolCall toolCall() {
             return ToolCall.builder()
-                .toolCallId(request.toolCallId())
-                .toolName(request.toolName())
-                .input(request.input())
-                .providerMetadata(request.providerMetadata())
-                .build();
+                    .toolCallId(request.toolCallId())
+                    .toolName(request.toolName())
+                    .input(request.input())
+                    .providerMetadata(request.providerMetadata())
+                    .build();
         }
 
         public ToolError deniedError() {
             var reason = response.reason();
             return ToolError.builder()
-                .toolCallId(request.toolCallId())
-                .toolName(request.toolName())
-                .errorText(reason != null && !reason.isBlank()
-                    ? "Tool execution denied: " + reason
-                    : "Tool execution denied")
-                .providerMetadata(response.providerMetadata())
-                .build();
+                    .toolCallId(request.toolCallId())
+                    .toolName(request.toolName())
+                    .errorText(
+                            reason != null && !reason.isBlank()
+                                    ? "Tool execution denied: " + reason
+                                    : "Tool execution denied")
+                    .providerMetadata(response.providerMetadata())
+                    .build();
         }
     }
 
     public record PendingApproval(
-        String approvalId,
-        String toolCallId,
-        String toolName,
-        Map<String, Object> input,
-        Integer stepIndex,
-        Map<String, Object> providerMetadata
-    ) {
+            String approvalId,
+            String toolCallId,
+            String toolName,
+            Map<String, Object> input,
+            Integer stepIndex,
+            Map<String, Object> providerMetadata) {
         PendingApproval(ModelMessagePart part) {
-            this(part.getApprovalId(), part.getToolCallId(), part.getToolName(),
-                part.getInput(), part.getStepIndex(), part.getProviderMetadata());
+            this(
+                    part.getApprovalId(),
+                    part.getToolCallId(),
+                    part.getToolName(),
+                    part.getInput(),
+                    part.getStepIndex(),
+                    part.getProviderMetadata());
         }
 
         ToolApprovalRequest toRequest() {
             return ToolApprovalRequest.builder()
-                .approvalId(approvalId)
-                .toolCallId(toolCallId)
-                .toolName(toolName)
-                .input(input)
-                .stepIndex(stepIndex)
-                .providerMetadata(providerMetadata)
-                .build();
+                    .approvalId(approvalId)
+                    .toolCallId(toolCallId)
+                    .toolName(toolName)
+                    .input(input)
+                    .stepIndex(stepIndex)
+                    .providerMetadata(providerMetadata)
+                    .build();
         }
     }
 
     public record ResponseEntry(
-        String approvalId,
-        String toolCallId,
-        String toolName,
-        Boolean approved,
-        String reason,
-        Map<String, Object> providerMetadata,
-        int messageIndex
-    ) {
+            String approvalId,
+            String toolCallId,
+            String toolName,
+            Boolean approved,
+            String reason,
+            Map<String, Object> providerMetadata,
+            int messageIndex) {
         ResponseEntry(ModelMessagePart part, int messageIndex) {
-            this(part.getApprovalId(), part.getToolCallId(), part.getToolName(),
-                part.getApproved(), part.getReason(), part.getProviderMetadata(), messageIndex);
+            this(
+                    part.getApprovalId(),
+                    part.getToolCallId(),
+                    part.getToolName(),
+                    part.getApproved(),
+                    part.getReason(),
+                    part.getProviderMetadata(),
+                    messageIndex);
         }
 
         ToolApprovalResponse toResponse() {
             return ToolApprovalResponse.builder()
-                .approvalId(approvalId)
-                .toolCallId(toolCallId)
-                .toolName(toolName)
-                .approved(approved)
-                .reason(reason)
-                .providerMetadata(providerMetadata)
-                .build();
+                    .approvalId(approvalId)
+                    .toolCallId(toolCallId)
+                    .toolName(toolName)
+                    .approved(approved)
+                    .reason(reason)
+                    .providerMetadata(providerMetadata)
+                    .build();
         }
     }
 }

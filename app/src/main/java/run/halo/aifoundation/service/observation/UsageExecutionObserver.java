@@ -12,8 +12,12 @@ import run.halo.aifoundation.provider.support.DecisionResponseValidationExceptio
 @Component
 public class UsageExecutionObserver {
 
-    public <T> Mono<T> observe(UsageUnitKind kind, int unitIndex, Supplier<Mono<T>> invocation,
-        Function<T, NormalizedUsage> usage, Function<T, String> responseModel) {
+    public <T> Mono<T> observe(
+            UsageUnitKind kind,
+            int unitIndex,
+            Supplier<Mono<T>> invocation,
+            Function<T, NormalizedUsage> usage,
+            Function<T, String> responseModel) {
         return Mono.deferContextual(context -> {
             var session = UsageCallSession.from(context);
             if (session == null) {
@@ -24,19 +28,18 @@ public class UsageExecutionObserver {
                 return invocation.get();
             }
             return Mono.defer(invocation)
-                .doOnSuccess(value -> UsageTelemetry.safely(() -> {
-                    if (value == null) {
-                        scope.succeed(NormalizedUsage.missing(), null);
-                        return;
-                    }
-                    scope.succeed(UsageTelemetry.safely(() -> usage.apply(value), NormalizedUsage.missing()),
-                        UsageTelemetry.safely(() -> responseModel.apply(value), null));
-                }))
-                .doOnError(error -> UsageTelemetry.safely(
-                    () -> scope.fail(error, NormalizedUsage.fromFailure(error),
-                        responseModelFromFailure(error))))
-                .doOnCancel(() -> UsageTelemetry.safely(
-                    () -> scope.cancel(NormalizedUsage.missing(), null)));
+                    .doOnSuccess(value -> UsageTelemetry.safely(() -> {
+                        if (value == null) {
+                            scope.succeed(NormalizedUsage.missing(), null);
+                            return;
+                        }
+                        scope.succeed(
+                                UsageTelemetry.safely(() -> usage.apply(value), NormalizedUsage.missing()),
+                                UsageTelemetry.safely(() -> responseModel.apply(value), null));
+                    }))
+                    .doOnError(error -> UsageTelemetry.safely(() ->
+                            scope.fail(error, NormalizedUsage.fromFailure(error), responseModelFromFailure(error))))
+                    .doOnCancel(() -> UsageTelemetry.safely(() -> scope.cancel(NormalizedUsage.missing(), null)));
         });
     }
 
@@ -49,9 +52,12 @@ public class UsageExecutionObserver {
         return null;
     }
 
-    public <T> Flux<T> observeFlux(UsageUnitKind kind, int unitIndex,
-        Supplier<Flux<T>> invocation, Function<T, NormalizedUsage> usage,
-        Function<T, String> responseModel) {
+    public <T> Flux<T> observeFlux(
+            UsageUnitKind kind,
+            int unitIndex,
+            Supplier<Flux<T>> invocation,
+            Function<T, NormalizedUsage> usage,
+            Function<T, String> responseModel) {
         return Flux.deferContextual(context -> {
             var session = UsageCallSession.from(context);
             if (session == null) {
@@ -65,32 +71,32 @@ public class UsageExecutionObserver {
             var lastModel = new AtomicReference<String>();
             var extractionFailed = new java.util.concurrent.atomic.AtomicBoolean();
             return Flux.defer(invocation)
-                .doOnNext(value -> UsageTelemetry.safely(() -> {
-                    var observedUsage = UsageTelemetry.safely(() -> usage.apply(value), null);
-                    if (observedUsage == null) {
-                        extractionFailed.set(true);
-                    }
-                    if (!NormalizedUsage.isMissing(observedUsage)) {
-                        lastUsage.set(observedUsage);
-                    }
-                    var observedModel = responseModel.apply(value);
-                    if (StringUtils.hasText(observedModel)) {
-                        lastModel.set(observedModel);
-                    }
-                }))
-                .doOnComplete(() -> UsageTelemetry.safely(
-                    () -> scope.succeed(observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get())))
-                .doOnError(error -> UsageTelemetry.safely(() -> {
-                    var failureUsage = NormalizedUsage.fromFailure(error);
-                    // An exception can carry the final snapshot even if no finish chunk arrived.
-                    // Prefer it over earlier cumulative snapshots; never add the two.
-                    if (NormalizedUsage.isMissing(failureUsage)) {
-                        failureUsage = observedUsage(lastUsage.get(), extractionFailed.get());
-                    }
-                    scope.fail(error, failureUsage, lastModel.get());
-                }))
-                .doOnCancel(() -> UsageTelemetry.safely(() ->
-                    scope.cancel(observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get())));
+                    .doOnNext(value -> UsageTelemetry.safely(() -> {
+                        var observedUsage = UsageTelemetry.safely(() -> usage.apply(value), null);
+                        if (observedUsage == null) {
+                            extractionFailed.set(true);
+                        }
+                        if (!NormalizedUsage.isMissing(observedUsage)) {
+                            lastUsage.set(observedUsage);
+                        }
+                        var observedModel = responseModel.apply(value);
+                        if (StringUtils.hasText(observedModel)) {
+                            lastModel.set(observedModel);
+                        }
+                    }))
+                    .doOnComplete(() -> UsageTelemetry.safely(() ->
+                            scope.succeed(observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get())))
+                    .doOnError(error -> UsageTelemetry.safely(() -> {
+                        var failureUsage = NormalizedUsage.fromFailure(error);
+                        // An exception can carry the final snapshot even if no finish chunk arrived.
+                        // Prefer it over earlier cumulative snapshots; never add the two.
+                        if (NormalizedUsage.isMissing(failureUsage)) {
+                            failureUsage = observedUsage(lastUsage.get(), extractionFailed.get());
+                        }
+                        scope.fail(error, failureUsage, lastModel.get());
+                    }))
+                    .doOnCancel(() -> UsageTelemetry.safely(() ->
+                            scope.cancel(observedUsage(lastUsage.get(), extractionFailed.get()), lastModel.get())));
         });
     }
 
@@ -101,10 +107,14 @@ public class UsageExecutionObserver {
         if (NormalizedUsage.isMissing(usage)) {
             return usage;
         }
-        return new NormalizedUsage(usage.inputTokens(), usage.outputTokens(),
-            usage.cacheReadInputTokens(), usage.cacheCreationInputTokens(),
-            usage.reasoningOutputTokens(), usage.providerTotalTokens(),
-            usage.accountedTotalTokens(), UsageQuality.PARTIAL);
+        return new NormalizedUsage(
+                usage.inputTokens(),
+                usage.outputTokens(),
+                usage.cacheReadInputTokens(),
+                usage.cacheCreationInputTokens(),
+                usage.reasoningOutputTokens(),
+                usage.providerTotalTokens(),
+                usage.accountedTotalTokens(),
+                UsageQuality.PARTIAL);
     }
-
 }

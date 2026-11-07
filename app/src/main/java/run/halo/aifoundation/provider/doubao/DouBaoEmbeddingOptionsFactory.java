@@ -11,11 +11,10 @@ final class DouBaoEmbeddingOptionsFactory {
 
     private static final Set<String> FIELDS = Set.of("encoding_format");
 
-    private DouBaoEmbeddingOptionsFactory() {
-    }
+    private DouBaoEmbeddingOptionsFactory() {}
 
-    static DouBaoEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    static DouBaoEmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return DouBaoEmbeddingOptions.builder().build();
         }
@@ -23,17 +22,15 @@ final class DouBaoEmbeddingOptionsFactory {
         rejectUnknownOptions(values.keySet());
         var encodingFormat = string(values.get("encoding_format"));
         if (encodingFormat != null && !Set.of("float", "base64").contains(encodingFormat)) {
-            throw new IllegalArgumentException(
-                "Doubao embedding encoding_format must be 'float' or 'base64'");
+            throw new IllegalArgumentException("Doubao embedding encoding_format must be 'float' or 'base64'");
         }
         return DouBaoEmbeddingOptions.builder()
-            .dimensions(request.getDimensions())
-            .encodingFormat(encodingFormat)
-            .instructions(request.getInstructions())
-            .includeSparseEmbedding(Boolean.TRUE.equals(request.getIncludeSparseEmbedding()))
-            .includeModalityEmbeddings(
-                Boolean.TRUE.equals(request.getIncludeModalityEmbeddings()))
-            .build();
+                .dimensions(request.getDimensions())
+                .encodingFormat(encodingFormat)
+                .instructions(request.getInstructions())
+                .includeSparseEmbedding(Boolean.TRUE.equals(request.getIncludeSparseEmbedding()))
+                .includeModalityEmbeddings(Boolean.TRUE.equals(request.getIncludeModalityEmbeddings()))
+                .build();
     }
 
     private static void rejectUnknownOptions(Set<String> fields) {
@@ -42,8 +39,7 @@ final class DouBaoEmbeddingOptionsFactory {
         if (unknown.isEmpty()) {
             return;
         }
-        throw new IllegalArgumentException("Unsupported Doubao embedding option(s): "
-            + String.join(", ", unknown));
+        throw new IllegalArgumentException("Unsupported Doubao embedding option(s): " + String.join(", ", unknown));
     }
 
     private static String string(Object value) {
@@ -53,7 +49,6 @@ final class DouBaoEmbeddingOptionsFactory {
         if (value instanceof String text && !text.isBlank()) {
             return text;
         }
-        throw new IllegalArgumentException(
-            "Doubao embedding encoding_format must be a non-blank string");
+        throw new IllegalArgumentException("Doubao embedding encoding_format must be a non-blank string");
     }
 }

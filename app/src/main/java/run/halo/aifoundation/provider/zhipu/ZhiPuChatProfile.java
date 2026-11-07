@@ -22,31 +22,30 @@ import run.halo.aifoundation.provider.support.UriReferencePolicy;
 /** Current BigModel Chat contract: thinking, streaming tools, built-ins, and multimodal input. */
 final class ZhiPuChatProfile implements ChatCompletionsProfile {
 
-    private static final UriReferencePolicy HTTP_MEDIA_REFERENCES =
-        UriReferencePolicy.allowing("http://", "https://");
-    private static final UriReferencePolicy DATA_REFERENCES =
-        UriReferencePolicy.allowing("data:");
-    private static final Set<String> EXTRA_FIELDS = Set.of(
-        "thinking", "reasoning_effort", "do_sample", "tool_stream", "builtinTools",
-        "request_id", "user_id");
+    private static final UriReferencePolicy HTTP_MEDIA_REFERENCES = UriReferencePolicy.allowing("http://", "https://");
+    private static final UriReferencePolicy DATA_REFERENCES = UriReferencePolicy.allowing("data:");
+    private static final Set<String> EXTRA_FIELDS =
+            Set.of("thinking", "reasoning_effort", "do_sample", "tool_stream", "builtinTools", "request_id", "user_id");
     private static final Set<String> DOCUMENT_MIME_TYPES = Set.of(
-        "application/pdf", "text/plain", "application/json", "application/jsonl",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation");
-    private static final Set<String> VIDEO_MIME_TYPES = Set.of(
-        "video/mp4", "video/x-matroska", "video/quicktime");
+            "application/pdf",
+            "text/plain",
+            "application/json",
+            "application/jsonl",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+    private static final Set<String> VIDEO_MIME_TYPES = Set.of("video/mp4", "video/x-matroska", "video/quicktime");
     private static final Set<String> IMAGE_MIME_TYPES = Set.of("image/jpeg", "image/png");
     private static final Map<String, String> AUDIO_FORMATS = Map.of(
-        "audio/wav", "wav",
-        "audio/x-wav", "wav",
-        "audio/mpeg", "mp3",
-        "audio/mp3", "mp3");
-    private static final Set<String> REASONING_EFFORTS = Set.of(
-        "max", "xhigh", "high", "medium", "low", "minimal", "none");
+            "audio/wav", "wav",
+            "audio/x-wav", "wav",
+            "audio/mpeg", "mp3",
+            "audio/mp3", "mp3");
+    private static final Set<String> REASONING_EFFORTS =
+            Set.of("max", "xhigh", "high", "medium", "low", "minimal", "none");
 
     @Override
     public String providerType() {
@@ -59,8 +58,8 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         validateExtraFields(options.getExtraBody());
         body.remove("stream_options");
         applyBuiltinTools(body);
@@ -76,27 +75,23 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
     @Override
     public Map<String, Object> mediaContentPart(Media media) {
         var mime = media.getMimeType() != null
-            ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
-            : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
+                ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
+                : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
         if (IMAGE_MIME_TYPES.contains(mime)) {
-            return Map.of("type", "image_url", "image_url", Map.of(
-                "url", mediaReference(media, mime, true)));
+            return Map.of("type", "image_url", "image_url", Map.of("url", mediaReference(media, mime, true)));
         }
         if (VIDEO_MIME_TYPES.contains(mime)) {
-            return Map.of("type", "video_url", "video_url", Map.of(
-                "url", mediaReference(media, mime, false)));
+            return Map.of("type", "video_url", "video_url", Map.of("url", mediaReference(media, mime, false)));
         }
         if (DOCUMENT_MIME_TYPES.contains(mime)) {
-            return Map.of("type", "file_url", "file_url", Map.of(
-                "url", mediaReference(media, mime, false)));
+            return Map.of("type", "file_url", "file_url", Map.of("url", mediaReference(media, mime, false)));
         }
         var audioFormat = AUDIO_FORMATS.get(mime);
         if (audioFormat != null) {
-            return Map.of("type", "input_audio", "input_audio", Map.of(
-                "data", rawBase64(media), "format", audioFormat));
+            return Map.of(
+                    "type", "input_audio", "input_audio", Map.of("data", rawBase64(media), "format", audioFormat));
         }
-        throw new IllegalArgumentException(
-            "Zhipu Chat supports JPEG/PNG images, MP4/MKV/MOV video, documented files, "
+        throw new IllegalArgumentException("Zhipu Chat supports JPEG/PNG images, MP4/MKV/MOV video, documented files, "
                 + "or WAV/MP3 audio; received: " + mime);
     }
 
@@ -126,8 +121,7 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(EXTRA_FIELDS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported Zhipu Chat option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported Zhipu Chat option(s): " + String.join(", ", unknown));
         }
     }
 
@@ -162,16 +156,13 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
             var unknown = new LinkedHashSet<>(thinking.keySet());
             unknown.removeAll(Set.of("type", "clear_thinking"));
             if (!unknown.isEmpty()) {
-                throw new IllegalArgumentException("Unsupported Zhipu thinking field(s): "
-                    + join(unknown));
+                throw new IllegalArgumentException("Unsupported Zhipu thinking field(s): " + join(unknown));
             }
             var type = text(thinking.get("type"));
             if (type != null && !Set.of("enabled", "disabled").contains(type)) {
-                throw new IllegalArgumentException(
-                    "Zhipu thinking.type must be 'enabled' or 'disabled'");
+                throw new IllegalArgumentException("Zhipu thinking.type must be 'enabled' or 'disabled'");
             }
-            if (thinking.get("clear_thinking") != null
-                && !(thinking.get("clear_thinking") instanceof Boolean)) {
+            if (thinking.get("clear_thinking") != null && !(thinking.get("clear_thinking") instanceof Boolean)) {
                 throw new IllegalArgumentException("Zhipu thinking.clear_thinking must be boolean");
             }
         }
@@ -210,14 +201,12 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
             var tool = map(value);
             var type = tool != null ? text(tool.get("type")) : null;
             if (!Set.of("function", "retrieval", "web_search", "mcp").contains(type)) {
-                throw new IllegalArgumentException(
-                    "Zhipu tools must be function, retrieval, web_search, or mcp");
+                throw new IllegalArgumentException("Zhipu tools must be function, retrieval, web_search, or mcp");
             }
             if ("function".equals(type)) {
                 var function = map(tool.get("function"));
                 if (function == null || function.get("strict") != null) {
-                    throw new IllegalArgumentException(
-                        "Zhipu function tools do not document the OpenAI strict field");
+                    throw new IllegalArgumentException("Zhipu function tools do not document the OpenAI strict field");
                 }
             }
         }
@@ -227,14 +216,13 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
         var tool = map(value);
         var type = tool != null ? text(tool.get("type")) : null;
         if (!Set.of("retrieval", "web_search", "mcp").contains(type)) {
-            throw new IllegalArgumentException(
-                "Zhipu builtinTools entries must be retrieval, web_search, or mcp");
+            throw new IllegalArgumentException("Zhipu builtinTools entries must be retrieval, web_search, or mcp");
         }
         var unknown = new LinkedHashSet<>(tool.keySet());
         unknown.removeAll(Set.of("type", type));
         if (!unknown.isEmpty() || map(tool.get(type)) == null) {
             throw new IllegalArgumentException(
-                "Zhipu " + type + " tool must contain only its matching configuration object");
+                    "Zhipu " + type + " tool must contain only its matching configuration object");
         }
         switch (type) {
             case "web_search" -> validateWebSearch(map(tool.get(type)));
@@ -245,22 +233,33 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
     }
 
     private void validateWebSearch(Map<String, Object> search) {
-        var allowed = Set.of("enable", "search_engine", "search_query", "search_intent",
-            "count", "search_domain_filter", "search_recency_filter", "content_size",
-            "result_sequence", "search_result", "require_search", "search_prompt");
+        var allowed = Set.of(
+                "enable",
+                "search_engine",
+                "search_query",
+                "search_intent",
+                "count",
+                "search_domain_filter",
+                "search_recency_filter",
+                "content_size",
+                "result_sequence",
+                "search_result",
+                "require_search",
+                "search_prompt");
         rejectUnknown(search, allowed, "web_search");
         var engine = text(search.get("search_engine"));
-        if (engine == null || !Set.of("search_std", "search_pro", "search_pro_sogou",
-            "search_pro_quark").contains(engine)) {
+        if (engine == null
+                || !Set.of("search_std", "search_pro", "search_pro_sogou", "search_pro_quark")
+                        .contains(engine)) {
             throw new IllegalArgumentException("Zhipu web_search.search_engine is required");
         }
         integerRange(search.get("count"), "web_search.count", 1, 50);
-        enumValue(search.get("search_recency_filter"), "web_search.search_recency_filter",
-            Set.of("oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"));
-        enumValue(search.get("content_size"), "web_search.content_size",
-            Set.of("medium", "high"));
-        enumValue(search.get("result_sequence"), "web_search.result_sequence",
-            Set.of("before", "after"));
+        enumValue(
+                search.get("search_recency_filter"),
+                "web_search.search_recency_filter",
+                Set.of("oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"));
+        enumValue(search.get("content_size"), "web_search.content_size", Set.of("medium", "high"));
+        enumValue(search.get("result_sequence"), "web_search.result_sequence", Set.of("before", "after"));
         for (var field : List.of("enable", "search_result", "require_search")) {
             booleanValue(search.get(field), "web_search." + field);
         }
@@ -274,13 +273,11 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
     }
 
     private void validateMcp(Map<String, Object> mcp) {
-        rejectUnknown(mcp, Set.of("server_label", "server_url", "transport_type",
-            "allowed_tools", "headers"), "mcp");
+        rejectUnknown(mcp, Set.of("server_label", "server_url", "transport_type", "allowed_tools", "headers"), "mcp");
         if (text(mcp.get("server_label")) == null) {
             throw new IllegalArgumentException("Zhipu mcp.server_label is required");
         }
-        enumValue(mcp.get("transport_type"), "mcp.transport_type",
-            Set.of("sse", "streamable-http"));
+        enumValue(mcp.get("transport_type"), "mcp.transport_type", Set.of("sse", "streamable-http"));
     }
 
     private void validateIdentifiers(Map<String, Object> body) {
@@ -294,12 +291,10 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
             return;
         }
         if (!Set.of("text", "json_object").contains(text(format.get("type")))) {
-            throw new IllegalArgumentException(
-                "Zhipu response_format.type must be 'text' or 'json_object'");
+            throw new IllegalArgumentException("Zhipu response_format.type must be 'text' or 'json_object'");
         }
         if (format.size() != 1) {
-            throw new IllegalArgumentException(
-                "Zhipu response_format does not document JSON Schema fields");
+            throw new IllegalArgumentException("Zhipu response_format does not document JSON Schema fields");
         }
     }
 
@@ -309,10 +304,8 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
         if (kinds.isEmpty()) {
             return;
         }
-        if (kinds.contains("file_url")
-            && (kinds.contains("image_url") || kinds.contains("video_url"))) {
-            throw new IllegalArgumentException(
-                "Zhipu file_url cannot be combined with image_url or video_url");
+        if (kinds.contains("file_url") && (kinds.contains("image_url") || kinds.contains("video_url"))) {
+            throw new IllegalArgumentException("Zhipu file_url cannot be combined with image_url or video_url");
         }
         if (media.imageCount() > 50) {
             throw new IllegalArgumentException("Zhipu vision requests accept at most 50 images");
@@ -345,17 +338,29 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
 
     private void rejectUndocumentedOpenAiFields(Map<String, Object> body) {
         var unsupported = new LinkedHashSet<String>();
-        for (var field : Set.of("frequency_penalty", "presence_penalty", "seed", "logprobs",
-            "top_logprobs", "parallel_tool_calls", "logit_bias", "n", "modalities",
-            "audio", "max_completion_tokens", "verbosity", "store", "metadata",
-            "service_tier")) {
+        for (var field : Set.of(
+                "frequency_penalty",
+                "presence_penalty",
+                "seed",
+                "logprobs",
+                "top_logprobs",
+                "parallel_tool_calls",
+                "logit_bias",
+                "n",
+                "modalities",
+                "audio",
+                "max_completion_tokens",
+                "verbosity",
+                "store",
+                "metadata",
+                "service_tier")) {
             if (body.containsKey(field)) {
                 unsupported.add(field);
             }
         }
         if (!unsupported.isEmpty()) {
-            throw new IllegalArgumentException("Zhipu Chat does not document field(s): "
-                + String.join(", ", unsupported));
+            throw new IllegalArgumentException(
+                    "Zhipu Chat does not document field(s): " + String.join(", ", unsupported));
         }
     }
 
@@ -368,8 +373,7 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
             try {
                 var bytes = resource.getContentAsByteArray();
                 if (!dataAllowed) {
-                    throw new IllegalArgumentException(
-                        "Zhipu video and file inputs require an HTTP(S) URL");
+                    throw new IllegalArgumentException("Zhipu video and file inputs require an HTTP(S) URL");
                 }
                 validateImageBytes(bytes);
                 return "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
@@ -379,8 +383,7 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
         }
         if (data instanceof byte[] bytes) {
             if (!dataAllowed) {
-                throw new IllegalArgumentException(
-                    "Zhipu video and file inputs require an HTTP(S) URL");
+                throw new IllegalArgumentException("Zhipu video and file inputs require an HTTP(S) URL");
             }
             validateImageBytes(bytes);
             return "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
@@ -395,8 +398,7 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
             }
         }
         throw new IllegalArgumentException(
-            "Zhipu media input requires an HTTP(S) URL"
-                + (dataAllowed ? " or data URL" : ""));
+                "Zhipu media input requires an HTTP(S) URL" + (dataAllowed ? " or data URL" : ""));
     }
 
     private String rawBase64(Media media) {
@@ -452,8 +454,8 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(allowed);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported Zhipu " + label + " field(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException(
+                    "Unsupported Zhipu " + label + " field(s): " + String.join(", ", unknown));
         }
     }
 
@@ -474,16 +476,13 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
             return;
         }
         if (!(value instanceof Number number)) {
-            throw new IllegalArgumentException(
-                "Zhipu " + field + " must be between " + min + " and " + max);
+            throw new IllegalArgumentException("Zhipu " + field + " must be between " + min + " and " + max);
         }
         if (number.doubleValue() < min) {
-            throw new IllegalArgumentException(
-                "Zhipu " + field + " must be between " + min + " and " + max);
+            throw new IllegalArgumentException("Zhipu " + field + " must be between " + min + " and " + max);
         }
         if (number.doubleValue() > max) {
-            throw new IllegalArgumentException(
-                "Zhipu " + field + " must be between " + min + " and " + max);
+            throw new IllegalArgumentException("Zhipu " + field + " must be between " + min + " and " + max);
         }
         var scaled = number.doubleValue() * 100d;
         if (Math.abs(scaled - Math.rint(scaled)) > 0.0000001d) {
@@ -510,8 +509,7 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
     }
 
     private IllegalArgumentException invalidInteger(String field, int min, int max) {
-        return new IllegalArgumentException(
-            "Zhipu " + field + " must be an integer between " + min + " and " + max);
+        return new IllegalArgumentException("Zhipu " + field + " must be an integer between " + min + " and " + max);
     }
 
     private void stringLength(Object value, String field, int min, int max) {
@@ -520,22 +518,18 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
         }
         var text = text(value);
         if (text == null) {
-            throw new IllegalArgumentException(
-                "Zhipu " + field + " length must be between " + min + " and " + max);
+            throw new IllegalArgumentException("Zhipu " + field + " length must be between " + min + " and " + max);
         }
         if (text.length() < min) {
-            throw new IllegalArgumentException(
-                "Zhipu " + field + " length must be between " + min + " and " + max);
+            throw new IllegalArgumentException("Zhipu " + field + " length must be between " + min + " and " + max);
         }
         if (text.length() > max) {
-            throw new IllegalArgumentException(
-                "Zhipu " + field + " length must be between " + min + " and " + max);
+            throw new IllegalArgumentException("Zhipu " + field + " length must be between " + min + " and " + max);
         }
     }
 
     private String join(Set<?> values) {
-        return values.stream().map(String::valueOf).sorted()
-            .collect(java.util.stream.Collectors.joining(", "));
+        return values.stream().map(String::valueOf).sorted().collect(java.util.stream.Collectors.joining(", "));
     }
 
     private record MediaStats(Set<String> kinds, int imageCount, int fileCount) {
@@ -561,7 +555,7 @@ final class ZhiPuChatProfile implements ChatCompletionsProfile {
             switch (type) {
                 case "image_url" -> imageCount++;
                 case "file_url" -> fileCount++;
-                default -> { }
+                default -> {}
             }
         }
 

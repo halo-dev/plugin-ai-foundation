@@ -19,8 +19,8 @@ final class GiteeChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         var responseFormat = body.remove("response_format");
         var schema = jsonSchema(responseFormat);
         if (schema == null) {

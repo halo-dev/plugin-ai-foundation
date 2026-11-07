@@ -11,10 +11,8 @@ import run.halo.aifoundation.provider.protocol.messages.StandardAnthropicMessage
 /** OpenRouter policy for its Anthropic Messages endpoint. */
 final class OpenRouterMessagesProfile implements AnthropicMessagesProfile {
 
-    private static final StandardAnthropicMessagesProfile STANDARD =
-        new StandardAnthropicMessagesProfile(
-            "openrouter", "openrouter-messages", "/messages",
-            StandardAnthropicMessagesProfile.Authentication.BEARER);
+    private static final StandardAnthropicMessagesProfile STANDARD = new StandardAnthropicMessagesProfile(
+            "openrouter", "openrouter-messages", "/messages", StandardAnthropicMessagesProfile.Authentication.BEARER);
 
     @Override
     public String providerType() {
@@ -37,8 +35,8 @@ final class OpenRouterMessagesProfile implements AnthropicMessagesProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         STANDARD.customizeRequest(body, prompt, options, stream);
         AnthropicMessagesOutputFormats.applyJsonSchema(body, options);
     }

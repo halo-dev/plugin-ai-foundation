@@ -6,9 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Non-fatal diagnostic from reranking execution.
- */
+/** Non-fatal diagnostic from reranking execution. */
 @Data
 @Builder
 @NoArgsConstructor

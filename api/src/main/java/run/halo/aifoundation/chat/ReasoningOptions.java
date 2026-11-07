@@ -9,10 +9,9 @@ import lombok.NoArgsConstructor;
 /**
  * Request-scoped reasoning preference for text generation.
  *
- * <p>The setting describes the caller's intent. A provider adapter decides whether the selected
- * provider can honor that intent and how it should be translated to native request parameters.
- * When the adapter cannot apply an explicit setting, generation fails before a provider call is
- * made.
+ * <p>The setting describes the caller's intent. A provider adapter decides whether the selected provider can honor that
+ * intent and how it should be translated to native request parameters. When the adapter cannot apply an explicit
+ * setting, generation fails before a provider call is made.
  *
  * <pre>{@code
  * GenerateTextRequest request = GenerateTextRequest.builder()
@@ -21,8 +20,8 @@ import lombok.NoArgsConstructor;
  *     .build();
  * }</pre>
  *
- * <p>The administrator maps this provider-neutral intent to a fixed Provider or Model template.
- * Callers do not select provider-native reasoning fields.
+ * <p>The administrator maps this provider-neutral intent to a fixed Provider or Model template. Callers do not select
+ * provider-native reasoning fields.
  */
 @Data
 @Builder
@@ -30,14 +29,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ReasoningOptions {
 
-    /**
-     * Reasoning mode requested for this generation call.
-     */
+    /** Reasoning mode requested for this generation call. */
     private Mode mode;
 
-    /**
-     * Optional effort level. Provider adapters may reject levels they do not support.
-     */
+    /** Optional effort level. Provider adapters may reject levels they do not support. */
     private Effort effort;
 
     /**
@@ -47,9 +42,7 @@ public class ReasoningOptions {
      * @return reasoning options that do not add provider-native reasoning controls
      */
     public static ReasoningOptions providerDefault() {
-        return ReasoningOptions.builder()
-            .mode(Mode.DEFAULT)
-            .build();
+        return ReasoningOptions.builder().mode(Mode.DEFAULT).build();
     }
 
     /**
@@ -58,21 +51,17 @@ public class ReasoningOptions {
      * @return reasoning options with {@link Mode#ENABLED}
      */
     public static ReasoningOptions enabled() {
-        return ReasoningOptions.builder()
-            .mode(Mode.ENABLED)
-            .build();
+        return ReasoningOptions.builder().mode(Mode.ENABLED).build();
     }
 
     /**
-     * Request non-reasoning behavior when the selected provider adapter supports an explicit
-     * disable switch. This is useful for latency-sensitive requests.
+     * Request non-reasoning behavior when the selected provider adapter supports an explicit disable switch. This is
+     * useful for latency-sensitive requests.
      *
      * @return reasoning options with {@link Mode#DISABLED}
      */
     public static ReasoningOptions disabled() {
-        return ReasoningOptions.builder()
-            .mode(Mode.DISABLED)
-            .build();
+        return ReasoningOptions.builder().mode(Mode.DISABLED).build();
     }
 
     /**
@@ -84,9 +73,9 @@ public class ReasoningOptions {
      */
     public static ReasoningOptions effort(Effort effort) {
         return ReasoningOptions.builder()
-            .mode(Mode.ENABLED)
-            .effort(Objects.requireNonNull(effort, "effort must not be null"))
-            .build();
+                .mode(Mode.ENABLED)
+                .effort(Objects.requireNonNull(effort, "effort must not be null"))
+                .build();
     }
 
     /**
@@ -98,43 +87,27 @@ public class ReasoningOptions {
         return effort != null || mode == Mode.ENABLED || mode == Mode.DISABLED;
     }
 
-    /**
-     * Request-scoped reasoning mode.
-     */
+    /** Request-scoped reasoning mode. */
     public enum Mode {
-        /**
-         * Leave reasoning behavior to the provider and selected model.
-         */
+        /** Leave reasoning behavior to the provider and selected model. */
         DEFAULT,
 
-        /**
-         * Ask the provider adapter to enable reasoning when it has a native mapping.
-         */
+        /** Ask the provider adapter to enable reasoning when it has a native mapping. */
         ENABLED,
 
-        /**
-         * Ask the provider adapter to disable reasoning when it has a native mapping.
-         */
+        /** Ask the provider adapter to disable reasoning when it has a native mapping. */
         DISABLED
     }
 
-    /**
-     * Portable effort intent for providers that expose effort-style reasoning controls.
-     */
+    /** Portable effort intent for providers that expose effort-style reasoning controls. */
     public enum Effort {
-        /**
-         * Lower reasoning effort where supported.
-         */
+        /** Lower reasoning effort where supported. */
         LOW,
 
-        /**
-         * Balanced reasoning effort where supported.
-         */
+        /** Balanced reasoning effort where supported. */
         MEDIUM,
 
-        /**
-         * Higher reasoning effort where supported.
-         */
+        /** Higher reasoning effort where supported. */
         HIGH
     }
 }

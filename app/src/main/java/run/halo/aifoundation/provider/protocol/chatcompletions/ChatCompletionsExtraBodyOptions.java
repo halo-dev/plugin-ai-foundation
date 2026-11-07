@@ -5,16 +5,15 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 
-/**
- * Applies adapter-owned extra body values.
- */
+/** Applies adapter-owned extra body values. */
 public final class ChatCompletionsExtraBodyOptions {
 
-    private ChatCompletionsExtraBodyOptions() {
-    }
+    private ChatCompletionsExtraBodyOptions() {}
 
-    public static void apply(ChatCompletionsOptions.Builder builder, GenerateTextRequest request,
-        BiConsumer<Map<String, Object>, GenerateTextRequest> customizer) {
+    public static void apply(
+            ChatCompletionsOptions.Builder builder,
+            GenerateTextRequest request,
+            BiConsumer<Map<String, Object>, GenerateTextRequest> customizer) {
         var extraBody = new LinkedHashMap<String, Object>();
         if (customizer != null) {
             customizer.accept(extraBody, request);
@@ -23,5 +22,4 @@ public final class ChatCompletionsExtraBodyOptions {
             builder.extraBody(Map.copyOf(extraBody));
         }
     }
-
 }

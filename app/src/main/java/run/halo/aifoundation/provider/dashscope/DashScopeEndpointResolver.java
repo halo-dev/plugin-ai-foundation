@@ -1,14 +1,13 @@
 package run.halo.aifoundation.provider.dashscope;
 
-import run.halo.aifoundation.provider.support.ProviderUris;
-
 import java.util.List;
+import run.halo.aifoundation.provider.support.ProviderUris;
 
 /** Resolves the distinct compatible and native endpoint families exposed by Model Studio. */
 public final class DashScopeEndpointResolver {
 
-    private static final List<String> KNOWN_SUFFIXES = List.of(
-        "/compatible-mode/v1", "/compatible-api/v1", "/apps/anthropic", "/api/v1");
+    private static final List<String> KNOWN_SUFFIXES =
+            List.of("/compatible-mode/v1", "/compatible-api/v1", "/apps/anthropic", "/api/v1");
 
     private final String endpointRoot;
 
@@ -48,5 +47,4 @@ public final class DashScopeEndpointResolver {
         }
         return value;
     }
-
 }

@@ -11,8 +11,12 @@ final class UsageStatisticsMaintenance {
     static final int EXECUTION_BATCH_SIZE = 2048;
 
     boolean retainBatch(Connection connection, Clock clock) {
-        var cutoff = clock.instant().atZone(ZoneOffset.UTC).toLocalDate()
-            .minusDays(EXECUTION_RETENTION_DAYS).atStartOfDay().toInstant(ZoneOffset.UTC);
+        var cutoff = clock.instant()
+                .atZone(ZoneOffset.UTC)
+                .toLocalDate()
+                .minusDays(EXECUTION_RETENTION_DAYS)
+                .atStartOfDay()
+                .toInstant(ZoneOffset.UTC);
         // Calls remain as the permanent statistical facts. Keep unfinished executions for
         // lost-terminal recovery, and bound each deletion so the writer can serve new calls.
         try (var statement = connection.prepareStatement("""

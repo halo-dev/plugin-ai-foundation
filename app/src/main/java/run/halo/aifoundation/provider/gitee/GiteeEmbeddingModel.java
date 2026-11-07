@@ -7,21 +7,21 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.util.Assert;
 import org.springframework.web.reactive.function.client.WebClient;
-import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.embedding.EmbeddingContent;
+import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingModel;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpRequest;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpTransport;
 import run.halo.aifoundation.provider.support.embedding.IndexedEmbeddingDecoder;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 
 /** Gitee AI text and multimodal embedding adapter. */
 public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
@@ -32,8 +32,7 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
     private final GiteeEmbeddingOptions defaultOptions;
     private final EmbeddingHttpTransport transport;
 
-    public GiteeEmbeddingModel(GiteeEmbeddingOptions defaultOptions,
-        WebClient.Builder webClientBuilder) {
+    public GiteeEmbeddingModel(GiteeEmbeddingOptions defaultOptions, WebClient.Builder webClientBuilder) {
         Assert.notNull(defaultOptions, "defaultOptions must not be null");
         Assert.notNull(webClientBuilder, "webClientBuilder must not be null");
         this.defaultOptions = defaultOptions;
@@ -47,8 +46,7 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
     @Override
     public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
-        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(),
-            request.getOptions(), Map.of()));
+        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(), request.getOptions(), Map.of()));
     }
 
     @Override
@@ -56,8 +54,7 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
         Assert.notNull(request, "ProviderEmbeddingRequest must not be null");
         var options = defaultOptions.merge(request.options(), request.headers());
         validateOptions(options);
-        var input = request.contents().isEmpty()
-            ? textInput(request.inputs()) : multimodalInput(request.contents());
+        var input = request.contents().isEmpty() ? textInput(request.inputs()) : multimodalInput(request.contents());
         var body = new LinkedHashMap<>(options.extraBody());
         body.put("model", options.model());
         body.put("input", input);
@@ -67,11 +64,11 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
         }
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + "/embeddings";
         var exchange = EmbeddingHttpRequest.builder(url, body)
-            .adapterType("gitee-embedding")
-            .apiKey(options.apiKey())
-            .headers(options.customHeaders())
-            .timeout(options.timeout())
-            .build();
+                .adapterType("gitee-embedding")
+                .apiKey(options.apiKey())
+                .headers(options.customHeaders())
+                .timeout(options.timeout())
+                .build();
         return embeddingResponse(transport.post(exchange), options.model());
     }
 
@@ -79,8 +76,10 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
     public float[] embed(Document document) {
         Assert.notNull(document, "Document must not be null");
         var response = call(new org.springframework.ai.embedding.EmbeddingRequest(
-            List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
-        return response.getResults().isEmpty() ? new float[0] : response.getResult().getOutput();
+                List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
+        return response.getResults().isEmpty()
+                ? new float[0]
+                : response.getResult().getOutput();
     }
 
     private void validateOptions(GiteeEmbeddingOptions options) {
@@ -88,8 +87,7 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
             throw new IllegalArgumentException("Gitee AI embeddings do not support instructions");
         }
         if (options.includeSparseEmbedding() || options.includeModalityEmbeddings()) {
-            throw new IllegalArgumentException(
-                "Gitee AI embeddings return dense vectors without per-modality vectors");
+            throw new IllegalArgumentException("Gitee AI embeddings return dense vectors without per-modality vectors");
         }
     }
 
@@ -111,8 +109,8 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
             switch (content.getType()) {
                 case TEXT -> input.add(Map.of("text", content.getText()));
                 case IMAGE -> input.add(Map.of("image", imageSource(content)));
-                case VIDEO -> throw new IllegalArgumentException(
-                    "Gitee AI multimodal embeddings do not support video input");
+                case VIDEO ->
+                    throw new IllegalArgumentException("Gitee AI multimodal embeddings do not support video input");
             }
         }
         return List.copyOf(input);
@@ -121,32 +119,30 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
     private String imageSource(EmbeddingContent content) {
         var media = content.getMedia();
         if (media == null || media.isUrl() == media.isData()) {
-            throw new IllegalArgumentException(
-                "Gitee AI embedding image must set exactly one URL or base64 value");
+            throw new IllegalArgumentException("Gitee AI embedding image must set exactly one URL or base64 value");
         }
-        return media.isUrl() ? media.getUrl()
-            : "data:" + media.getMediaType() + ";base64," + media.getData();
+        return media.isUrl() ? media.getUrl() : "data:" + media.getMediaType() + ";base64," + media.getData();
     }
 
     private void validateCount(int size) {
         if (size < 1 || size > MAX_INPUTS) {
-            throw new IllegalArgumentException(
-                "Gitee AI embeddings accept between 1 and 1000 inputs per request");
+            throw new IllegalArgumentException("Gitee AI embeddings accept between 1 and 1000 inputs per request");
         }
     }
 
     private EmbeddingResponse embeddingResponse(String data, String requestedModel) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
-            var indexed = IndexedEmbeddingDecoder.decode(root.path("data"), value ->
-                IndexedEmbeddingDecoder.floatArrayOrBase64(value,
-                    "Gitee AI embedding vector has an invalid shape"));
+            var indexed = IndexedEmbeddingDecoder.decode(
+                    root.path("data"),
+                    value -> IndexedEmbeddingDecoder.floatArrayOrBase64(
+                            value, "Gitee AI embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var rawUsage = JsonNodes.isAbsent(usage)
-                ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
+            var rawUsage = JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadata = new EmbeddingResponseMetadata(
-                hasText(text(root, "model")) ? text(root, "model") : requestedModel,
-                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), Map.of());
+                    hasText(text(root, "model")) ? text(root, "model") : requestedModel,
+                    ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage),
+                    Map.of());
             return new EmbeddingResponse(indexed, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse Gitee AI embedding response", e);
@@ -160,5 +156,4 @@ public final class GiteeEmbeddingModel implements ProviderEmbeddingModel {
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
-
 }

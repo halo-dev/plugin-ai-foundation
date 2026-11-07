@@ -8,20 +8,17 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import reactor.core.publisher.Flux;
 
-/**
- * Incrementally decodes the SSE wire format without assuming network-buffer boundaries.
- */
+/** Incrementally decodes the SSE wire format without assuming network-buffer boundaries. */
 public final class ProviderSseDecoder {
 
-    private ProviderSseDecoder() {
-    }
+    private ProviderSseDecoder() {}
 
     public static Flux<ProviderSseEvent> decode(Flux<DataBuffer> source) {
         return Flux.defer(() -> {
             var state = new DecoderState();
             return source.concatMapIterable(state::accept)
-                .concatWith(Flux.defer(() -> Flux.fromIterable(state.finish())))
-                .doOnDiscard(DataBuffer.class, DataBufferUtils::release);
+                    .concatWith(Flux.defer(() -> Flux.fromIterable(state.finish())))
+                    .doOnDiscard(DataBuffer.class, DataBufferUtils::release);
         });
     }
 
@@ -119,8 +116,7 @@ public final class ProviderSseDecoder {
             }
             data.setLength(data.length() - 1);
             events.add(new ProviderSseEvent(
-                event == null || event.isEmpty() ? "message" : event,
-                data.toString(), lastEventId, retryMillis));
+                    event == null || event.isEmpty() ? "message" : event, data.toString(), lastEventId, retryMillis));
             data.setLength(0);
             event = null;
             retryMillis = null;

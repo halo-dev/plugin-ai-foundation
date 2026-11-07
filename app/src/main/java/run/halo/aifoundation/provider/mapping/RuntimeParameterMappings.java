@@ -10,9 +10,7 @@ import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.extension.ModelParameterConstraints;
 import run.halo.aifoundation.extension.ModelParameterMappings;
 
-/**
- * Executable, identity-aware view of effective mappings used by model runtimes.
- */
+/** Executable, identity-aware view of effective mappings used by model runtimes. */
 public final class RuntimeParameterMappings {
 
     private final EffectiveParameterMappings effectiveMappings;
@@ -20,10 +18,12 @@ public final class RuntimeParameterMappings {
     private final String modelName;
     private final String providerName;
 
-    public RuntimeParameterMappings(EffectiveParameterMappings effectiveMappings,
-        ParameterMappingTemplateRegistry templates, String modelName, String providerName) {
-        this.effectiveMappings = effectiveMappings != null
-            ? effectiveMappings : EffectiveParameterMappings.empty();
+    public RuntimeParameterMappings(
+            EffectiveParameterMappings effectiveMappings,
+            ParameterMappingTemplateRegistry templates,
+            String modelName,
+            String providerName) {
+        this.effectiveMappings = effectiveMappings != null ? effectiveMappings : EffectiveParameterMappings.empty();
         this.templates = templates != null ? templates : new ParameterMappingTemplateRegistry();
         this.modelName = modelName;
         this.providerName = providerName;
@@ -96,8 +96,7 @@ public final class RuntimeParameterMappings {
         return true;
     }
 
-    public void validateReasoning(ReasoningOptions reasoning,
-        ModelParameterConstraints.Reasoning constraints) {
+    public void validateReasoning(ReasoningOptions reasoning, ModelParameterConstraints.Reasoning constraints) {
         var value = reasoningValue(reasoning);
         if (value == null || constraints == null) {
             return;
@@ -105,8 +104,7 @@ public final class RuntimeParameterMappings {
         for (var item : validatedReasoningValues(value)) {
             var field = item.getField();
             if (!reasoningFieldAllowed(field, item.getValue(), constraints)) {
-                throw new IllegalArgumentException("reasoning value for " + field
-                    + " is not supported by this model");
+                throw new IllegalArgumentException("reasoning value for " + field + " is not supported by this model");
             }
             if (!isReasoningBudgetField(field)) {
                 continue;
@@ -119,13 +117,11 @@ public final class RuntimeParameterMappings {
         }
     }
 
-    public static void validateBudget(long budget,
-        ModelParameterConstraints.Reasoning constraints) {
+    public static void validateBudget(long budget, ModelParameterConstraints.Reasoning constraints) {
         validateBudget(BigDecimal.valueOf(budget), constraints);
     }
 
-    public static void validateBudget(Number budget,
-        ModelParameterConstraints.Reasoning constraints) {
+    public static void validateBudget(Number budget, ModelParameterConstraints.Reasoning constraints) {
         if (constraints == null) {
             return;
         }
@@ -138,20 +134,18 @@ public final class RuntimeParameterMappings {
         // Preserve arbitrary-precision native numbers so narrowing cannot hide a violated limit.
         var value = new BigDecimal(budget.toString());
         if (constraints.getBudgetMinimum() != null
-            && value.compareTo(BigDecimal.valueOf(constraints.getBudgetMinimum())) < 0) {
-            throw new IllegalArgumentException("reasoning budget must be at least "
-                + constraints.getBudgetMinimum());
+                && value.compareTo(BigDecimal.valueOf(constraints.getBudgetMinimum())) < 0) {
+            throw new IllegalArgumentException("reasoning budget must be at least " + constraints.getBudgetMinimum());
         }
         if (constraints.getBudgetMaximum() != null
-            && value.compareTo(BigDecimal.valueOf(constraints.getBudgetMaximum())) > 0) {
-            throw new IllegalArgumentException("reasoning budget must not exceed "
-                + constraints.getBudgetMaximum());
+                && value.compareTo(BigDecimal.valueOf(constraints.getBudgetMaximum())) > 0) {
+            throw new IllegalArgumentException("reasoning budget must not exceed " + constraints.getBudgetMaximum());
         }
     }
 
     /** Tests native controls only; unrecognized fields and absent facts remain unknown. */
-    public static boolean reasoningFieldAllowed(String field, Object value,
-        ModelParameterConstraints.Reasoning constraints) {
+    public static boolean reasoningFieldAllowed(
+            String field, Object value, ModelParameterConstraints.Reasoning constraints) {
         if (constraints == null || field == null) {
             return true;
         }
@@ -166,8 +160,9 @@ public final class RuntimeParameterMappings {
         if (toggle && Boolean.FALSE.equals(constraints.getToggle())) {
             return false;
         }
-        return !effort || constraints.getEfforts() == null
-            || constraints.getEfforts().contains(String.valueOf(value));
+        return !effort
+                || constraints.getEfforts() == null
+                || constraints.getEfforts().contains(String.valueOf(value));
     }
 
     private static boolean isReasoningEffortField(String field, Object value) {
@@ -188,18 +183,19 @@ public final class RuntimeParameterMappings {
     }
 
     private static boolean isReasoningBudgetField(String field) {
-        return field != null && (field.endsWith("budget_tokens")
-            || field.endsWith("thinking_budget") || field.equals("reasoning.max_tokens"));
+        return field != null
+                && (field.endsWith("budget_tokens")
+                        || field.endsWith("thinking_budget")
+                        || field.equals("reasoning.max_tokens"));
     }
 
     private List<ModelParameterMappings.ReasoningValueMapping> validatedReasoningValues(
-        ModelParameterMappings.ReasoningValueMapping value) {
+            ModelParameterMappings.ReasoningValueMapping value) {
         var values = new ArrayList<ModelParameterMappings.ReasoningValueMapping>();
         values.add(value);
         if (value.getAdditionalValues() != null) {
             if (value.getAdditionalValues().size() > 8) {
-                throw new IllegalArgumentException(
-                    "reasoning mapping permits at most 8 additional values");
+                throw new IllegalArgumentException("reasoning mapping permits at most 8 additional values");
             }
             values.addAll(value.getAdditionalValues());
         }
@@ -209,16 +205,16 @@ public final class RuntimeParameterMappings {
             if (item == null || item.getField() == null || item.getField().isBlank()) {
                 throw new IllegalArgumentException("reasoning mapping field must not be blank");
             }
-            if (index > 0 && item.getAdditionalValues() != null
-                && !item.getAdditionalValues().isEmpty()) {
-                throw new IllegalArgumentException(
-                    "reasoning mapping additional values cannot be nested");
+            if (index > 0
+                    && item.getAdditionalValues() != null
+                    && !item.getAdditionalValues().isEmpty()) {
+                throw new IllegalArgumentException("reasoning mapping additional values cannot be nested");
             }
-            if (fields.stream().anyMatch(field -> field.equals(item.getField())
-                || field.startsWith(item.getField() + ".")
-                || item.getField().startsWith(field + "."))) {
-                throw new IllegalArgumentException("reasoning mapping fields must not overlap: "
-                    + item.getField());
+            if (fields.stream()
+                    .anyMatch(field -> field.equals(item.getField())
+                            || field.startsWith(item.getField() + ".")
+                            || item.getField().startsWith(field + "."))) {
+                throw new IllegalArgumentException("reasoning mapping fields must not overlap: " + item.getField());
             }
             fields.add(item.getField());
             typedReasoningValue(item);
@@ -231,7 +227,7 @@ public final class RuntimeParameterMappings {
             throw new IllegalArgumentException("reasoning mapping value and type are required");
         }
         if (value.getValueType() == ModelParameterMappings.ValueType.BOOLEAN
-            && !List.of("true", "false").contains(value.getValue())) {
+                && !List.of("true", "false").contains(value.getValue())) {
             throw new IllegalArgumentException("reasoning mapping boolean must be true or false");
         }
         var typed = value.typedValue();
@@ -244,8 +240,7 @@ public final class RuntimeParameterMappings {
     @SuppressWarnings("unchecked")
     private void mergeMappedValues(Map<String, Object> target, Map<String, Object> values) {
         values.forEach((key, value) -> {
-            if (value instanceof Map<?, ?> nested
-                && target.get(key) instanceof Map<?, ?> existing) {
+            if (value instanceof Map<?, ?> nested && target.get(key) instanceof Map<?, ?> existing) {
                 var merged = new LinkedHashMap<>((Map<String, Object>) existing);
                 mergeMappedValues(merged, (Map<String, Object>) nested);
                 target.put(key, merged);
@@ -255,8 +250,7 @@ public final class RuntimeParameterMappings {
         });
     }
 
-    private ModelParameterMappings.ReasoningValueMapping reasoningValue(
-        ReasoningOptions reasoning) {
+    private ModelParameterMappings.ReasoningValueMapping reasoningValue(ReasoningOptions reasoning) {
         if (reasoning == null || !reasoning.isExplicit()) {
             return null;
         }
@@ -268,8 +262,8 @@ public final class RuntimeParameterMappings {
         if (descriptor == null) {
             return null;
         }
-        var values = mapping.reasoningMapping() != null
-            ? mapping.reasoningMapping() : descriptor.defaultReasoningMapping();
+        var values =
+                mapping.reasoningMapping() != null ? mapping.reasoningMapping() : descriptor.defaultReasoningMapping();
         if (values == null) {
             return null;
         }

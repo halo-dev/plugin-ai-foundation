@@ -10,18 +10,22 @@ import run.halo.aifoundation.service.observation.UsageTelemetry;
 
 final class UsageCallRecorder {
 
-    private UsageCallRecorder() {
-    }
+    private UsageCallRecorder() {}
 
-    static <T> Mono<T> record(UsageObservation statistics, ModelCallContext context,
-        String operation, boolean streaming, Map<String, Object> metadata,
-        Supplier<Mono<T>> invocation, int failureStepCount,
-        BiConsumer<UsageCallSession, T> success) {
+    static <T> Mono<T> record(
+            UsageObservation statistics,
+            ModelCallContext context,
+            String operation,
+            boolean streaming,
+            Map<String, Object> metadata,
+            Supplier<Mono<T>> invocation,
+            int failureStepCount,
+            BiConsumer<UsageCallSession, T> success) {
         // Assemble once to preserve middleware state and synchronous invocation failures.
         var source = invocation.get();
         // Describe eagerly at assembly time so the caller snapshot reflects the invoking plugin.
-        var descriptor = UsageTelemetry.safely(
-            () -> statistics.describeCall(context, operation, streaming, metadata), null);
+        var descriptor =
+                UsageTelemetry.safely(() -> statistics.describeCall(context, operation, streaming, metadata), null);
         if (descriptor == null) {
             return source;
         }
@@ -30,14 +34,10 @@ final class UsageCallRecorder {
             if (session == null) {
                 return source;
             }
-            return source
-                .doOnSuccess(result -> UsageTelemetry.safely(
-                    () -> success.accept(session, result)))
-                .doOnError(error -> UsageTelemetry.safely(
-                    () -> session.fail(error, failureStepCount)))
-                .doOnCancel(() -> UsageTelemetry.safely(session::cancel))
-                .contextWrite(contextView ->
-                    contextView.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+            return source.doOnSuccess(result -> UsageTelemetry.safely(() -> success.accept(session, result)))
+                    .doOnError(error -> UsageTelemetry.safely(() -> session.fail(error, failureStepCount)))
+                    .doOnCancel(() -> UsageTelemetry.safely(session::cancel))
+                    .contextWrite(contextView -> contextView.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         });
     }
 }

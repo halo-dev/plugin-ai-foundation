@@ -62,46 +62,69 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     private final UsageExecutionObserver usageExecutionObserver;
     private final Map<String, Object> nativeOptions;
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client,
-        ModelCapabilities modelCapabilities,
-        String modelName, String providerName, String providerType,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
-        this(client, modelCapabilities, modelName, providerName, providerType, mediaResourcePolicy,
-            capabilityMatcher, EffectiveParameterMappings.empty());
+    ImageGenerationModelImpl(
+            ProviderImageGenerationClient client,
+            ModelCapabilities modelCapabilities,
+            String modelName,
+            String providerName,
+            String providerType,
+            MediaResourcePolicy mediaResourcePolicy,
+            ModelCapabilityMatcher capabilityMatcher) {
+        this(
+                client,
+                modelCapabilities,
+                modelName,
+                providerName,
+                providerType,
+                mediaResourcePolicy,
+                capabilityMatcher,
+                EffectiveParameterMappings.empty());
     }
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client,
-        ModelCapabilities modelCapabilities,
-        String modelName, String providerName, String providerType,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
-        EffectiveParameterMappings parameterMappings) {
-        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher,
-            ModelRuntimeContext.unresolved(providerType, modelName, providerName,
-                new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
+    ImageGenerationModelImpl(
+            ProviderImageGenerationClient client,
+            ModelCapabilities modelCapabilities,
+            String modelName,
+            String providerName,
+            String providerType,
+            MediaResourcePolicy mediaResourcePolicy,
+            ModelCapabilityMatcher capabilityMatcher,
+            EffectiveParameterMappings parameterMappings) {
+        this(
+                client,
+                modelCapabilities,
+                mediaResourcePolicy,
+                capabilityMatcher,
+                ModelRuntimeContext.unresolved(
+                        providerType,
+                        modelName,
+                        providerName,
+                        new RuntimeParameterMappings(parameterMappings, null, modelName, providerName)));
     }
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client,
-        ModelCapabilities modelCapabilities,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
-        ModelRuntimeContext context) {
-        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher, context,
-            new UsageExecutionObserver());
+    ImageGenerationModelImpl(
+            ProviderImageGenerationClient client,
+            ModelCapabilities modelCapabilities,
+            MediaResourcePolicy mediaResourcePolicy,
+            ModelCapabilityMatcher capabilityMatcher,
+            ModelRuntimeContext context) {
+        this(client, modelCapabilities, mediaResourcePolicy, capabilityMatcher, context, new UsageExecutionObserver());
     }
 
-    ImageGenerationModelImpl(ProviderImageGenerationClient client,
-        ModelCapabilities modelCapabilities,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher,
-        ModelRuntimeContext context, UsageExecutionObserver usageExecutionObserver) {
+    ImageGenerationModelImpl(
+            ProviderImageGenerationClient client,
+            ModelCapabilities modelCapabilities,
+            MediaResourcePolicy mediaResourcePolicy,
+            ModelCapabilityMatcher capabilityMatcher,
+            ModelRuntimeContext context,
+            UsageExecutionObserver usageExecutionObserver) {
         this.client = client;
-        this.modelCapabilities = modelCapabilities != null ? modelCapabilities
-            : ModelCapabilities.empty();
+        this.modelCapabilities = modelCapabilities != null ? modelCapabilities : ModelCapabilities.empty();
         this.modelName = hasText(context.modelName()) ? context.modelName() : "unknown";
         this.providerName = hasText(context.providerName()) ? context.providerName() : "unknown";
         this.providerType = context.providerType();
-        this.mediaResourcePolicy = mediaResourcePolicy != null ? mediaResourcePolicy
-            : new MediaResourcePolicy();
-        this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher
-            : new ModelCapabilityMatcher();
+        this.mediaResourcePolicy = mediaResourcePolicy != null ? mediaResourcePolicy : new MediaResourcePolicy();
+        this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher : new ModelCapabilityMatcher();
         this.parameterMappings = context.parameterMappings();
         this.usageExecutionObserver = usageExecutionObserver;
         this.nativeOptions = context.nativeOptions();
@@ -109,8 +132,9 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
 
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
-        if (request != null && request.getMiddleware() != null
-            && !request.getMiddleware().isEmpty()) {
+        if (request != null
+                && request.getMiddleware() != null
+                && !request.getMiddleware().isEmpty()) {
             return ImageGenerationMiddlewares.applyRequestMiddleware(this, request);
         }
         return generateImageDirect(request);
@@ -118,15 +142,13 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
 
     private Mono<GenerateImageResult> generateImageDirect(GenerateImageRequest request) {
         return Mono.defer(() -> {
-                validateRequest(request);
-                checkCancellation(request);
-                var invocation = prepareInvocation(request);
-                return executeBatches(invocation)
-                    .collectList()
-                    .map(results -> aggregate(invocation, results));
-            })
-            .transform(mono -> withTimeout(mono, request))
-            .doOnNext(ignored -> checkCancellation(request));
+                    validateRequest(request);
+                    checkCancellation(request);
+                    var invocation = prepareInvocation(request);
+                    return executeBatches(invocation).collectList().map(results -> aggregate(invocation, results));
+                })
+                .transform(mono -> withTimeout(mono, request))
+                .doOnNext(ignored -> checkCancellation(request));
     }
 
     @Override
@@ -137,19 +159,19 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     @Override
     public ModelInfo modelInfo() {
         return ModelInfo.builder()
-            .name(modelName)
-            .providerName(providerName)
-            .enabled(true)
-            .build();
+                .name(modelName)
+                .providerName(providerName)
+                .enabled(true)
+                .build();
     }
 
     @Override
     public ProviderInfo providerInfo() {
         return ProviderInfo.builder()
-            .name(providerName)
-            .providerType(providerType)
-            .enabled(true)
-            .build();
+                .name(providerName)
+                .providerType(providerType)
+                .enabled(true)
+                .build();
     }
 
     private ImageInvocation prepareInvocation(GenerateImageRequest request) {
@@ -157,30 +179,37 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         validateCapabilities(request);
         var warnings = new ArrayList<ImageGenerationWarning>();
         var adjusted = adjustedRequest(request, warnings);
-        return new ImageInvocation(adjusted, warnings, batches(requestedImageCount(adjusted)),
-            concurrency(request));
+        return new ImageInvocation(adjusted, warnings, batches(requestedImageCount(adjusted)), concurrency(request));
     }
 
     private Flux<GenerateImageResult> executeBatches(ImageInvocation invocation) {
         return Flux.range(0, invocation.batchSizes().size())
-            .flatMapSequential(index -> invokeBatch(
-                    copyForBatch(invocation.request(), invocation.batchSizes().get(index)), index),
-                invocation.concurrency(), 1);
+                .flatMapSequential(
+                        index -> invokeBatch(
+                                copyForBatch(
+                                        invocation.request(),
+                                        invocation.batchSizes().get(index)),
+                                index),
+                        invocation.concurrency(),
+                        1);
     }
 
     private Mono<GenerateImageResult> invokeBatch(GenerateImageRequest request, int batchIndex) {
         var call = Mono.defer(() -> {
             checkCancellation(request);
             var target = parameterMappings.isEmpty() ? null : mappingTarget(request);
-            Supplier<Mono<GenerateImageResult>> invocation =
-                () -> client.generateImage(request, target, nativeOptions);
-            return usageExecutionObserver.observe(UsageUnitKind.IMAGE_BATCH, batchIndex,
-                    invocation, result -> NormalizedUsage.from(result.getUsage()), this::responseModel)
-                .doOnNext(ignored -> checkCancellation(request));
+            Supplier<Mono<GenerateImageResult>> invocation = () -> client.generateImage(request, target, nativeOptions);
+            return usageExecutionObserver
+                    .observe(
+                            UsageUnitKind.IMAGE_BATCH,
+                            batchIndex,
+                            invocation,
+                            result -> NormalizedUsage.from(result.getUsage()),
+                            this::responseModel)
+                    .doOnNext(ignored -> checkCancellation(request));
         });
         var maxRetries = maxRetries(request);
-        return maxRetries <= 0 ? call
-            : call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
+        return maxRetries <= 0 ? call : call.retryWhen(Retry.max(maxRetries).filter(this::isRetryable));
     }
 
     private String responseModel(GenerateImageResult result) {
@@ -201,13 +230,11 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         return target;
     }
 
-    private void applyMapping(ModelParameter parameter, Object value,
-        ParameterMappingTarget target) {
+    private void applyMapping(ModelParameter parameter, Object value, ParameterMappingTarget target) {
         parameterMappings.apply(parameter, value, target);
     }
 
-    private GenerateImageResult aggregate(ImageInvocation invocation,
-        List<GenerateImageResult> results) {
+    private GenerateImageResult aggregate(ImageInvocation invocation, List<GenerateImageResult> results) {
         var images = new ArrayList<GeneratedFile>();
         var warnings = new ArrayList<ImageGenerationWarning>(invocation.warnings());
         var responses = new ArrayList<GenerationResponseMetadata>();
@@ -217,8 +244,7 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             if (result == null) {
                 continue;
             }
-            var validResult = ImageGenerationResults.requireImages(result, modelName, providerName,
-                providerType);
+            var validResult = ImageGenerationResults.requireImages(result, modelName, providerName, providerType);
             if (validResult.getImages() != null) {
                 images.addAll(validResult.getImages());
             }
@@ -229,20 +255,22 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
                 responses.addAll(validResult.getResponses());
             }
             if (validResult.getProviderMetadata() != null
-                && !validResult.getProviderMetadata().isEmpty()) {
+                    && !validResult.getProviderMetadata().isEmpty()) {
                 batchProviderMetadata.add(validResult.getProviderMetadata());
             }
             usage = addUsage(usage, validResult.getUsage());
         }
         var aggregated = GenerateImageResult.builder()
-            .images(List.copyOf(images))
-            .usage(usage != null ? usage : ImageUsage.builder().imageCount(images.size()).build())
-            .warnings(List.copyOf(warnings))
-            .responses(List.copyOf(responses))
-            .providerMetadata(providerMetadata(batchProviderMetadata))
-            .build();
-        return ImageGenerationResults.requireImages(aggregated, modelName, providerName,
-            providerType);
+                .images(List.copyOf(images))
+                .usage(
+                        usage != null
+                                ? usage
+                                : ImageUsage.builder().imageCount(images.size()).build())
+                .warnings(List.copyOf(warnings))
+                .responses(List.copyOf(responses))
+                .providerMetadata(providerMetadata(batchProviderMetadata))
+                .build();
+        return ImageGenerationResults.requireImages(aggregated, modelName, providerName, providerType);
     }
 
     private void validateRequest(GenerateImageRequest request) {
@@ -270,102 +298,100 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         }
         if (media.isUrl() == media.isData()) {
             throw new InvalidMediaContentException(
-                name + " media content must set exactly one of url or data",
-                media.getMediaType(), media.getFilename(), null, null);
+                    name + " media content must set exactly one of url or data",
+                    media.getMediaType(),
+                    media.getFilename(),
+                    null,
+                    null);
         }
         if (!hasText(media.getMediaType())) {
             throw new InvalidMediaContentException(
-                name + " mediaType is required for image generation media",
-                media.getMediaType(), media.getFilename(), null, null);
+                    name + " mediaType is required for image generation media",
+                    media.getMediaType(),
+                    media.getFilename(),
+                    null,
+                    null);
         }
         if (!isImageMediaType(media.getMediaType())) {
             throw new InvalidMediaContentException(
-                name + " mediaType must match image/*",
-                media.getMediaType(), media.getFilename(), null, null);
+                    name + " mediaType must match image/*", media.getMediaType(), media.getFilename(), null, null);
         }
     }
 
     private void validateCapabilities(GenerateImageRequest request) {
         var expected = ImageGenerationCapability.builder()
-            .textToImage(hasInputImages(request) ? null : Boolean.TRUE)
-            .imageToImage(hasInputImages(request) ? Boolean.TRUE : null)
-            .maskInput(request.getMask() != null ? Boolean.TRUE : null)
-            .build();
-        var result = capabilityMatcher.match(modelCapabilities,
-            ModelCapabilityRequirement.builder().imageGeneration(expected).build());
+                .textToImage(hasInputImages(request) ? null : Boolean.TRUE)
+                .imageToImage(hasInputImages(request) ? Boolean.TRUE : null)
+                .maskInput(request.getMask() != null ? Boolean.TRUE : null)
+                .build();
+        var result = capabilityMatcher.match(
+                modelCapabilities,
+                ModelCapabilityRequirement.builder().imageGeneration(expected).build());
         if (result.matched()) {
             return;
         }
         var issue = result.issues().isEmpty()
-            ? new CapabilityMatchIssue("imageGeneration", expected, modelCapabilities)
-            : result.issues().getFirst();
-        throw new UnsupportedModelCapabilityException(modelName, providerName, providerType,
-            issue.path(), issue.expected(), issue.actual());
+                ? new CapabilityMatchIssue("imageGeneration", expected, modelCapabilities)
+                : result.issues().getFirst();
+        throw new UnsupportedModelCapabilityException(
+                modelName, providerName, providerType, issue.path(), issue.expected(), issue.actual());
     }
 
-    private GenerateImageRequest adjustedRequest(GenerateImageRequest request,
-        List<ImageGenerationWarning> warnings) {
+    private GenerateImageRequest adjustedRequest(GenerateImageRequest request, List<ImageGenerationWarning> warnings) {
         return GenerateImageRequest.builder()
-            .prompt(request.getPrompt())
-            .images(request.getImages())
-            .mask(request.getMask())
-            .n(mapped(ModelParameter.IMAGE_COUNT, request.getN(), warnings))
-            .size(mapped(ModelParameter.IMAGE_SIZE, supportedSize(request, warnings), warnings))
-            .aspectRatio(mapped(ModelParameter.ASPECT_RATIO,
-                supportedAspectRatio(request, warnings), warnings))
-            .negativePrompt(mapped(ModelParameter.NEGATIVE_PROMPT,
-                request.getNegativePrompt(), warnings))
-            .seed(mapped(ModelParameter.IMAGE_SEED, request.getSeed(), warnings))
-            .responseFormat(mapped(ModelParameter.RESPONSE_FORMAT,
-                request.getResponseFormat(), warnings))
-            .headers(request.getHeaders())
-            .maxRetries(request.getMaxRetries())
-            .maxParallelCalls(request.getMaxParallelCalls())
-            .metadata(request.getMetadata())
-            .context(request.getContext())
-            .cancellationToken(request.getCancellationToken())
-            .timeouts(request.getTimeouts())
-            .build();
+                .prompt(request.getPrompt())
+                .images(request.getImages())
+                .mask(request.getMask())
+                .n(mapped(ModelParameter.IMAGE_COUNT, request.getN(), warnings))
+                .size(mapped(ModelParameter.IMAGE_SIZE, supportedSize(request, warnings), warnings))
+                .aspectRatio(mapped(ModelParameter.ASPECT_RATIO, supportedAspectRatio(request, warnings), warnings))
+                .negativePrompt(mapped(ModelParameter.NEGATIVE_PROMPT, request.getNegativePrompt(), warnings))
+                .seed(mapped(ModelParameter.IMAGE_SEED, request.getSeed(), warnings))
+                .responseFormat(mapped(ModelParameter.RESPONSE_FORMAT, request.getResponseFormat(), warnings))
+                .headers(request.getHeaders())
+                .maxRetries(request.getMaxRetries())
+                .maxParallelCalls(request.getMaxParallelCalls())
+                .metadata(request.getMetadata())
+                .context(request.getContext())
+                .cancellationToken(request.getCancellationToken())
+                .timeouts(request.getTimeouts())
+                .build();
     }
 
-    private <T> T mapped(ModelParameter parameter, T value,
-        List<ImageGenerationWarning> warnings) {
+    private <T> T mapped(ModelParameter parameter, T value, List<ImageGenerationWarning> warnings) {
         if (value == null) {
             return null;
         }
         if (!parameterMappings.isUnsupported(parameter)) {
             return value;
         }
-        warnings.add(parameterMappings.unsupportedDiagnostic(parameter)
-            .imageWarning());
+        warnings.add(parameterMappings.unsupportedDiagnostic(parameter).imageWarning());
         return null;
     }
 
-    private String supportedSize(GenerateImageRequest request,
-        List<ImageGenerationWarning> warnings) {
+    private String supportedSize(GenerateImageRequest request, List<ImageGenerationWarning> warnings) {
         var size = request.getSize();
         var supported = imageGenerationCapabilities().getSizes();
-        if (!hasText(size) || supported == null || supported.isEmpty()
-            || supported.contains(size)) {
+        if (!hasText(size) || supported == null || supported.isEmpty() || supported.contains(size)) {
             return size;
         }
-        warnings.add(warning("size-unsupported",
-            "Requested image size is not declared by the resolved model and was ignored.",
-            Map.of("requested", size, "supported", supported)));
+        warnings.add(warning(
+                "size-unsupported",
+                "Requested image size is not declared by the resolved model and was ignored.",
+                Map.of("requested", size, "supported", supported)));
         return null;
     }
 
-    private String supportedAspectRatio(GenerateImageRequest request,
-        List<ImageGenerationWarning> warnings) {
+    private String supportedAspectRatio(GenerateImageRequest request, List<ImageGenerationWarning> warnings) {
         var aspectRatio = request.getAspectRatio();
         var supported = imageGenerationCapabilities().getAspectRatios();
-        if (!hasText(aspectRatio) || supported == null || supported.isEmpty()
-            || supported.contains(aspectRatio)) {
+        if (!hasText(aspectRatio) || supported == null || supported.isEmpty() || supported.contains(aspectRatio)) {
             return aspectRatio;
         }
-        warnings.add(warning("aspect-ratio-unsupported",
-            "Requested image aspect ratio is not declared by the resolved model and was ignored.",
-            Map.of("requested", aspectRatio, "supported", supported)));
+        warnings.add(warning(
+                "aspect-ratio-unsupported",
+                "Requested image aspect ratio is not declared by the resolved model and was ignored.",
+                Map.of("requested", aspectRatio, "supported", supported)));
         return null;
     }
 
@@ -383,23 +409,23 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
 
     private GenerateImageRequest copyForBatch(GenerateImageRequest request, int n) {
         return GenerateImageRequest.builder()
-            .prompt(request.getPrompt())
-            .images(request.getImages())
-            .mask(request.getMask())
-            .n(request.getN() != null ? n : null)
-            .size(request.getSize())
-            .aspectRatio(request.getAspectRatio())
-            .negativePrompt(request.getNegativePrompt())
-            .seed(request.getSeed())
-            .responseFormat(request.getResponseFormat())
-            .headers(request.getHeaders())
-            .maxRetries(request.getMaxRetries())
-            .maxParallelCalls(request.getMaxParallelCalls())
-            .metadata(request.getMetadata())
-            .context(request.getContext())
-            .cancellationToken(request.getCancellationToken())
-            .timeouts(request.getTimeouts())
-            .build();
+                .prompt(request.getPrompt())
+                .images(request.getImages())
+                .mask(request.getMask())
+                .n(request.getN() != null ? n : null)
+                .size(request.getSize())
+                .aspectRatio(request.getAspectRatio())
+                .negativePrompt(request.getNegativePrompt())
+                .seed(request.getSeed())
+                .responseFormat(request.getResponseFormat())
+                .headers(request.getHeaders())
+                .maxRetries(request.getMaxRetries())
+                .maxParallelCalls(request.getMaxParallelCalls())
+                .metadata(request.getMetadata())
+                .context(request.getContext())
+                .cancellationToken(request.getCancellationToken())
+                .timeouts(request.getTimeouts())
+                .build();
     }
 
     private ImageUsage addUsage(ImageUsage left, ImageUsage right) {
@@ -408,20 +434,20 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         }
         if (left == null) {
             return ImageUsage.builder()
-                .inputTokens(right.getInputTokens())
-                .outputTokens(right.getOutputTokens())
-                .totalTokens(right.getTotalTokens())
-                .imageCount(right.getImageCount())
-                .raw(right.getRaw())
-                .build();
+                    .inputTokens(right.getInputTokens())
+                    .outputTokens(right.getOutputTokens())
+                    .totalTokens(right.getTotalTokens())
+                    .imageCount(right.getImageCount())
+                    .raw(right.getRaw())
+                    .build();
         }
         return ImageUsage.builder()
-            .inputTokens(add(left.getInputTokens(), right.getInputTokens()))
-            .outputTokens(add(left.getOutputTokens(), right.getOutputTokens()))
-            .totalTokens(add(left.getTotalTokens(), right.getTotalTokens()))
-            .imageCount(add(left.getImageCount(), right.getImageCount()))
-            .raw(rawUsage(left.getRaw(), right.getRaw()))
-            .build();
+                .inputTokens(add(left.getInputTokens(), right.getInputTokens()))
+                .outputTokens(add(left.getOutputTokens(), right.getOutputTokens()))
+                .totalTokens(add(left.getTotalTokens(), right.getTotalTokens()))
+                .imageCount(add(left.getImageCount(), right.getImageCount()))
+                .raw(rawUsage(left.getRaw(), right.getRaw()))
+                .build();
     }
 
     private List<Object> rawUsage(Object left, Object right) {
@@ -456,13 +482,12 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         return metadata;
     }
 
-    private ImageGenerationWarning warning(String code, String message,
-        Map<String, Object> metadata) {
+    private ImageGenerationWarning warning(String code, String message, Map<String, Object> metadata) {
         return ImageGenerationWarning.builder()
-            .code(code)
-            .message(message)
-            .providerMetadata(metadata)
-            .build();
+                .code(code)
+                .message(message)
+                .providerMetadata(metadata)
+                .build();
     }
 
     private int requestedImageCount(GenerateImageRequest request) {
@@ -475,10 +500,10 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     }
 
     private int concurrency(GenerateImageRequest request) {
-        var requested = request.getMaxParallelCalls() != null
-            ? request.getMaxParallelCalls()
-            : DEFAULT_MAX_PARALLEL_CALLS;
-        return Math.max(1, Math.min(requested, batches(requestedImageCount(request)).size()));
+        var requested =
+                request.getMaxParallelCalls() != null ? request.getMaxParallelCalls() : DEFAULT_MAX_PARALLEL_CALLS;
+        return Math.max(
+                1, Math.min(requested, batches(requestedImageCount(request)).size()));
     }
 
     private int maxRetries(GenerateImageRequest request) {
@@ -487,8 +512,8 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
 
     private ImageGenerationCapability imageGenerationCapabilities() {
         return modelCapabilities.getImageGeneration() != null
-            ? modelCapabilities.getImageGeneration()
-            : ImageGenerationCapability.unknown();
+                ? modelCapabilities.getImageGeneration()
+                : ImageGenerationCapability.unknown();
     }
 
     private boolean hasInputImages(GenerateImageRequest request) {
@@ -496,8 +521,9 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
     }
 
     private void checkCancellation(GenerateImageRequest request) {
-        if (request != null && request.getCancellationToken() != null
-            && request.getCancellationToken().isCancellationRequested()) {
+        if (request != null
+                && request.getCancellationToken() != null
+                && request.getCancellationToken().isCancellationRequested()) {
             throw new AiGenerationCancelledException("Image generation was cancelled");
         }
     }
@@ -508,23 +534,22 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
             return mono;
         }
         return mono.timeout(timeout)
-            .onErrorMap(TimeoutException.class,
-                error -> new AiGenerationTimeoutException("image", timeout, error));
+                .onErrorMap(TimeoutException.class, error -> new AiGenerationTimeoutException("image", timeout, error));
     }
 
     private Duration timeout(GenerateImageRequest request) {
         return request != null && request.getTimeouts() != null
-            ? request.getTimeouts().getTotalTimeout()
-            : null;
+                ? request.getTimeouts().getTotalTimeout()
+                : null;
     }
 
     private boolean isRetryable(Throwable error) {
         return !(error instanceof IllegalArgumentException)
-            && !(error instanceof UnsupportedModelCapabilityException)
-            && !(error instanceof InvalidMediaContentException)
-            && !(error instanceof MediaContentTooLargeException)
-            && !(error instanceof AiGenerationCancelledException)
-            && !(error instanceof ImageGenerationException);
+                && !(error instanceof UnsupportedModelCapabilityException)
+                && !(error instanceof InvalidMediaContentException)
+                && !(error instanceof MediaContentTooLargeException)
+                && !(error instanceof AiGenerationCancelledException)
+                && !(error instanceof ImageGenerationException);
     }
 
     private boolean isImageMediaType(String mediaType) {
@@ -535,9 +560,9 @@ public class ImageGenerationModelImpl implements ImageGenerationModel {
         return value != null && !value.isBlank();
     }
 
-    private record ImageInvocation(GenerateImageRequest request,
-                                   List<ImageGenerationWarning> warnings,
-                                   List<Integer> batchSizes,
-                                   int concurrency) {
-    }
+    private record ImageInvocation(
+            GenerateImageRequest request,
+            List<ImageGenerationWarning> warnings,
+            List<Integer> batchSizes,
+            int concurrency) {}
 }

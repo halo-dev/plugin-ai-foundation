@@ -11,11 +11,8 @@ import java.util.List;
  * @param part part currently being validated, or {@code null} for message-level validation
  * @param partIndex zero-based part index, or {@code -1} for message-level validation
  */
-public record UIMessageValidationContext<M>(List<UIMessage<M>> messages,
-                                            UIMessage<M> message,
-                                            int messageIndex,
-                                            UIMessagePart part,
-                                            int partIndex) {
+public record UIMessageValidationContext<M>(
+        List<UIMessage<M>> messages, UIMessage<M> message, int messageIndex, UIMessagePart part, int partIndex) {
     public UIMessageValidationContext {
         messages = List.copyOf(messages);
     }

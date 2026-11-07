@@ -9,25 +9,19 @@ import lombok.NoArgsConstructor;
 /**
  * Non-fatal warning produced while generating text.
  *
- * <p>Warnings describe behavior that completed but may need caller attention, such as unsupported
- * administrator-mapped unsupported parameters, tool execution limits, lifecycle callback failures,
- * or structured-output guidance that had to be applied locally.
+ * <p>Warnings describe behavior that completed but may need caller attention, such as unsupported administrator-mapped
+ * unsupported parameters, tool execution limits, lifecycle callback failures, or structured-output guidance that had to
+ * be applied locally.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class GenerationWarning {
-    /**
-     * Stable warning code intended for programmatic handling.
-     */
+    /** Stable warning code intended for programmatic handling. */
     private String code;
-    /**
-     * Human-readable warning message for logs or developer diagnostics.
-     */
+    /** Human-readable warning message for logs or developer diagnostics. */
     private String message;
-    /**
-     * Provider-specific details associated with this warning.
-     */
+    /** Provider-specific details associated with this warning. */
     private Map<String, Object> providerMetadata;
 }

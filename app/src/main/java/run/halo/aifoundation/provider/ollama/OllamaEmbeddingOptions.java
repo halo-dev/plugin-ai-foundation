@@ -6,8 +6,8 @@ import org.springframework.ai.embedding.EmbeddingOptions;
 import run.halo.aifoundation.provider.support.EmbeddingOptionOverrides;
 
 /** Native options accepted by Ollama's {@code /api/embed} endpoint. */
-record OllamaEmbeddingOptions(String model, Integer dimensions, Boolean truncate,
-                              Map<String, Object> runtimeOptions) implements EmbeddingOptions {
+record OllamaEmbeddingOptions(String model, Integer dimensions, Boolean truncate, Map<String, Object> runtimeOptions)
+        implements EmbeddingOptions {
 
     OllamaEmbeddingOptions {
         runtimeOptions = runtimeOptions == null ? Map.of() : Map.copyOf(runtimeOptions);
@@ -49,8 +49,7 @@ record OllamaEmbeddingOptions(String model, Integer dimensions, Boolean truncate
         if (requestRuntime != null) {
             runtime.putAll(requestRuntime);
         }
-        return new OllamaEmbeddingOptions(mergedModel, mergedDimensions, mergedTruncate,
-            Map.copyOf(runtime));
+        return new OllamaEmbeddingOptions(mergedModel, mergedDimensions, mergedTruncate, Map.copyOf(runtime));
     }
 
     private Integer integer(String key) {

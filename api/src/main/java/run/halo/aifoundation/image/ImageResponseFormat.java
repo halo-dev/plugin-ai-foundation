@@ -1,16 +1,10 @@
 package run.halo.aifoundation.image;
 
-/**
- * Preferred provider response representation for generated images.
- */
+/** Preferred provider response representation for generated images. */
 public enum ImageResponseFormat {
-    /**
-     * Prefer provider-returned URLs.
-     */
+    /** Prefer provider-returned URLs. */
     URL,
 
-    /**
-     * Prefer base64 encoded file content.
-     */
+    /** Prefer base64 encoded file content. */
     BASE64
 }

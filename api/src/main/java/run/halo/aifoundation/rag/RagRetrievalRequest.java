@@ -7,9 +7,7 @@ import lombok.Value;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.message.ModelMessage;
 
-/**
- * Request passed to a caller-provided RAG retriever.
- */
+/** Request passed to a caller-provided RAG retriever. */
 @Value
 @Builder
 public class RagRetrievalRequest {

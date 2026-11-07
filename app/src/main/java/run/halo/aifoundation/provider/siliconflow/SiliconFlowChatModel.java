@@ -7,8 +7,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 /** SiliconFlow Chat Completions client with provider-owned request policy. */
 public final class SiliconFlowChatModel extends ChatCompletionsModel {
 
-    public SiliconFlowChatModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public SiliconFlowChatModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new SiliconFlowChatProfile());
     }
 }

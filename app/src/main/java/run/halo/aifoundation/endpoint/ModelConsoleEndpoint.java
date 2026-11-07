@@ -32,17 +32,19 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.aifoundation.AiModelService;
+import run.halo.aifoundation.chat.GenerateTextRequest;
+import run.halo.aifoundation.chat.GenerateTextResult;
+import run.halo.aifoundation.chat.GenerationResponseMetadata;
+import run.halo.aifoundation.chat.LanguageModel;
+import run.halo.aifoundation.chat.LanguageModelCapabilities;
+import run.halo.aifoundation.chat.StopCondition;
+import run.halo.aifoundation.chat.StreamTextResult;
 import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingResponseMetadata;
 import run.halo.aifoundation.embedding.EmbeddingUsage;
 import run.halo.aifoundation.embedding.EmbeddingUtils;
 import run.halo.aifoundation.embedding.EmbeddingWarning;
-import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.chat.GenerateTextResult;
-import run.halo.aifoundation.chat.LanguageModel;
-import run.halo.aifoundation.chat.LanguageModelCapabilities;
-import run.halo.aifoundation.chat.StreamTextResult;
-import run.halo.aifoundation.chat.GenerationResponseMetadata;
+import run.halo.aifoundation.extension.AiModel;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationWarning;
@@ -68,7 +70,6 @@ import run.halo.aifoundation.rerank.RerankResult;
 import run.halo.aifoundation.rerank.RerankUsage;
 import run.halo.aifoundation.rerank.RerankWarning;
 import run.halo.aifoundation.rerank.RerankingModel;
-import run.halo.aifoundation.chat.StopCondition;
 import run.halo.aifoundation.source.RetrievedContext;
 import run.halo.aifoundation.source.RetrievedSource;
 import run.halo.aifoundation.tool.ToolCall;
@@ -85,7 +86,6 @@ import run.halo.aifoundation.ui.UIMessageChunks;
 import run.halo.aifoundation.ui.UIMessageStream;
 import run.halo.aifoundation.ui.UIMessageStreamResponse;
 import run.halo.aifoundation.ui.UIMessageTransportCodec;
-import run.halo.aifoundation.extension.AiModel;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListOptions;
@@ -106,8 +106,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private static final String CONSOLE_EXTERNAL_TEST_TOOL_NAME = "halo_external_test_info";
     private static final String CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME = "get_current_page_context";
     private static final String CONSOLE_AGENT_ECHO_TOOL_NAME = "halo_agent_test_action";
-    private static final String CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME =
-        "halo_tool_input_stream_test";
+    private static final String CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME = "halo_tool_input_stream_test";
     private static final String CONSOLE_REPAIR_TEST_TOOL_NAME = "halo_repair_test_info";
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
@@ -118,213 +117,216 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.aifoundation.halo.run/v1alpha1/Model";
-        return route()
-            .GET("models", this::listModels,
-                builder -> builder.operationId("ListModels")
-                    .description("List all AI models.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("labelSelector")
-                        .in(ParameterIn.QUERY)
-                        .description("Label selector for filtering models")
-                        .implementationArray(String.class))
-                    .parameter(parameterBuilder()
-                        .name("fieldSelector")
-                        .in(ParameterIn.QUERY)
-                        .description("Field selector for filtering models (e.g., spec.providerName=openai)")
-                        .implementationArray(String.class))
-                    .response(responseBuilder()
-                        .implementationArray(AiModel.class))
-            )
-            .POST("models", this::createModel,
-                builder -> builder.operationId("CreateModel")
-                    .description("Create a new AI model.")
-                    .tag(tag)
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(AiModel.class))
-                    .response(responseBuilder().implementation(AiModel.class))
-            )
-            .PUT("models/{name}", this::updateModel,
-                builder -> builder.operationId("UpdateModel")
-                    .description("Update an AI model.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(AiModel.class))
-                    .response(responseBuilder().implementation(AiModel.class))
-            )
-            .DELETE("models/{name}", this::deleteModel,
-                builder -> builder.operationId("DeleteModel")
-                    .description("Delete an AI model.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name")
-                        .implementation(String.class)
-                        .required(true))
-                    .response(responseBuilder().implementation(Void.class))
-            )
-            .POST("models/{name}/test-chat/ui-message/stream", this::testUiMessageChatStream,
-                builder -> builder.operationId("TestModelUiMessageChatStream")
-                    .description("Test text generation with Halo UI Message stream response.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .parameter(parameterBuilder()
-                        .name("enableTestTool")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether to inject the console-only halo_test_info tool for "
-                            + "tool calling tests.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .parameter(parameterBuilder()
-                        .name("enableTestToolApproval")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether the console-only halo_test_info tool should require "
-                            + "caller approval before execution.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .parameter(parameterBuilder()
-                        .name("enableExternalTestTool")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether to inject the console-only halo_external_test_info "
-                            + "tool that must be executed by the workbench caller.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .parameter(parameterBuilder()
-                        .name("enableToolCallRepair")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether to inject a console-only repairable tool and "
-                            + "deterministic tool-call repair callback.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .parameter(parameterBuilder()
-                        .name("enableAgentTestTools")
-                        .in(ParameterIn.QUERY)
-                        .description("Whether to inject console-only browser Agent test tools "
-                            + "that are executed by the workbench frontend.")
-                        .implementation(Boolean.class)
-                        .required(false))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(TestUiMessageChatRequest.class))
-                    .response(responseBuilder()
-                        .description("Server-Sent Events using the Halo UI Message stream protocol. "
-                            + "Each data event contains a UIMessageChunk JSON object and the stream "
-                            + "ends with data: [DONE].")
-                        .implementation(UIMessageChunk.class))
-            )
-            .POST("models/{name}/test-completion/stream", this::testCompletionStream,
-                builder -> builder.operationId("TestModelCompletionStream")
-                    .description("Test prompt completion with plain text stream response.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(TestCompletionStreamRequest.class))
-                    .response(responseBuilder()
-                        .description("Plain text stream containing generated text deltas.")
-                        .implementation(String.class))
-            )
-            .POST("models/{name}/test-object/stream", this::testObjectStream,
-                builder -> builder.operationId("TestModelObjectStream")
-                    .description("Test structured object generation with plain JSON text stream response.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(TestObjectStreamRequest.class))
-                    .response(responseBuilder()
-                        .description("Plain text stream containing generated JSON text deltas. "
-                            + "The final generated value is validated as structured output.")
-                        .implementation(String.class))
-            )
-            .POST("models/{name}/test-embedding", this::testEmbedding,
-                builder -> builder.operationId("TestModelEmbedding")
-                    .description("Test embedding generation with embedding settings and diagnostics.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(TestEmbeddingRequest.class))
-                    .response(responseBuilder().implementation(TestEmbeddingResponse.class))
-            )
-            .POST("models/{name}/test-rerank", this::testRerank,
-                builder -> builder.operationId("TestModelRerank")
-                    .description("Test reranking with candidate documents and diagnostics.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(TestRerankRequest.class))
-                    .response(responseBuilder().implementation(TestRerankResponse.class))
-            )
-            .POST("models/{name}/test-image-generation", this::testImageGeneration,
-                builder -> builder.operationId("TestModelImageGeneration")
-                    .description("Test image generation with prompt, optional input images, and diagnostics.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Image generation model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(TestImageGenerationRequest.class))
-                    .response(responseBuilder().implementation(TestImageGenerationResponse.class))
-            )
-            .POST("models/{name}/test-rag/ui-message/stream", this::testRagUiMessageStream,
-                builder -> builder.operationId("TestModelRagUiMessageStream")
-                    .description("Test single-query RAG with manual sources and Halo UI Message "
-                        + "stream response.")
-                    .tag(tag)
-                    .parameter(parameterBuilder()
-                        .name("name")
-                        .in(ParameterIn.PATH)
-                        .description("Language model name (AiModel.metadata.name)")
-                        .implementation(String.class)
-                        .required(true))
-                    .requestBody(requestBodyBuilder()
-                        .required(true)
-                        .implementation(TestRagRequest.class))
-                    .response(responseBuilder()
-                        .description("Server-Sent Events using the Halo UI Message stream protocol.")
-                        .implementation(UIMessageChunk.class))
-            )
-            .build();
+        return route().GET(
+                        "models",
+                        this::listModels,
+                        builder -> builder.operationId("ListModels")
+                                .description("List all AI models.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("labelSelector")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Label selector for filtering models")
+                                        .implementationArray(String.class))
+                                .parameter(parameterBuilder()
+                                        .name("fieldSelector")
+                                        .in(ParameterIn.QUERY)
+                                        .description(
+                                                "Field selector for filtering models (e.g., spec.providerName=openai)")
+                                        .implementationArray(String.class))
+                                .response(responseBuilder().implementationArray(AiModel.class)))
+                .POST(
+                        "models",
+                        this::createModel,
+                        builder -> builder.operationId("CreateModel")
+                                .description("Create a new AI model.")
+                                .tag(tag)
+                                .requestBody(requestBodyBuilder().required(true).implementation(AiModel.class))
+                                .response(responseBuilder().implementation(AiModel.class)))
+                .PUT(
+                        "models/{name}",
+                        this::updateModel,
+                        builder -> builder.operationId("UpdateModel")
+                                .description("Update an AI model.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder().required(true).implementation(AiModel.class))
+                                .response(responseBuilder().implementation(AiModel.class)))
+                .DELETE(
+                        "models/{name}",
+                        this::deleteModel,
+                        builder -> builder.operationId("DeleteModel")
+                                .description("Delete an AI model.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .response(responseBuilder().implementation(Void.class)))
+                .POST(
+                        "models/{name}/test-chat/ui-message/stream",
+                        this::testUiMessageChatStream,
+                        builder -> builder.operationId("TestModelUiMessageChatStream")
+                                .description("Test text generation with Halo UI Message stream response.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .parameter(parameterBuilder()
+                                        .name("enableTestTool")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Whether to inject the console-only halo_test_info tool for "
+                                                + "tool calling tests.")
+                                        .implementation(Boolean.class)
+                                        .required(false))
+                                .parameter(parameterBuilder()
+                                        .name("enableTestToolApproval")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Whether the console-only halo_test_info tool should require "
+                                                + "caller approval before execution.")
+                                        .implementation(Boolean.class)
+                                        .required(false))
+                                .parameter(parameterBuilder()
+                                        .name("enableExternalTestTool")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Whether to inject the console-only halo_external_test_info "
+                                                + "tool that must be executed by the workbench caller.")
+                                        .implementation(Boolean.class)
+                                        .required(false))
+                                .parameter(parameterBuilder()
+                                        .name("enableToolCallRepair")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Whether to inject a console-only repairable tool and "
+                                                + "deterministic tool-call repair callback.")
+                                        .implementation(Boolean.class)
+                                        .required(false))
+                                .parameter(parameterBuilder()
+                                        .name("enableAgentTestTools")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Whether to inject console-only browser Agent test tools "
+                                                + "that are executed by the workbench frontend.")
+                                        .implementation(Boolean.class)
+                                        .required(false))
+                                .requestBody(requestBodyBuilder()
+                                        .required(true)
+                                        .implementation(TestUiMessageChatRequest.class))
+                                .response(responseBuilder()
+                                        .description("Server-Sent Events using the Halo UI Message stream protocol. "
+                                                + "Each data event contains a UIMessageChunk JSON object and the stream "
+                                                + "ends with data: [DONE].")
+                                        .implementation(UIMessageChunk.class)))
+                .POST(
+                        "models/{name}/test-completion/stream",
+                        this::testCompletionStream,
+                        builder -> builder.operationId("TestModelCompletionStream")
+                                .description("Test prompt completion with plain text stream response.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder()
+                                        .required(true)
+                                        .implementation(TestCompletionStreamRequest.class))
+                                .response(responseBuilder()
+                                        .description("Plain text stream containing generated text deltas.")
+                                        .implementation(String.class)))
+                .POST(
+                        "models/{name}/test-object/stream",
+                        this::testObjectStream,
+                        builder -> builder.operationId("TestModelObjectStream")
+                                .description("Test structured object generation with plain JSON text stream response.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder()
+                                        .required(true)
+                                        .implementation(TestObjectStreamRequest.class))
+                                .response(responseBuilder()
+                                        .description("Plain text stream containing generated JSON text deltas. "
+                                                + "The final generated value is validated as structured output.")
+                                        .implementation(String.class)))
+                .POST(
+                        "models/{name}/test-embedding",
+                        this::testEmbedding,
+                        builder -> builder.operationId("TestModelEmbedding")
+                                .description("Test embedding generation with embedding settings and diagnostics.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(
+                                        requestBodyBuilder().required(true).implementation(TestEmbeddingRequest.class))
+                                .response(responseBuilder().implementation(TestEmbeddingResponse.class)))
+                .POST(
+                        "models/{name}/test-rerank",
+                        this::testRerank,
+                        builder -> builder.operationId("TestModelRerank")
+                                .description("Test reranking with candidate documents and diagnostics.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(
+                                        requestBodyBuilder().required(true).implementation(TestRerankRequest.class))
+                                .response(responseBuilder().implementation(TestRerankResponse.class)))
+                .POST(
+                        "models/{name}/test-image-generation",
+                        this::testImageGeneration,
+                        builder -> builder.operationId("TestModelImageGeneration")
+                                .description(
+                                        "Test image generation with prompt, optional input images, and diagnostics.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Image generation model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder()
+                                        .required(true)
+                                        .implementation(TestImageGenerationRequest.class))
+                                .response(responseBuilder().implementation(TestImageGenerationResponse.class)))
+                .POST(
+                        "models/{name}/test-rag/ui-message/stream",
+                        this::testRagUiMessageStream,
+                        builder -> builder.operationId("TestModelRagUiMessageStream")
+                                .description("Test single-query RAG with manual sources and Halo UI Message "
+                                        + "stream response.")
+                                .tag(tag)
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Language model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(requestBodyBuilder().required(true).implementation(TestRagRequest.class))
+                                .response(responseBuilder()
+                                        .description("Server-Sent Events using the Halo UI Message stream protocol.")
+                                        .implementation(UIMessageChunk.class)))
+                .build();
     }
 
     @Override
@@ -337,53 +339,51 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var fieldSelector = queryParams.getOrDefault("fieldSelector", List.of());
         var labelSelector = queryParams.getOrDefault("labelSelector", List.of());
         var listOptions = SelectorUtil.labelAndFieldSelectorToListOptions(labelSelector, fieldSelector);
-        return client.listAll(AiModel.class, listOptions,
-            Sort.by("metadata.creationTimestamp").descending())
-            .collectList()
-            .flatMap(models -> ServerResponse.ok().bodyValue(models));
+        return client.listAll(
+                        AiModel.class,
+                        listOptions,
+                        Sort.by("metadata.creationTimestamp").descending())
+                .collectList()
+                .flatMap(models -> ServerResponse.ok().bodyValue(models));
     }
 
     private Mono<ServerResponse> createModel(ServerRequest request) {
         return request.bodyToMono(AiModel.class)
-            .flatMap(model -> validateModel(model)
-                .then(Mono.defer(() -> checkModelUniqueness(model, null)))
-                .then(Mono.defer(() -> {
-                    if (model.getMetadata() == null) {
-                        model.setMetadata(new Metadata());
-                    }
-                    var providerName = model.getSpec().getProviderName();
-                    var modelId = model.getSpec().getModelId();
-                    return createWithGeneratedName(model, providerName, modelId, 0);
-                }))
-            )
-            .flatMap(created -> ServerResponse.ok().bodyValue(created));
+                .flatMap(model -> validateModel(model)
+                        .then(Mono.defer(() -> checkModelUniqueness(model, null)))
+                        .then(Mono.defer(() -> {
+                            if (model.getMetadata() == null) {
+                                model.setMetadata(new Metadata());
+                            }
+                            var providerName = model.getSpec().getProviderName();
+                            var modelId = model.getSpec().getModelId();
+                            return createWithGeneratedName(model, providerName, modelId, 0);
+                        })))
+                .flatMap(created -> ServerResponse.ok().bodyValue(created));
     }
 
     private Mono<ServerResponse> updateModel(ServerRequest request) {
         var name = request.pathVariable("name");
         return request.bodyToMono(AiModel.class)
-            .flatMap(model -> validateModel(model)
-                .then(Mono.defer(() -> checkModelUniqueness(model, name)))
-                .then(client.fetch(AiModel.class, name)
-                    .switchIfEmpty(Mono.error(
-                        new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Model not found: " + name)))
-                    .flatMap(existing -> {
-                        existing.setSpec(model.getSpec());
-                        return client.update(existing);
-                    })
-                )
-            )
-            .flatMap(updated -> ServerResponse.ok().bodyValue(updated));
+                .flatMap(model -> validateModel(model)
+                        .then(Mono.defer(() -> checkModelUniqueness(model, name)))
+                        .then(client.fetch(AiModel.class, name)
+                                .switchIfEmpty(Mono.error(
+                                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Model not found: " + name)))
+                                .flatMap(existing -> {
+                                    existing.setSpec(model.getSpec());
+                                    return client.update(existing);
+                                })))
+                .flatMap(updated -> ServerResponse.ok().bodyValue(updated));
     }
 
     private Mono<ServerResponse> deleteModel(ServerRequest request) {
         var name = request.pathVariable("name");
         return client.fetch(AiModel.class, name)
-            .switchIfEmpty(Mono.error(
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Model not found: " + name)))
-            .flatMap(client::delete)
-            .then(ServerResponse.noContent().build());
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Model not found: " + name)))
+                .flatMap(client::delete)
+                .then(ServerResponse.noContent().build());
     }
 
     private Mono<ServerResponse> testUiMessageChatStream(ServerRequest request) {
@@ -391,57 +391,61 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         log.info("testUiMessageChatStream: modelName={}", modelName);
 
         return request.bodyToMono(TestUiMessageChatRequest.class)
-            .flatMap(body -> validateTestUiMessageChatRequest(body).then(Mono.defer(() -> {
-                var cancellation = UIMessageCancellations.create();
-                return aiModelService.languageModel(modelName)
-                    .map(languageModel -> UIMessageChatHandlers.<Map<String, Object>>streamText(
-                        options -> options
-                            .model(new ConsoleTestLanguageModel(languageModel))
-                            .chatRequest(toUiMessageChatRequest(body))
-                            .metadataSupplier(() -> new LinkedHashMap<>())
-                            .serializer(ModelConsoleEndpoint::writeJson)
-                            .request(builder -> applyConsoleGenerationOptions(builder, body,
-                                ConsoleTestToolOptions.from(request)))
-                            .cancellationToken(cancellation.token())
-                            .onError(ModelConsoleEndpoint::safeMessage)
-                            .onFinish(finish -> log.debug(
-                                "UI message chat test finished: modelName={}, messages={}, "
-                                    + "aborted={}, errorText={}",
-                                modelName, finish.messages().size(), finish.terminal().aborted(),
-                                finish.terminal().errorText()
-                            ))
-                    ))
-                    .flatMap(chat -> uiMessageStreamResponse(chat.response(), cancellation));
-            })))
-            .onErrorResume(error -> {
-                if (error instanceof ResponseStatusException) {
-                    return Mono.error(error);
-                }
-                log.error("UI message stream chat failed for model: {}, error={}",
-                    modelName, safeMessage(error), error);
-                return uiMessageStreamResponse(new UIMessageStreamResponse(new UIMessageStream(
-                    Flux.just(UIMessageChunks.error(safeMessage(error), null,
-                        Map.of("exceptionType", "error")))
-                ), ModelConsoleEndpoint::writeJson), UIMessageCancellations.create());
-            });
+                .flatMap(body -> validateTestUiMessageChatRequest(body).then(Mono.defer(() -> {
+                    var cancellation = UIMessageCancellations.create();
+                    return aiModelService
+                            .languageModel(modelName)
+                            .map(languageModel -> UIMessageChatHandlers.<Map<String, Object>>streamText(
+                                    options -> options.model(new ConsoleTestLanguageModel(languageModel))
+                                            .chatRequest(toUiMessageChatRequest(body))
+                                            .metadataSupplier(() -> new LinkedHashMap<>())
+                                            .serializer(ModelConsoleEndpoint::writeJson)
+                                            .request(builder -> applyConsoleGenerationOptions(
+                                                    builder, body, ConsoleTestToolOptions.from(request)))
+                                            .cancellationToken(cancellation.token())
+                                            .onError(ModelConsoleEndpoint::safeMessage)
+                                            .onFinish(finish -> log.debug(
+                                                    "UI message chat test finished: modelName={}, messages={}, "
+                                                            + "aborted={}, errorText={}",
+                                                    modelName,
+                                                    finish.messages().size(),
+                                                    finish.terminal().aborted(),
+                                                    finish.terminal().errorText()))))
+                            .flatMap(chat -> uiMessageStreamResponse(chat.response(), cancellation));
+                })))
+                .onErrorResume(error -> {
+                    if (error instanceof ResponseStatusException) {
+                        return Mono.error(error);
+                    }
+                    log.error(
+                            "UI message stream chat failed for model: {}, error={}",
+                            modelName,
+                            safeMessage(error),
+                            error);
+                    return uiMessageStreamResponse(
+                            new UIMessageStreamResponse(
+                                    new UIMessageStream(Flux.just(UIMessageChunks.error(
+                                            safeMessage(error), null, Map.of("exceptionType", "error")))),
+                                    ModelConsoleEndpoint::writeJson),
+                            UIMessageCancellations.create());
+                });
     }
 
-    private Mono<ServerResponse> uiMessageStreamResponse(UIMessageStreamResponse response,
-        UIMessageCancellation cancellation) {
-        Flux<ServerSentEvent<Object>> flux = cancellation.cancelWhenSubscriberCancels(
-                response.stream())
-            .onErrorResume(error -> {
-                log.error("UI message stream failed: {}", safeMessage(error), error);
-                return Flux.just(UIMessageChunks.error(safeMessage(error), null,
-                    Map.of("exceptionType", "error")));
-            })
-            .map(chunk -> ServerSentEvent.builder((Object) writeJson(chunk)).build())
-            .concatWith(Mono.just(ServerSentEvent.builder((Object) UIMessageStreamResponse.DONE_MARKER)
-                .build()));
+    private Mono<ServerResponse> uiMessageStreamResponse(
+            UIMessageStreamResponse response, UIMessageCancellation cancellation) {
+        Flux<ServerSentEvent<Object>> flux = cancellation
+                .cancelWhenSubscriberCancels(response.stream())
+                .onErrorResume(error -> {
+                    log.error("UI message stream failed: {}", safeMessage(error), error);
+                    return Flux.just(UIMessageChunks.error(safeMessage(error), null, Map.of("exceptionType", "error")));
+                })
+                .map(chunk -> ServerSentEvent.builder((Object) writeJson(chunk)).build())
+                .concatWith(Mono.just(ServerSentEvent.builder((Object) UIMessageStreamResponse.DONE_MARKER)
+                        .build()));
         return ServerResponse.ok()
-            .contentType(MediaType.TEXT_EVENT_STREAM)
-            .headers(headers -> response.headers().forEach(headers::set))
-            .body(flux, ServerSentEvent.class);
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .headers(headers -> response.headers().forEach(headers::set))
+                .body(flux, ServerSentEvent.class);
     }
 
     private Mono<ServerResponse> testCompletionStream(ServerRequest request) {
@@ -449,14 +453,15 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         log.info("testCompletionStream: modelName={}", modelName);
 
         return request.bodyToMono(TestCompletionStreamRequest.class)
-            .flatMap(body -> validateTestCompletionRequest(body).then(Mono.defer(() -> {
-                var generation = completionRequest(body).build();
-                return aiModelService.languageModel(modelName)
-                    .map(languageModel -> languageModel.streamText(generation))
-                    .flatMap(result -> ServerResponse.ok()
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .body(result.textStream(), String.class));
-            })));
+                .flatMap(body -> validateTestCompletionRequest(body).then(Mono.defer(() -> {
+                    var generation = completionRequest(body).build();
+                    return aiModelService
+                            .languageModel(modelName)
+                            .map(languageModel -> languageModel.streamText(generation))
+                            .flatMap(result -> ServerResponse.ok()
+                                    .contentType(MediaType.TEXT_PLAIN)
+                                    .body(result.textStream(), String.class));
+                })));
     }
 
     private Mono<ServerResponse> testObjectStream(ServerRequest request) {
@@ -464,175 +469,177 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         log.info("testObjectStream: modelName={}", modelName);
 
         return request.bodyToMono(TestObjectStreamRequest.class)
-            .flatMap(body -> validateTestObjectRequest(body).then(Mono.defer(() -> {
-                var generation = objectRequest(body).build();
-                return aiModelService.languageModel(modelName)
-                    .map(languageModel -> languageModel.streamText(generation))
-                    .flatMap(result -> ServerResponse.ok()
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .body(result.textStream()
-                            .concatWith(result.result().then(Mono.empty())), String.class));
-            })));
+                .flatMap(body -> validateTestObjectRequest(body).then(Mono.defer(() -> {
+                    var generation = objectRequest(body).build();
+                    return aiModelService
+                            .languageModel(modelName)
+                            .map(languageModel -> languageModel.streamText(generation))
+                            .flatMap(result -> ServerResponse.ok()
+                                    .contentType(MediaType.TEXT_PLAIN)
+                                    .body(
+                                            result.textStream()
+                                                    .concatWith(result.result().then(Mono.empty())),
+                                            String.class));
+                })));
     }
 
     private Mono<ServerResponse> testEmbedding(ServerRequest request) {
         var modelName = request.pathVariable("name");
         log.info("testEmbedding: modelName={}", modelName);
         return request.bodyToMono(TestEmbeddingRequest.class)
-            .flatMap(body -> validateTestEmbeddingRequest(body)
-                .then(aiModelService.embeddingModel(modelName))
-                .flatMap(model -> model.embed(EmbeddingRequest.builder()
-                        .inputs(body.getInputs())
-                        .dimensions(body.getDimensions())
-                        .maxBatchSize(body.getMaxBatchSize())
-                        .maxParallelCalls(body.getMaxParallelCalls())
-                        .maxRetries(body.getMaxRetries())
-                        .metadata(Map.of("source", "console-test"))
-                        .build())
-                    .map(TestEmbeddingResponse::from)))
-            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+                .flatMap(body -> validateTestEmbeddingRequest(body)
+                        .then(aiModelService.embeddingModel(modelName))
+                        .flatMap(model -> model.embed(EmbeddingRequest.builder()
+                                        .inputs(body.getInputs())
+                                        .dimensions(body.getDimensions())
+                                        .maxBatchSize(body.getMaxBatchSize())
+                                        .maxParallelCalls(body.getMaxParallelCalls())
+                                        .maxRetries(body.getMaxRetries())
+                                        .metadata(Map.of("source", "console-test"))
+                                        .build())
+                                .map(TestEmbeddingResponse::from)))
+                .flatMap(response -> ServerResponse.ok().bodyValue(response));
     }
 
     private Mono<ServerResponse> testRerank(ServerRequest request) {
         var modelName = request.pathVariable("name");
         log.info("testRerank: modelName={}", modelName);
         return request.bodyToMono(TestRerankRequest.class)
-            .flatMap(body -> validateTestRerankRequest(body)
-                .then(aiModelService.rerankingModel(modelName))
-                .flatMap(model -> model.rerank(RerankRequest.builder()
-                        .query(body.getQuery())
-                        .documents(toRerankDocuments(body.getDocuments()))
-                        .topN(body.getTopN())
-                        .metadata(Map.of("source", "console-test"))
-                        .build())
-                    .map(TestRerankResponse::from)))
-            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+                .flatMap(body -> validateTestRerankRequest(body)
+                        .then(aiModelService.rerankingModel(modelName))
+                        .flatMap(model -> model.rerank(RerankRequest.builder()
+                                        .query(body.getQuery())
+                                        .documents(toRerankDocuments(body.getDocuments()))
+                                        .topN(body.getTopN())
+                                        .metadata(Map.of("source", "console-test"))
+                                        .build())
+                                .map(TestRerankResponse::from)))
+                .flatMap(response -> ServerResponse.ok().bodyValue(response));
     }
 
     private Mono<ServerResponse> testImageGeneration(ServerRequest request) {
         var modelName = request.pathVariable("name");
         log.info("testImageGeneration: modelName={}", modelName);
         return request.bodyToMono(TestImageGenerationRequest.class)
-            .flatMap(body -> validateTestImageGenerationRequest(body)
-                .then(aiModelService.imageGenerationModel(modelName))
-                .flatMap(model -> model.generateImage(toGenerateImageRequest(body)))
-                .map(TestImageGenerationResponse::from))
-            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+                .flatMap(body -> validateTestImageGenerationRequest(body)
+                        .then(aiModelService.imageGenerationModel(modelName))
+                        .flatMap(model -> model.generateImage(toGenerateImageRequest(body)))
+                        .map(TestImageGenerationResponse::from))
+                .flatMap(response -> ServerResponse.ok().bodyValue(response));
     }
 
     private Mono<ServerResponse> testRagUiMessageStream(ServerRequest request) {
         var modelName = request.pathVariable("name");
         log.info("testRagUiMessageStream: modelName={}", modelName);
         return request.bodyToMono(TestRagRequest.class)
-            .flatMap(body -> validateTestRagRequest(body).then(Mono.defer(() -> {
-                var cancellation = UIMessageCancellations.create();
-                var diagnostics = new RagTestDiagnostics(toRetrievedSources(body));
-                return aiModelService.languageModel(modelName)
-                    .flatMap(languageModel -> testRagReranker(body, diagnostics)
-                        .map(optionalReranker -> {
-                            var reranker = optionalReranker.orElse(null);
-                            var generation = ragGenerationRequest(body, cancellation, diagnostics,
-                                reranker);
-                            var result = languageModel.streamText(generation);
-                            var chunks = Flux.concat(
-                                Flux.just(UIMessageChunks.data("rag-input", diagnostics.input())),
-                                result.toUIMessageStream().chunks(),
-                                Flux.defer(() -> Flux.just(UIMessageChunks.data("rag-diagnostics",
-                                    diagnostics.snapshot())))
-                            );
-                            return new UIMessageStreamResponse(new UIMessageStream(chunks));
-                        }))
-                    .flatMap(response -> uiMessageStreamResponse(response, cancellation));
-            })));
+                .flatMap(body -> validateTestRagRequest(body).then(Mono.defer(() -> {
+                    var cancellation = UIMessageCancellations.create();
+                    var diagnostics = new RagTestDiagnostics(toRetrievedSources(body));
+                    return aiModelService
+                            .languageModel(modelName)
+                            .flatMap(languageModel -> testRagReranker(body, diagnostics)
+                                    .map(optionalReranker -> {
+                                        var reranker = optionalReranker.orElse(null);
+                                        var generation =
+                                                ragGenerationRequest(body, cancellation, diagnostics, reranker);
+                                        var result = languageModel.streamText(generation);
+                                        var chunks = Flux.concat(
+                                                Flux.just(UIMessageChunks.data("rag-input", diagnostics.input())),
+                                                result.toUIMessageStream().chunks(),
+                                                Flux.defer(() -> Flux.just(UIMessageChunks.data(
+                                                        "rag-diagnostics", diagnostics.snapshot()))));
+                                        return new UIMessageStreamResponse(new UIMessageStream(chunks));
+                                    }))
+                            .flatMap(response -> uiMessageStreamResponse(response, cancellation));
+                })));
     }
 
-    private GenerateTextRequest ragGenerationRequest(TestRagRequest body,
-        UIMessageCancellation cancellation, RagTestDiagnostics diagnostics,
-        RagSourceReranker reranker) {
+    private GenerateTextRequest ragGenerationRequest(
+            TestRagRequest body,
+            UIMessageCancellation cancellation,
+            RagTestDiagnostics diagnostics,
+            RagSourceReranker reranker) {
         var ragOptions = body.getRagOptions() != null ? body.getRagOptions() : new TestRagOptions();
-        var retrievedSources = diagnostics.retrievedSources(body.getTopN(),
-            ragOptions.getMinScore(), reranker != null);
+        var retrievedSources = diagnostics.retrievedSources(body.getTopN(), ragOptions.getMinScore(), reranker != null);
         return GenerateTextRequest.builder()
-            .prompt(body.getQuery())
-            .system(body.getSystem())
-            .temperature(body.getTemperature())
-            .topP(body.getTopP())
-            .topK(body.getTopK())
-            .minP(body.getMinP())
-            .presencePenalty(body.getPresencePenalty())
-            .frequencyPenalty(body.getFrequencyPenalty())
-            .repetitionPenalty(body.getRepetitionPenalty())
-            .logprobs(body.getLogprobs())
-            .topLogprobs(body.getTopLogprobs())
-            .parallelToolCalls(body.getParallelToolCalls())
-            .stopSequences(body.getStopSequences())
-            .maxOutputTokens(body.getMaxOutputTokens())
-            .seed(body.getSeed())
-            .maxRetries(body.getMaxRetries())
-            .reasoning(body.getReasoning())
-            .headers(body.getHeaders())
-            .metadata(Map.of("source", "console-rag-test"))
-            .context(body.getContext())
-            .cancellationToken(cancellation.token())
-            .middleware(new RagLanguageModelMiddleware(RagMiddlewareOptions.builder()
-                .retriever(retrievalRequest -> Mono.just(RetrievedContext.builder()
-                    .query(retrievalRequest.getQuery())
-                    .sources(retrievedSources)
-                    .metadata(Map.of("source", "console-rag-test"))
-                    .build()))
-                .reranker(reranker)
-                .maxResults(null)
-                .minScore(ragOptions.getMinScore())
-                .maxContextCharacters(ragOptions.getMaxContextCharacters())
-                .promptPlacement(ragOptions.getPromptPlacement())
-                .emptyContextPolicy(ragOptions.getEmptyContextPolicy())
-                .retrievalFailurePolicy(ragOptions.getRetrievalFailurePolicy())
-                .rerankFailurePolicy(ragOptions.getRerankFailurePolicy())
-                .emptyContextText(ragOptions.getEmptyContextText())
-                .contextHeader(ragOptions.getContextHeader())
+                .prompt(body.getQuery())
+                .system(body.getSystem())
+                .temperature(body.getTemperature())
+                .topP(body.getTopP())
+                .topK(body.getTopK())
+                .minP(body.getMinP())
+                .presencePenalty(body.getPresencePenalty())
+                .frequencyPenalty(body.getFrequencyPenalty())
+                .repetitionPenalty(body.getRepetitionPenalty())
+                .logprobs(body.getLogprobs())
+                .topLogprobs(body.getTopLogprobs())
+                .parallelToolCalls(body.getParallelToolCalls())
+                .stopSequences(body.getStopSequences())
+                .maxOutputTokens(body.getMaxOutputTokens())
+                .seed(body.getSeed())
+                .maxRetries(body.getMaxRetries())
+                .reasoning(body.getReasoning())
+                .headers(body.getHeaders())
                 .metadata(Map.of("source", "console-rag-test"))
                 .context(body.getContext())
-                .retrieverOptions(ragOptions.getRetrieverOptions())
-                .lifecycle(diagnostics.lifecycle())
-                .build()))
-            .build();
+                .cancellationToken(cancellation.token())
+                .middleware(new RagLanguageModelMiddleware(RagMiddlewareOptions.builder()
+                        .retriever(retrievalRequest -> Mono.just(RetrievedContext.builder()
+                                .query(retrievalRequest.getQuery())
+                                .sources(retrievedSources)
+                                .metadata(Map.of("source", "console-rag-test"))
+                                .build()))
+                        .reranker(reranker)
+                        .maxResults(null)
+                        .minScore(ragOptions.getMinScore())
+                        .maxContextCharacters(ragOptions.getMaxContextCharacters())
+                        .promptPlacement(ragOptions.getPromptPlacement())
+                        .emptyContextPolicy(ragOptions.getEmptyContextPolicy())
+                        .retrievalFailurePolicy(ragOptions.getRetrievalFailurePolicy())
+                        .rerankFailurePolicy(ragOptions.getRerankFailurePolicy())
+                        .emptyContextText(ragOptions.getEmptyContextText())
+                        .contextHeader(ragOptions.getContextHeader())
+                        .metadata(Map.of("source", "console-rag-test"))
+                        .context(body.getContext())
+                        .retrieverOptions(ragOptions.getRetrieverOptions())
+                        .lifecycle(diagnostics.lifecycle())
+                        .build()))
+                .build();
     }
 
-    private Mono<Optional<RagSourceReranker>> testRagReranker(TestRagRequest body,
-        RagTestDiagnostics diagnostics) {
+    private Mono<Optional<RagSourceReranker>> testRagReranker(TestRagRequest body, RagTestDiagnostics diagnostics) {
         if (body.getRerankModelName() == null || body.getRerankModelName().isBlank()) {
             return Mono.just(Optional.empty());
         }
-        return aiModelService.rerankingModel(body.getRerankModelName())
-            .map(model -> new ConsoleRagSourceReranker(model, body.getTopN(), diagnostics))
-            .map(Optional::<RagSourceReranker>of);
+        return aiModelService
+                .rerankingModel(body.getRerankModelName())
+                .map(model -> new ConsoleRagSourceReranker(model, body.getTopN(), diagnostics))
+                .map(Optional::<RagSourceReranker>of);
     }
 
     private Mono<Void> validateTestRagRequest(TestRagRequest request) {
         if (request == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "request body is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required"));
         }
         if (request.getQuery() == null || request.getQuery().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "query must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "query must not be blank"));
         }
         if (request.getSources() == null || request.getSources().isEmpty()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "At least one source is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one source is required"));
         }
         if (request.getSources().size() > 50) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "At most 50 sources can be tested at once"));
+            return Mono.error(
+                    new ResponseStatusException(HttpStatus.BAD_REQUEST, "At most 50 sources can be tested at once"));
         }
         if (request.getTopN() != null && request.getTopN() <= 0) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "topN must be positive"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "topN must be positive"));
         }
         for (var source : request.getSources()) {
-            if (source == null || source.getContent() == null || source.getContent().isBlank()) {
-                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "RAG source content must not be blank"));
+            if (source == null
+                    || source.getContent() == null
+                    || source.getContent().isBlank()) {
+                return Mono.error(
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "RAG source content must not be blank"));
             }
         }
         return Mono.empty();
@@ -648,58 +655,55 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             }
             metadata.put("originalIndex", i);
             sources.add(RetrievedSource.builder()
-                .id(hasText(source.getId()) ? source.getId() : String.valueOf(i))
-                .sourceType(source.getSourceType())
-                .title(source.getTitle())
-                .url(source.getUrl())
-                .content(source.getContent())
-                .score(source.getScore())
-                .metadata(Map.copyOf(metadata))
-                .usedForContext(source.getUsedForContext())
-                .visible(source.getVisible())
-                .build());
+                    .id(hasText(source.getId()) ? source.getId() : String.valueOf(i))
+                    .sourceType(source.getSourceType())
+                    .title(source.getTitle())
+                    .url(source.getUrl())
+                    .content(source.getContent())
+                    .score(source.getScore())
+                    .metadata(Map.copyOf(metadata))
+                    .usedForContext(source.getUsedForContext())
+                    .visible(source.getVisible())
+                    .build());
         }
         return List.copyOf(sources);
     }
 
     private static boolean consoleTestToolEnabled(ServerRequest request) {
-        return request.queryParam("enableTestTool")
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+        return request.queryParam("enableTestTool").map(Boolean::parseBoolean).orElse(false);
     }
 
     private static boolean consoleTestToolApprovalEnabled(ServerRequest request) {
         return request.queryParam("enableTestToolApproval")
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+                .map(Boolean::parseBoolean)
+                .orElse(false);
     }
 
     private static boolean consoleExternalTestToolEnabled(ServerRequest request) {
         return request.queryParam("enableExternalTestTool")
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+                .map(Boolean::parseBoolean)
+                .orElse(false);
     }
 
     private static boolean consoleToolCallRepairEnabled(ServerRequest request) {
         return request.queryParam("enableToolCallRepair")
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+                .map(Boolean::parseBoolean)
+                .orElse(false);
     }
 
     private static boolean consoleAgentTestToolsEnabled(ServerRequest request) {
         return request.queryParam("enableAgentTestTools")
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+                .map(Boolean::parseBoolean)
+                .orElse(false);
     }
 
     private static boolean consoleToolInputStreamTestEnabled(ServerRequest request) {
         return request.queryParam("enableToolInputStreamTest")
-            .map(Boolean::parseBoolean)
-            .orElse(false);
+                .map(Boolean::parseBoolean)
+                .orElse(false);
     }
 
-    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request,
-        ConsoleTestToolOptions options) {
+    private GenerateTextRequest withConsoleTestTool(GenerateTextRequest request, ConsoleTestToolOptions options) {
         if (!options.hasAnyEnabled()) {
             return request;
         }
@@ -708,11 +712,11 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             tools.addAll(request.getTools());
         }
         tools.removeIf(tool -> CONSOLE_TEST_TOOL_NAME.equals(tool.getName())
-            || CONSOLE_EXTERNAL_TEST_TOOL_NAME.equals(tool.getName())
-            || CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME.equals(tool.getName())
-            || CONSOLE_AGENT_ECHO_TOOL_NAME.equals(tool.getName())
-            || CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME.equals(tool.getName())
-            || CONSOLE_REPAIR_TEST_TOOL_NAME.equals(tool.getName()));
+                || CONSOLE_EXTERNAL_TEST_TOOL_NAME.equals(tool.getName())
+                || CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME.equals(tool.getName())
+                || CONSOLE_AGENT_ECHO_TOOL_NAME.equals(tool.getName())
+                || CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME.equals(tool.getName())
+                || CONSOLE_REPAIR_TEST_TOOL_NAME.equals(tool.getName()));
         if (options.basicEnabled() || options.approvalEnabled()) {
             tools.add(consoleTestTool(options.approvalEnabled()));
         }
@@ -737,11 +741,8 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                     return Mono.just(ToolCallRepairResult.unrepaired());
                 }
                 return Mono.just(ToolCallRepairResult.repaired(ToolCall.builder()
-                    .input(Map.of(
-                        "query", repairedQuery,
-                        "repairSource", "console-test"
-                    ))
-                    .build()));
+                        .input(Map.of("query", repairedQuery, "repairSource", "console-test"))
+                        .build()));
             });
         }
         request.setTools(List.copyOf(tools));
@@ -750,115 +751,114 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     private void applyConsoleGenerationOptions(
-        GenerateTextRequest.GenerateTextRequestBuilder builder,
-        TestUiMessageChatRequest request, ConsoleTestToolOptions options) {
+            GenerateTextRequest.GenerateTextRequestBuilder builder,
+            TestUiMessageChatRequest request,
+            ConsoleTestToolOptions options) {
         var generation = GenerateTextRequest.builder()
-            .system(request.getSystem())
-            .temperature(request.getTemperature())
-            .topP(request.getTopP())
-            .topK(request.getTopK())
-            .minP(request.getMinP())
-            .presencePenalty(request.getPresencePenalty())
-            .frequencyPenalty(request.getFrequencyPenalty())
-            .repetitionPenalty(request.getRepetitionPenalty())
-            .logprobs(request.getLogprobs())
-            .topLogprobs(request.getTopLogprobs())
-            .parallelToolCalls(request.getParallelToolCalls())
-            .stopSequences(request.getStopSequences())
-            .maxOutputTokens(request.getMaxOutputTokens())
-            .seed(request.getSeed())
-            .maxRetries(request.getMaxRetries())
-            .reasoning(request.getReasoning())
-            .headers(request.getHeaders())
-            .metadata(request.getMetadata())
-            .context(request.getContext())
-            .output(request.getOutput())
-            .toolChoice(request.getToolChoice())
-            .build();
+                .system(request.getSystem())
+                .temperature(request.getTemperature())
+                .topP(request.getTopP())
+                .topK(request.getTopK())
+                .minP(request.getMinP())
+                .presencePenalty(request.getPresencePenalty())
+                .frequencyPenalty(request.getFrequencyPenalty())
+                .repetitionPenalty(request.getRepetitionPenalty())
+                .logprobs(request.getLogprobs())
+                .topLogprobs(request.getTopLogprobs())
+                .parallelToolCalls(request.getParallelToolCalls())
+                .stopSequences(request.getStopSequences())
+                .maxOutputTokens(request.getMaxOutputTokens())
+                .seed(request.getSeed())
+                .maxRetries(request.getMaxRetries())
+                .reasoning(request.getReasoning())
+                .headers(request.getHeaders())
+                .metadata(request.getMetadata())
+                .context(request.getContext())
+                .output(request.getOutput())
+                .toolChoice(request.getToolChoice())
+                .build();
         generation = withConsoleTestTool(generation, options);
         builder.system(generation.getSystem())
-            .temperature(generation.getTemperature())
-            .topP(generation.getTopP())
-            .topK(generation.getTopK())
-            .minP(generation.getMinP())
-            .presencePenalty(generation.getPresencePenalty())
-            .frequencyPenalty(generation.getFrequencyPenalty())
-            .repetitionPenalty(generation.getRepetitionPenalty())
-            .logprobs(generation.getLogprobs())
-            .topLogprobs(generation.getTopLogprobs())
-            .parallelToolCalls(generation.getParallelToolCalls())
-            .stopSequences(generation.getStopSequences())
-            .maxOutputTokens(generation.getMaxOutputTokens())
-            .seed(generation.getSeed())
-            .maxRetries(generation.getMaxRetries())
-            .reasoning(generation.getReasoning())
-            .headers(generation.getHeaders())
-            .metadata(generation.getMetadata())
-            .context(generation.getContext())
-            .output(generation.getOutput())
-            .tools(generation.getTools())
-            .toolChoice(generation.getToolChoice())
-            .stopWhen(generation.getStopWhen())
-            .toolCallRepair(generation.getToolCallRepair());
+                .temperature(generation.getTemperature())
+                .topP(generation.getTopP())
+                .topK(generation.getTopK())
+                .minP(generation.getMinP())
+                .presencePenalty(generation.getPresencePenalty())
+                .frequencyPenalty(generation.getFrequencyPenalty())
+                .repetitionPenalty(generation.getRepetitionPenalty())
+                .logprobs(generation.getLogprobs())
+                .topLogprobs(generation.getTopLogprobs())
+                .parallelToolCalls(generation.getParallelToolCalls())
+                .stopSequences(generation.getStopSequences())
+                .maxOutputTokens(generation.getMaxOutputTokens())
+                .seed(generation.getSeed())
+                .maxRetries(generation.getMaxRetries())
+                .reasoning(generation.getReasoning())
+                .headers(generation.getHeaders())
+                .metadata(generation.getMetadata())
+                .context(generation.getContext())
+                .output(generation.getOutput())
+                .tools(generation.getTools())
+                .toolChoice(generation.getToolChoice())
+                .stopWhen(generation.getStopWhen())
+                .toolCallRepair(generation.getToolCallRepair());
     }
 
     private ToolDefinition consoleTestTool(boolean approvalEnabled) {
         return ToolDefinition.builder()
-            .name(CONSOLE_TEST_TOOL_NAME)
-            .description("Halo 控制台模型测试工具。用于验证工具调用链路；当用户要求测试工具、"
-                + "回显输入、获取 Halo 测试信息时调用。")
-            .needsApproval(approvalEnabled)
-            .inputSchema(Map.of(
-                "type", "object",
-                "properties", Map.of(
-                    "query", Map.of(
-                        "type", "string",
-                        "description", "用户想让测试工具回显或处理的文本"
-                    )
-                )
-            ))
-            .executor(context -> Mono.just(Map.of(
-                "tool", CONSOLE_TEST_TOOL_NAME,
-                "message", "Halo console test tool executed successfully.",
-                "query", context.getInput() != null
-                    ? context.getInput().getOrDefault("query", "")
-                    : "",
-                "nextAction", "Answer the user using this tool result."
-            )))
-            .build();
+                .name(CONSOLE_TEST_TOOL_NAME)
+                .description("Halo 控制台模型测试工具。用于验证工具调用链路；当用户要求测试工具、" + "回显输入、获取 Halo 测试信息时调用。")
+                .needsApproval(approvalEnabled)
+                .inputSchema(Map.of(
+                        "type",
+                        "object",
+                        "properties",
+                        Map.of(
+                                "query",
+                                Map.of(
+                                        "type", "string",
+                                        "description", "用户想让测试工具回显或处理的文本"))))
+                .executor(context -> Mono.just(Map.of(
+                        "tool",
+                        CONSOLE_TEST_TOOL_NAME,
+                        "message",
+                        "Halo console test tool executed successfully.",
+                        "query",
+                        context.getInput() != null ? context.getInput().getOrDefault("query", "") : "",
+                        "nextAction",
+                        "Answer the user using this tool result.")))
+                .build();
     }
 
     private ToolDefinition consoleRepairTestTool() {
         return ToolDefinition.builder()
-            .name(CONSOLE_REPAIR_TEST_TOOL_NAME)
-            .description("Halo 控制台工具调用修复测试工具。用于验证模型输出错误参数后，"
-                + "后台 repair callback 将参数修复为 query 并继续执行工具。")
-            .inputSchema(Map.of(
-                "type", "object",
-                "properties", Map.of(
-                    "query", Map.of(
-                        "type", "string",
-                        "description", "需要测试工具处理的文本"
-                    ),
-                    "repairSource", Map.of(
-                        "type", "string",
-                        "description", "修复来源"
-                    )
-                ),
-                "required", List.of("query")
-            ))
-            .executor(context -> Mono.just(Map.of(
-                "tool", CONSOLE_REPAIR_TEST_TOOL_NAME,
-                "message", "Halo console repair test tool executed successfully.",
-                "query", context.getInput() != null
-                    ? context.getInput().getOrDefault("query", "")
-                    : "",
-                "repairSource", context.getInput() != null
-                    ? context.getInput().getOrDefault("repairSource", "")
-                    : "",
-                "nextAction", "Answer the user using this repaired tool result."
-            )))
-            .build();
+                .name(CONSOLE_REPAIR_TEST_TOOL_NAME)
+                .description("Halo 控制台工具调用修复测试工具。用于验证模型输出错误参数后，" + "后台 repair callback 将参数修复为 query 并继续执行工具。")
+                .inputSchema(Map.of(
+                        "type", "object",
+                        "properties",
+                                Map.of(
+                                        "query",
+                                                Map.of(
+                                                        "type", "string",
+                                                        "description", "需要测试工具处理的文本"),
+                                        "repairSource",
+                                                Map.of(
+                                                        "type", "string",
+                                                        "description", "修复来源")),
+                        "required", List.of("query")))
+                .executor(context -> Mono.just(Map.of(
+                        "tool",
+                        CONSOLE_REPAIR_TEST_TOOL_NAME,
+                        "message",
+                        "Halo console repair test tool executed successfully.",
+                        "query",
+                        context.getInput() != null ? context.getInput().getOrDefault("query", "") : "",
+                        "repairSource",
+                        context.getInput() != null ? context.getInput().getOrDefault("repairSource", "") : "",
+                        "nextAction",
+                        "Answer the user using this repaired tool result.")))
+                .build();
     }
 
     private String repairedConsoleQuery(Map<String, Object> input) {
@@ -872,133 +872,131 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             }
         }
         return input.values().stream()
-            .filter(value -> value != null && !String.valueOf(value).isBlank())
-            .map(String::valueOf)
-            .findFirst()
-            .orElse(null);
+                .filter(value -> value != null && !String.valueOf(value).isBlank())
+                .map(String::valueOf)
+                .findFirst()
+                .orElse(null);
     }
 
     private ToolDefinition consoleExternalTestTool() {
         return ToolDefinition.builder()
-            .name(CONSOLE_EXTERNAL_TEST_TOOL_NAME)
-            .description("Halo 控制台外部工具测试工具。用于验证工具调用返回后由调用方在外部执行，"
-                + "再把结果或错误追加到消息历史中继续生成。")
-            .inputSchema(Map.of(
-                "type", "object",
-                "properties", Map.of(
-                    "query", Map.of(
-                        "type", "string",
-                        "description", "希望外部系统查询或处理的文本"
-                    )
-                )
-            ))
-            .build();
+                .name(CONSOLE_EXTERNAL_TEST_TOOL_NAME)
+                .description("Halo 控制台外部工具测试工具。用于验证工具调用返回后由调用方在外部执行，" + "再把结果或错误追加到消息历史中继续生成。")
+                .inputSchema(Map.of(
+                        "type",
+                        "object",
+                        "properties",
+                        Map.of(
+                                "query",
+                                Map.of(
+                                        "type", "string",
+                                        "description", "希望外部系统查询或处理的文本"))))
+                .build();
     }
 
     private ToolDefinition consoleAgentPageContextTool() {
         return ToolDefinition.builder()
-            .name(CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME)
-            .description("Halo 控制台 Agent 浏览器工具测试：读取当前后台测试工作台页面上下文，"
-                + "包括页面标题、地址、选中模型、测试模式和最近用户消息。该工具由前端执行，"
-                + "用于验证客户端 Agent 工具调用与自动续跑。")
-            .inputSchema(Map.of(
-                "type", "object",
-                "properties", Map.of()
-            ))
-            .build();
+                .name(CONSOLE_AGENT_PAGE_CONTEXT_TOOL_NAME)
+                .description("Halo 控制台 Agent 浏览器工具测试：读取当前后台测试工作台页面上下文，"
+                        + "包括页面标题、地址、选中模型、测试模式和最近用户消息。该工具由前端执行，"
+                        + "用于验证客户端 Agent 工具调用与自动续跑。")
+                .inputSchema(Map.of("type", "object", "properties", Map.of()))
+                .build();
     }
 
     private ToolDefinition consoleAgentTestActionTool() {
         return ToolDefinition.builder()
-            .name(CONSOLE_AGENT_ECHO_TOOL_NAME)
-            .description("Halo 控制台 Agent 浏览器工具测试：执行一个中性的前端测试动作并回显输入，"
-                + "不会修改真实业务数据。该工具由前端执行，用于验证工具结果回传后模型继续生成。")
-            .inputSchema(Map.of(
-                "type", "object",
-                "properties", Map.of(
-                    "message", Map.of(
-                        "type", "string",
-                        "description", "需要前端测试工具回显的内容"
-                    )
-                ),
-                "required", List.of("message")
-            ))
-            .build();
+                .name(CONSOLE_AGENT_ECHO_TOOL_NAME)
+                .description("Halo 控制台 Agent 浏览器工具测试：执行一个中性的前端测试动作并回显输入，" + "不会修改真实业务数据。该工具由前端执行，用于验证工具结果回传后模型继续生成。")
+                .inputSchema(Map.of(
+                        "type", "object",
+                        "properties",
+                                Map.of(
+                                        "message",
+                                        Map.of(
+                                                "type", "string",
+                                                "description", "需要前端测试工具回显的内容")),
+                        "required", List.of("message")))
+                .build();
     }
 
     private ToolDefinition consoleToolInputStreamTestTool() {
         var lifecycleEvents = new CopyOnWriteArrayList<String>();
         return ToolDefinition.builder()
-            .name(CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME)
-            .description("Halo 控制台流式工具入参专项测试。仅当用户明确要求流式工具入参测试时调用；"
-                + "按 schema 完整生成较长参数，以验证 provider 原生 delta、UI Message 事件和"
-                + "服务端工具输入生命周期回调。")
-            .inputSchema(Map.of(
-                "type", "object",
-                "properties", Map.of(
-                    "title", Map.of(
-                        "type", "string",
-                        "description", "本次测试标题"
-                    ),
-                    "payload", Map.of(
-                        "type", "string",
-                        "description", "用于产生多个流式 JSON 参数片段的完整长文本"
-                    ),
-                    "sequence", Map.of(
-                        "type", "array",
-                        "description", "期望观察的生命周期名称，按顺序填写",
-                        "items", Map.of("type", "string")
-                    )
-                ),
-                "required", List.of("title", "payload", "sequence")
-            ))
-            .onInputStart(context -> Mono.fromRunnable(() -> lifecycleEvents.add("start")))
-            .onInputDelta(context -> Mono.fromRunnable(() -> lifecycleEvents.add("delta")))
-            .onInputAvailable(context -> Mono.fromRunnable(() -> lifecycleEvents.add("available")))
-            .executor(context -> {
-                var deltaCount = lifecycleEvents.stream().filter("delta"::equals).count();
-                var mode = deltaCount > 0 ? "provider-native-delta" : "final-only";
-                return Mono.just(Map.of(
-                    "tool", CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME,
-                    "message", "Halo console tool input streaming test executed successfully.",
-                    "input", context.getInput() != null ? context.getInput() : Map.of(),
-                    "backendLifecycle", Map.of(
-                        "events", List.copyOf(lifecycleEvents),
-                        "deltaCount", deltaCount,
-                        "mode", mode
-                    ),
-                    "nextAction", "Summarize backendLifecycle without calling another tool."
-                ));
-            })
-            .build();
+                .name(CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME)
+                .description("Halo 控制台流式工具入参专项测试。仅当用户明确要求流式工具入参测试时调用；"
+                        + "按 schema 完整生成较长参数，以验证 provider 原生 delta、UI Message 事件和"
+                        + "服务端工具输入生命周期回调。")
+                .inputSchema(Map.of(
+                        "type", "object",
+                        "properties",
+                                Map.of(
+                                        "title",
+                                                Map.of(
+                                                        "type", "string",
+                                                        "description", "本次测试标题"),
+                                        "payload",
+                                                Map.of(
+                                                        "type", "string",
+                                                        "description", "用于产生多个流式 JSON 参数片段的完整长文本"),
+                                        "sequence",
+                                                Map.of(
+                                                        "type", "array",
+                                                        "description", "期望观察的生命周期名称，按顺序填写",
+                                                        "items", Map.of("type", "string"))),
+                        "required", List.of("title", "payload", "sequence")))
+                .onInputStart(context -> Mono.fromRunnable(() -> lifecycleEvents.add("start")))
+                .onInputDelta(context -> Mono.fromRunnable(() -> lifecycleEvents.add("delta")))
+                .onInputAvailable(context -> Mono.fromRunnable(() -> lifecycleEvents.add("available")))
+                .executor(context -> {
+                    var deltaCount =
+                            lifecycleEvents.stream().filter("delta"::equals).count();
+                    var mode = deltaCount > 0 ? "provider-native-delta" : "final-only";
+                    return Mono.just(Map.of(
+                            "tool",
+                            CONSOLE_TOOL_INPUT_STREAM_TEST_TOOL_NAME,
+                            "message",
+                            "Halo console tool input streaming test executed successfully.",
+                            "input",
+                            context.getInput() != null ? context.getInput() : Map.of(),
+                            "backendLifecycle",
+                            Map.of(
+                                    "events", List.copyOf(lifecycleEvents),
+                                    "deltaCount", deltaCount,
+                                    "mode", mode),
+                            "nextAction",
+                            "Summarize backendLifecycle without calling another tool."));
+                })
+                .build();
     }
 
     private Mono<Void> validateTestChatRequest(GenerateTextRequest request) {
         var hasPrompt = request.getPrompt() != null && !request.getPrompt().isBlank();
-        var hasMessages = request.getMessages() != null && !request.getMessages().isEmpty();
+        var hasMessages =
+                request.getMessages() != null && !request.getMessages().isEmpty();
         if (hasPrompt == hasMessages) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "exactly one of prompt or messages must be provided"));
+            return Mono.error(new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "exactly one of prompt or messages must be provided"));
         }
         if (request.getPrompt() != null && request.getPrompt().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "prompt must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "prompt must not be blank"));
         }
         if (request.getSystem() != null && request.getSystem().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "system must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "system must not be blank"));
         }
         if (hasMessages) {
             for (var message : request.getMessages()) {
-                if (message == null || message.getRole() == null
-                    || message.getContent() == null || message.getContent().isEmpty()) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "messages must include role and content"));
+                if (message == null
+                        || message.getRole() == null
+                        || message.getContent() == null
+                        || message.getContent().isEmpty()) {
+                    return Mono.error(new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "messages must include role and content"));
                 }
                 for (var part : message.getContent()) {
                     if (part == null || !isSupportedTestChatPart(message.getRole(), part)) {
-                        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "messages must include non-empty supported content parts"));
+                        return Mono.error(new ResponseStatusException(
+                                HttpStatus.BAD_REQUEST, "messages must include non-empty supported content parts"));
                     }
                 }
             }
@@ -1008,22 +1006,19 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private Mono<Void> validateTestUiMessageChatRequest(TestUiMessageChatRequest request) {
         if (request == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "request body is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required"));
         }
         if (request.getId() == null || request.getId().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "id must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "id must not be blank"));
         }
         if (request.getMessages() == null || request.getMessages().isEmpty()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "messages must not be empty"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "messages must not be empty"));
         }
         var trigger = parseUiMessageChatTrigger(request.getTrigger());
         if (trigger == UIMessageChatTrigger.REGENERATE_MESSAGE
-            && (request.getMessageId() == null || request.getMessageId().isBlank())) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "messageId must be set for regenerate-message requests"));
+                && (request.getMessageId() == null || request.getMessageId().isBlank())) {
+            return Mono.error(new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "messageId must be set for regenerate-message requests"));
         }
         for (var message : request.getMessages()) {
             validateConsoleUiMessage(message);
@@ -1033,24 +1028,20 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private Mono<Void> validateTestCompletionRequest(TestCompletionStreamRequest request) {
         if (request == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "request body is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required"));
         }
         if (request.getPrompt() == null || request.getPrompt().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "prompt must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "prompt must not be blank"));
         }
         return Mono.empty();
     }
 
     private Mono<Void> validateTestObjectRequest(TestObjectStreamRequest request) {
         if (request == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "request body is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required"));
         }
         if (request.getInput() == null || request.getInput().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "input must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "input must not be blank"));
         }
         try {
             objectOutput(request);
@@ -1061,18 +1052,19 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<Void> validateTestEmbeddingRequest(TestEmbeddingRequest request) {
-        if (request == null || request.getInputs() == null || request.getInputs().isEmpty()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "At least one input is required"));
+        if (request == null
+                || request.getInputs() == null
+                || request.getInputs().isEmpty()) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one input is required"));
         }
         if (request.getInputs().size() > 20) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "At most 20 inputs can be tested at once"));
+            return Mono.error(
+                    new ResponseStatusException(HttpStatus.BAD_REQUEST, "At most 20 inputs can be tested at once"));
         }
         for (var input : request.getInputs()) {
             if (input == null || input.isBlank()) {
-                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Embedding inputs must not be blank"));
+                return Mono.error(
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Embedding inputs must not be blank"));
             }
         }
         return Mono.empty();
@@ -1080,29 +1072,25 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private Mono<Void> validateTestRerankRequest(TestRerankRequest request) {
         if (request == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "request body is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required"));
         }
         if (request.getQuery() == null || request.getQuery().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "query must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "query must not be blank"));
         }
         if (request.getDocuments() == null || request.getDocuments().isEmpty()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "At least one document is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one document is required"));
         }
         if (request.getDocuments().size() > 50) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "At most 50 documents can be tested at once"));
+            return Mono.error(
+                    new ResponseStatusException(HttpStatus.BAD_REQUEST, "At most 50 documents can be tested at once"));
         }
         if (request.getTopN() != null && request.getTopN() <= 0) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "topN must be positive"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "topN must be positive"));
         }
         for (var document : request.getDocuments()) {
             if (document == null || document.isBlank()) {
-                return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Rerank documents must not be blank"));
+                return Mono.error(
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rerank documents must not be blank"));
             }
         }
         return Mono.empty();
@@ -1110,48 +1098,41 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
     private Mono<Void> validateTestImageGenerationRequest(TestImageGenerationRequest request) {
         if (request == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "request body is required"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required"));
         }
         if (request.getPrompt() == null || request.getPrompt().isBlank()) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "prompt must not be blank"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "prompt must not be blank"));
         }
         if (request.getN() != null && request.getN() <= 0) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "n must be positive"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "n must be positive"));
         }
         if (request.getWidth() != null && request.getWidth() <= 0) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "width must be positive"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "width must be positive"));
         }
         if (request.getHeight() != null && request.getHeight() <= 0) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "height must be positive"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "height must be positive"));
         }
         if (request.getMaxRetries() != null && request.getMaxRetries() < 0) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "maxRetries must not be negative"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxRetries must not be negative"));
         }
         if (request.getMaxParallelCalls() != null && request.getMaxParallelCalls() <= 0) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "maxParallelCalls must be positive"));
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxParallelCalls must be positive"));
         }
         if (request.getImages() != null && request.getImages().size() > 8) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "At most 8 input images can be tested at once"));
+            return Mono.error(new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "At most 8 input images can be tested at once"));
         }
         if (request.getImages() != null) {
             for (var image : request.getImages()) {
                 if (!hasMediaPayload(image)) {
-                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "input images must set exactly one of url or data"));
+                    return Mono.error(new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST, "input images must set exactly one of url or data"));
                 }
             }
         }
         if (request.getMask() != null && !hasMediaPayload(request.getMask())) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "mask must set exactly one of url or data"));
+            return Mono.error(
+                    new ResponseStatusException(HttpStatus.BAD_REQUEST, "mask must set exactly one of url or data"));
         }
         return Mono.empty();
     }
@@ -1160,15 +1141,15 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var result = new ArrayList<RerankDocument>();
         for (int i = 0; i < documents.size(); i++) {
             result.add(RerankDocument.builder()
-                .id(String.valueOf(i))
-                .text(documents.get(i))
-                .build());
+                    .id(String.valueOf(i))
+                    .text(documents.get(i))
+                    .build());
         }
         return List.copyOf(result);
     }
 
-    private boolean isSupportedTestChatPart(run.halo.aifoundation.message.ModelMessageRole role,
-        run.halo.aifoundation.message.ModelMessagePart part) {
+    private boolean isSupportedTestChatPart(
+            run.halo.aifoundation.message.ModelMessageRole role, run.halo.aifoundation.message.ModelMessagePart part) {
         if (PartType.isText(part.getType())) {
             return part.getText() != null && !part.getText().isBlank();
         }
@@ -1181,31 +1162,29 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return false;
     }
 
-    private boolean isSupportedAssistantTestChatPart(
-        run.halo.aifoundation.message.ModelMessagePart part) {
+    private boolean isSupportedAssistantTestChatPart(run.halo.aifoundation.message.ModelMessagePart part) {
         return (PartType.isReasoning(part.getType())
-                && (part.getText() != null && !part.getText().isBlank()))
-            || (PartType.TOOL_CALL.equals(part.getType())
-                && hasText(part.getToolCallId())
-                && hasText(part.getToolName()))
-            || (PartType.TOOL_APPROVAL_REQUEST.equals(part.getType())
-                && hasText(part.getApprovalId())
-                && hasText(part.getToolCallId())
-                && hasText(part.getToolName()));
+                        && (part.getText() != null && !part.getText().isBlank()))
+                || (PartType.TOOL_CALL.equals(part.getType())
+                        && hasText(part.getToolCallId())
+                        && hasText(part.getToolName()))
+                || (PartType.TOOL_APPROVAL_REQUEST.equals(part.getType())
+                        && hasText(part.getApprovalId())
+                        && hasText(part.getToolCallId())
+                        && hasText(part.getToolName()));
     }
 
-    private boolean isSupportedToolTestChatPart(
-        run.halo.aifoundation.message.ModelMessagePart part) {
+    private boolean isSupportedToolTestChatPart(run.halo.aifoundation.message.ModelMessagePart part) {
         return (PartType.TOOL_RESULT.equals(part.getType())
-                && hasText(part.getToolCallId())
-                && hasText(part.getToolName()))
-            || (PartType.TOOL_ERROR.equals(part.getType())
-                && hasText(part.getToolCallId())
-                && hasText(part.getToolName())
-                && hasText(part.getErrorText()))
-            || (PartType.TOOL_APPROVAL_RESPONSE.equals(part.getType())
-                && hasText(part.getApprovalId())
-                && part.getApproved() != null);
+                        && hasText(part.getToolCallId())
+                        && hasText(part.getToolName()))
+                || (PartType.TOOL_ERROR.equals(part.getType())
+                        && hasText(part.getToolCallId())
+                        && hasText(part.getToolName())
+                        && hasText(part.getErrorText()))
+                || (PartType.TOOL_APPROVAL_RESPONSE.equals(part.getType())
+                        && hasText(part.getApprovalId())
+                        && part.getApproved() != null);
     }
 
     private static boolean hasText(String value) {
@@ -1220,58 +1199,54 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return media != null && hasText(media.getUrl()) != hasText(media.getData());
     }
 
-    private GenerateTextRequest.GenerateTextRequestBuilder completionRequest(
-        TestCompletionStreamRequest request) {
+    private GenerateTextRequest.GenerateTextRequestBuilder completionRequest(TestCompletionStreamRequest request) {
         return GenerateTextRequest.builder()
-            .prompt(request.getPrompt())
-            .system(request.getSystem())
-            .temperature(request.getTemperature())
-            .topP(request.getTopP())
-            .topK(request.getTopK())
-            .minP(request.getMinP())
-            .presencePenalty(request.getPresencePenalty())
-            .frequencyPenalty(request.getFrequencyPenalty())
-            .repetitionPenalty(request.getRepetitionPenalty())
-            .logprobs(request.getLogprobs())
-            .topLogprobs(request.getTopLogprobs())
-            .parallelToolCalls(request.getParallelToolCalls())
-            .stopSequences(request.getStopSequences())
-            .maxOutputTokens(request.getMaxOutputTokens())
-            .seed(request.getSeed())
-            .maxRetries(request.getMaxRetries())
-            .reasoning(request.getReasoning())
-            .headers(request.getHeaders())
-            .metadata(request.getMetadata())
-            .context(request.getContext());
+                .prompt(request.getPrompt())
+                .system(request.getSystem())
+                .temperature(request.getTemperature())
+                .topP(request.getTopP())
+                .topK(request.getTopK())
+                .minP(request.getMinP())
+                .presencePenalty(request.getPresencePenalty())
+                .frequencyPenalty(request.getFrequencyPenalty())
+                .repetitionPenalty(request.getRepetitionPenalty())
+                .logprobs(request.getLogprobs())
+                .topLogprobs(request.getTopLogprobs())
+                .parallelToolCalls(request.getParallelToolCalls())
+                .stopSequences(request.getStopSequences())
+                .maxOutputTokens(request.getMaxOutputTokens())
+                .seed(request.getSeed())
+                .maxRetries(request.getMaxRetries())
+                .reasoning(request.getReasoning())
+                .headers(request.getHeaders())
+                .metadata(request.getMetadata())
+                .context(request.getContext());
     }
 
-    private GenerateTextRequest.GenerateTextRequestBuilder objectRequest(
-        TestObjectStreamRequest request) {
-        return completionRequest(request)
-            .prompt(request.getInput())
-            .output(objectOutput(request));
+    private GenerateTextRequest.GenerateTextRequestBuilder objectRequest(TestObjectStreamRequest request) {
+        return completionRequest(request).prompt(request.getInput()).output(objectOutput(request));
     }
 
     private GenerateImageRequest toGenerateImageRequest(TestImageGenerationRequest request) {
         var builder = GenerateImageRequest.builder()
-            .prompt(request.getPrompt())
-            .images(toDataContents(request.getImages()))
-            .mask(toDataContent(request.getMask()))
-            .n(request.getN())
-            .aspectRatio(request.getAspectRatio())
-            .negativePrompt(request.getNegativePrompt())
-            .seed(request.getSeed())
-            .responseFormat(request.getResponseFormat())
-            .headers(request.getHeaders())
-            .maxRetries(request.getMaxRetries())
-            .maxParallelCalls(request.getMaxParallelCalls())
-            .metadata(Map.of("source", "console-image-generation-test"));
+                .prompt(request.getPrompt())
+                .images(toDataContents(request.getImages()))
+                .mask(toDataContent(request.getMask()))
+                .n(request.getN())
+                .aspectRatio(request.getAspectRatio())
+                .negativePrompt(request.getNegativePrompt())
+                .seed(request.getSeed())
+                .responseFormat(request.getResponseFormat())
+                .headers(request.getHeaders())
+                .maxRetries(request.getMaxRetries())
+                .maxParallelCalls(request.getMaxParallelCalls())
+                .metadata(Map.of("source", "console-image-generation-test"));
         applyImageSize(builder, request);
         return builder.build();
     }
 
-    private static void applyImageSize(GenerateImageRequest.GenerateImageRequestBuilder builder,
-        TestImageGenerationRequest request) {
+    private static void applyImageSize(
+            GenerateImageRequest.GenerateImageRequestBuilder builder, TestImageGenerationRequest request) {
         if (hasText(request.getSize())) {
             var size = request.getSize().trim();
             if (size.matches("\\d+")) {
@@ -1292,9 +1267,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         if (media == null || media.isEmpty()) {
             return null;
         }
-        return media.stream()
-            .map(ModelConsoleEndpoint::toDataContent)
-            .toList();
+        return media.stream().map(ModelConsoleEndpoint::toDataContent).toList();
     }
 
     private static DataContent toDataContent(TestMediaContent media) {
@@ -1302,28 +1275,25 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             return null;
         }
         if (hasText(media.getUrl())) {
-            return DataContent.url(media.getUrl().trim(), emptyToNull(media.getMediaType()),
-                emptyToNull(media.getFilename()));
+            return DataContent.url(
+                    media.getUrl().trim(), emptyToNull(media.getMediaType()), emptyToNull(media.getFilename()));
         }
         if (hasText(media.getData())) {
             var data = media.getData().trim();
             if (data.regionMatches(true, 0, "data:", 0, "data:".length())) {
                 return DataContent.dataUrl(data, emptyToNull(media.getFilename()));
             }
-            return DataContent.data(data, emptyToNull(media.getMediaType()),
-                emptyToNull(media.getFilename()));
+            return DataContent.data(data, emptyToNull(media.getMediaType()), emptyToNull(media.getFilename()));
         }
         return null;
     }
 
-    private run.halo.aifoundation.schema.OutputSpec objectOutput(
-        TestObjectStreamRequest request) {
+    private run.halo.aifoundation.schema.OutputSpec objectOutput(TestObjectStreamRequest request) {
         if (request.getOutput() != null && !request.getOutput().isEmpty()) {
             return outputSpecFromMap(request.getOutput());
         }
         if (request.getSchema() == null || request.getSchema().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "schema or output must be provided");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "schema or output must be provided");
         }
         return run.halo.aifoundation.schema.OutputSpec.object(request.getSchema());
     }
@@ -1331,16 +1301,15 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
     private run.halo.aifoundation.schema.OutputSpec outputSpecFromMap(Map<String, Object> output) {
         var type = outputType(output.get("type"));
         if (type != run.halo.aifoundation.schema.OutputType.OBJECT) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "output.type must be object");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "output.type must be object");
         }
         return run.halo.aifoundation.schema.OutputSpec.builder()
-            .type(type)
-            .name(stringValue(output.get("name")))
-            .description(stringValue(output.get("description")))
-            .schema(objectMapValue(output.get("schema")))
-            .strict(booleanValue(output.get("strict")))
-            .build();
+                .type(type)
+                .name(stringValue(output.get("name")))
+                .description(stringValue(output.get("description")))
+                .schema(objectMapValue(output.get("schema")))
+                .strict(booleanValue(output.get("strict")))
+                .build();
     }
 
     private run.halo.aifoundation.schema.OutputType outputType(Object value) {
@@ -1351,8 +1320,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         try {
             return run.halo.aifoundation.schema.OutputType.valueOf(normalized);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "unsupported output.type: " + value, e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported output.type: " + value, e);
         }
     }
 
@@ -1377,27 +1345,22 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         return Boolean.parseBoolean(String.valueOf(value));
     }
 
-    private static UIMessageChatRequest<Map<String, Object>> toUiMessageChatRequest(
-        TestUiMessageChatRequest request) {
+    private static UIMessageChatRequest<Map<String, Object>> toUiMessageChatRequest(TestUiMessageChatRequest request) {
         return UIMessageTransportCodec.chatRequestFromMap(toUiMessageChatRequestMap(request));
     }
 
     private static void validateConsoleUiMessage(TestUiMessage message) {
         if (message == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "messages must not contain null values");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "messages must not contain null values");
         }
         if (message.getId() == null || message.getId().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "message id must not be blank");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "message id must not be blank");
         }
         if (message.getRole() == null || message.getRole().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "message role must not be blank");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "message role must not be blank");
         }
         if (message.getParts() == null || message.getParts().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "message parts must not be empty");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "message parts must not be empty");
         }
         try {
             UIMessageTransportCodec.messageFromMap(toUiMessageMap(message));
@@ -1414,13 +1377,14 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         }
     }
 
-    private static Map<String, Object> toUiMessageChatRequestMap(
-        TestUiMessageChatRequest request) {
+    private static Map<String, Object> toUiMessageChatRequestMap(TestUiMessageChatRequest request) {
         var map = new LinkedHashMap<String, Object>();
         map.put("id", request.getId());
-        map.put("messages", request.getMessages().stream()
-            .map(ModelConsoleEndpoint::toUiMessageMap)
-            .toList());
+        map.put(
+                "messages",
+                request.getMessages().stream()
+                        .map(ModelConsoleEndpoint::toUiMessageMap)
+                        .toList());
         map.put("trigger", request.getTrigger() != null ? request.getTrigger() : "submit-message");
         if (request.getMessageId() != null) {
             map.put("messageId", request.getMessageId());
@@ -1455,45 +1419,48 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         if (error instanceof InvalidUIMessageException invalid) {
             return invalid.getMessage() + ": " + invalid.issues();
         }
-        return error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
+        return error.getMessage() != null
+                ? error.getMessage()
+                : error.getClass().getSimpleName();
     }
 
     private record ConsoleTestToolOptions(
-        boolean basicEnabled,
-        boolean approvalEnabled,
-        boolean externalEnabled,
-        boolean agentEnabled,
-        boolean repairEnabled,
-        boolean toolInputStreamEnabled
-    ) {
+            boolean basicEnabled,
+            boolean approvalEnabled,
+            boolean externalEnabled,
+            boolean agentEnabled,
+            boolean repairEnabled,
+            boolean toolInputStreamEnabled) {
         static ConsoleTestToolOptions from(ServerRequest request) {
             return new ConsoleTestToolOptions(
-                consoleTestToolEnabled(request),
-                consoleTestToolApprovalEnabled(request),
-                consoleExternalTestToolEnabled(request),
-                consoleAgentTestToolsEnabled(request),
-                consoleToolCallRepairEnabled(request),
-                consoleToolInputStreamTestEnabled(request)
-            );
+                    consoleTestToolEnabled(request),
+                    consoleTestToolApprovalEnabled(request),
+                    consoleExternalTestToolEnabled(request),
+                    consoleAgentTestToolsEnabled(request),
+                    consoleToolCallRepairEnabled(request),
+                    consoleToolInputStreamTestEnabled(request));
         }
 
         boolean hasAnyEnabled() {
-            return basicEnabled || approvalEnabled || externalEnabled || agentEnabled
-                || repairEnabled || toolInputStreamEnabled;
+            return basicEnabled
+                    || approvalEnabled
+                    || externalEnabled
+                    || agentEnabled
+                    || repairEnabled
+                    || toolInputStreamEnabled;
         }
     }
 
-    private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId,
-        int attempt) {
+    private Mono<AiModel> createWithGeneratedName(AiModel model, String providerName, String modelId, int attempt) {
         if (attempt >= MAX_NAME_GENERATION_ATTEMPTS) {
-            return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT,
-                "Could not generate a unique model resource name"));
+            return Mono.error(new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Could not generate a unique model resource name"));
         }
         var name = AiModelNameGenerator.generate(providerName, modelId, attempt);
         model.getMetadata().setName(name);
         return client.fetch(AiModel.class, name)
-            .flatMap(existing -> createWithGeneratedName(model, providerName, modelId, attempt + 1))
-            .switchIfEmpty(Mono.defer(() -> client.create(model)));
+                .flatMap(existing -> createWithGeneratedName(model, providerName, modelId, attempt + 1))
+                .switchIfEmpty(Mono.defer(() -> client.create(model)));
     }
 
     private Mono<Void> validateModel(AiModel model) {
@@ -1504,20 +1471,18 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         var providerName = model.getSpec().getProviderName();
         var modelId = model.getSpec().getModelId();
         var listOptions = ListOptions.builder()
-            .fieldQuery(Queries.and(
-                Queries.equal("spec.providerName", providerName),
-                Queries.equal("spec.modelId", modelId)
-            ))
-            .build();
+                .fieldQuery(Queries.and(
+                        Queries.equal("spec.providerName", providerName), Queries.equal("spec.modelId", modelId)))
+                .build();
         return client.listAll(AiModel.class, listOptions, Sort.unsorted())
-            .filter(existing -> excludeName == null
-                || !excludeName.equals(existing.getMetadata().getName()))
-            .next()
-            .flatMap(existing -> Mono.<Void>error(new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "A model with providerName='" + providerName
-                    + "' and modelId='" + modelId + "' already exists")))
-            .switchIfEmpty(Mono.empty());
+                .filter(existing -> excludeName == null
+                        || !excludeName.equals(existing.getMetadata().getName()))
+                .next()
+                .flatMap(existing -> Mono.<Void>error(new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "A model with providerName='" + providerName + "' and modelId='" + modelId
+                                + "' already exists")))
+                .switchIfEmpty(Mono.empty());
     }
 
     @Data
@@ -1727,18 +1692,16 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Map<String, Object> providerMetadata;
 
         static TestEmbeddingResponse from(run.halo.aifoundation.embedding.EmbeddingResponse response) {
-            var vectors = response.getEmbeddings() != null
-                ? response.getEmbeddings()
-                : List.<float[]>of();
+            var vectors = response.getEmbeddings() != null ? response.getEmbeddings() : List.<float[]>of();
             return TestEmbeddingResponse.builder()
-                .embeddingsCount(vectors.size())
-                .embeddings(previews(vectors))
-                .firstPairSimilarity(similarity(vectors))
-                .usage(response.getUsage())
-                .response(response.getResponse())
-                .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
-                .providerMetadata(response.getProviderMetadata())
-                .build();
+                    .embeddingsCount(vectors.size())
+                    .embeddings(previews(vectors))
+                    .firstPairSimilarity(similarity(vectors))
+                    .usage(response.getUsage())
+                    .response(response.getResponse())
+                    .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
+                    .providerMetadata(response.getProviderMetadata())
+                    .build();
         }
 
         private static List<EmbeddingPreview> previews(List<float[]> vectors) {
@@ -1746,10 +1709,10 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
             for (int i = 0; i < vectors.size(); i++) {
                 var vector = vectors.get(i);
                 result.add(EmbeddingPreview.builder()
-                    .index(i)
-                    .dimensions(vector != null ? vector.length : 0)
-                    .preview(preview(vector))
-                    .build());
+                        .index(i)
+                        .dimensions(vector != null ? vector.length : 0)
+                        .preview(preview(vector))
+                        .build());
             }
             return List.copyOf(result);
         }
@@ -1799,29 +1762,31 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
         static TestRerankResponse from(RerankResponse response) {
             var results = response.getResults() != null
-                ? response.getResults()
-                : List.<run.halo.aifoundation.rerank.RerankResult>of();
+                    ? response.getResults()
+                    : List.<run.halo.aifoundation.rerank.RerankResult>of();
             return TestRerankResponse.builder()
-                .query(response.getQuery())
-                .resultsCount(results.size())
-                .results(results.stream()
-                    .map(result -> RerankPreview.builder()
-                        .index(result.getIndex())
-                        .documentId(result.getDocument() != null
-                            ? result.getDocument().getId()
-                            : null)
-                        .text(result.getDocument() != null
-                            ? result.getDocument().getText()
-                            : null)
-                        .score(result.getScore())
-                        .providerMetadata(result.getProviderMetadata())
-                        .build())
-                    .toList())
-                .usage(response.getUsage())
-                .response(response.getResponse())
-                .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
-                .providerMetadata(response.getProviderMetadata())
-                .build();
+                    .query(response.getQuery())
+                    .resultsCount(results.size())
+                    .results(results.stream()
+                            .map(result -> RerankPreview.builder()
+                                    .index(result.getIndex())
+                                    .documentId(
+                                            result.getDocument() != null
+                                                    ? result.getDocument().getId()
+                                                    : null)
+                                    .text(
+                                            result.getDocument() != null
+                                                    ? result.getDocument().getText()
+                                                    : null)
+                                    .score(result.getScore())
+                                    .providerMetadata(result.getProviderMetadata())
+                                    .build())
+                            .toList())
+                    .usage(response.getUsage())
+                    .response(response.getResponse())
+                    .warnings(response.getWarnings() != null ? response.getWarnings() : List.of())
+                    .providerMetadata(response.getProviderMetadata())
+                    .build();
         }
     }
 
@@ -1838,21 +1803,19 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Map<String, Object> providerMetadata;
 
         static TestImageGenerationResponse from(GenerateImageResult result) {
-            var images = result.getImages() != null
-                ? result.getImages()
-                : List.<GeneratedFile>of();
+            var images = result.getImages() != null ? result.getImages() : List.<GeneratedFile>of();
             var previews = new ArrayList<TestGeneratedFile>();
             for (int i = 0; i < images.size(); i++) {
                 previews.add(TestGeneratedFile.from(i, images.get(i)));
             }
             return TestImageGenerationResponse.builder()
-                .imagesCount(images.size())
-                .images(List.copyOf(previews))
-                .usage(result.getUsage())
-                .warnings(result.getWarnings() != null ? result.getWarnings() : List.of())
-                .responses(result.getResponses() != null ? result.getResponses() : List.of())
-                .providerMetadata(result.getProviderMetadata())
-                .build();
+                    .imagesCount(images.size())
+                    .images(List.copyOf(previews))
+                    .usage(result.getUsage())
+                    .warnings(result.getWarnings() != null ? result.getWarnings() : List.of())
+                    .responses(result.getResponses() != null ? result.getResponses() : List.of())
+                    .providerMetadata(result.getProviderMetadata())
+                    .build();
         }
     }
 
@@ -1872,15 +1835,15 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
         static TestGeneratedFile from(int index, GeneratedFile file) {
             return TestGeneratedFile.builder()
-                .index(index)
-                .id(file.getId())
-                .url(file.getUrl())
-                .base64(file.getBase64())
-                .mediaType(file.getMediaType())
-                .filename(file.getFilename())
-                .title(file.getTitle())
-                .metadata(file.getMetadata())
-                .build();
+                    .index(index)
+                    .id(file.getId())
+                    .url(file.getUrl())
+                    .base64(file.getBase64())
+                    .mediaType(file.getMediaType())
+                    .filename(file.getFilename())
+                    .title(file.getTitle())
+                    .metadata(file.getMetadata())
+                    .build();
         }
     }
 
@@ -1914,8 +1877,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private final Integer topN;
         private final RagTestDiagnostics diagnostics;
 
-        ConsoleRagSourceReranker(RerankingModel model, Integer topN,
-            RagTestDiagnostics diagnostics) {
+        ConsoleRagSourceReranker(RerankingModel model, Integer topN, RagTestDiagnostics diagnostics) {
             this.model = model;
             this.topN = topN;
             this.diagnostics = diagnostics;
@@ -1924,27 +1886,27 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         @Override
         public Mono<List<RetrievedSource>> rerank(RagSourceRerankRequest request) {
             var documents = request.getSources().stream()
-                .map(source -> RerankDocument.builder()
-                    .id(source.getId())
-                    .text(source.getContent())
-                    .metadata(source.getMetadata())
-                    .build())
-                .toList();
+                    .map(source -> RerankDocument.builder()
+                            .id(source.getId())
+                            .text(source.getContent())
+                            .metadata(source.getMetadata())
+                            .build())
+                    .toList();
             return model.rerank(RerankRequest.builder()
-                    .query(request.getQuery())
-                    .documents(documents)
-                    .topN(topN != null ? topN : request.getTopN())
-                    .metadata(request.getMetadata())
-                    .context(request.getContext())
-                    .build())
-                .map(response -> response.getResults() != null ? response.getResults() : List.<RerankResult>of())
-                .map(results -> results.stream()
-                    .filter(result -> result.getIndex() >= 0
-                        && result.getIndex() < request.getSources().size())
-                    .map(result -> withRerankMetadata(request.getSources().get(result.getIndex()),
-                        result))
-                    .toList())
-                .doOnNext(diagnostics::finalSources);
+                            .query(request.getQuery())
+                            .documents(documents)
+                            .topN(topN != null ? topN : request.getTopN())
+                            .metadata(request.getMetadata())
+                            .context(request.getContext())
+                            .build())
+                    .map(response -> response.getResults() != null ? response.getResults() : List.<RerankResult>of())
+                    .map(results -> results.stream()
+                            .filter(result -> result.getIndex() >= 0
+                                    && result.getIndex() < request.getSources().size())
+                            .map(result ->
+                                    withRerankMetadata(request.getSources().get(result.getIndex()), result))
+                            .toList())
+                    .doOnNext(diagnostics::finalSources);
         }
 
         private RetrievedSource withRerankMetadata(RetrievedSource source, RerankResult result) {
@@ -1953,28 +1915,28 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
                 metadata.putAll(source.getMetadata());
             }
             metadata.put("rerankScore", result.getScore());
-            if (result.getProviderMetadata() != null && !result.getProviderMetadata().isEmpty()) {
+            if (result.getProviderMetadata() != null
+                    && !result.getProviderMetadata().isEmpty()) {
                 metadata.put("rerankProviderMetadata", result.getProviderMetadata());
             }
             return RetrievedSource.builder()
-                .id(source.getId())
-                .sourceType(source.getSourceType())
-                .title(source.getTitle())
-                .url(source.getUrl())
-                .content(source.getContent())
-                .score(source.getScore())
-                .metadata(Map.copyOf(metadata))
-                .usedForContext(source.getUsedForContext())
-                .visible(source.getVisible())
-                .build();
+                    .id(source.getId())
+                    .sourceType(source.getSourceType())
+                    .title(source.getTitle())
+                    .url(source.getUrl())
+                    .content(source.getContent())
+                    .score(source.getScore())
+                    .metadata(Map.copyOf(metadata))
+                    .usedForContext(source.getUsedForContext())
+                    .visible(source.getVisible())
+                    .build();
         }
     }
 
     private static class RagTestDiagnostics {
 
         private final List<RetrievedSource> originalSources;
-        private final AtomicReference<List<RetrievedSource>> finalSources =
-            new AtomicReference<>(List.of());
+        private final AtomicReference<List<RetrievedSource>> finalSources = new AtomicReference<>(List.of());
         private final CopyOnWriteArrayList<Map<String, Object>> events = new CopyOnWriteArrayList<>();
 
         RagTestDiagnostics(List<RetrievedSource> originalSources) {
@@ -1987,13 +1949,13 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
         List<RetrievedSource> retrievedSources(Integer topN, Double minScore, boolean willRerank) {
             var sources = originalSources.stream()
-                .filter(source -> source.getUsedForContext() == null
-                    || Boolean.TRUE.equals(source.getUsedForContext()))
-                .filter(source -> source.getContent() != null && !source.getContent().isBlank())
-                .filter(source -> minScore == null || source.getScore() == null
-                    || source.getScore() >= minScore)
-                .limit(!willRerank && topN != null ? topN : Long.MAX_VALUE)
-                .toList();
+                    .filter(source ->
+                            source.getUsedForContext() == null || Boolean.TRUE.equals(source.getUsedForContext()))
+                    .filter(source ->
+                            source.getContent() != null && !source.getContent().isBlank())
+                    .filter(source -> minScore == null || source.getScore() == null || source.getScore() >= minScore)
+                    .limit(!willRerank && topN != null ? topN : Long.MAX_VALUE)
+                    .toList();
             if (!willRerank) {
                 finalSources(sources);
             }
@@ -2040,20 +2002,18 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
 
         Map<String, Object> input() {
             return Map.of(
-                "sources", previews(originalSources),
-                "sourceCount", originalSources.size()
-            );
+                    "sources", previews(originalSources),
+                    "sourceCount", originalSources.size());
         }
 
         Map<String, Object> snapshot() {
             var finalItems = finalSources.get();
             return Map.of(
-                "sources", previews(finalItems.isEmpty() ? originalSources : finalItems),
-                "originalSources", previews(originalSources),
-                "finalSources", previews(finalItems),
-                "sourceCount", originalSources.size(),
-                "events", List.copyOf(events)
-            );
+                    "sources", previews(finalItems.isEmpty() ? originalSources : finalItems),
+                    "originalSources", previews(originalSources),
+                    "finalSources", previews(finalItems),
+                    "sourceCount", originalSources.size(),
+                    "events", List.copyOf(events));
         }
 
         private Mono<Void> record(String type, RagLifecycleEvent event) {
@@ -2073,9 +2033,7 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         }
 
         private static List<Map<String, Object>> previews(List<RetrievedSource> sources) {
-            return sources.stream()
-                .map(RagTestDiagnostics::preview)
-                .toList();
+            return sources.stream().map(RagTestDiagnostics::preview).toList();
         }
 
         private static Map<String, Object> preview(RetrievedSource source) {
@@ -2109,5 +2067,4 @@ public class ModelConsoleEndpoint implements CustomEndpoint {
         private Double score;
         private Map<String, Object> providerMetadata;
     }
-
 }

@@ -45,61 +45,62 @@ public class ModelParameterConsoleEndpoint implements CustomEndpoint {
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.aifoundation.halo.run/v1alpha1/Model";
-        return route()
-            .POST("model-parameters/resolve", this::resolveParameters,
-                builder -> builder.operationId("ResolveModelParameters")
-                    .description("Resolve model parameter mappings and constraints "
-                        + "without inference.")
-                    .tag(tag)
-                    .requestBody(requestBodyBuilder().required(true).implementation(AiModel.class))
-                    .response(responseBuilder().implementation(ModelParameterProfile.class)))
-            .POST("model-parameters/catalog", this::getCatalogParameters,
-                builder -> builder.operationId("GetModelCatalogParameters")
-                    .description("Preview cached catalog parameters for the selected model "
-                        + "and adapter.")
-                    .tag(tag)
-                    .requestBody(requestBodyBuilder().required(true).implementation(AiModel.class))
-                    .response(responseBuilder().responseCode("200")
-                        .implementation(ModelParameterProfile.class))
-                    .response(responseBuilder().responseCode("204")
-                        .description("No exact catalog match")))
-            .build();
+        return route().POST(
+                        "model-parameters/resolve",
+                        this::resolveParameters,
+                        builder -> builder.operationId("ResolveModelParameters")
+                                .description("Resolve model parameter mappings and constraints " + "without inference.")
+                                .tag(tag)
+                                .requestBody(requestBodyBuilder().required(true).implementation(AiModel.class))
+                                .response(responseBuilder().implementation(ModelParameterProfile.class)))
+                .POST(
+                        "model-parameters/catalog",
+                        this::getCatalogParameters,
+                        builder -> builder.operationId("GetModelCatalogParameters")
+                                .description(
+                                        "Preview cached catalog parameters for the selected model " + "and adapter.")
+                                .tag(tag)
+                                .requestBody(requestBodyBuilder().required(true).implementation(AiModel.class))
+                                .response(responseBuilder()
+                                        .responseCode("200")
+                                        .implementation(ModelParameterProfile.class))
+                                .response(responseBuilder().responseCode("204").description("No exact catalog match")))
+                .build();
     }
 
     private Mono<ServerResponse> resolveParameters(ServerRequest request) {
         return resolveModel(request)
-            .map(parameterMappingResolver::resolveProfile)
-            .flatMap(profile -> ServerResponse.ok().bodyValue(profile));
+                .map(parameterMappingResolver::resolveProfile)
+                .flatMap(profile -> ServerResponse.ok().bodyValue(profile));
     }
 
     private Mono<ServerResponse> getCatalogParameters(ServerRequest request) {
         return resolveModel(request)
-            .flatMap(this::catalogParameters)
-            .flatMap(profile -> ServerResponse.ok().bodyValue(profile))
-            .switchIfEmpty(ServerResponse.noContent().build());
+                .flatMap(this::catalogParameters)
+                .flatMap(profile -> ServerResponse.ok().bodyValue(profile))
+                .switchIfEmpty(ServerResponse.noContent().build());
     }
 
     private Mono<ModelParameterProfile> catalogParameters(ModelResolution resolution) {
         return savedCatalogProfile(resolution)
-            .flatMap(profile -> freshCatalogParameters(resolution, profile.getFeatureEvidence())
-                .defaultIfEmpty(profile))
-            .switchIfEmpty(Mono.defer(() -> freshCatalogParameters(resolution, Map.of())));
+                .flatMap(profile -> freshCatalogParameters(resolution, profile.getFeatureEvidence())
+                        .defaultIfEmpty(profile))
+                .switchIfEmpty(Mono.defer(() -> freshCatalogParameters(resolution, Map.of())));
     }
 
-    private Mono<ModelParameterProfile> freshCatalogParameters(ModelResolution resolution,
-        Map<ModelFeature, Boolean> featureEvidence) {
+    private Mono<ModelParameterProfile> freshCatalogParameters(
+            ModelResolution resolution, Map<ModelFeature, Boolean> featureEvidence) {
         var spec = resolution.model().getSpec();
         var model = DiscoveredModel.builder()
-            .modelId(spec.getModelId())
-            .modelType(spec.getModelType())
-            .adapterType(spec.getAdapterType())
-            // The editor selected this type; only identifier-only discovery may reclassify it.
-            .source(DiscoverySource.RULE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .featureEvidence(featureEvidence)
-            .build();
-        var enriched = catalogEnricher.enrich(resolution.provider(), resolution.providerType(),
-            List.of(model));
+                .modelId(spec.getModelId())
+                .modelType(spec.getModelType())
+                .adapterType(spec.getAdapterType())
+                // The editor selected this type; only identifier-only discovery may reclassify it.
+                .source(DiscoverySource.RULE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .featureEvidence(featureEvidence)
+                .build();
+        var enriched = catalogEnricher.enrich(resolution.provider(), resolution.providerType(), List.of(model));
         return Mono.justOrEmpty(enriched.getFirst().catalogParameters());
     }
 
@@ -111,32 +112,30 @@ public class ModelParameterConsoleEndpoint implements CustomEndpoint {
         var draft = resolution.model().getSpec();
         // Only evidence belonging to this model and current endpoint/adapter can be reused.
         return client.fetch(AiModel.class, metadata.getName())
-            .filter(saved -> saved.getSpec() != null
-                && Objects.equals(saved.getSpec().getProviderName(), draft.getProviderName())
-                && Objects.equals(saved.getSpec().getModelId(), draft.getModelId())
-                && saved.getSpec().getModelType() == draft.getModelType())
-            .flatMap(saved -> {
-                var savedResolution = new ModelResolution(saved, resolution.provider(),
-                    resolution.providerType(), null);
-                return Mono.justOrEmpty(
-                    parameterMappingResolver.applicableCatalogProfile(savedResolution));
-            })
-            .filter(profile -> profile.getAdapterType() == draft.getAdapterType());
+                .filter(saved -> saved.getSpec() != null
+                        && Objects.equals(saved.getSpec().getProviderName(), draft.getProviderName())
+                        && Objects.equals(saved.getSpec().getModelId(), draft.getModelId())
+                        && saved.getSpec().getModelType() == draft.getModelType())
+                .flatMap(saved -> {
+                    var savedResolution =
+                            new ModelResolution(saved, resolution.provider(), resolution.providerType(), null);
+                    return Mono.justOrEmpty(parameterMappingResolver.applicableCatalogProfile(savedResolution));
+                })
+                .filter(profile -> profile.getAdapterType() == draft.getAdapterType());
     }
 
     private Mono<ModelResolution> resolveModel(ServerRequest request) {
         return request.bodyToMono(AiModel.class)
-            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Model is required")))
-            .flatMap(model -> modelValidator.validate(model).thenReturn(model))
-            .flatMap(model -> client.fetch(AiProvider.class, model.getSpec().getProviderName())
-                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Provider not found")))
-                .map(provider -> {
-                    var providerType = providerClientCache.getProviderType(
-                        provider.getSpec().getProviderType());
-                    return new ModelResolution(model, provider, providerType, null);
-                }));
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Model is required")))
+                .flatMap(model -> modelValidator.validate(model).thenReturn(model))
+                .flatMap(model -> client.fetch(AiProvider.class, model.getSpec().getProviderName())
+                        .switchIfEmpty(
+                                Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provider not found")))
+                        .map(provider -> {
+                            var providerType = providerClientCache.getProviderType(
+                                    provider.getSpec().getProviderType());
+                            return new ModelResolution(model, provider, providerType, null);
+                        }));
     }
 
     @Override

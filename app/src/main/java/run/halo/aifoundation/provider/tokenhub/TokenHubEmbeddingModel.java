@@ -30,8 +30,7 @@ public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
     private final TokenHubEmbeddingOptions defaultOptions;
     private final EmbeddingHttpTransport transport;
 
-    public TokenHubEmbeddingModel(TokenHubEmbeddingOptions defaultOptions,
-        WebClient.Builder webClientBuilder) {
+    public TokenHubEmbeddingModel(TokenHubEmbeddingOptions defaultOptions, WebClient.Builder webClientBuilder) {
         Assert.notNull(defaultOptions, "defaultOptions must not be null");
         Assert.notNull(webClientBuilder, "webClientBuilder must not be null");
         this.defaultOptions = defaultOptions;
@@ -45,8 +44,7 @@ public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
     @Override
     public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
-        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(),
-            request.getOptions(), Map.of()));
+        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(), request.getOptions(), Map.of()));
     }
 
     @Override
@@ -60,11 +58,11 @@ public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
         body.put("encoding_format", "float");
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + "/embeddings";
         var exchange = EmbeddingHttpRequest.builder(url, body)
-            .adapterType("tokenhub-embedding")
-            .apiKey(options.apiKey())
-            .headers(options.customHeaders())
-            .timeout(options.timeout())
-            .build();
+                .adapterType("tokenhub-embedding")
+                .apiKey(options.apiKey())
+                .headers(options.customHeaders())
+                .timeout(options.timeout())
+                .build();
         return embeddingResponse(transport.post(exchange), options.model());
     }
 
@@ -72,30 +70,27 @@ public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
     public float[] embed(Document document) {
         Assert.notNull(document, "Document must not be null");
         var response = call(new org.springframework.ai.embedding.EmbeddingRequest(
-            List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
-        return response.getResults().isEmpty() ? new float[0] : response.getResult().getOutput();
+                List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
+        return response.getResults().isEmpty()
+                ? new float[0]
+                : response.getResult().getOutput();
     }
 
     private List<String> textInput(ProviderEmbeddingRequest request) {
         if (!request.contents().isEmpty()) {
             throw new IllegalArgumentException(
-                "TokenHub multimodal embeddings use a separate endpoint this adapter does not "
-                    + "implement");
+                    "TokenHub multimodal embeddings use a separate endpoint this adapter does not " + "implement");
         }
         var inputs = request.inputs();
         if (inputs == null || inputs.isEmpty()) {
-            throw new IllegalArgumentException(
-                "TokenHub embedding input must contain non-blank text");
+            throw new IllegalArgumentException("TokenHub embedding input must contain non-blank text");
         }
         if (inputs.stream().anyMatch(this::isBlank)) {
-            throw new IllegalArgumentException(
-                "TokenHub embedding input must contain non-blank text");
+            throw new IllegalArgumentException("TokenHub embedding input must contain non-blank text");
         }
-        if (inputs.stream().anyMatch(input -> input.codePointCount(0, input.length())
-            > MAX_INPUT_CHARACTERS)) {
+        if (inputs.stream().anyMatch(input -> input.codePointCount(0, input.length()) > MAX_INPUT_CHARACTERS)) {
             throw new IllegalArgumentException(
-                "TokenHub embedding input must be at most " + MAX_INPUT_CHARACTERS
-                    + " characters per text");
+                    "TokenHub embedding input must be at most " + MAX_INPUT_CHARACTERS + " characters per text");
         }
         return List.copyOf(inputs);
     }
@@ -103,16 +98,16 @@ public final class TokenHubEmbeddingModel implements ProviderEmbeddingModel {
     private EmbeddingResponse embeddingResponse(String data, String requestedModel) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
-            var indexed = IndexedEmbeddingDecoder.decode(root.path("data"), value ->
-                IndexedEmbeddingDecoder.floatArrayOrBase64(value,
-                    "TokenHub embedding vector has an invalid shape"));
+            var indexed = IndexedEmbeddingDecoder.decode(
+                    root.path("data"),
+                    value -> IndexedEmbeddingDecoder.floatArrayOrBase64(
+                            value, "TokenHub embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var rawUsage = JsonNodes.isAbsent(usage)
-                ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
+            var rawUsage = JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadata = new EmbeddingResponseMetadata(
-                text(root, "model") != null ? text(root, "model") : requestedModel,
-                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage),
-                Map.of());
+                    text(root, "model") != null ? text(root, "model") : requestedModel,
+                    ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage),
+                    Map.of());
             return new EmbeddingResponse(indexed, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse TokenHub embedding response", e);

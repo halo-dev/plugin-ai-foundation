@@ -5,13 +5,13 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import run.halo.aifoundation.extension.AiProvider;
 import run.halo.app.extension.Extension;
 import run.halo.app.extension.GroupVersionKind;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.extension.Secret;
 import run.halo.app.extension.Watcher;
-import run.halo.aifoundation.extension.AiProvider;
 
 @Slf4j
 @Component
@@ -23,13 +23,10 @@ public class ProviderCacheInvalidationWatcher implements Watcher {
     private volatile boolean disposed = false;
     private Runnable disposeHook;
 
-    private static final GroupVersionKind AI_PROVIDER_GVK =
-        GroupVersionKind.fromExtension(AiProvider.class);
-    private static final GroupVersionKind SECRET_GVK =
-        GroupVersionKind.fromExtension(Secret.class);
+    private static final GroupVersionKind AI_PROVIDER_GVK = GroupVersionKind.fromExtension(AiProvider.class);
+    private static final GroupVersionKind SECRET_GVK = GroupVersionKind.fromExtension(Secret.class);
 
-    public ProviderCacheInvalidationWatcher(ReactiveExtensionClient client,
-        ProviderClientCache providerClientCache) {
+    public ProviderCacheInvalidationWatcher(ReactiveExtensionClient client, ProviderClientCache providerClientCache) {
         this.client = client;
         this.providerClientCache = providerClientCache;
     }
@@ -86,16 +83,20 @@ public class ProviderCacheInvalidationWatcher implements Watcher {
 
     private void invalidateProvidersBySecret(String secretName) {
         client.listAll(AiProvider.class, new ListOptions(), Sort.unsorted())
-            .filter(provider -> secretName.equals(provider.getSpec().getApiKeySecretName()))
-            .map(provider -> provider.getMetadata().getName())
-            .collectList()
-            .subscribe(providerNames -> {
-                providerNames.forEach(providerClientCache::invalidate);
-                if (!providerNames.isEmpty()) {
-                    log.info("Invalidated cache for {} providers referencing secret: {}",
-                        providerNames.size(), secretName);
-                }
-            }, error -> log.error("Failed to invalidate providers by secret: {}", secretName, error));
+                .filter(provider -> secretName.equals(provider.getSpec().getApiKeySecretName()))
+                .map(provider -> provider.getMetadata().getName())
+                .collectList()
+                .subscribe(
+                        providerNames -> {
+                            providerNames.forEach(providerClientCache::invalidate);
+                            if (!providerNames.isEmpty()) {
+                                log.info(
+                                        "Invalidated cache for {} providers referencing secret: {}",
+                                        providerNames.size(),
+                                        secretName);
+                            }
+                        },
+                        error -> log.error("Failed to invalidate providers by secret: {}", secretName, error));
     }
 
     @Override

@@ -19,7 +19,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.chat.ReasoningOptions;
 import run.halo.aifoundation.embedding.EmbeddingContent;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.image.GenerateImageRequest;
@@ -36,11 +35,10 @@ import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.app.extension.Metadata;
 
 @ProviderContractSource(
-    provider = "ernie",
-    officialDocumentation = "https://cloud.baidu.com/doc/qianfan-api/s/vmhejnuy8; "
-        + "https://cloud.baidu.com/doc/qianfan-docs/s/6mh3e6gjp",
-    retrievedAt = "2026-08-27"
-)
+        provider = "ernie",
+        officialDocumentation = "https://cloud.baidu.com/doc/qianfan-api/s/vmhejnuy8; "
+                + "https://cloud.baidu.com/doc/qianfan-docs/s/6mh3e6gjp",
+        retrievedAt = "2026-08-27")
 class ErnieProviderTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -52,93 +50,102 @@ class ErnieProviderTest {
         var aiProvider = provider("https://example.com/v2");
 
         assertThat(provider.buildChatModel(aiProvider, "test-key", "qwen3-14b"))
-            .isInstanceOf(ErnieResponsesModel.class);
-        assertThat(provider.buildChatModel(aiProvider, "test-key", new ProviderModelRef(
-            "qwen3-14b", ModelType.LANGUAGE, AdapterType.ERNIE_CHAT)))
-            .isInstanceOf(ErnieChatModel.class);
-        assertThat(provider.buildChatModel(aiProvider, "test-key", new ProviderModelRef(
-            "qwen3-14b", ModelType.LANGUAGE, AdapterType.ERNIE_MESSAGES)))
-            .isInstanceOf(ErnieMessagesModel.class);
+                .isInstanceOf(ErnieResponsesModel.class);
+        assertThat(provider.buildChatModel(
+                        aiProvider,
+                        "test-key",
+                        new ProviderModelRef("qwen3-14b", ModelType.LANGUAGE, AdapterType.ERNIE_CHAT)))
+                .isInstanceOf(ErnieChatModel.class);
+        assertThat(provider.buildChatModel(
+                        aiProvider,
+                        "test-key",
+                        new ProviderModelRef("qwen3-14b", ModelType.LANGUAGE, AdapterType.ERNIE_MESSAGES)))
+                .isInstanceOf(ErnieMessagesModel.class);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void responsesDefaultsToStatelessStorageAndCombinesNativeTools() {
         var callback = org.mockito.Mockito.mock(ToolCallback.class);
-        org.mockito.Mockito.when(callback.getToolDefinition()).thenReturn(ToolDefinition.builder()
-            .name("local_search")
-            .description("Search Halo")
-            .inputSchema("{\"type\":\"object\",\"properties\":{}}")
-            .build());
-        var builtin = Map.<String, Object>of(
-            "type", "knowledge_search", "knowledgebase_ids", "kb-1");
+        org.mockito.Mockito.when(callback.getToolDefinition())
+                .thenReturn(ToolDefinition.builder()
+                        .name("local_search")
+                        .description("Search Halo")
+                        .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                        .build());
+        var builtin = Map.<String, Object>of("type", "knowledge_search", "knowledgebase_ids", "kb-1");
         var nativeOptions = Map.<String, Object>of(
-            "builtinTools", List.of(builtin),
-            "thinking", Map.of("type", "disabled"));
-        var generated = languageOptions(GenerateTextRequest.builder()
-            .prompt("Search product knowledge")
-            .build());
-        var options = generated.mutate()
-            .baseUrl("https://example.com/v2")
-            .apiKey("test-key")
-            .model("qwen3-14b")
-            .extraBody(nativeOptions)
-            .toolCallbacks(List.of(callback))
-            .toolContext("ernie-responses.messages", List.of(new UserMessage("Halo")))
-            .build();
+                "builtinTools", List.of(builtin),
+                "thinking", Map.of("type", "disabled"));
+        var generated = languageOptions(
+                GenerateTextRequest.builder().prompt("Search product knowledge").build());
+        var options = generated
+                .mutate()
+                .baseUrl("https://example.com/v2")
+                .apiKey("test-key")
+                .model("qwen3-14b")
+                .extraBody(nativeOptions)
+                .toolCallbacks(List.of(callback))
+                .toolContext("ernie-responses.messages", List.of(new UserMessage("Halo")))
+                .build();
         var model = new ErnieResponsesModel(options, WebClient.builder());
 
-        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
-            "requestBody", options, false);
+        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model, "requestBody", options, false);
 
-        assertThat(body).containsEntry("store", false)
-            .containsEntry("thinking", Map.of("type", "disabled"))
-            .doesNotContainKey("builtinTools");
+        assertThat(body)
+                .containsEntry("store", false)
+                .containsEntry("thinking", Map.of("type", "disabled"))
+                .doesNotContainKey("builtinTools");
         assertThat((List<Map<String, Object>>) body.get("tools"))
-            .extracting(tool -> tool.get("type"))
-            .containsExactly("function", "knowledge_search");
+                .extracting(tool -> tool.get("type"))
+                .containsExactly("function", "knowledge_search");
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void chatConvertsThinkingAndKeepsSearchCacheAndBudgetOptions() {
         var nativeOptions = Map.<String, Object>of(
-            "enable_thinking", false,
-            "web_search", Map.of("enable", true, "search_number", 6),
-            "cache_id", "cache-1",
-            "thinking_budget", 1024,
-            "reasoning_effort", "max");
-        var generated = languageOptions(GenerateTextRequest.builder()
-            .prompt("Search the web")
-            .build());
+                "enable_thinking",
+                false,
+                "web_search",
+                Map.of("enable", true, "search_number", 6),
+                "cache_id",
+                "cache-1",
+                "thinking_budget",
+                1024,
+                "reasoning_effort",
+                "max");
+        var generated = languageOptions(
+                GenerateTextRequest.builder().prompt("Search the web").build());
         generated = generated.mutate().extraBody(nativeOptions).build();
         var model = new ErnieChatModel(generated, WebClient.builder());
         var prompt = new org.springframework.ai.chat.prompt.Prompt(
-            List.of(new UserMessage("latest Halo release")), generated);
+                List.of(new UserMessage("latest Halo release")), generated);
 
-        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
-            "requestBody", prompt, generated, false);
+        var body =
+                (Map<String, Object>) ReflectionTestUtils.invokeMethod(model, "requestBody", prompt, generated, false);
 
-        assertThat(body).containsEntry("enable_thinking", false)
-            .containsEntry("cache_id", "cache-1")
-            .containsEntry("thinking_budget", 1024)
-            .containsEntry("reasoning_effort", "max")
-            .containsEntry("web_search", Map.of("enable", true, "search_number", 6))
-            .doesNotContainKeys("thinking", "store");
+        assertThat(body)
+                .containsEntry("enable_thinking", false)
+                .containsEntry("cache_id", "cache-1")
+                .containsEntry("thinking_budget", 1024)
+                .containsEntry("reasoning_effort", "max")
+                .containsEntry("web_search", Map.of("enable", true, "search_number", 6))
+                .doesNotContainKeys("thinking", "store");
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void chatPreservesSearchResultsAndDetailedCacheReasoningUsage() {
         var options = ChatCompletionsOptions.builder()
-            .baseUrl("https://example.com/v2")
-            .apiKey("test-key")
-            .model("deepseek-v3.2")
-            .build();
+                .baseUrl("https://example.com/v2")
+                .apiKey("test-key")
+                .model("deepseek-v3.2")
+                .build();
         var model = new ErnieChatModel(options, WebClient.builder());
 
         var response = (org.springframework.ai.chat.model.ChatResponse)
-            ReflectionTestUtils.invokeMethod(model, "chatResponse", """
+                ReflectionTestUtils.invokeMethod(model, "chatResponse", """
                 {"id":"chat-1","model":"deepseek-v3.2","choices":[{
                   "index":0,"finish_reason":"stop","message":{
                     "role":"assistant","content":"Halo 2.0",
@@ -151,24 +158,24 @@ class ErnieProviderTest {
                 """, options, "diagnostic-1");
 
         assertThat((List<Map<String, Object>>) response.getMetadata().get("search_results"))
-            .singleElement().satisfies(source -> assertThat(source)
-                .containsEntry("title", "Halo").containsEntry("url", "https://www.halo.run"));
+                .singleElement()
+                .satisfies(source ->
+                        assertThat(source).containsEntry("title", "Halo").containsEntry("url", "https://www.halo.run"));
         assertThat(response.getResult().getOutput().getMetadata())
-            .containsEntry("reasoningContent", "Check official sources.");
+                .containsEntry("reasoningContent", "Check official sources.");
         var rawUsage = (Map<String, Object>) response.getMetadata().getUsage().getNativeUsage();
         assertThat((Map<String, Object>) rawUsage.get("prompt_tokens_details"))
-            .containsEntry("cached_tokens", 4)
-            .containsEntry("search_tokens", 2)
-            .containsEntry("plugin_tokens", 1);
+                .containsEntry("cached_tokens", 4)
+                .containsEntry("search_tokens", 2)
+                .containsEntry("plugin_tokens", 1);
         assertThat((Map<String, Object>) rawUsage.get("completion_tokens_details"))
-            .containsEntry("reasoning_tokens", 3);
+                .containsEntry("reasoning_tokens", 3);
     }
 
     @Test
     void modelCatalogUsesOfficialTypesAndArchitectureModalities() throws Exception {
         var authorization = new AtomicReference<String>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v2/models", exchange -> {
             try (exchange) {
                 authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -193,21 +200,23 @@ class ErnieProviderTest {
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v2";
             StepVerifier.create(provider.discoverModels(provider(baseUrl), "test-key"))
-                .assertNext(models -> {
-                    assertThat(models).hasSize(4);
-                    assertThat(models).extracting(model -> model.modelType())
-                        .containsExactly(ModelType.LANGUAGE, ModelType.EMBEDDING,
-                            ModelType.RERANK, ModelType.IMAGE_GENERATION);
-                    assertThat(models.getFirst().adapterType())
-                        .isEqualTo(AdapterType.ERNIE_RESPONSES);
-                    assertThat(models.getFirst().features())
-                        .containsExactlyInAnyOrder(ModelFeature.STREAMING, ModelFeature.VISION);
-                    assertThat(models.get(1).adapterType())
-                        .isEqualTo(AdapterType.ERNIE_EMBEDDING);
-                    assertThat(models.get(2).adapterType()).isEqualTo(AdapterType.RERANK);
-                    assertThat(models.get(3).adapterType()).isEqualTo(AdapterType.ERNIE_IMAGE);
-                })
-                .verifyComplete();
+                    .assertNext(models -> {
+                        assertThat(models).hasSize(4);
+                        assertThat(models)
+                                .extracting(model -> model.modelType())
+                                .containsExactly(
+                                        ModelType.LANGUAGE,
+                                        ModelType.EMBEDDING,
+                                        ModelType.RERANK,
+                                        ModelType.IMAGE_GENERATION);
+                        assertThat(models.getFirst().adapterType()).isEqualTo(AdapterType.ERNIE_RESPONSES);
+                        assertThat(models.getFirst().features())
+                                .containsExactlyInAnyOrder(ModelFeature.STREAMING, ModelFeature.VISION);
+                        assertThat(models.get(1).adapterType()).isEqualTo(AdapterType.ERNIE_EMBEDDING);
+                        assertThat(models.get(2).adapterType()).isEqualTo(AdapterType.RERANK);
+                        assertThat(models.get(3).adapterType()).isEqualTo(AdapterType.ERNIE_IMAGE);
+                    })
+                    .verifyComplete();
             assertThat(authorization.get()).isEqualTo("Bearer test-key");
         } finally {
             server.stop(0);
@@ -218,8 +227,7 @@ class ErnieProviderTest {
     @SuppressWarnings("unchecked")
     void multimodalEmbeddingUsesJointTextImageObjectAndDataUrl() throws Exception {
         var captured = new AtomicReference<Map<String, Object>>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v2/embeddings", exchange -> {
             try (exchange) {
                 captured.set(OBJECT_MAPPER.readValue(exchange.getRequestBody(), Map.class));
@@ -238,26 +246,31 @@ class ErnieProviderTest {
 
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v2";
-            var model = new ErnieEmbeddingModel(new ErnieEmbeddingOptions(baseUrl, "test-key",
-                "gme-model", null, null, false, false, Map.of(), Map.of(), null),
-                WebClient.builder());
-            var requestOptions = new ErnieEmbeddingOptions(null, null, null, null, null,
-                false, false, Map.of("user", "halo-user"), Map.of(), null);
+            var model = new ErnieEmbeddingModel(
+                    new ErnieEmbeddingOptions(
+                            baseUrl, "test-key", "gme-model", null, null, false, false, Map.of(), Map.of(), null),
+                    WebClient.builder());
+            var requestOptions = new ErnieEmbeddingOptions(
+                    null, null, null, null, null, false, false, Map.of("user", "halo-user"), Map.of(), null);
 
-            var response = model.call(new ProviderEmbeddingRequest(List.of(), List.of(
-                EmbeddingContent.text("Halo CMS"),
-                EmbeddingContent.image(DataContent.data(new byte[] {1, 2, 3}, "image/png"))
-            ), requestOptions, Map.of()));
+            var response = model.call(new ProviderEmbeddingRequest(
+                    List.of(),
+                    List.of(
+                            EmbeddingContent.text("Halo CMS"),
+                            EmbeddingContent.image(DataContent.data(new byte[] {1, 2, 3}, "image/png"))),
+                    requestOptions,
+                    Map.of()));
 
-            assertThat(captured.get()).containsEntry("model", "gme-model")
-                .containsEntry("encoding_format", "float")
-                .containsEntry("user", "halo-user");
+            assertThat(captured.get())
+                    .containsEntry("model", "gme-model")
+                    .containsEntry("encoding_format", "float")
+                    .containsEntry("user", "halo-user");
             assertThat((List<Map<String, Object>>) captured.get().get("input"))
-                .singleElement().satisfies(input -> {
-                    assertThat(input).containsEntry("text", "Halo CMS");
-                    assertThat(input.get("image").toString())
-                        .startsWith("data:image/png;base64,");
-                });
+                    .singleElement()
+                    .satisfies(input -> {
+                        assertThat(input).containsEntry("text", "Halo CMS");
+                        assertThat(input.get("image").toString()).startsWith("data:image/png;base64,");
+                    });
             assertThat(response.getResult().getOutput()).containsExactly(0.1f, 0.2f);
             assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(3);
         } finally {
@@ -268,65 +281,67 @@ class ErnieProviderTest {
     @Test
     @SuppressWarnings("unchecked")
     void rerankMapsOfficialBodyAndEnforcesDocumentLimits() {
-        var client = new ErnieRerankingClient("https://example.com/v2", "bce-reranker-base_v1",
-            "test-key", WebClient.builder());
+        var client = new ErnieRerankingClient(
+                "https://example.com/v2", "bce-reranker-base_v1", "test-key", WebClient.builder());
         var request = RerankRequest.builder()
-            .query("Halo")
-            .documents("first", "second")
-            .topN(1)
-            .build();
+                .query("Halo")
+                .documents("first", "second")
+                .topN(1)
+                .build();
 
-        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(client,
-            "requestBody", request, Map.of("return_documents", true));
-        assertThat(body).containsEntry("model", "bce-reranker-base_v1")
-            .containsEntry("query", "Halo")
-            .containsEntry("documents", List.of("first", "second"))
-            .containsEntry("top_n", 1)
-            .containsEntry("return_documents", true);
+        var body = (Map<String, Object>)
+                ReflectionTestUtils.invokeMethod(client, "requestBody", request, Map.of("return_documents", true));
+        assertThat(body)
+                .containsEntry("model", "bce-reranker-base_v1")
+                .containsEntry("query", "Halo")
+                .containsEntry("documents", List.of("first", "second"))
+                .containsEntry("top_n", 1)
+                .containsEntry("return_documents", true);
 
-        var tooMany = RerankRequest.builder().query("Halo")
-            .documents(java.util.stream.IntStream.range(0, 65)
-                .mapToObj(index -> run.halo.aifoundation.rerank.RerankDocument.of(
-                    "document-" + index)).toList())
-            .build();
+        var tooMany = RerankRequest.builder()
+                .query("Halo")
+                .documents(java.util.stream.IntStream.range(0, 65)
+                        .mapToObj(index -> run.halo.aifoundation.rerank.RerankDocument.of("document-" + index))
+                        .toList())
+                .build();
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(client, "endpoint", tooMany))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("at most 64 documents");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at most 64 documents");
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void imageAdapterUsesGenerationAndEditEndpointsWithNativeOptions() {
-        var client = new ErnieImageGenerationClient(new ImageGenerationClientOptions(
-            "ernie", "https://example.com/v2", "test-key", "qwen-image-edit", null),
-            WebClient.builder());
+        var client = new ErnieImageGenerationClient(
+                new ImageGenerationClientOptions(
+                        "ernie", "https://example.com/v2", "test-key", "qwen-image-edit", null),
+                WebClient.builder());
         var request = GenerateImageRequest.builder()
-            .prompt("Use image one's subject and image two's clothes")
-            .images(List.of(
-                DataContent.url("https://example.com/one.png", "image/png"),
-                DataContent.url("https://example.com/two.png", "image/png")))
-            .negativePrompt("blur")
-            .seed(42)
-            .build();
+                .prompt("Use image one's subject and image two's clothes")
+                .images(List.of(
+                        DataContent.url("https://example.com/one.png", "image/png"),
+                        DataContent.url("https://example.com/two.png", "image/png")))
+                .negativePrompt("blur")
+                .seed(42)
+                .build();
         var nativeOptions = Map.<String, Object>of("prompt_extend", true, "watermark", false);
 
-        var body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(client,
-            "requestBody", request, nativeOptions);
-        var endpoint = (String) ReflectionTestUtils.invokeMethod(client,
-            "endpointPath", request, nativeOptions);
+        var body =
+                (Map<String, Object>) ReflectionTestUtils.invokeMethod(client, "requestBody", request, nativeOptions);
+        var endpoint = (String) ReflectionTestUtils.invokeMethod(client, "endpointPath", request, nativeOptions);
         var result = (run.halo.aifoundation.image.GenerateImageResult)
-            ReflectionTestUtils.invokeMethod(client, "imageResponse", """
+                ReflectionTestUtils.invokeMethod(client, "imageResponse", """
                 {"created":123,"data":[{"url":"https://example.com/output.png",
                   "revised_prompt":"A refined prompt"}]}
                 """, request, nativeOptions);
 
         assertThat(endpoint).isEqualTo("/images/edits");
-        assertThat(body).containsEntry("image", List.of("https://example.com/one.png",
-                "https://example.com/two.png"))
-            .containsEntry("negative_prompt", "blur")
-            .containsEntry("seed", 42)
-            .containsEntry("prompt_extend", true)
-            .containsEntry("watermark", false);
+        assertThat(body)
+                .containsEntry("image", List.of("https://example.com/one.png", "https://example.com/two.png"))
+                .containsEntry("negative_prompt", "blur")
+                .containsEntry("seed", 42)
+                .containsEntry("prompt_extend", true)
+                .containsEntry("watermark", false);
         assertThat(result.getImages()).singleElement().satisfies(image -> {
             assertThat(image.getUrl()).isEqualTo("https://example.com/output.png");
             assertThat(image.getMetadata()).containsEntry("urlExpiresInSeconds", 86400);
@@ -335,30 +350,43 @@ class ErnieProviderTest {
 
     @Test
     void rejectsUnsupportedEmbeddingAndImageShapes() {
-        var embedding = new ErnieEmbeddingModel(new ErnieEmbeddingOptions(
-            "https://example.com/v2", "test-key", "gme-model", null, null, false, false,
-            Map.of(), Map.of(), null), WebClient.builder());
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(embedding,
-            "multimodalRequestBody", List.of(EmbeddingContent.video(
-                DataContent.url("https://example.com/video.mp4"))), embedding.getOptions()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("do not support video");
+        var embedding = new ErnieEmbeddingModel(
+                new ErnieEmbeddingOptions(
+                        "https://example.com/v2",
+                        "test-key",
+                        "gme-model",
+                        null,
+                        null,
+                        false,
+                        false,
+                        Map.of(),
+                        Map.of(),
+                        null),
+                WebClient.builder());
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                        embedding,
+                        "multimodalRequestBody",
+                        List.of(EmbeddingContent.video(DataContent.url("https://example.com/video.mp4"))),
+                        embedding.getOptions()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("do not support video");
 
-        var image = new ErnieImageGenerationClient(new ImageGenerationClientOptions(
-            "ernie", "https://example.com/v2", "test-key", "qwen-image-edit", null),
-            WebClient.builder());
-        var dataEdit = GenerateImageRequest.builder().prompt("edit")
-            .images(List.of(DataContent.data(new byte[] {1}, "image/png")))
-            .build();
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(image,
-            "requestBody", dataEdit))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("provider-accessible image URLs");
+        var image = new ErnieImageGenerationClient(
+                new ImageGenerationClientOptions(
+                        "ernie", "https://example.com/v2", "test-key", "qwen-image-edit", null),
+                WebClient.builder());
+        var dataEdit = GenerateImageRequest.builder()
+                .prompt("edit")
+                .images(List.of(DataContent.data(new byte[] {1}, "image/png")))
+                .build();
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(image, "requestBody", dataEdit))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("provider-accessible image URLs");
     }
 
     private ChatCompletionsOptions languageOptions(GenerateTextRequest request) {
-        return (ChatCompletionsOptions) provider.languageModelProviderOptions()
-            .chatOptionsFactory().build(request);
+        return (ChatCompletionsOptions)
+                provider.languageModelProviderOptions().chatOptionsFactory().build(request);
     }
 
     private AiProvider provider(String baseUrl) {

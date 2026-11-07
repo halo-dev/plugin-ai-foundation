@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -21,10 +20,9 @@ import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpRequest;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpTransport;
 import run.halo.aifoundation.provider.support.embedding.IndexedEmbeddingDecoder;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 
-/**
- * OpenAI-compatible embedding adapter backed by WebClient.
- */
+/** OpenAI-compatible embedding adapter backed by WebClient. */
 public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEmbeddingModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -33,8 +31,8 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
     private final OpenAiCompatibleEmbeddingOptions defaultOptions;
     private final EmbeddingHttpTransport transport;
 
-    public OpenAiCompatibleEmbeddingModel(OpenAiCompatibleEmbeddingOptions defaultOptions,
-        WebClient.Builder webClientBuilder) {
+    public OpenAiCompatibleEmbeddingModel(
+            OpenAiCompatibleEmbeddingOptions defaultOptions, WebClient.Builder webClientBuilder) {
         Assert.notNull(defaultOptions, "defaultOptions must not be null");
         Assert.notNull(webClientBuilder, "webClientBuilder must not be null");
         this.defaultOptions = defaultOptions;
@@ -51,18 +49,18 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
     }
 
     @Override
-    public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request,
-        Map<String, String> headers) {
+    public EmbeddingResponse call(
+            org.springframework.ai.embedding.EmbeddingRequest request, Map<String, String> headers) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
         var options = mergedOptions(request.getOptions(), headers);
         var body = requestBody(request.getInstructions(), options);
         var url = embeddingsUrl(options);
         var exchange = EmbeddingHttpRequest.builder(url, body)
-            .adapterType("openai-compatible-embedding")
-            .apiKey(options.getApiKey())
-            .headers(options.getCustomHeaders())
-            .timeout(options.getTimeout())
-            .build();
+                .adapterType("openai-compatible-embedding")
+                .apiKey(options.getApiKey())
+                .headers(options.getCustomHeaders())
+                .timeout(options.getTimeout())
+                .build();
         return embeddingResponse(transport.post(exchange));
     }
 
@@ -70,25 +68,26 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
     public float[] embed(Document document) {
         Assert.notNull(document, "Document must not be null");
         var response = call(new org.springframework.ai.embedding.EmbeddingRequest(
-            List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
-        return response.getResults().isEmpty() ? new float[0] : response.getResult().getOutput();
+                List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
+        return response.getResults().isEmpty()
+                ? new float[0]
+                : response.getResult().getOutput();
     }
 
-    private OpenAiCompatibleEmbeddingOptions mergedOptions(EmbeddingOptions options,
-        Map<String, String> headers) {
+    private OpenAiCompatibleEmbeddingOptions mergedOptions(EmbeddingOptions options, Map<String, String> headers) {
         var builder = OpenAiCompatibleEmbeddingOptions.builder()
-            .baseUrl(defaultOptions.getBaseUrl())
-            .endpointPath(defaultOptions.getEndpointPath())
-            .apiKey(defaultOptions.getApiKey())
-            .model(defaultOptions.getModel())
-            .deploymentName(defaultOptions.getDeploymentName())
-            .timeout(defaultOptions.getTimeout())
-            .maxRetries(defaultOptions.getMaxRetries())
-            .proxy(defaultOptions.getProxy())
-            .user(defaultOptions.getUser())
-            .encodingFormat(defaultOptions.getEncodingFormat())
-            .dimensions(defaultOptions.getDimensions())
-            .extraBody(defaultOptions.getExtraBody());
+                .baseUrl(defaultOptions.getBaseUrl())
+                .endpointPath(defaultOptions.getEndpointPath())
+                .apiKey(defaultOptions.getApiKey())
+                .model(defaultOptions.getModel())
+                .deploymentName(defaultOptions.getDeploymentName())
+                .timeout(defaultOptions.getTimeout())
+                .maxRetries(defaultOptions.getMaxRetries())
+                .proxy(defaultOptions.getProxy())
+                .user(defaultOptions.getUser())
+                .encodingFormat(defaultOptions.getEncodingFormat())
+                .dimensions(defaultOptions.getDimensions())
+                .extraBody(defaultOptions.getExtraBody());
         if (options != null) {
             if (options.getModel() != null) {
                 builder.model(options.getModel());
@@ -102,7 +101,7 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
             customHeaders.putAll(defaultOptions.getCustomHeaders());
         }
         if (options instanceof OpenAiCompatibleEmbeddingOptions openAiOptions
-            && openAiOptions.getCustomHeaders() != null) {
+                && openAiOptions.getCustomHeaders() != null) {
             customHeaders.putAll(openAiOptions.getCustomHeaders());
         }
         if (options instanceof OpenAiCompatibleEmbeddingOptions openAiOptions) {
@@ -136,8 +135,7 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
             }
         }
         if (headers != null) {
-            headers.forEach((name, value) ->
-                ProviderHeaders.putIfValid(customHeaders, name, value));
+            headers.forEach((name, value) -> ProviderHeaders.putIfValid(customHeaders, name, value));
         }
         if (!customHeaders.isEmpty()) {
             builder.customHeaders(Map.copyOf(customHeaders));
@@ -151,9 +149,7 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
             body.putAll(options.getExtraBody());
         }
         body.put(Fields.INPUT, input != null ? input : List.of());
-        body.put(Fields.MODEL, hasText(options.getDeploymentName())
-            ? options.getDeploymentName()
-            : options.getModel());
+        body.put(Fields.MODEL, hasText(options.getDeploymentName()) ? options.getDeploymentName() : options.getModel());
         putIfPresent(body, Fields.USER, options.getUser());
         if (options.getEncodingFormat() != null) {
             body.put(Fields.ENCODING_FORMAT, options.getEncodingFormat().getValue());
@@ -165,9 +161,10 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
     private EmbeddingResponse embeddingResponse(String body) {
         try {
             var root = OBJECT_MAPPER.readTree(body);
-            var embeddings = IndexedEmbeddingDecoder.decode(root.path(Fields.DATA), value ->
-                IndexedEmbeddingDecoder.floatArrayOrBase64(value,
-                    "OpenAI-compatible embedding vector has an invalid shape"));
+            var embeddings = IndexedEmbeddingDecoder.decode(
+                    root.path(Fields.DATA),
+                    value -> IndexedEmbeddingDecoder.floatArrayOrBase64(
+                            value, "OpenAI-compatible embedding vector has an invalid shape"));
             var metadata = new EmbeddingResponseMetadata();
             metadata.setModel(root.path(Fields.MODEL).asText(""));
             metadata.setUsage(usage(root.path(Fields.USAGE)));
@@ -178,8 +175,11 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
     }
 
     private ProviderUsage usage(JsonNode node) {
-        return ProviderUsage.embedding(node, Fields.PROMPT_TOKENS, Fields.TOTAL_TOKENS,
-            JsonNodes.isAbsent(node) ? null : OBJECT_MAPPER.convertValue(node, Object.class));
+        return ProviderUsage.embedding(
+                node,
+                Fields.PROMPT_TOKENS,
+                Fields.TOTAL_TOKENS,
+                JsonNodes.isAbsent(node) ? null : OBJECT_MAPPER.convertValue(node, Object.class));
     }
 
     private String embeddingsUrl(OpenAiCompatibleEmbeddingOptions options) {
@@ -220,7 +220,6 @@ public class OpenAiCompatibleEmbeddingModel implements EmbeddingModel, RequestHe
         static final String USAGE = "usage";
         static final String USER = "user";
 
-        private Fields() {
-        }
+        private Fields() {}
     }
 }

@@ -30,8 +30,8 @@ import run.halo.aifoundation.provider.contract.ProviderContractSource;
 import run.halo.aifoundation.provider.mapping.ModelParameter;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.support.AdapterType;
-import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoveredModel;
+import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
@@ -41,10 +41,9 @@ import run.halo.aifoundation.provider.transport.ProviderHttpException;
 import run.halo.app.extension.Metadata;
 
 @ProviderContractSource(
-    provider = "tokenhub",
-    officialDocumentation = "https://cloud.tencent.com/document/product/1823/130079",
-    retrievedAt = "2026-10-20"
-)
+        provider = "tokenhub",
+        officialDocumentation = "https://cloud.tencent.com/document/product/1823/130079",
+        retrievedAt = "2026-10-20")
 class TokenHubProviderTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -58,18 +57,21 @@ class TokenHubProviderTest {
         assertThat(provider.getProviderType()).isEqualTo("tokenhub");
         assertThat(provider.getDefaultBaseUrl()).isEqualTo("https://tokenhub.tencentmaas.com/v1");
         assertThat(provider.getSupportedAdapterTypes())
-            .containsExactly(AdapterType.TOKENHUB_CHAT, AdapterType.TOKENHUB_EMBEDDING);
-        assertThat(provider.getSupportedFeatures()).containsExactlyInAnyOrder(
-            ModelFeature.STREAMING, ModelFeature.VISION, ModelFeature.TOOL_CALL,
-            ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+                .containsExactly(AdapterType.TOKENHUB_CHAT, AdapterType.TOKENHUB_EMBEDDING);
+        assertThat(provider.getSupportedFeatures())
+                .containsExactlyInAnyOrder(
+                        ModelFeature.STREAMING,
+                        ModelFeature.VISION,
+                        ModelFeature.TOOL_CALL,
+                        ModelFeature.STRUCTURED_OUTPUT,
+                        ModelFeature.REASONING);
         assertThat(provider.buildChatModel(aiProvider, "test-key", "hunyuan-turbos-latest"))
-            .isInstanceOf(TokenHubChatModel.class);
-        assertThat(provider.buildEmbeddingModel(aiProvider, "test-key",
-            "kinfra-text-embedding-0.6b")).isInstanceOf(TokenHubEmbeddingModel.class);
+                .isInstanceOf(TokenHubChatModel.class);
+        assertThat(provider.buildEmbeddingModel(aiProvider, "test-key", "kinfra-text-embedding-0.6b"))
+                .isInstanceOf(TokenHubEmbeddingModel.class);
 
         var options = provider.languageModelProviderOptions();
-        assertThat(options.structuredOutputSupport())
-            .isEqualTo(StructuredOutputSupport.JSON_SCHEMA);
+        assertThat(options.structuredOutputSupport()).isEqualTo(StructuredOutputSupport.JSON_SCHEMA);
         assertThat(options.nativeStrictToolSchemas()).isFalse();
         assertThat(options.seedSupported()).isTrue();
         assertThat(options.reasoningHistorySupported()).isTrue();
@@ -77,126 +79,137 @@ class TokenHubProviderTest {
         assertThat(options.reasoningControlOptions().supportedEfforts()).isEmpty();
 
         var defaults = provider.getDefaultParameterMappings();
-        assertThat(defaults.get(ModelParameter.MAX_OUTPUT_TOKENS).template())
-            .isEqualTo("openai.max-completion-tokens");
-        assertThat(defaults.get(ModelParameter.REASONING).template())
-            .isEqualTo("reasoning.tokenhub");
-        for (var parameter : List.of(ModelParameter.TOP_K, ModelParameter.MIN_P,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.DIMENSIONS)) {
+        assertThat(defaults.get(ModelParameter.MAX_OUTPUT_TOKENS).template()).isEqualTo("openai.max-completion-tokens");
+        assertThat(defaults.get(ModelParameter.REASONING).template()).isEqualTo("reasoning.tokenhub");
+        for (var parameter : List.of(
+                ModelParameter.TOP_K,
+                ModelParameter.MIN_P,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.DIMENSIONS)) {
             assertThat(defaults.get(parameter).mode())
-                .as(parameter.name())
-                .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+                    .as(parameter.name())
+                    .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
         }
         assertThat(provider.getDefaultParameterMappings(AdapterType.TOKENHUB_CHAT)
-            .get(ModelParameter.REASONING).template()).isEqualTo("reasoning.tokenhub");
+                        .get(ModelParameter.REASONING)
+                        .template())
+                .isEqualTo("reasoning.tokenhub");
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void chatRequestUsesCurrentTokenFieldsAndDocumentedOptions() {
-        var options = options(GenerateTextRequest.builder()
-            .prompt("Think")
-            .maxOutputTokens(4096)
-            .temperature(1d)
-            .topP(0.9d)
-            .seed(42)
-            .build(), "hunyuan-turbos-latest");
+        var options = options(
+                GenerateTextRequest.builder()
+                        .prompt("Think")
+                        .maxOutputTokens(4096)
+                        .temperature(1d)
+                        .topP(0.9d)
+                        .seed(42)
+                        .build(),
+                "hunyuan-turbos-latest");
         var body = requestBody(options, new UserMessage("Think"));
 
         // TokenHub models differ on the output-token field, so the adapter preserves whichever
         // field the caller or model mapping selected.
-        assertThat(body).containsEntry("max_tokens", 4096)
-            .containsEntry("temperature", 1d)
-            .containsEntry("top_p", 0.9d)
-            .containsEntry("seed", 42)
-            .doesNotContainKey("max_completion_tokens");
+        assertThat(body)
+                .containsEntry("max_tokens", 4096)
+                .containsEntry("temperature", 1d)
+                .containsEntry("top_p", 0.9d)
+                .containsEntry("seed", 42)
+                .doesNotContainKey("max_completion_tokens");
 
         var thinking = options.mutate()
-            .extraBody(Map.of("thinking", Map.of("type", "enabled"),
-                "reasoning_effort", "medium"))
-            .build();
+                .extraBody(Map.of("thinking", Map.of("type", "enabled"), "reasoning_effort", "medium"))
+                .build();
         assertThat(requestBody(thinking, new UserMessage("Think")))
-            .containsEntry("thinking", Map.of("type", "enabled"))
-            .containsEntry("reasoning_effort", "medium");
+                .containsEntry("thinking", Map.of("type", "enabled"))
+                .containsEntry("reasoning_effort", "medium");
 
-        var maxEffort = options.mutate()
-            .extraBody(Map.of("reasoning_effort", "max"))
-            .build();
-        assertThat(requestBody(maxEffort, new UserMessage("Think")))
-            .containsEntry("reasoning_effort", "max");
+        var maxEffort =
+                options.mutate().extraBody(Map.of("reasoning_effort", "max")).build();
+        assertThat(requestBody(maxEffort, new UserMessage("Think"))).containsEntry("reasoning_effort", "max");
 
-        var currentTokens = options.mutate()
-            .maxTokens(null)
-            .maxCompletionTokens(2048)
-            .build();
+        var currentTokens =
+                options.mutate().maxTokens(null).maxCompletionTokens(2048).build();
         assertThat(requestBody(currentTokens, new UserMessage("Think")))
-            .containsEntry("max_completion_tokens", 2048)
-            .doesNotContainKey("max_tokens");
+                .containsEntry("max_completion_tokens", 2048)
+                .doesNotContainKey("max_tokens");
 
         var format = ChatCompletionsOptions.ResponseFormat.builder()
-            .type(ChatCompletionsOptions.ResponseFormat.Type.JSON_SCHEMA)
-            .name("answer")
-            .jsonSchema("{\"type\":\"object\"}")
-            .strict(true)
-            .build();
+                .type(ChatCompletionsOptions.ResponseFormat.Type.JSON_SCHEMA)
+                .name("answer")
+                .jsonSchema("{\"type\":\"object\"}")
+                .strict(true)
+                .build();
         var structured = options.mutate().responseFormat(format).build();
-        assertThat((Map<String, Object>) requestBody(structured, new UserMessage("JSON"))
-            .get("response_format")).containsEntry("type", "json_schema");
+        assertThat((Map<String, Object>)
+                        requestBody(structured, new UserMessage("JSON")).get("response_format"))
+                .containsEntry("type", "json_schema");
     }
 
     @Test
     void chatRejectsValuesOutsideTheDocumentedContract() {
         var base = ChatCompletionsOptions.builder()
-            .baseUrl("https://example.com/v1")
-            .model("hunyuan-turbos-latest")
-            .build();
+                .baseUrl("https://example.com/v1")
+                .model("hunyuan-turbos-latest")
+                .build();
 
-        assertThatThrownBy(() -> requestBody(base.mutate().temperature(2.5d).build(),
-            new UserMessage("Hot")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("temperature");
+        assertThatThrownBy(() -> requestBody(base.mutate().temperature(2.5d).build(), new UserMessage("Hot")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("temperature");
         for (var effort : List.of("none", "minimal", "xhigh")) {
-            assertThat(requestBody(base.mutate()
-                .extraBody(Map.of("reasoning_effort", effort)).build(),
-                new UserMessage("Think")))
-                .containsEntry("reasoning_effort", effort);
+            assertThat(requestBody(
+                            base.mutate()
+                                    .extraBody(Map.of("reasoning_effort", effort))
+                                    .build(),
+                            new UserMessage("Think")))
+                    .containsEntry("reasoning_effort", effort);
         }
-        assertThatThrownBy(() -> requestBody(base.mutate()
-            .extraBody(Map.of("reasoning_effort", "extreme")).build(),
-            new UserMessage("Think")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("reasoning_effort");
-        assertThatThrownBy(() -> requestBody(base.mutate()
-            .extraBody(Map.of("thinking", Map.of("type", "auto"))).build(),
-            new UserMessage("Think")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("thinking.type");
-        assertThatThrownBy(() -> requestBody(base.mutate()
-            .extraBody(Map.of("thinking", Map.of("type", "enabled"))).n(2).build(),
-            new UserMessage("Think")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("n=1");
-        assertThatThrownBy(() -> requestBody(base.mutate()
-            .stopSequences(List.of("a", "b", "c", "d", "e")).build(),
-            new UserMessage("Stop")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("4 stop sequences");
-        assertThatThrownBy(() -> requestBody(base.mutate().topLogprobs(5).build(),
-            new UserMessage("Tokens")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("requires logprobs");
+        assertThatThrownBy(() -> requestBody(
+                        base.mutate()
+                                .extraBody(Map.of("reasoning_effort", "extreme"))
+                                .build(),
+                        new UserMessage("Think")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reasoning_effort");
+        assertThatThrownBy(() -> requestBody(
+                        base.mutate()
+                                .extraBody(Map.of("thinking", Map.of("type", "auto")))
+                                .build(),
+                        new UserMessage("Think")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("thinking.type");
+        assertThatThrownBy(() -> requestBody(
+                        base.mutate()
+                                .extraBody(Map.of("thinking", Map.of("type", "enabled")))
+                                .n(2)
+                                .build(),
+                        new UserMessage("Think")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("n=1");
+        assertThatThrownBy(() -> requestBody(
+                        base.mutate()
+                                .stopSequences(List.of("a", "b", "c", "d", "e"))
+                                .build(),
+                        new UserMessage("Stop")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("4 stop sequences");
+        assertThatThrownBy(() -> requestBody(base.mutate().topLogprobs(5).build(), new UserMessage("Tokens")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("requires logprobs");
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void reasoningContentAndDetailsRoundTripThroughAssistantMessages() {
         var options = ChatCompletionsOptions.builder()
-            .baseUrl("https://example.com/v1")
-            .model("hunyuan-turbos-latest")
-            .build();
+                .baseUrl("https://example.com/v1")
+                .model("hunyuan-turbos-latest")
+                .build();
         var model = new TokenHubChatModel(options, WebClient.builder());
         var response = (org.springframework.ai.chat.model.ChatResponse)
-            ReflectionTestUtils.invokeMethod(model, "chatResponse", """
+                ReflectionTestUtils.invokeMethod(model, "chatResponse", """
                 {"id":"chat-1","model":"hunyuan-turbos-latest","choices":[{
                   "index":0,"finish_reason":"stop","message":{
                     "role":"assistant","content":"Done",
@@ -206,90 +219,119 @@ class TokenHubProviderTest {
                  "usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
                 """, options, "diagnostic-1");
 
-        var details = List.of(Map.of("type", "thinking", "content", "Inspect",
-            "signature", "sig-1"));
+        var details = List.of(Map.of("type", "thinking", "content", "Inspect", "signature", "sig-1"));
         var metadata = response.getResult().getOutput().getMetadata();
-        assertThat(metadata).containsEntry("reasoningContent", "Inspect the contract.")
-            .containsEntry("reasoningDetails", details);
+        assertThat(metadata)
+                .containsEntry("reasoningContent", "Inspect the contract.")
+                .containsEntry("reasoningDetails", details);
 
         var assistant = AssistantMessage.builder()
-            .content("Done")
-            .properties(Map.of(
-                "reasoningContent", "Inspect the contract.",
-                "reasoningProviderMetadata", Map.of("tokenhub",
-                    Map.of("reasoningDetails", details))))
-            .build();
+                .content("Done")
+                .properties(Map.of(
+                        "reasoningContent",
+                        "Inspect the contract.",
+                        "reasoningProviderMetadata",
+                        Map.of("tokenhub", Map.of("reasoningDetails", details))))
+                .build();
         var body = requestBody(options, new UserMessage("Find"), assistant);
         var messages = (List<Map<String, Object>>) body.get("messages");
         assertThat(messages.getLast())
-            .containsEntry("role", "assistant")
-            .containsEntry("reasoning_content", "Inspect the contract.")
-            .containsEntry("reasoning_details", details);
+                .containsEntry("role", "assistant")
+                .containsEntry("reasoning_content", "Inspect the contract.")
+                .containsEntry("reasoning_details", details);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void mediaUsesDocumentedImageAndVideoParts() {
         var options = ChatCompletionsOptions.builder()
-            .baseUrl("https://example.com/v1")
-            .model("hunyuan-turbos-latest")
-            .build();
-        var image = Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG)
-            .data(new byte[] {1, 2, 3}).build();
-        var video = Media.builder().mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
-            .data(URI.create("https://example.com/clip.mp4")).build();
+                .baseUrl("https://example.com/v1")
+                .model("hunyuan-turbos-latest")
+                .build();
+        var image = Media.builder()
+                .mimeType(MimeTypeUtils.IMAGE_PNG)
+                .data(new byte[] {1, 2, 3})
+                .build();
+        var video = Media.builder()
+                .mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
+                .data(URI.create("https://example.com/clip.mp4"))
+                .build();
         var user = UserMessage.builder().text("Describe").media(image, video).build();
         var body = requestBody(options, user);
         var messages = (List<Map<String, Object>>) body.get("messages");
         var content = (List<Map<String, Object>>) messages.getFirst().get("content");
 
-        assertThat(content).extracting(part -> part.get("type"))
-            .containsExactly("text", "image_url", "video_url");
+        assertThat(content).extracting(part -> part.get("type")).containsExactly("text", "image_url", "video_url");
         assertThat((Map<String, Object>) content.get(1).get("image_url"))
-            .extractingByKey("url").asString().startsWith("data:image/png;base64,");
+                .extractingByKey("url")
+                .asString()
+                .startsWith("data:image/png;base64,");
         assertThat((Map<String, Object>) content.get(2).get("video_url"))
-            .containsEntry("url", "https://example.com/clip.mp4");
+                .containsEntry("url", "https://example.com/clip.mp4");
 
-        var dataVideo = Media.builder().mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
-            .data(new byte[] {1, 2, 3}).build();
-        var dataBody = requestBody(options,
-            UserMessage.builder().text("Describe").media(dataVideo).build());
+        var dataVideo = Media.builder()
+                .mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
+                .data(new byte[] {1, 2, 3})
+                .build();
+        var dataBody = requestBody(
+                options, UserMessage.builder().text("Describe").media(dataVideo).build());
         var dataMessages = (List<Map<String, Object>>) dataBody.get("messages");
         var dataContent = (List<Map<String, Object>>) dataMessages.getFirst().get("content");
         assertThat((Map<String, Object>) dataContent.get(1).get("video_url"))
-            .extractingByKey("url").asString().startsWith("data:video/mp4;base64,");
+                .extractingByKey("url")
+                .asString()
+                .startsWith("data:video/mp4;base64,");
 
-        var uploadedVideo = Media.builder().mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
-            .data(URI.create("ms://uploaded-video")).build();
-        var uploadedVideoBody = requestBody(options,
-            UserMessage.builder().text("Describe").media(uploadedVideo).build());
-        var uploadedVideoContent = (List<Map<String, Object>>) ((List<Map<String, Object>>)
-            uploadedVideoBody.get("messages")).getFirst().get("content");
+        var uploadedVideo = Media.builder()
+                .mimeType(MimeTypeUtils.parseMimeType("video/mp4"))
+                .data(URI.create("ms://uploaded-video"))
+                .build();
+        var uploadedVideoBody = requestBody(
+                options,
+                UserMessage.builder().text("Describe").media(uploadedVideo).build());
+        var uploadedVideoContent =
+                (List<Map<String, Object>>) ((List<Map<String, Object>>) uploadedVideoBody.get("messages"))
+                        .getFirst()
+                        .get("content");
         assertThat((Map<String, Object>) uploadedVideoContent.get(1).get("video_url"))
-            .containsEntry("url", "ms://uploaded-video");
+                .containsEntry("url", "ms://uploaded-video");
 
-        var uploadedImage = Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG)
-            .data(URI.create("ms://uploaded-image")).build();
-        var uploadedImageBody = requestBody(options,
-            UserMessage.builder().text("Describe").media(uploadedImage).build());
-        var uploadedImageContent = (List<Map<String, Object>>) ((List<Map<String, Object>>)
-            uploadedImageBody.get("messages")).getFirst().get("content");
+        var uploadedImage = Media.builder()
+                .mimeType(MimeTypeUtils.IMAGE_PNG)
+                .data(URI.create("ms://uploaded-image"))
+                .build();
+        var uploadedImageBody = requestBody(
+                options,
+                UserMessage.builder().text("Describe").media(uploadedImage).build());
+        var uploadedImageContent =
+                (List<Map<String, Object>>) ((List<Map<String, Object>>) uploadedImageBody.get("messages"))
+                        .getFirst()
+                        .get("content");
         assertThat((Map<String, Object>) uploadedImageContent.get(1).get("image_url"))
-            .containsEntry("url", "ms://uploaded-image");
+                .containsEntry("url", "ms://uploaded-image");
 
-        var unsupportedImage = Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG)
-            .data(URI.create("file:///tmp/image.png")).build();
-        assertThatThrownBy(() -> requestBody(options,
-            UserMessage.builder().text("Describe").media(unsupportedImage).build()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("image input");
+        var unsupportedImage = Media.builder()
+                .mimeType(MimeTypeUtils.IMAGE_PNG)
+                .data(URI.create("file:///tmp/image.png"))
+                .build();
+        assertThatThrownBy(() -> requestBody(
+                        options,
+                        UserMessage.builder()
+                                .text("Describe")
+                                .media(unsupportedImage)
+                                .build()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("image input");
 
-        var audio = Media.builder().mimeType(MimeTypeUtils.parseMimeType("audio/mpeg"))
-            .data(new byte[] {1, 2, 3}).build();
-        assertThatThrownBy(() -> requestBody(options,
-            UserMessage.builder().text("Describe").media(audio).build()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("audio input");
+        var audio = Media.builder()
+                .mimeType(MimeTypeUtils.parseMimeType("audio/mpeg"))
+                .data(new byte[] {1, 2, 3})
+                .build();
+        assertThatThrownBy(() -> requestBody(
+                        options,
+                        UserMessage.builder().text("Describe").media(audio).build()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("audio input");
     }
 
     @Test
@@ -297,8 +339,7 @@ class TokenHubProviderTest {
     void embeddingsUseTheOpenAiCompatibleEndpoint() throws Exception {
         var authorization = new AtomicReference<String>();
         var captured = new AtomicReference<Map<String, Object>>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v1/embeddings", exchange -> {
             try (exchange) {
                 authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -320,21 +361,23 @@ class TokenHubProviderTest {
 
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
-            var model = new TokenHubEmbeddingModel(new TokenHubEmbeddingOptions(baseUrl,
-                "test-key", "kinfra-text-embedding-0.6b", Map.of("X-Trace", "1"), null),
-                WebClient.builder());
+            var model = new TokenHubEmbeddingModel(
+                    new TokenHubEmbeddingOptions(
+                            baseUrl, "test-key", "kinfra-text-embedding-0.6b", Map.of("X-Trace", "1"), null),
+                    WebClient.builder());
             var longEmoji = "😀".repeat(1001);
             var response = model.call(new ProviderEmbeddingRequest(
-                List.of("Halo CMS", "AI Foundation", longEmoji), List.of(), model.getOptions(),
-                Map.of()));
+                    List.of("Halo CMS", "AI Foundation", longEmoji), List.of(), model.getOptions(), Map.of()));
 
             assertThat(authorization.get()).isEqualTo("Bearer test-key");
-            assertThat(captured.get()).containsEntry("model", "kinfra-text-embedding-0.6b")
-                .containsEntry("encoding_format", "float");
+            assertThat(captured.get())
+                    .containsEntry("model", "kinfra-text-embedding-0.6b")
+                    .containsEntry("encoding_format", "float");
             assertThat((List<Object>) captured.get().get("input"))
-                .containsExactly("Halo CMS", "AI Foundation", longEmoji);
-            assertThat(response.getResults()).extracting(result -> result.getOutput()[0])
-                .containsExactly(0.1f, 0.3f, 0.5f);
+                    .containsExactly("Halo CMS", "AI Foundation", longEmoji);
+            assertThat(response.getResults())
+                    .extracting(result -> result.getOutput()[0])
+                    .containsExactly(0.1f, 0.3f, 0.5f);
             assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(4);
         } finally {
             server.stop(0);
@@ -345,31 +388,43 @@ class TokenHubProviderTest {
     void embeddingOptionsRejectFieldsTokenHubDoesNotDocument() {
         var providerOptions = provider.embeddingModelProviderOptions();
 
-        assertThatThrownBy(() -> providerOptions.buildOptions(EmbeddingRequest.builder()
-            .inputs(List.of("Halo"))
-            .dimensions(512)
-            .build(), List.of()))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("dimensions are fixed");
-        assertThatThrownBy(() -> new TokenHubEmbeddingModel(new TokenHubEmbeddingOptions(
-            "https://example.com/v1", "test-key", "kinfra-text-embedding-0.6b", Map.of(), null),
-            WebClient.builder()).call(new ProviderEmbeddingRequest(List.of(),
-                List.of(EmbeddingContent.text("Halo")), null, Map.of())))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("multimodal");
-        assertThatThrownBy(() -> new TokenHubEmbeddingModel(new TokenHubEmbeddingOptions(
-            "https://example.com/v1", "test-key", "kinfra-text-embedding-0.6b", Map.of(), null),
-            WebClient.builder()).call(new ProviderEmbeddingRequest(
-                List.of("x".repeat(2001)), List.of(), null, Map.of())))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("2000");
+        assertThatThrownBy(() -> providerOptions.buildOptions(
+                        EmbeddingRequest.builder()
+                                .inputs(List.of("Halo"))
+                                .dimensions(512)
+                                .build(),
+                        List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("dimensions are fixed");
+        assertThatThrownBy(() -> new TokenHubEmbeddingModel(
+                                new TokenHubEmbeddingOptions(
+                                        "https://example.com/v1",
+                                        "test-key",
+                                        "kinfra-text-embedding-0.6b",
+                                        Map.of(),
+                                        null),
+                                WebClient.builder())
+                        .call(new ProviderEmbeddingRequest(
+                                List.of(), List.of(EmbeddingContent.text("Halo")), null, Map.of())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("multimodal");
+        assertThatThrownBy(() -> new TokenHubEmbeddingModel(
+                                new TokenHubEmbeddingOptions(
+                                        "https://example.com/v1",
+                                        "test-key",
+                                        "kinfra-text-embedding-0.6b",
+                                        Map.of(),
+                                        null),
+                                WebClient.builder())
+                        .call(new ProviderEmbeddingRequest(List.of("x".repeat(2001)), List.of(), null, Map.of())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("2000");
     }
 
     @Test
     void discoveryListsTheCatalogAsLowConfidenceProviderDefaults() throws Exception {
         var authorization = new AtomicReference<String>();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v1/models", exchange -> {
             try (exchange) {
                 authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -392,18 +447,19 @@ class TokenHubProviderTest {
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
             StepVerifier.create(provider.discoverModels(provider(baseUrl), "test-key"))
-                .assertNext(models -> {
-                    assertThat(models).hasSize(3);
-                    assertThat(models).allSatisfy(model -> {
-                        assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
-                        assertThat(model.adapterType()).isEqualTo(AdapterType.TOKENHUB_CHAT);
-                        assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
-                        assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
-                    });
-                    assertThat(models).extracting(DiscoveredModel::displayName)
-                        .containsExactly("Hy3", "DeepSeek-V4-Pro", "Kinfra Embedding");
-                })
-                .verifyComplete();
+                    .assertNext(models -> {
+                        assertThat(models).hasSize(3);
+                        assertThat(models).allSatisfy(model -> {
+                            assertThat(model.modelType()).isEqualTo(ModelType.LANGUAGE);
+                            assertThat(model.adapterType()).isEqualTo(AdapterType.TOKENHUB_CHAT);
+                            assertThat(model.source()).isEqualTo(DiscoverySource.RULE);
+                            assertThat(model.confidence()).isEqualTo(DiscoveryConfidence.LOW);
+                        });
+                        assertThat(models)
+                                .extracting(DiscoveredModel::displayName)
+                                .containsExactly("Hy3", "DeepSeek-V4-Pro", "Kinfra Embedding");
+                    })
+                    .verifyComplete();
             assertThat(authorization.get()).isEqualTo("Bearer test-key");
         } finally {
             server.stop(0);
@@ -412,8 +468,7 @@ class TokenHubProviderTest {
 
     @Test
     void streamingErrorFramesFailTheRequest() throws Exception {
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             try (exchange) {
                 var response = """
@@ -433,18 +488,17 @@ class TokenHubProviderTest {
         try {
             var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
             var options = ChatCompletionsOptions.builder()
-                .baseUrl(baseUrl)
-                .apiKey("test-key")
-                .model("hy3")
-                .build();
+                    .baseUrl(baseUrl)
+                    .apiKey("test-key")
+                    .model("hy3")
+                    .build();
             var model = new TokenHubChatModel(options, WebClient.builder());
 
-            StepVerifier.create(model.streamParts(
-                    new Prompt(List.of(new UserMessage("Hi")), options)))
-                .expectErrorSatisfies(error -> assertThat(error)
-                    .isInstanceOf(ProviderHttpException.class)
-                    .hasMessageContaining("boom"))
-                .verify();
+            StepVerifier.create(model.streamParts(new Prompt(List.of(new UserMessage("Hi")), options)))
+                    .expectErrorSatisfies(error -> assertThat(error)
+                            .isInstanceOf(ProviderHttpException.class)
+                            .hasMessageContaining("boom"))
+                    .verify();
         } finally {
             server.stop(0);
         }
@@ -452,20 +506,21 @@ class TokenHubProviderTest {
 
     private ChatCompletionsOptions options(GenerateTextRequest request, String modelId) {
         return ((ChatCompletionsOptions) provider.languageModelProviderOptions()
-            .chatOptionsFactory().build(request)).mutate()
-            .baseUrl("https://example.com/v1")
-            .apiKey("test-key")
-            .model(modelId)
-            .build();
+                        .chatOptionsFactory()
+                        .build(request))
+                .mutate()
+                .baseUrl("https://example.com/v1")
+                .apiKey("test-key")
+                .model(modelId)
+                .build();
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> requestBody(ChatCompletionsOptions options,
-        org.springframework.ai.chat.messages.Message... messages) {
+    private Map<String, Object> requestBody(
+            ChatCompletionsOptions options, org.springframework.ai.chat.messages.Message... messages) {
         var model = new TokenHubChatModel(options, WebClient.builder());
         var prompt = new Prompt(List.of(messages), options);
-        return (Map<String, Object>) ReflectionTestUtils.invokeMethod(model,
-            "requestBody", prompt, options, false);
+        return (Map<String, Object>) ReflectionTestUtils.invokeMethod(model, "requestBody", prompt, options, false);
     }
 
     private AiProvider provider(String baseUrl) {

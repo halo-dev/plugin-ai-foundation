@@ -11,6 +11,7 @@ import reactor.core.publisher.Mono;
  * Reads a UI message chunk stream into assistant message snapshots.
  *
  * <p>Example:
+ *
  * <pre>{@code
  * ReadUIMessageStreamResult<MyMetadata> result = UIMessageStreamReader.read(options -> options
  *     .stream(stream)
@@ -23,8 +24,7 @@ import reactor.core.publisher.Mono;
  */
 public final class UIMessageStreamReader {
 
-    private UIMessageStreamReader() {
-    }
+    private UIMessageStreamReader() {}
 
     /**
      * Reads a stream with map metadata defaults.
@@ -44,8 +44,7 @@ public final class UIMessageStreamReader {
      * @param <M> message metadata type
      * @return reader result containing snapshots, final response message, and terminal state
      */
-    public static <M> ReadUIMessageStreamResult<M> read(UIMessage<M> message,
-        UIMessageStream stream) {
+    public static <M> ReadUIMessageStreamResult<M> read(UIMessage<M> message, UIMessageStream stream) {
         return read(options -> options.message(message).stream(stream));
     }
 
@@ -56,8 +55,7 @@ public final class UIMessageStreamReader {
      * @param <M> message metadata type
      * @return reader result containing snapshots, final response message, and terminal state
      */
-    public static <M> ReadUIMessageStreamResult<M> read(
-        Consumer<UIMessageStreamReaderOptions<M>> configure) {
+    public static <M> ReadUIMessageStreamResult<M> read(Consumer<UIMessageStreamReaderOptions<M>> configure) {
         Objects.requireNonNull(configure, "configure must not be null");
         var options = new UIMessageStreamReaderOptions<M>();
         configure.accept(options);
@@ -67,48 +65,41 @@ public final class UIMessageStreamReader {
         return createResult(options);
     }
 
-    private static <M> ReadUIMessageStreamResult<M> createResult(
-        UIMessageStreamReaderOptions<M> options) {
+    private static <M> ReadUIMessageStreamResult<M> createResult(UIMessageStreamReaderOptions<M> options) {
         var events = Flux.defer(() -> {
-            var state = new State<>(options);
-            return options.stream()
-                .chunks()
-                .handle((chunk, sink) -> {
-                    var message = state.accept(chunk);
-                    if (message != null) {
-                        sink.next(ReadEvent.snapshot(message));
-                    }
+                    var state = new State<>(options);
+                    return options.stream()
+                            .chunks()
+                            .handle((chunk, sink) -> {
+                                var message = state.accept(chunk);
+                                if (message != null) {
+                                    sink.next(ReadEvent.snapshot(message));
+                                }
+                            })
+                            .cast(ReadEvent.class)
+                            .onErrorResume(error -> {
+                                options.onError().accept(error);
+                                if (options.terminateOnError()) {
+                                    return Flux.error(error);
+                                }
+                                state.recordReadError(options.errorHandler().apply(error));
+                                return Flux.empty();
+                            })
+                            .concatWith(Mono.fromSupplier(
+                                    () -> ReadEvent.terminal(state.responseMessage(), state.terminal())));
                 })
-                .cast(ReadEvent.class)
-                .onErrorResume(error -> {
-                    options.onError().accept(error);
-                    if (options.terminateOnError()) {
-                        return Flux.error(error);
-                    }
-                    state.recordReadError(options.errorHandler().apply(error));
-                    return Flux.empty();
-                })
-                .concatWith(Mono.fromSupplier(() -> ReadEvent.terminal(
-                    state.responseMessage(), state.terminal())));
-        }).cache();
+                .cache();
 
-        var snapshots = events
-            .filter(ReadEvent::snapshot)
-            .map(ReadEvent::message);
-        var terminal = events
-            .filter(event -> !event.snapshot())
-            .last()
-            .cache();
+        var snapshots = events.filter(ReadEvent::snapshot).map(ReadEvent::message);
+        var terminal = events.filter(event -> !event.snapshot()).last().cache();
 
         return new ReadUIMessageStreamResult<>(
-            snapshots.map(message -> (UIMessage<M>) message),
-            terminal.map(event -> (UIMessage<M>) event.message()),
-            terminal.map(ReadEvent::terminal)
-        );
+                snapshots.map(message -> (UIMessage<M>) message),
+                terminal.map(event -> (UIMessage<M>) event.message()),
+                terminal.map(ReadEvent::terminal));
     }
 
-    private record ReadEvent(boolean snapshot, UIMessage<?> message,
-                             UIMessageStreamTerminal terminal) {
+    private record ReadEvent(boolean snapshot, UIMessage<?> message, UIMessageStreamTerminal terminal) {
         static ReadEvent snapshot(UIMessage<?> message) {
             return new ReadEvent(true, message, null);
         }
@@ -143,8 +134,9 @@ public final class UIMessageStreamReader {
             var changed = reducer.accept(chunk);
             changed = switch (chunk) {
                 case StartChunk start -> {
-                    if (messageId == null && start.messageId() != null
-                        && !start.messageId().isBlank()) {
+                    if (messageId == null
+                            && start.messageId() != null
+                            && !start.messageId().isBlank()) {
                         messageId = start.messageId();
                     }
                     yield changed || mergeMetadata(start.messageMetadata());
@@ -192,8 +184,7 @@ public final class UIMessageStreamReader {
                 metadata = options.metadataSupplier().get();
                 metadataCreated = true;
             }
-            return new UIMessage<>(messageId, UIMessageRole.ASSISTANT, reducer.parts(),
-                metadata);
+            return new UIMessage<>(messageId, UIMessageRole.ASSISTANT, reducer.parts(), metadata);
         }
 
         UIMessageStreamTerminal terminal() {

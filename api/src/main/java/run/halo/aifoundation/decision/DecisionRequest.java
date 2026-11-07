@@ -17,9 +17,11 @@ import run.halo.aifoundation.control.CancellationToken;
 public class DecisionRequest {
     /** Text, a JSON object, or a JSON array; media assets are not supported. */
     private Object state;
+
     private Map<String, DecisionQuestion> questions;
     /** Local audit metadata, never sent to the provider. */
     private Map<String, Object> metadata;
+
     private transient CancellationToken cancellationToken;
     private transient GenerationTimeouts timeouts;
 

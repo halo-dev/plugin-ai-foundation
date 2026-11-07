@@ -5,9 +5,7 @@ import run.halo.aifoundation.capability.ModelCapabilities;
 import run.halo.aifoundation.model.ModelInfo;
 import run.halo.aifoundation.model.ProviderInfo;
 
-/**
- * Provider-neutral Java SDK for non-streaming image generation.
- */
+/** Provider-neutral Java SDK for non-streaming image generation. */
 public interface ImageGenerationModel {
 
     /**
@@ -17,16 +15,14 @@ public interface ImageGenerationModel {
      * @return asynchronous image generation result
      */
     default Mono<GenerateImageResult> generateImage(String prompt) {
-        return generateImage(GenerateImageRequest.builder()
-            .prompt(prompt)
-            .build());
+        return generateImage(GenerateImageRequest.builder().prompt(prompt).build());
     }
 
     /**
      * Generates images from a full provider-neutral request.
      *
-     * <p>Implementations validate the request structure, media resources, and resolved model
-     * capabilities before invoking the provider.
+     * <p>Implementations validate the request structure, media resources, and resolved model capabilities before
+     * invoking the provider.
      *
      * @param request image generation request
      * @return asynchronous image generation result
@@ -36,8 +32,8 @@ public interface ImageGenerationModel {
     /**
      * Returns read-only capability metadata for this resolved model.
      *
-     * <p>Implementations should be conservative: unknown capabilities should remain unknown and
-     * required unknown capabilities are treated as unsupported during invocation.
+     * <p>Implementations should be conservative: unknown capabilities should remain unknown and required unknown
+     * capabilities are treated as unsupported during invocation.
      */
     default ModelCapabilities capabilities() {
         return ModelCapabilities.empty();
@@ -46,8 +42,8 @@ public interface ImageGenerationModel {
     /**
      * Returns stable model identity for diagnostics and middleware context.
      *
-     * <p>Models not resolved by AI Foundation may return {@code null}. Managed models use
-     * {@code AiModel.metadata.name} as the model name, not the provider-side raw model id.
+     * <p>Models not resolved by AI Foundation may return {@code null}. Managed models use {@code AiModel.metadata.name}
+     * as the model name, not the provider-side raw model id.
      *
      * @return model information, or {@code null} when unavailable
      */
@@ -58,8 +54,8 @@ public interface ImageGenerationModel {
     /**
      * Returns stable provider identity for diagnostics and middleware context.
      *
-     * <p>The provider resource name and provider type are separate values. Credentials and provider
-     * implementation objects are never exposed through this metadata.
+     * <p>The provider resource name and provider type are separate values. Credentials and provider implementation
+     * objects are never exposed through this metadata.
      *
      * @return provider information, or {@code null} when unavailable
      */
@@ -70,16 +66,15 @@ public interface ImageGenerationModel {
     /**
      * Creates a model object that fails with an unsupported-capability error when invoked.
      *
-     * <p>This is used internally when a configured model has an image-generation model type but
-     * the provider adapter cannot safely serve image generation.
+     * <p>This is used internally when a configured model has an image-generation model type but the provider adapter
+     * cannot safely serve image generation.
      *
      * @param modelName Halo model resource name
      * @param providerName Halo provider resource name
      * @param providerType provider type identifier
      * @return unsupported image generation model wrapper
      */
-    static ImageGenerationModel unsupported(String modelName, String providerName,
-        String providerType) {
+    static ImageGenerationModel unsupported(String modelName, String providerName, String providerType) {
         return new UnsupportedImageGenerationModel(modelName, providerName, providerType);
     }
 }

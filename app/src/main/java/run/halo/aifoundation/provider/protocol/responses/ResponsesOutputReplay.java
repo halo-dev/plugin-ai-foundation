@@ -14,29 +14,25 @@ public final class ResponsesOutputReplay {
     public static final String REASONING_METADATA_KEY = "responsesReasoningItems";
     private static final Set<String> REASONING_TYPES = Set.of("reasoning");
 
-    private ResponsesOutputReplay() {
-    }
+    private ResponsesOutputReplay() {}
 
-    static List<Map<String, Object>> reasoningFromProviderMetadata(
-        Map<String, Object> metadata) {
+    static List<Map<String, Object>> reasoningFromProviderMetadata(Map<String, Object> metadata) {
         return fromProviderMetadata(metadata, REASONING_TYPES);
     }
 
-    public static List<Map<String, Object>> fromProviderMetadata(Map<String, Object> metadata,
-        Set<String> types) {
+    public static List<Map<String, Object>> fromProviderMetadata(Map<String, Object> metadata, Set<String> types) {
         if (metadata == null || metadata.isEmpty()) {
             return List.of();
         }
         return matchingItems(findOutputItems(metadata), types);
     }
 
-    public static List<Map<String, Object>> reasoningInputItems(AssistantMessage message,
-        String providerType) {
+    public static List<Map<String, Object>> reasoningInputItems(AssistantMessage message, String providerType) {
         return assistantInputItems(message, providerType, REASONING_TYPES);
     }
 
-    public static List<Map<String, Object>> assistantInputItems(AssistantMessage message,
-        String providerType, Set<String> types) {
+    public static List<Map<String, Object>> assistantInputItems(
+            AssistantMessage message, String providerType, Set<String> types) {
         if (message == null || message.getMetadata() == null) {
             return List.of();
         }
@@ -44,8 +40,7 @@ public final class ResponsesOutputReplay {
         if (!preserved.isEmpty()) {
             return preserved;
         }
-        var direct = matchingItems(
-            message.getMetadata().get(REASONING_METADATA_KEY), types);
+        var direct = matchingItems(message.getMetadata().get(REASONING_METADATA_KEY), types);
         if (!direct.isEmpty()) {
             return direct;
         }

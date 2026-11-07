@@ -49,9 +49,11 @@ class ModelConsoleModelValidatorTest {
         provider.setSpec(spec);
         when(client.fetch(AiProvider.class, "provider")).thenReturn(Mono.just(provider));
         when(cache.getProviderTypeMap()).thenReturn(Map.of(providerType, type));
-        validator = new ModelConsoleModelValidator(client, cache,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
-            new EffectiveParameterMappingResolver());
+        validator = new ModelConsoleModelValidator(
+                client,
+                cache,
+                new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+                new EffectiveParameterMappingResolver());
     }
 
     @ParameterizedTest
@@ -67,8 +69,7 @@ class ModelConsoleModelValidatorTest {
             case TOOL_CALL -> constraints.setToolCalling(true);
             case STRUCTURED_OUTPUT -> {
                 constraints.setStructuredOutput(true);
-                doReturn(List.of(ModelFeature.STREAMING)).when(type)
-                    .getSupportedFeatures(AdapterType.GITEE_MESSAGES);
+                doReturn(List.of(ModelFeature.STREAMING)).when(type).getSupportedFeatures(AdapterType.GITEE_MESSAGES);
             }
             case REASONING -> {
                 var reasoning = new ModelParameterConstraints.Reasoning();
@@ -80,13 +81,13 @@ class ModelConsoleModelValidatorTest {
         setConstraints(model, constraints, catalog);
 
         StepVerifier.create(validator.validate(model))
-            .expectErrorSatisfies(error -> {
-                assertThat(error).isInstanceOf(ResponseStatusException.class);
-                var response = (ResponseStatusException) error;
-                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                assertThat(response.getReason()).contains(feature.name(), "gitee-messages");
-            })
-            .verify();
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(ResponseStatusException.class);
+                    var response = (ResponseStatusException) error;
+                    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(response.getReason()).contains(feature.name(), "gitee-messages");
+                })
+                .verify();
     }
 
     @ParameterizedTest
@@ -119,8 +120,11 @@ class ModelConsoleModelValidatorTest {
         assertThat(constraints.getOutputTokens()).isEqualTo(4096L);
         assertThat(constraints.getReasoning().getBudgetMinimum()).isEqualTo(512L);
         assertThat(constraints.getReasoning().getBudgetMaximum()).isEqualTo(2048L);
-        assertThat(catalog ? model.getSpec().getCatalogParameters().getConstraints()
-            : model.getSpec().getParameterConstraints()).isSameAs(constraints);
+        assertThat(
+                        catalog
+                                ? model.getSpec().getCatalogParameters().getConstraints()
+                                : model.getSpec().getParameterConstraints())
+                .isSameAs(constraints);
     }
 
     @Test
@@ -142,13 +146,13 @@ class ModelConsoleModelValidatorTest {
         var model = budgetModel(minimum, maximum);
 
         StepVerifier.create(validator.validate(model))
-            .expectErrorSatisfies(error -> {
-                assertThat(error).isInstanceOf(ResponseStatusException.class);
-                var response = (ResponseStatusException) error;
-                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                assertThat(response.getReason()).isEqualTo("reasoning budget minimum exceeds maximum");
-            })
-            .verify();
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(ResponseStatusException.class);
+                    var response = (ResponseStatusException) error;
+                    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(response.getReason()).isEqualTo("reasoning budget minimum exceeds maximum");
+                })
+                .verify();
     }
 
     @ParameterizedTest
@@ -229,8 +233,7 @@ class ModelConsoleModelValidatorTest {
         return model;
     }
 
-    private void setConstraints(AiModel model, ModelParameterConstraints constraints,
-        boolean catalog) {
+    private void setConstraints(AiModel model, ModelParameterConstraints constraints, boolean catalog) {
         if (!catalog) {
             model.getSpec().setParameterConstraints(constraints);
             return;

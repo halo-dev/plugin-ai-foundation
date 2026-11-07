@@ -15,28 +15,27 @@ import reactor.test.StepVerifier;
 
 class ProviderSseDecoderTest {
 
-    private final NettyDataBufferFactory buffers =
-        new NettyDataBufferFactory(ByteBufAllocator.DEFAULT);
+    private final NettyDataBufferFactory buffers = new NettyDataBufferFactory(ByteBufAllocator.DEFAULT);
 
     @Test
     void decodesFragmentedUtf8CrlfAndMultiLineEvents() {
         var payload = "event: delta\r\nid: 42\r\nretry: 1500\r\n"
-            + "data: 你\r\ndata: 好\r\n\r\n"
-            + ": heartbeat\r"
-            + "data: final\r\r";
+                + "data: 你\r\ndata: 好\r\n\r\n"
+                + ": heartbeat\r"
+                + "data: final\r\r";
         var bytes = payload.getBytes(StandardCharsets.UTF_8);
         var firstChineseByte = indexOf(bytes, "你".getBytes(StandardCharsets.UTF_8)[0]);
 
         var chunks = Flux.just(
-            wrap(Arrays.copyOfRange(bytes, 0, firstChineseByte + 1)),
-            wrap(Arrays.copyOfRange(bytes, firstChineseByte + 1, firstChineseByte + 2)),
-            wrap(Arrays.copyOfRange(bytes, firstChineseByte + 2, bytes.length - 1)),
-            wrap(Arrays.copyOfRange(bytes, bytes.length - 1, bytes.length)));
+                wrap(Arrays.copyOfRange(bytes, 0, firstChineseByte + 1)),
+                wrap(Arrays.copyOfRange(bytes, firstChineseByte + 1, firstChineseByte + 2)),
+                wrap(Arrays.copyOfRange(bytes, firstChineseByte + 2, bytes.length - 1)),
+                wrap(Arrays.copyOfRange(bytes, bytes.length - 1, bytes.length)));
 
         StepVerifier.create(ProviderSseDecoder.decode(chunks))
-            .expectNext(new ProviderSseEvent("delta", "你\n好", "42", 1500L))
-            .expectNext(new ProviderSseEvent("message", "final", "42", null))
-            .verifyComplete();
+                .expectNext(new ProviderSseEvent("delta", "你\n好", "42", 1500L))
+                .expectNext(new ProviderSseEvent("message", "final", "42", null))
+                .verifyComplete();
     }
 
     @Test
@@ -44,8 +43,8 @@ class ProviderSseDecoderTest {
         var payload = "ignored: value\nid: invalid\0id\nretry: later\ndata:test";
 
         StepVerifier.create(ProviderSseDecoder.decode(Flux.just(wrap(payload))))
-            .expectNext(new ProviderSseEvent("message", "test", null, null))
-            .verifyComplete();
+                .expectNext(new ProviderSseEvent("message", "test", null, null))
+                .verifyComplete();
     }
 
     @Test
@@ -54,9 +53,9 @@ class ProviderSseDecoderTest {
         var second = wrap("data: second\n\n");
 
         StepVerifier.create(ProviderSseDecoder.decode(Flux.just(first, second)))
-            .expectNext(new ProviderSseEvent("message", "first", null, null))
-            .thenCancel()
-            .verify();
+                .expectNext(new ProviderSseEvent("message", "first", null, null))
+                .thenCancel()
+                .verify();
 
         assertThat(nativeRefCount(first)).isZero();
         releaseIfNecessary(second);

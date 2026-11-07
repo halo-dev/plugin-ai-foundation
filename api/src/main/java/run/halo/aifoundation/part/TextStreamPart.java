@@ -21,8 +21,8 @@ import run.halo.aifoundation.tool.ToolResult;
 /**
  * One event in the Halo text stream protocol returned by {@link LanguageModel#streamText}.
  *
- * <p>Each instance uses {@link #type} as a discriminator. Only some fields are meaningful for a
- * given type. Typical text-only order is:
+ * <p>Each instance uses {@link #type} as a discriminator. Only some fields are meaningful for a given type. Typical
+ * text-only order is:
  *
  * <pre>{@code
  * start
@@ -34,11 +34,10 @@ import run.halo.aifoundation.tool.ToolResult;
  * finish
  * }</pre>
  *
- * <p>A tool-enabled stream may include {@code tool-call}, {@code tool-result}, and
- * {@code tool-error} events between step lifecycle events. Reasoning-capable models may also emit
- * {@code reasoning-start}, {@code reasoning-delta}, and {@code reasoning-end}; these are not
- * answer text deltas. Structured output requests still stream the model text normally; callers can
- * read the JSON text from text events. Callers should ignore unknown {@code type} values so newer
+ * <p>A tool-enabled stream may include {@code tool-call}, {@code tool-result}, and {@code tool-error} events between
+ * step lifecycle events. Reasoning-capable models may also emit {@code reasoning-start}, {@code reasoning-delta}, and
+ * {@code reasoning-end}; these are not answer text deltas. Structured output requests still stream the model text
+ * normally; callers can read the JSON text from text events. Callers should ignore unknown {@code type} values so newer
  * protocol events can be introduced without breaking old clients.
  */
 @Data
@@ -46,372 +45,289 @@ import run.halo.aifoundation.tool.ToolResult;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TextStreamPart {
-                                                                                
-    /**
-     * Event discriminator. Use values from {@link PartType}.
-     */
+
+    /** Event discriminator. Use values from {@link PartType}. */
     private String type;
-    /**
-     * Response message id for {@link PartType#START}.
-     */
+    /** Response message id for {@link PartType#START}. */
     private String messageId;
     /**
-     * Text block id for {@link PartType#TEXT_START}, {@link PartType#TEXT_DELTA}, and
-     * {@link PartType#TEXT_END}; reasoning block id for {@link PartType#REASONING_START},
-     * {@link PartType#REASONING_DELTA}, and {@link PartType#REASONING_END}.
+     * Text block id for {@link PartType#TEXT_START}, {@link PartType#TEXT_DELTA}, and {@link PartType#TEXT_END};
+     * reasoning block id for {@link PartType#REASONING_START}, {@link PartType#REASONING_DELTA}, and
+     * {@link PartType#REASONING_END}.
      */
     private String id;
-    /**
-     * Zero-based model invocation step index for step lifecycle events.
-     */
+    /** Zero-based model invocation step index for step lifecycle events. */
     private Integer stepIndex;
-    /**
-     * Incremental text for {@link PartType#TEXT_DELTA}.
-     */
+    /** Incremental text for {@link PartType#TEXT_DELTA}. */
     private String delta;
-    /**
-     * Optional provider signature for reasoning stream events.
-     */
+    /** Optional provider signature for reasoning stream events. */
     private String signature;
-    /**
-     * Approval id for tool approval request events.
-     */
+    /** Approval id for tool approval request events. */
     private String approvalId;
-    /**
-     * Approval decision for tool approval response events.
-     */
+    /** Approval decision for tool approval response events. */
     private Boolean approved;
-    /**
-     * Optional approval response reason.
-     */
+    /** Optional approval response reason. */
     private String reason;
-    /**
-     * Tool call id for tool call/result/error events.
-     */
+    /** Tool call id for tool call/result/error events. */
     private String toolCallId;
-    /**
-     * Tool name for tool call/result/error events.
-     */
+    /** Tool name for tool call/result/error events. */
     private String toolName;
-    /**
-     * Parsed tool arguments for {@link PartType#TOOL_CALL}.
-     */
+    /** Parsed tool arguments for {@link PartType#TOOL_CALL}. */
     private Map<String, Object> input;
-    /**
-     * Server-side tool execution result for {@link PartType#TOOL_RESULT}.
-     */
+    /** Server-side tool execution result for {@link PartType#TOOL_RESULT}. */
     private Object result;
-    /**
-     * Normalized finish reason for {@link PartType#FINISH_STEP} and {@link PartType#FINISH}.
-     */
+    /** Normalized finish reason for {@link PartType#FINISH_STEP} and {@link PartType#FINISH}. */
     private FinishReason finishReason;
-    /**
-     * Provider-specific finish reason before Halo normalization.
-     */
+    /** Provider-specific finish reason before Halo normalization. */
     private String rawFinishReason;
-    /**
-     * Usage for the current step on {@link PartType#FINISH_STEP}, or aggregate usage on
-     * {@link PartType#FINISH}.
-     */
+    /** Usage for the current step on {@link PartType#FINISH_STEP}, or aggregate usage on {@link PartType#FINISH}. */
     private LanguageModelUsage usage;
-    /**
-     * Non-fatal warnings for a completed step.
-     */
+    /** Non-fatal warnings for a completed step. */
     private List<GenerationWarning> warnings;
-    /**
-     * Request metadata for a completed step.
-     */
+    /** Request metadata for a completed step. */
     private GenerationRequestMetadata request;
-    /**
-     * Response metadata for a completed step.
-     */
+    /** Response metadata for a completed step. */
     private GenerationResponseMetadata response;
-    /**
-     * Provider-specific metadata associated with the stream event.
-     */
+    /** Provider-specific metadata associated with the stream event. */
     private Map<String, Object> providerMetadata;
-    /**
-     * Error text for {@link PartType#TOOL_INPUT_ERROR}, {@link PartType#TOOL_ERROR}, or
-     * {@link PartType#ERROR}.
-     */
+    /** Error text for {@link PartType#TOOL_INPUT_ERROR}, {@link PartType#TOOL_ERROR}, or {@link PartType#ERROR}. */
     private String errorText;
-    /**
-     * Source URL or generated file URL.
-     */
+    /** Source URL or generated file URL. */
     private String url;
-    /**
-     * Source or generated file title/name.
-     */
+    /** Source or generated file title/name. */
     private String title;
-    /**
-     * Generated file media type.
-     */
+    /** Generated file media type. */
     private String mediaType;
-    /**
-     * Generated file data when available.
-     */
+    /** Generated file data when available. */
     private Object data;
-    /**
-     * Sanitized diagnostic metadata for {@link PartType#RAW}.
-     */
+    /** Sanitized diagnostic metadata for {@link PartType#RAW}. */
     private Map<String, Object> metadata;
 
-    /**
-     * Creates a stream start event.
-     */
+    /** Creates a stream start event. */
     public static TextStreamPart start(String messageId) {
-        return TextStreamPart.builder().type(PartType.START).messageId(messageId).build();
+        return TextStreamPart.builder()
+                .type(PartType.START)
+                .messageId(messageId)
+                .build();
     }
 
-    /**
-     * Creates a step start event.
-     */
+    /** Creates a step start event. */
     public static TextStreamPart startStep(Integer stepIndex) {
-        return TextStreamPart.builder().type(PartType.START_STEP).stepIndex(stepIndex).build();
+        return TextStreamPart.builder()
+                .type(PartType.START_STEP)
+                .stepIndex(stepIndex)
+                .build();
     }
 
-    /**
-     * Creates a text block start event.
-     */
+    /** Creates a text block start event. */
     public static TextStreamPart textStart(String id) {
         return TextStreamPart.builder().type(PartType.TEXT_START).id(id).build();
     }
 
-    /**
-     * Creates a text delta event.
-     */
+    /** Creates a text delta event. */
     public static TextStreamPart textDelta(String id, String delta) {
-        return TextStreamPart.builder().type(PartType.TEXT_DELTA).id(id).delta(delta).build();
+        return TextStreamPart.builder()
+                .type(PartType.TEXT_DELTA)
+                .id(id)
+                .delta(delta)
+                .build();
     }
 
-    /**
-     * Creates a text block end event.
-     */
+    /** Creates a text block end event. */
     public static TextStreamPart textEnd(String id) {
         return TextStreamPart.builder().type(PartType.TEXT_END).id(id).build();
     }
 
-    /**
-     * Creates a reasoning block start event.
-     */
+    /** Creates a reasoning block start event. */
     public static TextStreamPart reasoningStart(String id) {
         return TextStreamPart.builder().type(PartType.REASONING_START).id(id).build();
     }
 
-    /**
-     * Creates a reasoning delta event. Reasoning deltas should not be appended to answer text.
-     */
-    public static TextStreamPart reasoningDelta(String id, String delta,
-        Map<String, Object> providerMetadata) {
+    /** Creates a reasoning delta event. Reasoning deltas should not be appended to answer text. */
+    public static TextStreamPart reasoningDelta(String id, String delta, Map<String, Object> providerMetadata) {
         return TextStreamPart.builder()
-            .type(PartType.REASONING_DELTA)
-            .id(id)
-            .delta(delta)
-            .providerMetadata(providerMetadata)
-            .build();
+                .type(PartType.REASONING_DELTA)
+                .id(id)
+                .delta(delta)
+                .providerMetadata(providerMetadata)
+                .build();
     }
 
-    /**
-     * Creates a reasoning block end event.
-     */
+    /** Creates a reasoning block end event. */
     public static TextStreamPart reasoningEnd(String id) {
         return TextStreamPart.builder().type(PartType.REASONING_END).id(id).build();
     }
 
-    /**
-     * Creates a tool input block start event.
-     */
+    /** Creates a tool input block start event. */
     public static TextStreamPart toolInputStart(String id, String toolCallId, String toolName) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_INPUT_START)
-            .id(id)
-            .toolCallId(toolCallId)
-            .toolName(toolName)
-            .build();
+                .type(PartType.TOOL_INPUT_START)
+                .id(id)
+                .toolCallId(toolCallId)
+                .toolName(toolName)
+                .build();
     }
 
-    /**
-     * Creates a tool input delta event.
-     */
-    public static TextStreamPart toolInputDelta(String id, String toolCallId, String toolName,
-        String delta) {
+    /** Creates a tool input delta event. */
+    public static TextStreamPart toolInputDelta(String id, String toolCallId, String toolName, String delta) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_INPUT_DELTA)
-            .id(id)
-            .toolCallId(toolCallId)
-            .toolName(toolName)
-            .delta(delta)
-            .build();
+                .type(PartType.TOOL_INPUT_DELTA)
+                .id(id)
+                .toolCallId(toolCallId)
+                .toolName(toolName)
+                .delta(delta)
+                .build();
     }
 
-    /**
-     * Creates a tool input block end event.
-     */
+    /** Creates a tool input block end event. */
     public static TextStreamPart toolInputEnd(String id, String toolCallId, String toolName) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_INPUT_END)
-            .id(id)
-            .toolCallId(toolCallId)
-            .toolName(toolName)
-            .build();
+                .type(PartType.TOOL_INPUT_END)
+                .id(id)
+                .toolCallId(toolCallId)
+                .toolName(toolName)
+                .build();
     }
 
-    /**
-     * Creates an event for tool input that could not be normalized.
-     */
-    public static TextStreamPart toolInputError(String toolCallId, String toolName,
-        String errorText, Map<String, Object> providerMetadata) {
+    /** Creates an event for tool input that could not be normalized. */
+    public static TextStreamPart toolInputError(
+            String toolCallId, String toolName, String errorText, Map<String, Object> providerMetadata) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_INPUT_ERROR)
-            .toolCallId(toolCallId)
-            .toolName(toolName)
-            .errorText(errorText)
-            .providerMetadata(providerMetadata)
-            .build();
+                .type(PartType.TOOL_INPUT_ERROR)
+                .toolCallId(toolCallId)
+                .toolName(toolName)
+                .errorText(errorText)
+                .providerMetadata(providerMetadata)
+                .build();
     }
 
-    /**
-     * Creates a stream event for a model-requested tool call.
-     */
+    /** Creates a stream event for a model-requested tool call. */
     public static TextStreamPart toolCall(ToolCall toolCall) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_CALL)
-            .toolCallId(toolCall.getToolCallId())
-            .toolName(toolCall.getToolName())
-            .input(toolCall.getInput())
-            .providerMetadata(toolCall.getProviderMetadata())
-            .build();
+                .type(PartType.TOOL_CALL)
+                .toolCallId(toolCall.getToolCallId())
+                .toolName(toolCall.getToolName())
+                .input(toolCall.getInput())
+                .providerMetadata(toolCall.getProviderMetadata())
+                .build();
     }
 
-    /**
-     * Creates a stream event for a pending tool approval request.
-     */
+    /** Creates a stream event for a pending tool approval request. */
     public static TextStreamPart toolApprovalRequest(ToolApprovalRequest request) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_APPROVAL_REQUEST)
-            .approvalId(request.getApprovalId())
-            .toolCallId(request.getToolCallId())
-            .toolName(request.getToolName())
-            .input(request.getInput())
-            .stepIndex(request.getStepIndex())
-            .providerMetadata(request.getProviderMetadata())
-            .build();
+                .type(PartType.TOOL_APPROVAL_REQUEST)
+                .approvalId(request.getApprovalId())
+                .toolCallId(request.getToolCallId())
+                .toolName(request.getToolName())
+                .input(request.getInput())
+                .stepIndex(request.getStepIndex())
+                .providerMetadata(request.getProviderMetadata())
+                .build();
     }
 
-    /**
-     * Creates a stream event for a caller response to a pending tool approval request.
-     */
+    /** Creates a stream event for a caller response to a pending tool approval request. */
     public static TextStreamPart toolApprovalResponse(ToolApprovalResponse response) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_APPROVAL_RESPONSE)
-            .approvalId(response.getApprovalId())
-            .toolCallId(response.getToolCallId())
-            .toolName(response.getToolName())
-            .approved(response.getApproved())
-            .reason(response.getReason())
-            .providerMetadata(response.getProviderMetadata())
-            .build();
+                .type(PartType.TOOL_APPROVAL_RESPONSE)
+                .approvalId(response.getApprovalId())
+                .toolCallId(response.getToolCallId())
+                .toolName(response.getToolName())
+                .approved(response.getApproved())
+                .reason(response.getReason())
+                .providerMetadata(response.getProviderMetadata())
+                .build();
     }
 
-    /**
-     * Creates a stream event for a successful server-side tool execution.
-     */
+    /** Creates a stream event for a successful server-side tool execution. */
     public static TextStreamPart toolResult(ToolResult toolResult) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_RESULT)
-            .toolCallId(toolResult.getToolCallId())
-            .toolName(toolResult.getToolName())
-            .result(toolResult.getResult())
-            .providerMetadata(toolResult.getProviderMetadata())
-            .build();
+                .type(PartType.TOOL_RESULT)
+                .toolCallId(toolResult.getToolCallId())
+                .toolName(toolResult.getToolName())
+                .result(toolResult.getResult())
+                .providerMetadata(toolResult.getProviderMetadata())
+                .build();
     }
 
-    /**
-     * Creates a stream event for a failed server-side tool execution.
-     */
+    /** Creates a stream event for a failed server-side tool execution. */
     public static TextStreamPart toolError(ToolError toolError) {
         return TextStreamPart.builder()
-            .type(PartType.TOOL_ERROR)
-            .toolCallId(toolError.getToolCallId())
-            .toolName(toolError.getToolName())
-            .errorText(toolError.getErrorText())
-            .providerMetadata(toolError.getProviderMetadata())
-            .build();
+                .type(PartType.TOOL_ERROR)
+                .toolCallId(toolError.getToolCallId())
+                .toolName(toolError.getToolName())
+                .errorText(toolError.getErrorText())
+                .providerMetadata(toolError.getProviderMetadata())
+                .build();
     }
 
-    /**
-     * Creates a source reference event.
-     */
+    /** Creates a source reference event. */
     public static TextStreamPart source(GenerationContentPart source) {
         return TextStreamPart.builder()
-            .type(PartType.SOURCE)
-            .id(source.getId())
-            .url(source.getUrl())
-            .title(source.getTitle())
-            .providerMetadata(source.getMetadata())
-            .build();
+                .type(PartType.SOURCE)
+                .id(source.getId())
+                .url(source.getUrl())
+                .title(source.getTitle())
+                .providerMetadata(source.getMetadata())
+                .build();
     }
 
-    /**
-     * Creates a generated file event.
-     */
+    /** Creates a generated file event. */
     public static TextStreamPart file(GenerationContentPart file) {
         return TextStreamPart.builder()
-            .type(PartType.FILE)
-            .id(file.getId())
-            .url(file.getUrl())
-            .title(file.getTitle())
-            .mediaType(file.getMediaType())
-            .data(file.getData())
-            .providerMetadata(file.getMetadata())
-            .build();
+                .type(PartType.FILE)
+                .id(file.getId())
+                .url(file.getUrl())
+                .title(file.getTitle())
+                .mediaType(file.getMediaType())
+                .data(file.getData())
+                .providerMetadata(file.getMetadata())
+                .build();
     }
 
-    /**
-     * Creates a step finish event.
-     */
-    public static TextStreamPart finishStep(Integer stepIndex, FinishReason finishReason,
-        String rawFinishReason, LanguageModelUsage usage, List<GenerationWarning> warnings,
-        GenerationRequestMetadata request, GenerationResponseMetadata response,
-        Map<String, Object> providerMetadata) {
+    /** Creates a step finish event. */
+    public static TextStreamPart finishStep(
+            Integer stepIndex,
+            FinishReason finishReason,
+            String rawFinishReason,
+            LanguageModelUsage usage,
+            List<GenerationWarning> warnings,
+            GenerationRequestMetadata request,
+            GenerationResponseMetadata response,
+            Map<String, Object> providerMetadata) {
         return TextStreamPart.builder()
-            .type(PartType.FINISH_STEP)
-            .stepIndex(stepIndex)
-            .finishReason(finishReason)
-            .rawFinishReason(rawFinishReason)
-            .usage(usage)
-            .warnings(warnings)
-            .request(request)
-            .response(response)
-            .providerMetadata(providerMetadata)
-            .build();
+                .type(PartType.FINISH_STEP)
+                .stepIndex(stepIndex)
+                .finishReason(finishReason)
+                .rawFinishReason(rawFinishReason)
+                .usage(usage)
+                .warnings(warnings)
+                .request(request)
+                .response(response)
+                .providerMetadata(providerMetadata)
+                .build();
     }
 
-    /**
-     * Creates a generation finish event.
-     */
-    public static TextStreamPart finish(FinishReason finishReason, String rawFinishReason,
-        LanguageModelUsage usage) {
+    /** Creates a generation finish event. */
+    public static TextStreamPart finish(FinishReason finishReason, String rawFinishReason, LanguageModelUsage usage) {
         return TextStreamPart.builder()
-            .type(PartType.FINISH)
-            .finishReason(finishReason)
-            .rawFinishReason(rawFinishReason)
-            .usage(usage)
-            .build();
+                .type(PartType.FINISH)
+                .finishReason(finishReason)
+                .rawFinishReason(rawFinishReason)
+                .usage(usage)
+                .build();
     }
 
-    /**
-     * Creates a sanitized raw diagnostic event.
-     */
+    /** Creates a sanitized raw diagnostic event. */
     public static TextStreamPart raw(Map<String, Object> metadata) {
         return TextStreamPart.builder().type(PartType.RAW).metadata(metadata).build();
     }
 
-    /**
-     * Creates a stream error event.
-     */
+    /** Creates a stream error event. */
     public static TextStreamPart error(String errorText) {
-        return TextStreamPart.builder().type(PartType.ERROR).errorText(errorText).build();
+        return TextStreamPart.builder()
+                .type(PartType.ERROR)
+                .errorText(errorText)
+                .build();
     }
 
     private TextStreamPart validate() {
@@ -421,8 +337,8 @@ public class TextStreamPart {
         switch (type) {
             case PartType.START -> requireText(messageId, "start stream part messageId");
             case PartType.START_STEP -> requirePresent(stepIndex, "start-step stream part stepIndex");
-            case PartType.TEXT_START, PartType.TEXT_END, PartType.REASONING_START,
-                PartType.REASONING_END -> requireText(id, type + " stream part id");
+            case PartType.TEXT_START, PartType.TEXT_END, PartType.REASONING_START, PartType.REASONING_END ->
+                requireText(id, type + " stream part id");
             case PartType.TEXT_DELTA, PartType.REASONING_DELTA -> {
                 requireText(id, type + " stream part id");
                 requirePresent(delta, type + " stream part delta");
@@ -464,10 +380,8 @@ public class TextStreamPart {
                 requirePresent(approved, "tool-approval-response stream part approved");
             }
             case PartType.SOURCE, PartType.FILE -> requireText(id, type + " stream part id");
-            case PartType.FINISH_STEP -> requirePresent(stepIndex,
-                "finish-step stream part stepIndex");
-            case PartType.FINISH, PartType.RAW, PartType.ABORT -> {
-            }
+            case PartType.FINISH_STEP -> requirePresent(stepIndex, "finish-step stream part stepIndex");
+            case PartType.FINISH, PartType.RAW, PartType.ABORT -> {}
             case PartType.ERROR -> requireText(errorText, "error stream part errorText");
             default -> throw new IllegalArgumentException("unsupported stream part type: " + type);
         }

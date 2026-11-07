@@ -12,6 +12,10 @@ Guidance for coding agents working in this repository.
 ./gradlew compileJava
 ./gradlew test
 
+# Format Java code
+./gradlew spotlessApply
+./gradlew spotlessCheck
+
 # Run one backend test class
 ./gradlew :app:test --tests "run.halo.aifoundation.provider.AbstractAiProviderTypeTest"
 

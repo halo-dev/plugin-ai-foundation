@@ -57,8 +57,8 @@ class AiModelNameGeneratorTest {
     @Test
     void generate_truncatesLongNamesWithinDnsLabelLimit() {
         var name = AiModelNameGenerator.generate(
-            "very-long-provider-name-that-keeps-going",
-            "very-long-model-id-that-keeps-going-and-going-and-going:latest");
+                "very-long-provider-name-that-keeps-going",
+                "very-long-model-id-that-keeps-going-and-going-and-going:latest");
 
         assertThat(name).hasSizeLessThanOrEqualTo(63);
         assertThat(name).matches("[a-z0-9]([-a-z0-9]*[a-z0-9])?");

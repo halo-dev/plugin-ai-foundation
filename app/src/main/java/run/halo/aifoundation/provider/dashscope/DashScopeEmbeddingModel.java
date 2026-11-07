@@ -7,7 +7,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -21,20 +20,18 @@ import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpRequest;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpTransport;
 import run.halo.aifoundation.provider.support.embedding.IndexedEmbeddingDecoder;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 
 /** DashScope-native text embedding adapter with dense/sparse metadata preservation. */
-public final class DashScopeEmbeddingModel
-    implements EmbeddingModel, RequestHeaderAwareEmbeddingModel {
+public final class DashScopeEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEmbeddingModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String EMBEDDING_PATH =
-        "/services/embeddings/text-embedding/text-embedding";
+    private static final String EMBEDDING_PATH = "/services/embeddings/text-embedding/text-embedding";
 
     private final DashScopeEmbeddingOptions defaultOptions;
     private final EmbeddingHttpTransport transport;
 
-    public DashScopeEmbeddingModel(DashScopeEmbeddingOptions defaultOptions,
-        WebClient.Builder webClientBuilder) {
+    public DashScopeEmbeddingModel(DashScopeEmbeddingOptions defaultOptions, WebClient.Builder webClientBuilder) {
         Assert.notNull(defaultOptions, "defaultOptions must not be null");
         Assert.notNull(webClientBuilder, "webClientBuilder must not be null");
         this.defaultOptions = defaultOptions;
@@ -51,27 +48,26 @@ public final class DashScopeEmbeddingModel
     }
 
     @Override
-    public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request,
-        Map<String, String> headers) {
+    public EmbeddingResponse call(
+            org.springframework.ai.embedding.EmbeddingRequest request, Map<String, String> headers) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
         var options = defaultOptions.merge(request.getOptions(), headers);
         if (options.outputType() == DashScopeEmbeddingOptions.OutputType.SPARSE) {
             throw new IllegalArgumentException(
-                "DashScope sparse-only embeddings cannot be represented as dense vectors; "
-                    + "use dense or dense&sparse");
+                    "DashScope sparse-only embeddings cannot be represented as dense vectors; "
+                            + "use dense or dense&sparse");
         }
         if (request.getInstructions() != null && request.getInstructions().size() > 20) {
-            throw new IllegalArgumentException(
-                "DashScope native embedding accepts at most 20 texts per request");
+            throw new IllegalArgumentException("DashScope native embedding accepts at most 20 texts per request");
         }
         var body = requestBody(request.getInstructions(), options);
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + EMBEDDING_PATH;
         var exchange = EmbeddingHttpRequest.builder(url, body)
-            .adapterType("dashscope-embedding")
-            .apiKey(options.apiKey())
-            .headers(options.customHeaders())
-            .timeout(options.timeout())
-            .build();
+                .adapterType("dashscope-embedding")
+                .apiKey(options.apiKey())
+                .headers(options.customHeaders())
+                .timeout(options.timeout())
+                .build();
         return embeddingResponse(transport.post(exchange), options.model());
     }
 
@@ -79,12 +75,13 @@ public final class DashScopeEmbeddingModel
     public float[] embed(Document document) {
         Assert.notNull(document, "Document must not be null");
         var response = call(new org.springframework.ai.embedding.EmbeddingRequest(
-            List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
-        return response.getResults().isEmpty() ? new float[0] : response.getResult().getOutput();
+                List.of(document.getFormattedContent(MetadataMode.EMBED)), defaultOptions));
+        return response.getResults().isEmpty()
+                ? new float[0]
+                : response.getResult().getOutput();
     }
 
-    private Map<String, Object> requestBody(List<String> texts,
-        DashScopeEmbeddingOptions options) {
+    private Map<String, Object> requestBody(List<String> texts, DashScopeEmbeddingOptions options) {
         var parameters = new LinkedHashMap<String, Object>();
         if (options.dimensions() != null) {
             parameters.put("dimension", options.dimensions());
@@ -108,30 +105,31 @@ public final class DashScopeEmbeddingModel
         try {
             var root = OBJECT_MAPPER.readTree(data);
             var values = root.path("output").path("embeddings");
-            var embeddings = IndexedEmbeddingDecoder.decode(values,
-                item -> item.path("text_index").isNumber()
-                    ? item.path("text_index").asInt() : -1,
-                value -> IndexedEmbeddingDecoder.floatArray(value,
-                    "DashScope embedding vector must be an array"));
+            var embeddings = IndexedEmbeddingDecoder.decode(
+                    values,
+                    item -> item.path("text_index").isNumber()
+                            ? item.path("text_index").asInt()
+                            : -1,
+                    value -> IndexedEmbeddingDecoder.floatArray(value, "DashScope embedding vector must be an array"));
             var sparse = new ArrayList<Map<String, Object>>();
             var fallbackIndex = 0;
             for (var item : values) {
                 var index = item.path("text_index").isNumber()
-                    ? item.path("text_index").asInt() : fallbackIndex;
+                        ? item.path("text_index").asInt()
+                        : fallbackIndex;
                 if (item.path("sparse_embedding").isArray()) {
                     sparse.add(Map.of(
-                        "textIndex", index,
-                        "values", OBJECT_MAPPER.convertValue(item.path("sparse_embedding"),
-                            Object.class)
-                    ));
+                            "textIndex",
+                            index,
+                            "values",
+                            OBJECT_MAPPER.convertValue(item.path("sparse_embedding"), Object.class)));
                 }
                 fallbackIndex++;
             }
             sparse.sort(Comparator.comparingInt(value -> (Integer) value.get("textIndex")));
 
             var usage = root.path("usage");
-            var rawUsage = JsonNodes.isAbsent(usage)
-                ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
+            var rawUsage = JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadataValues = new LinkedHashMap<String, Object>();
             if (hasText(root.path("request_id").asText(null))) {
                 metadataValues.put("id", root.path("request_id").asText());
@@ -139,8 +137,10 @@ public final class DashScopeEmbeddingModel
             if (!sparse.isEmpty()) {
                 metadataValues.put("sparseEmbeddings", List.copyOf(sparse));
             }
-            var metadata = new EmbeddingResponseMetadata(requestedModel,
-                ProviderUsage.embedding(usage, "total_tokens", "total_tokens", rawUsage), metadataValues);
+            var metadata = new EmbeddingResponseMetadata(
+                    requestedModel,
+                    ProviderUsage.embedding(usage, "total_tokens", "total_tokens", rawUsage),
+                    metadataValues);
             return new EmbeddingResponse(embeddings, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse DashScope embedding response", e);
@@ -150,5 +150,4 @@ public final class DashScopeEmbeddingModel
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
-
 }

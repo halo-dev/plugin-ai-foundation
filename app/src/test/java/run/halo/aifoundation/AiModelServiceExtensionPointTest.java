@@ -23,38 +23,37 @@ class AiModelServiceExtensionPointTest {
         var docs = loadExtensionResourceDocuments();
 
         var extensionPointDefinition = docs.stream()
-            .filter(doc -> "ExtensionPointDefinition".equals(doc.get("kind")))
-            .findFirst()
-            .orElseThrow();
+                .filter(doc -> "ExtensionPointDefinition".equals(doc.get("kind")))
+                .findFirst()
+                .orElseThrow();
         assertThat(extensionPointDefinition)
-            .extracting(doc -> ((Map<?, ?>) doc.get("metadata")).get("name"))
-            .isEqualTo("ai-model-service");
+                .extracting(doc -> ((Map<?, ?>) doc.get("metadata")).get("name"))
+                .isEqualTo("ai-model-service");
         assertThat(extensionPointDefinition)
-            .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("className"))
-            .isEqualTo(AiModelService.class.getName());
+                .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("className"))
+                .isEqualTo(AiModelService.class.getName());
         assertThat(extensionPointDefinition)
-            .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("type"))
-            .isEqualTo("SINGLETON");
+                .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("type"))
+                .isEqualTo("SINGLETON");
 
         var extensionDefinition = docs.stream()
-            .filter(doc -> "ExtensionDefinition".equals(doc.get("kind")))
-            .findFirst()
-            .orElseThrow();
+                .filter(doc -> "ExtensionDefinition".equals(doc.get("kind")))
+                .findFirst()
+                .orElseThrow();
         assertThat(extensionDefinition)
-            .extracting(doc -> ((Map<?, ?>) doc.get("metadata")).get("name"))
-            .isEqualTo("ai-foundation-ai-model-service");
+                .extracting(doc -> ((Map<?, ?>) doc.get("metadata")).get("name"))
+                .isEqualTo("ai-foundation-ai-model-service");
         assertThat(extensionDefinition)
-            .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("className"))
-            .isEqualTo(AiModelServiceImpl.class.getName());
+                .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("className"))
+                .isEqualTo(AiModelServiceImpl.class.getName());
         assertThat(extensionDefinition)
-            .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("extensionPointName"))
-            .isEqualTo("ai-model-service");
+                .extracting(doc -> ((Map<?, ?>) doc.get("spec")).get("extensionPointName"))
+                .isEqualTo("ai-model-service");
     }
 
     private static ArrayList<Map<String, Object>> loadExtensionResourceDocuments() {
         var resourceName = "extensions/ai-model-service-extension-point.yaml";
-        var resource = AiModelServiceExtensionPointTest.class.getClassLoader()
-            .getResourceAsStream(resourceName);
+        var resource = AiModelServiceExtensionPointTest.class.getClassLoader().getResourceAsStream(resourceName);
         assertThat(resource).as(resourceName).isNotNull();
 
         var docs = new ArrayList<Map<String, Object>>();

@@ -33,8 +33,7 @@ class ProviderLanguageNativeOptionsTest {
     @Test
     void providerOwnedLanguageOptionsApplyAdministratorNativeOptions() {
         for (var provider : providers()) {
-            assertNativeOptionsApplied(provider.getProviderType(),
-                provider.languageModelProviderOptions());
+            assertNativeOptionsApplied(provider.getProviderType(), provider.languageModelProviderOptions());
         }
     }
 
@@ -42,55 +41,60 @@ class ProviderLanguageNativeOptionsTest {
     void ollamaCompatibleProtocolsApplyAdministratorNativeOptions() {
         var provider = new OllamaProvider();
 
-        assertNativeOptionsApplied(provider.getProviderType(),
-            provider.languageModelProviderOptions(AdapterType.OLLAMA_RESPONSES));
-        assertNativeOptionsApplied(provider.getProviderType(),
-            provider.languageModelProviderOptions(AdapterType.OLLAMA_MESSAGES));
+        assertNativeOptionsApplied(
+                provider.getProviderType(), provider.languageModelProviderOptions(AdapterType.OLLAMA_RESPONSES));
+        assertNativeOptionsApplied(
+                provider.getProviderType(), provider.languageModelProviderOptions(AdapterType.OLLAMA_MESSAGES));
     }
 
     @Test
     void rejectsConfiguredNativeOptionsWhenProviderHasNoApplicator() {
-        var builder = new LanguageModelChatOptionsBuilder("provider", "configured-model",
-            LanguageModelProviderOptions.defaults(), Map.of("extension", true), ignored -> "{}");
+        var builder = new LanguageModelChatOptionsBuilder(
+                "provider",
+                "configured-model",
+                LanguageModelProviderOptions.defaults(),
+                Map.of("extension", true),
+                ignored -> "{}");
 
         assertThatThrownBy(() -> builder.build(
-            GenerateTextRequest.builder().prompt("Hello").build()))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("does not support configured native options");
+                        GenerateTextRequest.builder().prompt("Hello").build()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("does not support configured native options");
     }
 
-    private void assertNativeOptionsApplied(String providerType,
-        LanguageModelProviderOptions providerOptions) {
-        var builder = new LanguageModelChatOptionsBuilder(providerType, "configured-model",
-            providerOptions, Map.of("provider_extension", "configured"), ignored -> "{}");
+    private void assertNativeOptionsApplied(String providerType, LanguageModelProviderOptions providerOptions) {
+        var builder = new LanguageModelChatOptionsBuilder(
+                providerType,
+                "configured-model",
+                providerOptions,
+                Map.of("provider_extension", "configured"),
+                ignored -> "{}");
 
-        var options = builder.build(GenerateTextRequest.builder().prompt("Hello").build());
+        var options =
+                builder.build(GenerateTextRequest.builder().prompt("Hello").build());
 
-        assertThat(options)
-            .as(providerType)
-            .isInstanceOf(ChatCompletionsOptions.class);
+        assertThat(options).as(providerType).isInstanceOf(ChatCompletionsOptions.class);
         assertThat(((ChatCompletionsOptions) options).getExtraBody())
-            .as(providerType)
-            .containsEntry("provider_extension", "configured");
+                .as(providerType)
+                .containsEntry("provider_extension", "configured");
     }
 
     private List<AiProviderType> providers() {
         return List.of(
-            new AiHubMixProvider(),
-            new DashScopeProvider(),
-            new DeepSeekProvider(),
-            new DouBaoProvider(),
-            new ErnieProvider(),
-            new GiteeProvider(),
-            new KimiProvider(),
-            new MiMoProvider(),
-            new MiniMaxProvider(),
-            new OpenAiProvider(),
-            new OpenAiLikeProvider(),
-            new OpenRouterProvider(),
-            new SiliconFlowProvider(),
-            new TokenHubProvider(),
-            new ZhiPuProvider()
-        );
+                new AiHubMixProvider(),
+                new DashScopeProvider(),
+                new DeepSeekProvider(),
+                new DouBaoProvider(),
+                new ErnieProvider(),
+                new GiteeProvider(),
+                new KimiProvider(),
+                new MiMoProvider(),
+                new MiniMaxProvider(),
+                new OpenAiProvider(),
+                new OpenAiLikeProvider(),
+                new OpenRouterProvider(),
+                new SiliconFlowProvider(),
+                new TokenHubProvider(),
+                new ZhiPuProvider());
     }
 }

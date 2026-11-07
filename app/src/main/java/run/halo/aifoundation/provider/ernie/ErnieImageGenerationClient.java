@@ -16,8 +16,7 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 /** Qianfan v2 image generation and URL-based multi-image editing adapter. */
 public final class ErnieImageGenerationClient extends AbstractJsonImageGenerationClient {
 
-    public ErnieImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public ErnieImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
@@ -32,8 +31,7 @@ public final class ErnieImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         validate(request);
         var body = new LinkedHashMap<String, Object>();
         nativeOptions.forEach((key, value) -> {
@@ -48,7 +46,8 @@ public final class ErnieImageGenerationClient extends AbstractJsonImageGeneratio
         body.put("model", options.model());
         body.put("prompt", request.getPrompt());
         if (hasInputImages(request)) {
-            var images = request.getImages().stream().map(image -> image.getUrl()).toList();
+            var images =
+                    request.getImages().stream().map(image -> image.getUrl()).toList();
             body.put("image", images.size() == 1 ? images.getFirst() : images);
         }
         putIfNotNull(body, "n", request.getN());
@@ -59,8 +58,8 @@ public final class ErnieImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "Qianfan");
         var images = new ArrayList<GeneratedFile>();
         for (var item : root.path("data")) {
@@ -72,21 +71,27 @@ public final class ErnieImageGenerationClient extends AbstractJsonImageGeneratio
             putIfHasText(metadata, "revisedPrompt", textOrNull(item.path("revised_prompt")));
             metadata.put("urlExpiresInSeconds", 24 * 60 * 60);
             images.add(GeneratedFile.builder()
-                .url(url)
-                .mediaType("image/png")
-                .metadata(Map.copyOf(metadata))
-                .build());
+                    .url(url)
+                    .mediaType("image/png")
+                    .metadata(Map.copyOf(metadata))
+                    .build());
         }
         var warnings = new ArrayList<ImageGenerationWarning>();
         if (request.getResponseFormat() == ImageResponseFormat.BASE64) {
             warnings.add(ImageGenerationWarning.builder()
-                .code("response-format-unsupported")
-                .message("Qianfan image APIs return temporary URLs; base64 was not requested.")
-                .providerMetadata(Map.of("providerType", "ernie"))
-                .build());
+                    .code("response-format-unsupported")
+                    .message("Qianfan image APIs return temporary URLs; base64 was not requested.")
+                    .providerMetadata(Map.of("providerType", "ernie"))
+                    .build());
         }
-        return result(data, root, List.copyOf(images), tokenUsage(root.path("usage"), images.size()),
-            List.copyOf(warnings), textOrNull(root.path("id")), textOrNull(root.path("model")));
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                tokenUsage(root.path("usage"), images.size()),
+                List.copyOf(warnings),
+                textOrNull(root.path("id")),
+                textOrNull(root.path("model")));
     }
 
     private void validate(GenerateImageRequest request) {
@@ -99,8 +104,7 @@ public final class ErnieImageGenerationClient extends AbstractJsonImageGeneratio
         if (hasInputImages(request)) {
             for (var image : request.getImages()) {
                 if (image == null || !image.isUrl()) {
-                    throw new IllegalArgumentException(
-                        "Qianfan image editing requires provider-accessible image URLs");
+                    throw new IllegalArgumentException("Qianfan image editing requires provider-accessible image URLs");
                 }
             }
         }

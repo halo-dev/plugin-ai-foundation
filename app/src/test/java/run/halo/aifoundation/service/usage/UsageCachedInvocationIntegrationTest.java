@@ -54,8 +54,8 @@ import run.halo.aifoundation.service.observation.UsageUnitKind;
 class UsageCachedInvocationIntegrationTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
-    private static final ModelCallContext MODEL_CONTEXT = new ModelCallContext(
-        ModelType.LANGUAGE, "model", "provider", "openai", "gpt-test");
+    private static final ModelCallContext MODEL_CONTEXT =
+            new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt-test");
 
     @TempDir
     Path temp;
@@ -66,22 +66,31 @@ class UsageCachedInvocationIntegrationTest {
         var subscriptions = new AtomicInteger();
         var wraps = new AtomicInteger();
         var expected = result(10, 5);
-        var source = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
-            () -> Mono.fromSupplier(() -> {
-                subscriptions.incrementAndGet();
-                return expected;
-            }), value -> NormalizedUsage.from(value.getTotalUsage()), ignored -> "gpt-test");
+        var source = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Mono.fromSupplier(() -> {
+                            subscriptions.incrementAndGet();
+                            return expected;
+                        }),
+                        value -> NormalizedUsage.from(value.getTotalUsage()),
+                        ignored -> "gpt-test");
         try (var fixture = new Fixture()) {
-            var publisher = fixture.audit(localModel(source)).generateText(
-                request(cached, wraps));
+            var publisher = fixture.audit(localModel(source)).generateText(request(cached, wraps));
             assertThat(wraps).hasValue(1);
             assertThat(subscriptions).hasValue(0);
-            assertThat(fixture.service.summary(fixture.query).block(TIMEOUT).callCount()).isZero();
+            assertThat(fixture.service.summary(fixture.query).block(TIMEOUT).callCount())
+                    .isZero();
 
             assertThat(publisher.block(TIMEOUT)).isSameAs(expected);
             fixture.awaitCalls(1);
-            var firstId = fixture.service.listCalls(fixture.query, 10, null)
-                .block(TIMEOUT).items().getFirst().id();
+            var firstId = fixture.service
+                    .listCalls(fixture.query, 10, null)
+                    .block(TIMEOUT)
+                    .items()
+                    .getFirst()
+                    .id();
             assertThat(publisher.block(TIMEOUT)).isSameAs(expected);
             fixture.awaitCalls(2);
 
@@ -98,8 +107,7 @@ class UsageCachedInvocationIntegrationTest {
     @Test
     void cachedBuiltInProviderSendsOneHttpRequestAndPersistsFifteenTokens() throws Exception {
         var requests = new AtomicInteger();
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        var server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             try (exchange) {
                 requests.incrementAndGet();
@@ -124,26 +132,42 @@ class UsageCachedInvocationIntegrationTest {
             spec.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
             provider.setSpec(spec);
             var providerType = new OpenAiProvider();
-            var chat = providerType.buildChatModel(provider, "local-test-key",
-                new ProviderModelRef("gpt-test", ModelType.LANGUAGE, AdapterType.OPENAI_CHAT));
-            var runtime = new LanguageModelRuntimeFactory(new LanguageModelRuntimeSupport(),
-                new MediaResourcePolicy(), new ModelCapabilityMatcher(),
-                new LanguageModelRuntimeProperties(), new UsageExecutionObserver());
+            var chat = providerType.buildChatModel(
+                    provider,
+                    "local-test-key",
+                    new ProviderModelRef("gpt-test", ModelType.LANGUAGE, AdapterType.OPENAI_CHAT));
+            var runtime = new LanguageModelRuntimeFactory(
+                    new LanguageModelRuntimeSupport(),
+                    new MediaResourcePolicy(),
+                    new ModelCapabilityMatcher(),
+                    new LanguageModelRuntimeProperties(),
+                    new UsageExecutionObserver());
             var configuration = new LanguageModelRuntimeConfiguration(
-                new ModelRuntimeContext("model", "gpt-test", "provider", "openai",
-                    AdapterType.OPENAI_CHAT, providerType, null, null),
-                providerType.languageModelProviderOptions(AdapterType.OPENAI_CHAT), null);
+                    new ModelRuntimeContext(
+                            "model",
+                            "gpt-test",
+                            "provider",
+                            "openai",
+                            AdapterType.OPENAI_CHAT,
+                            providerType,
+                            null,
+                            null),
+                    providerType.languageModelProviderOptions(AdapterType.OPENAI_CHAT),
+                    null);
             var wraps = new AtomicInteger();
-            var publisher = fixture.audit(runtime.create(chat, configuration))
-                .generateText(request(true, wraps));
+            var publisher = fixture.audit(runtime.create(chat, configuration)).generateText(request(true, wraps));
 
             var first = publisher.block(TIMEOUT);
             assertThat(first).isNotNull();
             assertThat(first.getText()).isEqualTo("answer");
             assertThat(first.getTotalUsage().getTotalTokens()).isEqualTo(15);
             fixture.awaitCalls(1);
-            var firstId = fixture.service.listCalls(fixture.query, 10, null)
-                .block(TIMEOUT).items().getFirst().id();
+            var firstId = fixture.service
+                    .listCalls(fixture.query, 10, null)
+                    .block(TIMEOUT)
+                    .items()
+                    .getFirst()
+                    .id();
             var second = publisher.block(TIMEOUT);
             assertThat(second).isSameAs(first);
             assertThat(second.getTotalUsage().getTotalTokens()).isEqualTo(15);
@@ -165,7 +189,8 @@ class UsageCachedInvocationIntegrationTest {
         var expected = result(10, 5);
         try (var fixture = new Fixture()) {
             var actual = fixture.audit(localModel(Mono.just(expected)))
-                .generateText(request(false, new AtomicInteger())).block(TIMEOUT);
+                    .generateText(request(false, new AtomicInteger()))
+                    .block(TIMEOUT);
             assertThat(actual).isSameAs(expected);
             assertThat(actual.getTotalUsage().getTotalTokens()).isEqualTo(15);
             fixture.awaitCalls(1);
@@ -178,13 +203,18 @@ class UsageCachedInvocationIntegrationTest {
     @Test
     void observedZeroTokensRemainKnownAndFullyCovered() throws Exception {
         var expected = result(0, 0);
-        var source = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
-            () -> Mono.just(expected), value -> NormalizedUsage.from(value.getTotalUsage()),
-            ignored -> "gpt-test");
+        var source = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Mono.just(expected),
+                        value -> NormalizedUsage.from(value.getTotalUsage()),
+                        ignored -> "gpt-test");
         try (var fixture = new Fixture()) {
             assertThat(fixture.audit(localModel(source))
-                .generateText(request(false, new AtomicInteger())).block(TIMEOUT))
-                .isSameAs(expected);
+                            .generateText(request(false, new AtomicInteger()))
+                            .block(TIMEOUT))
+                    .isSameAs(expected);
             fixture.awaitCalls(1);
             assertKnownZero(fixture);
             fixture.reopen();
@@ -197,7 +227,7 @@ class UsageCachedInvocationIntegrationTest {
         var expected = result(10, 5);
         try (var fixture = new Fixture()) {
             var stream = fixture.audit(localModel(Mono.just(expected)))
-                .streamText(GenerateTextRequest.builder().prompt("hello").build());
+                    .streamText(GenerateTextRequest.builder().prompt("hello").build());
             assertThat(stream.textStream().collectList().block(TIMEOUT)).containsExactly("answer");
             fixture.awaitCalls(1);
             assertUnknownCall(fixture);
@@ -221,7 +251,10 @@ class UsageCachedInvocationIntegrationTest {
         assertThat(summary.partialUsageCalls()).isZero();
         assertThat(summary.usageCoverage()).isEqualTo(cached ? 0.5 : 1.0);
         assertThat(summary.complete()).isTrue();
-        var calls = fixture.service.listCalls(fixture.query, 10, null).block(TIMEOUT).items();
+        var calls = fixture.service
+                .listCalls(fixture.query, 10, null)
+                .block(TIMEOUT)
+                .items();
         assertThat(calls).hasSize(2);
         var executionCount = 0;
         for (var call : calls) {
@@ -253,13 +286,20 @@ class UsageCachedInvocationIntegrationTest {
         assertThat(summary.accountedTotalTokens()).isNull();
         assertThat(summary.missingUsageCalls()).isEqualTo(1);
         assertThat(summary.usageCoverage()).isZero();
-        var calls = fixture.service.listCalls(fixture.query, 10, null).block(TIMEOUT).items();
+        var calls = fixture.service
+                .listCalls(fixture.query, 10, null)
+                .block(TIMEOUT)
+                .items();
         assertThat(calls).singleElement().satisfies(call -> {
             assertThat(call.attemptCount()).isZero();
             assertThat(call.usage().quality()).isEqualTo(UsageQuality.MISSING);
             assertThat(call.usage().accountedTotalTokens()).isNull();
-            assertThat(fixture.service.getCall(call.id()).block(TIMEOUT).orElseThrow().executions())
-                .isEmpty();
+            assertThat(fixture.service
+                            .getCall(call.id())
+                            .block(TIMEOUT)
+                            .orElseThrow()
+                            .executions())
+                    .isEmpty();
         });
         assertHealthy(fixture);
     }
@@ -271,16 +311,24 @@ class UsageCachedInvocationIntegrationTest {
         assertThat(summary.accountedTotalTokens()).isZero();
         assertThat(summary.missingUsageCalls()).isZero();
         assertThat(summary.usageCoverage()).isEqualTo(1.0);
-        var calls = fixture.service.listCalls(fixture.query, 10, null).block(TIMEOUT).items();
+        var calls = fixture.service
+                .listCalls(fixture.query, 10, null)
+                .block(TIMEOUT)
+                .items();
         assertThat(calls).singleElement().satisfies(call -> {
             assertThat(call.attemptCount()).isEqualTo(1);
             assertThat(call.usage().accountedTotalTokens()).isZero();
             assertThat(call.usage().quality()).isEqualTo(UsageQuality.REPORTED_COMPONENTS);
-            assertThat(fixture.service.getCall(call.id()).block(TIMEOUT).orElseThrow().executions())
-                .singleElement().satisfies(execution -> {
-                    assertThat(execution.usage().accountedTotalTokens()).isZero();
-                    assertThat(execution.usage().quality()).isEqualTo(UsageQuality.REPORTED_COMPONENTS);
-                });
+            assertThat(fixture.service
+                            .getCall(call.id())
+                            .block(TIMEOUT)
+                            .orElseThrow()
+                            .executions())
+                    .singleElement()
+                    .satisfies(execution -> {
+                        assertThat(execution.usage().accountedTotalTokens()).isZero();
+                        assertThat(execution.usage().quality()).isEqualTo(UsageQuality.REPORTED_COMPONENTS);
+                    });
         });
         assertHealthy(fixture);
     }
@@ -292,22 +340,30 @@ class UsageCachedInvocationIntegrationTest {
     }
 
     private static GenerateTextRequest request(boolean cached, AtomicInteger wraps) {
-        return GenerateTextRequest.builder().prompt("hello").maxRetries(0)
-            .middleware(new LanguageModelMiddleware() {
-                @Override
-                public Mono<GenerateTextResult> wrapGenerate(LanguageModelGenerateContext context,
-                    GenerateTextNext next) {
-                    wraps.incrementAndGet();
-                    var source = next.generate(context.request());
-                    return cached ? source.cache() : source;
-                }
-            }).build();
+        return GenerateTextRequest.builder()
+                .prompt("hello")
+                .maxRetries(0)
+                .middleware(new LanguageModelMiddleware() {
+                    @Override
+                    public Mono<GenerateTextResult> wrapGenerate(
+                            LanguageModelGenerateContext context, GenerateTextNext next) {
+                        wraps.incrementAndGet();
+                        var source = next.generate(context.request());
+                        return cached ? source.cache() : source;
+                    }
+                })
+                .build();
     }
 
     private static GenerateTextResult result(int input, int output) {
-        return GenerateTextResult.builder().text("answer")
-            .totalUsage(LanguageModelUsage.builder().inputTokens(input).outputTokens(output)
-                .totalTokens(input + output).build()).build();
+        return GenerateTextResult.builder()
+                .text("answer")
+                .totalUsage(LanguageModelUsage.builder()
+                        .inputTokens(input)
+                        .outputTokens(output)
+                        .totalTokens(input + output)
+                        .build())
+                .build();
     }
 
     private static LanguageModel localModel(Mono<GenerateTextResult> source) {
@@ -324,8 +380,8 @@ class UsageCachedInvocationIntegrationTest {
 
             @Override
             public StreamTextResult streamText(GenerateTextRequest request) {
-                return new StreamTextResult(Flux.empty(), Flux.just("answer"), Flux.empty(),
-                    Flux.empty(), Mono.empty(), source);
+                return new StreamTextResult(
+                        Flux.empty(), Flux.just("answer"), Flux.empty(), Flux.empty(), Mono.empty(), source);
             }
         };
     }
@@ -333,33 +389,44 @@ class UsageCachedInvocationIntegrationTest {
     private final class Fixture implements AutoCloseable {
         private final UsageDatabasePaths paths = new UsageDatabasePaths(temp);
         private final Clock clock = Clock.fixed(Instant.now(), ZoneOffset.UTC);
-        private final UsageQuery query = new UsageQuery(clock.instant().minusSeconds(1),
-            clock.instant().plusSeconds(1), null, null, null, null, null, null, null, null, null);
+        private final UsageQuery query = new UsageQuery(
+                clock.instant().minusSeconds(1),
+                clock.instant().plusSeconds(1),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         private final CallerPluginResolver resolver = mock(CallerPluginResolver.class);
         private UsageStatisticsService service;
 
         private Fixture() {
-            when(resolver.resolveCurrentCallerSnapshot()).thenReturn(CallerPluginInfo.builder()
-                .pluginName("integration-test").version("1").detectionSource("test").build());
+            when(resolver.resolveCurrentCallerSnapshot())
+                    .thenReturn(CallerPluginInfo.builder()
+                            .pluginName("integration-test")
+                            .version("1")
+                            .detectionSource("test")
+                            .build());
             open();
         }
 
         private void open() {
-            service = new UsageStatisticsService(new SqliteUsageStatisticsStore(paths), resolver,
-                clock);
+            service = new UsageStatisticsService(new SqliteUsageStatisticsStore(paths), resolver, clock);
             service.initialize();
             assertThat(service.health().available()).isTrue();
         }
 
         private LanguageModel audit(LanguageModel delegate) {
-            return new AuditedLanguageModel(delegate, MODEL_CONTEXT,
-                mock(CallerPluginAuditRecorder.class), service);
+            return new AuditedLanguageModel(delegate, MODEL_CONTEXT, mock(CallerPluginAuditRecorder.class), service);
         }
 
         private void awaitCalls(long count) throws InterruptedException {
             var deadline = System.nanoTime() + TIMEOUT.toNanos();
-            while (service.summary(query).block(TIMEOUT).successCount() < count
-                && System.nanoTime() < deadline) {
+            while (service.summary(query).block(TIMEOUT).successCount() < count && System.nanoTime() < deadline) {
                 Thread.sleep(10);
             }
             assertThat(service.summary(query).block(TIMEOUT).successCount()).isEqualTo(count);

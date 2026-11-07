@@ -8,9 +8,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.StandardChatCompl
 /** Ollama's documented OpenAI-compatible Chat Completions adapter. */
 public final class OllamaOpenAiChatModel extends ChatCompletionsModel {
 
-    public OllamaOpenAiChatModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
-        super(options, webClientBuilder,
-            new StandardChatCompletionsProfile("ollama", "ollama-openai-chat"));
+    public OllamaOpenAiChatModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
+        super(options, webClientBuilder, new StandardChatCompletionsProfile("ollama", "ollama-openai-chat"));
     }
 }

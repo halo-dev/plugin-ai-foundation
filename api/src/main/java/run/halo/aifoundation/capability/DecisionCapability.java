@@ -8,8 +8,8 @@ import lombok.NoArgsConstructor;
 import run.halo.aifoundation.decision.DecisionQuestionType;
 
 /**
- * Capabilities of a decision adapter. Null values mean unknown.
- * Output flags indicate supported information, not a guarantee that every response includes it.
+ * Capabilities of a decision adapter. Null values mean unknown. Output flags indicate supported information, not a
+ * guarantee that every response includes it.
  */
 @Data
 @Builder
@@ -27,9 +27,11 @@ public class DecisionCapability {
     private Boolean scoreLegend;
 
     /** Retains the constructor used before optional output capabilities were introduced. */
-    public DecisionCapability(List<DecisionQuestionType> questionTypes, Boolean structuredState,
-        Integer maxChoiceOptions, Integer maxScoreLevels) {
-        this(questionTypes, structuredState, maxChoiceOptions, maxScoreLevels,
-            null, null, null, null, null);
+    public DecisionCapability(
+            List<DecisionQuestionType> questionTypes,
+            Boolean structuredState,
+            Integer maxChoiceOptions,
+            Integer maxScoreLevels) {
+        this(questionTypes, structuredState, maxChoiceOptions, maxScoreLevels, null, null, null, null, null);
     }
 }

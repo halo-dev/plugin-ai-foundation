@@ -5,22 +5,19 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Schema version is stored in ai_statistics_meta.schema_version; no upgrade path exists yet.
- * Before the first release this schema may change in place. After release, schema changes must
- * increment VERSION and add explicit migrations from supported older versions, while keeping
- * fresh-database DDL current. Run migration SQL and its version update in the same transaction;
- * preserve existing data and statistics_epoch, and roll back on failure rather than recreate.
- * Update the store's read-only version gate to recognize supported migration sources, run the
- * migrations on its writer before normal access, then validate the resulting schema. Continue
- * rejecting newer/unknown versions. Cover fresh creation, upgrades with retained data, rollback,
- * reopening, and newer-version rejection in tests.
+ * Schema version is stored in ai_statistics_meta.schema_version; no upgrade path exists yet. Before the first release
+ * this schema may change in place. After release, schema changes must increment VERSION and add explicit migrations
+ * from supported older versions, while keeping fresh-database DDL current. Run migration SQL and its version update in
+ * the same transaction; preserve existing data and statistics_epoch, and roll back on failure rather than recreate.
+ * Update the store's read-only version gate to recognize supported migration sources, run the migrations on its writer
+ * before normal access, then validate the resulting schema. Continue rejecting newer/unknown versions. Cover fresh
+ * creation, upgrades with retained data, rollback, reopening, and newer-version rejection in tests.
  */
 final class UsageSqliteSchema {
 
     static final int VERSION = 1;
 
-    private UsageSqliteSchema() {
-    }
+    private UsageSqliteSchema() {}
 
     // Fresh databases only; changing this DDL does not upgrade existing databases.
     static void initialize(Connection connection) throws SQLException {
@@ -98,8 +95,7 @@ final class UsageSqliteSchema {
               UNIQUE(call_id, unit_kind, unit_index, attempt_index)
             ) STRICT
             """);
-        statement.execute(
-            "CREATE INDEX idx_calls_started ON ai_calls(started_at_ms DESC, id DESC)");
+        statement.execute("CREATE INDEX idx_calls_started ON ai_calls(started_at_ms DESC, id DESC)");
         statement.execute("""
             CREATE INDEX idx_calls_caller_started
             ON ai_calls(caller_plugin_name, started_at_ms DESC, id DESC)
@@ -128,8 +124,8 @@ final class UsageSqliteSchema {
 
     static void validateRecognized(Connection connection) throws SQLException {
         try (var statement = connection.prepareStatement(
-            "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'");
-            var rows = statement.executeQuery()) {
+                        "SELECT value FROM ai_statistics_meta WHERE key = 'schema_version'");
+                var rows = statement.executeQuery()) {
             if (!rows.next()) {
                 throw new SQLException("Missing statistics schema metadata");
             }
@@ -138,13 +134,13 @@ final class UsageSqliteSchema {
             }
         }
         try (var statement = connection.createStatement();
-            var rows = statement.executeQuery("SELECT id FROM ai_statistics_health WHERE id = 1")) {
+                var rows = statement.executeQuery("SELECT id FROM ai_statistics_health WHERE id = 1")) {
             if (!rows.next()) {
                 throw new SQLException("SQLite statistics health row is missing");
             }
         }
         try (var statement = connection.createStatement();
-            var rows = statement.executeQuery("PRAGMA quick_check")) {
+                var rows = statement.executeQuery("PRAGMA quick_check")) {
             if (!rows.next() || !"ok".equalsIgnoreCase(rows.getString(1)) || rows.next()) {
                 throw new UsageDatabaseIntegrityException("SQLite statistics quick_check failed");
             }

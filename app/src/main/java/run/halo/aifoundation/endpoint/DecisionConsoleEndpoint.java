@@ -31,23 +31,28 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class DecisionConsoleEndpoint implements CustomEndpoint {
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder()
-        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-        .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .build();
     private final AiModelService modelService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
-        return route().POST("models/{name}/test-decision", this::testDecision,
-            builder -> builder.operationId("TestModelDecision")
-                .description("Evaluate typed questions against a shared text or JSON state.")
-                .tag("console.api.aifoundation.halo.run/v1alpha1/Model")
-                .parameter(parameterBuilder().name("name").in(ParameterIn.PATH)
-                    .description("Model name (AiModel.metadata.name)")
-                    .implementation(String.class).required(true))
-                .requestBody(requestBodyBuilder().required(true)
-                    .implementation(TestDecisionRequest.class))
-                .response(responseBuilder().implementation(DecisionResponse.class)))
-            .build();
+        return route().POST(
+                        "models/{name}/test-decision",
+                        this::testDecision,
+                        builder -> builder.operationId("TestModelDecision")
+                                .description("Evaluate typed questions against a shared text or JSON state.")
+                                .tag("console.api.aifoundation.halo.run/v1alpha1/Model")
+                                .parameter(parameterBuilder()
+                                        .name("name")
+                                        .in(ParameterIn.PATH)
+                                        .description("Model name (AiModel.metadata.name)")
+                                        .implementation(String.class)
+                                        .required(true))
+                                .requestBody(
+                                        requestBodyBuilder().required(true).implementation(TestDecisionRequest.class))
+                                .response(responseBuilder().implementation(DecisionResponse.class)))
+                .build();
     }
 
     @Override
@@ -57,36 +62,44 @@ public class DecisionConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> testDecision(ServerRequest request) {
         return request.bodyToMono(TestDecisionRequest.class)
-            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Decision request is required")))
-            .flatMap(body -> {
-                var input = DecisionRequest.builder().state(parseState(body))
-                    .questions(body.getQuestions()).metadata(Map.of("source", "console-test"))
-                    .build();
-                return Mono.fromRunnable(() -> DecisionValidation.request(input))
-                    .then(Mono.defer(() -> modelService.decisionModel(request.pathVariable("name"))))
-                    .flatMap(model -> model.decide(input))
-                    .onErrorMap(IllegalArgumentException.class,
-                        error -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            error.getMessage(), error));
-            })
-            .flatMap(response -> ServerResponse.ok().bodyValue(response));
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Decision request is required")))
+                .flatMap(body -> {
+                    var input = DecisionRequest.builder()
+                            .state(parseState(body))
+                            .questions(body.getQuestions())
+                            .metadata(Map.of("source", "console-test"))
+                            .build();
+                    return Mono.fromRunnable(() -> DecisionValidation.request(input))
+                            .then(Mono.defer(() -> modelService.decisionModel(request.pathVariable("name"))))
+                            .flatMap(model -> model.decide(input))
+                            .onErrorMap(
+                                    IllegalArgumentException.class,
+                                    error -> new ResponseStatusException(
+                                            HttpStatus.BAD_REQUEST, error.getMessage(), error));
+                })
+                .flatMap(response -> ServerResponse.ok().bodyValue(response));
     }
 
     @Data
     public static class TestDecisionRequest {
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-            description = "Text to evaluate, or serialized JSON when stateFormat is JSON")
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Text to evaluate, or serialized JSON when stateFormat is JSON")
         private String state;
+
         @Schema(description = "Input format; defaults to TEXT")
         private StateFormat stateFormat = StateFormat.TEXT;
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-            description = "Independent questions keyed by caller-selected identifiers")
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Independent questions keyed by caller-selected identifiers")
         private Map<String, DecisionQuestion> questions;
     }
 
     public enum StateFormat {
-        TEXT, JSON
+        TEXT,
+        JSON
     }
 
     private static Object parseState(TestDecisionRequest request) {

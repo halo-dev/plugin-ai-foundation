@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import org.junit.jupiter.api.Test;
 
 class EmbeddingModelConvenienceTest {
 
@@ -16,8 +16,8 @@ class EmbeddingModelConvenienceTest {
         var model = new FakeEmbeddingModel(captured);
 
         StepVerifier.create(model.embedValue("Halo"))
-            .assertNext(vector -> assertThat(vector).containsExactly(1f, 2f))
-            .verifyComplete();
+                .assertNext(vector -> assertThat(vector).containsExactly(1f, 2f))
+                .verifyComplete();
 
         assertThat(captured.get()).containsExactly("Halo");
     }
@@ -28,12 +28,12 @@ class EmbeddingModelConvenienceTest {
         var model = new FakeEmbeddingModel(captured);
 
         StepVerifier.create(model.embedValues(List.of("one", "two")))
-            .assertNext(vectors -> {
-                assertThat(vectors).hasSize(2);
-                assertThat(vectors.get(0)).containsExactly(1f, 2f);
-                assertThat(vectors.get(1)).containsExactly(3f, 4f);
-            })
-            .verifyComplete();
+                .assertNext(vectors -> {
+                    assertThat(vectors).hasSize(2);
+                    assertThat(vectors.get(0)).containsExactly(1f, 2f);
+                    assertThat(vectors.get(1)).containsExactly(3f, 4f);
+                })
+                .verifyComplete();
 
         assertThat(captured.get()).containsExactly("one", "two");
     }
@@ -50,8 +50,8 @@ class EmbeddingModelConvenienceTest {
         public Mono<EmbeddingResponse> embed(List<String> inputs) {
             captured.set(inputs);
             return Mono.just(EmbeddingResponse.builder()
-                .embeddings(List.of(new float[] {1f, 2f}, new float[] {3f, 4f}))
-                .build());
+                    .embeddings(List.of(new float[] {1f, 2f}, new float[] {3f, 4f}))
+                    .build());
         }
 
         @Override

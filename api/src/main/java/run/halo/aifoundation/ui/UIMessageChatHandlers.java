@@ -7,14 +7,14 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
-import run.halo.aifoundation.chat.StreamTextResult;
-import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
+import run.halo.aifoundation.chat.middleware.LanguageModelMiddlewares;
 
 /**
  * Framework-neutral helpers for streaming chat responses from persisted UI messages.
  *
  * <p>Example:
+ *
  * <pre>{@code
  * UIMessageChatResult<MyMetadata> result = UIMessageChatHandlers.streamText(options -> options
  *     .model(languageModel)
@@ -28,71 +28,66 @@ import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
  */
 public final class UIMessageChatHandlers {
 
-    private UIMessageChatHandlers() {
-    }
+    private UIMessageChatHandlers() {}
 
     /**
      * Streams a chat response from UI messages with full configuration.
      *
      * <p>The handler validates UI messages, converts them to model messages, invokes
-     * {@link LanguageModel#streamText(GenerateTextRequest)}, maps the model stream to UI
-     * chunks, and exposes the final aggregated assistant message through
-     * {@link UIMessageChatResult#finish()}.
+     * {@link LanguageModel#streamText(GenerateTextRequest)}, maps the model stream to UI chunks, and exposes the final
+     * aggregated assistant message through {@link UIMessageChatResult#finish()}.
      *
      * @param configure chat option customizer
      * @param <M> message metadata type
      * @return chat stream result
      */
-    public static <M> UIMessageChatResult<M> streamText(
-        Consumer<UIMessageChatOptions<M>> configure) {
+    public static <M> UIMessageChatResult<M> streamText(Consumer<UIMessageChatOptions<M>> configure) {
         Objects.requireNonNull(configure, "configure must not be null");
         var options = new UIMessageChatOptions<M>();
         configure.accept(options);
         requireOptions(options);
         var messages = effectiveMessages(options);
 
-        var validation = UIMessageValidators.validate(messages,
-            options.validationCustomizer());
+        var validation = UIMessageValidators.validate(messages, options.validationCustomizer());
         var validationResult = new UIMessageValidationResult<>(validation, List.of());
         var continuationMessage = continuationMessage(options, validation);
-        var conversion = UIMessageConverters.convertToModelMessages(validation,
-            effectiveConversionCustomizer(options));
+        var conversion = UIMessageConverters.convertToModelMessages(validation, effectiveConversionCustomizer(options));
         if (conversion.messages().isEmpty()) {
             throw new IllegalArgumentException("UI messages produced no model messages");
         }
 
-        var modelResult = LanguageModelMiddlewares.defer(finalRequest(baseRequest(options),
-            conversion, options, validation)
-            .map(options.model()::streamText)
-            .cache());
+        var modelResult =
+                LanguageModelMiddlewares.defer(finalRequest(baseRequest(options), conversion, options, validation)
+                        .map(options.model()::streamText)
+                        .cache());
         var finishSink = Sinks.<UIMessageStreamFinish<M>>one();
         var finish = finishSink.asMono().cache();
         var stream = UIMessageStreams.<M>createWithOptions(streamOptions -> {
             streamOptions
-                .originalMessages(validation)
-                .message(continuationMessage)
-                .generateMessageId(options.messageIdGenerator())
-                .metadataSupplier(options.metadataSupplier())
-                .onError(options.errorHandler())
-                .onReadError(options.readErrorHandler())
-                .terminateOnError(options.terminateOnError())
-                .onFinish(value -> {
-                    try {
-                        options.finishHandler().accept(value);
-                        finishSink.tryEmitValue(value);
-                    } catch (Throwable error) {
-                        finishSink.tryEmitError(error);
-                        throw error;
-                    }
-                })
-                .execute(writer -> writer.merge(modelResult.toUIMessageStream()));
+                    .originalMessages(validation)
+                    .message(continuationMessage)
+                    .generateMessageId(options.messageIdGenerator())
+                    .metadataSupplier(options.metadataSupplier())
+                    .onError(options.errorHandler())
+                    .onReadError(options.readErrorHandler())
+                    .terminateOnError(options.terminateOnError())
+                    .onFinish(value -> {
+                        try {
+                            options.finishHandler().accept(value);
+                            finishSink.tryEmitValue(value);
+                        } catch (Throwable error) {
+                            finishSink.tryEmitError(error);
+                            throw error;
+                        }
+                    })
+                    .execute(writer -> writer.merge(modelResult.toUIMessageStream()));
             if (options.cancellationToken() != null) {
                 streamOptions.cancellationToken(options.cancellationToken());
             }
         });
         var response = options.serializer() != null
-            ? new UIMessageStreamResponse(stream, options.serializer())
-            : new UIMessageStreamResponse(stream);
+                ? new UIMessageStreamResponse(stream, options.serializer())
+                : new UIMessageStreamResponse(stream);
         return new UIMessageChatResult<>(stream, response, validationResult, conversion, finish);
     }
 
@@ -104,10 +99,8 @@ public final class UIMessageChatHandlers {
      * @param <M> message metadata type
      * @return chat stream result
      */
-    public static <M> UIMessageChatResult<M> streamText(LanguageModel model,
-        UIMessageChatRequest<M> chatRequest) {
-        return streamText(model, chatRequest, options -> {
-        });
+    public static <M> UIMessageChatResult<M> streamText(LanguageModel model, UIMessageChatRequest<M> chatRequest) {
+        return streamText(model, chatRequest, options -> {});
     }
 
     /**
@@ -119,8 +112,8 @@ public final class UIMessageChatHandlers {
      * @param <M> message metadata type
      * @return chat stream result
      */
-    public static <M> UIMessageChatResult<M> streamText(LanguageModel model,
-        UIMessageChatRequest<M> chatRequest, Consumer<UIMessageChatOptions<M>> configure) {
+    public static <M> UIMessageChatResult<M> streamText(
+            LanguageModel model, UIMessageChatRequest<M> chatRequest, Consumer<UIMessageChatOptions<M>> configure) {
         Objects.requireNonNull(configure, "configure must not be null");
         return streamText(options -> {
             options.model(model).chatRequest(chatRequest);
@@ -151,11 +144,9 @@ public final class UIMessageChatHandlers {
         };
     }
 
-    private static <M> List<UIMessage<M>> regenerateMessages(
-        UIMessageChatRequest<M> chatRequest) {
+    private static <M> List<UIMessage<M>> regenerateMessages(UIMessageChatRequest<M> chatRequest) {
         if (chatRequest.messageId() == null || chatRequest.messageId().isBlank()) {
-            throw new IllegalArgumentException(
-                "messageId must be set for regenerate-message requests");
+            throw new IllegalArgumentException("messageId must be set for regenerate-message requests");
         }
         var messages = chatRequest.messages();
         for (var index = 0; index < messages.size(); index++) {
@@ -164,16 +155,14 @@ public final class UIMessageChatHandlers {
                 continue;
             }
             if (message.role() != UIMessageRole.ASSISTANT) {
-                throw new IllegalArgumentException(
-                    "regenerate-message target must be an assistant message");
+                throw new IllegalArgumentException("regenerate-message target must be an assistant message");
             }
             return List.copyOf(messages.subList(0, index));
         }
         throw new IllegalArgumentException("regenerate-message target message not found");
     }
 
-    private static <M> UIMessage<M> continuationMessage(UIMessageChatOptions<M> options,
-        List<UIMessage<M>> messages) {
+    private static <M> UIMessage<M> continuationMessage(UIMessageChatOptions<M> options, List<UIMessage<M>> messages) {
         if (options.messageConfigured()) {
             return options.message();
         }
@@ -239,30 +228,28 @@ public final class UIMessageChatHandlers {
         options.requestCustomizer().accept(builder);
         var request = builder.build();
         if (request.getPrompt() != null && !request.getPrompt().isBlank()) {
-            throw new IllegalArgumentException(
-                "UI message chat request customizer must not set prompt");
+            throw new IllegalArgumentException("UI message chat request customizer must not set prompt");
         }
         if (request.getMessages() != null && !request.getMessages().isEmpty()) {
-            throw new IllegalArgumentException(
-                "UI message chat request customizer must not set messages");
+            throw new IllegalArgumentException("UI message chat request customizer must not set messages");
         }
         if (request.getCancellationToken() != null) {
-            throw new IllegalArgumentException(
-                "UI message chat request customizer must not set cancellationToken");
+            throw new IllegalArgumentException("UI message chat request customizer must not set cancellationToken");
         }
         return request;
     }
 
     private static <M> Consumer<UIMessageConversionOptions<M>> effectiveConversionCustomizer(
-        UIMessageChatOptions<M> options) {
+            UIMessageChatOptions<M> options) {
         return conversion -> {
             options.conversionCustomizer().accept(conversion);
             if (conversion.reasoningConversion() != UIReasoningConversion.AUTO) {
                 return;
             }
-            conversion.reasoningConversion(reasoningHistorySupported(options.model())
-                ? UIReasoningConversion.PRESERVE_PROVIDER_STATE
-                : UIReasoningConversion.DROP);
+            conversion.reasoningConversion(
+                    reasoningHistorySupported(options.model())
+                            ? UIReasoningConversion.PRESERVE_PROVIDER_STATE
+                            : UIReasoningConversion.DROP);
         };
     }
 
@@ -271,55 +258,56 @@ public final class UIMessageChatHandlers {
         return capabilities != null && capabilities.reasoningHistorySupported();
     }
 
-    private static <M> Mono<GenerateTextRequest> finalRequest(GenerateTextRequest source,
-        UIMessageConversionResult conversion, UIMessageChatOptions<M> options,
-        List<UIMessage<M>> messages) {
+    private static <M> Mono<GenerateTextRequest> finalRequest(
+            GenerateTextRequest source,
+            UIMessageConversionResult conversion,
+            UIMessageChatOptions<M> options,
+            List<UIMessage<M>> messages) {
         var builder = GenerateTextRequest.builder()
-            .system(source.getSystem())
-            .messages(conversion.messages())
-            .maxOutputTokens(source.getMaxOutputTokens())
-            .temperature(source.getTemperature())
-            .topP(source.getTopP())
-            .topK(source.getTopK())
-            .minP(source.getMinP())
-            .presencePenalty(source.getPresencePenalty())
-            .frequencyPenalty(source.getFrequencyPenalty())
-            .repetitionPenalty(source.getRepetitionPenalty())
-            .logprobs(source.getLogprobs())
-            .topLogprobs(source.getTopLogprobs())
-            .parallelToolCalls(source.getParallelToolCalls())
-            .stopSequences(source.getStopSequences())
-            .seed(source.getSeed())
-            .maxRetries(source.getMaxRetries())
-            .reasoning(source.getReasoning())
-            .headers(source.getHeaders())
-            .metadata(source.getMetadata())
-            .context(source.getContext())
-            .output(source.getOutput())
-            .tools(source.getTools())
-            .toolChoice(source.getToolChoice())
-            .stopWhen(source.getStopWhen())
-            .prepareStep(source.getPrepareStep())
-            .lifecycle(source.getLifecycle())
-            .toolCallRepair(source.getToolCallRepair())
-            .cancellationToken(options.cancellationToken())
-            .timeouts(source.getTimeouts());
+                .system(source.getSystem())
+                .messages(conversion.messages())
+                .maxOutputTokens(source.getMaxOutputTokens())
+                .temperature(source.getTemperature())
+                .topP(source.getTopP())
+                .topK(source.getTopK())
+                .minP(source.getMinP())
+                .presencePenalty(source.getPresencePenalty())
+                .frequencyPenalty(source.getFrequencyPenalty())
+                .repetitionPenalty(source.getRepetitionPenalty())
+                .logprobs(source.getLogprobs())
+                .topLogprobs(source.getTopLogprobs())
+                .parallelToolCalls(source.getParallelToolCalls())
+                .stopSequences(source.getStopSequences())
+                .seed(source.getSeed())
+                .maxRetries(source.getMaxRetries())
+                .reasoning(source.getReasoning())
+                .headers(source.getHeaders())
+                .metadata(source.getMetadata())
+                .context(source.getContext())
+                .output(source.getOutput())
+                .tools(source.getTools())
+                .toolChoice(source.getToolChoice())
+                .stopWhen(source.getStopWhen())
+                .prepareStep(source.getPrepareStep())
+                .lifecycle(source.getLifecycle())
+                .toolCallRepair(source.getToolCallRepair())
+                .cancellationToken(options.cancellationToken())
+                .timeouts(source.getTimeouts());
         var middleware = combinedMiddleware(source, options);
         if (!middleware.isEmpty()) {
             builder.middleware(middleware.toArray(LanguageModelMiddleware[]::new));
         }
         var context = UIMessageChatPrepareContext.<M>builder()
-            .chatRequest(options.chatRequest())
-            .messages(messages)
-            .conversion(conversion)
-            .requestBuilder(builder)
-            .build();
-        return options.prepareHandler().prepare(context)
-            .then(Mono.fromSupplier(builder::build));
+                .chatRequest(options.chatRequest())
+                .messages(messages)
+                .conversion(conversion)
+                .requestBuilder(builder)
+                .build();
+        return options.prepareHandler().prepare(context).then(Mono.fromSupplier(builder::build));
     }
 
-    private static <M> List<LanguageModelMiddleware> combinedMiddleware(GenerateTextRequest source,
-        UIMessageChatOptions<M> options) {
+    private static <M> List<LanguageModelMiddleware> combinedMiddleware(
+            GenerateTextRequest source, UIMessageChatOptions<M> options) {
         var middleware = new java.util.ArrayList<LanguageModelMiddleware>();
         if (source.getMiddleware() != null) {
             middleware.addAll(source.getMiddleware());

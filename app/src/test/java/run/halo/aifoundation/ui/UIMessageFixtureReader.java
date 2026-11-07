@@ -13,8 +13,7 @@ final class UIMessageFixtureReader {
     private static final Path FIXTURE_DIR = findFixtureDir();
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    private UIMessageFixtureReader() {
-    }
+    private UIMessageFixtureReader() {}
 
     static UIMessageFixture read(String name) {
         try {
@@ -26,38 +25,35 @@ final class UIMessageFixtureReader {
     }
 
     record UIMessageFixture(
-        String name,
-        String description,
-        List<Map<String, Object>> chunks,
-        Map<String, Object> expectedMessage,
-        List<Map<String, Object>> expectedTransientEvents,
-        Map<String, Object> expectedTerminal
-    ) {
+            String name,
+            String description,
+            List<Map<String, Object>> chunks,
+            Map<String, Object> expectedMessage,
+            List<Map<String, Object>> expectedTransientEvents,
+            Map<String, Object> expectedTerminal) {
 
         UIMessageFixture {
             chunks = List.copyOf(chunks == null ? List.of() : chunks);
             expectedMessage = expectedMessage == null ? Map.of() : Map.copyOf(expectedMessage);
             expectedTransientEvents =
-                List.copyOf(expectedTransientEvents == null ? List.of() : expectedTransientEvents);
+                    List.copyOf(expectedTransientEvents == null ? List.of() : expectedTransientEvents);
             expectedTerminal = expectedTerminal == null ? Map.of() : Map.copyOf(expectedTerminal);
         }
     }
 
     static List<Map<String, Object>> fixtureIndex() {
         try (var paths = Files.list(FIXTURE_DIR)) {
-            return paths
-                .filter(path -> path.getFileName().toString().endsWith(".json"))
-                .sorted()
-                .map(path -> {
-                    try {
-                        return MAPPER.readValue(Files.readString(path),
-                            new TypeReference<Map<String, Object>>() {
-                            });
-                    } catch (IOException e) {
-                        throw new IllegalStateException("Failed to read fixture " + path, e);
-                    }
-                })
-                .toList();
+            return paths.filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .sorted()
+                    .map(path -> {
+                        try {
+                            return MAPPER.readValue(
+                                    Files.readString(path), new TypeReference<Map<String, Object>>() {});
+                        } catch (IOException e) {
+                            throw new IllegalStateException("Failed to read fixture " + path, e);
+                        }
+                    })
+                    .toList();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to list UI message fixtures", e);
         }

@@ -8,23 +8,21 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 
 final class ErnieEmbeddingOptionsFactory {
 
-    private ErnieEmbeddingOptionsFactory() {
-    }
+    private ErnieEmbeddingOptionsFactory() {}
 
-    static ErnieEmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    static ErnieEmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return ErnieEmbeddingOptions.builder().build();
         }
         var extraBody = new LinkedHashMap<String, Object>();
         extraBody.putAll(providerOptions.nativeOptions());
         return ErnieEmbeddingOptions.builder()
-            .dimensions(request.getDimensions())
-            .instructions(request.getInstructions())
-            .includeSparseEmbedding(Boolean.TRUE.equals(request.getIncludeSparseEmbedding()))
-            .includeModalityEmbeddings(
-                Boolean.TRUE.equals(request.getIncludeModalityEmbeddings()))
-            .extraBody(extraBody)
-            .build();
+                .dimensions(request.getDimensions())
+                .instructions(request.getInstructions())
+                .includeSparseEmbedding(Boolean.TRUE.equals(request.getIncludeSparseEmbedding()))
+                .includeModalityEmbeddings(Boolean.TRUE.equals(request.getIncludeModalityEmbeddings()))
+                .extraBody(extraBody)
+                .build();
     }
 }

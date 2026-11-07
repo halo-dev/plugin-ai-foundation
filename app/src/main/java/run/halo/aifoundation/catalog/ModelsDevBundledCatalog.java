@@ -17,12 +17,11 @@ final class ModelsDevBundledCatalog {
     private static final int MAX_METADATA_BYTES = 16 * 1024;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private ModelsDevBundledCatalog() {
-    }
+    private ModelsDevBundledCatalog() {}
 
     static ModelsDevCatalogService.Snapshot load() {
         try (var catalog = ModelsDevBundledCatalog.class.getResourceAsStream(CATALOG_RESOURCE);
-             var metadata = ModelsDevBundledCatalog.class.getResourceAsStream(METADATA_RESOURCE)) {
+                var metadata = ModelsDevBundledCatalog.class.getResourceAsStream(METADATA_RESOURCE)) {
             if (catalog == null && metadata == null) {
                 return null;
             }
@@ -35,18 +34,19 @@ final class ModelsDevBundledCatalog {
         }
     }
 
-    static ModelsDevCatalogService.Snapshot read(InputStream compressed, InputStream metadata)
-        throws IOException {
+    static ModelsDevCatalogService.Snapshot read(InputStream compressed, InputStream metadata) throws IOException {
         var metadataBytes = metadata.readNBytes(MAX_METADATA_BYTES + 1);
         if (metadataBytes.length > MAX_METADATA_BYTES) {
             throw new IOException("Bundled models.dev metadata too large");
         }
         var manifest = MAPPER.readTree(metadataBytes);
-        if (manifest == null || !manifest.isObject()
-            || !manifest.path("schemaVersion").isIntegralNumber()
-            || !manifest.path("schemaVersion").canConvertToInt()
-            || manifest.path("schemaVersion").intValue() != 2
-            || !ModelsDevCatalogService.SOURCE_URL.equals(manifest.path("sourceUrl").asText())) {
+        if (manifest == null
+                || !manifest.isObject()
+                || !manifest.path("schemaVersion").isIntegralNumber()
+                || !manifest.path("schemaVersion").canConvertToInt()
+                || manifest.path("schemaVersion").intValue() != 2
+                || !ModelsDevCatalogService.SOURCE_URL.equals(
+                        manifest.path("sourceUrl").asText())) {
             throw new IOException("Unsupported bundled models.dev metadata");
         }
         var timestamp = manifest.path("fetchedAt").asText();
@@ -73,8 +73,8 @@ final class ModelsDevBundledCatalog {
         if (!expectedHash.equalsIgnoreCase(sha256(json))) {
             throw new IOException("Bundled models.dev digest mismatch");
         }
-        var catalog = ModelsDevCatalog.parse(MAPPER.readTree(json))
-            .retainProviders(ModelsDevProviderIdentity.catalogIds());
+        var catalog =
+                ModelsDevCatalog.parse(MAPPER.readTree(json)).retainProviders(ModelsDevProviderIdentity.catalogIds());
         return new ModelsDevCatalogService.Snapshot(catalog, fetchedAt, null);
     }
 

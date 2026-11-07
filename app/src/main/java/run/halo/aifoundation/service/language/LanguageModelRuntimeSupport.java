@@ -17,8 +17,9 @@ public class LanguageModelRuntimeSupport {
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     public void checkCancellation(GenerateTextRequest request) {
-        if (request != null && request.getCancellationToken() != null
-            && request.getCancellationToken().isCancellationRequested()) {
+        if (request != null
+                && request.getCancellationToken() != null
+                && request.getCancellationToken().isCancellationRequested()) {
             throw new AiGenerationCancelledException("Generation was cancelled");
         }
     }
@@ -29,8 +30,7 @@ public class LanguageModelRuntimeSupport {
             return mono;
         }
         return mono.timeout(timeout)
-            .onErrorMap(TimeoutException.class,
-                error -> new AiGenerationTimeoutException("tool", timeout, error));
+                .onErrorMap(TimeoutException.class, error -> new AiGenerationTimeoutException("tool", timeout, error));
     }
 
     public <T> Mono<T> withStepTimeout(Mono<T> mono, GenerateTextRequest request) {
@@ -39,8 +39,7 @@ public class LanguageModelRuntimeSupport {
             return mono;
         }
         return mono.timeout(timeout)
-            .onErrorMap(TimeoutException.class,
-                error -> new AiGenerationTimeoutException("step", timeout, error));
+                .onErrorMap(TimeoutException.class, error -> new AiGenerationTimeoutException("step", timeout, error));
     }
 
     public String writeJson(Object value) {
@@ -53,13 +52,13 @@ public class LanguageModelRuntimeSupport {
 
     private Duration toolTimeout(GenerateTextRequest request) {
         return request != null && request.getTimeouts() != null
-            ? request.getTimeouts().getToolTimeout()
-            : null;
+                ? request.getTimeouts().getToolTimeout()
+                : null;
     }
 
     private Duration stepTimeout(GenerateTextRequest request) {
         return request != null && request.getTimeouts() != null
-            ? request.getTimeouts().getStepTimeout()
-            : null;
+                ? request.getTimeouts().getStepTimeout()
+                : null;
     }
 }

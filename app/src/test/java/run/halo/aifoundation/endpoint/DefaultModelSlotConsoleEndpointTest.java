@@ -34,66 +34,72 @@ class DefaultModelSlotConsoleEndpointTest {
         var defaultModelSlotStore = new DefaultModelSlotStore(client, pluginContext);
         var endpoint = new DefaultModelSlotConsoleEndpoint(client, defaultModelSlotStore);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
-            .configureClient()
-            .build();
+                .configureClient()
+                .build();
     }
 
     @Test
     void getDefaultModelSlots_returnsEmptySingletonWhenMissing() {
         when(client.fetch(ConfigMap.class, "ai-foundation-configmap")).thenReturn(Mono.empty());
 
-        webTestClient.get().uri("/default-model-slots")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(DefaultModelSlots.class)
-            .consumeWith(response -> assertThat(response.getResponseBody().getLanguageModelName())
-                .isNull());
+        webTestClient
+                .get()
+                .uri("/default-model-slots")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(DefaultModelSlots.class)
+                .consumeWith(response -> assertThat(response.getResponseBody().getLanguageModelName())
+                        .isNull());
     }
 
     @Test
     void getDefaultModelSlots_readsConfigMapPayload() {
         var configMap = new ConfigMap();
-        configMap.putDataItem(DefaultModelSlots.GROUP,
-            "{\"languageModelName\":\"gpt-4\",\"embeddingModelName\":\"embedding\"}");
+        configMap.putDataItem(
+                DefaultModelSlots.GROUP, "{\"languageModelName\":\"gpt-4\",\"embeddingModelName\":\"embedding\"}");
         when(client.fetch(ConfigMap.class, "ai-foundation-configmap")).thenReturn(Mono.just(configMap));
 
-        webTestClient.get().uri("/default-model-slots")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(DefaultModelSlots.class)
-            .consumeWith(response -> {
-                assertThat(response.getResponseBody().getLanguageModelName()).isEqualTo("gpt-4");
-                assertThat(response.getResponseBody().getEmbeddingModelName()).isEqualTo("embedding");
-            });
+        webTestClient
+                .get()
+                .uri("/default-model-slots")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(DefaultModelSlots.class)
+                .consumeWith(response -> {
+                    assertThat(response.getResponseBody().getLanguageModelName())
+                            .isEqualTo("gpt-4");
+                    assertThat(response.getResponseBody().getEmbeddingModelName())
+                            .isEqualTo("embedding");
+                });
     }
 
     @Test
     void updateDefaultModelSlots_acceptsEnabledMatchingModel() {
         var slots = slots("gpt-4", null);
-        when(client.fetch(AiModel.class, "gpt-4"))
-            .thenReturn(Mono.just(model("gpt-4", ModelType.LANGUAGE, true)));
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider(true)));
-        when(client.fetch(ConfigMap.class, "ai-foundation-configmap"))
-            .thenReturn(Mono.empty());
-        when(client.create(any(ConfigMap.class)))
-            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(model("gpt-4", ModelType.LANGUAGE, true)));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider(true)));
+        when(client.fetch(ConfigMap.class, "ai-foundation-configmap")).thenReturn(Mono.empty());
+        when(client.create(any(ConfigMap.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.put().uri("/default-model-slots")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(slots)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(DefaultModelSlots.class)
-            .consumeWith(response -> assertThat(response.getResponseBody()
-                .getLanguageModelName()).isEqualTo("gpt-4"));
+        webTestClient
+                .put()
+                .uri("/default-model-slots")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(slots)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(DefaultModelSlots.class)
+                .consumeWith(response -> assertThat(response.getResponseBody().getLanguageModelName())
+                        .isEqualTo("gpt-4"));
 
         var captor = ArgumentCaptor.forClass(ConfigMap.class);
         verify(client).create(captor.capture());
-        assertThat(captor.getValue().getData())
-            .containsKey(DefaultModelSlots.GROUP);
+        assertThat(captor.getValue().getData()).containsKey(DefaultModelSlots.GROUP);
         assertThat(captor.getValue().getData().get(DefaultModelSlots.GROUP))
-            .contains("\"languageModelName\":\"gpt-4\"");
+                .contains("\"languageModelName\":\"gpt-4\"");
     }
 
     @Test
@@ -101,52 +107,62 @@ class DefaultModelSlotConsoleEndpointTest {
         var slots = slots("missing", null);
         when(client.fetch(AiModel.class, "missing")).thenReturn(Mono.empty());
 
-        webTestClient.put().uri("/default-model-slots")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(slots)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .put()
+                .uri("/default-model-slots")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(slots)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void updateDefaultModelSlots_rejectsDisabledProvider() {
         var slots = slots("gpt-4", null);
-        when(client.fetch(AiModel.class, "gpt-4"))
-            .thenReturn(Mono.just(model("gpt-4", ModelType.LANGUAGE, true)));
-        when(client.fetch(AiProvider.class, "openai-prod"))
-            .thenReturn(Mono.just(provider(false)));
+        when(client.fetch(AiModel.class, "gpt-4")).thenReturn(Mono.just(model("gpt-4", ModelType.LANGUAGE, true)));
+        when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider(false)));
 
-        webTestClient.put().uri("/default-model-slots")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(slots)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .put()
+                .uri("/default-model-slots")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(slots)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void updateDefaultModelSlots_rejectsDisabledModel() {
         var slots = slots("disabled", null);
         when(client.fetch(AiModel.class, "disabled"))
-            .thenReturn(Mono.just(model("disabled", ModelType.LANGUAGE, false)));
+                .thenReturn(Mono.just(model("disabled", ModelType.LANGUAGE, false)));
 
-        webTestClient.put().uri("/default-model-slots")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(slots)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .put()
+                .uri("/default-model-slots")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(slots)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void updateDefaultModelSlots_rejectsWrongModelType() {
         var slots = slots("embedding", null);
         when(client.fetch(AiModel.class, "embedding"))
-            .thenReturn(Mono.just(model("embedding", ModelType.EMBEDDING, true)));
+                .thenReturn(Mono.just(model("embedding", ModelType.EMBEDDING, true)));
 
-        webTestClient.put().uri("/default-model-slots")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(slots)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .put()
+                .uri("/default-model-slots")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(slots)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     private DefaultModelSlots slots(String languageModelName, String embeddingModelName) {

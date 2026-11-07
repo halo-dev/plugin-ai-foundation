@@ -11,11 +11,10 @@ import run.halo.aifoundation.provider.support.AdapterType;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
-import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
+import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 
 @Component
@@ -64,8 +63,8 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
-            AdapterType.RERANK, AdapterType.OPENAI_IMAGE);
+        return List.of(
+                AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING, AdapterType.RERANK, AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -95,36 +94,43 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new OpenAiCompatibleChatModel(chatCompletionsOptions(provider, apiKey, modelId,
-            java.util.Map.of()), webClientBuilder(provider));
+        return new OpenAiCompatibleChatModel(
+                chatCompletionsOptions(provider, apiKey, modelId, java.util.Map.of()), webClientBuilder(provider));
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = OpenAiCompatibleEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .endpointPath(embeddingEndpointPath(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .endpointPath(embeddingEndpointPath(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .build();
         return new OpenAiCompatibleEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new OpenAiCompatibleImageGenerationClient(new OpenAiCompatibleImageOptions(
-            getProviderType(), resolveBaseUrl(provider),
-            imageEndpointPath(provider), apiKey, modelId, java.util.Map.of()),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new OpenAiCompatibleImageGenerationClient(
+                new OpenAiCompatibleImageOptions(
+                        getProviderType(),
+                        resolveBaseUrl(provider),
+                        imageEndpointPath(provider),
+                        apiKey,
+                        modelId,
+                        java.util.Map.of()),
+                imageWebClientBuilder(provider));
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
         return new OpenAiLikeRerankingClient(
-            ProviderUris.withoutTrailingSlashes(resolveBaseUrl(provider)),
-            rerankEndpointPath(provider), modelId, apiKey, webClientBuilder(provider));
+                ProviderUris.withoutTrailingSlashes(resolveBaseUrl(provider)),
+                rerankEndpointPath(provider),
+                modelId,
+                apiKey,
+                webClientBuilder(provider));
     }
 
     @Override
@@ -144,18 +150,15 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
     }
 
     private String embeddingEndpointPath(AiProvider provider) {
-        return endpointPath(provider.getSpec().getEmbeddingEndpointPath(),
-            getEmbeddingEndpointPath(), EMBEDDINGS_PATH);
+        return endpointPath(provider.getSpec().getEmbeddingEndpointPath(), getEmbeddingEndpointPath(), EMBEDDINGS_PATH);
     }
 
     private String rerankEndpointPath(AiProvider provider) {
-        return endpointPath(provider.getSpec().getRerankEndpointPath(),
-            getRerankEndpointPath(), RERANK_PATH);
+        return endpointPath(provider.getSpec().getRerankEndpointPath(), getRerankEndpointPath(), RERANK_PATH);
     }
 
     private String imageEndpointPath(AiProvider provider) {
-        return endpointPath(provider.getSpec().getImageEndpointPath(),
-            getImageEndpointPath(), IMAGES_GENERATIONS_PATH);
+        return endpointPath(provider.getSpec().getImageEndpointPath(), getImageEndpointPath(), IMAGES_GENERATIONS_PATH);
     }
 
     private String endpointPath(String configuredPath, String defaultPath, String fallbackPath) {
@@ -168,5 +171,4 @@ public class OpenAiLikeProvider extends AbstractAiProviderType {
         }
         return path.startsWith("/") ? path : "/" + path;
     }
-
 }

@@ -7,8 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class ParameterMappingTemplateApplicatorTest {
 
-    private final ParameterMappingTemplateRegistry registry =
-        new ParameterMappingTemplateRegistry();
+    private final ParameterMappingTemplateRegistry registry = new ParameterMappingTemplateRegistry();
 
     @Test
     void appliesOpenAiRootAndAlternativeMaxTokenFields() {
@@ -46,8 +45,7 @@ class ParameterMappingTemplateApplicatorTest {
         assertThat(thinking.root()).containsEntry("thinking", Map.of("type", "enabled"));
 
         var effort = new ParameterMappingTarget();
-        registry.get("reasoning.deepseek-messages").applicator()
-            .apply("low", "output_config.effort", effort);
+        registry.get("reasoning.deepseek-messages").applicator().apply("low", "output_config.effort", effort);
         assertThat(effort.root()).containsEntry("output_config", Map.of("effort", "low"));
     }
 
@@ -73,22 +71,19 @@ class ParameterMappingTemplateApplicatorTest {
         assertRoot("image.size", "size", "1024x1024");
         assertRoot("image.aspect-ratio", "aspect_ratio", "1:1");
         assertRoot("image.seed", "seed", 42);
-        assertThat(apply("image.response-format.openai", "BASE64").root())
-            .containsEntry("response_format", "b64_json");
-        assertThat(apply("image.response-format.minimax", "BASE64").root())
-            .containsEntry("response_format", "base64");
+        assertThat(apply("image.response-format.openai", "BASE64").root()).containsEntry("response_format", "b64_json");
+        assertThat(apply("image.response-format.minimax", "BASE64").root()).containsEntry("response_format", "base64");
         assertRoot("image.negative-prompt", "negative_prompt", "blurry");
         assertThat(apply("image.parameters.n", 2).parameters()).containsEntry("n", 2);
-        assertThat(apply("image.parameters.size", "1024x768").parameters())
-            .containsEntry("size", "1024*768");
+        assertThat(apply("image.parameters.size", "1024x768").parameters()).containsEntry("size", "1024*768");
         assertThat(apply("image.parameters.seed", 7).parameters()).containsEntry("seed", 7);
         assertThat(apply("image.parameters.negative-prompt", "blurry").parameters())
-            .containsEntry("negative_prompt", "blurry");
+                .containsEntry("negative_prompt", "blurry");
         assertRoot("image.siliconflow.batch-size", "batch_size", 2);
         assertRoot("image.siliconflow.image-size", "image_size", "1024x1024");
         assertThat(apply("image.minimax.dimensions", "1024x768").root())
-            .containsEntry("width", 1024)
-            .containsEntry("height", 768);
+                .containsEntry("width", 1024)
+                .containsEntry("height", 768);
     }
 
     private void assertRoot(String template, String field, Object value) {

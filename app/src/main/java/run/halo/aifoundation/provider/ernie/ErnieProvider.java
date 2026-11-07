@@ -1,6 +1,5 @@
 package run.halo.aifoundation.provider.ernie;
 
-import java.net.URI;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,12 +24,11 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
-import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
-import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
+import run.halo.aifoundation.provider.support.ProviderUris;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -86,9 +84,13 @@ public class ErnieProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.ERNIE_RESPONSES, AdapterType.ERNIE_CHAT,
-            AdapterType.ERNIE_MESSAGES, AdapterType.ERNIE_EMBEDDING, AdapterType.RERANK,
-            AdapterType.ERNIE_IMAGE);
+        return List.of(
+                AdapterType.ERNIE_RESPONSES,
+                AdapterType.ERNIE_CHAT,
+                AdapterType.ERNIE_MESSAGES,
+                AdapterType.ERNIE_EMBEDDING,
+                AdapterType.RERANK,
+                AdapterType.ERNIE_IMAGE);
     }
 
     @Override
@@ -130,36 +132,38 @@ public class ErnieProvider extends AbstractAiProviderType {
         return switch (resolved.adapterType()) {
             case ERNIE_RESPONSES -> new ErnieResponsesModel(options, webClientBuilder(provider));
             case ERNIE_CHAT -> new ErnieChatModel(options, webClientBuilder(provider));
-            case ERNIE_MESSAGES -> new ErnieMessagesModel(options.mutate()
-                .baseUrl(ProviderUris.withoutTrailingPath(options.getBaseUrl(), "/v2"))
-                .build(), webClientBuilder(provider));
-            default -> throw new IllegalArgumentException("Unsupported Qianfan language adapter: "
-                + resolved.adapterType());
+            case ERNIE_MESSAGES ->
+                new ErnieMessagesModel(
+                        options.mutate()
+                                .baseUrl(ProviderUris.withoutTrailingPath(options.getBaseUrl(), "/v2"))
+                                .build(),
+                        webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException("Unsupported Qianfan language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = ErnieEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .build();
         return new ErnieEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
-        return new ErnieRerankingClient(resolveBaseUrl(provider), modelId, apiKey,
-            webClientBuilder(provider));
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
+        return new ErnieRerankingClient(resolveBaseUrl(provider), modelId, apiKey, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new ErnieImageGenerationClient(new ImageGenerationClientOptions(getProviderType(),
-            resolveBaseUrl(provider), apiKey, modelId, null), imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new ErnieImageGenerationClient(
+                new ImageGenerationClientOptions(getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+                imageWebClientBuilder(provider));
     }
 
     @Override
@@ -180,37 +184,38 @@ public class ErnieProvider extends AbstractAiProviderType {
         return languageModelProviderOptions();
     }
 
-    private LanguageModelProviderOptions languageModelProviderOptions(
-        StructuredOutputSupport structuredOutput) {
+    private LanguageModelProviderOptions languageModelProviderOptions(StructuredOutputSupport structuredOutput) {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, structuredOutput);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, structuredOutput);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(true)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(structuredOutput)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(structuredOutput)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
-        return getDiscoveryJson(provider, apiKey,
-            uriBuilder -> uriBuilder.path("/models").build(), null)
-            .map(root -> {
-                var data = listValue(root, "data");
-                if (data == null) {
-                    return List.of();
-                }
-                return discoveredModelsFromNodes(data, "id", this::discoveredModel);
-            });
+        return getDiscoveryJson(
+                        provider,
+                        apiKey,
+                        uriBuilder -> uriBuilder.path("/models").build(),
+                        null)
+                .map(root -> {
+                    var data = listValue(root, "data");
+                    if (data == null) {
+                        return List.of();
+                    }
+                    return discoveredModelsFromNodes(data, "id", this::discoveredModel);
+                });
     }
 
     private DiscoveredModel discoveredModel(Map<?, ?> node) {
@@ -220,14 +225,14 @@ public class ErnieProvider extends AbstractAiProviderType {
             return null;
         }
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(modelType)
-            .features(features(node, modelType))
-            .adapterType(recommendAdapterType(modelType).orElse(null))
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(modelType)
+                .features(features(node, modelType))
+                .adapterType(recommendAdapterType(modelType).orElse(null))
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .build();
     }
 
     private ModelType modelType(String type) {
@@ -249,8 +254,7 @@ public class ErnieProvider extends AbstractAiProviderType {
         var features = new LinkedHashSet<ModelFeature>();
         features.add(ModelFeature.STREAMING);
         var architecture = node.get("architecture") instanceof Map<?, ?> value ? value : Map.of();
-        var modalities = architecture.get("input_modalities") instanceof Iterable<?> values
-            ? values : List.of();
+        var modalities = architecture.get("input_modalities") instanceof Iterable<?> values ? values : List.of();
         for (var modality : modalities) {
             var value = modality != null ? modality.toString().toLowerCase(Locale.ROOT) : "";
             if (value.equals("image")) {
@@ -268,17 +272,15 @@ public class ErnieProvider extends AbstractAiProviderType {
         defaults.putAll(super.getDefaultParameterMappings());
         defaults.put(ModelParameter.DIMENSIONS, DefaultParameterMapping.unsupported());
         defaults.put(ModelParameter.MIN_P, DefaultParameterMapping.unsupported());
-        defaults.put(ModelParameter.IMAGE_SEED,
-            DefaultParameterMapping.template("image.seed"));
-        defaults.put(ModelParameter.NEGATIVE_PROMPT,
-            DefaultParameterMapping.template("image.negative-prompt"));
+        defaults.put(ModelParameter.IMAGE_SEED, DefaultParameterMapping.template("image.seed"));
+        defaults.put(ModelParameter.NEGATIVE_PROMPT, DefaultParameterMapping.template("image.negative-prompt"));
         defaults.put(ModelParameter.RESPONSE_FORMAT, DefaultParameterMapping.unsupported());
         return Map.copyOf(defaults);
     }
 
     private ChatModel responsesModel(AiProvider provider, String apiKey, String modelId) {
-        return new ErnieResponsesModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new ErnieResponsesModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     private String reasoningContent(AssistantMessage message) {

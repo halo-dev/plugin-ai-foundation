@@ -6,8 +6,8 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.web.reactive.function.client.WebClient;
-import run.halo.aifoundation.provider.support.rerank.AbstractHttpRerankingClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
+import run.halo.aifoundation.provider.support.rerank.AbstractHttpRerankingClient;
 import run.halo.aifoundation.provider.support.rerank.StandardRerankResponseDecoder;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
@@ -16,13 +16,12 @@ import run.halo.aifoundation.rerank.RerankUsage;
 /** SiliconFlow native rerank client, including its documented chunk controls. */
 public final class SiliconFlowRerankingClient extends AbstractHttpRerankingClient {
 
-    private static final Set<String> OPTIONS = Set.of(
-        "return_documents", "max_chunks_per_doc", "overlap_tokens");
+    private static final Set<String> OPTIONS = Set.of("return_documents", "max_chunks_per_doc", "overlap_tokens");
     private final String baseUrl;
     private final String modelId;
 
-    public SiliconFlowRerankingClient(String baseUrl, String modelId, String apiKey,
-        WebClient.Builder webClientBuilder) {
+    public SiliconFlowRerankingClient(
+            String baseUrl, String modelId, String apiKey, WebClient.Builder webClientBuilder) {
         super("siliconflow", modelId, apiKey, webClientBuilder, new ResponseDecoder());
         this.baseUrl = ProviderUris.withoutTrailingSlashes(baseUrl);
         this.modelId = modelId;
@@ -34,15 +33,14 @@ public final class SiliconFlowRerankingClient extends AbstractHttpRerankingClien
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(RerankRequest request, Map<String, Object> nativeOptions) {
         validateRequest(request);
         var values = nativeOptions;
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported SiliconFlow rerank option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException(
+                    "Unsupported SiliconFlow rerank option(s): " + String.join(", ", unknown));
         }
         var body = new LinkedHashMap<String, Object>();
         body.put("model", modelId);
@@ -54,12 +52,10 @@ public final class SiliconFlowRerankingClient extends AbstractHttpRerankingClien
         var maxChunks = integer(values.get("max_chunks_per_doc"), "max_chunks_per_doc");
         var overlap = integer(values.get("overlap_tokens"), "overlap_tokens");
         if (maxChunks != null && maxChunks < 1) {
-            throw new IllegalArgumentException(
-                "SiliconFlow max_chunks_per_doc must be positive");
+            throw new IllegalArgumentException("SiliconFlow max_chunks_per_doc must be positive");
         }
         if (overlap != null && (overlap < 0 || overlap > 80)) {
-            throw new IllegalArgumentException(
-                "SiliconFlow overlap_tokens must be between 0 and 80");
+            throw new IllegalArgumentException("SiliconFlow overlap_tokens must be between 0 and 80");
         }
         putIfPresent(body, "max_chunks_per_doc", maxChunks);
         putIfPresent(body, "overlap_tokens", overlap);
@@ -89,20 +85,16 @@ public final class SiliconFlowRerankingClient extends AbstractHttpRerankingClien
 
     private void validateDocument(RerankDocument document) {
         if (document == null) {
-            throw new IllegalArgumentException(
-                "SiliconFlow rerank supports non-blank text documents only");
+            throw new IllegalArgumentException("SiliconFlow rerank supports non-blank text documents only");
         }
         if (document.getImage() != null) {
-            throw new IllegalArgumentException(
-                "SiliconFlow rerank supports non-blank text documents only");
+            throw new IllegalArgumentException("SiliconFlow rerank supports non-blank text documents only");
         }
         if (document.getText() == null) {
-            throw new IllegalArgumentException(
-                "SiliconFlow rerank supports non-blank text documents only");
+            throw new IllegalArgumentException("SiliconFlow rerank supports non-blank text documents only");
         }
         if (document.getText().isBlank()) {
-            throw new IllegalArgumentException(
-                "SiliconFlow rerank supports non-blank text documents only");
+            throw new IllegalArgumentException("SiliconFlow rerank supports non-blank text documents only");
         }
     }
 
@@ -140,9 +132,9 @@ public final class SiliconFlowRerankingClient extends AbstractHttpRerankingClien
                 return null;
             }
             return RerankUsage.builder()
-                .inputTokens(input)
-                .totalTokens(value(input) + value(output))
-                .build();
+                    .inputTokens(input)
+                    .totalTokens(value(input) + value(output))
+                    .build();
         }
 
         @Override
@@ -163,5 +155,4 @@ public final class SiliconFlowRerankingClient extends AbstractHttpRerankingClien
             return number == null ? 0 : number;
         }
     }
-
 }

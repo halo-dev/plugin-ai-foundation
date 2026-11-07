@@ -27,19 +27,20 @@ import run.halo.aifoundation.provider.support.ModelType;
 
 /** Combines model facts with reviewed adapter wire mappings, never with catalog SDK code. */
 final class ModelCatalogParameterMapper {
-    private static final ParameterMappingTemplateRegistry TEMPLATES =
-        new ParameterMappingTemplateRegistry();
-    private static final List<String> EFFORT_ORDER =
-        List.of("minimal", "low", "medium", "high", "xhigh", "max");
+    private static final ParameterMappingTemplateRegistry TEMPLATES = new ParameterMappingTemplateRegistry();
+    private static final List<String> EFFORT_ORDER = List.of("minimal", "low", "medium", "high", "xhigh", "max");
 
-    private ModelCatalogParameterMapper() {
-    }
+    private ModelCatalogParameterMapper() {}
 
-    static ModelParameterProfile map(AiProvider provider, AiProviderType type,
-        DiscoveredModel model, ModelsDevCatalog.Entry entry, AdapterType adapter) {
+    static ModelParameterProfile map(
+            AiProvider provider,
+            AiProviderType type,
+            DiscoveredModel model,
+            ModelsDevCatalog.Entry entry,
+            AdapterType adapter) {
         if (adapter == null
-            || adapter.getModelType() != model.modelType()
-            || !entry.matchesModelType(model.modelType())) {
+                || adapter.getModelType() != model.modelType()
+                || !entry.matchesModelType(model.modelType())) {
             return null;
         }
         var protocol = ModelsDevProviderIdentity.protocol(adapter);
@@ -74,30 +75,39 @@ final class ModelCatalogParameterMapper {
         return constraints;
     }
 
-    private static void addLanguageConstraints(ModelParameterConstraints constraints,
-        AiProviderType type, DiscoveredModel model, ModelsDevCatalog.Entry entry,
-        AdapterType adapter, JsonNode api) {
+    private static void addLanguageConstraints(
+            ModelParameterConstraints constraints,
+            AiProviderType type,
+            DiscoveredModel model,
+            ModelsDevCatalog.Entry entry,
+            AdapterType adapter,
+            JsonNode api) {
         var capabilities = entry.model().path("capabilities");
         var protocolCapabilities = api.path("capabilities");
         constraints.setTemperature(bool(capabilities, "temperature"));
         constraints.setTopP(bool(capabilities, "top_p"));
         constraints.setTopK(bool(capabilities, "top_k"));
-        constraints.setToolCalling(supported(type, adapter, ModelFeature.TOOL_CALL,
-            evidence(model, ModelFeature.TOOL_CALL, entry.tools())));
-        constraints.setStructuredOutput(supported(type, adapter, ModelFeature.STRUCTURED_OUTPUT,
-            evidence(model, ModelFeature.STRUCTURED_OUTPUT, entry.structuredOutput())));
+        constraints.setToolCalling(supported(
+                type, adapter, ModelFeature.TOOL_CALL, evidence(model, ModelFeature.TOOL_CALL, entry.tools())));
+        constraints.setStructuredOutput(supported(
+                type,
+                adapter,
+                ModelFeature.STRUCTURED_OUTPUT,
+                evidence(model, ModelFeature.STRUCTURED_OUTPUT, entry.structuredOutput())));
         var tools = protocolCapabilities.path("tools");
         constraints.setToolStrict(bool(tools, "strict"));
         constraints.setToolChoices(strings(tools.path("choice")));
         constraints.setStore(flag(capabilities, protocolCapabilities, "store"));
         constraints.setStreamUsage(flag(capabilities, protocolCapabilities, "stream_usage"));
         constraints.setPromptCacheKey(flag(capabilities, protocolCapabilities, "prompt_cache_key"));
-        constraints.setServiceTiers(strings(protocolCapabilities.has("service_tier")
-            ? protocolCapabilities.path("service_tier") : capabilities.path("service_tier")));
+        constraints.setServiceTiers(strings(
+                protocolCapabilities.has("service_tier")
+                        ? protocolCapabilities.path("service_tier")
+                        : capabilities.path("service_tier")));
 
         var reasoning = capabilities.path("reasoning");
-        var reasoningSupported = supported(type, adapter, ModelFeature.REASONING,
-            evidence(model, ModelFeature.REASONING, entry.reasoning()));
+        var reasoningSupported = supported(
+                type, adapter, ModelFeature.REASONING, evidence(model, ModelFeature.REASONING, entry.reasoning()));
         if (reasoningSupported != null || reasoning.isObject()) {
             var controls = new ModelParameterConstraints.Reasoning();
             controls.setSupported(reasoningSupported);
@@ -109,8 +119,12 @@ final class ModelCatalogParameterMapper {
         }
     }
 
-    private static ModelParameterMappings.LanguageMappings languageMappings(AiProviderType type,
-        AdapterType adapter, JsonNode model, JsonNode api, ModelParameterConstraints constraints) {
+    private static ModelParameterMappings.LanguageMappings languageMappings(
+            AiProviderType type,
+            AdapterType adapter,
+            JsonNode model,
+            JsonNode api,
+            ModelParameterConstraints constraints) {
         var language = new ModelParameterMappings.LanguageMappings();
         language.setTemperature(sampling(constraints.getTemperature()));
         language.setTopP(sampling(constraints.getTopP()));
@@ -118,25 +132,26 @@ final class ModelCatalogParameterMapper {
         language.setMaxOutputTokens(outputTokenMapping(type, adapter, api));
         var reasoning = model.path("capabilities").path("reasoning");
         var controls = constraints.getReasoning();
-        if (controls != null && (controls.getSupported() != null || reasoning.has("toggle")
-            || reasoning.has("effort") || reasoning.has("budget"))) {
+        if (controls != null
+                && (controls.getSupported() != null
+                        || reasoning.has("toggle")
+                        || reasoning.has("effort")
+                        || reasoning.has("budget"))) {
             language.setReasoning(reasoning(type, adapter, reasoning, controls));
         }
         return language;
     }
 
-    private static Selection outputTokenMapping(AiProviderType type, AdapterType adapter,
-        JsonNode api) {
+    private static Selection outputTokenMapping(AiProviderType type, AdapterType adapter, JsonNode api) {
         // Unlike optional capability flags, v2 explicitly defines this omitted field's meaning.
-        var tokenField = api.path("compatibility").path("max_tokens_field")
-            .asText("max_completion_tokens");
+        var tokenField = api.path("compatibility").path("max_tokens_field").asText("max_completion_tokens");
         if (adapter.getProtocol() != AdapterProtocol.CHAT_COMPLETIONS
-            || !List.of("max_tokens", "max_completion_tokens").contains(tokenField)) {
+                || !List.of("max_tokens", "max_completion_tokens").contains(tokenField)) {
             return null;
         }
         var template = template(type, adapter, ModelParameter.MAX_OUTPUT_TOKENS);
-        if (template == null || !List.of("openai.max-tokens", "openai.max-completion-tokens")
-            .contains(template.id())) {
+        if (template == null
+                || !List.of("openai.max-tokens", "openai.max-completion-tokens").contains(template.id())) {
             return null;
         }
         var selection = selection(template.id());
@@ -144,14 +159,17 @@ final class ModelCatalogParameterMapper {
         return selection;
     }
 
-    private static ModelParameterProfile profile(AiProvider provider, AiProviderType type,
-        DiscoveredModel model, AdapterType adapter, ModelParameterMappings mappings,
-        ModelParameterConstraints constraints) {
+    private static ModelParameterProfile profile(
+            AiProvider provider,
+            AiProviderType type,
+            DiscoveredModel model,
+            AdapterType adapter,
+            ModelParameterMappings mappings,
+            ModelParameterConstraints constraints) {
         var result = new ModelParameterProfile();
         result.setProviderType(provider.getSpec().getProviderType());
         var baseUrl = provider.getSpec().getBaseUrl();
-        result.setProviderBaseUrl(baseUrl == null || baseUrl.isBlank()
-            ? type.getDefaultBaseUrl() : baseUrl);
+        result.setProviderBaseUrl(baseUrl == null || baseUrl.isBlank() ? type.getDefaultBaseUrl() : baseUrl);
         result.setModelId(model.modelId());
         result.setAdapterType(adapter);
         result.setMappings(mappings);
@@ -159,16 +177,17 @@ final class ModelCatalogParameterMapper {
         return result;
     }
 
-    private static Selection reasoning(AiProviderType type, AdapterType adapter, JsonNode node,
-        ModelParameterConstraints.Reasoning controls) {
+    private static Selection reasoning(
+            AiProviderType type, AdapterType adapter, JsonNode node, ModelParameterConstraints.Reasoning controls) {
         if (Boolean.FALSE.equals(controls.getSupported())) {
             return unsupported();
         }
         var template = template(type, adapter, ModelParameter.REASONING);
         // Kimi's toggle-only models use thinking.type; its effort models keep reasoning_effort.
         // Select the reviewed wire shape from model controls rather than model-name heuristics.
-        if (adapter == AdapterType.KIMI_CHAT && Boolean.TRUE.equals(controls.getToggle())
-            && (controls.getEfforts() == null || controls.getEfforts().isEmpty())) {
+        if (adapter == AdapterType.KIMI_CHAT
+                && Boolean.TRUE.equals(controls.getToggle())
+                && (controls.getEfforts() == null || controls.getEfforts().isEmpty())) {
             template = TEMPLATES.get("reasoning.thinking-type");
         }
         if (template == null || template.defaultReasoningMapping() == null) {
@@ -182,13 +201,16 @@ final class ModelCatalogParameterMapper {
         }
         applyEffortMapping(mapping, adapter, defaults, controls.getEfforts());
         // Budgets are opt-in per adapter: v2 describes amounts, not native request paths.
-        if (mapping.getLow() == null && node.path("budget").isObject()
-            && (adapter == AdapterType.DASHSCOPE_CHAT || adapter == AdapterType.SILICONFLOW_CHAT)) {
+        if (mapping.getLow() == null
+                && node.path("budget").isObject()
+                && (adapter == AdapterType.DASHSCOPE_CHAT || adapter == AdapterType.SILICONFLOW_CHAT)) {
             applyBudgetMapping(mapping, controls);
         }
-        if (mapping.getEnabled() == null && mapping.getDisabled() == null
-            && mapping.getLow() == null && mapping.getMedium() == null
-            && mapping.getHigh() == null) {
+        if (mapping.getEnabled() == null
+                && mapping.getDisabled() == null
+                && mapping.getLow() == null
+                && mapping.getMedium() == null
+                && mapping.getHigh() == null) {
             // Explicit model facts must not revive an unrelated provider-wide effort control.
             return unsupported();
         }
@@ -197,18 +219,16 @@ final class ModelCatalogParameterMapper {
         return selection;
     }
 
-    private static ReasoningValueMapping supportedToggle(ReasoningValueMapping value,
-        List<String> efforts) {
+    private static ReasoningValueMapping supportedToggle(ReasoningValueMapping value, List<String> efforts) {
         // Effort-based toggle values are valid only when the catalog enumerates them.
-        if (value == null || (isEffort(value)
-            && (efforts == null || !efforts.contains(value.getValue())))) {
+        if (value == null || (isEffort(value) && (efforts == null || !efforts.contains(value.getValue())))) {
             return null;
         }
         return copy(value);
     }
 
-    private static void applyEffortMapping(ReasoningMapping mapping, AdapterType adapter,
-        ReasoningMapping defaults, List<String> efforts) {
+    private static void applyEffortMapping(
+            ReasoningMapping mapping, AdapterType adapter, ReasoningMapping defaults, List<String> efforts) {
         if (efforts == null) {
             return;
         }
@@ -231,8 +251,7 @@ final class ModelCatalogParameterMapper {
         }
     }
 
-    private static void applyBudgetMapping(ReasoningMapping mapping,
-        ModelParameterConstraints.Reasoning controls) {
+    private static void applyBudgetMapping(ReasoningMapping mapping, ModelParameterConstraints.Reasoning controls) {
         mapping.setLow(budget(1024, controls, mapping));
         mapping.setMedium(budget(4096, controls, mapping));
         mapping.setHigh(budget(8192, controls, mapping));
@@ -241,8 +260,7 @@ final class ModelCatalogParameterMapper {
         }
     }
 
-    private static ReasoningValueMapping effortMapping(AdapterType adapter,
-        ReasoningMapping defaults) {
+    private static ReasoningValueMapping effortMapping(AdapterType adapter, ReasoningMapping defaults) {
         var effort = defaults.getLow();
         if (effort != null && isEffort(effort)) {
             return effort;
@@ -256,22 +274,19 @@ final class ModelCatalogParameterMapper {
         };
     }
 
-    private static ReasoningValueMapping budget(long preset,
-        ModelParameterConstraints.Reasoning controls, ReasoningMapping mapping) {
-        var amount = Math.max(preset, controls.getBudgetMinimum() == null
-            ? 1 : controls.getBudgetMinimum());
+    private static ReasoningValueMapping budget(
+            long preset, ModelParameterConstraints.Reasoning controls, ReasoningMapping mapping) {
+        var amount = Math.max(preset, controls.getBudgetMinimum() == null ? 1 : controls.getBudgetMinimum());
         if (controls.getBudgetMaximum() != null) {
             amount = Math.min(amount, controls.getBudgetMaximum());
         }
         if (amount > Integer.MAX_VALUE) {
             return null;
         }
-        return withEnable(
-            value("thinking_budget", ValueType.INTEGER, Long.toString(amount)), mapping);
+        return withEnable(value("thinking_budget", ValueType.INTEGER, Long.toString(amount)), mapping);
     }
 
-    private static ReasoningValueMapping withEnable(ReasoningValueMapping value,
-        ReasoningMapping mapping) {
+    private static ReasoningValueMapping withEnable(ReasoningValueMapping value, ReasoningMapping mapping) {
         var enabled = mapping.getEnabled();
         if (enabled != null && !enabled.getField().equals(value.getField())) {
             value.setAdditionalValues(List.of(copy(enabled)));
@@ -281,7 +296,7 @@ final class ModelCatalogParameterMapper {
 
     private static boolean isEffort(ReasoningValueMapping value) {
         return value.getValueType() == ValueType.STRING
-            && (value.getField().endsWith("effort") || "think".equals(value.getField()));
+                && (value.getField().endsWith("effort") || "think".equals(value.getField()));
     }
 
     private static ReasoningValueMapping copy(ReasoningValueMapping value) {
@@ -291,7 +306,8 @@ final class ModelCatalogParameterMapper {
         var copy = value(value.getField(), value.getValueType(), value.getValue());
         if (value.getAdditionalValues() != null) {
             copy.setAdditionalValues(value.getAdditionalValues().stream()
-                .map(ModelCatalogParameterMapper::copy).toList());
+                    .map(ModelCatalogParameterMapper::copy)
+                    .toList());
         }
         return copy;
     }
@@ -304,13 +320,12 @@ final class ModelCatalogParameterMapper {
         return value;
     }
 
-    private static ParameterMappingTemplateDescriptor template(AiProviderType type,
-        AdapterType adapter, ModelParameter parameter) {
+    private static ParameterMappingTemplateDescriptor template(
+            AiProviderType type, AdapterType adapter, ModelParameter parameter) {
         var defaults = type.getDefaultParameterMappings(adapter);
         var mapping = defaults == null ? null : defaults.get(parameter);
         var descriptor = mapping == null ? null : TEMPLATES.get(mapping.template());
-        return descriptor != null && descriptor.adapterTypes().contains(adapter)
-            ? descriptor : null;
+        return descriptor != null && descriptor.adapterTypes().contains(adapter) ? descriptor : null;
     }
 
     private static Selection sampling(Boolean supported) {
@@ -334,14 +349,12 @@ final class ModelCatalogParameterMapper {
         if (model.featureEvidence().containsKey(feature)) {
             return model.featureEvidence().get(feature);
         }
-        return model.source() == DiscoverySource.REMOTE && model.features().contains(feature)
-            ? Boolean.TRUE : fallback;
+        return model.source() == DiscoverySource.REMOTE && model.features().contains(feature) ? Boolean.TRUE : fallback;
     }
 
     private static Map<ModelFeature, Boolean> providerEvidence(DiscoveredModel model) {
         var evidence = new EnumMap<ModelFeature, Boolean>(ModelFeature.class);
-        for (var feature : List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
-            ModelFeature.REASONING)) {
+        for (var feature : List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING)) {
             var value = evidence(model, feature, null);
             if (value != null) {
                 evidence.put(feature, value);
@@ -350,11 +363,12 @@ final class ModelCatalogParameterMapper {
         return Map.copyOf(evidence);
     }
 
-    private static Boolean supported(AiProviderType type, AdapterType adapter,
-        ModelFeature feature, Boolean supported) {
+    private static Boolean supported(
+            AiProviderType type, AdapterType adapter, ModelFeature feature, Boolean supported) {
         return Boolean.TRUE.equals(supported)
-            && !type.getSupportedFeatures(adapter).contains(feature)
-            ? Boolean.FALSE : supported;
+                        && !type.getSupportedFeatures(adapter).contains(feature)
+                ? Boolean.FALSE
+                : supported;
     }
 
     private static Boolean bool(JsonNode node, String key) {
@@ -366,8 +380,7 @@ final class ModelCatalogParameterMapper {
     }
 
     private static Long positive(JsonNode node) {
-        return node.isIntegralNumber() && node.canConvertToLong() && node.longValue() > 0
-            ? node.longValue() : null;
+        return node.isIntegralNumber() && node.canConvertToLong() && node.longValue() > 0 ? node.longValue() : null;
     }
 
     private static List<String> strings(JsonNode node) {

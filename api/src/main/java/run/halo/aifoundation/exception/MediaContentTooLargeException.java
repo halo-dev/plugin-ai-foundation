@@ -3,44 +3,30 @@ package run.halo.aifoundation.exception;
 /**
  * Raised when media content exceeds framework resource limits.
  *
- * <p>This is a technical resource guard, not a business upload policy. Consumer plugins remain
- * responsible for deciding which files users may choose for their own workflows.
+ * <p>This is a technical resource guard, not a business upload policy. Consumer plugins remain responsible for deciding
+ * which files users may choose for their own workflows.
  */
 public class MediaContentTooLargeException extends AiFoundationException {
 
-    /**
-     * Configured maximum byte count for the failing limit.
-     */
+    /** Configured maximum byte count for the failing limit. */
     private final long maxBytes;
 
-    /**
-     * Actual byte count observed for the failing limit.
-     */
+    /** Actual byte count observed for the failing limit. */
     private final long actualBytes;
 
-    /**
-     * Limit scope, for example a single media part or total request media.
-     */
+    /** Limit scope, for example a single media part or total request media. */
     private final String scope;
 
-    /**
-     * Media type associated with the oversized content, when available.
-     */
+    /** Media type associated with the oversized content, when available. */
     private final String mediaType;
 
-    /**
-     * Filename associated with the oversized content, when available.
-     */
+    /** Filename associated with the oversized content, when available. */
     private final String filename;
 
-    /**
-     * Zero-based message index for language-message validation failures, when available.
-     */
+    /** Zero-based message index for language-message validation failures, when available. */
     private final Integer messageIndex;
 
-    /**
-     * Zero-based part index for language-message validation failures, when available.
-     */
+    /** Zero-based part index for language-message validation failures, when available. */
     private final Integer partIndex;
 
     /**
@@ -65,10 +51,15 @@ public class MediaContentTooLargeException extends AiFoundationException {
      * @param messageIndex zero-based message index, when available
      * @param partIndex zero-based part index, when available
      */
-    public MediaContentTooLargeException(String scope, long maxBytes, long actualBytes,
-        String mediaType, String filename, Integer messageIndex, Integer partIndex) {
-        super("Media content exceeds " + scope + " limit: maxBytes=" + maxBytes
-            + ", actualBytes=" + actualBytes);
+    public MediaContentTooLargeException(
+            String scope,
+            long maxBytes,
+            long actualBytes,
+            String mediaType,
+            String filename,
+            Integer messageIndex,
+            Integer partIndex) {
+        super("Media content exceeds " + scope + " limit: maxBytes=" + maxBytes + ", actualBytes=" + actualBytes);
         this.scope = scope;
         this.maxBytes = maxBytes;
         this.actualBytes = actualBytes;

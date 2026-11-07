@@ -12,9 +12,8 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesProfile;
 /** Gateway-specific Responses policy for native tools and reasoning constraints. */
 final class AiHubMixResponsesProfile implements ResponsesProfile {
 
-    private static final Set<String> BUILTIN_TOOL_TYPES = Set.of(
-        "web_search_preview", "image_generation", "code_interpreter", "mcp",
-        "computer_use_preview");
+    private static final Set<String> BUILTIN_TOOL_TYPES =
+            Set.of("web_search_preview", "image_generation", "code_interpreter", "mcp", "computer_use_preview");
 
     @Override
     public String providerType() {
@@ -27,8 +26,7 @@ final class AiHubMixResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         appendBuiltinTools(body);
         validateReasoning(body);
         validateToolChoice(body.get("tool_choice"));
@@ -48,10 +46,9 @@ final class AiHubMixResponsesProfile implements ResponsesProfile {
         }
         for (var item : builtins) {
             if (!(item instanceof Map<?, ?> tool)
-                || !(tool.get("type") instanceof String type)
-                || !BUILTIN_TOOL_TYPES.contains(type)) {
-                throw new IllegalArgumentException(
-                    "AIHubMix Responses builtin tool type must be one of: "
+                    || !(tool.get("type") instanceof String type)
+                    || !BUILTIN_TOOL_TYPES.contains(type)) {
+                throw new IllegalArgumentException("AIHubMix Responses builtin tool type must be one of: "
                         + String.join(", ", BUILTIN_TOOL_TYPES));
             }
             tools.add(item);
@@ -62,8 +59,7 @@ final class AiHubMixResponsesProfile implements ResponsesProfile {
     }
 
     private void validateReasoning(Map<String, Object> body) {
-        if (!(body.get("reasoning") instanceof Map<?, ?> reasoning)
-            || reasoning.get("effort") == null) {
+        if (!(body.get("reasoning") instanceof Map<?, ?> reasoning) || reasoning.get("effort") == null) {
             return;
         }
         var effort = reasoning.get("effort").toString().toLowerCase(Locale.ROOT);
@@ -78,7 +74,7 @@ final class AiHubMixResponsesProfile implements ResponsesProfile {
             return;
         }
         if (!(value instanceof String choice)
-            || !new LinkedHashSet<>(List.of("auto", "none", "required")).contains(choice)) {
+                || !new LinkedHashSet<>(List.of("auto", "none", "required")).contains(choice)) {
             throw new IllegalArgumentException("Unsupported AIHubMix Responses tool_choice");
         }
     }

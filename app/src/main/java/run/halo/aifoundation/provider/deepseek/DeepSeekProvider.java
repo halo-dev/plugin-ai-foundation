@@ -71,8 +71,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.DEEPSEEK_CHAT, AdapterType.DEEPSEEK_RESPONSES,
-            AdapterType.DEEPSEEK_MESSAGES);
+        return List.of(AdapterType.DEEPSEEK_CHAT, AdapterType.DEEPSEEK_RESPONSES, AdapterType.DEEPSEEK_MESSAGES);
     }
 
     @Override
@@ -98,8 +97,7 @@ public class DeepSeekProvider extends AbstractAiProviderType {
     @Override
     public List<ModelFeature> getSupportedFeatures(AdapterType adapterType) {
         return switch (adapterType) {
-            case DEEPSEEK_CHAT, DEEPSEEK_RESPONSES, DEEPSEEK_MESSAGES ->
-                ProviderFeatureSets.VISION_REASONING;
+            case DEEPSEEK_CHAT, DEEPSEEK_RESPONSES, DEEPSEEK_MESSAGES -> ProviderFeatureSets.VISION_REASONING;
             default -> List.of();
         };
     }
@@ -116,23 +114,21 @@ public class DeepSeekProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new DeepSeekChatModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new DeepSeekChatModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     @Override
-    public ChatModel buildChatModel(AiProvider provider, String apiKey,
-        run.halo.aifoundation.provider.support.ProviderModelRef model) {
+    public ChatModel buildChatModel(
+            AiProvider provider, String apiKey, run.halo.aifoundation.provider.support.ProviderModelRef model) {
         var resolved = resolveModel(model);
         var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of());
         return switch (resolved.adapterType()) {
             case DEEPSEEK_CHAT -> new DeepSeekChatModel(options, webClientBuilder(provider));
-            case DEEPSEEK_RESPONSES -> new DeepSeekResponsesModel(options,
-                webClientBuilder(provider));
-            case DEEPSEEK_MESSAGES -> new DeepSeekMessagesModel(options,
-                webClientBuilder(provider));
-            default -> throw new IllegalArgumentException(
-                "Unsupported DeepSeek language adapter: " + resolved.adapterType());
+            case DEEPSEEK_RESPONSES -> new DeepSeekResponsesModel(options, webClientBuilder(provider));
+            case DEEPSEEK_MESSAGES -> new DeepSeekMessagesModel(options, webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException("Unsupported DeepSeek language adapter: " + resolved.adapterType());
         };
     }
 
@@ -149,31 +145,29 @@ public class DeepSeekProvider extends AbstractAiProviderType {
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions(AdapterType adapterType) {
         return switch (adapterType) {
-            case DEEPSEEK_RESPONSES ->
-                languageModelProviderOptions(StructuredOutputSupport.JSON_SCHEMA, false);
-            case DEEPSEEK_MESSAGES ->
-                languageModelProviderOptions(StructuredOutputSupport.PROMPT_ONLY, false);
+            case DEEPSEEK_RESPONSES -> languageModelProviderOptions(StructuredOutputSupport.JSON_SCHEMA, false);
+            case DEEPSEEK_MESSAGES -> languageModelProviderOptions(StructuredOutputSupport.PROMPT_ONLY, false);
             default -> languageModelProviderOptions();
         };
     }
 
     private LanguageModelProviderOptions languageModelProviderOptions(
-        StructuredOutputSupport structuredOutput, boolean nativeStrictToolSchemas) {
+            StructuredOutputSupport structuredOutput, boolean nativeStrictToolSchemas) {
         var reasoningControlOptions = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoningControlOptions, nativeStrictToolSchemas, structuredOutput);
+        var optionsFactory =
+                chatCompletionsOptionsFactory(reasoningControlOptions, nativeStrictToolSchemas, structuredOutput);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .nativeStrictToolSchemas(nativeStrictToolSchemas)
-            .structuredOutputSupport(structuredOutput)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoningControlOptions)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .nativeStrictToolSchemas(nativeStrictToolSchemas)
+                .structuredOutputSupport(structuredOutput)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoningControlOptions)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     private String reasoningContent(AssistantMessage message) {
@@ -194,13 +188,13 @@ public class DeepSeekProvider extends AbstractAiProviderType {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
         for (var parameter : List.of(
-            ModelParameter.TOP_K,
-            ModelParameter.MIN_P,
-            ModelParameter.PRESENCE_PENALTY,
-            ModelParameter.FREQUENCY_PENALTY,
-            ModelParameter.REPETITION_PENALTY,
-            ModelParameter.SEED,
-            ModelParameter.PARALLEL_TOOL_CALLS)) {
+                ModelParameter.TOP_K,
+                ModelParameter.MIN_P,
+                ModelParameter.PRESENCE_PENALTY,
+                ModelParameter.FREQUENCY_PENALTY,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.SEED,
+                ModelParameter.PARALLEL_TOOL_CALLS)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);

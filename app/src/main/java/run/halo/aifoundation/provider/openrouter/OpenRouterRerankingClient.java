@@ -1,9 +1,7 @@
 package run.halo.aifoundation.provider.openrouter;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpHeaders;
@@ -23,8 +21,12 @@ public final class OpenRouterRerankingClient extends AbstractHttpRerankingClient
     private final String modelId;
     private final Map<String, String> headers;
 
-    public OpenRouterRerankingClient(String baseUrl, String modelId, String apiKey,
-        WebClient.Builder webClientBuilder, Map<String, String> headers) {
+    public OpenRouterRerankingClient(
+            String baseUrl,
+            String modelId,
+            String apiKey,
+            WebClient.Builder webClientBuilder,
+            Map<String, String> headers) {
         super("openrouter", modelId, apiKey, webClientBuilder);
         this.baseUrl = ProviderUris.withoutTrailingSlashes(baseUrl);
         this.modelId = modelId;
@@ -37,8 +39,7 @@ public final class OpenRouterRerankingClient extends AbstractHttpRerankingClient
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(RerankRequest request, Map<String, Object> nativeOptions) {
         if (request == null) {
             throw new IllegalArgumentException("OpenRouter rerank documents must not be empty");
         }
@@ -52,13 +53,14 @@ public final class OpenRouterRerankingClient extends AbstractHttpRerankingClient
         var unknown = new java.util.LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported OpenRouter rerank option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException(
+                    "Unsupported OpenRouter rerank option(s): " + String.join(", ", unknown));
         }
         var body = new LinkedHashMap<String, Object>();
         body.put("model", modelId);
         body.put("query", request.getQuery());
-        body.put("documents", request.getDocuments().stream().map(this::document).toList());
+        body.put(
+                "documents", request.getDocuments().stream().map(this::document).toList());
         putIfPresent(body, "top_n", topN(request));
         if (values.get("provider") != null) {
             OpenRouterRoutingOptions.validate(values.get("provider"), "rerank");
@@ -80,8 +82,7 @@ public final class OpenRouterRerankingClient extends AbstractHttpRerankingClient
         var image = document.getImage();
         if (image == null) {
             if (!hasText(text)) {
-                throw new IllegalArgumentException(
-                    "OpenRouter rerank document must contain text or an image");
+                throw new IllegalArgumentException("OpenRouter rerank document must contain text or an image");
             }
             return text;
         }
@@ -89,8 +90,7 @@ public final class OpenRouterRerankingClient extends AbstractHttpRerankingClient
         if (hasText(text)) {
             value.put("text", text);
         }
-        value.put("image", MediaContentSources.urlOrDataUrl(image,
-            "OpenRouter rerank image"));
+        value.put("image", MediaContentSources.urlOrDataUrl(image, "OpenRouter rerank image"));
         return Map.copyOf(value);
     }
 

@@ -1,17 +1,17 @@
 package run.halo.aifoundation.ui;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import reactor.core.publisher.Mono;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.chat.middleware.LanguageModelMiddleware;
 import run.halo.aifoundation.control.CancellationToken;
-import reactor.core.publisher.Mono;
 
 /**
  * Options for the framework-neutral UI message chat handler.
@@ -27,21 +27,14 @@ public final class UIMessageChatOptions<M> {
     private Supplier<M> metadataSupplier = () -> null;
     private Supplier<String> messageIdGenerator = () -> "msg_" + UUID.randomUUID();
     private Function<UIMessageChunk, String> serializer;
-    private Consumer<GenerateTextRequest.GenerateTextRequestBuilder> requestCustomizer =
-        builder -> {
-        };
+    private Consumer<GenerateTextRequest.GenerateTextRequestBuilder> requestCustomizer = builder -> {};
     private UIMessageChatPrepare<M> prepareHandler = context -> Mono.empty();
     private final List<LanguageModelMiddleware> middleware = new ArrayList<>();
-    private Consumer<UIMessageValidationOptions<M>> validationCustomizer = options -> {
-    };
-    private Consumer<UIMessageConversionOptions<M>> conversionCustomizer = options -> {
-    };
-    private Consumer<UIMessageStreamFinish<M>> finishHandler = finish -> {
-    };
-    private Function<Throwable, String> errorHandler = error -> UIMessageStreamOptions
-        .DEFAULT_ERROR_TEXT;
-    private Consumer<Throwable> readErrorHandler = error -> {
-    };
+    private Consumer<UIMessageValidationOptions<M>> validationCustomizer = options -> {};
+    private Consumer<UIMessageConversionOptions<M>> conversionCustomizer = options -> {};
+    private Consumer<UIMessageStreamFinish<M>> finishHandler = finish -> {};
+    private Function<Throwable, String> errorHandler = error -> UIMessageStreamOptions.DEFAULT_ERROR_TEXT;
+    private Consumer<Throwable> readErrorHandler = error -> {};
     private CancellationToken cancellationToken;
     private boolean terminateOnError;
 
@@ -101,8 +94,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> metadataSupplier(Supplier<M> metadataSupplier) {
-        this.metadataSupplier = Objects.requireNonNull(metadataSupplier,
-            "metadataSupplier must not be null");
+        this.metadataSupplier = Objects.requireNonNull(metadataSupplier, "metadataSupplier must not be null");
         return this;
     }
 
@@ -113,8 +105,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> generateMessageId(Supplier<String> generator) {
-        this.messageIdGenerator = Objects.requireNonNull(generator,
-            "generator must not be null");
+        this.messageIdGenerator = Objects.requireNonNull(generator, "generator must not be null");
         return this;
     }
 
@@ -132,16 +123,14 @@ public final class UIMessageChatOptions<M> {
     /**
      * Customizes the underlying model request.
      *
-     * <p>The customizer must not set prompt, messages, or cancellation token because
-     * those are owned by the UI message handler.
+     * <p>The customizer must not set prompt, messages, or cancellation token because those are owned by the UI message
+     * handler.
      *
      * @param customizer model request customizer
      * @return this options object
      */
-    public UIMessageChatOptions<M> request(
-        Consumer<GenerateTextRequest.GenerateTextRequestBuilder> customizer) {
-        this.requestCustomizer = Objects.requireNonNull(customizer,
-            "customizer must not be null");
+    public UIMessageChatOptions<M> request(Consumer<GenerateTextRequest.GenerateTextRequestBuilder> customizer) {
+        this.requestCustomizer = Objects.requireNonNull(customizer, "customizer must not be null");
         return this;
     }
 
@@ -179,10 +168,8 @@ public final class UIMessageChatOptions<M> {
      * @param customizer validation option customizer
      * @return this options object
      */
-    public UIMessageChatOptions<M> validation(
-        Consumer<UIMessageValidationOptions<M>> customizer) {
-        this.validationCustomizer = Objects.requireNonNull(customizer,
-            "customizer must not be null");
+    public UIMessageChatOptions<M> validation(Consumer<UIMessageValidationOptions<M>> customizer) {
+        this.validationCustomizer = Objects.requireNonNull(customizer, "customizer must not be null");
         return this;
     }
 
@@ -192,10 +179,8 @@ public final class UIMessageChatOptions<M> {
      * @param customizer conversion option customizer
      * @return this options object
      */
-    public UIMessageChatOptions<M> conversion(
-        Consumer<UIMessageConversionOptions<M>> customizer) {
-        this.conversionCustomizer = Objects.requireNonNull(customizer,
-            "customizer must not be null");
+    public UIMessageChatOptions<M> conversion(Consumer<UIMessageConversionOptions<M>> customizer) {
+        this.conversionCustomizer = Objects.requireNonNull(customizer, "customizer must not be null");
         return this;
     }
 
@@ -228,8 +213,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> onReadError(Consumer<Throwable> readErrorHandler) {
-        this.readErrorHandler = Objects.requireNonNull(readErrorHandler,
-            "readErrorHandler must not be null");
+        this.readErrorHandler = Objects.requireNonNull(readErrorHandler, "readErrorHandler must not be null");
         return this;
     }
 
@@ -240,8 +224,7 @@ public final class UIMessageChatOptions<M> {
      * @return this options object
      */
     public UIMessageChatOptions<M> cancellationToken(CancellationToken cancellationToken) {
-        this.cancellationToken = Objects.requireNonNull(cancellationToken,
-            "cancellationToken must not be null");
+        this.cancellationToken = Objects.requireNonNull(cancellationToken, "cancellationToken must not be null");
         return this;
     }
 

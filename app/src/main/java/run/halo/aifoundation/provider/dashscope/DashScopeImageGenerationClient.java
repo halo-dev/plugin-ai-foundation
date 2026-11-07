@@ -15,19 +15,16 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 
 public final class DashScopeImageGenerationClient extends AbstractJsonImageGenerationClient {
 
-    private static final String ENDPOINT_PATH =
-        "/services/aigc/multimodal-generation/generation";
-    private static final Set<String> NATIVE_OPTIONS = Set.of(
-        "prompt_extend", "prompt_extend_mode", "enable_thinking", "watermark");
+    private static final String ENDPOINT_PATH = "/services/aigc/multimodal-generation/generation";
+    private static final Set<String> NATIVE_OPTIONS =
+            Set.of("prompt_extend", "prompt_extend_mode", "enable_thinking", "watermark");
 
-    public DashScopeImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public DashScopeImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
     @Override
-    public Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    public Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.model());
 
@@ -38,10 +35,7 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
             }
         }
         content.add(Map.of("text", request.getPrompt()));
-        body.put("input", Map.of("messages", List.of(Map.of(
-            "role", "user",
-            "content", content
-        ))));
+        body.put("input", Map.of("messages", List.of(Map.of("role", "user", "content", content))));
 
         var parameters = nativeParameters(nativeOptions);
         putIfNotNull(parameters, "n", request.getN());
@@ -59,8 +53,7 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(NATIVE_OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported DashScope image option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported DashScope image option(s): " + String.join(", ", unknown));
         }
         var parameters = new LinkedHashMap<String, Object>();
         putBoolean(parameters, values, "prompt_extend");
@@ -86,19 +79,17 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
             return;
         }
         if (!(value instanceof String mode)) {
-            throw new IllegalArgumentException(
-                "DashScope image prompt_extend_mode must be direct or agent");
+            throw new IllegalArgumentException("DashScope image prompt_extend_mode must be direct or agent");
         }
         if (!Set.of("direct", "agent").contains(mode)) {
-            throw new IllegalArgumentException(
-                "DashScope image prompt_extend_mode must be direct or agent");
+            throw new IllegalArgumentException("DashScope image prompt_extend_mode must be direct or agent");
         }
         target.put("prompt_extend_mode", mode);
     }
 
     @Override
-    public GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    public GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "DashScope");
         var images = new ArrayList<GeneratedFile>();
         var choices = root.path("output").path("choices");
@@ -107,9 +98,14 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
                 images.addAll(choiceImages(choice));
             }
         }
-        return result(data, root, List.copyOf(images), tokenUsage(root.path("usage"),
-            images.size()), List.of(), textOrNull(root.path("request_id")),
-            textOrNull(root.path("model")));
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                tokenUsage(root.path("usage"), images.size()),
+                List.of(),
+                textOrNull(root.path("request_id")),
+                textOrNull(root.path("model")));
     }
 
     private List<GeneratedFile> choiceImages(com.fasterxml.jackson.databind.JsonNode choice) {
@@ -129,8 +125,7 @@ public final class DashScopeImageGenerationClient extends AbstractJsonImageGener
     }
 
     @Override
-    protected String endpointUrl(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected String endpointUrl(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         return new DashScopeEndpointResolver(options.baseUrl()).nativeBaseUrl() + ENDPOINT_PATH;
     }
 

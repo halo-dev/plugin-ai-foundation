@@ -7,11 +7,7 @@ import run.halo.aifoundation.embedding.EmbeddingContent;
 
 /** Provider-facing embedding invocation after common validation and batching. */
 public record ProviderEmbeddingRequest(
-    List<String> inputs,
-    List<EmbeddingContent> contents,
-    EmbeddingOptions options,
-    Map<String, String> headers
-) {
+        List<String> inputs, List<EmbeddingContent> contents, EmbeddingOptions options, Map<String, String> headers) {
     public ProviderEmbeddingRequest {
         inputs = inputs == null ? List.of() : List.copyOf(inputs);
         contents = contents == null ? List.of() : List.copyOf(contents);

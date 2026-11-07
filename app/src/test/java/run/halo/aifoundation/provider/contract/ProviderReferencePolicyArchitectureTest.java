@@ -12,21 +12,21 @@ import org.junit.jupiter.api.Test;
 
 class ProviderReferencePolicyArchitectureTest {
 
-    private static final Pattern INLINE_REFERENCE_CLASSIFICATION = Pattern.compile(
-        "\\.startsWith\\(\\\"(?:https?://|data:|ms://)\\\"\\)");
+    private static final Pattern INLINE_REFERENCE_CLASSIFICATION =
+            Pattern.compile("\\.startsWith\\(\\\"(?:https?://|data:|ms://)\\\"\\)");
 
     @Test
     void productionProvidersUseNamedReferencePolicies() throws IOException {
         var violations = new ArrayList<String>();
         try (var files = Files.walk(providerSourceRoot())) {
             files.filter(path -> path.toString().endsWith(".java"))
-                .filter(path -> !path.endsWith("UriReferencePolicy.java"))
-                .forEach(path -> inspect(path, violations));
+                    .filter(path -> !path.endsWith("UriReferencePolicy.java"))
+                    .forEach(path -> inspect(path, violations));
         }
 
         assertThat(violations)
-            .as("Provider URI acceptance rules must be expressed by named policies")
-            .isEmpty();
+                .as("Provider URI acceptance rules must be expressed by named policies")
+                .isEmpty();
     }
 
     private void inspect(Path path, List<String> violations) {

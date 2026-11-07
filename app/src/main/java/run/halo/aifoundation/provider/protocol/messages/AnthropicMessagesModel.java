@@ -51,8 +51,10 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
     private final WebClient webClient;
     private final AnthropicMessagesProfile profile;
 
-    public AnthropicMessagesModel(ChatCompletionsOptions defaultOptions,
-        WebClient.Builder webClientBuilder, AnthropicMessagesProfile profile) {
+    public AnthropicMessagesModel(
+            ChatCompletionsOptions defaultOptions,
+            WebClient.Builder webClientBuilder,
+            AnthropicMessagesProfile profile) {
         this.defaultOptions = java.util.Objects.requireNonNull(defaultOptions);
         this.webClient = webClientBuilder.build();
         this.profile = java.util.Objects.requireNonNull(profile);
@@ -71,26 +73,27 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         var diagnostics = ProviderDiagnostics.create(profile.providerType(), profile.adapterType());
         var url = endpoint(options);
         diagnostics.request(url, body, false);
-        return webClient.method(HttpMethod.POST)
-            .uri(URI.create(url))
-            .headers(headers -> applyHeaders(headers, options))
-            .bodyValue(body)
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response, profile.providerType(),
-                        "messages", diagnostics);
-                }
-                return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> response(data, diagnostics.invocationId()));
-            })
-            .block(options.getTimeout());
+        return webClient
+                .method(HttpMethod.POST)
+                .uri(URI.create(url))
+                .headers(headers -> applyHeaders(headers, options))
+                .bodyValue(body)
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(
+                                response, profile.providerType(), "messages", diagnostics);
+                    }
+                    return ProviderHttpResponseSupport.body(response, diagnostics)
+                            .map(data -> response(data, diagnostics.invocationId()));
+                })
+                .block(options.getTimeout());
     }
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
         return streamParts(prompt)
-            .ofType(ProviderStreamPart.ChatResponsePart.class)
-            .map(ProviderStreamPart.ChatResponsePart::response);
+                .ofType(ProviderStreamPart.ChatResponsePart.class)
+                .map(ProviderStreamPart.ChatResponsePart::response);
     }
 
     @Override
@@ -99,23 +102,23 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             var requestPrompt = requestPrompt(prompt);
             var options = (ChatCompletionsOptions) requestPrompt.getOptions();
             var body = requestBody(requestPrompt, options, true);
-            var diagnostics = ProviderDiagnostics.create(profile.providerType(),
-                profile.adapterType());
+            var diagnostics = ProviderDiagnostics.create(profile.providerType(), profile.adapterType());
             var url = endpoint(options);
             diagnostics.request(url, body, true);
-            return webClient.method(HttpMethod.POST)
-                .uri(URI.create(url))
-                .headers(headers -> applyHeaders(headers, options))
-                .bodyValue(body)
-                .exchangeToFlux(response -> {
-                    if (!response.statusCode().is2xxSuccessful()) {
-                        return ProviderHttpResponseSupport.errorFlux(response,
-                            profile.providerType(), "messages", diagnostics);
-                    }
-                    var state = new StreamState(diagnostics.invocationId());
-                    return ProviderHttpResponseSupport.sse(response, diagnostics)
-                        .concatMapIterable(event -> state.accept(event.data()));
-                });
+            return webClient
+                    .method(HttpMethod.POST)
+                    .uri(URI.create(url))
+                    .headers(headers -> applyHeaders(headers, options))
+                    .bodyValue(body)
+                    .exchangeToFlux(response -> {
+                        if (!response.statusCode().is2xxSuccessful()) {
+                            return ProviderHttpResponseSupport.errorFlux(
+                                    response, profile.providerType(), "messages", diagnostics);
+                        }
+                        var state = new StreamState(diagnostics.invocationId());
+                        return ProviderHttpResponseSupport.sse(response, diagnostics)
+                                .concatMapIterable(event -> state.accept(event.data()));
+                    });
         });
     }
 
@@ -129,27 +132,30 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         return new Prompt(prompt.getInstructions(), options);
     }
 
-    private Map<String, Object> requestBody(Prompt prompt, ChatCompletionsOptions options,
-        boolean stream) {
+    private Map<String, Object> requestBody(Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         var body = new LinkedHashMap<String, Object>();
         if (options.getExtraBody() != null) {
             body.putAll(options.getExtraBody());
         }
         body.put("model", options.getModel());
         var system = prompt.getInstructions().stream()
-            .filter(message -> message instanceof SystemMessage)
-            .map(Message::getText)
-            .filter(AnthropicMessagesModel::hasContent)
-            .toList();
+                .filter(message -> message instanceof SystemMessage)
+                .map(Message::getText)
+                .filter(AnthropicMessagesModel::hasContent)
+                .toList();
         if (!system.isEmpty()) {
             body.put("system", String.join("\n\n", system));
         }
-        body.put("messages", prompt.getInstructions().stream()
-            .filter(message -> !(message instanceof SystemMessage))
-            .flatMap(message -> messageBodies(message, options).stream())
-            .toList());
-        put(body, "max_tokens", options.getMaxTokens() != null
-            ? options.getMaxTokens() : options.getMaxCompletionTokens());
+        body.put(
+                "messages",
+                prompt.getInstructions().stream()
+                        .filter(message -> !(message instanceof SystemMessage))
+                        .flatMap(message -> messageBodies(message, options).stream())
+                        .toList());
+        put(
+                body,
+                "max_tokens",
+                options.getMaxTokens() != null ? options.getMaxTokens() : options.getMaxCompletionTokens());
         put(body, "temperature", options.getTemperature());
         put(body, "top_p", options.getTopP());
         if (!CollectionUtils.isEmpty(options.getStopSequences())) {
@@ -169,8 +175,7 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         return body;
     }
 
-    private List<Map<String, Object>> messageBodies(Message message,
-        ChatCompletionsOptions options) {
+    private List<Map<String, Object>> messageBodies(Message message, ChatCompletionsOptions options) {
         if (message instanceof UserMessage user) {
             var body = new LinkedHashMap<String, Object>();
             body.put("role", "user");
@@ -181,17 +186,22 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             return List.of(assistantBody(assistant));
         }
         if (message instanceof ToolResponseMessage tool) {
-            var content = tool.getResponses().stream().map(response -> {
-                var block = new LinkedHashMap<String, Object>();
-                block.put("type", "tool_result");
-                block.put("tool_use_id", response.id());
-                block.put("content", response.responseData() != null ? response.responseData() : "");
-                return Map.copyOf(block);
-            }).toList();
+            var content = tool.getResponses().stream()
+                    .map(response -> {
+                        var block = new LinkedHashMap<String, Object>();
+                        block.put("type", "tool_result");
+                        block.put("tool_use_id", response.id());
+                        block.put("content", response.responseData() != null ? response.responseData() : "");
+                        return Map.copyOf(block);
+                    })
+                    .toList();
             return List.of(Map.of("role", "user", "content", content));
         }
-        return List.of(Map.of("role", message.getMessageType().getValue(),
-            "content", message.getText() != null ? message.getText() : ""));
+        return List.of(Map.of(
+                "role",
+                message.getMessageType().getValue(),
+                "content",
+                message.getText() != null ? message.getText() : ""));
     }
 
     private Object userContent(UserMessage message, ChatCompletionsOptions options) {
@@ -237,10 +247,9 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         var provider = ReasoningProviderMetadata.values(metadata, profile.providerType());
         if (provider.get("reasoningBlocks") instanceof List<?> blocks) {
             return blocks.stream()
-                .filter(Map.class::isInstance)
-                .<Map<String, Object>>map(block ->
-                    new LinkedHashMap<>((Map<String, Object>) block))
-                .toList();
+                    .filter(Map.class::isInstance)
+                    .<Map<String, Object>>map(block -> new LinkedHashMap<>((Map<String, Object>) block))
+                    .toList();
         }
         var reasoning = string(metadata.get("reasoningContent"));
         if (!hasContent(reasoning)) {
@@ -262,10 +271,11 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             return providerBlock;
         }
         var mime = media.getMimeType() != null
-            ? media.getMimeType().toString() : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
+                ? media.getMimeType().toString()
+                : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
         if (!mime.startsWith("image/")) {
             throw new IllegalArgumentException(
-                "Anthropic Messages supports only provider-declared media, received: " + mime);
+                    "Anthropic Messages supports only provider-declared media, received: " + mime);
         }
         return Map.of("type", "image", "source", mediaSource(media, mime));
     }
@@ -273,21 +283,28 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
     private Map<String, Object> mediaSource(Media media, String mime) {
         var data = media.getData();
         if (data instanceof byte[] bytes) {
-            return Map.of("type", "base64", "media_type", mime,
-                "data", Base64.getEncoder().encodeToString(bytes));
+            return Map.of(
+                    "type",
+                    "base64",
+                    "media_type",
+                    mime,
+                    "data",
+                    Base64.getEncoder().encodeToString(bytes));
         }
         return Map.of("type", "url", "url", string(data));
     }
 
     private List<Map<String, Object>> tools(List<ToolCallback> callbacks) {
-        return callbacks.stream().map(callback -> {
-            var definition = callback.getToolDefinition();
-            var tool = new LinkedHashMap<String, Object>();
-            tool.put("name", definition.name());
-            tool.put("description", definition.description());
-            tool.put("input_schema", parseJson(definition.inputSchema()));
-            return Map.copyOf(tool);
-        }).toList();
+        return callbacks.stream()
+                .map(callback -> {
+                    var definition = callback.getToolDefinition();
+                    var tool = new LinkedHashMap<String, Object>();
+                    tool.put("name", definition.name());
+                    tool.put("description", definition.description());
+                    tool.put("input_schema", parseJson(definition.inputSchema()));
+                    return Map.copyOf(tool);
+                })
+                .toList();
     }
 
     private Object toolChoice(Object value) {
@@ -302,8 +319,8 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             };
         }
         if (value instanceof Map<?, ?> map
-            && map.get("function") instanceof Map<?, ?> function
-            && function.get("name") != null) {
+                && map.get("function") instanceof Map<?, ?> function
+                && function.get("name") != null) {
             return Map.of("type", "tool", "name", function.get("name").toString());
         }
         return value;
@@ -317,14 +334,21 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             }
             var parsed = output(root.path("content"));
             var properties = outputProperties(parsed);
-            var output = AssistantMessage.builder().content(parsed.text())
-                .properties(properties).toolCalls(parsed.toolCalls()).build();
-            var generation = new Generation(output, ChatGenerationMetadata.builder()
-                .finishReason(text(root, "stop_reason")).metadata(properties).build());
+            var output = AssistantMessage.builder()
+                    .content(parsed.text())
+                    .properties(properties)
+                    .toolCalls(parsed.toolCalls())
+                    .build();
+            var generation = new Generation(
+                    output,
+                    ChatGenerationMetadata.builder()
+                            .finishReason(text(root, "stop_reason"))
+                            .metadata(properties)
+                            .build());
             var metadata = ChatResponseMetadata.builder()
-                .id(text(root, "id"))
-                .model(text(root, "model"))
-                .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
+                    .id(text(root, "id"))
+                    .model(text(root, "model"))
+                    .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
             var usage = usage(root.path("usage"));
             if (usage != null) {
                 metadata.usage(usage);
@@ -332,8 +356,7 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             additionalMetadata(root).forEach(metadata::keyValue);
             return new ChatResponse(List.of(generation), metadata.build());
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
-                "Failed to parse " + profile.providerType() + " Messages response", e);
+            throw new IllegalStateException("Failed to parse " + profile.providerType() + " Messages response", e);
         }
     }
 
@@ -352,25 +375,26 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
                         signature = text(block, "signature");
                         reasoningBlocks.add(OBJECT_MAPPER.convertValue(block, Map.class));
                     }
-                    case "tool_use" -> calls.add(new AssistantMessage.ToolCall(
-                        text(block, "id"), "function", text(block, "name"),
-                        OBJECT_MAPPER.writeValueAsString(
-                            OBJECT_MAPPER.convertValue(block.path("input"), Object.class))));
-                    default -> { }
+                    case "tool_use" ->
+                        calls.add(new AssistantMessage.ToolCall(
+                                text(block, "id"),
+                                "function",
+                                text(block, "name"),
+                                OBJECT_MAPPER.writeValueAsString(
+                                        OBJECT_MAPPER.convertValue(block.path("input"), Object.class))));
+                    default -> {}
                 }
             }
         }
-        return new ParsedOutput(text.toString(), reasoning.toString(), signature,
-            List.copyOf(reasoningBlocks), List.copyOf(calls));
+        return new ParsedOutput(
+                text.toString(), reasoning.toString(), signature, List.copyOf(reasoningBlocks), List.copyOf(calls));
     }
 
     private Map<String, Object> outputProperties(ParsedOutput output) {
         var values = new LinkedHashMap<String, Object>();
-        put(values, "reasoningContent", hasContent(output.reasoning())
-            ? output.reasoning() : null);
+        put(values, "reasoningContent", hasContent(output.reasoning()) ? output.reasoning() : null);
         put(values, "reasoningSignature", output.signature());
-        put(values, "reasoningBlocks", output.reasoningBlocks().isEmpty()
-            ? null : output.reasoningBlocks());
+        put(values, "reasoningBlocks", output.reasoningBlocks().isEmpty() ? null : output.reasoningBlocks());
         return Map.copyOf(values);
     }
 
@@ -378,7 +402,7 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         var values = new LinkedHashMap<String, Object>();
         root.fields().forEachRemaining(field -> {
             if (!List.of("id", "model", "content", "usage", "stop_reason", "role", "type")
-                .contains(field.getKey())) {
+                    .contains(field.getKey())) {
                 values.put(field.getKey(), OBJECT_MAPPER.convertValue(field.getValue(), Object.class));
             }
         });
@@ -392,27 +416,34 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         return ProviderUsage.messages(node, OBJECT_MAPPER.convertValue(node, Object.class));
     }
 
-    private ProviderStreamPart.ChatResponsePart chatPart(String content,
-        AssistantMessage.ToolCall toolCall, Map<String, Object> properties, String finishReason,
-        Usage usage, String diagnosticId) {
-        var output = AssistantMessage.builder().content(content != null ? content : "")
-            .properties(properties != null ? properties : Map.of());
+    private ProviderStreamPart.ChatResponsePart chatPart(
+            String content,
+            AssistantMessage.ToolCall toolCall,
+            Map<String, Object> properties,
+            String finishReason,
+            Usage usage,
+            String diagnosticId) {
+        var output = AssistantMessage.builder()
+                .content(content != null ? content : "")
+                .properties(properties != null ? properties : Map.of());
         if (toolCall != null) {
             output.toolCalls(List.of(toolCall));
         }
-        var generation = new Generation(output.build(), ChatGenerationMetadata.builder()
-            .finishReason(finishReason).metadata(properties != null ? properties : Map.of()).build());
-        var metadata = ChatResponseMetadata.builder()
-            .keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
+        var generation = new Generation(
+                output.build(),
+                ChatGenerationMetadata.builder()
+                        .finishReason(finishReason)
+                        .metadata(properties != null ? properties : Map.of())
+                        .build());
+        var metadata =
+                ChatResponseMetadata.builder().keyValue(AiFoundationDiagnostics.CORRELATION_ID_KEY, diagnosticId);
         if (usage != null) {
             metadata.usage(usage);
         }
-        return new ProviderStreamPart.ChatResponsePart(
-            new ChatResponse(List.of(generation), metadata.build()));
+        return new ProviderStreamPart.ChatResponsePart(new ChatResponse(List.of(generation), metadata.build()));
     }
 
-    private void applyHeaders(org.springframework.http.HttpHeaders headers,
-        ChatCompletionsOptions options) {
+    private void applyHeaders(org.springframework.http.HttpHeaders headers, ChatCompletionsOptions options) {
         headers.setContentType(MediaType.APPLICATION_JSON);
         profile.applyHeaders(headers, options);
         if (options.getCustomHeaders() != null) {
@@ -462,8 +493,7 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
     private final class StreamState {
         private final String diagnosticId;
         private final Map<Integer, BlockState> blocks = new LinkedHashMap<>();
-        private final com.fasterxml.jackson.databind.node.ObjectNode cumulativeUsage =
-            OBJECT_MAPPER.createObjectNode();
+        private final com.fasterxml.jackson.databind.node.ObjectNode cumulativeUsage = OBJECT_MAPPER.createObjectNode();
 
         private StreamState(String diagnosticId) {
             this.diagnosticId = diagnosticId;
@@ -483,24 +513,31 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
                     case "content_block_stop" -> blockStop(root);
                     case "message_delta" -> messageDelta(root);
                     case "message_stop", "ping" -> List.of();
-                    case "error" -> throw new ProviderHttpException(profile.providerType(),
-                        "messages-stream", 200, data);
-                    default -> List.of(chatPart("", null,
-                        Map.of("unknownEventType", type, "providerEvent",
-                            OBJECT_MAPPER.convertValue(root, Object.class)),
-                        null, null, diagnosticId));
+                    case "error" ->
+                        throw new ProviderHttpException(profile.providerType(), "messages-stream", 200, data);
+                    default ->
+                        List.of(chatPart(
+                                "",
+                                null,
+                                Map.of(
+                                        "unknownEventType",
+                                        type,
+                                        "providerEvent",
+                                        OBJECT_MAPPER.convertValue(root, Object.class)),
+                                null,
+                                null,
+                                diagnosticId));
                 };
             } catch (JsonProcessingException e) {
                 throw new IllegalStateException(
-                    "Failed to parse " + profile.providerType() + " Messages stream event", e);
+                        "Failed to parse " + profile.providerType() + " Messages stream event", e);
             }
         }
 
         private List<ProviderStreamPart> messageStart(JsonNode root) {
             var usage = root.path("message").path("usage");
             mergeUsage(usage);
-            return List.of(chatPart("", null, Map.of(), null,
-                usageSnapshot().partial(), diagnosticId));
+            return List.of(chatPart("", null, Map.of(), null, usageSnapshot().partial(), diagnosticId));
         }
 
         private List<ProviderStreamPart> blockStart(JsonNode root) throws JsonProcessingException {
@@ -513,21 +550,25 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
                 state.name = text(block, "name");
                 var initial = block.path("input");
                 if (initial.isObject() && initial.size() > 0) {
-                    state.value.append(OBJECT_MAPPER.writeValueAsString(
-                        OBJECT_MAPPER.convertValue(initial, Object.class)));
+                    state.value.append(
+                            OBJECT_MAPPER.writeValueAsString(OBJECT_MAPPER.convertValue(initial, Object.class)));
                 }
-                return List.of(new ProviderStreamPart.ToolInputStartPart(index, state.id,
-                    state.name));
+                return List.of(new ProviderStreamPart.ToolInputStartPart(index, state.id, state.name));
             }
             var initial = "thinking".equals(state.type)
-                ? block.path("thinking").asText("") : block.path("text").asText("");
+                    ? block.path("thinking").asText("")
+                    : block.path("text").asText("");
             state.value.append(initial);
             if (!hasContent(initial)) {
                 return List.of();
             }
-            return List.of(chatPart("text".equals(state.type) ? initial : "", null,
-                "thinking".equals(state.type) ? Map.of("reasoningContent", initial) : Map.of(),
-                null, null, diagnosticId));
+            return List.of(chatPart(
+                    "text".equals(state.type) ? initial : "",
+                    null,
+                    "thinking".equals(state.type) ? Map.of("reasoningContent", initial) : Map.of(),
+                    null,
+                    null,
+                    diagnosticId));
         }
 
         private List<ProviderStreamPart> blockDelta(JsonNode root) {
@@ -543,8 +584,7 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
                 case "thinking_delta" -> {
                     var value = delta.path("thinking").asText("");
                     state.value.append(value);
-                    yield List.of(chatPart("", null, Map.of("reasoningContent", value),
-                        null, null, diagnosticId));
+                    yield List.of(chatPart("", null, Map.of("reasoningContent", value), null, null, diagnosticId));
                 }
                 case "signature_delta" -> {
                     state.signature.append(delta.path("signature").asText(""));
@@ -567,16 +607,33 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             }
             if ("tool_use".equals(state.type)) {
                 var arguments = state.value.isEmpty() ? "{}" : state.value.toString();
-                return List.of(new ProviderStreamPart.ToolInputEndPart(index),
-                    chatPart("", new AssistantMessage.ToolCall(state.id, "function", state.name,
-                        arguments), Map.of(), "tool_use", null, diagnosticId));
+                return List.of(
+                        new ProviderStreamPart.ToolInputEndPart(index),
+                        chatPart(
+                                "",
+                                new AssistantMessage.ToolCall(state.id, "function", state.name, arguments),
+                                Map.of(),
+                                "tool_use",
+                                null,
+                                diagnosticId));
             }
             if ("thinking".equals(state.type) && !state.signature.isEmpty()) {
-                var block = Map.<String, Object>of("type", "thinking",
-                    "thinking", state.value.toString(), "signature", state.signature.toString());
-                return List.of(chatPart("", null, Map.of(
-                    "reasoningSignature", state.signature.toString(),
-                    "reasoningBlocks", List.of(block)), null, null, diagnosticId));
+                var block = Map.<String, Object>of(
+                        "type",
+                        "thinking",
+                        "thinking",
+                        state.value.toString(),
+                        "signature",
+                        state.signature.toString());
+                return List.of(chatPart(
+                        "",
+                        null,
+                        Map.of(
+                                "reasoningSignature", state.signature.toString(),
+                                "reasoningBlocks", List.of(block)),
+                        null,
+                        null,
+                        diagnosticId));
             }
             return List.of();
         }
@@ -585,15 +642,20 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
             mergeUsage(root.path("usage"));
             var stopReason = text(root.path("delta"), "stop_reason");
             var usage = usageSnapshot();
-            return List.of(chatPart("", null, Map.of(), stopReason,
-                hasContent(stopReason) ? usage : usage.partial(), diagnosticId));
+            return List.of(chatPart(
+                    "", null, Map.of(), stopReason, hasContent(stopReason) ? usage : usage.partial(), diagnosticId));
         }
 
         private void mergeUsage(JsonNode update) {
             // These are cumulative snapshots, not deltas to add. Omitted fields retain their
             // previous value; explicit invalid/null counters remain unknown.
-            for (var field : List.of("input_tokens", "output_tokens", "cache_read_input_tokens",
-                "cache_creation_input_tokens", "output_tokens_details", "iterations")) {
+            for (var field : List.of(
+                    "input_tokens",
+                    "output_tokens",
+                    "cache_read_input_tokens",
+                    "cache_creation_input_tokens",
+                    "output_tokens_details",
+                    "iterations")) {
                 if (update.has(field)) {
                     cumulativeUsage.set(field, update.get(field).deepCopy());
                 }
@@ -601,10 +663,8 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         }
 
         private ProviderUsage usageSnapshot() {
-            return ProviderUsage.messages(cumulativeUsage,
-                OBJECT_MAPPER.convertValue(cumulativeUsage, Object.class));
+            return ProviderUsage.messages(cumulativeUsage, OBJECT_MAPPER.convertValue(cumulativeUsage, Object.class));
         }
-
     }
 
     private static final class BlockState {
@@ -619,9 +679,10 @@ public class AnthropicMessagesModel implements ChatModel, ProviderStreamingChatM
         }
     }
 
-    private record ParsedOutput(String text, String reasoning, String signature,
-                                List<Map<String, Object>> reasoningBlocks,
-                                List<AssistantMessage.ToolCall> toolCalls) {
-    }
-
+    private record ParsedOutput(
+            String text,
+            String reasoning,
+            String signature,
+            List<Map<String, Object>> reasoningBlocks,
+            List<AssistantMessage.ToolCall> toolCalls) {}
 }

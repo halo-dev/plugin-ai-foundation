@@ -11,15 +11,13 @@ public enum ModelParameterDomain {
     LANGUAGE("language", ModelType.LANGUAGE, mappings -> mappings.getLanguage() != null),
     EMBEDDING("embedding", ModelType.EMBEDDING, mappings -> mappings.getEmbedding() != null),
     RERANK("rerank", ModelType.RERANK, mappings -> mappings.getRerank() != null),
-    IMAGE_GENERATION("imageGeneration", ModelType.IMAGE_GENERATION,
-        mappings -> mappings.getImageGeneration() != null);
+    IMAGE_GENERATION("imageGeneration", ModelType.IMAGE_GENERATION, mappings -> mappings.getImageGeneration() != null);
 
     private final String value;
     private final ModelType modelType;
     private final Predicate<ModelParameterMappings> presence;
 
-    ModelParameterDomain(String value, ModelType modelType,
-        Predicate<ModelParameterMappings> presence) {
+    ModelParameterDomain(String value, ModelType modelType, Predicate<ModelParameterMappings> presence) {
         this.value = value;
         this.modelType = modelType;
         this.presence = presence;
@@ -41,8 +39,7 @@ public enum ModelParameterDomain {
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static ModelParameterDomain fromValue(String value) {
         return find(value)
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Unsupported model parameter domain: " + value));
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported model parameter domain: " + value));
     }
 
     public static Optional<ModelParameterDomain> find(String value) {
@@ -50,7 +47,7 @@ public enum ModelParameterDomain {
             return Optional.empty();
         }
         return Arrays.stream(values())
-            .filter(domain -> domain.value.equals(value))
-            .findFirst();
+                .filter(domain -> domain.value.equals(value))
+                .findFirst();
     }
 }

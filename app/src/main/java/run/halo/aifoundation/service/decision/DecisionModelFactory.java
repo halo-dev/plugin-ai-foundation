@@ -16,8 +16,8 @@ public class DecisionModelFactory {
     private final UsageExecutionObserver observer;
 
     public DecisionModel create(ModelResolution resolution) {
-        var client = providerClientCache.getOrCreateDecisionClient(resolution.provider(),
-            resolution.apiKey(), ProviderModelRef.from(resolution.model()));
+        var client = providerClientCache.getOrCreateDecisionClient(
+                resolution.provider(), resolution.apiKey(), ProviderModelRef.from(resolution.model()));
         if (client == null) {
             throw new ModelNotFoundException("Provider does not support decision inference");
         }

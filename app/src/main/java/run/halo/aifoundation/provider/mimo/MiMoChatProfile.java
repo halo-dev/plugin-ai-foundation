@@ -24,10 +24,10 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final UriReferencePolicy MEDIA_REFERENCES =
-        UriReferencePolicy.allowing("http://", "https://", "data:");
+            UriReferencePolicy.allowing("http://", "https://", "data:");
     private static final Set<String> EXTRA_FIELDS = Set.of("thinking", "builtinTools", "video");
-    private static final Set<String> VIDEO_MIME_TYPES = Set.of(
-        "video/mp4", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv");
+    private static final Set<String> VIDEO_MIME_TYPES =
+            Set.of("video/mp4", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv");
 
     @Override
     public String providerType() {
@@ -40,8 +40,8 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         validateExtraFields(options.getExtraBody());
         useMaxCompletionTokens(body);
         applyBuiltinTools(body);
@@ -58,8 +58,8 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
     @Override
     public Map<String, Object> mediaContentPart(Media media) {
         var mime = media.getMimeType() != null
-            ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
-            : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
+                ? media.getMimeType().toString().toLowerCase(Locale.ROOT)
+                : MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE;
         var reference = mediaReference(media, mime);
         if (mime.startsWith("image/")) {
             return Map.of("type", "image_url", "image_url", Map.of("url", reference));
@@ -68,11 +68,10 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
             return Map.of("type", "input_audio", "input_audio", Map.of("data", reference));
         }
         if (VIDEO_MIME_TYPES.contains(mime)) {
-            return new LinkedHashMap<>(Map.of("type", "video_url", "video_url",
-                Map.of("url", reference)));
+            return new LinkedHashMap<>(Map.of("type", "video_url", "video_url", Map.of("url", reference)));
         }
         throw new IllegalArgumentException(
-            "MiMo Chat supports image, audio, MP4, MOV, AVI, or WMV media; received: " + mime);
+                "MiMo Chat supports image, audio, MP4, MOV, AVI, or WMV media; received: " + mime);
     }
 
     @Override
@@ -85,8 +84,7 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
     public Map<String, Object> additionalMessageMetadata(JsonNode message) {
         var metadata = new LinkedHashMap<String, Object>();
         if (message.path("annotations").isArray()) {
-            metadata.put("annotations", OBJECT_MAPPER.convertValue(message.path("annotations"),
-                Object.class));
+            metadata.put("annotations", OBJECT_MAPPER.convertValue(message.path("annotations"), Object.class));
         }
         if (message.path("error_message").isTextual()) {
             metadata.put("errorMessage", message.path("error_message").asText());
@@ -101,8 +99,7 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(EXTRA_FIELDS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported MiMo Chat option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported MiMo Chat option(s): " + String.join(", ", unknown));
         }
     }
 
@@ -145,8 +142,7 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
         var unknown = new LinkedHashSet<>(options.keySet());
         unknown.removeAll(Set.of("fps", "media_resolution"));
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported MiMo video option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported MiMo video option(s): " + String.join(", ", unknown));
         }
         var fps = decimal(options.get("fps"), "video.fps");
         if (fps != null && (fps < 0.1d || fps > 10d)) {
@@ -154,13 +150,11 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
         }
         var resolution = text(options.get("media_resolution"));
         if (!isSupportedResolution(resolution)) {
-            throw new IllegalArgumentException(
-                "MiMo video.media_resolution must be 'default' or 'max'");
+            throw new IllegalArgumentException("MiMo video.media_resolution must be 'default' or 'max'");
         }
         var videoParts = videoParts(body.get("messages"));
         if (videoParts.isEmpty()) {
-            throw new IllegalArgumentException(
-                "MiMo video options require at least one video input");
+            throw new IllegalArgumentException("MiMo video options require at least one video input");
         }
         for (var part : videoParts) {
             if (fps != null) {
@@ -199,10 +193,10 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
             return List.of();
         }
         return content.stream()
-            .map(this::map)
-            .filter(java.util.Objects::nonNull)
-            .filter(part -> "video_url".equals(part.get("type")))
-            .toList();
+                .map(this::map)
+                .filter(java.util.Objects::nonNull)
+                .filter(part -> "video_url".equals(part.get("type")))
+                .toList();
     }
 
     private void validateThinking(Object value) {
@@ -210,21 +204,18 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
             return;
         }
         if (!(value instanceof Map<?, ?> thinking) || thinking.size() != 1) {
-            throw new IllegalArgumentException(
-                "MiMo thinking must be an object containing only 'type'");
+            throw new IllegalArgumentException("MiMo thinking must be an object containing only 'type'");
         }
         var type = text(thinking.get("type"));
         if (!"enabled".equals(type) && !"disabled".equals(type)) {
-            throw new IllegalArgumentException(
-                "MiMo thinking.type must be 'enabled' or 'disabled'");
+            throw new IllegalArgumentException("MiMo thinking.type must be 'enabled' or 'disabled'");
         }
     }
 
     private void validateLimits(Map<String, Object> body) {
         var max = integer(body.get("max_completion_tokens"), "max_completion_tokens");
         if (max != null && (max < 1 || max > 131072)) {
-            throw new IllegalArgumentException(
-                "MiMo max_completion_tokens must be between 1 and 131072");
+            throw new IllegalArgumentException("MiMo max_completion_tokens must be between 1 and 131072");
         }
         range(body.get("temperature"), "temperature", 0d, 1.5d);
         range(body.get("top_p"), "top_p", 0.01d, 1d);
@@ -254,8 +245,7 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
             var tool = map(item);
             var type = tool != null ? text(tool.get("type")) : null;
             if (!"function".equals(type) && !"web_search".equals(type)) {
-                throw new IllegalArgumentException(
-                    "MiMo Chat supports function and web_search tools only");
+                throw new IllegalArgumentException("MiMo Chat supports function and web_search tools only");
             }
         }
     }
@@ -263,25 +253,20 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
     private void validateWebSearchTool(Object value) {
         var tool = map(value);
         if (tool == null || !"web_search".equals(tool.get("type"))) {
-            throw new IllegalArgumentException(
-                "MiMo builtinTools entries must have type='web_search'");
+            throw new IllegalArgumentException("MiMo builtinTools entries must have type='web_search'");
         }
         var unknown = new LinkedHashSet<>(tool.keySet());
-        unknown.removeAll(Set.of("type", "max_keyword", "force_search", "limit",
-            "user_location"));
+        unknown.removeAll(Set.of("type", "max_keyword", "force_search", "limit", "user_location"));
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported MiMo web_search field(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported MiMo web_search field(s): " + String.join(", ", unknown));
         }
         positiveInteger(tool.get("max_keyword"), "web_search.max_keyword");
         positiveInteger(tool.get("limit"), "web_search.limit");
         if (tool.get("force_search") != null && !(tool.get("force_search") instanceof Boolean)) {
             throw new IllegalArgumentException("MiMo web_search.force_search must be boolean");
         }
-        if (tool.get("user_location") != null
-            && !(tool.get("user_location") instanceof Map<?, ?>)) {
-            throw new IllegalArgumentException(
-                "MiMo web_search.user_location must be an object");
+        if (tool.get("user_location") != null && !(tool.get("user_location") instanceof Map<?, ?>)) {
+            throw new IllegalArgumentException("MiMo web_search.user_location must be an object");
         }
     }
 
@@ -291,8 +276,7 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
         }
         var type = text(format.get("type"));
         if (!"text".equals(type) && !"json_object".equals(type)) {
-            throw new IllegalArgumentException(
-                "MiMo Chat supports text or JSON object output, not " + type);
+            throw new IllegalArgumentException("MiMo Chat supports text or JSON object output, not " + type);
         }
     }
 
@@ -313,11 +297,17 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
     }
 
     private void rejectUndocumentedFields(Map<String, Object> body) {
-        for (var field : List.of("seed", "parallel_tool_calls", "logprobs", "top_logprobs",
-            "verbosity", "store", "metadata", "service_tier")) {
+        for (var field : List.of(
+                "seed",
+                "parallel_tool_calls",
+                "logprobs",
+                "top_logprobs",
+                "verbosity",
+                "store",
+                "metadata",
+                "service_tier")) {
             if (body.containsKey(field)) {
-                throw new IllegalArgumentException(
-                    "MiMo Chat does not document request field: " + field);
+                throw new IllegalArgumentException("MiMo Chat does not document request field: " + field);
             }
         }
     }
@@ -340,16 +330,14 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
                 throw new IllegalArgumentException("Failed to read MiMo media input", e);
             }
         }
-        throw new IllegalArgumentException(
-            "MiMo media content must be a URL or binary data");
+        throw new IllegalArgumentException("MiMo media content must be a URL or binary data");
     }
 
     private String validateMediaReference(String value) {
         if (MEDIA_REFERENCES.allows(value)) {
             return value;
         }
-        throw new IllegalArgumentException(
-            "MiMo media references must use HTTP(S) or a data URL");
+        throw new IllegalArgumentException("MiMo media references must use HTTP(S) or a data URL");
     }
 
     private String dataUrl(String mime, byte[] bytes) {
@@ -387,10 +375,8 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
         if (value == null) {
             return;
         }
-        if (!(value instanceof Number number) || number.doubleValue() < minimum
-            || number.doubleValue() > maximum) {
-            throw new IllegalArgumentException("MiMo " + field + " must be between " + minimum
-                + " and " + maximum);
+        if (!(value instanceof Number number) || number.doubleValue() < minimum || number.doubleValue() > maximum) {
+            throw new IllegalArgumentException("MiMo " + field + " must be between " + minimum + " and " + maximum);
         }
     }
 
@@ -402,5 +388,4 @@ final class MiMoChatProfile implements ChatCompletionsProfile {
     private String text(Object value) {
         return value != null && !value.toString().isBlank() ? value.toString() : null;
     }
-
 }

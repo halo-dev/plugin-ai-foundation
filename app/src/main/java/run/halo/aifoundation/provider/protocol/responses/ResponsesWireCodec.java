@@ -11,9 +11,7 @@ import java.util.Map;
 import run.halo.aifoundation.diagnostics.AiFoundationDiagnostics;
 import run.halo.aifoundation.provider.support.JsonNodes;
 
-/**
- * Stateless response and per-subscription streaming event normalization for Responses APIs.
- */
+/** Stateless response and per-subscription streaming event normalization for Responses APIs. */
 public final class ResponsesWireCodec {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -44,18 +42,31 @@ public final class ResponsesWireCodec {
         if (!providerItems.isEmpty()) {
             metadata.put("providerOutputItems", List.copyOf(providerItems));
         }
-        return new ResponsesResult(text(root, "id"), text(root, "model"), text(root, "status"),
-            text.toString(), reasoning.toString(), toolCalls, sources, files,
-            usage(root.path("usage")), profile.normalizeProviderMetadata(metadata));
+        return new ResponsesResult(
+                text(root, "id"),
+                text(root, "model"),
+                text(root, "status"),
+                text.toString(),
+                reasoning.toString(),
+                toolCalls,
+                sources,
+                files,
+                usage(root.path("usage")),
+                profile.normalizeProviderMetadata(metadata));
     }
 
     public StreamDecoder newStreamDecoder() {
         return new StreamDecoder();
     }
 
-    private void decodeItem(JsonNode item, StringBuilder outputText, StringBuilder reasoning,
-        List<ResponsesResult.ToolCall> toolCalls, List<Map<String, Object>> sources,
-        List<Map<String, Object>> files, List<Map<String, Object>> providerItems) {
+    private void decodeItem(
+            JsonNode item,
+            StringBuilder outputText,
+            StringBuilder reasoning,
+            List<ResponsesResult.ToolCall> toolCalls,
+            List<Map<String, Object>> sources,
+            List<Map<String, Object>> files,
+            List<Map<String, Object>> providerItems) {
         switch (text(item, "type")) {
             case "message" -> decodeMessage(item, outputText, sources, files);
             case "reasoning" -> {
@@ -65,22 +76,25 @@ public final class ResponsesWireCodec {
                 // reasoning replay can place it back into a later input array.
                 providerItems.add(sanitizedMap(item));
             }
-            case "function_call" -> toolCalls.add(new ResponsesResult.ToolCall(
-                text(item, "id"), text(item, "call_id"), text(item, "name"),
-                text(item, "arguments")));
+            case "function_call" ->
+                toolCalls.add(new ResponsesResult.ToolCall(
+                        text(item, "id"), text(item, "call_id"), text(item, "name"), text(item, "arguments")));
             case "file_search_call" -> appendObjects(item.path("results"), files);
             case "web_search_call" -> {
                 appendObjects(item.path("action").path("sources"), sources);
                 providerItems.add(sanitizedMap(item));
             }
-            default -> decodeProviderItem(item, outputText, reasoning, sources, files,
-                providerItems);
+            default -> decodeProviderItem(item, outputText, reasoning, sources, files, providerItems);
         }
     }
 
-    private void decodeProviderItem(JsonNode item, StringBuilder outputText,
-        StringBuilder reasoning, List<Map<String, Object>> sources,
-        List<Map<String, Object>> files, List<Map<String, Object>> providerItems) {
+    private void decodeProviderItem(
+            JsonNode item,
+            StringBuilder outputText,
+            StringBuilder reasoning,
+            List<Map<String, Object>> sources,
+            List<Map<String, Object>> files,
+            List<Map<String, Object>> providerItems) {
         var normalized = profile.providerOutputItem(item);
         normalized.text().forEach(outputText::append);
         normalized.reasoning().forEach(reasoning::append);
@@ -91,8 +105,11 @@ public final class ResponsesWireCodec {
         }
     }
 
-    private void decodeMessage(JsonNode item, StringBuilder outputText,
-        List<Map<String, Object>> sources, List<Map<String, Object>> files) {
+    private void decodeMessage(
+            JsonNode item,
+            StringBuilder outputText,
+            List<Map<String, Object>> sources,
+            List<Map<String, Object>> files) {
         var content = item.path("content");
         if (!content.isArray()) {
             return;
@@ -136,17 +153,18 @@ public final class ResponsesWireCodec {
         if (usage == null || !usage.isObject()) {
             return null;
         }
-        return new ResponsesResult.Usage(integer(usage, "input_tokens"),
-            integer(usage, "output_tokens"), integer(usage, "total_tokens"),
-            sanitizedMap(usage));
+        return new ResponsesResult.Usage(
+                integer(usage, "input_tokens"),
+                integer(usage, "output_tokens"),
+                integer(usage, "total_tokens"),
+                sanitizedMap(usage));
     }
 
     private JsonNode readTree(String json, String label) {
         try {
             return OBJECT_MAPPER.readTree(json);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to parse " + profile.providerType()
-                + " Responses " + label, e);
+            throw new IllegalStateException("Failed to parse " + profile.providerType() + " Responses " + label, e);
         }
     }
 
@@ -156,9 +174,7 @@ public final class ResponsesWireCodec {
         }
         try {
             var redacted = AiFoundationDiagnostics.redactSensitiveText(node.toString());
-            var value = OBJECT_MAPPER.readValue(redacted,
-                new TypeReference<LinkedHashMap<String, Object>>() {
-                });
+            var value = OBJECT_MAPPER.readValue(redacted, new TypeReference<LinkedHashMap<String, Object>>() {});
             // Responses payloads commonly use explicit nulls for optional terminal fields such as
             // metadata, error, and incomplete_details. The protocol records expose immutable maps,
             // whose copy constructors reject null values; omitting absent optional fields also
@@ -166,8 +182,7 @@ public final class ResponsesWireCodec {
             value.entrySet().removeIf(entry -> entry.getKey() == null || entry.getValue() == null);
             return value;
         } catch (JsonProcessingException e) {
-            return new LinkedHashMap<>(Map.of("value",
-                AiFoundationDiagnostics.redactSensitiveText(node.toString())));
+            return new LinkedHashMap<>(Map.of("value", AiFoundationDiagnostics.redactSensitiveText(node.toString())));
         }
     }
 
@@ -190,24 +205,23 @@ public final class ResponsesWireCodec {
             var eventType = profile.eventType(event);
             return switch (eventType) {
                 case "response.output_item.added" -> itemAdded(event);
-                case "response.output_text.delta" -> List.of(new ResponsesStreamPart.TextDelta(
-                    text(event, "item_id"), text(event, "delta")));
+                case "response.output_text.delta" ->
+                    List.of(new ResponsesStreamPart.TextDelta(text(event, "item_id"), text(event, "delta")));
                 case "response.reasoning_summary_text.delta", "response.reasoning_text.delta" ->
-                    List.of(
-                    new ResponsesStreamPart.ReasoningDelta(text(event, "item_id"),
-                        text(event, "delta")));
+                    List.of(new ResponsesStreamPart.ReasoningDelta(text(event, "item_id"), text(event, "delta")));
                 case "response.function_call_arguments.delta" -> toolDelta(event);
                 case "response.output_item.done" -> itemDone(event);
-                case "response.output_text.annotation.added" -> List.of(
-                    new ResponsesStreamPart.Source(sanitizedMap(event.path("annotation"))));
-                case "response.completed", "response.incomplete" -> List.of(
-                    new ResponsesStreamPart.Completed(decodeResponse(
-                        event.path("response").toString())));
+                case "response.output_text.annotation.added" ->
+                    List.of(new ResponsesStreamPart.Source(sanitizedMap(event.path("annotation"))));
+                case "response.completed", "response.incomplete" ->
+                    List.of(new ResponsesStreamPart.Completed(
+                            decodeResponse(event.path("response").toString())));
                 case "response.failed", "error" -> throw failure(eventType, event);
-                default -> profile.preserveUnknownEvents()
-                    ? List.of(new ResponsesStreamPart.Unknown(eventType,
-                        profile.normalizeProviderMetadata(sanitizedMap(event))))
-                    : List.of();
+                default ->
+                    profile.preserveUnknownEvents()
+                            ? List.of(new ResponsesStreamPart.Unknown(
+                                    eventType, profile.normalizeProviderMetadata(sanitizedMap(event))))
+                            : List.of();
             };
         }
 
@@ -216,47 +230,39 @@ public final class ResponsesWireCodec {
             if (!"function_call".equals(text(item, "type"))) {
                 return List.of();
             }
-            var index = integer(event, "output_index") != null
-                ? integer(event, "output_index") : tools.size();
-            var tool = new MutableToolCall(text(item, "id"), text(item, "call_id"),
-                text(item, "name"));
+            var index = integer(event, "output_index") != null ? integer(event, "output_index") : tools.size();
+            var tool = new MutableToolCall(text(item, "id"), text(item, "call_id"), text(item, "name"));
             tools.put(index, tool);
-            return List.of(new ResponsesStreamPart.ToolInputStart(index, tool.itemId,
-                tool.callId, tool.name));
+            return List.of(new ResponsesStreamPart.ToolInputStart(index, tool.itemId, tool.callId, tool.name));
         }
 
         private List<ResponsesStreamPart> toolDelta(JsonNode event) {
-            var index = integer(event, "output_index") != null
-                ? integer(event, "output_index") : 0;
-            var tool = tools.computeIfAbsent(index, ignored -> new MutableToolCall(
-                text(event, "item_id"), text(event, "call_id"), ""));
+            var index = integer(event, "output_index") != null ? integer(event, "output_index") : 0;
+            var tool = tools.computeIfAbsent(
+                    index, ignored -> new MutableToolCall(text(event, "item_id"), text(event, "call_id"), ""));
             var delta = text(event, "delta");
             tool.arguments.append(delta);
-            return List.of(new ResponsesStreamPart.ToolInputDelta(index, tool.itemId,
-                tool.callId, delta));
+            return List.of(new ResponsesStreamPart.ToolInputDelta(index, tool.itemId, tool.callId, delta));
         }
 
         private List<ResponsesStreamPart> itemDone(JsonNode event) {
             var item = event.path("item");
             if ("function_call".equals(text(item, "type"))) {
-                var index = integer(event, "output_index") != null
-                    ? integer(event, "output_index") : 0;
+                var index = integer(event, "output_index") != null ? integer(event, "output_index") : 0;
                 var tool = tools.remove(index);
                 var arguments = text(item, "arguments");
                 if (tool == null) {
-                    tool = new MutableToolCall(text(item, "id"), text(item, "call_id"),
-                        text(item, "name"));
+                    tool = new MutableToolCall(text(item, "id"), text(item, "call_id"), text(item, "name"));
                 }
                 if (arguments.isEmpty()) {
                     arguments = tool.arguments.toString();
                 }
-                return List.of(new ResponsesStreamPart.ToolInputEnd(index, tool.itemId,
-                    tool.callId, tool.name, arguments));
+                return List.of(
+                        new ResponsesStreamPart.ToolInputEnd(index, tool.itemId, tool.callId, tool.name, arguments));
             }
             if ("file_search_call".equals(text(item, "type"))) {
                 var parts = new ArrayList<ResponsesStreamPart>();
-                item.path("results").forEach(value ->
-                    parts.add(new ResponsesStreamPart.File(sanitizedMap(value))));
+                item.path("results").forEach(value -> parts.add(new ResponsesStreamPart.File(sanitizedMap(value))));
                 return parts;
             }
             return List.of();
@@ -271,8 +277,8 @@ public final class ResponsesWireCodec {
             if (message.isEmpty()) {
                 message = event.toString();
             }
-            return new ResponsesProtocolException(profile.providerType(), eventType, message,
-                profile.normalizeProviderMetadata(sanitizedMap(event)));
+            return new ResponsesProtocolException(
+                    profile.providerType(), eventType, message, profile.normalizeProviderMetadata(sanitizedMap(event)));
         }
     }
 

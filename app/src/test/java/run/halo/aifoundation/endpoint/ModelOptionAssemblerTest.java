@@ -29,8 +29,7 @@ import run.halo.app.extension.Metadata;
 class ModelOptionAssemblerTest {
 
     private final ModelOptionAssembler assembler = new ModelOptionAssembler(
-        new ModelCapabilityService(), new ModelCapabilityMatcher(),
-        new EffectiveParameterMappingResolver());
+            new ModelCapabilityService(), new ModelCapabilityMatcher(), new EffectiveParameterMappingResolver());
     private final AiProviderType providerType = mock(AiProviderType.class);
     private AiProvider provider;
     private AiModel model;
@@ -39,13 +38,12 @@ class ModelOptionAssemblerTest {
     @BeforeEach
     void setUp() {
         when(providerType.getSupportedFeatures(AdapterType.OPENAI_RESPONSES))
-            .thenReturn(List.of(ModelFeature.values()));
-        when(providerType.getSupportedAdapterTypes())
-            .thenReturn(List.of(AdapterType.OPENAI_RESPONSES));
+                .thenReturn(List.of(ModelFeature.values()));
+        when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.recommendAdapterType(ModelType.LANGUAGE))
-            .thenReturn(Optional.of(AdapterType.OPENAI_RESPONSES));
+                .thenReturn(Optional.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
-            .thenReturn(Map.of());
+                .thenReturn(Map.of());
         when(providerType.getDefaultBaseUrl()).thenReturn("https://api.openai.com/v1");
         provider = new AiProvider();
         provider.setMetadata(metadata("provider"));
@@ -73,16 +71,18 @@ class ModelOptionAssemblerTest {
 
     @Test
     void excludesStaleFeaturesFromOptionsAndRequiredFeatureFilters() {
-        model.getSpec().setFeatures(List.of(ModelFeature.STREAMING, ModelFeature.TOOL_CALL,
-            ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING));
+        model.getSpec()
+                .setFeatures(List.of(
+                        ModelFeature.STREAMING,
+                        ModelFeature.TOOL_CALL,
+                        ModelFeature.STRUCTURED_OUTPUT,
+                        ModelFeature.REASONING));
         catalogConstraints.setToolCalling(false);
         catalogConstraints.setStructuredOutput(false);
         catalogConstraints.setReasoning(reasoning(false));
 
-        assertThat(options(List.of()).getFirst().getFeatures())
-            .containsExactly(ModelFeature.STREAMING);
-        for (var feature : List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
-            ModelFeature.REASONING)) {
+        assertThat(options(List.of()).getFirst().getFeatures()).containsExactly(ModelFeature.STREAMING);
+        for (var feature : List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING)) {
             assertThat(options(List.of(feature))).isEmpty();
         }
         assertThat(model.getSpec().getFeatures()).hasSize(4);
@@ -103,8 +103,11 @@ class ModelOptionAssemblerTest {
         model.getSpec().getCatalogParameters().setMappings(mappings);
 
         assertThat(options(List.of(ModelFeature.REASONING)).getFirst().getFeatures())
-            .containsExactly(ModelFeature.STREAMING, ModelFeature.TOOL_CALL,
-                ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+                .containsExactly(
+                        ModelFeature.STREAMING,
+                        ModelFeature.TOOL_CALL,
+                        ModelFeature.STRUCTURED_OUTPUT,
+                        ModelFeature.REASONING);
     }
 
     @Test
@@ -120,7 +123,7 @@ class ModelOptionAssemblerTest {
         model.getSpec().setParameterConstraints(manual);
 
         assertThat(options(List.of(ModelFeature.TOOL_CALL)).getFirst().getFeatures())
-            .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
+                .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
         assertThat(options(List.of(ModelFeature.STRUCTURED_OUTPUT))).isEmpty();
     }
 
@@ -146,12 +149,22 @@ class ModelOptionAssemblerTest {
         }
 
         for (var required : List.of(ModelFeature.TOOL_CALL, ModelFeature.REASONING)) {
-            assertThat(assembler.toOptions(List.of(model), Map.of("provider", provider),
-                Map.of("gitee-moark", gitee), query(List.of(required)))).isEmpty();
+            assertThat(assembler.toOptions(
+                            List.of(model),
+                            Map.of("provider", provider),
+                            Map.of("gitee-moark", gitee),
+                            query(List.of(required))))
+                    .isEmpty();
         }
-        assertThat(assembler.toOptions(List.of(model), Map.of("provider", provider),
-            Map.of("gitee-moark", gitee), query(List.of(ModelFeature.STRUCTURED_OUTPUT)))
-            .getFirst().getFeatures()).containsExactly(ModelFeature.STRUCTURED_OUTPUT);
+        assertThat(assembler
+                        .toOptions(
+                                List.of(model),
+                                Map.of("provider", provider),
+                                Map.of("gitee-moark", gitee),
+                                query(List.of(ModelFeature.STRUCTURED_OUTPUT)))
+                        .getFirst()
+                        .getFeatures())
+                .containsExactly(ModelFeature.STRUCTURED_OUTPUT);
         assertThat(constraints.getToolCalling()).isTrue();
         assertThat(constraints.getReasoning().getSupported()).isTrue();
     }
@@ -171,7 +184,7 @@ class ModelOptionAssemblerTest {
             provider.getSpec().setParameterMappings(modelOverride ? null : mappings);
             model.getSpec().setParameterMappings(modelOverride ? mappings : null);
             assertThat(options(List.of(ModelFeature.REASONING)).getFirst().getFeatures())
-                .containsExactly(ModelFeature.REASONING);
+                    .containsExactly(ModelFeature.REASONING);
         }
     }
 
@@ -182,23 +195,25 @@ class ModelOptionAssemblerTest {
         provider.getSpec().setBaseUrl("https://gateway.example/v1");
 
         assertThat(options(List.of(ModelFeature.TOOL_CALL)).getFirst().getFeatures())
-            .containsExactly(ModelFeature.TOOL_CALL);
+                .containsExactly(ModelFeature.TOOL_CALL);
     }
 
     @Test
     void unknownCatalogFieldsAndMissingProvidersPreserveLegacyFeatures() {
         model.getSpec().setFeatures(List.of(ModelFeature.TOOL_CALL, ModelFeature.REASONING));
         assertThat(options(List.of()).getFirst().getFeatures())
-            .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
+                .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
         catalogConstraints.setToolCalling(false);
-        assertThat(assembler.toOptions(List.of(model), Map.of(), Map.of(), query(List.of()))
-            .getFirst().getFeatures())
-            .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
+        assertThat(assembler
+                        .toOptions(List.of(model), Map.of(), Map.of(), query(List.of()))
+                        .getFirst()
+                        .getFeatures())
+                .containsExactly(ModelFeature.TOOL_CALL, ModelFeature.REASONING);
     }
 
     private List<ModelOption> options(List<ModelFeature> required) {
-        return assembler.toOptions(List.of(model), Map.of("provider", provider),
-            Map.of("openai", providerType), query(required));
+        return assembler.toOptions(
+                List.of(model), Map.of("provider", provider), Map.of("openai", providerType), query(required));
     }
 
     private ModelOptionQuery query(List<ModelFeature> required) {

@@ -19,12 +19,11 @@ final class OpenAiChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         if (!body.containsKey("builtinTools")) {
             return;
         }
-        throw new IllegalArgumentException(
-            "OpenAI builtinTools require the openai-responses adapter");
+        throw new IllegalArgumentException("OpenAI builtinTools require the openai-responses adapter");
     }
 }

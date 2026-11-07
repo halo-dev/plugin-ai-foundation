@@ -10,12 +10,13 @@ class LiveProviderTestSupportTest {
     @Test
     void liveTestsRequireExplicitProviderOrAllOptIn() {
         assertThat(LiveProviderTestSupport.isEnabled("openai", Map.of())).isFalse();
-        assertThat(LiveProviderTestSupport.isEnabled("openai",
-            Map.of(LiveProviderTestSupport.ENABLED_ENV, "deepseek, openai"))).isTrue();
-        assertThat(LiveProviderTestSupport.isEnabled("openai",
-            Map.of(LiveProviderTestSupport.ENABLED_ENV, "all"))).isTrue();
-        assertThat(LiveProviderTestSupport.isEnabled("openai",
-            Map.of(LiveProviderTestSupport.ENABLED_ENV, "deepseek"))).isFalse();
+        assertThat(LiveProviderTestSupport.isEnabled(
+                        "openai", Map.of(LiveProviderTestSupport.ENABLED_ENV, "deepseek, openai")))
+                .isTrue();
+        assertThat(LiveProviderTestSupport.isEnabled("openai", Map.of(LiveProviderTestSupport.ENABLED_ENV, "all")))
+                .isTrue();
+        assertThat(LiveProviderTestSupport.isEnabled("openai", Map.of(LiveProviderTestSupport.ENABLED_ENV, "deepseek")))
+                .isFalse();
     }
 
     @Test

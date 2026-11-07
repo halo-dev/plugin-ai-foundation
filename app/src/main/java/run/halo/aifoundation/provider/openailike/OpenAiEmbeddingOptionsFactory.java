@@ -8,11 +8,10 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 
 public final class OpenAiEmbeddingOptionsFactory {
 
-    private OpenAiEmbeddingOptionsFactory() {
-    }
+    private OpenAiEmbeddingOptionsFactory() {}
 
-    public static org.springframework.ai.embedding.EmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    public static org.springframework.ai.embedding.EmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
@@ -20,10 +19,9 @@ public final class OpenAiEmbeddingOptionsFactory {
 
         var headers = request.getHeaders() != null ? request.getHeaders() : Map.<String, String>of();
         var builder = OpenAiCompatibleEmbeddingOptions.builder()
-            .dimensions(dimensions)
-            .extraBody(providerOptions.nativeOptions());
+                .dimensions(dimensions)
+                .extraBody(providerOptions.nativeOptions());
         builder.customHeaders(headers);
         return builder.build();
     }
-
 }

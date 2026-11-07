@@ -15,20 +15,19 @@ class ModelParameterCatalogTest {
     @Test
     void definesEveryParameterExactlyOnce() {
         assertThat(catalog.definitions())
-            .extracting(ModelParameterDefinition::parameter)
-            .containsExactlyInAnyOrder(ModelParameter.values())
-            .doesNotHaveDuplicates();
+                .extracting(ModelParameterDefinition::parameter)
+                .containsExactlyInAnyOrder(ModelParameter.values())
+                .doesNotHaveDuplicates();
         assertThat(catalog.definitions())
-            .extracting(ModelParameterDefinition::domain)
-            .contains(ModelParameterDomain.values());
+                .extracting(ModelParameterDefinition::domain)
+                .contains(ModelParameterDomain.values());
 
-        assertThat(catalog.definitions())
-            .allSatisfy(definition -> {
-                assertThat(definition.domain().getValue()).isNotBlank();
-                assertThat(definition.field()).isNotBlank();
-                assertThat(definition.displayName()).isNotBlank();
-                assertThat(definition.description()).isNotBlank();
-            });
+        assertThat(catalog.definitions()).allSatisfy(definition -> {
+            assertThat(definition.domain().getValue()).isNotBlank();
+            assertThat(definition.field()).isNotBlank();
+            assertThat(definition.displayName()).isNotBlank();
+            assertThat(definition.description()).isNotBlank();
+        });
     }
 
     @Test
@@ -41,14 +40,12 @@ class ModelParameterCatalogTest {
             definition.write(mappings, selection);
 
             assertThat(definition.read(mappings))
-                .as(definition.parameter().name())
-                .isSameAs(selection);
-            assertThat(catalog.selections(mappings))
-                .singleElement()
-                .satisfies(entry -> {
-                    assertThat(entry.definition()).isSameAs(definition);
-                    assertThat(entry.selection()).isSameAs(selection);
-                });
+                    .as(definition.parameter().name())
+                    .isSameAs(selection);
+            assertThat(catalog.selections(mappings)).singleElement().satisfies(entry -> {
+                assertThat(entry.definition()).isSameAs(definition);
+                assertThat(entry.selection()).isSameAs(selection);
+            });
         }
     }
 
@@ -57,33 +54,30 @@ class ModelParameterCatalogTest {
         var supportedTypes = EnumSet.of(ModelType.EMBEDDING, ModelType.RERANK);
 
         assertThat(catalog.definitionsFor(supportedTypes))
-            .extracting(ModelParameterDefinition::parameter)
-            .containsExactly(ModelParameter.DIMENSIONS, ModelParameter.TOP_N);
+                .extracting(ModelParameterDefinition::parameter)
+                .containsExactly(ModelParameter.DIMENSIONS, ModelParameter.TOP_N);
     }
 
     @Test
     void ownsTheCuratedCommonParameterGrouping() {
         assertThat(catalog.definitions().stream()
-            .filter(ModelParameterDefinition::common)
-            .map(ModelParameterDefinition::parameter))
-            .containsExactly(
-                ModelParameter.MAX_OUTPUT_TOKENS,
-                ModelParameter.TEMPERATURE,
-                ModelParameter.TOP_P,
-                ModelParameter.REASONING,
-                ModelParameter.DIMENSIONS,
-                ModelParameter.TOP_N,
-                ModelParameter.IMAGE_COUNT,
-                ModelParameter.IMAGE_SIZE,
-                ModelParameter.ASPECT_RATIO
-            );
+                        .filter(ModelParameterDefinition::common)
+                        .map(ModelParameterDefinition::parameter))
+                .containsExactly(
+                        ModelParameter.MAX_OUTPUT_TOKENS,
+                        ModelParameter.TEMPERATURE,
+                        ModelParameter.TOP_P,
+                        ModelParameter.REASONING,
+                        ModelParameter.DIMENSIONS,
+                        ModelParameter.TOP_N,
+                        ModelParameter.IMAGE_COUNT,
+                        ModelParameter.IMAGE_SIZE,
+                        ModelParameter.ASPECT_RATIO);
     }
 
     @Test
     void modelTypeBelongsToDefinitions() {
-        assertThat(catalog.definition(ModelParameter.REASONING).modelType())
-            .isEqualTo(ModelType.LANGUAGE);
-        assertThat(catalog.definition(ModelParameter.IMAGE_SIZE).modelType())
-            .isEqualTo(ModelType.IMAGE_GENERATION);
+        assertThat(catalog.definition(ModelParameter.REASONING).modelType()).isEqualTo(ModelType.LANGUAGE);
+        assertThat(catalog.definition(ModelParameter.IMAGE_SIZE).modelType()).isEqualTo(ModelType.IMAGE_GENERATION);
     }
 }

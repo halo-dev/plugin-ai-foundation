@@ -2,7 +2,6 @@ package run.halo.aifoundation.provider.aihubmix;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -35,14 +34,13 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.provider.support.ProviderFeatureSets;
 import run.halo.aifoundation.provider.support.ProviderDecisionClient;
+import run.halo.aifoundation.provider.support.ProviderFeatureSets;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -100,9 +98,14 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
-            AdapterType.AIHUBMIX_MESSAGES, AdapterType.AIHUBMIX_EMBEDDING,
-            AdapterType.RERANK, AdapterType.AIHUBMIX_IMAGE, AdapterType.AIHUBMIX_SYSTEM_ONE);
+        return List.of(
+                AdapterType.AIHUBMIX_RESPONSES,
+                AdapterType.AIHUBMIX_CHAT,
+                AdapterType.AIHUBMIX_MESSAGES,
+                AdapterType.AIHUBMIX_EMBEDDING,
+                AdapterType.RERANK,
+                AdapterType.AIHUBMIX_IMAGE,
+                AdapterType.AIHUBMIX_SYSTEM_ONE);
     }
 
     @Override
@@ -137,8 +140,7 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new AiHubMixResponsesModel(chatOptions(provider, apiKey, modelId),
-            webClientBuilder(provider));
+        return new AiHubMixResponsesModel(chatOptions(provider, apiKey, modelId), webClientBuilder(provider));
     }
 
     @Override
@@ -146,71 +148,73 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         var resolved = resolveModel(model);
         var options = chatOptions(provider, apiKey, resolved.modelId());
         return switch (resolved.adapterType()) {
-            case AIHUBMIX_RESPONSES -> new AiHubMixResponsesModel(options,
-                webClientBuilder(provider));
+            case AIHUBMIX_RESPONSES -> new AiHubMixResponsesModel(options, webClientBuilder(provider));
             case AIHUBMIX_CHAT -> new AiHubMixChatModel(options, webClientBuilder(provider));
-            case AIHUBMIX_MESSAGES -> new AiHubMixMessagesModel(options,
-                webClientBuilder(provider));
-            default -> throw new IllegalArgumentException(
-                "Unsupported AIHubMix language adapter: " + resolved.adapterType());
+            case AIHUBMIX_MESSAGES -> new AiHubMixMessagesModel(options, webClientBuilder(provider));
+            default ->
+                throw new IllegalArgumentException("Unsupported AIHubMix language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = AiHubMixEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .customHeaders(AiHubMixHeaders.DEFAULTS)
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .customHeaders(AiHubMixHeaders.DEFAULTS)
+                .build();
         return new AiHubMixEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
-        return new AiHubMixRerankingClient(resolveBaseUrl(provider), modelId, apiKey,
-            webClientBuilder(provider), AiHubMixHeaders.DEFAULTS);
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
+        return new AiHubMixRerankingClient(
+                resolveBaseUrl(provider), modelId, apiKey, webClientBuilder(provider), AiHubMixHeaders.DEFAULTS);
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new AiHubMixImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), resolveBaseUrl(provider), apiKey, modelId,
-            AiHubMixHeaders.DEFAULTS), imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new AiHubMixImageGenerationClient(
+                new ImageGenerationClientOptions(
+                        getProviderType(), resolveBaseUrl(provider), apiKey, modelId, AiHubMixHeaders.DEFAULTS),
+                imageWebClientBuilder(provider));
     }
 
     @Override
     public DecisionCapability decisionCapabilities() {
         return DecisionCapability.builder()
-            .questionTypes(List.of(DecisionQuestionType.YES_NO, DecisionQuestionType.CHOICE,
-                DecisionQuestionType.SCORE))
-            .structuredState(true).maxChoiceOptions(255).maxScoreLevels(10)
-            .choiceProbabilities(true).choiceConfidence(true)
-            .scoreProbabilities(true).scoreConfidence(true).scoreLegend(true)
-            .build();
+                .questionTypes(
+                        List.of(DecisionQuestionType.YES_NO, DecisionQuestionType.CHOICE, DecisionQuestionType.SCORE))
+                .structuredState(true)
+                .maxChoiceOptions(255)
+                .maxScoreLevels(10)
+                .choiceProbabilities(true)
+                .choiceConfidence(true)
+                .scoreProbabilities(true)
+                .scoreConfidence(true)
+                .scoreLegend(true)
+                .build();
     }
 
     @Override
-    public ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey,
-        ProviderModelRef model) {
+    public ProviderDecisionClient buildDecisionClient(AiProvider provider, String apiKey, ProviderModelRef model) {
         var resolved = resolveModel(model);
         if (resolved.adapterType() != AdapterType.AIHUBMIX_SYSTEM_ONE) {
-            throw new IllegalArgumentException(
-                "Unsupported AIHubMix decision adapter: " + resolved.adapterType());
+            throw new IllegalArgumentException("Unsupported AIHubMix decision adapter: " + resolved.adapterType());
         }
         validateNativeModelOptions(resolved);
-        return new AiHubMixDecisionClient(resolveBaseUrl(provider), apiKey, resolved.modelId(),
-            webClientBuilder(provider));
+        return new AiHubMixDecisionClient(
+                resolveBaseUrl(provider), apiKey, resolved.modelId(), webClientBuilder(provider));
     }
 
     @Override
     public void validateNativeModelOptions(ProviderModelRef model) {
         super.validateNativeModelOptions(model);
         if (model.modelType() == ModelType.DECISION
-            && model.nativeOptions() != null && !model.nativeOptions().isEmpty()) {
+                && model.nativeOptions() != null
+                && !model.nativeOptions().isEmpty()) {
             throw new IllegalArgumentException("AIHubMix decision models do not accept native options");
         }
     }
@@ -229,23 +233,22 @@ public class AiHubMixProvider extends AbstractAiProviderType {
     }
 
     private LanguageModelProviderOptions languageModelProviderOptions(
-        StructuredOutputSupport structuredOutput, boolean nativeStrictToolSchemas) {
+            StructuredOutputSupport structuredOutput, boolean nativeStrictToolSchemas) {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, nativeStrictToolSchemas, structuredOutput);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, nativeStrictToolSchemas, structuredOutput);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(true)
-            .nativeStrictToolSchemas(nativeStrictToolSchemas)
-            .structuredOutputSupport(structuredOutput)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .nativeStrictToolSchemas(nativeStrictToolSchemas)
+                .structuredOutputSupport(structuredOutput)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
@@ -256,7 +259,8 @@ public class AiHubMixProvider extends AbstractAiProviderType {
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
         var webClient = discoveryWebClientBuilder(provider)
-            .baseUrl(modelCatalogBaseUrl(provider)).build();
+                .baseUrl(modelCatalogBaseUrl(provider))
+                .build();
         var request = webClient.get().uri(MODEL_CATALOG_PATH);
         if (apiKey != null && !apiKey.isBlank()) {
             request = request.header("Authorization", "Bearer " + apiKey);
@@ -264,33 +268,31 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         request.header("APP-Code", AiHubMixHeaders.APP_CODE);
         customizeDiscoveryRequest(request);
         return request.retrieve()
-            .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {
-            })
-            .map(root -> {
-                var data = listValue(root, "data");
-                return data == null ? List.of()
-                    : discoveredModelsFromNodes(data, "model_id", this::toDiscoveredModel);
-            });
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .map(root -> {
+                    var data = listValue(root, "data");
+                    return data == null
+                            ? List.of()
+                            : discoveredModelsFromNodes(data, "model_id", this::toDiscoveredModel);
+                });
     }
 
     @Override
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        defaults.put(ModelParameter.MAX_OUTPUT_TOKENS,
-            DefaultParameterMapping.template("openai.max-completion-tokens"));
+        defaults.put(
+                ModelParameter.MAX_OUTPUT_TOKENS, DefaultParameterMapping.template("openai.max-completion-tokens"));
         return Map.copyOf(defaults);
     }
 
-    private ChatCompletionsOptions chatOptions(AiProvider provider, String apiKey,
-        String modelId) {
+    private ChatCompletionsOptions chatOptions(AiProvider provider, String apiKey, String modelId) {
         return chatCompletionsOptions(provider, apiKey, modelId, AiHubMixHeaders.DEFAULTS);
     }
 
     private String modelCatalogBaseUrl(AiProvider provider) {
         var baseUrl = ProviderUris.withoutTrailingSlashes(resolveBaseUrl(provider));
-        return baseUrl.endsWith("/v1")
-            ? baseUrl.substring(0, baseUrl.length() - 3) : baseUrl;
+        return baseUrl.endsWith("/v1") ? baseUrl.substring(0, baseUrl.length() - 3) : baseUrl;
     }
 
     private DiscoveredModel toDiscoveredModel(Map<?, ?> node) {
@@ -322,13 +324,13 @@ public class AiHubMixProvider extends AbstractAiProviderType {
 
     private DiscoveredModel typedModel(String modelId, ModelType type, AdapterType adapter) {
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(type)
-            .adapterType(adapter)
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(type)
+                .adapterType(adapter)
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .build();
     }
 
     private DiscoveredModel languageModel(String modelId, Map<?, ?> node) {
@@ -337,12 +339,12 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         var hasDeclaredInputs = node.get("input_modalities") != null;
         var evidence = DiscoveryFeatureEvidence.fromBooleanFields(node);
         if (hasDeclaredFeatures) {
-            DiscoveryFeatureEvidence.recordDeclaredFeatures(evidence, features,
-                ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(
+                    evidence, features, ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
         }
         if (hasDeclaredInputs) {
-            DiscoveryFeatureEvidence.recordDeclaredFeatures(evidence, features, ModelFeature.VISION,
-                ModelFeature.AUDIO_INPUT);
+            DiscoveryFeatureEvidence.recordDeclaredFeatures(
+                    evidence, features, ModelFeature.VISION, ModelFeature.AUDIO_INPUT);
         }
         var inputs = tokens(node.get("input_modalities"));
         var mediaTypes = new ArrayList<String>();
@@ -357,47 +359,49 @@ public class AiHubMixProvider extends AbstractAiProviderType {
             capability.reasoningHistory(features.contains(ModelFeature.REASONING));
         }
         if (hasDeclaredInputs) {
-            capability.imageInput(inputs.contains("image"))
-                .fileInput(inputs.contains("pdf"))
-                .inputMediaTypes(List.copyOf(mediaTypes))
-                .inputSources(mediaTypes.isEmpty() ? List.of()
-                    : List.of(InputSource.DATA, InputSource.URL));
+            capability
+                    .imageInput(inputs.contains("image"))
+                    .fileInput(inputs.contains("pdf"))
+                    .inputMediaTypes(List.copyOf(mediaTypes))
+                    .inputSources(mediaTypes.isEmpty() ? List.of() : List.of(InputSource.DATA, InputSource.URL));
         }
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(ModelType.LANGUAGE)
-            .features(features)
-            .featureEvidence(evidence)
-            .adapterType(AdapterType.AIHUBMIX_RESPONSES)
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .capabilities(ModelCapabilities.builder().language(capability.build()).build())
-            .capabilitySources(ModelCapabilitySources.builder()
-                .language(CapabilitySource.REMOTE)
-                .build())
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(ModelType.LANGUAGE)
+                .features(features)
+                .featureEvidence(evidence)
+                .adapterType(AdapterType.AIHUBMIX_RESPONSES)
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .capabilities(
+                        ModelCapabilities.builder().language(capability.build()).build())
+                .capabilitySources(ModelCapabilitySources.builder()
+                        .language(CapabilitySource.REMOTE)
+                        .build())
+                .build();
     }
 
     private DiscoveredModel imageModel(String modelId, Map<?, ?> node) {
         var inputs = tokens(node.get("input_modalities"));
         var imageInput = inputs.contains("image");
         var capability = ImageGenerationCapability.builder()
-            .textToImage(true)
-            .imageToImage(imageInput)
-            .build();
+                .textToImage(true)
+                .imageToImage(imageInput)
+                .build();
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(ModelType.IMAGE_GENERATION)
-            .adapterType(AdapterType.AIHUBMIX_IMAGE)
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .capabilities(ModelCapabilities.builder().imageGeneration(capability).build())
-            .capabilitySources(ModelCapabilitySources.builder()
-                .imageGeneration(CapabilitySource.REMOTE)
-                .build())
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(ModelType.IMAGE_GENERATION)
+                .adapterType(AdapterType.AIHUBMIX_IMAGE)
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .capabilities(
+                        ModelCapabilities.builder().imageGeneration(capability).build())
+                .capabilitySources(ModelCapabilitySources.builder()
+                        .imageGeneration(CapabilitySource.REMOTE)
+                        .build())
+                .build();
     }
 
     private Set<ModelFeature> languageFeatures(Map<?, ?> node) {
@@ -483,5 +487,4 @@ public class AiHubMixProvider extends AbstractAiProviderType {
         }
         return null;
     }
-
 }

@@ -16,10 +16,18 @@ import java.util.Map;
  * @param approval optional approval metadata
  * @param providerMetadata provider-specific metadata
  */
-public record ToolPart(String type, String toolCallId, String toolName, ToolPartState state,
-                       Object input, String inputText, Object output, String errorText,
-                       ToolApproval approval, Map<String, Object> providerMetadata)
-    implements UIMessagePart {
+public record ToolPart(
+        String type,
+        String toolCallId,
+        String toolName,
+        ToolPartState state,
+        Object input,
+        String inputText,
+        Object output,
+        String errorText,
+        ToolApproval approval,
+        Map<String, Object> providerMetadata)
+        implements UIMessagePart {
 
     public ToolPart {
         UIMessageDynamicNames.requireToolType(type, toolName);

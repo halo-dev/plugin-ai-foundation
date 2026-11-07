@@ -11,9 +11,9 @@ import java.util.Map;
  * @param filename optional filename
  * @param providerMetadata provider-specific metadata
  */
-public record SourceDocumentChunk(String sourceId, String mediaType, String title,
-                                  String filename, Map<String, Object> providerMetadata)
-    implements UIMessageChunk {
+public record SourceDocumentChunk(
+        String sourceId, String mediaType, String title, String filename, Map<String, Object> providerMetadata)
+        implements UIMessageChunk {
     @Override
     public String type() {
         return UIMessageChunkType.SOURCE_DOCUMENT;

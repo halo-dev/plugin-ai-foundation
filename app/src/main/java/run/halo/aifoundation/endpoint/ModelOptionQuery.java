@@ -24,19 +24,18 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 record ModelOptionQuery(
-    ModelType modelType,
-    String providerName,
-    String providerType,
-    Boolean enabled,
-    Boolean available,
-    List<ModelFeature> requiredFeatures,
-    ModelCapabilityRequirement requiredCapabilities,
-    String keyword
-) {
+        ModelType modelType,
+        String providerName,
+        String providerType,
+        Boolean enabled,
+        Boolean available,
+        List<ModelFeature> requiredFeatures,
+        ModelCapabilityRequirement requiredCapabilities,
+        String keyword) {
 
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder()
-        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-        .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .build();
 
     static ModelOptionQuery from(ServerRequest request) {
         var modelType = parseModelType(single(request, "modelType", false));
@@ -45,11 +44,17 @@ record ModelOptionQuery(
         var enabled = parseBoolean(single(request, "enabled", false), "enabled");
         var available = parseBoolean(single(request, "available", false), "available");
         var requiredFeatures = parseFeatures(request);
-        var requiredCapabilities = parseRequiredCapabilities(
-            single(request, "requiredCapabilities", false));
+        var requiredCapabilities = parseRequiredCapabilities(single(request, "requiredCapabilities", false));
         var keyword = single(request, "keyword", true);
-        return new ModelOptionQuery(modelType, providerName, providerType, enabled,
-            available, requiredFeatures, requiredCapabilities, keyword);
+        return new ModelOptionQuery(
+                modelType,
+                providerName,
+                providerType,
+                enabled,
+                available,
+                requiredFeatures,
+                requiredCapabilities,
+                keyword);
     }
 
     ListOptions modelListOptions() {
@@ -57,18 +62,18 @@ record ModelOptionQuery(
             return new ListOptions();
         }
         return ListOptions.builder()
-            .fieldQuery(Queries.equal("spec.providerName", providerName))
-            .build();
+                .fieldQuery(Queries.equal("spec.providerName", providerName))
+                .build();
     }
 
     boolean matches(ModelOption option) {
         return matchesModelType(option)
-            && matchesProviderName(option)
-            && matchesProviderType(option)
-            && matchesEnabled(option)
-            && matchesAvailable(option)
-            && matchesRequiredFeatures(option)
-            && matchesKeyword(option);
+                && matchesProviderName(option)
+                && matchesProviderType(option)
+                && matchesEnabled(option)
+                && matchesAvailable(option)
+                && matchesRequiredFeatures(option)
+                && matchesKeyword(option);
     }
 
     private boolean matchesModelType(ModelOption option) {
@@ -77,12 +82,12 @@ record ModelOptionQuery(
 
     private boolean matchesProviderName(ModelOption option) {
         return !StringUtils.hasText(providerName)
-            || providerName.equals(option.getProvider().getName());
+                || providerName.equals(option.getProvider().getName());
     }
 
     private boolean matchesProviderType(ModelOption option) {
         return !StringUtils.hasText(providerType)
-            || providerType.equals(option.getProvider().getProviderType());
+                || providerType.equals(option.getProvider().getProviderType());
     }
 
     private boolean matchesEnabled(ModelOption option) {
@@ -109,11 +114,11 @@ record ModelOptionQuery(
         }
         var normalizedKeyword = keyword.toLowerCase(Locale.ROOT);
         return contains(option.getName(), normalizedKeyword)
-            || contains(option.getModelId(), normalizedKeyword)
-            || contains(option.getDisplayName(), normalizedKeyword)
-            || contains(option.getProvider().getName(), normalizedKeyword)
-            || contains(option.getProvider().getDisplayName(), normalizedKeyword)
-            || contains(option.getProvider().getProviderType(), normalizedKeyword);
+                || contains(option.getModelId(), normalizedKeyword)
+                || contains(option.getDisplayName(), normalizedKeyword)
+                || contains(option.getProvider().getName(), normalizedKeyword)
+                || contains(option.getProvider().getDisplayName(), normalizedKeyword)
+                || contains(option.getProvider().getProviderType(), normalizedKeyword);
     }
 
     private static boolean contains(String value, String keyword) {
@@ -142,8 +147,7 @@ record ModelOptionQuery(
         if (value == null) {
             return null;
         }
-        return ModelType.find(value)
-            .orElseThrow(() -> badRequest("Unsupported modelType: " + value));
+        return ModelType.find(value).orElseThrow(() -> badRequest("Unsupported modelType: " + value));
     }
 
     private static Boolean parseBoolean(String value, String name) {
@@ -175,7 +179,7 @@ record ModelOptionQuery(
                     throw badRequest("requiredFeatures contains a blank feature");
                 }
                 features.add(ModelFeature.find(feature)
-                    .orElseThrow(() -> badRequest("Unsupported model feature: " + feature)));
+                        .orElseThrow(() -> badRequest("Unsupported model feature: " + feature)));
             }
         }
         return List.copyOf(features);
@@ -193,57 +197,66 @@ record ModelOptionQuery(
         }
         rejectUnknownKeys(root, "requiredCapabilities", List.of("language", "imageGeneration", "decision"));
         return ModelCapabilityRequirement.builder()
-            .decision(parseDecisionCapability(asMap(root.get("decision"), "decision")))
-            .language(parseLanguageCapability(asMap(root.get("language"), "language")))
-            .imageGeneration(parseImageGenerationCapability(
-                asMap(root.get("imageGeneration"), "imageGeneration")))
-            .build();
+                .decision(parseDecisionCapability(asMap(root.get("decision"), "decision")))
+                .language(parseLanguageCapability(asMap(root.get("language"), "language")))
+                .imageGeneration(parseImageGenerationCapability(asMap(root.get("imageGeneration"), "imageGeneration")))
+                .build();
     }
 
     private static LanguageCapability parseLanguageCapability(Map<?, ?> value) {
         if (value == null) {
             return null;
         }
-        rejectUnknownKeys(value, "language", List.of("imageInput", "fileInput",
-            "reasoningHistory", "inputMediaTypes", "inputSources"));
+        rejectUnknownKeys(
+                value,
+                "language",
+                List.of("imageInput", "fileInput", "reasoningHistory", "inputMediaTypes", "inputSources"));
         return LanguageCapability.builder()
-            .imageInput(booleanValue(value.get("imageInput"), "language.imageInput"))
-            .fileInput(booleanValue(value.get("fileInput"), "language.fileInput"))
-            .reasoningHistory(booleanValue(value.get("reasoningHistory"),
-                "language.reasoningHistory"))
-            .inputMediaTypes(mediaTypes(value.get("inputMediaTypes"),
-                "language.inputMediaTypes"))
-            .inputSources(inputSources(value.get("inputSources"), "language.inputSources"))
-            .build();
+                .imageInput(booleanValue(value.get("imageInput"), "language.imageInput"))
+                .fileInput(booleanValue(value.get("fileInput"), "language.fileInput"))
+                .reasoningHistory(booleanValue(value.get("reasoningHistory"), "language.reasoningHistory"))
+                .inputMediaTypes(mediaTypes(value.get("inputMediaTypes"), "language.inputMediaTypes"))
+                .inputSources(inputSources(value.get("inputSources"), "language.inputSources"))
+                .build();
     }
 
     private static DecisionCapability parseDecisionCapability(Map<?, ?> value) {
         if (value == null) {
             return null;
         }
-        rejectUnknownKeys(value, "decision", List.of("questionTypes", "structuredState",
-            "maxChoiceOptions", "maxScoreLevels", "choiceProbabilities", "choiceConfidence",
-            "scoreProbabilities", "scoreConfidence", "scoreLegend"));
+        rejectUnknownKeys(
+                value,
+                "decision",
+                List.of(
+                        "questionTypes",
+                        "structuredState",
+                        "maxChoiceOptions",
+                        "maxScoreLevels",
+                        "choiceProbabilities",
+                        "choiceConfidence",
+                        "scoreProbabilities",
+                        "scoreConfidence",
+                        "scoreLegend"));
         var types = stringList(value.get("questionTypes"), "decision.questionTypes");
         var builder = DecisionCapability.builder()
-            .structuredState(booleanValue(value.get("structuredState"), "decision.structuredState"))
-            .maxChoiceOptions(integerValue(value.get("maxChoiceOptions"), "decision.maxChoiceOptions"))
-            .maxScoreLevels(integerValue(value.get("maxScoreLevels"), "decision.maxScoreLevels"))
-            .choiceProbabilities(booleanValue(value.get("choiceProbabilities"),
-                "decision.choiceProbabilities"))
-            .choiceConfidence(booleanValue(value.get("choiceConfidence"), "decision.choiceConfidence"))
-            .scoreProbabilities(booleanValue(value.get("scoreProbabilities"),
-                "decision.scoreProbabilities"))
-            .scoreConfidence(booleanValue(value.get("scoreConfidence"), "decision.scoreConfidence"))
-            .scoreLegend(booleanValue(value.get("scoreLegend"), "decision.scoreLegend"));
+                .structuredState(booleanValue(value.get("structuredState"), "decision.structuredState"))
+                .maxChoiceOptions(integerValue(value.get("maxChoiceOptions"), "decision.maxChoiceOptions"))
+                .maxScoreLevels(integerValue(value.get("maxScoreLevels"), "decision.maxScoreLevels"))
+                .choiceProbabilities(booleanValue(value.get("choiceProbabilities"), "decision.choiceProbabilities"))
+                .choiceConfidence(booleanValue(value.get("choiceConfidence"), "decision.choiceConfidence"))
+                .scoreProbabilities(booleanValue(value.get("scoreProbabilities"), "decision.scoreProbabilities"))
+                .scoreConfidence(booleanValue(value.get("scoreConfidence"), "decision.scoreConfidence"))
+                .scoreLegend(booleanValue(value.get("scoreLegend"), "decision.scoreLegend"));
         if (types != null) {
-            builder.questionTypes(types.stream().map(type -> {
-                try {
-                    return DecisionQuestionType.valueOf(type);
-                } catch (IllegalArgumentException error) {
-                    throw badRequest("Unsupported decision question type: " + type);
-                }
-            }).toList());
+            builder.questionTypes(types.stream()
+                    .map(type -> {
+                        try {
+                            return DecisionQuestionType.valueOf(type);
+                        } catch (IllegalArgumentException error) {
+                            throw badRequest("Unsupported decision question type: " + type);
+                        }
+                    })
+                    .toList());
         }
         return builder.build();
     }
@@ -252,22 +265,26 @@ record ModelOptionQuery(
         if (value == null) {
             return null;
         }
-        rejectUnknownKeys(value, "imageGeneration", List.of("textToImage", "imageToImage",
-            "maskInput", "maxImagesPerCall", "sizes", "aspectRatios", "outputMediaTypes"));
+        rejectUnknownKeys(
+                value,
+                "imageGeneration",
+                List.of(
+                        "textToImage",
+                        "imageToImage",
+                        "maskInput",
+                        "maxImagesPerCall",
+                        "sizes",
+                        "aspectRatios",
+                        "outputMediaTypes"));
         return ImageGenerationCapability.builder()
-            .textToImage(booleanValue(value.get("textToImage"),
-                "imageGeneration.textToImage"))
-            .imageToImage(booleanValue(value.get("imageToImage"),
-                "imageGeneration.imageToImage"))
-            .maskInput(booleanValue(value.get("maskInput"), "imageGeneration.maskInput"))
-            .maxImagesPerCall(integerValue(value.get("maxImagesPerCall"),
-                "imageGeneration.maxImagesPerCall"))
-            .sizes(stringList(value.get("sizes"), "imageGeneration.sizes"))
-            .aspectRatios(stringList(value.get("aspectRatios"),
-                "imageGeneration.aspectRatios"))
-            .outputMediaTypes(mediaTypes(value.get("outputMediaTypes"),
-                "imageGeneration.outputMediaTypes"))
-            .build();
+                .textToImage(booleanValue(value.get("textToImage"), "imageGeneration.textToImage"))
+                .imageToImage(booleanValue(value.get("imageToImage"), "imageGeneration.imageToImage"))
+                .maskInput(booleanValue(value.get("maskInput"), "imageGeneration.maskInput"))
+                .maxImagesPerCall(integerValue(value.get("maxImagesPerCall"), "imageGeneration.maxImagesPerCall"))
+                .sizes(stringList(value.get("sizes"), "imageGeneration.sizes"))
+                .aspectRatios(stringList(value.get("aspectRatios"), "imageGeneration.aspectRatios"))
+                .outputMediaTypes(mediaTypes(value.get("outputMediaTypes"), "imageGeneration.outputMediaTypes"))
+                .build();
     }
 
     private static Map<?, ?> asMap(Object value, String path) {
@@ -315,9 +332,9 @@ record ModelOptionQuery(
             return null;
         }
         return values.stream()
-            .map(source -> InputSource.find(source)
-                .orElseThrow(() -> badRequest("Unsupported input source: " + source)))
-            .toList();
+                .map(source ->
+                        InputSource.find(source).orElseThrow(() -> badRequest("Unsupported input source: " + source)))
+                .toList();
     }
 
     private static List<String> mediaTypes(Object value, String path) {
@@ -348,8 +365,7 @@ record ModelOptionQuery(
 
     private static void validateMediaTypePattern(String mediaType, String path) {
         var parts = mediaType.split("/", -1);
-        if (parts.length != 2 || !StringUtils.hasText(parts[0])
-            || !StringUtils.hasText(parts[1])) {
+        if (parts.length != 2 || !StringUtils.hasText(parts[0]) || !StringUtils.hasText(parts[1])) {
             throw badRequest(path + " contains invalid media type pattern: " + mediaType);
         }
         if (parts[0].contains("*") && !"*".equals(parts[0])) {

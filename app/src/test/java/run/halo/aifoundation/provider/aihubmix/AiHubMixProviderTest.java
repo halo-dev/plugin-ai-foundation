@@ -25,8 +25,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.test.StepVerifier;
 import run.halo.aifoundation.chat.GenerateTextRequest;
-import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.embedding.EmbeddingContent;
+import run.halo.aifoundation.embedding.EmbeddingRequest;
 import run.halo.aifoundation.extension.AiProvider;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.media.DataContent;
@@ -37,25 +37,24 @@ import run.halo.aifoundation.provider.support.DiscoveryConfidence;
 import run.halo.aifoundation.provider.support.DiscoverySource;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
-import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingModel;
 import run.halo.aifoundation.provider.support.ProviderEmbeddingRequest;
+import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.app.extension.Metadata;
 
 @ProviderContractSource(
-    provider = "aihubmix",
-    officialDocumentation = "https://docs.aihubmix.com/en/api/responses/overview; "
-        + "https://docs.aihubmix.com/en/api/Responses-API; "
-        + "https://docs.aihubmix.com/cn/api-reference/anthropic-compatible/create-a-message; "
-        + "https://docs.aihubmix.com/en/api/Models-API; "
-        + "https://docs.aihubmix.com/en/api/App-code; "
-        + "https://docs.aihubmix.com/en/api/Image-Gen; "
-        + "https://docs.aihubmix.com/cn/api/Rerank; "
-        + "https://docs.aihubmix.com/cn/api/Jina-AI",
-    retrievedAt = "2026-08-27"
-)
+        provider = "aihubmix",
+        officialDocumentation = "https://docs.aihubmix.com/en/api/responses/overview; "
+                + "https://docs.aihubmix.com/en/api/Responses-API; "
+                + "https://docs.aihubmix.com/cn/api-reference/anthropic-compatible/create-a-message; "
+                + "https://docs.aihubmix.com/en/api/Models-API; "
+                + "https://docs.aihubmix.com/en/api/App-code; "
+                + "https://docs.aihubmix.com/en/api/Image-Gen; "
+                + "https://docs.aihubmix.com/cn/api/Rerank; "
+                + "https://docs.aihubmix.com/cn/api/Jina-AI",
+        retrievedAt = "2026-08-27")
 class AiHubMixProviderTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -68,69 +67,91 @@ class AiHubMixProviderTest {
         metadata.put("route", "primary");
 
         assertThat(new AiHubMixChatProfile().normalizeProviderMetadata(metadata))
-            .containsEntry("aihubmix", Map.of("route", "primary"));
+                .containsEntry("aihubmix", Map.of("route", "primary"));
     }
 
     @Test
     void declaresProviderOwnedAdaptersClientsAndResponsesDefault() {
         var provider = provider("https://example.com/v1");
-        assertThat(providerType.getSupportedAdapterTypes()).containsExactly(
-            AdapterType.AIHUBMIX_RESPONSES, AdapterType.AIHUBMIX_CHAT,
-            AdapterType.AIHUBMIX_MESSAGES, AdapterType.AIHUBMIX_EMBEDDING,
-            AdapterType.RERANK, AdapterType.AIHUBMIX_IMAGE, AdapterType.AIHUBMIX_SYSTEM_ONE);
-        assertThat(providerType.buildChatModel(provider, "key", "gpt-5"))
-            .isInstanceOf(AiHubMixResponsesModel.class);
-        assertThat(providerType.buildChatModel(provider, "key", new ProviderModelRef(
-            "claude-sonnet", ModelType.LANGUAGE, AdapterType.AIHUBMIX_CHAT)))
-            .isInstanceOf(AiHubMixChatModel.class);
-        assertThat(providerType.buildChatModel(provider, "key", new ProviderModelRef(
-            "claude-sonnet", ModelType.LANGUAGE, AdapterType.AIHUBMIX_MESSAGES)))
-            .isInstanceOf(AiHubMixMessagesModel.class);
+        assertThat(providerType.getSupportedAdapterTypes())
+                .containsExactly(
+                        AdapterType.AIHUBMIX_RESPONSES,
+                        AdapterType.AIHUBMIX_CHAT,
+                        AdapterType.AIHUBMIX_MESSAGES,
+                        AdapterType.AIHUBMIX_EMBEDDING,
+                        AdapterType.RERANK,
+                        AdapterType.AIHUBMIX_IMAGE,
+                        AdapterType.AIHUBMIX_SYSTEM_ONE);
+        assertThat(providerType.buildChatModel(provider, "key", "gpt-5")).isInstanceOf(AiHubMixResponsesModel.class);
+        assertThat(providerType.buildChatModel(
+                        provider,
+                        "key",
+                        new ProviderModelRef("claude-sonnet", ModelType.LANGUAGE, AdapterType.AIHUBMIX_CHAT)))
+                .isInstanceOf(AiHubMixChatModel.class);
+        assertThat(providerType.buildChatModel(
+                        provider,
+                        "key",
+                        new ProviderModelRef("claude-sonnet", ModelType.LANGUAGE, AdapterType.AIHUBMIX_MESSAGES)))
+                .isInstanceOf(AiHubMixMessagesModel.class);
         assertThat(providerType.buildEmbeddingModel(provider, "key", "text-embedding-3-small"))
-            .isInstanceOf(AiHubMixEmbeddingModel.class);
+                .isInstanceOf(AiHubMixEmbeddingModel.class);
         assertThat(providerType.buildRerankingClient(provider, "key", "gte-rerank-v2"))
-            .isInstanceOf(AiHubMixRerankingClient.class);
+                .isInstanceOf(AiHubMixRerankingClient.class);
         assertThat(providerType.buildImageGenerationClient(provider, "key", "gpt-image-1.5"))
-            .isInstanceOf(AiHubMixImageGenerationClient.class);
+                .isInstanceOf(AiHubMixImageGenerationClient.class);
         assertThat(providerType.embeddingModelProviderOptions().embeddingOptionsFactory())
-            .isNotNull();
-        assertThat(providerType.languageModelProviderOptions().nativeStrictToolSchemas()).isTrue();
+                .isNotNull();
+        assertThat(providerType.languageModelProviderOptions().nativeStrictToolSchemas())
+                .isTrue();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void responsesCombinesDocumentedBuiltinToolsAndRejectsInvalidReasoning() {
-        var nativeOptions = Map.<String, Object>of("builtinTools", List.of(
-            Map.of("type", "web_search_preview"),
-            Map.of("type", "code_interpreter", "container", Map.of("type", "auto"))));
-        var generated = (ChatCompletionsOptions) providerType.languageModelProviderOptions()
-            .chatOptionsFactory().build(GenerateTextRequest.builder().prompt("Search")
-                .build());
-        var options = generated.mutate().baseUrl("https://example.com/v1").model("gpt-5")
-            .extraBody(nativeOptions).build();
+        var nativeOptions = Map.<String, Object>of(
+                "builtinTools",
+                List.of(
+                        Map.of("type", "web_search_preview"),
+                        Map.of("type", "code_interpreter", "container", Map.of("type", "auto"))));
+        var generated = (ChatCompletionsOptions) providerType
+                .languageModelProviderOptions()
+                .chatOptionsFactory()
+                .build(GenerateTextRequest.builder().prompt("Search").build());
+        var options = generated
+                .mutate()
+                .baseUrl("https://example.com/v1")
+                .model("gpt-5")
+                .extraBody(nativeOptions)
+                .build();
         var body = responsesBody(options, new UserMessage("Search"));
         assertThat(body).doesNotContainKey("builtinTools");
         assertThat((List<Map<String, Object>>) body.get("tools"))
-            .extracting(tool -> tool.get("type"))
-            .containsExactly("web_search_preview", "code_interpreter");
+                .extracting(tool -> tool.get("type"))
+                .containsExactly("web_search_preview", "code_interpreter");
 
-        var invalidTool = options.mutate().extraBody(Map.of(
-            "builtinTools", List.of(Map.of("type", "unofficial_search")))).build();
+        var invalidTool = options.mutate()
+                .extraBody(Map.of("builtinTools", List.of(Map.of("type", "unofficial_search"))))
+                .build();
         assertThatThrownBy(() -> responsesBody(invalidTool, new UserMessage("Search")))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("builtin tool type");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("builtin tool type");
 
-        var invalidEffort = options.mutate().model("claude-sonnet")
-            .extraBody(Map.of("reasoning", Map.of("effort", "minimal"))).build();
+        var invalidEffort = options.mutate()
+                .model("claude-sonnet")
+                .extraBody(Map.of("reasoning", Map.of("effort", "minimal")))
+                .build();
         assertThat(responsesBody(invalidEffort, new UserMessage("Think")))
-            .containsEntry("reasoning", Map.of("effort", "minimal"));
+                .containsEntry("reasoning", Map.of("effort", "minimal"));
 
-        assertThatThrownBy(() -> new AiHubMixChatProfile().customizeRequest(
-            new java.util.LinkedHashMap<>(Map.of("builtinTools",
-                List.of(Map.of("type", "web_search_preview")))),
-            new Prompt(new UserMessage("Search")), options, false))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Responses adapter");
+        assertThatThrownBy(() -> new AiHubMixChatProfile()
+                        .customizeRequest(
+                                new java.util.LinkedHashMap<>(
+                                        Map.of("builtinTools", List.of(Map.of("type", "web_search_preview")))),
+                                new Prompt(new UserMessage("Search")),
+                                options,
+                                false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Responses adapter");
     }
 
     @Test
@@ -139,8 +160,12 @@ class AiHubMixProviderTest {
         var server = server();
         server.createContext("/v1/embeddings", exchange -> {
             capture.set(capture(exchange));
-            var encoded = Base64.getEncoder().encodeToString(ByteBuffer.allocate(8)
-                .order(ByteOrder.LITTLE_ENDIAN).putFloat(0.25f).putFloat(0.75f).array());
+            var encoded = Base64.getEncoder()
+                    .encodeToString(ByteBuffer.allocate(8)
+                            .order(ByteOrder.LITTLE_ENDIAN)
+                            .putFloat(0.25f)
+                            .putFloat(0.75f)
+                            .array());
             respond(exchange, """
                 {"id":"emb-1","model":"text-embedding-3-small",
                  "data":[{"index":0,"embedding":"%s"}],
@@ -149,35 +174,46 @@ class AiHubMixProviderTest {
         });
         server.start();
         try {
-            var model = providerType.buildEmbeddingModel(provider(baseUrl(server)), "sk-test",
-                "text-embedding-3-small");
-            var requestOptions = providerType.embeddingModelProviderOptions()
-                .withNativeOptions(Map.of("embedding_format", "base64"))
-                .buildOptions(
-                EmbeddingRequest.builder().inputs(List.of("Halo")).dimensions(512)
-                    .build(), new java.util.ArrayList<>());
-            EmbeddingResponse response = model.call(new org.springframework.ai.embedding.EmbeddingRequest(
-                List.of("Halo"), requestOptions));
+            var model =
+                    providerType.buildEmbeddingModel(provider(baseUrl(server)), "sk-test", "text-embedding-3-small");
+            var requestOptions = providerType
+                    .embeddingModelProviderOptions()
+                    .withNativeOptions(Map.of("embedding_format", "base64"))
+                    .buildOptions(
+                            EmbeddingRequest.builder()
+                                    .inputs(List.of("Halo"))
+                                    .dimensions(512)
+                                    .build(),
+                            new java.util.ArrayList<>());
+            EmbeddingResponse response =
+                    model.call(new org.springframework.ai.embedding.EmbeddingRequest(List.of("Halo"), requestOptions));
             assertThat(response.getResult().getOutput()).containsExactly(0.25f, 0.75f);
             assertThat(response.getMetadata().getUsage().getPromptTokens()).isEqualTo(3);
-            assertThat(capture.get().headers()).containsEntry("App-code", "NEUE3459")
-                .containsEntry("Authorization", "Bearer sk-test");
-            assertThat(capture.get().body()).containsEntry("dimensions", 512)
-                .containsEntry("embedding_format", "base64");
+            assertThat(capture.get().headers())
+                    .containsEntry("App-code", "NEUE3459")
+                    .containsEntry("Authorization", "Bearer sk-test");
+            assertThat(capture.get().body())
+                    .containsEntry("dimensions", 512)
+                    .containsEntry("embedding_format", "base64");
 
-            ((ProviderEmbeddingModel) model).call(new ProviderEmbeddingRequest(List.of(), List.of(
-                EmbeddingContent.text("Halo"),
-                EmbeddingContent.image(DataContent.data(new byte[] {1, 2, 3}, "image/png"))),
-                requestOptions, Map.of()));
-            assertThat(capture.get().body().get("input")).isEqualTo(List.of(
-                Map.of("text", "Halo"),
-                Map.of("image", Base64.getEncoder().encodeToString(
-                    new byte[] {1, 2, 3}))));
+            ((ProviderEmbeddingModel) model)
+                    .call(new ProviderEmbeddingRequest(
+                            List.of(),
+                            List.of(
+                                    EmbeddingContent.text("Halo"),
+                                    EmbeddingContent.image(DataContent.data(new byte[] {1, 2, 3}, "image/png"))),
+                            requestOptions,
+                            Map.of()));
+            assertThat(capture.get().body().get("input"))
+                    .isEqualTo(List.of(
+                            Map.of("text", "Halo"),
+                            Map.of("image", Base64.getEncoder().encodeToString(new byte[] {1, 2, 3}))));
 
             assertThat(model.call(new org.springframework.ai.embedding.EmbeddingRequest(
-                List.of("Halo"), new AiHubMixEmbeddingOptions(baseUrl(server), "key",
-                    "future-embedding", 512, null, null, Map.of(), null))))
-                .isNotNull();
+                            List.of("Halo"),
+                            new AiHubMixEmbeddingOptions(
+                                    baseUrl(server), "key", "future-embedding", 512, null, null, Map.of(), null))))
+                    .isNotNull();
         } finally {
             server.stop(0);
         }
@@ -197,16 +233,22 @@ class AiHubMixProviderTest {
         });
         server.start();
         try {
-            var client = providerType.buildRerankingClient(provider(baseUrl(server)), "sk-test",
-                "gte-rerank-v2");
-            var response = client.rerank(RerankRequest.builder().query("CMS")
-                .documents(List.of(RerankDocument.of("Other"), RerankDocument.of("Halo")))
-                .topN(1).build(), null, Map.of("return_documents", true)).block();
+            var client = providerType.buildRerankingClient(provider(baseUrl(server)), "sk-test", "gte-rerank-v2");
+            var response = client.rerank(
+                            RerankRequest.builder()
+                                    .query("CMS")
+                                    .documents(List.of(RerankDocument.of("Other"), RerankDocument.of("Halo")))
+                                    .topN(1)
+                                    .build(),
+                            null,
+                            Map.of("return_documents", true))
+                    .block();
             assertThat(response.getResults().getFirst().getScore()).isEqualTo(0.98);
             assertThat(response.getResults().getFirst().getDocument().getText()).isEqualTo("Halo");
             assertThat(capture.get().headers()).containsEntry("App-code", "NEUE3459");
-            assertThat(capture.get().body()).containsEntry("model", "gte-rerank-v2")
-                .containsEntry("return_documents", true);
+            assertThat(capture.get().body())
+                    .containsEntry("model", "gte-rerank-v2")
+                    .containsEntry("return_documents", true);
         } finally {
             server.stop(0);
         }
@@ -225,30 +267,36 @@ class AiHubMixProviderTest {
         });
         server.start();
         try {
-            var client = providerType.buildImageGenerationClient(provider(baseUrl(server)),
-                "sk-test", "imagen-4.0-generate-001");
+            var client = providerType.buildImageGenerationClient(
+                    provider(baseUrl(server)), "sk-test", "imagen-4.0-generate-001");
             var nativeOptions = Map.<String, Object>of(
-                "model_path", "google/imagen-4.0-generate-001",
-                "output_format", "png",
-                "count_field", "numberOfImages");
-            var result = client.generateImage(GenerateImageRequest.builder().prompt("Halo")
-                .n(2).size("1024x1024")
-                .build(), null, nativeOptions).block();
-            assertThat(result.getImages()).singleElement().satisfies(image ->
-                assertThat(image.getUrl()).isEqualTo("https://example.com/image.png"));
-            assertThat(capture.get().path()).isEqualTo(
-                "/v1/models/google/imagen-4.0-generate-001/predictions");
+                    "model_path", "google/imagen-4.0-generate-001",
+                    "output_format", "png",
+                    "count_field", "numberOfImages");
+            var result = client.generateImage(
+                            GenerateImageRequest.builder()
+                                    .prompt("Halo")
+                                    .n(2)
+                                    .size("1024x1024")
+                                    .build(),
+                            null,
+                            nativeOptions)
+                    .block();
+            assertThat(result.getImages())
+                    .singleElement()
+                    .satisfies(image -> assertThat(image.getUrl()).isEqualTo("https://example.com/image.png"));
+            assertThat(capture.get().path()).isEqualTo("/v1/models/google/imagen-4.0-generate-001/predictions");
             assertThat(capture.get().headers()).containsEntry("App-code", "NEUE3459");
             var input = (Map<String, Object>) capture.get().body().get("input");
-            assertThat(input).containsEntry("numberOfImages", 2)
-                .doesNotContainKey("n");
+            assertThat(input).containsEntry("numberOfImages", 2).doesNotContainKey("n");
 
-            var unknown = providerType.buildImageGenerationClient(provider(baseUrl(server)),
-                "key", "unknown-image");
+            var unknown = providerType.buildImageGenerationClient(provider(baseUrl(server)), "key", "unknown-image");
             assertThatThrownBy(() -> unknown.generateImage(GenerateImageRequest.builder()
-                .prompt("Halo").build()).block())
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("model_path");
+                                    .prompt("Halo")
+                                    .build())
+                            .block())
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("model_path");
         } finally {
             server.stop(0);
         }
@@ -276,40 +324,55 @@ class AiHubMixProviderTest {
         server.start();
         try {
             StepVerifier.create(providerType.discoverModels(provider(baseUrl(server)), "sk-test"))
-                .assertNext(models -> {
-                    assertThat(models).hasSize(4);
-                    var language = models.getFirst();
-                    assertThat(language.adapterType()).isEqualTo(AdapterType.AIHUBMIX_RESPONSES);
-                    assertThat(language.features()).containsExactlyInAnyOrder(
-                        ModelFeature.STREAMING, ModelFeature.VISION, ModelFeature.TOOL_CALL,
-                        ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING);
-                    assertThat(language.capabilities().getLanguage().getImageInput()).isTrue();
-                    assertThat(language.capabilities().getLanguage().getFileInput()).isTrue();
-                    assertThat(language.capabilities().getLanguage().getInputMediaTypes())
-                        .containsExactly("image/*", "application/pdf");
-                    assertThat(language.source()).isEqualTo(DiscoverySource.REMOTE);
-                    assertThat(language.confidence()).isEqualTo(DiscoveryConfidence.HIGH);
-                    assertThat(models).extracting(model -> model.adapterType())
-                        .containsExactly(AdapterType.AIHUBMIX_RESPONSES,
-                            AdapterType.AIHUBMIX_EMBEDDING, AdapterType.RERANK,
-                            AdapterType.AIHUBMIX_IMAGE);
-                    assertThat(models).extracting(model -> model.modelId())
-                        .doesNotContain("video-model", "voice-model", "speech-model");
-                }).verifyComplete();
-            assertThat(capture.get().headers()).containsEntry("App-code", "NEUE3459")
-                .containsEntry("Authorization", "Bearer sk-test");
+                    .assertNext(models -> {
+                        assertThat(models).hasSize(4);
+                        var language = models.getFirst();
+                        assertThat(language.adapterType()).isEqualTo(AdapterType.AIHUBMIX_RESPONSES);
+                        assertThat(language.features())
+                                .containsExactlyInAnyOrder(
+                                        ModelFeature.STREAMING,
+                                        ModelFeature.VISION,
+                                        ModelFeature.TOOL_CALL,
+                                        ModelFeature.STRUCTURED_OUTPUT,
+                                        ModelFeature.REASONING);
+                        assertThat(language.capabilities().getLanguage().getImageInput())
+                                .isTrue();
+                        assertThat(language.capabilities().getLanguage().getFileInput())
+                                .isTrue();
+                        assertThat(language.capabilities().getLanguage().getInputMediaTypes())
+                                .containsExactly("image/*", "application/pdf");
+                        assertThat(language.source()).isEqualTo(DiscoverySource.REMOTE);
+                        assertThat(language.confidence()).isEqualTo(DiscoveryConfidence.HIGH);
+                        assertThat(models)
+                                .extracting(model -> model.adapterType())
+                                .containsExactly(
+                                        AdapterType.AIHUBMIX_RESPONSES,
+                                        AdapterType.AIHUBMIX_EMBEDDING,
+                                        AdapterType.RERANK,
+                                        AdapterType.AIHUBMIX_IMAGE);
+                        assertThat(models)
+                                .extracting(model -> model.modelId())
+                                .doesNotContain("video-model", "voice-model", "speech-model");
+                    })
+                    .verifyComplete();
+            assertThat(capture.get().headers())
+                    .containsEntry("App-code", "NEUE3459")
+                    .containsEntry("Authorization", "Bearer sk-test");
         } finally {
             server.stop(0);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> responsesBody(ChatCompletionsOptions options,
-        org.springframework.ai.chat.messages.Message... messages) {
+    private Map<String, Object> responsesBody(
+            ChatCompletionsOptions options, org.springframework.ai.chat.messages.Message... messages) {
         var model = new AiHubMixResponsesModel(options, WebClient.builder());
         var key = (String) ReflectionTestUtils.getField(model, "messageContextKey");
-        return (Map<String, Object>) ReflectionTestUtils.invokeMethod(model, "requestBody",
-            options.mutate().toolContext(key, List.of(messages)).build(), false);
+        return (Map<String, Object>) ReflectionTestUtils.invokeMethod(
+                model,
+                "requestBody",
+                options.mutate().toolContext(key, List.of(messages)).build(),
+                false);
     }
 
     private AiProvider provider(String baseUrl) {
@@ -332,12 +395,12 @@ class AiHubMixProviderTest {
 
     private Capture capture(HttpExchange exchange) throws IOException {
         var headers = Map.of(
-            "Authorization", value(exchange, "Authorization"),
-            "App-code", value(exchange, "APP-Code"));
+                "Authorization", value(exchange, "Authorization"),
+                "App-code", value(exchange, "APP-Code"));
         var bytes = exchange.getRequestBody().readAllBytes();
-        Map<String, Object> body = bytes.length == 0 ? Map.of()
-            : OBJECT_MAPPER.readValue(bytes,
-                new TypeReference<Map<String, Object>>() { });
+        Map<String, Object> body = bytes.length == 0
+                ? Map.of()
+                : OBJECT_MAPPER.readValue(bytes, new TypeReference<Map<String, Object>>() {});
         return new Capture(exchange.getRequestURI().getPath(), headers, body);
     }
 
@@ -354,6 +417,5 @@ class AiHubMixProviderTest {
         exchange.close();
     }
 
-    private record Capture(String path, Map<String, String> headers, Map<String, Object> body) {
-    }
+    private record Capture(String path, Map<String, String> headers, Map<String, Object> body) {}
 }
