@@ -10,8 +10,8 @@ import java.util.Map;
  * @param title optional source title
  * @param providerMetadata provider-specific metadata
  */
-public record SourceUrlPart(String sourceId, String url, String title,
-                            Map<String, Object> providerMetadata) implements UIMessagePart {
+public record SourceUrlPart(String sourceId, String url, String title, Map<String, Object> providerMetadata)
+        implements UIMessagePart {
     @Override
     public String type() {
         return UIMessageChunkType.SOURCE_URL;

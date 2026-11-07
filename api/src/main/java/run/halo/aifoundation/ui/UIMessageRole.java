@@ -1,19 +1,11 @@
 package run.halo.aifoundation.ui;
 
-/**
- * Role of a persisted UI message in a conversation.
- */
+/** Role of a persisted UI message in a conversation. */
 public enum UIMessageRole {
-    /**
-     * System instruction message.
-     */
+    /** System instruction message. */
     SYSTEM,
-    /**
-     * End-user message.
-     */
+    /** End-user message. */
     USER,
-    /**
-     * Assistant response message.
-     */
+    /** Assistant response message. */
     ASSISTANT
 }

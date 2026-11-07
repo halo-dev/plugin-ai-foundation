@@ -8,10 +8,10 @@ public final class ResponsesProtocolException extends IllegalStateException {
     private final String eventType;
     private final Map<String, Object> providerMetadata;
 
-    ResponsesProtocolException(String providerType, String eventType, String message,
-        Map<String, Object> providerMetadata) {
+    ResponsesProtocolException(
+            String providerType, String eventType, String message, Map<String, Object> providerMetadata) {
         super(providerType + " Responses stream failed at " + eventType + ": "
-            + AiFoundationDiagnostics.redactSensitiveText(message));
+                + AiFoundationDiagnostics.redactSensitiveText(message));
         this.eventType = eventType;
         this.providerMetadata = Map.copyOf(providerMetadata);
     }

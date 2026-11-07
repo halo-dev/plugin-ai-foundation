@@ -8,16 +8,32 @@ import java.util.Set;
 public final class NativeModelOptionsValidator {
 
     private static final Set<String> INVOCATION_FIELDS = Set.of(
-        "model", "messages", "input", "prompt", "image", "images", "mask", "tools",
-        "toolchoice", "documents", "query", "stream", "streamoptions");
+            "model",
+            "messages",
+            "input",
+            "prompt",
+            "image",
+            "images",
+            "mask",
+            "tools",
+            "toolchoice",
+            "documents",
+            "query",
+            "stream",
+            "streamoptions");
     private static final Set<String> EXACT_CREDENTIAL_FIELDS = Set.of("token", "secret");
     private static final Set<String> CREDENTIAL_MARKERS = Set.of(
-        "apikey", "authorization", "secretkey", "privatekey", "password", "credential",
-        "secretaccesskey", "accesskeyid");
+            "apikey",
+            "authorization",
+            "secretkey",
+            "privatekey",
+            "password",
+            "credential",
+            "secretaccesskey",
+            "accesskeyid");
     private static final int MAX_NESTING_DEPTH = 32;
 
-    private NativeModelOptionsValidator() {
-    }
+    private NativeModelOptionsValidator() {}
 
     public static void validate(Map<String, Object> options) {
         if (options == null) {
@@ -36,7 +52,7 @@ public final class NativeModelOptionsValidator {
         validateName(name, name);
         if (INVOCATION_FIELDS.contains(normalizeName(name))) {
             throw new IllegalArgumentException(
-                "Provider-native option '" + name + "' is owned by the model invocation");
+                    "Provider-native option '" + name + "' is owned by the model invocation");
         }
         validateValue(entry.getValue(), name, 0);
     }
@@ -51,7 +67,7 @@ public final class NativeModelOptionsValidator {
         var normalizedName = normalizeName(name);
         if (isCredentialName(normalizedName)) {
             throw new IllegalArgumentException(
-                "Provider-native option '" + path + "' must use the provider Secret instead");
+                    "Provider-native option '" + path + "' must use the provider Secret instead");
         }
     }
 
@@ -84,12 +100,10 @@ public final class NativeModelOptionsValidator {
 
     private static void validateValue(Object value, String path, int depth) {
         if (value == null) {
-            throw new IllegalArgumentException(
-                "Provider-native option '" + path + "' must not be null");
+            throw new IllegalArgumentException("Provider-native option '" + path + "' must not be null");
         }
         if (depth >= MAX_NESTING_DEPTH) {
-            throw new IllegalArgumentException(
-                "Provider-native option '" + path + "' is nested too deeply");
+            throw new IllegalArgumentException("Provider-native option '" + path + "' is nested too deeply");
         }
         if (value instanceof Map<?, ?> values) {
             validateMap(values, path, depth + 1);
@@ -103,8 +117,7 @@ public final class NativeModelOptionsValidator {
     private static void validateMap(Map<?, ?> values, String parentPath, int depth) {
         for (var entry : values.entrySet()) {
             if (!(entry.getKey() instanceof String name)) {
-                throw new IllegalArgumentException(
-                    "Provider-native option object keys must be strings: " + parentPath);
+                throw new IllegalArgumentException("Provider-native option object keys must be strings: " + parentPath);
             }
             var path = parentPath + "." + name;
             validateName(name, path);

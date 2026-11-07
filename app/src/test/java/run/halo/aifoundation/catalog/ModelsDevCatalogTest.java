@@ -42,8 +42,8 @@ class ModelsDevCatalogTest {
 
         for (var modelId : new String[] {"chat", "image", "embedding", "rerank"}) {
             assertThat(catalog.find("openai", modelId).matchesModelType(ModelType.DECISION))
-                .as(modelId)
-                .isFalse();
+                    .as(modelId)
+                    .isFalse();
         }
     }
 
@@ -70,8 +70,7 @@ class ModelsDevCatalogTest {
         assertThat(image.matchesModelType(ModelType.LANGUAGE)).isFalse();
         assertThat(image.inputs()).containsExactly("text", "image/png");
         assertThat(image.outputs()).containsExactly("image/png", "image/webp");
-        assertThat(image.api("images").path("base_url").asText())
-            .isEqualTo("https://api.openai.com/v1");
+        assertThat(image.api("images").path("base_url").asText()).isEqualTo("https://api.openai.com/v1");
         var embedding = catalog.find("openai", "embedding");
         assertThat(embedding.matchesModelType(ModelType.EMBEDDING)).isTrue();
         assertThat(embedding.matchesModelType(ModelType.RERANK)).isFalse();
@@ -87,8 +86,7 @@ class ModelsDevCatalogTest {
     }
 
     @Test
-    void keepsUnknownControlValuesAndExplicitEmptyOrFalseWithoutConfusingThemWithMissing()
-        throws Exception {
+    void keepsUnknownControlValuesAndExplicitEmptyOrFalseWithoutConfusingThemWithMissing() throws Exception {
         var catalog = ModelsDevCatalog.parse(MAPPER.readTree("""
             {"openai":{"id":"openai","models":{
               "known":{"id":"known","type":"chat","modalities":{"input":[],"output":["text"]},
@@ -107,16 +105,24 @@ class ModelsDevCatalogTest {
         assertThat(known.structuredOutput()).isFalse();
         assertThat(known.reasoning()).isTrue();
         assertThat(known.inputs()).isEmpty();
-        assertThat(known.model().path("capabilities").path("reasoning").path("effort").get(1)
-            .asText())
-            .isEqualTo("ultra-future");
-        assertThat(known.model().path("capabilities").path("reasoning").path("budget").isObject())
-            .isTrue();
+        assertThat(known.model()
+                        .path("capabilities")
+                        .path("reasoning")
+                        .path("effort")
+                        .get(1)
+                        .asText())
+                .isEqualTo("ultra-future");
+        assertThat(known.model()
+                        .path("capabilities")
+                        .path("reasoning")
+                        .path("budget")
+                        .isObject())
+                .isTrue();
         assertThat(known.api("future-protocol").isMissingNode()).isTrue();
         assertThat(known.model().has("future_metadata")).isFalse();
         assertThat(known.model().path("limit").has("future_limit")).isFalse();
         assertThat(known.model().path("capabilities").path("reasoning").has("future_control"))
-            .isFalse();
+                .isFalse();
         var missing = catalog.find("openai", "missing");
         assertThat(missing.tools()).isNull();
         assertThat(missing.inputs()).isNull();
@@ -128,7 +134,7 @@ class ModelsDevCatalogTest {
     void modelIdentityMismatchCannotPoisonSuccessfulSnapshot() {
         assertThatThrownBy(() -> ModelsDevCatalog.parse(MAPPER.readTree("""
             {"openai":{"id":"openai","models":{"expected":{"id":"another","type":"chat"}}}}
-            """))).isInstanceOf(IllegalArgumentException.class);
+            """)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
-
 }

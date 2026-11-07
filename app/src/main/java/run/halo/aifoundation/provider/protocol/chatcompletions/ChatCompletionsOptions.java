@@ -112,44 +112,44 @@ public class ChatCompletionsOptions implements ToolCallingChatOptions {
     @Override
     public Builder mutate() {
         return builder()
-            .baseUrl(baseUrl)
-            .endpointPath(endpointPath)
-            .apiKey(apiKey)
-            .model(model)
-            .deploymentName(deploymentName)
-            .timeout(timeout)
-            .maxRetries(maxRetries)
-            .proxy(proxy)
-            .customHeaders(customHeaders)
-            .frequencyPenalty(frequencyPenalty)
-            .maxTokens(maxTokens)
-            .presencePenalty(presencePenalty)
-            .stopSequences(stopSequences)
-            .temperature(temperature)
-            .topK(topK)
-            .topP(topP)
-            .toolCallbacks(toolCallbacks)
-            .toolStrict(toolStrict)
-            .toolContext(toolContext)
-            .logitBias(logitBias)
-            .logprobs(logprobs)
-            .topLogprobs(topLogprobs)
-            .maxCompletionTokens(maxCompletionTokens)
-            .n(n)
-            .outputModalities(outputModalities)
-            .outputAudio(outputAudio)
-            .responseFormat(responseFormat)
-            .streamOptions(streamOptions)
-            .seed(seed)
-            .user(user)
-            .parallelToolCalls(parallelToolCalls)
-            .store(store)
-            .metadata(metadata)
-            .reasoningEffort(reasoningEffort)
-            .verbosity(verbosity)
-            .serviceTier(serviceTier)
-            .extraBody(extraBody)
-            .toolChoice(toolChoice);
+                .baseUrl(baseUrl)
+                .endpointPath(endpointPath)
+                .apiKey(apiKey)
+                .model(model)
+                .deploymentName(deploymentName)
+                .timeout(timeout)
+                .maxRetries(maxRetries)
+                .proxy(proxy)
+                .customHeaders(customHeaders)
+                .frequencyPenalty(frequencyPenalty)
+                .maxTokens(maxTokens)
+                .presencePenalty(presencePenalty)
+                .stopSequences(stopSequences)
+                .temperature(temperature)
+                .topK(topK)
+                .topP(topP)
+                .toolCallbacks(toolCallbacks)
+                .toolStrict(toolStrict)
+                .toolContext(toolContext)
+                .logitBias(logitBias)
+                .logprobs(logprobs)
+                .topLogprobs(topLogprobs)
+                .maxCompletionTokens(maxCompletionTokens)
+                .n(n)
+                .outputModalities(outputModalities)
+                .outputAudio(outputAudio)
+                .responseFormat(responseFormat)
+                .streamOptions(streamOptions)
+                .seed(seed)
+                .user(user)
+                .parallelToolCalls(parallelToolCalls)
+                .store(store)
+                .metadata(metadata)
+                .reasoningEffort(reasoningEffort)
+                .verbosity(verbosity)
+                .serviceTier(serviceTier)
+                .extraBody(extraBody)
+                .toolChoice(toolChoice);
     }
 
     public @Nullable String getBaseUrl() {
@@ -315,20 +315,35 @@ public class ChatCompletionsOptions implements ToolCallingChatOptions {
     }
 
     public enum AudioVoice {
-        ALLOY, ASH, BALLAD, CORAL, ECHO, FABLE, NOVA, ONYX, SAGE, SHIMMER, VERSE
+        ALLOY,
+        ASH,
+        BALLAD,
+        CORAL,
+        ECHO,
+        FABLE,
+        NOVA,
+        ONYX,
+        SAGE,
+        SHIMMER,
+        VERSE
     }
 
     public enum AudioFormat {
-        MP3, OPUS, AAC, FLAC, WAV, PCM16
+        MP3,
+        OPUS,
+        AAC,
+        FLAC,
+        WAV,
+        PCM16
     }
 
-    public record AudioParameters(@Nullable AudioVoice voice, @Nullable AudioFormat format) {
-    }
+    public record AudioParameters(
+            @Nullable AudioVoice voice, @Nullable AudioFormat format) {}
 
-    public record StreamOptions(@Nullable Boolean includeObfuscation,
-                                @Nullable Boolean includeUsage,
-                                @Nullable Map<String, Object> additionalProperties) {
-    }
+    public record StreamOptions(
+            @Nullable Boolean includeObfuscation,
+            @Nullable Boolean includeUsage,
+            @Nullable Map<String, Object> additionalProperties) {}
 
     public static final class ResponseFormat {
 
@@ -338,8 +353,12 @@ public class ChatCompletionsOptions implements ToolCallingChatOptions {
         private final @Nullable String description;
         private final @Nullable Boolean strict;
 
-        private ResponseFormat(@Nullable Type type, @Nullable String jsonSchema,
-            @Nullable String name, @Nullable String description, @Nullable Boolean strict) {
+        private ResponseFormat(
+                @Nullable Type type,
+                @Nullable String jsonSchema,
+                @Nullable String name,
+                @Nullable String description,
+                @Nullable Boolean strict) {
             this.type = type;
             this.jsonSchema = jsonSchema;
             this.name = name;
@@ -372,7 +391,9 @@ public class ChatCompletionsOptions implements ToolCallingChatOptions {
         }
 
         public enum Type {
-            TEXT, JSON_OBJECT, JSON_SCHEMA
+            TEXT,
+            JSON_OBJECT,
+            JSON_SCHEMA
         }
 
         public static final class Builder {
@@ -730,8 +751,7 @@ public class ChatCompletionsOptions implements ToolCallingChatOptions {
             logitBias = that.logitBias != null ? that.logitBias : logitBias;
             logprobs = that.logprobs != null ? that.logprobs : logprobs;
             topLogprobs = that.topLogprobs != null ? that.topLogprobs : topLogprobs;
-            maxCompletionTokens = that.maxCompletionTokens != null
-                ? that.maxCompletionTokens : maxCompletionTokens;
+            maxCompletionTokens = that.maxCompletionTokens != null ? that.maxCompletionTokens : maxCompletionTokens;
             n = that.n != null ? that.n : n;
             outputModalities = that.outputModalities != null ? that.outputModalities : outputModalities;
             outputAudio = that.outputAudio != null ? that.outputAudio : outputAudio;

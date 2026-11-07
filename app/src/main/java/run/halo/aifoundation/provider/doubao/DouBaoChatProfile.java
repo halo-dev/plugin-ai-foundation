@@ -20,8 +20,8 @@ final class DouBaoChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         // Ark's Chat Completions API accepts the native `thinking` object as supplied by the
         // provider-owned request options. No OpenAI reasoning-effort translation is applied.
         body.remove("builtinTools");
@@ -39,8 +39,7 @@ final class DouBaoChatProfile implements ChatCompletionsProfile {
         if (mime.startsWith("audio/")) {
             return audioPart(media, mime);
         }
-        throw new IllegalArgumentException(
-            "Doubao Chat supports image, video, and audio media, received: " + mime);
+        throw new IllegalArgumentException("Doubao Chat supports image, video, and audio media, received: " + mime);
     }
 
     private Map<String, Object> urlPart(String type, Media media) {
@@ -53,9 +52,13 @@ final class DouBaoChatProfile implements ChatCompletionsProfile {
         if (reference.isPresent()) {
             return audioUrl(reference.get());
         }
-        return Map.of("type", "input_audio", "input_audio", Map.of(
-            "data", MediaContentSources.rawBase64(media, "Doubao audio"),
-            "format", audioFormat(mime)));
+        return Map.of(
+                "type",
+                "input_audio",
+                "input_audio",
+                Map.of(
+                        "data", MediaContentSources.rawBase64(media, "Doubao audio"),
+                        "format", audioFormat(mime)));
     }
 
     private Map<String, Object> audioUrl(String url) {

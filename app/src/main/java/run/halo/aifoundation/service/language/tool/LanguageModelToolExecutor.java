@@ -35,28 +35,34 @@ public final class LanguageModelToolExecutor {
     private final ToolTimeout toolTimeout;
     private final CallbackTimeout callbackTimeout;
 
-    public LanguageModelToolExecutor(JsonSchemaValidator schemaValidator,
-        CancellationChecker cancellationChecker, ToolTimeout toolTimeout,
-        CallbackTimeout callbackTimeout) {
+    public LanguageModelToolExecutor(
+            JsonSchemaValidator schemaValidator,
+            CancellationChecker cancellationChecker,
+            ToolTimeout toolTimeout,
+            CallbackTimeout callbackTimeout) {
         this.schemaValidator = schemaValidator;
         this.cancellationChecker = cancellationChecker;
         this.toolTimeout = toolTimeout;
         this.callbackTimeout = callbackTimeout;
     }
 
-    public Mono<ToolExecutionBatch> execute(List<ToolCall> toolCalls, GenerateTextRequest request,
-        int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle) {
+    public Mono<ToolExecutionBatch> execute(
+            List<ToolCall> toolCalls,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> stepProviderMetadata,
+            ToolLifecycle lifecycle) {
         if (toolCalls.isEmpty()) {
             return Mono.just(new ToolExecutionBatch(List.of(), List.of(), List.of()));
         }
-        var context = ToolStepContext.execution(request, stepIndex, executionMessages,
-            stepProviderMetadata, lifecycle, toolsByName(request));
+        var context = ToolStepContext.execution(
+                request, stepIndex, executionMessages, stepProviderMetadata, lifecycle, toolsByName(request));
         return executeNext(toolCalls, 0, context, new ExecutionAccumulator());
     }
 
-    private Mono<ToolExecutionBatch> executeNext(List<ToolCall> toolCalls, int index,
-        ToolStepContext context, ExecutionAccumulator accumulator) {
+    private Mono<ToolExecutionBatch> executeNext(
+            List<ToolCall> toolCalls, int index, ToolStepContext context, ExecutionAccumulator accumulator) {
         if (index >= toolCalls.size()) {
             return Mono.just(accumulator.toBatch());
         }
@@ -74,29 +80,35 @@ public final class LanguageModelToolExecutor {
             }
             cancellationChecker.check(context.request());
             return repairIfNeeded(toolCall, tool, context)
-                .flatMap(repair -> executeRepairedCall(toolCalls, index, tool, context,
-                    accumulator, repair));
+                    .flatMap(repair -> executeRepairedCall(toolCalls, index, tool, context, accumulator, repair));
         } catch (RuntimeException e) {
             accumulator.addError(toolError(resolvedCall, e));
             return executeNext(toolCalls, index + 1, context, accumulator);
         }
     }
 
-    private Mono<ToolExecutionBatch> executeRepairedCall(List<ToolCall> toolCalls, int index,
-        ToolDefinition tool, ToolStepContext context, ExecutionAccumulator accumulator,
-        RepairAttempt repair) {
+    private Mono<ToolExecutionBatch> executeRepairedCall(
+            List<ToolCall> toolCalls,
+            int index,
+            ToolDefinition tool,
+            ToolStepContext context,
+            ExecutionAccumulator accumulator,
+            RepairAttempt repair) {
         accumulator.addWarnings(repair.warnings());
         if (repair.error() != null) {
             accumulator.addError(repair.error());
             return executeNext(toolCalls, index + 1, context, accumulator);
         }
         return executeOne(repair.toolCall(), tool, context)
-            .flatMap(outcome -> continueAfterExecution(toolCalls, index, context, accumulator,
-                outcome));
+                .flatMap(outcome -> continueAfterExecution(toolCalls, index, context, accumulator, outcome));
     }
 
-    private Mono<ToolExecutionBatch> continueAfterExecution(List<ToolCall> toolCalls, int index,
-        ToolStepContext context, ExecutionAccumulator accumulator, ToolExecutionOutcome outcome) {
+    private Mono<ToolExecutionBatch> continueAfterExecution(
+            List<ToolCall> toolCalls,
+            int index,
+            ToolStepContext context,
+            ExecutionAccumulator accumulator,
+            ToolExecutionOutcome outcome) {
         if (outcome.error() != null) {
             accumulator.addError(outcome.error());
         } else {
@@ -105,51 +117,61 @@ public final class LanguageModelToolExecutor {
         return executeNext(toolCalls, index + 1, context, accumulator);
     }
 
-    private Mono<ToolExecutionOutcome> executeOne(ToolCall resolvedCall, ToolDefinition tool,
-        ToolStepContext stepContext) {
+    private Mono<ToolExecutionOutcome> executeOne(
+            ToolCall resolvedCall, ToolDefinition tool, ToolStepContext stepContext) {
         var context = executionContext(resolvedCall, stepContext);
         var started = Instant.now();
-        return stepContext.lifecycle()
-            .toolCallStart(stepContext.stepIndex(), resolvedCall, context.getProviderMetadata())
-            .then(Mono.defer(() -> toolTimeout.apply(tool.getExecutor().execute(context),
-                stepContext.request())))
-            .doOnNext(value -> {
-                cancellationChecker.check(stepContext.request());
-                validateOutput(resolvedCall, tool, value);
-            })
-            .map(value -> ToolResult.builder()
-                .toolCallId(resolvedCall.getToolCallId())
-                .toolName(resolvedCall.getToolName())
-                .result(value)
-                .build())
-            .flatMap(result -> stepContext.lifecycle()
-                .toolCallFinish(stepContext.stepIndex(), result, null, started,
-                    context.getProviderMetadata())
-                .thenReturn(new ToolExecutionOutcome(result, null)))
-            .onErrorResume(RuntimeException.class, e -> {
-                var error = toolError(resolvedCall, e);
-                return stepContext.lifecycle().toolCallFinish(stepContext.stepIndex(), null, error, started,
-                        context.getProviderMetadata())
-                    .thenReturn(new ToolExecutionOutcome(null, error));
-            });
+        return stepContext
+                .lifecycle()
+                .toolCallStart(stepContext.stepIndex(), resolvedCall, context.getProviderMetadata())
+                .then(Mono.defer(() -> toolTimeout.apply(tool.getExecutor().execute(context), stepContext.request())))
+                .doOnNext(value -> {
+                    cancellationChecker.check(stepContext.request());
+                    validateOutput(resolvedCall, tool, value);
+                })
+                .map(value -> ToolResult.builder()
+                        .toolCallId(resolvedCall.getToolCallId())
+                        .toolName(resolvedCall.getToolName())
+                        .result(value)
+                        .build())
+                .flatMap(result -> stepContext
+                        .lifecycle()
+                        .toolCallFinish(stepContext.stepIndex(), result, null, started, context.getProviderMetadata())
+                        .thenReturn(new ToolExecutionOutcome(result, null)))
+                .onErrorResume(RuntimeException.class, e -> {
+                    var error = toolError(resolvedCall, e);
+                    return stepContext
+                            .lifecycle()
+                            .toolCallFinish(
+                                    stepContext.stepIndex(), null, error, started, context.getProviderMetadata())
+                            .thenReturn(new ToolExecutionOutcome(null, error));
+                });
     }
 
-    public Mono<ToolNormalizationBatch> normalizeInputs(List<ToolCall> toolCalls,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle,
-        Set<String> streamedInputCallIds) {
+    public Mono<ToolNormalizationBatch> normalizeInputs(
+            List<ToolCall> toolCalls,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> stepProviderMetadata,
+            ToolLifecycle lifecycle,
+            Set<String> streamedInputCallIds) {
         if (toolCalls.isEmpty()) {
-            return Mono.just(new ToolNormalizationBatch(List.of(), List.of(), List.of(), Set.of(),
-                List.of()));
+            return Mono.just(new ToolNormalizationBatch(List.of(), List.of(), List.of(), Set.of(), List.of()));
         }
-        var context = ToolStepContext.normalization(request, stepIndex, executionMessages,
-            stepProviderMetadata, lifecycle, toolsByName(request),
-            streamedInputCallIds != null ? Set.copyOf(streamedInputCallIds) : Set.of());
+        var context = ToolStepContext.normalization(
+                request,
+                stepIndex,
+                executionMessages,
+                stepProviderMetadata,
+                lifecycle,
+                toolsByName(request),
+                streamedInputCallIds != null ? Set.copyOf(streamedInputCallIds) : Set.of());
         return normalizeNext(toolCalls, 0, context, new NormalizationAccumulator());
     }
 
-    private Mono<ToolNormalizationBatch> normalizeNext(List<ToolCall> toolCalls, int index,
-        ToolStepContext context, NormalizationAccumulator accumulator) {
+    private Mono<ToolNormalizationBatch> normalizeNext(
+            List<ToolCall> toolCalls, int index, ToolStepContext context, NormalizationAccumulator accumulator) {
         if (index >= toolCalls.size()) {
             return Mono.just(accumulator.toBatch());
         }
@@ -162,68 +184,87 @@ public final class LanguageModelToolExecutor {
             }
             cancellationChecker.check(context.request());
             return notifyInputStartUnlessStreamed(toolCall, tool, context)
-                .then(Mono.defer(() -> repairIfNeeded(toolCall, tool, context)))
-                .flatMap(repair -> {
-                    accumulator.addWarnings(repair.warnings());
-                    if (repair.error() != null) {
-                        accumulator.addInvalidToolCall(toolCall, repair.error());
-                    } else {
-                        accumulator.addToolCall(repair.toolCall());
-                    }
-                    return normalizeNext(toolCalls, index + 1, context, accumulator);
-                });
+                    .then(Mono.defer(() -> repairIfNeeded(toolCall, tool, context)))
+                    .flatMap(repair -> {
+                        accumulator.addWarnings(repair.warnings());
+                        if (repair.error() != null) {
+                            accumulator.addInvalidToolCall(toolCall, repair.error());
+                        } else {
+                            accumulator.addToolCall(repair.toolCall());
+                        }
+                        return normalizeNext(toolCalls, index + 1, context, accumulator);
+                    });
         } catch (RuntimeException e) {
             accumulator.addInvalidToolCall(toolCall, toolError(toolCall, e));
             return normalizeNext(toolCalls, index + 1, context, accumulator);
         }
     }
 
-    private Mono<Void> notifyInputStartUnlessStreamed(ToolCall toolCall, ToolDefinition tool,
-        ToolStepContext context) {
+    private Mono<Void> notifyInputStartUnlessStreamed(ToolCall toolCall, ToolDefinition tool, ToolStepContext context) {
         if (context.streamedInputCallIds().contains(toolCall.getToolCallId())) {
             return Mono.empty();
         }
-        return inputStart(toolCall.getToolCallId(), toolCall.getToolName(), tool,
-            context.request(), context.stepIndex(), context.executionMessages(),
-            context.providerMetadata(toolCall));
+        return inputStart(
+                toolCall.getToolCallId(),
+                toolCall.getToolName(),
+                tool,
+                context.request(),
+                context.stepIndex(),
+                context.executionMessages(),
+                context.providerMetadata(toolCall));
     }
 
-    public Mono<ToolApprovalBatch> evaluateApproval(List<ToolCall> toolCalls,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata, ToolLifecycle lifecycle,
-        Function<ToolCall, String> approvalIdFactory) {
+    public Mono<ToolApprovalBatch> evaluateApproval(
+            List<ToolCall> toolCalls,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> stepProviderMetadata,
+            ToolLifecycle lifecycle,
+            Function<ToolCall, String> approvalIdFactory) {
         if (toolCalls.isEmpty()) {
-            return Mono.just(new ToolApprovalBatch(List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of()));
+            return Mono.just(new ToolApprovalBatch(List.of(), List.of(), List.of(), List.of(), List.of(), List.of()));
         }
-        var context = ToolStepContext.approval(request, stepIndex, executionMessages,
-            stepProviderMetadata, lifecycle, toolsByName(request), approvalIdFactory);
-        return notifyInputAvailable(toolCalls, request, stepIndex, executionMessages,
-                stepProviderMetadata)
-            .then(Mono.defer(() ->
-                evaluateApprovalNext(toolCalls, 0, context, new ApprovalAccumulator())));
+        var context = ToolStepContext.approval(
+                request,
+                stepIndex,
+                executionMessages,
+                stepProviderMetadata,
+                lifecycle,
+                toolsByName(request),
+                approvalIdFactory);
+        return notifyInputAvailable(toolCalls, request, stepIndex, executionMessages, stepProviderMetadata)
+                .then(Mono.defer(() -> evaluateApprovalNext(toolCalls, 0, context, new ApprovalAccumulator())));
     }
 
-    public Mono<Void> notifyInputAvailable(List<ToolCall> toolCalls, GenerateTextRequest request,
-        int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata) {
-        var context = ToolStepContext.normalization(request, stepIndex, executionMessages,
-            stepProviderMetadata, null, toolsByName(request), Set.of());
+    public Mono<Void> notifyInputAvailable(
+            List<ToolCall> toolCalls,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> stepProviderMetadata) {
+        var context = ToolStepContext.normalization(
+                request, stepIndex, executionMessages, stepProviderMetadata, null, toolsByName(request), Set.of());
         return reactor.core.publisher.Flux.fromIterable(toolCalls)
-            .concatMap(toolCall -> {
-                var tool = context.tool(toolCall);
-                if (tool == null) {
-                    return Mono.error(new IllegalStateException(
-                        "Normalized tool is no longer active: " + toolCall.getToolName()));
-                }
-                return inputAvailable(toolCall, tool, context.request(), context.stepIndex(),
-                    context.executionMessages(), context.providerMetadata(toolCall));
-            })
-            .then();
+                .concatMap(toolCall -> {
+                    var tool = context.tool(toolCall);
+                    if (tool == null) {
+                        return Mono.error(new IllegalStateException(
+                                "Normalized tool is no longer active: " + toolCall.getToolName()));
+                    }
+                    return inputAvailable(
+                            toolCall,
+                            tool,
+                            context.request(),
+                            context.stepIndex(),
+                            context.executionMessages(),
+                            context.providerMetadata(toolCall));
+                })
+                .then();
     }
 
-    private Mono<ToolApprovalBatch> evaluateApprovalNext(List<ToolCall> toolCalls, int index,
-        ToolStepContext context, ApprovalAccumulator accumulator) {
+    private Mono<ToolApprovalBatch> evaluateApprovalNext(
+            List<ToolCall> toolCalls, int index, ToolStepContext context, ApprovalAccumulator accumulator) {
         if (index >= toolCalls.size()) {
             return Mono.just(accumulator.toBatch());
         }
@@ -242,14 +283,17 @@ public final class LanguageModelToolExecutor {
             var executionContext = executionContext(toolCall, context);
             var policy = tool.getApprovalPolicy();
             if (policy != null && policy.requiresApproval(executionContext)) {
-                var approval = ToolApprovalRequest.from(toolCall,
-                    context.approvalId(toolCall), context.stepIndex(),
-                    executionContext.getProviderMetadata());
-                return context.lifecycle().toolApprovalRequest(context.stepIndex(), approval)
-                    .then(Mono.defer(() -> {
-                        accumulator.addApproval(approval);
-                        return evaluateApprovalNext(toolCalls, index + 1, context, accumulator);
-                    }));
+                var approval = ToolApprovalRequest.from(
+                        toolCall,
+                        context.approvalId(toolCall),
+                        context.stepIndex(),
+                        executionContext.getProviderMetadata());
+                return context.lifecycle()
+                        .toolApprovalRequest(context.stepIndex(), approval)
+                        .then(Mono.defer(() -> {
+                            accumulator.addApproval(approval);
+                            return evaluateApprovalNext(toolCalls, index + 1, context, accumulator);
+                        }));
             }
             accumulator.addExecutable(toolCall);
             return evaluateApprovalNext(toolCalls, index + 1, context, accumulator);
@@ -259,63 +303,75 @@ public final class LanguageModelToolExecutor {
         }
     }
 
-    public Mono<Void> inputStart(String toolCallId, String toolName, ToolDefinition tool,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> providerMetadata) {
+    public Mono<Void> inputStart(
+            String toolCallId,
+            String toolName,
+            ToolDefinition tool,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> providerMetadata) {
         if (tool == null || tool.getOnInputStart() == null) {
             return checkedEmpty(request);
         }
         var context = ToolInputStartContext.builder()
-            .toolCallId(toolCallId)
-            .toolName(toolName)
-            .stepIndex(stepIndex)
-            .messages(executionMessages)
-            .requestContext(copyContext(request.getContext()))
-            .providerMetadata(providerMetadata)
-            .cancellationToken(request.getCancellationToken())
-            .build();
-        return invokeCallback(Mono.defer(() -> tool.getOnInputStart().onInputStart(context)),
-            request);
+                .toolCallId(toolCallId)
+                .toolName(toolName)
+                .stepIndex(stepIndex)
+                .messages(executionMessages)
+                .requestContext(copyContext(request.getContext()))
+                .providerMetadata(providerMetadata)
+                .cancellationToken(request.getCancellationToken())
+                .build();
+        return invokeCallback(Mono.defer(() -> tool.getOnInputStart().onInputStart(context)), request);
     }
 
-    public Mono<Void> inputDelta(String toolCallId, String toolName, String inputTextDelta,
-        ToolDefinition tool, GenerateTextRequest request, int stepIndex,
-        List<ModelMessage> executionMessages, Map<String, Object> providerMetadata) {
+    public Mono<Void> inputDelta(
+            String toolCallId,
+            String toolName,
+            String inputTextDelta,
+            ToolDefinition tool,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> providerMetadata) {
         if (tool == null || tool.getOnInputDelta() == null) {
             return checkedEmpty(request);
         }
         var context = ToolInputDeltaContext.builder()
-            .toolCallId(toolCallId)
-            .toolName(toolName)
-            .inputTextDelta(inputTextDelta)
-            .stepIndex(stepIndex)
-            .messages(executionMessages)
-            .requestContext(copyContext(request.getContext()))
-            .providerMetadata(providerMetadata)
-            .cancellationToken(request.getCancellationToken())
-            .build();
-        return invokeCallback(Mono.defer(() -> tool.getOnInputDelta().onInputDelta(context)),
-            request);
+                .toolCallId(toolCallId)
+                .toolName(toolName)
+                .inputTextDelta(inputTextDelta)
+                .stepIndex(stepIndex)
+                .messages(executionMessages)
+                .requestContext(copyContext(request.getContext()))
+                .providerMetadata(providerMetadata)
+                .cancellationToken(request.getCancellationToken())
+                .build();
+        return invokeCallback(Mono.defer(() -> tool.getOnInputDelta().onInputDelta(context)), request);
     }
 
-    private Mono<Void> inputAvailable(ToolCall toolCall, ToolDefinition tool,
-        GenerateTextRequest request, int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> providerMetadata) {
+    private Mono<Void> inputAvailable(
+            ToolCall toolCall,
+            ToolDefinition tool,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> providerMetadata) {
         if (tool.getOnInputAvailable() == null) {
             return checkedEmpty(request);
         }
         var context = ToolInputAvailableContext.builder()
-            .toolCallId(toolCall.getToolCallId())
-            .toolName(toolCall.getToolName())
-            .input(toolCall.getInput())
-            .stepIndex(stepIndex)
-            .messages(executionMessages)
-            .requestContext(copyContext(request.getContext()))
-            .providerMetadata(providerMetadata)
-            .cancellationToken(request.getCancellationToken())
-            .build();
-        return invokeCallback(Mono.defer(() -> tool.getOnInputAvailable()
-            .onInputAvailable(context)), request);
+                .toolCallId(toolCall.getToolCallId())
+                .toolName(toolCall.getToolName())
+                .input(toolCall.getInput())
+                .stepIndex(stepIndex)
+                .messages(executionMessages)
+                .requestContext(copyContext(request.getContext()))
+                .providerMetadata(providerMetadata)
+                .cancellationToken(request.getCancellationToken())
+                .build();
+        return invokeCallback(Mono.defer(() -> tool.getOnInputAvailable().onInputAvailable(context)), request);
     }
 
     private Mono<Void> checkedEmpty(GenerateTextRequest request) {
@@ -324,83 +380,88 @@ public final class LanguageModelToolExecutor {
 
     private Mono<Void> invokeCallback(Mono<Void> callback, GenerateTextRequest request) {
         return Mono.fromRunnable(() -> cancellationChecker.check(request))
-            .then(callbackTimeout.apply(callback, request))
-            .then(Mono.fromRunnable(() -> cancellationChecker.check(request)));
+                .then(callbackTimeout.apply(callback, request))
+                .then(Mono.fromRunnable(() -> cancellationChecker.check(request)));
     }
 
     public ToolExecutionBatch stepLimitReached(List<ToolCall> toolCalls) {
         if (toolCalls.isEmpty()) {
             return new ToolExecutionBatch(List.of(), List.of(), List.of());
         }
-        return new ToolExecutionBatch(List.of(), List.of(), List.of(GenerationWarning.builder()
-            .code("stop-condition-reached")
-            .message("Tool calls were not executed because the generation step limit was reached")
-            .build()));
+        return new ToolExecutionBatch(
+                List.of(),
+                List.of(),
+                List.of(GenerationWarning.builder()
+                        .code("stop-condition-reached")
+                        .message("Tool calls were not executed because the generation step limit was reached")
+                        .build()));
     }
 
     private Map<String, ToolDefinition> toolsByName(GenerateTextRequest request) {
-        return request.getTools() == null ? Map.of()
-            : request.getTools().stream()
-                .collect(Collectors.toMap(ToolDefinition::getName, Function.identity()));
+        return request.getTools() == null
+                ? Map.of()
+                : request.getTools().stream().collect(Collectors.toMap(ToolDefinition::getName, Function.identity()));
     }
 
-    private ToolExecutionContext executionContext(ToolCall toolCall, GenerateTextRequest request,
-        int stepIndex, List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata) {
+    private ToolExecutionContext executionContext(
+            ToolCall toolCall,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> stepProviderMetadata) {
         return ToolExecutionContext.builder()
-            .toolCallId(toolCall.getToolCallId())
-            .toolName(toolCall.getToolName())
-            .input(toolCall.getInput())
-            .stepIndex(stepIndex)
-            .messages(List.copyOf(executionMessages))
-            .providerMetadata(mergeProviderMetadata(stepProviderMetadata,
-                toolCall.getProviderMetadata()))
-            .requestContext(copyContext(request.getContext()))
-            .cancellationToken(request.getCancellationToken())
-            .build();
+                .toolCallId(toolCall.getToolCallId())
+                .toolName(toolCall.getToolName())
+                .input(toolCall.getInput())
+                .stepIndex(stepIndex)
+                .messages(List.copyOf(executionMessages))
+                .providerMetadata(mergeProviderMetadata(stepProviderMetadata, toolCall.getProviderMetadata()))
+                .requestContext(copyContext(request.getContext()))
+                .cancellationToken(request.getCancellationToken())
+                .build();
     }
 
     private ToolExecutionContext executionContext(ToolCall toolCall, ToolStepContext context) {
-        return executionContext(toolCall, context.request(), context.stepIndex(),
-            context.executionMessages(), context.stepProviderMetadata());
+        return executionContext(
+                toolCall,
+                context.request(),
+                context.stepIndex(),
+                context.executionMessages(),
+                context.stepProviderMetadata());
     }
 
     private ToolError unknownToolError(ToolCall toolCall) {
         return ToolError.builder()
-            .toolCallId(toolCall.getToolCallId())
-            .toolName(toolCall.getToolName())
-            .errorText("Unknown tool: " + toolCall.getToolName())
-            .build();
+                .toolCallId(toolCall.getToolCallId())
+                .toolName(toolCall.getToolName())
+                .errorText("Unknown tool: " + toolCall.getToolName())
+                .build();
     }
 
     private ToolError toolError(ToolCall toolCall, RuntimeException e) {
         return ToolError.builder()
-            .toolCallId(toolCall.getToolCallId())
-            .toolName(toolCall.getToolName())
-            .errorText(safeErrorMessage(e))
-            .build();
+                .toolCallId(toolCall.getToolCallId())
+                .toolName(toolCall.getToolName())
+                .errorText(safeErrorMessage(e))
+                .build();
     }
 
     private void validateInput(ToolCall toolCall, ToolDefinition tool) {
         if (tool.getInputSchema() != null && !tool.getInputSchema().isEmpty()) {
-            schemaValidator.validate(toolCall.getInput(), tool.getInputSchema(),
-                validationPath(toolCall));
+            schemaValidator.validate(toolCall.getInput(), tool.getInputSchema(), validationPath(toolCall));
         }
     }
 
     private void validateOutput(ToolCall toolCall, ToolDefinition tool, Object value) {
         if (tool.getOutputSchema() != null && !tool.getOutputSchema().isEmpty()) {
-            schemaValidator.validate(value, tool.getOutputSchema(),
-                "$." + toolCall.getToolName() + ".output");
+            schemaValidator.validate(value, tool.getOutputSchema(), "$." + toolCall.getToolName() + ".output");
         }
     }
 
-    private Mono<RepairAttempt> repairIfNeeded(ToolCall toolCall, ToolDefinition tool,
-        ToolStepContext context) {
+    private Mono<RepairAttempt> repairIfNeeded(ToolCall toolCall, ToolDefinition tool, ToolStepContext context) {
         var parseError = toolCall.getInputParseError();
         if (parseError != null) {
-            return repair(toolCall, tool, context,
-                new IllegalArgumentException(parseError.getMessage()));
+            return repair(toolCall, tool, context, new IllegalArgumentException(parseError.getMessage()));
         }
         try {
             validateInput(toolCall, tool);
@@ -410,32 +471,35 @@ public final class LanguageModelToolExecutor {
         }
     }
 
-    private Mono<RepairAttempt> repair(ToolCall toolCall, ToolDefinition tool,
-        ToolStepContext context, RuntimeException validationFailure) {
+    private Mono<RepairAttempt> repair(
+            ToolCall toolCall, ToolDefinition tool, ToolStepContext context, RuntimeException validationFailure) {
         var repairCallback = context.request().getToolCallRepair();
         if (repairCallback == null) {
-            return Mono.just(new RepairAttempt(toolCall, toolError(toolCall, validationFailure),
-                List.of()));
+            return Mono.just(new RepairAttempt(toolCall, toolError(toolCall, validationFailure), List.of()));
         }
-        return repairCallback.repair(ToolCallRepairContext.builder()
-                .toolCall(toolCall)
-                .tool(tool)
-                .validationError(safeErrorMessage(validationFailure))
-                .validationPath(validationPath(toolCall))
-                .stepIndex(context.stepIndex())
-                .messages(List.copyOf(context.executionMessages()))
-                .requestContext(copyContext(context.request().getContext()))
-                .providerMetadata(mergeProviderMetadata(context.stepProviderMetadata(),
-                    toolCall.getProviderMetadata()))
-                .build())
-            .map(result -> repairedAttempt(toolCall, tool, validationFailure, result))
-            .onErrorResume(RuntimeException.class, repairFailure ->
-                Mono.just(failedRepairAttempt(toolCall, validationFailure, repairFailure)));
+        return repairCallback
+                .repair(ToolCallRepairContext.builder()
+                        .toolCall(toolCall)
+                        .tool(tool)
+                        .validationError(safeErrorMessage(validationFailure))
+                        .validationPath(validationPath(toolCall))
+                        .stepIndex(context.stepIndex())
+                        .messages(List.copyOf(context.executionMessages()))
+                        .requestContext(copyContext(context.request().getContext()))
+                        .providerMetadata(
+                                mergeProviderMetadata(context.stepProviderMetadata(), toolCall.getProviderMetadata()))
+                        .build())
+                .map(result -> repairedAttempt(toolCall, tool, validationFailure, result))
+                .onErrorResume(
+                        RuntimeException.class,
+                        repairFailure -> Mono.just(failedRepairAttempt(toolCall, validationFailure, repairFailure)));
     }
 
-    private RepairAttempt repairedAttempt(ToolCall toolCall, ToolDefinition tool,
-        RuntimeException validationFailure,
-        run.halo.aifoundation.tool.ToolCallRepairResult result) {
+    private RepairAttempt repairedAttempt(
+            ToolCall toolCall,
+            ToolDefinition tool,
+            RuntimeException validationFailure,
+            run.halo.aifoundation.tool.ToolCallRepairResult result) {
         var warnings = new ArrayList<GenerationWarning>();
         var repaired = result != null ? result.getToolCall() : null;
         if (repaired == null) {
@@ -452,10 +516,12 @@ public final class LanguageModelToolExecutor {
         }
     }
 
-    private RepairAttempt failedRepairAttempt(ToolCall toolCall, RuntimeException validationFailure,
-        Throwable repairFailure) {
-        return new RepairAttempt(toolCall, toolError(toolCall, validationFailure),
-            List.of(repairFailedWarning(toolCall, repairFailure)));
+    private RepairAttempt failedRepairAttempt(
+            ToolCall toolCall, RuntimeException validationFailure, Throwable repairFailure) {
+        return new RepairAttempt(
+                toolCall,
+                toolError(toolCall, validationFailure),
+                List.of(repairFailedWarning(toolCall, repairFailure)));
     }
 
     private Map<String, Object> copyContext(Map<String, Object> context) {
@@ -467,36 +533,33 @@ public final class LanguageModelToolExecutor {
 
     private ToolCall normalizeRepairedCall(ToolCall original, ToolCall repaired) {
         return ToolCall.builder()
-            .toolCallId(original.getToolCallId())
-            .toolName(original.getToolName())
-            .input(repaired.getInput() != null ? repaired.getInput() : Map.of())
-            .rawInput(repaired.getRawInput() != null ? repaired.getRawInput() : original.getRawInput())
-            .inputParseError(null)
-            .providerMetadata(mergeProviderMetadata(original.getProviderMetadata(),
-                repaired.getProviderMetadata()))
-            .build();
+                .toolCallId(original.getToolCallId())
+                .toolName(original.getToolName())
+                .input(repaired.getInput() != null ? repaired.getInput() : Map.of())
+                .rawInput(repaired.getRawInput() != null ? repaired.getRawInput() : original.getRawInput())
+                .inputParseError(null)
+                .providerMetadata(mergeProviderMetadata(original.getProviderMetadata(), repaired.getProviderMetadata()))
+                .build();
     }
 
     private GenerationWarning repairedWarning(ToolCall original, ToolCall repaired) {
         return GenerationWarning.builder()
-            .code(WARNING_TOOL_CALL_REPAIRED)
-            .message("Tool call input was repaired before execution: " + original.getToolName())
-            .providerMetadata(Map.of(
-                "toolCallId", repaired.getToolCallId(),
-                "toolName", repaired.getToolName()
-            ))
-            .build();
+                .code(WARNING_TOOL_CALL_REPAIRED)
+                .message("Tool call input was repaired before execution: " + original.getToolName())
+                .providerMetadata(Map.of(
+                        "toolCallId", repaired.getToolCallId(),
+                        "toolName", repaired.getToolName()))
+                .build();
     }
 
     private GenerationWarning repairFailedWarning(ToolCall toolCall, Throwable e) {
         return GenerationWarning.builder()
-            .code(WARNING_TOOL_CALL_REPAIR_FAILED)
-            .message("Tool call input repair failed: " + safeErrorMessage(e))
-            .providerMetadata(Map.of(
-                "toolCallId", toolCall.getToolCallId(),
-                "toolName", toolCall.getToolName()
-            ))
-            .build();
+                .code(WARNING_TOOL_CALL_REPAIR_FAILED)
+                .message("Tool call input repair failed: " + safeErrorMessage(e))
+                .providerMetadata(Map.of(
+                        "toolCallId", toolCall.getToolCallId(),
+                        "toolName", toolCall.getToolName()))
+                .build();
     }
 
     private String validationPath(ToolCall toolCall) {
@@ -505,17 +568,16 @@ public final class LanguageModelToolExecutor {
 
     private GenerationWarning externalToolPendingWarning(ToolDefinition tool) {
         return GenerationWarning.builder()
-            .code(WARNING_EXTERNAL_TOOL_PENDING)
-            .message("Tool is pending external execution: " + tool.getName())
-            .build();
+                .code(WARNING_EXTERNAL_TOOL_PENDING)
+                .message("Tool is pending external execution: " + tool.getName())
+                .build();
     }
 
     private String safeErrorMessage(Throwable e) {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
-    private static Map<String, Object> mergeProviderMetadata(Map<String, Object> left,
-        Map<String, Object> right) {
+    private static Map<String, Object> mergeProviderMetadata(Map<String, Object> left, Map<String, Object> right) {
         var merged = new LinkedHashMap<String, Object>();
         if (left != null) {
             merged.putAll(left);
@@ -527,36 +589,68 @@ public final class LanguageModelToolExecutor {
     }
 
     private record ToolStepContext(
-        GenerateTextRequest request,
-        int stepIndex,
-        List<ModelMessage> executionMessages,
-        Map<String, Object> stepProviderMetadata,
-        ToolLifecycle lifecycle,
-        Map<String, ToolDefinition> toolsByName,
-        Function<ToolCall, String> approvalIdFactory,
-        Set<String> streamedInputCallIds
-    ) {
-        static ToolStepContext execution(GenerateTextRequest request, int stepIndex,
-            List<ModelMessage> executionMessages, Map<String, Object> stepProviderMetadata,
-            ToolLifecycle lifecycle, Map<String, ToolDefinition> toolsByName) {
-            return new ToolStepContext(request, stepIndex, executionMessages,
-                stepProviderMetadata, lifecycle, toolsByName, null, Set.of());
-        }
-
-        static ToolStepContext approval(GenerateTextRequest request, int stepIndex,
-            List<ModelMessage> executionMessages, Map<String, Object> stepProviderMetadata,
-            ToolLifecycle lifecycle, Map<String, ToolDefinition> toolsByName,
-            Function<ToolCall, String> approvalIdFactory) {
-            return new ToolStepContext(request, stepIndex, executionMessages,
-                stepProviderMetadata, lifecycle, toolsByName, approvalIdFactory, Set.of());
-        }
-
-        static ToolStepContext normalization(GenerateTextRequest request, int stepIndex,
-            List<ModelMessage> executionMessages, Map<String, Object> stepProviderMetadata,
-            ToolLifecycle lifecycle, Map<String, ToolDefinition> toolsByName,
+            GenerateTextRequest request,
+            int stepIndex,
+            List<ModelMessage> executionMessages,
+            Map<String, Object> stepProviderMetadata,
+            ToolLifecycle lifecycle,
+            Map<String, ToolDefinition> toolsByName,
+            Function<ToolCall, String> approvalIdFactory,
             Set<String> streamedInputCallIds) {
-            return new ToolStepContext(request, stepIndex, executionMessages,
-                stepProviderMetadata, lifecycle, toolsByName, null, streamedInputCallIds);
+        static ToolStepContext execution(
+                GenerateTextRequest request,
+                int stepIndex,
+                List<ModelMessage> executionMessages,
+                Map<String, Object> stepProviderMetadata,
+                ToolLifecycle lifecycle,
+                Map<String, ToolDefinition> toolsByName) {
+            return new ToolStepContext(
+                    request,
+                    stepIndex,
+                    executionMessages,
+                    stepProviderMetadata,
+                    lifecycle,
+                    toolsByName,
+                    null,
+                    Set.of());
+        }
+
+        static ToolStepContext approval(
+                GenerateTextRequest request,
+                int stepIndex,
+                List<ModelMessage> executionMessages,
+                Map<String, Object> stepProviderMetadata,
+                ToolLifecycle lifecycle,
+                Map<String, ToolDefinition> toolsByName,
+                Function<ToolCall, String> approvalIdFactory) {
+            return new ToolStepContext(
+                    request,
+                    stepIndex,
+                    executionMessages,
+                    stepProviderMetadata,
+                    lifecycle,
+                    toolsByName,
+                    approvalIdFactory,
+                    Set.of());
+        }
+
+        static ToolStepContext normalization(
+                GenerateTextRequest request,
+                int stepIndex,
+                List<ModelMessage> executionMessages,
+                Map<String, Object> stepProviderMetadata,
+                ToolLifecycle lifecycle,
+                Map<String, ToolDefinition> toolsByName,
+                Set<String> streamedInputCallIds) {
+            return new ToolStepContext(
+                    request,
+                    stepIndex,
+                    executionMessages,
+                    stepProviderMetadata,
+                    lifecycle,
+                    toolsByName,
+                    null,
+                    streamedInputCallIds);
         }
 
         ToolDefinition tool(ToolCall toolCall) {
@@ -594,8 +688,7 @@ public final class LanguageModelToolExecutor {
         }
 
         ToolExecutionBatch toBatch() {
-            return new ToolExecutionBatch(List.copyOf(results), List.copyOf(errors),
-                List.copyOf(warnings));
+            return new ToolExecutionBatch(List.copyOf(results), List.copyOf(errors), List.copyOf(warnings));
         }
     }
 
@@ -633,9 +726,13 @@ public final class LanguageModelToolExecutor {
         }
 
         ToolApprovalBatch toBatch() {
-            return new ToolApprovalBatch(List.copyOf(resolvedCalls), List.copyOf(executable),
-                List.copyOf(pendingExternalCalls), List.copyOf(approvals), List.copyOf(errors),
-                List.copyOf(warnings));
+            return new ToolApprovalBatch(
+                    List.copyOf(resolvedCalls),
+                    List.copyOf(executable),
+                    List.copyOf(pendingExternalCalls),
+                    List.copyOf(approvals),
+                    List.copyOf(errors),
+                    List.copyOf(warnings));
         }
     }
 
@@ -662,9 +759,12 @@ public final class LanguageModelToolExecutor {
         }
 
         ToolNormalizationBatch toBatch() {
-            return new ToolNormalizationBatch(List.copyOf(recordedToolCalls),
-                List.copyOf(executableToolCalls), List.copyOf(inputErrors),
-                Set.copyOf(inputErrorCallIds), List.copyOf(warnings));
+            return new ToolNormalizationBatch(
+                    List.copyOf(recordedToolCalls),
+                    List.copyOf(executableToolCalls),
+                    List.copyOf(inputErrors),
+                    Set.copyOf(inputErrorCallIds),
+                    List.copyOf(warnings));
         }
     }
 
@@ -691,22 +791,13 @@ public final class LanguageModelToolExecutor {
     public interface ToolLifecycle {
         Mono<Void> toolCallStart(int stepIndex, ToolCall toolCall, Map<String, Object> metadata);
 
-        Mono<Void> toolCallFinish(int stepIndex, ToolResult result, ToolError error, Instant startedAt,
-            Map<String, Object> metadata);
+        Mono<Void> toolCallFinish(
+                int stepIndex, ToolResult result, ToolError error, Instant startedAt, Map<String, Object> metadata);
 
         Mono<Void> toolApprovalRequest(int stepIndex, ToolApprovalRequest request);
     }
 
-    private record ToolExecutionOutcome(
-        ToolResult result,
-        ToolError error
-    ) {
-    }
+    private record ToolExecutionOutcome(ToolResult result, ToolError error) {}
 
-    private record RepairAttempt(
-        ToolCall toolCall,
-        ToolError error,
-        List<GenerationWarning> warnings
-    ) {
-    }
+    private record RepairAttempt(ToolCall toolCall, ToolError error, List<GenerationWarning> warnings) {}
 }

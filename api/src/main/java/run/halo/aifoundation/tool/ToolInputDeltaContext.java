@@ -7,9 +7,7 @@ import lombok.Value;
 import run.halo.aifoundation.control.CancellationToken;
 import run.halo.aifoundation.message.ModelMessage;
 
-/**
- * Immutable provider-neutral snapshot for one streamed tool input delta callback.
- */
+/** Immutable provider-neutral snapshot for one streamed tool input delta callback. */
 @Value
 public class ToolInputDeltaContext {
     String toolCallId;
@@ -22,9 +20,15 @@ public class ToolInputDeltaContext {
     CancellationToken cancellationToken;
 
     @Builder
-    public ToolInputDeltaContext(String toolCallId, String toolName, String inputTextDelta,
-        Integer stepIndex, List<ModelMessage> messages, Map<String, Object> requestContext,
-        Map<String, Object> providerMetadata, CancellationToken cancellationToken) {
+    public ToolInputDeltaContext(
+            String toolCallId,
+            String toolName,
+            String inputTextDelta,
+            Integer stepIndex,
+            List<ModelMessage> messages,
+            Map<String, Object> requestContext,
+            Map<String, Object> providerMetadata,
+            CancellationToken cancellationToken) {
         this.toolCallId = toolCallId;
         this.toolName = toolName;
         this.inputTextDelta = inputTextDelta;

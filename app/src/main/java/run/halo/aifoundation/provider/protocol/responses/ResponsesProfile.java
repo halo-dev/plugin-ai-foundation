@@ -19,9 +19,7 @@ public interface ResponsesProfile {
         return "/responses";
     }
 
-    default void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
-    }
+    default void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {}
 
     /** Returns a provider-native media input part, or {@code null} for common mapping. */
     default Map<String, Object> mediaContentPart(Media media) {
@@ -31,9 +29,8 @@ public interface ResponsesProfile {
     /**
      * Returns provider-native input items that must precede the reconstructed assistant message.
      *
-     * <p>This hook is intentionally narrow: Responses providers whose reasoning protocol requires
-     * verbatim replay can retain the original sanitized output item without teaching the common
-     * codec a provider-specific reasoning schema.
+     * <p>This hook is intentionally narrow: Responses providers whose reasoning protocol requires verbatim replay can
+     * retain the original sanitized output item without teaching the common codec a provider-specific reasoning schema.
      */
     default List<Map<String, Object>> assistantInputItems(AssistantMessage message) {
         return ResponsesOutputReplay.reasoningInputItems(message, providerType());

@@ -39,15 +39,17 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<DecisionModel> decisionModel(String modelName) {
-        var name = StringUtils.hasText(modelName)
-            ? Mono.just(modelName) : modelResolver.defaultDecisionModelName();
+        var name = StringUtils.hasText(modelName) ? Mono.just(modelName) : modelResolver.defaultDecisionModelName();
         return name.flatMap(value -> modelResolver.resolve(value, ModelType.DECISION))
-            .map(resolution -> {
-                var context = ModelCallContext.from(resolution, ModelType.DECISION);
-                callerPluginAuditRecorder.recordModelResolution(context);
-                return new AuditedDecisionModel(decisionModelFactory.create(resolution), context,
-                    callerPluginAuditRecorder, usageStatistics);
-            });
+                .map(resolution -> {
+                    var context = ModelCallContext.from(resolution, ModelType.DECISION);
+                    callerPluginAuditRecorder.recordModelResolution(context);
+                    return new AuditedDecisionModel(
+                            decisionModelFactory.create(resolution),
+                            context,
+                            callerPluginAuditRecorder,
+                            usageStatistics);
+                });
     }
 
     @Override
@@ -57,12 +59,11 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<LanguageModel> languageModel(String modelName) {
-        var resolvedModelName = StringUtils.hasText(modelName)
-            ? Mono.just(modelName)
-            : modelResolver.defaultLanguageModelName();
+        var resolvedModelName =
+                StringUtils.hasText(modelName) ? Mono.just(modelName) : modelResolver.defaultLanguageModelName();
         return resolvedModelName
-            .flatMap(name -> modelResolver.resolve(name, ModelType.LANGUAGE))
-            .map(this::createLanguageModel);
+                .flatMap(name -> modelResolver.resolve(name, ModelType.LANGUAGE))
+                .map(this::createLanguageModel);
     }
 
     @Override
@@ -72,12 +73,11 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<EmbeddingModel> embeddingModel(String modelName) {
-        var resolvedModelName = StringUtils.hasText(modelName)
-            ? Mono.just(modelName)
-            : modelResolver.defaultEmbeddingModelName();
+        var resolvedModelName =
+                StringUtils.hasText(modelName) ? Mono.just(modelName) : modelResolver.defaultEmbeddingModelName();
         return resolvedModelName
-            .flatMap(name -> modelResolver.resolve(name, ModelType.EMBEDDING))
-            .map(this::createEmbeddingModel);
+                .flatMap(name -> modelResolver.resolve(name, ModelType.EMBEDDING))
+                .map(this::createEmbeddingModel);
     }
 
     @Override
@@ -87,12 +87,11 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<RerankingModel> rerankingModel(String modelName) {
-        var resolvedModelName = StringUtils.hasText(modelName)
-            ? Mono.just(modelName)
-            : modelResolver.defaultRerankModelName();
+        var resolvedModelName =
+                StringUtils.hasText(modelName) ? Mono.just(modelName) : modelResolver.defaultRerankModelName();
         return resolvedModelName
-            .flatMap(name -> modelResolver.resolve(name, ModelType.RERANK))
-            .map(this::createRerankingModel);
+                .flatMap(name -> modelResolver.resolve(name, ModelType.RERANK))
+                .map(this::createRerankingModel);
     }
 
     @Override
@@ -102,44 +101,38 @@ public class AiModelServiceImpl implements AiModelService {
 
     @Override
     public Mono<ImageGenerationModel> imageGenerationModel(String modelName) {
-        var resolvedModelName = StringUtils.hasText(modelName)
-            ? Mono.just(modelName)
-            : modelResolver.defaultImageGenerationModelName();
+        var resolvedModelName =
+                StringUtils.hasText(modelName) ? Mono.just(modelName) : modelResolver.defaultImageGenerationModelName();
         return resolvedModelName
-            .flatMap(name -> modelResolver.resolve(name, ModelType.IMAGE_GENERATION))
-            .map(this::createImageGenerationModel);
+                .flatMap(name -> modelResolver.resolve(name, ModelType.IMAGE_GENERATION))
+                .map(this::createImageGenerationModel);
     }
 
     private LanguageModel createLanguageModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.LANGUAGE);
         callerPluginAuditRecorder.recordModelResolution(context);
         var model = languageModelFactory.create(resolution);
-        return new AuditedLanguageModel(model, context, callerPluginAuditRecorder,
-            usageStatistics);
+        return new AuditedLanguageModel(model, context, callerPluginAuditRecorder, usageStatistics);
     }
 
     private EmbeddingModel createEmbeddingModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.EMBEDDING);
         callerPluginAuditRecorder.recordModelResolution(context);
         var model = embeddingModelFactory.create(resolution);
-        return new AuditedEmbeddingModel(model, context, callerPluginAuditRecorder,
-            usageStatistics);
+        return new AuditedEmbeddingModel(model, context, callerPluginAuditRecorder, usageStatistics);
     }
 
     private RerankingModel createRerankingModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.RERANK);
         callerPluginAuditRecorder.recordModelResolution(context);
         var model = rerankingModelFactory.create(resolution);
-        return new AuditedRerankingModel(model, context, callerPluginAuditRecorder,
-            usageStatistics);
+        return new AuditedRerankingModel(model, context, callerPluginAuditRecorder, usageStatistics);
     }
 
     private ImageGenerationModel createImageGenerationModel(ModelResolution resolution) {
         var context = ModelCallContext.from(resolution, ModelType.IMAGE_GENERATION);
         callerPluginAuditRecorder.recordModelResolution(context);
         var model = imageGenerationModelFactory.create(resolution);
-        return new AuditedImageGenerationModel(model, context, callerPluginAuditRecorder,
-            usageStatistics);
+        return new AuditedImageGenerationModel(model, context, callerPluginAuditRecorder, usageStatistics);
     }
-
 }

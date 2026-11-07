@@ -17,7 +17,7 @@ class UnsupportedImageGenerationModel implements ImageGenerationModel {
 
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
-        return Mono.error(new UnsupportedModelCapabilityException(modelName, providerName,
-            providerType, "imageGeneration", true, false));
+        return Mono.error(new UnsupportedModelCapabilityException(
+                modelName, providerName, providerType, "imageGeneration", true, false));
     }
 }

@@ -19,8 +19,7 @@ final class ErnieResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         // Qianfan stores Responses for three days by default. The SDK replays canonical messages
         // statelessly, so storage must be opt-in rather than an invisible server-side side effect.
         body.putIfAbsent("store", false);

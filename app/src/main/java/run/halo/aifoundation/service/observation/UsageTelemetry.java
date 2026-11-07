@@ -5,8 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class UsageTelemetry {
 
-    private UsageTelemetry() {
-    }
+    private UsageTelemetry() {}
 
     public static <T> T safely(java.util.function.Supplier<T> action, T fallback) {
         try {

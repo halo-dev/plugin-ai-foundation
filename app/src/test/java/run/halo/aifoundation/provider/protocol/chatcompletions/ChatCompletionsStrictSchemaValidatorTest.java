@@ -14,34 +14,41 @@ class ChatCompletionsStrictSchemaValidatorTest {
     @Test
     void acceptsClosedNestedSchemaWithNullableValue() {
         var schema = Map.<String, Object>of(
-            "type", "object",
-            "additionalProperties", false,
-            "properties", Map.of(
-                "title", Map.of("type", "string"),
-                "metadata", Map.of(
-                    "type", "object",
-                    "additionalProperties", false,
-                    "properties", Map.of(
-                        "description", Map.of("type", List.of("string", "null"))
-                    ),
-                    "required", List.of("description")
-                )
-            ),
-            "required", List.of("title", "metadata")
-        );
+                "type",
+                "object",
+                "additionalProperties",
+                false,
+                "properties",
+                Map.of(
+                        "title", Map.of("type", "string"),
+                        "metadata",
+                                Map.of(
+                                        "type",
+                                        "object",
+                                        "additionalProperties",
+                                        false,
+                                        "properties",
+                                        Map.of("description", Map.of("type", List.of("string", "null"))),
+                                        "required",
+                                        List.of("description"))),
+                "required",
+                List.of("title", "metadata"));
 
         assertThat(ChatCompletionsStrictSchemaValidator.validateAndBuildSchema(OutputSpec.object(schema)))
-            .isEqualTo(schema);
+                .isEqualTo(schema);
     }
 
     @Test
     void rejectsArrayAndChoiceAsNativeStrictRootSchemas() {
         var elementSchema = Map.<String, Object>of(
-            "type", "object",
-            "additionalProperties", false,
-            "properties", Map.of("value", Map.of("type", "integer")),
-            "required", List.of("value")
-        );
+                "type",
+                "object",
+                "additionalProperties",
+                false,
+                "properties",
+                Map.of("value", Map.of("type", "integer")),
+                "required",
+                List.of("value"));
 
         assertSchemaFailure(OutputSpec.array(elementSchema), "$.type");
         assertSchemaFailure(OutputSpec.choice(List.of("yes", "no")), "$.type");
@@ -50,10 +57,9 @@ class ChatCompletionsStrictSchemaValidatorTest {
     @Test
     void rejectsObjectWithoutClosedAdditionalProperties() {
         var output = OutputSpec.object(Map.of(
-            "type", "object",
-            "properties", Map.of("title", Map.of("type", "string")),
-            "required", List.of("title")
-        ));
+                "type", "object",
+                "properties", Map.of("title", Map.of("type", "string")),
+                "required", List.of("title")));
 
         assertSchemaFailure(output, "$.additionalProperties");
     }
@@ -61,11 +67,14 @@ class ChatCompletionsStrictSchemaValidatorTest {
     @Test
     void rejectsMissingAndUnexpectedRequiredProperties() {
         var output = OutputSpec.object(Map.of(
-            "type", "object",
-            "additionalProperties", false,
-            "properties", Map.of("title", Map.of("type", "string")),
-            "required", List.of("unexpected")
-        ));
+                "type",
+                "object",
+                "additionalProperties",
+                false,
+                "properties",
+                Map.of("title", Map.of("type", "string")),
+                "required",
+                List.of("unexpected")));
 
         assertSchemaFailure(output, "$.required");
     }
@@ -73,17 +82,19 @@ class ChatCompletionsStrictSchemaValidatorTest {
     @Test
     void rejectsNestedOpenObject() {
         var output = OutputSpec.object(Map.of(
-            "type", "object",
-            "additionalProperties", false,
-            "properties", Map.of(
-                "metadata", Map.of(
-                    "type", "object",
-                    "properties", Map.of(),
-                    "required", List.of()
-                )
-            ),
-            "required", List.of("metadata")
-        ));
+                "type",
+                "object",
+                "additionalProperties",
+                false,
+                "properties",
+                Map.of(
+                        "metadata",
+                        Map.of(
+                                "type", "object",
+                                "properties", Map.of(),
+                                "required", List.of())),
+                "required",
+                List.of("metadata")));
 
         assertSchemaFailure(output, "$.properties.metadata.additionalProperties");
     }
@@ -91,13 +102,14 @@ class ChatCompletionsStrictSchemaValidatorTest {
     @Test
     void rejectsUnsupportedCompositionKeyword() {
         var output = OutputSpec.object(Map.of(
-            "type", "object",
-            "additionalProperties", false,
-            "properties", Map.of(
-                "value", Map.of("allOf", List.of(Map.of("type", "string")))
-            ),
-            "required", List.of("value")
-        ));
+                "type",
+                "object",
+                "additionalProperties",
+                false,
+                "properties",
+                Map.of("value", Map.of("allOf", List.of(Map.of("type", "string")))),
+                "required",
+                List.of("value")));
 
         assertSchemaFailure(output, "$.properties.value.allOf");
     }
@@ -109,9 +121,9 @@ class ChatCompletionsStrictSchemaValidatorTest {
 
     private void assertSchemaFailure(OutputSpec output, String expectedPath) {
         assertThatThrownBy(() -> ChatCompletionsStrictSchemaValidator.validateAndBuildSchema(output))
-            .isInstanceOfSatisfying(StructuredOutputSchemaException.class, error -> {
-                assertThat(error.getValidationPath()).isEqualTo(expectedPath);
-                assertThat(error.getMessage()).contains(expectedPath);
-            });
+                .isInstanceOfSatisfying(StructuredOutputSchemaException.class, error -> {
+                    assertThat(error.getValidationPath()).isEqualTo(expectedPath);
+                    assertThat(error.getMessage()).contains(expectedPath);
+                });
     }
 }

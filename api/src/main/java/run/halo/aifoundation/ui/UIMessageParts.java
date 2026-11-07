@@ -2,13 +2,10 @@ package run.halo.aifoundation.ui;
 
 import java.util.Map;
 
-/**
- * Factory methods for persisted UI message parts.
- */
+/** Factory methods for persisted UI message parts. */
 public final class UIMessageParts {
 
-    private UIMessageParts() {
-    }
+    private UIMessageParts() {}
 
     /**
      * Creates a persisted generation-step boundary marker.
@@ -38,8 +35,7 @@ public final class UIMessageParts {
      * @param providerMetadata provider-specific reasoning metadata
      * @return reasoning part
      */
-    public static ReasoningPart reasoning(String id, String text,
-        Map<String, Object> providerMetadata) {
+    public static ReasoningPart reasoning(String id, String text, Map<String, Object> providerMetadata) {
         return new ReasoningPart(id, text, providerMetadata);
     }
 
@@ -75,8 +71,8 @@ public final class UIMessageParts {
      * @param providerMetadata provider-specific metadata
      * @return source URL part
      */
-    public static SourceUrlPart sourceUrl(String sourceId, String url, String title,
-        Map<String, Object> providerMetadata) {
+    public static SourceUrlPart sourceUrl(
+            String sourceId, String url, String title, Map<String, Object> providerMetadata) {
         return new SourceUrlPart(sourceId, url, title, providerMetadata);
     }
 
@@ -90,8 +86,8 @@ public final class UIMessageParts {
      * @param providerMetadata provider-specific metadata
      * @return document source part
      */
-    public static SourceDocumentPart sourceDocument(String sourceId, String mediaType,
-        String title, String filename, Map<String, Object> providerMetadata) {
+    public static SourceDocumentPart sourceDocument(
+            String sourceId, String mediaType, String title, String filename, Map<String, Object> providerMetadata) {
         return new SourceDocumentPart(sourceId, mediaType, title, filename, providerMetadata);
     }
 
@@ -106,8 +102,13 @@ public final class UIMessageParts {
      * @param providerMetadata provider-specific metadata
      * @return file part
      */
-    public static FilePart file(String fileId, String url, String title, String mediaType,
-        Object data, Map<String, Object> providerMetadata) {
+    public static FilePart file(
+            String fileId,
+            String url,
+            String title,
+            String mediaType,
+            Object data,
+            Map<String, Object> providerMetadata) {
         return new FilePart(fileId, url, title, mediaType, data, providerMetadata);
     }
 
@@ -125,11 +126,26 @@ public final class UIMessageParts {
      * @param providerMetadata provider-specific metadata
      * @return dynamic tool part
      */
-    public static ToolPart tool(String toolCallId, String toolName, ToolPartState state,
-        Object input, String inputText, Object output, String errorText, ToolApproval approval,
-        Map<String, Object> providerMetadata) {
-        return new ToolPart(ToolPart.typeFor(toolName), toolCallId, toolName, state, input,
-            inputText, output, errorText, approval, providerMetadata);
+    public static ToolPart tool(
+            String toolCallId,
+            String toolName,
+            ToolPartState state,
+            Object input,
+            String inputText,
+            Object output,
+            String errorText,
+            ToolApproval approval,
+            Map<String, Object> providerMetadata) {
+        return new ToolPart(
+                ToolPart.typeFor(toolName),
+                toolCallId,
+                toolName,
+                state,
+                input,
+                inputText,
+                output,
+                errorText,
+                approval,
+                providerMetadata);
     }
-
 }

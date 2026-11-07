@@ -4,8 +4,7 @@ import java.time.Clock;
 
 final class UsageStatisticsTestSupport {
 
-    private UsageStatisticsTestSupport() {
-    }
+    private UsageStatisticsTestSupport() {}
 
     static void retain(UsageStatisticsStore store, Clock clock) {
         while (store.retainBatch(clock)) {
@@ -15,8 +14,8 @@ final class UsageStatisticsTestSupport {
 
     // White-box seam replacing the deleted test-only constructor: installs a query
     // repository subclass/mock so tests can observe or block reader connections.
-    static SqliteUsageStatisticsStore storeWithQueries(UsageDatabasePaths paths,
-        UsageStatisticsQueryRepository queries) {
+    static SqliteUsageStatisticsStore storeWithQueries(
+            UsageDatabasePaths paths, UsageStatisticsQueryRepository queries) {
         var store = new SqliteUsageStatisticsStore(paths);
         try {
             var field = SqliteUsageStatisticsStore.class.getDeclaredField("queries");

@@ -53,11 +53,13 @@ class ModelParameterConsoleEndpointTest {
         when(client.fetch(AiProvider.class, "provider")).thenReturn(Mono.just(provider));
         when(cache.getProviderTypeMap()).thenReturn(Map.of("openai", type));
         when(cache.getProviderType("openai")).thenReturn(type);
-        var validator = new ModelConsoleModelValidator(client, cache,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
-            new EffectiveParameterMappingResolver());
-        var endpoint = new ModelParameterConsoleEndpoint(client, cache,
-            new EffectiveParameterMappingResolver(), validator, catalog);
+        var validator = new ModelConsoleModelValidator(
+                client,
+                cache,
+                new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+                new EffectiveParameterMappingResolver());
+        var endpoint = new ModelParameterConsoleEndpoint(
+                client, cache, new EffectiveParameterMappingResolver(), validator, catalog);
         web = WebTestClient.bindToRouterFunction(endpoint.endpoint()).build();
     }
 
@@ -68,18 +70,29 @@ class ModelParameterConsoleEndpointTest {
             assertThat(models.getFirst().adapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
             assertThat(models.getFirst().modelId()).isEqualTo("test-model");
             return List.of(models.getFirst().toBuilder()
-                .catalogParameters(profile("test-model")).build());
+                    .catalogParameters(profile("test-model"))
+                    .build());
         });
-        web.post().uri("/model-parameters/catalog").bodyValue(model()).exchange()
-            .expectStatus().isOk().expectBody().jsonPath("$.adapterType").isEqualTo("openai-chat");
+        web.post()
+                .uri("/model-parameters/catalog")
+                .bodyValue(model())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.adapterType")
+                .isEqualTo("openai-chat");
     }
 
     @Test
     void missingCatalogMatchReturnsNoContent() {
-        when(catalog.enrich(any(), any(), any()))
-            .thenAnswer(invocation -> invocation.getArgument(2));
-        web.post().uri("/model-parameters/catalog").bodyValue(model()).exchange()
-            .expectStatus().isNoContent();
+        when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(2));
+        web.post()
+                .uri("/model-parameters/catalog")
+                .bodyValue(model())
+                .exchange()
+                .expectStatus()
+                .isNoContent();
     }
 
     @ParameterizedTest
@@ -99,17 +112,31 @@ class ModelParameterConsoleEndpointTest {
             List<DiscoveredModel> models = invocation.getArgument(2);
             assertThat(models.getFirst().modelType()).isEqualTo(adapter.getModelType());
             assertThat(models.getFirst().confidence()).isEqualTo(DiscoveryConfidence.HIGH);
-            return List.of(models.getFirst().toBuilder().catalogParameters(captured).build());
+            return List.of(
+                    models.getFirst().toBuilder().catalogParameters(captured).build());
         });
-        var result = web.post().uri("/model-parameters/catalog").bodyValue(draft).exchange()
-            .expectStatus().isOk().expectBody(ModelParameterProfile.class).returnResult()
-            .getResponseBody();
+        var result = web.post()
+                .uri("/model-parameters/catalog")
+                .bodyValue(draft)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ModelParameterProfile.class)
+                .returnResult()
+                .getResponseBody();
         assertThat(result).isEqualTo(captured);
         draft.getSpec().setCatalogParameters(result);
-        web.post().uri("/model-parameters/resolve").bodyValue(draft).exchange()
-            .expectStatus().isOk().expectBody()
-            .jsonPath("$.constraints.inputTokens").isEqualTo(8191)
-            .jsonPath("$.constraints.outputTokens").isEmpty();
+        web.post()
+                .uri("/model-parameters/resolve")
+                .bodyValue(draft)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.constraints.inputTokens")
+                .isEqualTo(8191)
+                .jsonPath("$.constraints.outputTokens")
+                .isEmpty();
     }
 
     @Test
@@ -120,8 +147,8 @@ class ModelParameterConsoleEndpointTest {
         captured.getConstraints().setOutputTokens(1024L);
         saved.getSpec().setCatalogParameters(captured);
         saved.getSpec().setDiscoverySource(DiscoverySource.REMOTE);
-        var evidence = Map.of(ModelFeature.TOOL_CALL, true, ModelFeature.STRUCTURED_OUTPUT, false,
-            ModelFeature.REASONING, true);
+        var evidence = Map.of(
+                ModelFeature.TOOL_CALL, true, ModelFeature.STRUCTURED_OUTPUT, false, ModelFeature.REASONING, true);
         captured.setFeatureEvidence(evidence);
         var updated = profile("test-model");
         updated.setFeatureEvidence(evidence);
@@ -141,7 +168,8 @@ class ModelParameterConsoleEndpointTest {
             List<DiscoveredModel> models = invocation.getArgument(2);
             assertThat(models.getFirst().featureEvidence()).isEqualTo(evidence);
             assertThat(models.getFirst().features()).isEmpty();
-            return List.of(models.getFirst().toBuilder().catalogParameters(updated).build());
+            return List.of(
+                    models.getFirst().toBuilder().catalogParameters(updated).build());
         });
 
         var result = preview(saved);
@@ -150,17 +178,20 @@ class ModelParameterConsoleEndpointTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = DiscoverySource.class, names = {"REMOTE", "RULE"})
+    @EnumSource(
+            value = DiscoverySource.class,
+            names = {"REMOTE", "RULE"})
     void catalogAttributedFeaturesAreNotPromotedToProviderEvidence(DiscoverySource source) {
         var saved = savedModel();
         var captured = profile("test-model");
         captured.setConstraints(featureConstraints(true, true, true));
         saved.getSpec().setCatalogParameters(captured);
         saved.getSpec().setDiscoverySource(source);
-        saved.getSpec().setFeatures(List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
-            ModelFeature.REASONING));
-        saved.getSpec().setCatalogMatch(provenance(List.of("parameters", "features.tool-call",
-            "features.structured-output", "features.reasoning")));
+        saved.getSpec()
+                .setFeatures(List.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING));
+        saved.getSpec()
+                .setCatalogMatch(provenance(List.of(
+                        "parameters", "features.tool-call", "features.structured-output", "features.reasoning")));
         var updated = profile("test-model");
         updated.setConstraints(featureConstraints(false, false, false));
         updated.setFeatureEvidence(Map.of());
@@ -168,7 +199,8 @@ class ModelParameterConsoleEndpointTest {
             List<DiscoveredModel> models = invocation.getArgument(2);
             assertThat(models.getFirst().featureEvidence()).isEmpty();
             assertThat(models.getFirst().features()).isEmpty();
-            return List.of(models.getFirst().toBuilder().catalogParameters(updated).build());
+            return List.of(
+                    models.getFirst().toBuilder().catalogParameters(updated).build());
         });
 
         assertThat(preview(saved)).isEqualTo(updated);
@@ -208,9 +240,9 @@ class ModelParameterConsoleEndpointTest {
         when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> {
             List<DiscoveredModel> models = invocation.getArgument(2);
             assertThat(models.getFirst().featureEvidence()).isEmpty();
-            var updated = saved.getSpec().getCatalogParameters().getConstraints() == null
-                ? newlyKnown : changedLater;
-            return List.of(models.getFirst().toBuilder().catalogParameters(updated).build());
+            var updated = saved.getSpec().getCatalogParameters().getConstraints() == null ? newlyKnown : changedLater;
+            return List.of(
+                    models.getFirst().toBuilder().catalogParameters(updated).build());
         });
 
         var firstPreview = preview(saved);
@@ -225,8 +257,7 @@ class ModelParameterConsoleEndpointTest {
         var captured = profile("test-model");
         captured.setFeatureEvidence(Map.of(ModelFeature.TOOL_CALL, false));
         saved.getSpec().setCatalogParameters(captured);
-        when(catalog.enrich(any(), any(), any()))
-            .thenAnswer(invocation -> invocation.getArgument(2));
+        when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(2));
 
         assertThat(preview(saved)).isEqualTo(captured);
         assertThat(saved.getSpec().getCatalogParameters()).isSameAs(captured);
@@ -235,17 +266,23 @@ class ModelParameterConsoleEndpointTest {
     private ModelParameterProfile preview(AiModel saved) {
         var draft = model();
         draft.setMetadata(saved.getMetadata());
-        return web.post().uri("/model-parameters/catalog").bodyValue(draft).exchange()
-            .expectStatus().isOk().expectBody(ModelParameterProfile.class).returnResult()
-            .getResponseBody();
+        return web.post()
+                .uri("/model-parameters/catalog")
+                .bodyValue(draft)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ModelParameterProfile.class)
+                .returnResult()
+                .getResponseBody();
     }
 
     private ModelCatalogMatch provenance(List<String> fields) {
         return new ModelCatalogMatch("openai", "test-model", Instant.EPOCH, fields);
     }
 
-    private ModelParameterConstraints featureConstraints(boolean tools, boolean structured,
-        boolean reasoningSupported) {
+    private ModelParameterConstraints featureConstraints(
+            boolean tools, boolean structured, boolean reasoningSupported) {
         var constraints = new ModelParameterConstraints();
         constraints.setToolCalling(tools);
         constraints.setStructuredOutput(structured);
@@ -267,36 +304,40 @@ class ModelParameterConsoleEndpointTest {
         when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> {
             List<DiscoveredModel> models = invocation.getArgument(2);
             assertThat(models.getFirst().adapterType()).isEqualTo(AdapterType.OPENAI_RESPONSES);
-            return List.of(models.getFirst().toBuilder().catalogParameters(updated).build());
+            return List.of(
+                    models.getFirst().toBuilder().catalogParameters(updated).build());
         });
-        web.post().uri("/model-parameters/catalog").bodyValue(draft).exchange()
-            .expectStatus().isOk().expectBody()
-            .jsonPath("$.adapterType").isEqualTo("openai-responses");
+        web.post()
+                .uri("/model-parameters/catalog")
+                .bodyValue(draft)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.adapterType")
+                .isEqualTo("openai-responses");
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"modelId", "providerName", "baseUrl", "chatEndpointPath",
-        "profileProviderType", "profileBaseUrl"})
+    @ValueSource(
+            strings = {"modelId", "providerName", "baseUrl", "chatEndpointPath", "profileProviderType", "profileBaseUrl"
+            })
     void changedIdentityCannotReviveSavedCatalogParameters(String field) {
         var saved = savedModel();
         saved.getSpec().setCatalogParameters(profile("test-model"));
-        saved.getSpec().getCatalogParameters()
-            .setFeatureEvidence(Map.of(ModelFeature.TOOL_CALL, true));
+        saved.getSpec().getCatalogParameters().setFeatureEvidence(Map.of(ModelFeature.TOOL_CALL, true));
         var draft = model();
         draft.setMetadata(saved.getMetadata());
         switch (field) {
             case "modelId" -> draft.getSpec().setModelId("another-model");
             case "providerName" -> {
                 draft.getSpec().setProviderName("another-provider");
-                when(client.fetch(AiProvider.class, "another-provider"))
-                    .thenReturn(Mono.just(provider));
+                when(client.fetch(AiProvider.class, "another-provider")).thenReturn(Mono.just(provider));
             }
             case "baseUrl" -> provider.getSpec().setBaseUrl("https://another.example/v1");
             case "chatEndpointPath" -> provider.getSpec().setChatEndpointPath("/custom/chat");
-            case "profileProviderType" -> saved.getSpec().getCatalogParameters()
-                .setProviderType("deepseek");
-            case "profileBaseUrl" -> saved.getSpec().getCatalogParameters()
-                .setProviderBaseUrl(null);
+            case "profileProviderType" -> saved.getSpec().getCatalogParameters().setProviderType("deepseek");
+            case "profileBaseUrl" -> saved.getSpec().getCatalogParameters().setProviderBaseUrl(null);
             default -> throw new IllegalArgumentException(field);
         }
         when(catalog.enrich(any(), any(), any())).thenAnswer(invocation -> {
@@ -305,8 +346,12 @@ class ModelParameterConsoleEndpointTest {
             assertThat(models.getFirst().features()).isEmpty();
             return models;
         });
-        web.post().uri("/model-parameters/catalog").bodyValue(draft).exchange()
-            .expectStatus().isNoContent();
+        web.post()
+                .uri("/model-parameters/catalog")
+                .bodyValue(draft)
+                .exchange()
+                .expectStatus()
+                .isNoContent();
     }
 
     private AiModel savedModel() {
@@ -320,12 +365,23 @@ class ModelParameterConsoleEndpointTest {
 
     @Test
     void resolvesDraftWithoutCredentialsAndExpandsTemplateIntents() {
-        var result = web.post().uri("/model-parameters/resolve").bodyValue(model()).exchange()
-            .expectStatus().isOk().expectBody(ModelParameterProfile.class).returnResult()
-            .getResponseBody();
+        var result = web.post()
+                .uri("/model-parameters/resolve")
+                .bodyValue(model())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ModelParameterProfile.class)
+                .returnResult()
+                .getResponseBody();
         assertThat(result).isNotNull();
-        assertThat(result.getMappings().getLanguage().getReasoning().getReasoningMapping()
-            .getLow().getValue()).isEqualTo("low");
+        assertThat(result.getMappings()
+                        .getLanguage()
+                        .getReasoning()
+                        .getReasoningMapping()
+                        .getLow()
+                        .getValue())
+                .isEqualTo("low");
         assertThat(result.getModelId()).isEqualTo("test-model");
         assertThat(result.getAdapterType()).isEqualTo(AdapterType.OPENAI_CHAT);
     }
@@ -338,8 +394,12 @@ class ModelParameterConsoleEndpointTest {
         constraints.setOutputTokens(-1L);
         profile.setConstraints(constraints);
         model.getSpec().setCatalogParameters(profile);
-        web.post().uri("/model-parameters/resolve").bodyValue(model).exchange()
-            .expectStatus().isBadRequest();
+        web.post()
+                .uri("/model-parameters/resolve")
+                .bodyValue(model)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -350,11 +410,17 @@ class ModelParameterConsoleEndpointTest {
         constraints.setTemperature(false);
         profile.setConstraints(constraints);
         model.getSpec().setCatalogParameters(profile);
-        var result = web.post().uri("/model-parameters/resolve").bodyValue(model).exchange()
-            .expectStatus().isOk().expectBody(ModelParameterProfile.class).returnResult()
-            .getResponseBody();
+        var result = web.post()
+                .uri("/model-parameters/resolve")
+                .bodyValue(model)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ModelParameterProfile.class)
+                .returnResult()
+                .getResponseBody();
         assertThat(result.getMappings().getLanguage().getTemperature().getMode())
-            .isEqualTo(ModelParameterMappings.Mode.TEMPLATE);
+                .isEqualTo(ModelParameterMappings.Mode.TEMPLATE);
         assertThat(result.getConstraints().getTemperature()).isNull();
     }
 

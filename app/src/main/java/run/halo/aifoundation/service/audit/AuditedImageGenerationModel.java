@@ -17,31 +17,36 @@ import run.halo.aifoundation.service.observation.UsageCallSession;
 import run.halo.aifoundation.service.observation.UsageObservation;
 import run.halo.aifoundation.service.observation.UsageOperation;
 
-public class AuditedImageGenerationModel implements ImageGenerationModel,
-    ImageGenerationMiddlewareAware {
+public class AuditedImageGenerationModel implements ImageGenerationModel, ImageGenerationMiddlewareAware {
 
     private final ImageGenerationModel delegate;
     private final ModelCallContext context;
     private final CallerPluginAuditRecorder auditRecorder;
     private final UsageObservation usageStatistics;
 
-    public AuditedImageGenerationModel(ImageGenerationModel delegate, ModelCallContext context,
-        CallerPluginAuditRecorder auditRecorder, UsageObservation usageStatistics) {
+    public AuditedImageGenerationModel(
+            ImageGenerationModel delegate,
+            ModelCallContext context,
+            CallerPluginAuditRecorder auditRecorder,
+            UsageObservation usageStatistics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.context = Objects.requireNonNull(context, "context must not be null");
-        this.auditRecorder = Objects.requireNonNull(auditRecorder,
-            "auditRecorder must not be null");
-        this.usageStatistics = Objects.requireNonNull(usageStatistics,
-            "usageStatistics must not be null");
+        this.auditRecorder = Objects.requireNonNull(auditRecorder, "auditRecorder must not be null");
+        this.usageStatistics = Objects.requireNonNull(usageStatistics, "usageStatistics must not be null");
     }
 
     @Override
     public Mono<GenerateImageResult> generateImage(GenerateImageRequest request) {
         auditRecorder.recordModelInvocation(context, UsageOperation.IMAGE_GENERATE_IMAGE);
-        return UsageCallRecorder.record(usageStatistics, context,
-            UsageOperation.IMAGE_GENERATE_IMAGE, false,
-            request == null ? null : request.getMetadata(),
-            () -> delegate.generateImage(request), 1, AuditedImageGenerationModel::succeed);
+        return UsageCallRecorder.record(
+                usageStatistics,
+                context,
+                UsageOperation.IMAGE_GENERATE_IMAGE,
+                false,
+                request == null ? null : request.getMetadata(),
+                () -> delegate.generateImage(request),
+                1,
+                AuditedImageGenerationModel::succeed);
     }
 
     @Override
@@ -52,20 +57,20 @@ public class AuditedImageGenerationModel implements ImageGenerationModel,
     @Override
     public ModelInfo modelInfo() {
         return ModelInfo.builder()
-            .name(context.modelName())
-            .providerName(context.providerName())
-            .modelId(context.modelId())
-            .enabled(true)
-            .build();
+                .name(context.modelName())
+                .providerName(context.providerName())
+                .modelId(context.modelId())
+                .enabled(true)
+                .build();
     }
 
     @Override
     public ProviderInfo providerInfo() {
         return ProviderInfo.builder()
-            .name(context.providerName())
-            .providerType(context.providerType())
-            .enabled(true)
-            .build();
+                .name(context.providerName())
+                .providerType(context.providerType())
+                .enabled(true)
+                .build();
     }
 
     private static void succeed(UsageCallSession session, GenerateImageResult result) {
@@ -81,8 +86,7 @@ public class AuditedImageGenerationModel implements ImageGenerationModel,
     }
 
     @Override
-    public ImageGenerationModel wrapImageGenerationMiddleware(
-        List<ImageGenerationMiddleware> middleware) {
+    public ImageGenerationModel wrapImageGenerationMiddleware(List<ImageGenerationMiddleware> middleware) {
         var wrapped = ImageGenerationMiddlewares.wrap(delegate, middleware);
         return new AuditedImageGenerationModel(wrapped, context, auditRecorder, usageStatistics);
     }

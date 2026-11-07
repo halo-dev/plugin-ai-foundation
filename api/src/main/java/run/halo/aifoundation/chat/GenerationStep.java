@@ -11,103 +11,64 @@ import run.halo.aifoundation.part.GenerationContentPart;
 import run.halo.aifoundation.part.ReasoningPart;
 import run.halo.aifoundation.source.SourceReference;
 import run.halo.aifoundation.source.SourceReferences;
-import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolApprovalRequest;
+import run.halo.aifoundation.tool.ToolCall;
 import run.halo.aifoundation.tool.ToolError;
 import run.halo.aifoundation.tool.ToolResult;
 
 /**
  * Details for one model invocation within a text generation request.
  *
- * <p>A plain generation normally has one step. Tool-enabled generation can have multiple steps:
- * one step where the model asks for tools, followed by another step where the model receives tool
- * results and produces final text.
+ * <p>A plain generation normally has one step. Tool-enabled generation can have multiple steps: one step where the
+ * model asks for tools, followed by another step where the model receives tool results and produces final text.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class GenerationStep {
-    /**
-     * Zero-based step index.
-     */
+    /** Zero-based step index. */
     private Integer stepIndex;
-    /**
-     * Text produced by this step.
-     */
+    /** Text produced by this step. */
     private String text;
-    /**
-     * Parsed structured output for this step when requested and available.
-     */
+    /** Parsed structured output for this step when requested and available. */
     private Object output;
-    /**
-     * Raw text used to parse structured output for this step.
-     */
+    /** Raw text used to parse structured output for this step. */
     private String outputText;
-    /**
-     * Reasoning text produced by this step when available.
-     */
+    /** Reasoning text produced by this step when available. */
     private String reasoningText;
-    /**
-     * Structured content parts produced or appended during this step.
-     */
+    /** Structured content parts produced or appended during this step. */
     private List<GenerationContentPart> content;
     /**
-     * Display-safe source references used or returned during this step. When unset, this is derived
-     * from source content parts.
+     * Display-safe source references used or returned during this step. When unset, this is derived from source content
+     * parts.
      */
     private List<SourceReference> sources;
-    /**
-     * Reasoning parts produced by this step when available.
-     */
+    /** Reasoning parts produced by this step when available. */
     private List<ReasoningPart> reasoning;
-    /**
-     * Normalized finish reason for this step.
-     */
+    /** Normalized finish reason for this step. */
     private FinishReason finishReason;
-    /**
-     * Provider-specific finish reason before normalization.
-     */
+    /** Provider-specific finish reason before normalization. */
     private String rawFinishReason;
-    /**
-     * Token usage for this step when available.
-     */
+    /** Token usage for this step when available. */
     private LanguageModelUsage usage;
-    /**
-     * Tool calls requested by the model during this step.
-     */
+    /** Tool calls requested by the model during this step. */
     private List<ToolCall> toolCalls;
-    /**
-     * Tool execution approval requests produced during this step.
-     */
+    /** Tool execution approval requests produced during this step. */
     private List<ToolApprovalRequest> toolApprovalRequests;
-    /**
-     * Successful tool results produced during this step.
-     */
+    /** Successful tool results produced during this step. */
     private List<ToolResult> toolResults;
-    /**
-     * Tool execution errors produced during this step.
-     */
+    /** Tool execution errors produced during this step. */
     private List<ToolError> toolErrors;
-    /**
-     * Provider-neutral response messages produced during this step.
-     */
+    /** Provider-neutral response messages produced during this step. */
     private List<ModelMessage> responseMessages;
-    /**
-     * Non-fatal warnings for this step, such as skipped tool execution.
-     */
+    /** Non-fatal warnings for this step, such as skipped tool execution. */
     private List<GenerationWarning> warnings;
-    /**
-     * Request metadata for this step.
-     */
+    /** Request metadata for this step. */
     private GenerationRequestMetadata request;
-    /**
-     * Response metadata for this step.
-     */
+    /** Response metadata for this step. */
     private GenerationResponseMetadata response;
-    /**
-     * Provider-specific metadata for this step.
-     */
+    /** Provider-specific metadata for this step. */
     private Map<String, Object> providerMetadata;
 
     public List<SourceReference> getSources() {

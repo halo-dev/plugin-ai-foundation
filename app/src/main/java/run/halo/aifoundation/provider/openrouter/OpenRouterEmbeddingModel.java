@@ -7,10 +7,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.util.Assert;
@@ -25,18 +23,17 @@ import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpRequest;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpTransport;
 import run.halo.aifoundation.provider.support.embedding.IndexedEmbeddingDecoder;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 
 /** Native OpenRouter embeddings router client with routing and cost metadata. */
-public final class OpenRouterEmbeddingModel
-    implements ProviderEmbeddingModel, RequestHeaderAwareEmbeddingModel {
+public final class OpenRouterEmbeddingModel implements ProviderEmbeddingModel, RequestHeaderAwareEmbeddingModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final OpenRouterEmbeddingOptions defaults;
     private final EmbeddingHttpTransport transport;
 
-    OpenRouterEmbeddingModel(OpenRouterEmbeddingOptions defaults,
-        WebClient.Builder webClientBuilder) {
+    OpenRouterEmbeddingModel(OpenRouterEmbeddingOptions defaults, WebClient.Builder webClientBuilder) {
         this.defaults = defaults;
         this.transport = new EmbeddingHttpTransport("openrouter", webClientBuilder);
     }
@@ -47,11 +44,10 @@ public final class OpenRouterEmbeddingModel
     }
 
     @Override
-    public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request,
-        Map<String, String> headers) {
+    public EmbeddingResponse call(
+            org.springframework.ai.embedding.EmbeddingRequest request, Map<String, String> headers) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
-        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(),
-            request.getOptions(), headers));
+        return call(new ProviderEmbeddingRequest(request.getInstructions(), List.of(), request.getOptions(), headers));
     }
 
     @Override
@@ -62,11 +58,11 @@ public final class OpenRouterEmbeddingModel
         var body = requestBody(input, options);
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + "/embeddings";
         var exchange = EmbeddingHttpRequest.builder(url, body)
-            .adapterType("openrouter-embedding")
-            .apiKey(options.apiKey())
-            .headers(options.customHeaders())
-            .timeout(options.timeout())
-            .build();
+                .adapterType("openrouter-embedding")
+                .apiKey(options.apiKey())
+                .headers(options.customHeaders())
+                .timeout(options.timeout())
+                .build();
         return response(transport.post(exchange), options.getModel());
     }
 
@@ -74,17 +70,18 @@ public final class OpenRouterEmbeddingModel
     public float[] embed(Document document) {
         Assert.notNull(document, "Document must not be null");
         var response = call(new org.springframework.ai.embedding.EmbeddingRequest(
-            List.of(document.getFormattedContent(MetadataMode.EMBED)), defaults));
-        return response.getResults().isEmpty() ? new float[0] : response.getResult().getOutput();
+                List.of(document.getFormattedContent(MetadataMode.EMBED)), defaults));
+        return response.getResults().isEmpty()
+                ? new float[0]
+                : response.getResult().getOutput();
     }
 
-    private OpenRouterEmbeddingOptions merged(org.springframework.ai.embedding.EmbeddingOptions raw,
-        Map<String, String> headers) {
+    private OpenRouterEmbeddingOptions merged(
+            org.springframework.ai.embedding.EmbeddingOptions raw, Map<String, String> headers) {
         var builder = defaults.mutate();
         if (raw != null) {
             builder.model(raw.getModel() != null ? raw.getModel() : defaults.getModel())
-                .dimensions(raw.getDimensions() != null
-                    ? raw.getDimensions() : defaults.getDimensions());
+                    .dimensions(raw.getDimensions() != null ? raw.getDimensions() : defaults.getDimensions());
         }
         var customHeaders = new LinkedHashMap<>(defaults.customHeaders());
         if (raw instanceof OpenRouterEmbeddingOptions options) {
@@ -121,29 +118,30 @@ public final class OpenRouterEmbeddingModel
             parts.add(multimodalPart(content));
         }
         if (parts.isEmpty()) {
-            throw new IllegalArgumentException(
-                "OpenRouter multimodal embedding content must not be empty");
+            throw new IllegalArgumentException("OpenRouter multimodal embedding content must not be empty");
         }
         return List.of(Map.of("content", List.copyOf(parts)));
     }
 
     private Map<String, Object> multimodalPart(EmbeddingContent content) {
         if (content == null) {
-            throw new IllegalArgumentException(
-                "OpenRouter multimodal embedding content must not contain null");
+            throw new IllegalArgumentException("OpenRouter multimodal embedding content must not contain null");
         }
         return switch (content.getType()) {
             case TEXT -> Map.of("type", "text", "text", content.getText());
-            case IMAGE -> Map.of("type", "image_url", "image_url", Map.of("url",
-                MediaContentSources.urlOrDataUrl(content.getMedia(),
-                    "OpenRouter embedding image")));
-            case VIDEO -> throw new IllegalArgumentException(
-                "OpenRouter embeddings do not document video input");
+            case IMAGE ->
+                Map.of(
+                        "type",
+                        "image_url",
+                        "image_url",
+                        Map.of(
+                                "url",
+                                MediaContentSources.urlOrDataUrl(content.getMedia(), "OpenRouter embedding image")));
+            case VIDEO -> throw new IllegalArgumentException("OpenRouter embeddings do not document video input");
         };
     }
 
-    private Map<String, Object> requestBody(Object input,
-        OpenRouterEmbeddingOptions options) {
+    private Map<String, Object> requestBody(Object input, OpenRouterEmbeddingOptions options) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", options.getModel());
         body.put("input", input != null ? input : List.of());
@@ -160,12 +158,12 @@ public final class OpenRouterEmbeddingModel
     private EmbeddingResponse response(String data, String requestedModel) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
-            var embeddings = IndexedEmbeddingDecoder.decode(root.path("data"), value ->
-                IndexedEmbeddingDecoder.floatArrayOrBase64(value,
-                    "OpenRouter embedding vector has an invalid shape"));
+            var embeddings = IndexedEmbeddingDecoder.decode(
+                    root.path("data"),
+                    value -> IndexedEmbeddingDecoder.floatArrayOrBase64(
+                            value, "OpenRouter embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var rawUsage = JsonNodes.isAbsent(usage)
-                ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
+            var rawUsage = JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
             var metadataValues = new LinkedHashMap<String, Object>();
             put(metadataValues, "id", text(root.path("id")));
             put(metadataValues, "provider", text(root.path("provider")));
@@ -173,8 +171,9 @@ public final class OpenRouterEmbeddingModel
                 metadataValues.put("cost", map.get("cost"));
             }
             var metadata = new EmbeddingResponseMetadata(
-                hasText(text(root.path("model"))) ? text(root.path("model")) : requestedModel,
-                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage), metadataValues);
+                    hasText(text(root.path("model"))) ? text(root.path("model")) : requestedModel,
+                    ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", rawUsage),
+                    metadataValues);
             return new EmbeddingResponse(embeddings, metadata);
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse OpenRouter embedding response", e);
@@ -195,5 +194,4 @@ public final class OpenRouterEmbeddingModel
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
-
 }

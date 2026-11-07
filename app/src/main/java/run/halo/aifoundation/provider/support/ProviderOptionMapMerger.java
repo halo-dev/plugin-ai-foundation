@@ -6,11 +6,9 @@ import java.util.Map;
 /** Merges provider option objects while preserving unrelated nested fields. */
 public final class ProviderOptionMapMerger {
 
-    private ProviderOptionMapMerger() {
-    }
+    private ProviderOptionMapMerger() {}
 
-    public static Map<String, Object> merge(Map<String, Object> base,
-        Map<String, Object> overrides) {
+    public static Map<String, Object> merge(Map<String, Object> base, Map<String, Object> overrides) {
         var merged = copy(base);
         if (overrides == null) {
             return merged;

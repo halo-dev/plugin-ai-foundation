@@ -23,12 +23,16 @@ import run.halo.aifoundation.chat.LanguageModelUsage;
  * @param response response metadata
  * @param providerMetadata provider-specific metadata
  */
-public record FinishStepChunk(Integer stepIndex, FinishReason finishReason,
-                              String rawFinishReason, LanguageModelUsage usage,
-                              List<GenerationWarning> warnings,
-                              GenerationRequestMetadata request,
-                              GenerationResponseMetadata response,
-                              Map<String, Object> providerMetadata) implements UIMessageChunk {
+public record FinishStepChunk(
+        Integer stepIndex,
+        FinishReason finishReason,
+        String rawFinishReason,
+        LanguageModelUsage usage,
+        List<GenerationWarning> warnings,
+        GenerationRequestMetadata request,
+        GenerationResponseMetadata response,
+        Map<String, Object> providerMetadata)
+        implements UIMessageChunk {
     @Override
     public String type() {
         return UIMessageChunkType.FINISH_STEP;

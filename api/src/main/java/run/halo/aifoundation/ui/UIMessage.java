@@ -7,17 +7,15 @@ import java.util.Optional;
 /**
  * Persisted message exchanged with a frontend chat UI.
  *
- * <p>A UI message keeps interface-facing parts such as text, custom data, tool
- * results, files, sources, and reasoning. It is the object callers can store
- * and send back on the next chat request.
+ * <p>A UI message keeps interface-facing parts such as text, custom data, tool results, files, sources, and reasoning.
+ * It is the object callers can store and send back on the next chat request.
  *
  * @param id stable message identifier
  * @param role conversation role represented by the message
  * @param parts persisted UI message parts in display order
  * @param metadata caller-defined message-level metadata
  */
-public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> parts,
-                           M metadata) {
+public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> parts, M metadata) {
 
     public UIMessage {
         Objects.requireNonNull(id, "id must not be null");
@@ -43,9 +41,7 @@ public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> pa
      * @return matching parts in message order
      */
     public List<UIMessagePart> parts(String type) {
-        return parts.stream()
-            .filter(part -> type.equals(part.type()))
-            .toList();
+        return parts.stream().filter(part -> type.equals(part.type())).toList();
     }
 
     /**
@@ -57,9 +53,9 @@ public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> pa
      */
     public Optional<UIMessagePart> part(String type, String id) {
         return parts.stream()
-            .filter(part -> type.equals(part.type()))
-            .filter(part -> id.equals(partId(part)))
-            .findFirst();
+                .filter(part -> type.equals(part.type()))
+                .filter(part -> id.equals(partId(part)))
+                .findFirst();
     }
 
     /**
@@ -69,9 +65,9 @@ public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> pa
      */
     public List<TextPart> textParts() {
         return parts.stream()
-            .filter(TextPart.class::isInstance)
-            .map(TextPart.class::cast)
-            .toList();
+                .filter(TextPart.class::isInstance)
+                .map(TextPart.class::cast)
+                .toList();
     }
 
     /**
@@ -80,9 +76,7 @@ public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> pa
      * @return assistant or user text visible to the caller
      */
     public String text() {
-        return textParts().stream()
-            .map(TextPart::text)
-            .reduce("", String::concat);
+        return textParts().stream().map(TextPart::text).reduce("", String::concat);
     }
 
     /**
@@ -92,9 +86,9 @@ public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> pa
      */
     public List<DataPart> dataParts() {
         return parts.stream()
-            .filter(DataPart.class::isInstance)
-            .map(DataPart.class::cast)
-            .toList();
+                .filter(DataPart.class::isInstance)
+                .map(DataPart.class::cast)
+                .toList();
     }
 
     /**
@@ -104,9 +98,7 @@ public record UIMessage<M>(String id, UIMessageRole role, List<UIMessagePart> pa
      * @return matching data part when present
      */
     public Optional<DataPart> dataPart(String name) {
-        return dataParts().stream()
-            .filter(part -> name.equals(part.name()))
-            .findFirst();
+        return dataParts().stream().filter(part -> name.equals(part.name())).findFirst();
     }
 
     /**

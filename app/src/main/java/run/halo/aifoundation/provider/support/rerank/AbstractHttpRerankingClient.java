@@ -9,21 +9,20 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
+import run.halo.aifoundation.provider.support.ProviderRerankingClient;
+import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
+import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 import run.halo.aifoundation.rerank.RerankResponse;
 import run.halo.aifoundation.rerank.RerankResponseMetadata;
 import run.halo.aifoundation.rerank.RerankResult;
-import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
-import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
 public abstract class AbstractHttpRerankingClient implements ProviderRerankingClient {
 
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
-        new ParameterizedTypeReference<>() {
-        };
+            new ParameterizedTypeReference<>() {};
 
     private final String providerType;
     private final String modelId;
@@ -31,20 +30,22 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
     private final WebClient webClient;
     private final RerankResponseDecoder responseDecoder;
 
-    protected AbstractHttpRerankingClient(String providerType, String modelId, String apiKey,
-        WebClient.Builder webClientBuilder) {
-        this(providerType, modelId, apiKey, webClientBuilder,
-            new StandardRerankResponseDecoder());
+    protected AbstractHttpRerankingClient(
+            String providerType, String modelId, String apiKey, WebClient.Builder webClientBuilder) {
+        this(providerType, modelId, apiKey, webClientBuilder, new StandardRerankResponseDecoder());
     }
 
-    protected AbstractHttpRerankingClient(String providerType, String modelId, String apiKey,
-        WebClient.Builder webClientBuilder, RerankResponseDecoder responseDecoder) {
+    protected AbstractHttpRerankingClient(
+            String providerType,
+            String modelId,
+            String apiKey,
+            WebClient.Builder webClientBuilder,
+            RerankResponseDecoder responseDecoder) {
         this.providerType = providerType;
         this.modelId = modelId;
         this.apiKey = apiKey;
         this.webClient = webClientBuilder.build();
-        this.responseDecoder = java.util.Objects.requireNonNull(responseDecoder,
-            "responseDecoder must not be null");
+        this.responseDecoder = java.util.Objects.requireNonNull(responseDecoder, "responseDecoder must not be null");
     }
 
     @Override
@@ -58,35 +59,34 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
     }
 
     @Override
-    public Mono<RerankResponse> rerank(RerankRequest request, ParameterMappingTarget target,
-        Map<String, Object> nativeOptions) {
+    public Mono<RerankResponse> rerank(
+            RerankRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         var uri = endpoint(request);
         var resolvedOptions = nativeOptions == null ? Map.<String, Object>of() : nativeOptions;
         var body = requestBody(request, resolvedOptions);
         applyMappedParameters(body, target);
         var diagnostics = ProviderDiagnostics.create(providerType, "rerank");
         diagnostics.request(uri.toString(), body, false);
-        return webClient.post()
-            .uri(uri)
-            .headers(headers -> {
-                if (apiKey != null && !apiKey.isBlank()) {
-                    headers.setBearerAuth(apiKey);
-                }
-                customizeHeaders(headers);
-                if (request.getHeaders() != null) {
-                    request.getHeaders().forEach(headers::set);
-                }
-            })
-            .bodyValue(body)
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response, providerType,
-                        "rerank", diagnostics);
-                }
-                diagnostics.responseStatus(response.statusCode().value());
-                return response.bodyToMono(MAP_TYPE)
-                    .map(json -> response(json, request, uri));
-            });
+        return webClient
+                .post()
+                .uri(uri)
+                .headers(headers -> {
+                    if (apiKey != null && !apiKey.isBlank()) {
+                        headers.setBearerAuth(apiKey);
+                    }
+                    customizeHeaders(headers);
+                    if (request.getHeaders() != null) {
+                        request.getHeaders().forEach(headers::set);
+                    }
+                })
+                .bodyValue(body)
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(response, providerType, "rerank", diagnostics);
+                    }
+                    diagnostics.responseStatus(response.statusCode().value());
+                    return response.bodyToMono(MAP_TYPE).map(json -> response(json, request, uri));
+                });
     }
 
     @SuppressWarnings("unchecked")
@@ -95,8 +95,7 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
             return;
         }
         body.remove("top_n");
-        var parameters = body.get("parameters") instanceof Map<?, ?> values
-            ? (Map<String, Object>) values : null;
+        var parameters = body.get("parameters") instanceof Map<?, ?> values ? (Map<String, Object>) values : null;
         if (parameters != null) {
             parameters.remove("top_n");
         }
@@ -112,16 +111,12 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
 
     protected abstract URI endpoint(RerankRequest request);
 
-    protected abstract Map<String, Object> requestBody(RerankRequest request,
-        Map<String, Object> nativeOptions);
+    protected abstract Map<String, Object> requestBody(RerankRequest request, Map<String, Object> nativeOptions);
 
-    protected void customizeHeaders(HttpHeaders headers) {
-    }
+    protected void customizeHeaders(HttpHeaders headers) {}
 
     protected List<String> documentTexts(RerankRequest request) {
-        return request.getDocuments().stream()
-            .map(RerankDocument::getText)
-            .toList();
+        return request.getDocuments().stream().map(RerankDocument::getText).toList();
     }
 
     protected void putIfPresent(Map<String, Object> body, String key, Object value) {
@@ -130,15 +125,13 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
         }
     }
 
-    protected void applyOptions(Map<String, Object> target, Map<String, Object> options,
-        String... ignored) {
+    protected void applyOptions(Map<String, Object> target, Map<String, Object> options, String... ignored) {
         if (options == null || options.isEmpty()) {
             return;
         }
         var ignoredKeys = List.of(ignored);
         for (var entry : options.entrySet()) {
-            if (entry.getKey() != null && entry.getValue() != null
-                && !ignoredKeys.contains(entry.getKey())) {
+            if (entry.getKey() != null && entry.getValue() != null && !ignoredKeys.contains(entry.getKey())) {
                 target.put(entry.getKey(), entry.getValue());
             }
         }
@@ -160,16 +153,16 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
         metadata.put("providerType", providerType);
         metadata.put("endpoint", uri.toString());
         return RerankResponse.builder()
-            .query(request.getQuery())
-            .results(List.copyOf(results))
-            .usage(payload.usage())
-            .response(RerankResponseMetadata.builder()
-                .id(payload.id())
-                .model(payload.model())
-                .metadata(payload.responseMetadata())
-                .build())
-            .providerMetadata(Map.copyOf(metadata))
-            .build();
+                .query(request.getQuery())
+                .results(List.copyOf(results))
+                .usage(payload.usage())
+                .response(RerankResponseMetadata.builder()
+                        .id(payload.id())
+                        .model(payload.model())
+                        .metadata(payload.responseMetadata())
+                        .build())
+                .providerMetadata(Map.copyOf(metadata))
+                .build();
     }
 
     private RerankResult result(Map<?, ?> node, RerankRequest request) {
@@ -179,11 +172,11 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
         putIfPresent(providerMetadata, "document", node.get("document"));
         putIfPresent(providerMetadata, "rawScore", node.get("relevance_score"));
         return RerankResult.builder()
-            .index(index != null ? index : -1)
-            .document(document)
-            .score(doubleValue(node.get("relevance_score")))
-            .providerMetadata(Map.copyOf(providerMetadata))
-            .build();
+                .index(index != null ? index : -1)
+                .document(document)
+                .score(doubleValue(node.get("relevance_score")))
+                .providerMetadata(Map.copyOf(providerMetadata))
+                .build();
     }
 
     private RerankDocument document(Map<?, ?> node, RerankRequest request, Integer index) {
@@ -239,5 +232,4 @@ public abstract class AbstractHttpRerankingClient implements ProviderRerankingCl
         }
         return null;
     }
-
 }

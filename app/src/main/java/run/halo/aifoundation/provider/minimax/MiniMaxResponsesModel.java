@@ -7,8 +7,7 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesModel;
 /** MiniMax's documented OpenAI Responses-compatible adapter. */
 public final class MiniMaxResponsesModel extends ResponsesModel {
 
-    public MiniMaxResponsesModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public MiniMaxResponsesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new MiniMaxResponsesProfile());
     }
 }

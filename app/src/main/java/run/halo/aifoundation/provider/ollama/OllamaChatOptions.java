@@ -1,6 +1,5 @@
 package run.halo.aifoundation.provider.ollama;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,8 +10,8 @@ import org.springframework.ai.tool.ToolCallback;
 /**
  * Request options for Ollama's native chat API.
  *
- * <p>This deliberately models only fields used by the native transport. It avoids coupling the
- * provider to Spring AI's Ollama implementation while retaining Spring AI's neutral chat contract.
+ * <p>This deliberately models only fields used by the native transport. It avoids coupling the provider to Spring AI's
+ * Ollama implementation while retaining Spring AI's neutral chat contract.
  */
 public final class OllamaChatOptions implements ToolCallingChatOptions {
 
@@ -158,8 +157,7 @@ public final class OllamaChatOptions implements ToolCallingChatOptions {
         private Map<String, Object> toolContext = Map.of();
         private Map<String, Object> mappedOptions = Map.of();
 
-        private Builder() {
-        }
+        private Builder() {}
 
         private Builder(Builder source) {
             this.model = source.model;
@@ -327,8 +325,7 @@ public final class OllamaChatOptions implements ToolCallingChatOptions {
                 return this;
             }
             combineScalarValues(source);
-            toolCallbacks = ToolCallingChatOptions.mergeToolCallbacks(
-                toolCallbacks, source.toolCallbacks);
+            toolCallbacks = ToolCallingChatOptions.mergeToolCallbacks(toolCallbacks, source.toolCallbacks);
             toolContext = ToolCallingChatOptions.mergeToolContext(toolContext, source.toolContext);
             mappedOptions = merged(mappedOptions, source.mappedOptions);
             return this;
@@ -368,8 +365,7 @@ public final class OllamaChatOptions implements ToolCallingChatOptions {
             return values == null ? Map.of() : Map.copyOf(values);
         }
 
-        private static Map<String, Object> merged(Map<String, Object> defaults,
-            Map<String, Object> requested) {
+        private static Map<String, Object> merged(Map<String, Object> defaults, Map<String, Object> requested) {
             var values = new LinkedHashMap<>(defaults);
             values.putAll(requested);
             return Map.copyOf(values);

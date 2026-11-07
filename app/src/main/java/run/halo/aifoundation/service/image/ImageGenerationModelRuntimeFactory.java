@@ -14,18 +14,23 @@ public class ImageGenerationModelRuntimeFactory {
     private final ModelCapabilityMatcher capabilityMatcher;
     private final UsageExecutionObserver usageExecutionObserver;
 
-    public ImageGenerationModelRuntimeFactory(MediaResourcePolicy mediaResourcePolicy,
-        ModelCapabilityMatcher capabilityMatcher,
-        UsageExecutionObserver usageExecutionObserver) {
+    public ImageGenerationModelRuntimeFactory(
+            MediaResourcePolicy mediaResourcePolicy,
+            ModelCapabilityMatcher capabilityMatcher,
+            UsageExecutionObserver usageExecutionObserver) {
         this.mediaResourcePolicy = mediaResourcePolicy;
         this.capabilityMatcher = capabilityMatcher;
         this.usageExecutionObserver = usageExecutionObserver;
     }
 
-    public ImageGenerationModel create(ProviderImageGenerationClient client,
-        ImageGenerationModelRuntimeConfiguration configuration) {
-        return new ImageGenerationModelImpl(client, configuration.modelCapabilities(),
-            mediaResourcePolicy, capabilityMatcher, configuration.context(),
-            usageExecutionObserver);
+    public ImageGenerationModel create(
+            ProviderImageGenerationClient client, ImageGenerationModelRuntimeConfiguration configuration) {
+        return new ImageGenerationModelImpl(
+                client,
+                configuration.modelCapabilities(),
+                mediaResourcePolicy,
+                capabilityMatcher,
+                configuration.context(),
+                usageExecutionObserver);
     }
 }

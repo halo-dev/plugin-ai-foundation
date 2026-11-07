@@ -20,9 +20,7 @@ class ProviderHttpExceptionTest {
         assertThat(error.getStatusCode()).isEqualTo(429);
         assertThat(error.getResponseBody()).isEqualTo(body);
         assertThat(error.getErrorBody()).isInstanceOf(Map.class);
-        assertThat(error.getMessage())
-            .contains("quota exceeded", "[REDACTED]")
-            .doesNotContain("secret-value");
+        assertThat(error.getMessage()).contains("quota exceeded", "[REDACTED]").doesNotContain("secret-value");
     }
 
     @Test

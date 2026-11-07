@@ -13,9 +13,10 @@ import run.halo.aifoundation.provider.protocol.messages.StandardAnthropicMessage
 /** DeepSeek policy for its Anthropic Messages compatibility contract. */
 final class DeepSeekMessagesProfile implements AnthropicMessagesProfile {
 
-    private static final StandardAnthropicMessagesProfile STANDARD =
-        new StandardAnthropicMessagesProfile(
-            "deepseek", "deepseek-messages", "/anthropic/v1/messages",
+    private static final StandardAnthropicMessagesProfile STANDARD = new StandardAnthropicMessagesProfile(
+            "deepseek",
+            "deepseek-messages",
+            "/anthropic/v1/messages",
             StandardAnthropicMessagesProfile.Authentication.X_API_KEY);
 
     @Override
@@ -40,8 +41,8 @@ final class DeepSeekMessagesProfile implements AnthropicMessagesProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         STANDARD.customizeRequest(body, prompt, options, stream);
         validateTemperature(body.get("temperature"));
         validateMetadata(body.get("metadata"));
@@ -70,8 +71,7 @@ final class DeepSeekMessagesProfile implements AnthropicMessagesProfile {
     }
 
     private IllegalArgumentException temperatureError() {
-        return new IllegalArgumentException(
-            "DeepSeek Messages temperature must be between 0 and 2");
+        return new IllegalArgumentException("DeepSeek Messages temperature must be between 0 and 2");
     }
 
     private void validateMetadata(Object value) {
@@ -86,8 +86,7 @@ final class DeepSeekMessagesProfile implements AnthropicMessagesProfile {
         if (unsupported.isEmpty()) {
             return;
         }
-        throw new IllegalArgumentException(
-            "DeepSeek Messages metadata supports only user_id");
+        throw new IllegalArgumentException("DeepSeek Messages metadata supports only user_id");
     }
 
     private void removeIgnoredFields(Map<String, Object> body) {

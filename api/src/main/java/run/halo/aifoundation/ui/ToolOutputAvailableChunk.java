@@ -10,9 +10,9 @@ import java.util.Map;
  * @param output tool output
  * @param providerMetadata provider-specific metadata
  */
-public record ToolOutputAvailableChunk(String toolCallId, String toolName, Object output,
-                                       Map<String, Object> providerMetadata)
-    implements UIMessageChunk {
+public record ToolOutputAvailableChunk(
+        String toolCallId, String toolName, Object output, Map<String, Object> providerMetadata)
+        implements UIMessageChunk {
 
     public ToolOutputAvailableChunk {
         providerMetadata = providerMetadata == null ? Map.of() : Map.copyOf(providerMetadata);

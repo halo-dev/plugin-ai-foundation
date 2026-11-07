@@ -6,32 +6,22 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * One ranked document result.
- */
+/** One ranked document result. */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class RerankResult {
 
-    /**
-     * Original index in {@link RerankRequest#getDocuments()}.
-     */
+    /** Original index in {@link RerankRequest#getDocuments()}. */
     private int index;
 
-    /**
-     * Ranked document.
-     */
+    /** Ranked document. */
     private RerankDocument document;
 
-    /**
-     * Provider score, when reported.
-     */
+    /** Provider score, when reported. */
     private Double score;
 
-    /**
-     * Sanitized provider metadata for this result.
-     */
+    /** Sanitized provider metadata for this result. */
     private Map<String, Object> providerMetadata;
 }

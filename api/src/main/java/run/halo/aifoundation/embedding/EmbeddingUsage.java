@@ -5,20 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Provider-neutral token usage for an embedding request.
- */
+/** Provider-neutral token usage for an embedding request. */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class EmbeddingUsage {
-    /**
-     * Total token count reported for the embedding request.
-     */
+    /** Total token count reported for the embedding request. */
     private Integer tokens;
-    /**
-     * Raw provider usage object, retained for provider-specific diagnostics.
-     */
+    /** Raw provider usage object, retained for provider-specific diagnostics. */
     private Object raw;
 }

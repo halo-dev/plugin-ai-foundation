@@ -28,7 +28,6 @@ import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
-import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 
@@ -110,8 +109,8 @@ public class KimiProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new KimiChatModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new KimiChatModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     @Override
@@ -119,44 +118,47 @@ public class KimiProvider extends AbstractAiProviderType {
         return languageModelProviderOptions(ReasoningControlOptions.unsupported());
     }
 
-    private LanguageModelProviderOptions languageModelProviderOptions(
-        ReasoningControlOptions reasoning) {
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, true, StructuredOutputSupport.JSON_SCHEMA);
+    private LanguageModelProviderOptions languageModelProviderOptions(ReasoningControlOptions reasoning) {
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, true, StructuredOutputSupport.JSON_SCHEMA);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .nativeStrictToolSchemas(true)
-            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .nativeStrictToolSchemas(true)
+                .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
-        return getDiscoveryJson(provider, apiKey,
-            uriBuilder -> uriBuilder.path("/models").build(), this::customizeDiscoveryRequest)
-            .map(root -> {
-                var data = listValue(root, "data");
-                return data == null ? List.of()
-                    : discoveredModelsFromNodes(data, "id", this::remoteLanguageModel);
-            });
+        return getDiscoveryJson(
+                        provider,
+                        apiKey,
+                        uriBuilder -> uriBuilder.path("/models").build(),
+                        this::customizeDiscoveryRequest)
+                .map(root -> {
+                    var data = listValue(root, "data");
+                    return data == null ? List.of() : discoveredModelsFromNodes(data, "id", this::remoteLanguageModel);
+                });
     }
 
     @Override
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        defaults.put(ModelParameter.MAX_OUTPUT_TOKENS,
-            DefaultParameterMapping.template("openai.max-completion-tokens"));
-        for (var parameter : List.of(ModelParameter.TOP_K, ModelParameter.MIN_P,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.SEED,
-            ModelParameter.PARALLEL_TOOL_CALLS)) {
+        defaults.put(
+                ModelParameter.MAX_OUTPUT_TOKENS, DefaultParameterMapping.template("openai.max-completion-tokens"));
+        for (var parameter : List.of(
+                ModelParameter.TOP_K,
+                ModelParameter.MIN_P,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.SEED,
+                ModelParameter.PARALLEL_TOOL_CALLS)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);
@@ -179,17 +181,17 @@ public class KimiProvider extends AbstractAiProviderType {
         }
         var capabilities = capabilities(node);
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(ModelType.LANGUAGE)
-            .features(Set.copyOf(features))
-            .featureEvidence(DiscoveryFeatureEvidence.fromBooleanFields(node))
-            .adapterType(AdapterType.KIMI_CHAT)
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .capabilities(capabilities)
-            .capabilitySources(capabilitySources(capabilities))
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(ModelType.LANGUAGE)
+                .features(Set.copyOf(features))
+                .featureEvidence(DiscoveryFeatureEvidence.fromBooleanFields(node))
+                .adapterType(AdapterType.KIMI_CHAT)
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .capabilities(capabilities)
+                .capabilitySources(capabilitySources(capabilities))
+                .build();
     }
 
     private ModelCapabilitySources capabilitySources(ModelCapabilities capabilities) {
@@ -197,8 +199,8 @@ public class KimiProvider extends AbstractAiProviderType {
             return ModelCapabilitySources.unknown();
         }
         return ModelCapabilitySources.builder()
-            .language(CapabilitySource.REMOTE)
-            .build();
+                .language(CapabilitySource.REMOTE)
+                .build();
     }
 
     private ModelCapabilities capabilities(Map<?, ?> node) {
@@ -215,17 +217,13 @@ public class KimiProvider extends AbstractAiProviderType {
         if (Boolean.TRUE.equals(video)) {
             mediaTypes.add("video/*");
         }
-        var language = LanguageCapability.builder()
-            .imageInput(image)
-            .fileInput(video)
-            .reasoningHistory(reasoning);
+        var language =
+                LanguageCapability.builder().imageInput(image).fileInput(video).reasoningHistory(reasoning);
         if (image != null || video != null) {
             language.inputMediaTypes(List.copyOf(mediaTypes))
-                .inputSources(mediaTypes.isEmpty() ? List.of() : List.of(InputSource.DATA));
+                    .inputSources(mediaTypes.isEmpty() ? List.of() : List.of(InputSource.DATA));
         }
-        return ModelCapabilities.builder()
-            .language(language.build())
-            .build();
+        return ModelCapabilities.builder().language(language.build()).build();
     }
 
     private String reasoningContent(AssistantMessage message) {

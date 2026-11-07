@@ -7,13 +7,10 @@ import java.util.Objects;
 import run.halo.aifoundation.exception.ImageGenerationException;
 import run.halo.aifoundation.media.GeneratedFile;
 
-/**
- * Utility methods for validating and composing image generation results.
- */
+/** Utility methods for validating and composing image generation results. */
 public final class ImageGenerationResults {
 
-    private ImageGenerationResults() {
-    }
+    private ImageGenerationResults() {}
 
     /**
      * Creates a builder initialized from an existing result.
@@ -21,15 +18,14 @@ public final class ImageGenerationResults {
      * @param result source result
      * @return initialized result builder
      */
-    public static GenerateImageResult.GenerateImageResultBuilder builderFrom(
-        GenerateImageResult result) {
+    public static GenerateImageResult.GenerateImageResultBuilder builderFrom(GenerateImageResult result) {
         Objects.requireNonNull(result, "result must not be null");
         return GenerateImageResult.builder()
-            .images(result.getImages())
-            .usage(result.getUsage())
-            .warnings(result.getWarnings())
-            .responses(result.getResponses())
-            .providerMetadata(result.getProviderMetadata());
+                .images(result.getImages())
+                .usage(result.getUsage())
+                .warnings(result.getWarnings())
+                .responses(result.getResponses())
+                .providerMetadata(result.getProviderMetadata());
     }
 
     /**
@@ -39,8 +35,7 @@ public final class ImageGenerationResults {
      * @param warnings warnings to append
      * @return copied result with warnings appended
      */
-    public static GenerateImageResult withWarnings(GenerateImageResult result,
-        ImageGenerationWarning... warnings) {
+    public static GenerateImageResult withWarnings(GenerateImageResult result, ImageGenerationWarning... warnings) {
         return withWarnings(result, warnings == null ? null : Arrays.asList(warnings));
     }
 
@@ -51,20 +46,15 @@ public final class ImageGenerationResults {
      * @param warnings warnings to append
      * @return copied result with warnings appended
      */
-    public static GenerateImageResult withWarnings(GenerateImageResult result,
-        List<ImageGenerationWarning> warnings) {
+    public static GenerateImageResult withWarnings(GenerateImageResult result, List<ImageGenerationWarning> warnings) {
         var nextWarnings = new ArrayList<ImageGenerationWarning>();
         if (result != null && result.getWarnings() != null) {
             nextWarnings.addAll(result.getWarnings());
         }
         if (warnings != null) {
-            warnings.stream()
-                .filter(Objects::nonNull)
-                .forEach(nextWarnings::add);
+            warnings.stream().filter(Objects::nonNull).forEach(nextWarnings::add);
         }
-        return builderFrom(result)
-            .warnings(List.copyOf(nextWarnings))
-            .build();
+        return builderFrom(result).warnings(List.copyOf(nextWarnings)).build();
     }
 
     /**
@@ -77,11 +67,11 @@ public final class ImageGenerationResults {
      * @return the same result when valid
      * @throws ImageGenerationException when the result is missing valid generated files
      */
-    public static GenerateImageResult requireImages(GenerateImageResult result, String modelName,
-        String providerName, String providerType) {
+    public static GenerateImageResult requireImages(
+            GenerateImageResult result, String modelName, String providerName, String providerType) {
         if (result == null || result.getImages() == null || result.getImages().isEmpty()) {
-            throw new ImageGenerationException("Image generation returned no images", modelName,
-                providerName, providerType);
+            throw new ImageGenerationException(
+                    "Image generation returned no images", modelName, providerName, providerType);
         }
         for (var image : result.getImages()) {
             requireValidGeneratedFile(image, modelName, providerName, providerType);
@@ -89,16 +79,15 @@ public final class ImageGenerationResults {
         return result;
     }
 
-    private static void requireValidGeneratedFile(GeneratedFile file, String modelName,
-        String providerName, String providerType) {
+    private static void requireValidGeneratedFile(
+            GeneratedFile file, String modelName, String providerName, String providerType) {
         if (file == null) {
-            throw new ImageGenerationException("Image generation returned an invalid image",
-                modelName, providerName, providerType);
+            throw new ImageGenerationException(
+                    "Image generation returned an invalid image", modelName, providerName, providerType);
         }
         if (file.isUrl() == file.isBase64()) {
             throw new ImageGenerationException(
-                "Generated image must set exactly one of url or base64",
-                modelName, providerName, providerType);
+                    "Generated image must set exactly one of url or base64", modelName, providerName, providerType);
         }
     }
 }

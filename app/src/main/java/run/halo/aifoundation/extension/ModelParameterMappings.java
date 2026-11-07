@@ -4,9 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import lombok.Data;
 
-/**
- * Administrator-owned mapping from provider-neutral request settings to registered templates.
- */
+/** Administrator-owned mapping from provider-neutral request settings to registered templates. */
 @Data
 public class ModelParameterMappings {
 

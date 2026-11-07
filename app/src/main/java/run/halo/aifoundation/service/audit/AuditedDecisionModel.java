@@ -24,8 +24,14 @@ public class AuditedDecisionModel implements DecisionModel {
     @Override
     public Mono<DecisionResponse> decide(DecisionRequest request) {
         auditRecorder.recordModelInvocation(context, UsageOperation.DECISION);
-        return UsageCallRecorder.record(usageStatistics, context, UsageOperation.DECISION, false,
-            request == null ? null : request.getMetadata(), () -> delegate.decide(request), 1,
-            (session, response) -> session.succeed(response.getModel(), 1));
+        return UsageCallRecorder.record(
+                usageStatistics,
+                context,
+                UsageOperation.DECISION,
+                false,
+                request == null ? null : request.getMetadata(),
+                () -> delegate.decide(request),
+                1,
+                (session, response) -> session.succeed(response.getModel(), 1));
     }
 }

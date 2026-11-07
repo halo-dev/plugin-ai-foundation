@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import run.halo.aifoundation.provider.usage.ProviderUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -19,14 +18,13 @@ import run.halo.aifoundation.provider.support.RequestHeaderAwareEmbeddingModel;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpRequest;
 import run.halo.aifoundation.provider.support.embedding.EmbeddingHttpTransport;
 import run.halo.aifoundation.provider.support.embedding.IndexedEmbeddingDecoder;
+import run.halo.aifoundation.provider.usage.ProviderUsage;
 
 /** OpenAI-owned embedding adapter for float and base64 vectors. */
-public final class OpenAiEmbeddingModel
-    implements EmbeddingModel, RequestHeaderAwareEmbeddingModel {
+public final class OpenAiEmbeddingModel implements EmbeddingModel, RequestHeaderAwareEmbeddingModel {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String INVALID_INPUT =
-        "OpenAI embedding input must contain 1 to 2048 non-blank strings";
+    private static final String INVALID_INPUT = "OpenAI embedding input must contain 1 to 2048 non-blank strings";
     private final OpenAiEmbeddingOptions defaults;
     private final EmbeddingHttpTransport transport;
 
@@ -41,19 +39,19 @@ public final class OpenAiEmbeddingModel
     }
 
     @Override
-    public EmbeddingResponse call(org.springframework.ai.embedding.EmbeddingRequest request,
-        Map<String, String> headers) {
+    public EmbeddingResponse call(
+            org.springframework.ai.embedding.EmbeddingRequest request, Map<String, String> headers) {
         Assert.notNull(request, "EmbeddingRequest must not be null");
         var options = defaults.merge(request.getOptions(), headers);
         validate(request.getInstructions(), options);
         var body = requestBody(request.getInstructions(), options);
         var url = ProviderUris.withoutTrailingSlashes(options.baseUrl()) + "/embeddings";
         var exchange = EmbeddingHttpRequest.builder(url, body)
-            .adapterType("openai-embedding")
-            .apiKey(options.apiKey())
-            .headers(options.customHeaders())
-            .timeout(options.timeout())
-            .build();
+                .adapterType("openai-embedding")
+                .apiKey(options.apiKey())
+                .headers(options.customHeaders())
+                .timeout(options.timeout())
+                .build();
         return embeddingResponse(transport.post(exchange), options.model());
     }
 
@@ -61,8 +59,10 @@ public final class OpenAiEmbeddingModel
     public float[] embed(Document document) {
         Assert.notNull(document, "Document must not be null");
         var response = call(new org.springframework.ai.embedding.EmbeddingRequest(
-            List.of(document.getFormattedContent(MetadataMode.EMBED)), defaults));
-        return response.getResults().isEmpty() ? new float[0] : response.getResult().getOutput();
+                List.of(document.getFormattedContent(MetadataMode.EMBED)), defaults));
+        return response.getResults().isEmpty()
+                ? new float[0]
+                : response.getResult().getOutput();
     }
 
     private void validate(List<String> input, OpenAiEmbeddingOptions options) {
@@ -106,16 +106,17 @@ public final class OpenAiEmbeddingModel
     private EmbeddingResponse embeddingResponse(String data, String requestedModel) {
         try {
             var root = OBJECT_MAPPER.readTree(data);
-            var values = IndexedEmbeddingDecoder.decode(root.path("data"), value ->
-                IndexedEmbeddingDecoder.floatArrayOrBase64(value,
-                    "OpenAI embedding vector has an invalid shape"));
+            var values = IndexedEmbeddingDecoder.decode(
+                    root.path("data"),
+                    value -> IndexedEmbeddingDecoder.floatArrayOrBase64(
+                            value, "OpenAI embedding vector has an invalid shape"));
             var usage = root.path("usage");
-            var raw = JsonNodes.isAbsent(usage)
-                ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
-            var model = root.path("model").isTextual() ? root.path("model").asText()
-                : requestedModel;
-            return new EmbeddingResponse(values, new EmbeddingResponseMetadata(model,
-                ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", raw), Map.of()));
+            var raw = JsonNodes.isAbsent(usage) ? null : OBJECT_MAPPER.convertValue(usage, Object.class);
+            var model = root.path("model").isTextual() ? root.path("model").asText() : requestedModel;
+            return new EmbeddingResponse(
+                    values,
+                    new EmbeddingResponseMetadata(
+                            model, ProviderUsage.embedding(usage, "prompt_tokens", "total_tokens", raw), Map.of()));
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to parse OpenAI embedding response", e);
         }
@@ -131,5 +132,4 @@ public final class OpenAiEmbeddingModel
     private boolean text(String value) {
         return value != null && !value.isBlank();
     }
-
 }

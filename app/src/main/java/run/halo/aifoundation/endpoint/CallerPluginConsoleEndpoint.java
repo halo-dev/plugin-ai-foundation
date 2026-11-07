@@ -32,15 +32,15 @@ public class CallerPluginConsoleEndpoint implements CustomEndpoint {
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.aifoundation.halo.run/v1alpha1/CallerPlugin";
-        return route()
-            .GET("observed-caller-plugins", this::listObservedCallerPlugins,
-                builder -> builder.operationId("ListObservedCallerPlugins")
-                    .description("List caller plugins recorded in usage statistics, enriched "
-                        + "with plugin metadata.")
-                    .tag(tag)
-                    .response(responseBuilder().implementationArray(CallerPluginInfo.class))
-            )
-            .build();
+        return route().GET(
+                        "observed-caller-plugins",
+                        this::listObservedCallerPlugins,
+                        builder -> builder.operationId("ListObservedCallerPlugins")
+                                .description("List caller plugins recorded in usage statistics, enriched "
+                                        + "with plugin metadata.")
+                                .tag(tag)
+                                .response(responseBuilder().implementationArray(CallerPluginInfo.class)))
+                .build();
     }
 
     @Override
@@ -49,31 +49,32 @@ public class CallerPluginConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> listObservedCallerPlugins(ServerRequest request) {
-        return usageStatisticsService.callerPlugins()
-            .flatMapMany(Flux::fromIterable)
-            .concatMap(this::describe)
-            .collectList()
-            .flatMap(callers -> ServerResponse.ok().bodyValue(callers))
-            .onErrorResume(error -> {
-                // Keep the endpoint usable when usage statistics are disabled.
-                log.debug("Falling back to in-memory caller plugins.", error);
-                return ServerResponse.ok().bodyValue(observationRegistry.list());
-            });
+        return usageStatisticsService
+                .callerPlugins()
+                .flatMapMany(Flux::fromIterable)
+                .concatMap(this::describe)
+                .collectList()
+                .flatMap(callers -> ServerResponse.ok().bodyValue(callers))
+                .onErrorResume(error -> {
+                    // Keep the endpoint usable when usage statistics are disabled.
+                    log.debug("Falling back to in-memory caller plugins.", error);
+                    return ServerResponse.ok().bodyValue(observationRegistry.list());
+                });
     }
 
     private Mono<CallerPluginInfo> describe(UsageCallerPlugin caller) {
         var fallback = CallerPluginInfo.builder()
-            .detected(true)
-            .detectionSource(caller.detectionSource())
-            .pluginName(caller.name())
-            .version(caller.version())
-            .build();
+                .detected(true)
+                .detectionSource(caller.detectionSource())
+                .pluginName(caller.name())
+                .version(caller.version())
+                .build();
         return client.fetch(Plugin.class, caller.name())
-            .map(plugin -> CallerPluginInfo.fromPlugin(plugin, caller.detectionSource()))
-            .defaultIfEmpty(fallback)
-            .onErrorResume(error -> {
-                log.debug("Failed to load plugin {} metadata.", caller.name(), error);
-                return Mono.just(fallback);
-            });
+                .map(plugin -> CallerPluginInfo.fromPlugin(plugin, caller.detectionSource()))
+                .defaultIfEmpty(fallback)
+                .onErrorResume(error -> {
+                    log.debug("Failed to load plugin {} metadata.", caller.name(), error);
+                    return Mono.just(fallback);
+                });
     }
 }

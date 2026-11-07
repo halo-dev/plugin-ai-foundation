@@ -11,15 +11,13 @@ import run.halo.aifoundation.chat.FinishReason;
 /**
  * Framework-neutral transport codec for UI message maps.
  *
- * <p>This codec does not parse or write JSON. Callers remain responsible for
- * using their HTTP framework or JSON library to turn request bodies into
- * map/list structures. The codec only maps those transport structures to typed
- * UI Message API values.
+ * <p>This codec does not parse or write JSON. Callers remain responsible for using their HTTP framework or JSON library
+ * to turn request bodies into map/list structures. The codec only maps those transport structures to typed UI Message
+ * API values.
  */
 public final class UIMessageTransportCodec {
 
-    private UIMessageTransportCodec() {
-    }
+    private UIMessageTransportCodec() {}
 
     /**
      * Decodes a stream chunk from a transport map.
@@ -33,89 +31,126 @@ public final class UIMessageTransportCodec {
         }
         var type = stringValue(map.get("type"));
         if (type == null || type.isBlank()) {
-            throw invalid("transport.chunk.type.required",
-                "UI message chunk transport value must include type");
+            throw invalid("transport.chunk.type.required", "UI message chunk transport value must include type");
         }
         if (type.startsWith("data-")) {
-            return new DataChunk(type, stringValue(map.get("id")), stringValue(map.get("name")),
-                map.get("data"), booleanValueOrDefault(map.get("transient"), false));
+            return new DataChunk(
+                    type,
+                    stringValue(map.get("id")),
+                    stringValue(map.get("name")),
+                    map.get("data"),
+                    booleanValueOrDefault(map.get("transient"), false));
         }
         return switch (type) {
-            case UIMessageChunkType.START -> new StartChunk(stringValue(map.get("messageId")),
-                map.get("messageMetadata"));
-            case UIMessageChunkType.START_STEP -> UIMessageChunks.startStep(
-                integerValue(map.get("stepIndex")));
+            case UIMessageChunkType.START ->
+                new StartChunk(stringValue(map.get("messageId")), map.get("messageMetadata"));
+            case UIMessageChunkType.START_STEP -> UIMessageChunks.startStep(integerValue(map.get("stepIndex")));
             case UIMessageChunkType.TEXT_START -> UIMessageChunks.textStart(stringValue(map.get("id")));
-            case UIMessageChunkType.TEXT_DELTA -> UIMessageChunks.textDelta(stringValue(map.get("id")),
-                stringValue(map.get("delta")));
+            case UIMessageChunkType.TEXT_DELTA ->
+                UIMessageChunks.textDelta(stringValue(map.get("id")), stringValue(map.get("delta")));
             case UIMessageChunkType.TEXT_END -> UIMessageChunks.textEnd(stringValue(map.get("id")));
-            case UIMessageChunkType.REASONING_START -> UIMessageChunks.reasoningStart(
-                stringValue(map.get("id")));
-            case UIMessageChunkType.REASONING_DELTA -> UIMessageChunks.reasoningDelta(
-                stringValue(map.get("id")), stringValue(map.get("delta")),
-                objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.REASONING_END -> UIMessageChunks.reasoningEnd(
-                stringValue(map.get("id")));
-            case UIMessageChunkType.DATA -> UIMessageChunks.data(stringValue(map.get("name")),
-                map.get("data"), booleanValueOrDefault(map.get("transientData"), false));
-            case UIMessageChunkType.MESSAGE_METADATA -> UIMessageChunks.messageMetadata(
-                map.get("messageMetadata"));
-            case UIMessageChunkType.SOURCE_URL -> UIMessageChunks.sourceUrl(
-                stringValue(map.get("sourceId")), stringValue(map.get("url")),
-                stringValue(map.get("title")), objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.SOURCE_DOCUMENT -> UIMessageChunks.sourceDocument(
-                stringValue(map.get("sourceId")), stringValue(map.get("mediaType")),
-                stringValue(map.get("title")), stringValue(map.get("filename")),
-                objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.FILE -> UIMessageChunks.file(fileIdValue(map),
-                stringValue(map.get("url")), stringValue(map.get("title")),
-                stringValue(map.get("mediaType")), map.get("data"),
-                objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.TOOL_INPUT_START -> UIMessageChunks.toolInputStart(
-                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")));
-            case UIMessageChunkType.TOOL_INPUT_DELTA -> UIMessageChunks.toolInputDelta(
-                stringValue(map.get("toolCallId")), stringValue(map.get("inputTextDelta")));
-            case UIMessageChunkType.TOOL_INPUT_AVAILABLE -> UIMessageChunks.toolInputAvailable(
-                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
-                map.get("input"), objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.TOOL_INPUT_ERROR -> UIMessageChunks.toolInputError(
-                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
-                stringValue(map.get("errorText")), objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.TOOL_OUTPUT_AVAILABLE -> UIMessageChunks.toolOutputAvailable(
-                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
-                map.get("output"), objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.TOOL_OUTPUT_ERROR -> UIMessageChunks.toolOutputError(
-                stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
-                stringValue(map.get("errorText")), objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.TOOL_APPROVAL_REQUEST -> UIMessageChunks.toolApprovalRequest(
-                stringValue(map.get("approvalId")), stringValue(map.get("toolCallId")),
-                stringValue(map.get("toolName")), map.get("input"),
-                objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.TOOL_APPROVAL_RESPONSE -> UIMessageChunks.toolApprovalResponse(
-                stringValue(map.get("approvalId")), stringValue(map.get("toolCallId")),
-                stringValue(map.get("toolName")), booleanValue(map.get("approved")),
-                stringValue(map.get("reason")), objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.FINISH_STEP -> UIMessageChunks.finishStep(
-                integerValue(map.get("stepIndex")), finishReasonValue(map.get("finishReason")),
-                stringValue(map.get("rawFinishReason")), null, List.of(), null, null,
-                objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.FINISH -> UIMessageChunks.finish(
-                finishReasonValue(map.get("finishReason")), stringValue(map.get("rawFinishReason")),
-                null, map.get("messageMetadata"));
-            case UIMessageChunkType.ERROR -> new ErrorChunk(stringValue(map.get("errorText")),
-                integerValue(map.get("stepIndex")), objectMap(map.get("metadata")));
+            case UIMessageChunkType.REASONING_START -> UIMessageChunks.reasoningStart(stringValue(map.get("id")));
+            case UIMessageChunkType.REASONING_DELTA ->
+                UIMessageChunks.reasoningDelta(
+                        stringValue(map.get("id")),
+                        stringValue(map.get("delta")),
+                        objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.REASONING_END -> UIMessageChunks.reasoningEnd(stringValue(map.get("id")));
+            case UIMessageChunkType.DATA ->
+                UIMessageChunks.data(
+                        stringValue(map.get("name")),
+                        map.get("data"),
+                        booleanValueOrDefault(map.get("transientData"), false));
+            case UIMessageChunkType.MESSAGE_METADATA -> UIMessageChunks.messageMetadata(map.get("messageMetadata"));
+            case UIMessageChunkType.SOURCE_URL ->
+                UIMessageChunks.sourceUrl(
+                        stringValue(map.get("sourceId")), stringValue(map.get("url")),
+                        stringValue(map.get("title")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.SOURCE_DOCUMENT ->
+                UIMessageChunks.sourceDocument(
+                        stringValue(map.get("sourceId")),
+                        stringValue(map.get("mediaType")),
+                        stringValue(map.get("title")),
+                        stringValue(map.get("filename")),
+                        objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.FILE ->
+                UIMessageChunks.file(
+                        fileIdValue(map),
+                        stringValue(map.get("url")),
+                        stringValue(map.get("title")),
+                        stringValue(map.get("mediaType")),
+                        map.get("data"),
+                        objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_INPUT_START ->
+                UIMessageChunks.toolInputStart(stringValue(map.get("toolCallId")), stringValue(map.get("toolName")));
+            case UIMessageChunkType.TOOL_INPUT_DELTA ->
+                UIMessageChunks.toolInputDelta(
+                        stringValue(map.get("toolCallId")), stringValue(map.get("inputTextDelta")));
+            case UIMessageChunkType.TOOL_INPUT_AVAILABLE ->
+                UIMessageChunks.toolInputAvailable(
+                        stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                        map.get("input"), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_INPUT_ERROR ->
+                UIMessageChunks.toolInputError(
+                        stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                        stringValue(map.get("errorText")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_OUTPUT_AVAILABLE ->
+                UIMessageChunks.toolOutputAvailable(
+                        stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                        map.get("output"), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_OUTPUT_ERROR ->
+                UIMessageChunks.toolOutputError(
+                        stringValue(map.get("toolCallId")), stringValue(map.get("toolName")),
+                        stringValue(map.get("errorText")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_APPROVAL_REQUEST ->
+                UIMessageChunks.toolApprovalRequest(
+                        stringValue(map.get("approvalId")),
+                        stringValue(map.get("toolCallId")),
+                        stringValue(map.get("toolName")),
+                        map.get("input"),
+                        objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.TOOL_APPROVAL_RESPONSE ->
+                UIMessageChunks.toolApprovalResponse(
+                        stringValue(map.get("approvalId")), stringValue(map.get("toolCallId")),
+                        stringValue(map.get("toolName")), booleanValue(map.get("approved")),
+                        stringValue(map.get("reason")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.FINISH_STEP ->
+                UIMessageChunks.finishStep(
+                        integerValue(map.get("stepIndex")),
+                        finishReasonValue(map.get("finishReason")),
+                        stringValue(map.get("rawFinishReason")),
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.FINISH ->
+                UIMessageChunks.finish(
+                        finishReasonValue(map.get("finishReason")),
+                        stringValue(map.get("rawFinishReason")),
+                        null,
+                        map.get("messageMetadata"));
+            case UIMessageChunkType.ERROR ->
+                new ErrorChunk(
+                        stringValue(map.get("errorText")),
+                        integerValue(map.get("stepIndex")),
+                        objectMap(map.get("metadata")));
             case UIMessageChunkType.ABORT -> UIMessageChunks.abort();
             default -> {
                 if (type.startsWith("tool-")) {
-                    yield new ToolChunk(type, stringValue(map.get("toolCallId")),
-                        stringValue(map.get("toolName")), toolStateValue(map.get("state")),
-                        map.get("input"), stringValue(map.get("inputTextDelta")),
-                        map.get("output"), stringValue(map.get("errorText")),
-                        approvalValue(map.get("approval")),
-                        objectMap(map.get("providerMetadata")));
+                    yield new ToolChunk(
+                            type,
+                            stringValue(map.get("toolCallId")),
+                            stringValue(map.get("toolName")),
+                            toolStateValue(map.get("state")),
+                            map.get("input"),
+                            stringValue(map.get("inputTextDelta")),
+                            map.get("output"),
+                            stringValue(map.get("errorText")),
+                            approvalValue(map.get("approval")),
+                            objectMap(map.get("providerMetadata")));
                 }
-                throw invalid("transport.chunk.type.unsupported",
-                    "Unsupported UI message chunk type: " + type);
+                throw invalid("transport.chunk.type.unsupported", "Unsupported UI message chunk type: " + type);
             }
         };
     }
@@ -157,8 +192,7 @@ public final class UIMessageTransportCodec {
                 put(map, "data", data.data());
                 put(map, "transient", data.transientData() ? true : null);
             }
-            case MessageMetadataChunk metadata -> put(map, "messageMetadata",
-                metadata.messageMetadata());
+            case MessageMetadataChunk metadata -> put(map, "messageMetadata", metadata.messageMetadata());
             case SourceUrlChunk source -> {
                 put(map, "sourceId", source.sourceId());
                 put(map, "url", source.url());
@@ -259,8 +293,7 @@ public final class UIMessageTransportCodec {
                 put(map, "stepIndex", error.stepIndex());
                 put(map, "metadata", nonEmpty(error.metadata()));
             }
-            case AbortChunk ignored -> {
-            }
+            case AbortChunk ignored -> {}
         }
         return Map.copyOf(map);
     }
@@ -278,42 +311,55 @@ public final class UIMessageTransportCodec {
         }
         var type = stringValue(map.get("type"));
         if (type == null || type.isBlank()) {
-            throw invalid("transport.part.type.required",
-                "UI message part transport value must include type");
+            throw invalid("transport.part.type.required", "UI message part transport value must include type");
         }
         if (type.startsWith("data-")) {
-            return UIMessageParts.data(stringValue(map.get("id")), stringValue(map.get("name")),
-                map.get("data"));
+            return UIMessageParts.data(stringValue(map.get("id")), stringValue(map.get("name")), map.get("data"));
         }
         if (type.startsWith("tool-")) {
             var toolName = stringValue(map.get("toolName"));
-            return new ToolPart(type, stringValue(map.get("toolCallId")), toolName,
-                toolStateValue(map.get("state")), map.get("input"), stringValue(map.get("inputText")),
-                map.get("output"), stringValue(map.get("errorText")), approvalValue(map.get("approval")),
-                objectMap(map.get("providerMetadata")));
+            return new ToolPart(
+                    type,
+                    stringValue(map.get("toolCallId")),
+                    toolName,
+                    toolStateValue(map.get("state")),
+                    map.get("input"),
+                    stringValue(map.get("inputText")),
+                    map.get("output"),
+                    stringValue(map.get("errorText")),
+                    approvalValue(map.get("approval")),
+                    objectMap(map.get("providerMetadata")));
         }
         return switch (type) {
             case UIMessageChunkType.STEP_START -> UIMessageParts.stepStart();
-            case UIMessageChunkType.TEXT -> UIMessageParts.text(stringValue(map.get("id")),
-                stringValue(map.get("text")));
-            case UIMessageChunkType.REASONING -> UIMessageParts.reasoning(
-                stringValue(map.get("id")), stringValue(map.get("text")),
-                objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.DATA -> UIMessageParts.data(stringValue(map.get("name")),
-                map.get("data"));
-            case UIMessageChunkType.SOURCE_URL -> UIMessageParts.sourceUrl(
-                stringValue(map.get("sourceId")), stringValue(map.get("url")),
-                stringValue(map.get("title")), objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.SOURCE_DOCUMENT -> UIMessageParts.sourceDocument(
-                stringValue(map.get("sourceId")), stringValue(map.get("mediaType")),
-                stringValue(map.get("title")), stringValue(map.get("filename")),
-                objectMap(map.get("providerMetadata")));
-            case UIMessageChunkType.FILE -> UIMessageParts.file(fileIdValue(map),
-                stringValue(map.get("url")), stringValue(map.get("title")),
-                stringValue(map.get("mediaType")), map.get("data"),
-                objectMap(map.get("providerMetadata")));
-            default -> throw invalid("transport.part.type.unsupported",
-                "Unsupported UI message part type: " + type);
+            case UIMessageChunkType.TEXT ->
+                UIMessageParts.text(stringValue(map.get("id")), stringValue(map.get("text")));
+            case UIMessageChunkType.REASONING ->
+                UIMessageParts.reasoning(
+                        stringValue(map.get("id")),
+                        stringValue(map.get("text")),
+                        objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.DATA -> UIMessageParts.data(stringValue(map.get("name")), map.get("data"));
+            case UIMessageChunkType.SOURCE_URL ->
+                UIMessageParts.sourceUrl(
+                        stringValue(map.get("sourceId")), stringValue(map.get("url")),
+                        stringValue(map.get("title")), objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.SOURCE_DOCUMENT ->
+                UIMessageParts.sourceDocument(
+                        stringValue(map.get("sourceId")),
+                        stringValue(map.get("mediaType")),
+                        stringValue(map.get("title")),
+                        stringValue(map.get("filename")),
+                        objectMap(map.get("providerMetadata")));
+            case UIMessageChunkType.FILE ->
+                UIMessageParts.file(
+                        fileIdValue(map),
+                        stringValue(map.get("url")),
+                        stringValue(map.get("title")),
+                        stringValue(map.get("mediaType")),
+                        map.get("data"),
+                        objectMap(map.get("providerMetadata")));
+            default -> throw invalid("transport.part.type.unsupported", "Unsupported UI message part type: " + type);
         };
     }
 
@@ -330,8 +376,7 @@ public final class UIMessageTransportCodec {
         var map = new LinkedHashMap<String, Object>();
         put(map, "type", part.type());
         switch (part) {
-            case StepStartPart ignored -> {
-            }
+            case StepStartPart ignored -> {}
             case TextPart text -> {
                 put(map, "id", text.id());
                 put(map, "text", text.text());
@@ -401,8 +446,7 @@ public final class UIMessageTransportCodec {
      * @param <M> metadata type
      * @return typed UI message
      */
-    public static <M> UIMessage<M> messageFromMap(Map<String, Object> map,
-        Function<Object, M> metadataMapper) {
+    public static <M> UIMessage<M> messageFromMap(Map<String, Object> map, Function<Object, M> metadataMapper) {
         if (map == null) {
             throw invalid("transport.message.required", "UI message must not be null");
         }
@@ -413,8 +457,7 @@ public final class UIMessageTransportCodec {
         var role = roleValue(map.get("role"));
         var partsValue = map.get("parts");
         if (!(partsValue instanceof List<?> partValues)) {
-            throw invalid("transport.message.parts.required",
-                "UI message parts must be a list");
+            throw invalid("transport.message.parts.required", "UI message parts must be a list");
         }
         var parts = new ArrayList<UIMessagePart>();
         for (var partValue : partValues) {
@@ -436,9 +479,10 @@ public final class UIMessageTransportCodec {
         var map = new LinkedHashMap<String, Object>();
         put(map, "id", message.id());
         put(map, "role", roleValue(message.role()));
-        put(map, "parts", message.parts().stream()
-            .map(UIMessageTransportCodec::partToMap)
-            .toList());
+        put(
+                map,
+                "parts",
+                message.parts().stream().map(UIMessageTransportCodec::partToMap).toList());
         put(map, "metadata", message.metadata());
         return Map.copyOf(map);
     }
@@ -449,8 +493,7 @@ public final class UIMessageTransportCodec {
      * @param map transport map
      * @return typed chat request
      */
-    public static UIMessageChatRequest<Map<String, Object>> chatRequestFromMap(
-        Map<String, Object> map) {
+    public static UIMessageChatRequest<Map<String, Object>> chatRequestFromMap(Map<String, Object> map) {
         return chatRequestFromMap(map, UIMessageTransportCodec::objectMap);
     }
 
@@ -462,32 +505,27 @@ public final class UIMessageTransportCodec {
      * @param <M> metadata type
      * @return typed chat request
      */
-    public static <M> UIMessageChatRequest<M> chatRequestFromMap(Map<String, Object> map,
-        Function<Object, M> metadataMapper) {
+    public static <M> UIMessageChatRequest<M> chatRequestFromMap(
+            Map<String, Object> map, Function<Object, M> metadataMapper) {
         if (map == null) {
-            throw invalid("transport.chat-request.required",
-                "UI message chat request must not be null");
+            throw invalid("transport.chat-request.required", "UI message chat request must not be null");
         }
         var id = stringValue(map.get("id"));
         if (id == null || id.isBlank()) {
-            throw invalid("transport.chat-request.id.required",
-                "UI message chat request id must not be blank");
+            throw invalid("transport.chat-request.id.required", "UI message chat request id must not be blank");
         }
         var messagesValue = map.get("messages");
         if (!(messagesValue instanceof List<?> messageValues)) {
-            throw invalid("transport.chat-request.messages.required",
-                "UI message chat request messages must be a list");
+            throw invalid(
+                    "transport.chat-request.messages.required", "UI message chat request messages must be a list");
         }
         var messages = new ArrayList<UIMessage<M>>();
         for (var messageValue : messageValues) {
             messages.add(messageFromMap(objectMap(messageValue), metadataMapper));
         }
         var triggerValue = stringValue(map.get("trigger"));
-        var trigger = triggerValue != null
-            ? triggerValue(triggerValue)
-            : UIMessageChatTrigger.SUBMIT_MESSAGE;
-        return new UIMessageChatRequest<>(id, messages, trigger,
-            stringValue(map.get("messageId")));
+        var trigger = triggerValue != null ? triggerValue(triggerValue) : UIMessageChatTrigger.SUBMIT_MESSAGE;
+        return new UIMessageChatRequest<>(id, messages, trigger, stringValue(map.get("messageId")));
     }
 
     /**
@@ -498,14 +536,16 @@ public final class UIMessageTransportCodec {
      */
     public static Map<String, Object> chatRequestToMap(UIMessageChatRequest<?> request) {
         if (request == null) {
-            throw invalid("transport.chat-request.required",
-                "UI message chat request must not be null");
+            throw invalid("transport.chat-request.required", "UI message chat request must not be null");
         }
         var map = new LinkedHashMap<String, Object>();
         put(map, "id", request.id());
-        put(map, "messages", request.messages().stream()
-            .map(UIMessageTransportCodec::messageToMap)
-            .toList());
+        put(
+                map,
+                "messages",
+                request.messages().stream()
+                        .map(UIMessageTransportCodec::messageToMap)
+                        .toList());
         put(map, "trigger", request.trigger().value());
         put(map, "messageId", request.messageId());
         return Map.copyOf(map);
@@ -532,8 +572,7 @@ public final class UIMessageTransportCodec {
         try {
             return UIMessageRole.valueOf(role.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw invalid("transport.message.role.unsupported",
-                "Unsupported UI message role: " + role);
+            throw invalid("transport.message.role.unsupported", "Unsupported UI message role: " + role);
         }
     }
 
@@ -605,8 +644,7 @@ public final class UIMessageTransportCodec {
         try {
             return FinishReason.valueOf(text.trim().replace('-', '_').toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw invalid("transport.finish-reason.unsupported",
-                "Unsupported finish reason: " + text);
+            throw invalid("transport.finish-reason.unsupported", "Unsupported finish reason: " + text);
         }
     }
 
@@ -631,8 +669,8 @@ public final class UIMessageTransportCodec {
             return null;
         }
         var map = objectMap(value);
-        return new ToolApproval(stringValue(map.get("id")), booleanValue(map.get("approved")),
-            stringValue(map.get("reason")));
+        return new ToolApproval(
+                stringValue(map.get("id")), booleanValue(map.get("approved")), stringValue(map.get("reason")));
     }
 
     private static Map<String, Object> approvalToMap(ToolApproval approval) {
@@ -657,8 +695,7 @@ public final class UIMessageTransportCodec {
     }
 
     private static InvalidUIMessageException invalid(String code, String message) {
-        return new InvalidUIMessageException(List.of(
-            new UIMessageValidationIssue(null, null, null, null, code, message)
-        ));
+        return new InvalidUIMessageException(
+                List.of(new UIMessageValidationIssue(null, null, null, null, code, message)));
     }
 }

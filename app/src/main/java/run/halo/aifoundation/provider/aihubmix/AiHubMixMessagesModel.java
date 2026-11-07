@@ -9,8 +9,13 @@ import run.halo.aifoundation.provider.protocol.messages.StandardAnthropicMessage
 public final class AiHubMixMessagesModel extends AnthropicMessagesModel {
 
     public AiHubMixMessagesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
-        super(options, webClientBuilder, new StandardAnthropicMessagesProfile(
-            "aihubmix", "aihubmix-messages", "/messages",
-            StandardAnthropicMessagesProfile.Authentication.BEARER));
+        super(
+                options,
+                webClientBuilder,
+                new StandardAnthropicMessagesProfile(
+                        "aihubmix",
+                        "aihubmix-messages",
+                        "/messages",
+                        StandardAnthropicMessagesProfile.Authentication.BEARER));
     }
 }

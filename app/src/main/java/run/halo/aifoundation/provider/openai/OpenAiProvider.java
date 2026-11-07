@@ -16,9 +16,9 @@ import run.halo.aifoundation.provider.support.DiscoveredModel;
 import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
+import run.halo.aifoundation.provider.support.ProviderFeatureSets;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
-import run.halo.aifoundation.provider.support.ProviderFeatureSets;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -76,9 +76,11 @@ public class OpenAiProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.OPENAI_RESPONSES, AdapterType.OPENAI_CHAT,
-            AdapterType.OPENAI_EMBEDDING,
-            AdapterType.OPENAI_IMAGE);
+        return List.of(
+                AdapterType.OPENAI_RESPONSES,
+                AdapterType.OPENAI_CHAT,
+                AdapterType.OPENAI_EMBEDDING,
+                AdapterType.OPENAI_IMAGE);
     }
 
     @Override
@@ -104,8 +106,8 @@ public class OpenAiProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new OpenAiResponsesModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new OpenAiResponsesModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     @Override
@@ -113,27 +115,28 @@ public class OpenAiProvider extends AbstractAiProviderType {
         var resolved = resolveModel(model);
         var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of());
         return switch (resolved.adapterType()) {
-            case OPENAI_RESPONSES -> new OpenAiResponsesModel(options,
-                webClientBuilder(provider));
+            case OPENAI_RESPONSES -> new OpenAiResponsesModel(options, webClientBuilder(provider));
             case OPENAI_CHAT -> new OpenAiChatModel(options, webClientBuilder(provider));
-            default -> throw new IllegalArgumentException("Unsupported OpenAI language adapter: "
-                + resolved.adapterType());
+            default ->
+                throw new IllegalArgumentException("Unsupported OpenAI language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
-        return new OpenAiEmbeddingModel(new OpenAiEmbeddingOptions(resolveBaseUrl(provider),
-            apiKey, modelId, null, null, null, Map.of(), Map.of(), null),
-            webClientBuilder(provider));
+        return new OpenAiEmbeddingModel(
+                new OpenAiEmbeddingOptions(
+                        resolveBaseUrl(provider), apiKey, modelId, null, null, null, Map.of(), Map.of(), null),
+                webClientBuilder(provider));
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new OpenAiImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, Map.of()),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new OpenAiImageGenerationClient(
+                new ImageGenerationClientOptions(
+                        getProviderType(), resolveBaseUrl(provider), apiKey, modelId, Map.of()),
+                imageWebClientBuilder(provider));
     }
 
     @Override

@@ -11,85 +11,49 @@ import run.halo.aifoundation.tool.ToolChoice;
 /**
  * Step-scoped overrides returned by {@link PrepareStepCallback}.
  *
- * <p>Only non-null fields override the current request. Overrides apply to the current model
- * invocation only and do not mutate the original {@link GenerateTextRequest}.
+ * <p>Only non-null fields override the current request. Overrides apply to the current model invocation only and do not
+ * mutate the original {@link GenerateTextRequest}.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class PreparedStep {
-    /**
-     * Replacement messages for the current model invocation.
-     */
+    /** Replacement messages for the current model invocation. */
     private List<ModelMessage> messages;
-    /**
-     * Tool selection behavior for the current step.
-     */
+    /** Tool selection behavior for the current step. */
     private ToolChoice toolChoice;
-    /**
-     * Names of request tools that are active for the current step.
-     */
+    /** Names of request tools that are active for the current step. */
     private List<String> activeTools;
-    /**
-     * Maximum output tokens for the current step.
-     */
+    /** Maximum output tokens for the current step. */
     private Integer maxOutputTokens;
-    /**
-     * Sampling temperature for the current step.
-     */
+    /** Sampling temperature for the current step. */
     private Double temperature;
-    /**
-     * Nucleus sampling value for the current step.
-     */
+    /** Nucleus sampling value for the current step. */
     private Double topP;
-    /**
-     * Top-k sampling value for the current step.
-     */
+    /** Top-k sampling value for the current step. */
     private Integer topK;
-    /**
-     * Minimum probability threshold for the current step.
-     */
+    /** Minimum probability threshold for the current step. */
     private Double minP;
-    /**
-     * Presence penalty for the current step.
-     */
+    /** Presence penalty for the current step. */
     private Double presencePenalty;
-    /**
-     * Frequency penalty for the current step.
-     */
+    /** Frequency penalty for the current step. */
     private Double frequencyPenalty;
-    /**
-     * Repetition penalty for the current step.
-     */
+    /** Repetition penalty for the current step. */
     private Double repetitionPenalty;
-    /**
-     * Whether token log probabilities should be returned for the current step.
-     */
+    /** Whether token log probabilities should be returned for the current step. */
     private Boolean logprobs;
-    /**
-     * Number of top token log probabilities returned for the current step.
-     */
+    /** Number of top token log probabilities returned for the current step. */
     private Integer topLogprobs;
-    /**
-     * Whether parallel tool calls are enabled for the current step.
-     */
+    /** Whether parallel tool calls are enabled for the current step. */
     private Boolean parallelToolCalls;
-    /**
-     * Stop sequences for the current step.
-     */
+    /** Stop sequences for the current step. */
     private List<String> stopSequences;
-    /**
-     * Deterministic sampling seed for the current step.
-     */
+    /** Deterministic sampling seed for the current step. */
     private Integer seed;
-    /**
-     * Retry attempts for retryable non-streaming provider calls in the current step.
-     */
+    /** Retry attempts for retryable non-streaming provider calls in the current step. */
     private Integer maxRetries;
-    /**
-     * Stop condition override to use after this step completes.
-     */
+    /** Stop condition override to use after this step completes. */
     private transient StopCondition stopWhen;
 
     public static PreparedStep empty() {

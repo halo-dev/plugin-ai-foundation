@@ -11,8 +11,7 @@ public final class ParameterMappingTarget {
     private final Map<String, Object> root = new LinkedHashMap<>();
     private final Map<String, Object> parameters = new LinkedHashMap<>();
     private final Map<String, Object> options = new LinkedHashMap<>();
-    private final Set<ModelParameter> appliedParameters =
-        EnumSet.noneOf(ModelParameter.class);
+    private final Set<ModelParameter> appliedParameters = EnumSet.noneOf(ModelParameter.class);
 
     public Map<String, Object> root() {
         return root;
@@ -34,8 +33,8 @@ public final class ParameterMappingTarget {
     /**
      * Returns the portable parameters that produced fields in this target.
      *
-     * <p>The metadata lets a protocol adapter replace only the corresponding native defaults,
-     * instead of deleting unrelated administrator-defined options.</p>
+     * <p>The metadata lets a protocol adapter replace only the corresponding native defaults, instead of deleting
+     * unrelated administrator-defined options.
      */
     public Set<ModelParameter> appliedParameters() {
         return Set.copyOf(appliedParameters);

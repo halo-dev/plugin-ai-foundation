@@ -8,6 +8,5 @@ final class AiHubMixHeaders {
     static final String APP_CODE = "NEUE3459";
     static final Map<String, String> DEFAULTS = Map.of("APP-Code", APP_CODE);
 
-    private AiHubMixHeaders() {
-    }
+    private AiHubMixHeaders() {}
 }

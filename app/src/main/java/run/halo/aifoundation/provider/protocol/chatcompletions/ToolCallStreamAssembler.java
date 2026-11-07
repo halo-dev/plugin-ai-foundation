@@ -34,8 +34,7 @@ final class ToolCallStreamAssembler {
         var ordinal = 0;
         for (var item : node) {
             var index = toolCallIndex(item, ordinal, batchSize);
-            var current = toolCalls.computeIfAbsent(index,
-                ignored -> new MutableToolCall(fallbackId(index)));
+            var current = toolCalls.computeIfAbsent(index, ignored -> new MutableToolCall(fallbackId(index)));
             parts.addAll(current.append(index, item));
             ordinal++;
         }
@@ -43,9 +42,7 @@ final class ToolCallStreamAssembler {
     }
 
     List<AssistantMessage.ToolCall> currentToolCalls() {
-        return toolCalls.values().stream()
-            .map(MutableToolCall::toToolCall)
-            .toList();
+        return toolCalls.values().stream().map(MutableToolCall::toToolCall).toList();
     }
 
     List<ProviderStreamPart> finishParts() {
@@ -119,8 +116,7 @@ final class ToolCallStreamAssembler {
             }
         }
 
-        private void appendArguments(int index, JsonNode function,
-            List<ProviderStreamPart> parts) {
+        private void appendArguments(int index, JsonNode function, List<ProviderStreamPart> parts) {
             var argumentNode = function.path("arguments");
             if (!argumentNode.isTextual()) {
                 return;
@@ -131,8 +127,7 @@ final class ToolCallStreamAssembler {
             }
             idFrozen = true;
 
-            var normalized = streamDialect.normalizeArguments(index, arguments.toString(),
-                providerArguments);
+            var normalized = streamDialect.normalizeArguments(index, arguments.toString(), providerArguments);
             if (!normalized.reliable()) {
                 markDeltasUnreliable(providerArguments);
                 return;
@@ -164,8 +159,7 @@ final class ToolCallStreamAssembler {
             arguments.append(providerArguments);
         }
 
-        private void flushBufferedDeltasWhenNamed(int index,
-            List<ProviderStreamPart> parts) {
+        private void flushBufferedDeltasWhenNamed(int index, List<ProviderStreamPart> parts) {
             if (!deltasReliable) {
                 return;
             }
@@ -191,9 +185,8 @@ final class ToolCallStreamAssembler {
 
         private List<ProviderStreamPart> finish(int index) {
             if (!hasText(name)) {
-                throw new IllegalStateException(providerType
-                    + " Chat Completions tool call at index " + index
-                    + " did not provide a name");
+                throw new IllegalStateException(
+                        providerType + " Chat Completions tool call at index " + index + " did not provide a name");
             }
             if (streamingStatus == StreamingStatus.UNKNOWN) {
                 streamingStatus = StreamingStatus.FINAL_ONLY;

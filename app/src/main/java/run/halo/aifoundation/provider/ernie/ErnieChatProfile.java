@@ -18,8 +18,8 @@ final class ErnieChatProfile implements ChatCompletionsProfile {
     }
 
     @Override
-    public void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {
         body.remove("builtinTools");
         body.remove("store");
         var thinking = body.remove("thinking");

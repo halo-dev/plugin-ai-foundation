@@ -27,29 +27,35 @@ class ReasoningProviderOptionsTest {
     void everyProviderRequiresExplicitModelReasoningMappings() {
         providers().forEach(provider -> {
             var controls = provider.languageModelProviderOptions().reasoningControlOptions();
-            assertThat(controls.enabledSupported()).as(provider.getProviderType()).isFalse();
-            assertThat(controls.disabledSupported()).as(provider.getProviderType()).isFalse();
-            assertThat(controls.supportedEfforts()).as(provider.getProviderType()).isEmpty();
+            assertThat(controls.enabledSupported())
+                    .as(provider.getProviderType())
+                    .isFalse();
+            assertThat(controls.disabledSupported())
+                    .as(provider.getProviderType())
+                    .isFalse();
+            assertThat(controls.supportedEfforts())
+                    .as(provider.getProviderType())
+                    .isEmpty();
         });
     }
 
     private List<AiProviderType> providers() {
         return List.of(
-            new AiHubMixProvider(),
-            new DashScopeProvider(),
-            new DeepSeekProvider(),
-            new DouBaoProvider(),
-            new ErnieProvider(),
-            new GiteeProvider(),
-            new KimiProvider(),
-            new MiMoProvider(),
-            new MiniMaxProvider(),
-            new OllamaProvider(),
-            new OpenAiProvider(),
-            new OpenAiLikeProvider(),
-            new OpenRouterProvider(),
-            new SiliconFlowProvider(),
-            new TokenHubProvider(),
-            new ZhiPuProvider());
+                new AiHubMixProvider(),
+                new DashScopeProvider(),
+                new DeepSeekProvider(),
+                new DouBaoProvider(),
+                new ErnieProvider(),
+                new GiteeProvider(),
+                new KimiProvider(),
+                new MiMoProvider(),
+                new MiniMaxProvider(),
+                new OllamaProvider(),
+                new OpenAiProvider(),
+                new OpenAiLikeProvider(),
+                new OpenRouterProvider(),
+                new SiliconFlowProvider(),
+                new TokenHubProvider(),
+                new ZhiPuProvider());
     }
 }

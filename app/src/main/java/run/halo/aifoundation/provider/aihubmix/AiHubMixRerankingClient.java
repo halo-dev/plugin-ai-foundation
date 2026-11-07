@@ -7,8 +7,8 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
-import run.halo.aifoundation.provider.support.rerank.AbstractHttpRerankingClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
+import run.halo.aifoundation.provider.support.rerank.AbstractHttpRerankingClient;
 import run.halo.aifoundation.rerank.RerankDocument;
 import run.halo.aifoundation.rerank.RerankRequest;
 
@@ -21,8 +21,12 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
     private final String modelId;
     private final Map<String, String> headers;
 
-    public AiHubMixRerankingClient(String baseUrl, String modelId, String apiKey,
-        WebClient.Builder webClientBuilder, Map<String, String> headers) {
+    public AiHubMixRerankingClient(
+            String baseUrl,
+            String modelId,
+            String apiKey,
+            WebClient.Builder webClientBuilder,
+            Map<String, String> headers) {
         super("aihubmix", modelId, apiKey, webClientBuilder);
         this.baseUrl = ProviderUris.withoutTrailingSlashes(baseUrl);
         this.modelId = modelId;
@@ -35,8 +39,7 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
     }
 
     @Override
-    protected Map<String, Object> requestBody(RerankRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(RerankRequest request, Map<String, Object> nativeOptions) {
         if (request == null) {
             throw new IllegalArgumentException("AIHubMix rerank query must not be blank");
         }
@@ -47,12 +50,10 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
             throw new IllegalArgumentException("AIHubMix rerank query must not be blank");
         }
         if (request.getDocuments() == null) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank requires non-blank text documents");
+            throw new IllegalArgumentException("AIHubMix rerank requires non-blank text documents");
         }
         if (request.getDocuments().isEmpty()) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank requires non-blank text documents");
+            throw new IllegalArgumentException("AIHubMix rerank requires non-blank text documents");
         }
         for (var document : request.getDocuments()) {
             validateDocument(document);
@@ -62,35 +63,29 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported AIHubMix rerank option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported AIHubMix rerank option(s): " + String.join(", ", unknown));
         }
         var body = new LinkedHashMap<String, Object>();
         body.put("model", modelId);
         body.put("query", request.getQuery());
         body.put("documents", documentTexts(request));
         putIfPresent(body, "top_n", topN(request));
-        putIfPresent(body, "return_documents",
-            booleanValue(values.get("return_documents")));
+        putIfPresent(body, "return_documents", booleanValue(values.get("return_documents")));
         return body;
     }
 
     private void validateDocument(RerankDocument document) {
         if (document == null) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank requires non-blank text documents");
+            throw new IllegalArgumentException("AIHubMix rerank requires non-blank text documents");
         }
         if (document.getImage() != null) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank requires non-blank text documents");
+            throw new IllegalArgumentException("AIHubMix rerank requires non-blank text documents");
         }
         if (document.getText() == null) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank requires non-blank text documents");
+            throw new IllegalArgumentException("AIHubMix rerank requires non-blank text documents");
         }
         if (document.getText().isBlank()) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank requires non-blank text documents");
+            throw new IllegalArgumentException("AIHubMix rerank requires non-blank text documents");
         }
     }
 
@@ -99,12 +94,10 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
             return;
         }
         if (request.getTopN() < 1) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank top_n must be between 1 and the document count");
+            throw new IllegalArgumentException("AIHubMix rerank top_n must be between 1 and the document count");
         }
         if (request.getTopN() > request.getDocuments().size()) {
-            throw new IllegalArgumentException(
-                "AIHubMix rerank top_n must be between 1 and the document count");
+            throw new IllegalArgumentException("AIHubMix rerank top_n must be between 1 and the document count");
         }
     }
 
@@ -119,5 +112,4 @@ public final class AiHubMixRerankingClient extends AbstractHttpRerankingClient {
         }
         throw new IllegalArgumentException("AIHubMix return_documents must be boolean");
     }
-
 }

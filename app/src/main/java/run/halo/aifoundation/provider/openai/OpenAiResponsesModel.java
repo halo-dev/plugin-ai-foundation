@@ -6,8 +6,7 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesModel;
 
 public final class OpenAiResponsesModel extends ResponsesModel {
 
-    public OpenAiResponsesModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public OpenAiResponsesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new OpenAiResponsesProfile());
     }
 }

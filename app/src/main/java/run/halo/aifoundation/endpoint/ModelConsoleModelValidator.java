@@ -53,9 +53,9 @@ class ModelConsoleModelValidator {
         normalizeProfileDefaults(model.getSpec());
 
         return client.fetch(AiProvider.class, providerName)
-            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Provider not found: " + providerName)))
-            .flatMap(provider -> validateAgainstProviderType(model, provider));
+                .switchIfEmpty(Mono.error(
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provider not found: " + providerName)))
+                .flatMap(provider -> validateAgainstProviderType(model, provider));
     }
 
     private Mono<Void> validateAgainstProviderType(AiModel model, AiProvider provider) {
@@ -67,38 +67,36 @@ class ModelConsoleModelValidator {
         var modelType = model.getSpec().getModelType();
         if (!type.getSupportedModelTypes().contains(modelType)) {
             return badRequest("Model type '" + modelType.getValue()
-                + "' is not supported by provider type '" + providerType
-                + "'. Supported model types: " + type.getSupportedModelTypes());
+                    + "' is not supported by provider type '" + providerType
+                    + "'. Supported model types: " + type.getSupportedModelTypes());
         }
         return normalizeAdapterType(model, type)
-            .then(Mono.defer(() -> validateAdapterType(model, providerType, type)))
-            .then(Mono.defer(() -> validateFeatures(model, providerType, type)))
-            .then(Mono.defer(() -> validateParameterMappings(model, providerType, type)))
-            .then(Mono.defer(() -> validateEffectiveConstraints(model, provider, type)))
-            .then(Mono.defer(() -> validateNativeOptions(model, type)));
+                .then(Mono.defer(() -> validateAdapterType(model, providerType, type)))
+                .then(Mono.defer(() -> validateFeatures(model, providerType, type)))
+                .then(Mono.defer(() -> validateParameterMappings(model, providerType, type)))
+                .then(Mono.defer(() -> validateEffectiveConstraints(model, provider, type)))
+                .then(Mono.defer(() -> validateNativeOptions(model, type)));
     }
 
-    private Mono<Void> validateFeatures(AiModel model, String providerType,
-        AiProviderType type) {
+    private Mono<Void> validateFeatures(AiModel model, String providerType, AiProviderType type) {
         var supportedFeatures = type.getSupportedFeatures(model.getSpec().getAdapterType());
         var unsupportedFeatures = model.getSpec().getFeatures().stream()
-            .filter(feature -> !supportedFeatures.contains(feature))
-            .toList();
+                .filter(feature -> !supportedFeatures.contains(feature))
+                .toList();
         if (!unsupportedFeatures.isEmpty()) {
             return badRequest("Model features " + unsupportedFeatures
-                + " are not supported by provider type '" + providerType
-                + "' and adapter '" + model.getSpec().getAdapterType().getValue()
-                + "'. Supported features: " + supportedFeatures);
+                    + " are not supported by provider type '" + providerType
+                    + "' and adapter '" + model.getSpec().getAdapterType().getValue()
+                    + "'. Supported features: " + supportedFeatures);
         }
         return Mono.empty();
     }
 
-    private Mono<Void> validateParameterMappings(AiModel model, String providerType,
-        AiProviderType type) {
+    private Mono<Void> validateParameterMappings(AiModel model, String providerType, AiProviderType type) {
         try {
             var spec = model.getSpec();
-            parameterMappingValidator.validateModel(spec.getParameterMappings(),
-                spec.getModelType(), spec.getAdapterType());
+            parameterMappingValidator.validateModel(
+                    spec.getParameterMappings(), spec.getModelType(), spec.getAdapterType());
             parameterMappingValidator.validateConstraints(spec.getParameterConstraints());
             validateConstraintFeatures(spec.getParameterConstraints(), spec, providerType, type);
             var profile = spec.getCatalogParameters();
@@ -106,13 +104,12 @@ class ModelConsoleModelValidator {
                 return Mono.empty();
             }
             if (!Objects.equals(profile.getModelId(), spec.getModelId())
-                || !Objects.equals(profile.getProviderType(), providerType)
-                || profile.getAdapterType() != spec.getAdapterType()) {
+                    || !Objects.equals(profile.getProviderType(), providerType)
+                    || profile.getAdapterType() != spec.getAdapterType()) {
                 spec.setCatalogParameters(null);
                 return Mono.empty();
             }
-            parameterMappingValidator.validateModel(profile.getMappings(),
-                spec.getModelType(), spec.getAdapterType());
+            parameterMappingValidator.validateModel(profile.getMappings(), spec.getModelType(), spec.getAdapterType());
             parameterMappingValidator.validateConstraints(profile.getConstraints());
             validateConstraintFeatures(profile.getConstraints(), spec, providerType, type);
             return Mono.empty();
@@ -121,43 +118,40 @@ class ModelConsoleModelValidator {
         }
     }
 
-    private Mono<Void> validateEffectiveConstraints(AiModel model, AiProvider provider,
-        AiProviderType type) {
+    private Mono<Void> validateEffectiveConstraints(AiModel model, AiProvider provider, AiProviderType type) {
         try {
             var resolution = new ModelResolution(model, provider, type, null);
-            parameterMappingValidator.validateConstraints(
-                parameterMappingResolver.resolveConstraints(resolution));
+            parameterMappingValidator.validateConstraints(parameterMappingResolver.resolveConstraints(resolution));
             return Mono.empty();
         } catch (IllegalArgumentException e) {
             return badRequest(e.getMessage());
         }
     }
 
-    private void validateConstraintFeatures(ModelParameterConstraints constraints,
-        AiModel.AiModelSpec spec, String providerType, AiProviderType type) {
+    private void validateConstraintFeatures(
+            ModelParameterConstraints constraints, AiModel.AiModelSpec spec, String providerType, AiProviderType type) {
         if (constraints == null) {
             return;
         }
         var supportedFeatures = type.getSupportedFeatures(spec.getAdapterType());
         var unsupportedFeatures = new ArrayList<ModelFeature>();
-        if (Boolean.TRUE.equals(constraints.getToolCalling())
-            && !supportedFeatures.contains(ModelFeature.TOOL_CALL)) {
+        if (Boolean.TRUE.equals(constraints.getToolCalling()) && !supportedFeatures.contains(ModelFeature.TOOL_CALL)) {
             unsupportedFeatures.add(ModelFeature.TOOL_CALL);
         }
         if (Boolean.TRUE.equals(constraints.getStructuredOutput())
-            && !supportedFeatures.contains(ModelFeature.STRUCTURED_OUTPUT)) {
+                && !supportedFeatures.contains(ModelFeature.STRUCTURED_OUTPUT)) {
             unsupportedFeatures.add(ModelFeature.STRUCTURED_OUTPUT);
         }
         if (constraints.getReasoning() != null
-            && Boolean.TRUE.equals(constraints.getReasoning().getSupported())
-            && !supportedFeatures.contains(ModelFeature.REASONING)) {
+                && Boolean.TRUE.equals(constraints.getReasoning().getSupported())
+                && !supportedFeatures.contains(ModelFeature.REASONING)) {
             unsupportedFeatures.add(ModelFeature.REASONING);
         }
         if (!unsupportedFeatures.isEmpty()) {
             throw new IllegalArgumentException("Model parameter constraints declare features "
-                + unsupportedFeatures + " that are not supported by provider type '" + providerType
-                + "' and adapter '" + spec.getAdapterType().getValue()
-                + "'. Supported features: " + supportedFeatures);
+                    + unsupportedFeatures + " that are not supported by provider type '" + providerType
+                    + "' and adapter '" + spec.getAdapterType().getValue()
+                    + "'. Supported features: " + supportedFeatures);
         }
     }
 
@@ -170,8 +164,7 @@ class ModelConsoleModelValidator {
         }
     }
 
-    private Mono<Void> validateAdapterType(AiModel model, String providerType,
-        AiProviderType type) {
+    private Mono<Void> validateAdapterType(AiModel model, String providerType, AiProviderType type) {
         var adapterType = model.getSpec().getAdapterType();
         if (adapterType == null) {
             return badRequest("adapterType is required and no supported default could be recommended");
@@ -179,8 +172,8 @@ class ModelConsoleModelValidator {
         var supportedTypes = type.getSupportedAdapterTypes();
         if (!supportedTypes.contains(adapterType)) {
             return badRequest("Adapter type '" + adapterType.getValue()
-                + "' is not supported by provider type '" + providerType
-                + "'. Supported types: " + supportedTypes);
+                    + "' is not supported by provider type '" + providerType
+                    + "'. Supported types: " + supportedTypes);
         }
         return Mono.empty();
     }

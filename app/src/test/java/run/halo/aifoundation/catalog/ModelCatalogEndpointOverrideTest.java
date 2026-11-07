@@ -33,10 +33,12 @@ class ModelCatalogEndpointOverrideTest {
                 return WebClient.builder().exchangeFunction(request -> {
                     urls.add(request.url().toString());
                     var body = request.url().getPath().endsWith("/embeddings")
-                        ? "{\"data\":[{\"index\":0,\"embedding\":[1.0]}]}"
-                        : "{\"data\":[{\"b64_json\":\"AQID\"}]}";
+                            ? "{\"data\":[{\"index\":0,\"embedding\":[1.0]}]}"
+                            : "{\"data\":[{\"b64_json\":\"AQID\"}]}";
                     return Mono.just(ClientResponse.create(HttpStatus.OK)
-                        .header("Content-Type", "application/json").body(body).build());
+                            .header("Content-Type", "application/json")
+                            .body(body)
+                            .build());
                 });
             }
 
@@ -53,11 +55,13 @@ class ModelCatalogEndpointOverrideTest {
         var provider = provider(null);
         provider.getSpec().setChatEndpointPath("/custom/chat/completions");
         type.buildEmbeddingModel(provider, "test-key", "text-embedding-3-large")
-            .call(new EmbeddingRequest(List.of("test"), null));
+                .call(new EmbeddingRequest(List.of("test"), null));
         type.buildImageGenerationClient(provider, "test-key", "gpt-image-1-mini")
-            .generateImage(GenerateImageRequest.builder().prompt("test").build()).block();
-        assertThat(urls).containsExactly("https://api.openai.com/v1/embeddings",
-            "https://api.openai.com/v1/images/generations");
+                .generateImage(GenerateImageRequest.builder().prompt("test").build())
+                .block();
+        assertThat(urls)
+                .containsExactly(
+                        "https://api.openai.com/v1/embeddings", "https://api.openai.com/v1/images/generations");
     }
 
     @Test
@@ -68,31 +72,47 @@ class ModelCatalogEndpointOverrideTest {
         var type = new OpenAiProvider();
         var provider = provider(null);
         var models = List.of(
-            DiscoveredModel.builder().modelId("text-embedding-3-large")
-                .modelType(ModelType.EMBEDDING).adapterType(AdapterType.OPENAI_EMBEDDING)
-                .source(DiscoverySource.REMOTE).build(),
-            DiscoveredModel.builder().modelId("gpt-image-1-mini")
-                .modelType(ModelType.IMAGE_GENERATION).adapterType(AdapterType.OPENAI_IMAGE)
-                .source(DiscoverySource.REMOTE).build());
+                DiscoveredModel.builder()
+                        .modelId("text-embedding-3-large")
+                        .modelType(ModelType.EMBEDDING)
+                        .adapterType(AdapterType.OPENAI_EMBEDDING)
+                        .source(DiscoverySource.REMOTE)
+                        .build(),
+                DiscoveredModel.builder()
+                        .modelId("gpt-image-1-mini")
+                        .modelType(ModelType.IMAGE_GENERATION)
+                        .adapterType(AdapterType.OPENAI_IMAGE)
+                        .source(DiscoverySource.REMOTE)
+                        .build());
         var baseline = enricher.enrich(provider, type, models);
-        assertThat(baseline).allSatisfy(model -> assertThat(model.catalogParameters()).isNotNull());
+        assertThat(baseline)
+                .allSatisfy(model -> assertThat(model.catalogParameters()).isNotNull());
         provider.getSpec().setChatEndpointPath("/custom/chat/completions");
         assertThat(enricher.enrich(provider, type, models)).isEqualTo(baseline);
-        var identifierOnly = DiscoveredModel.builder().modelId("text-embedding-3-large")
-            .modelType(ModelType.LANGUAGE).adapterType(AdapterType.OPENAI_CHAT)
-            .source(DiscoverySource.RULE).confidence(DiscoveryConfidence.LOW).build();
-        assertThat(enricher.enrich(provider, type, List.of(identifierOnly))).singleElement()
-            .satisfies(model -> {
-                assertThat(model.modelType()).isEqualTo(ModelType.EMBEDDING);
-                assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_EMBEDDING);
-                assertThat(model.catalogParameters().getConstraints().getContextTokens())
-                    .isPositive();
-            });
+        var identifierOnly = DiscoveredModel.builder()
+                .modelId("text-embedding-3-large")
+                .modelType(ModelType.LANGUAGE)
+                .adapterType(AdapterType.OPENAI_CHAT)
+                .source(DiscoverySource.RULE)
+                .confidence(DiscoveryConfidence.LOW)
+                .build();
+        assertThat(enricher.enrich(provider, type, List.of(identifierOnly)))
+                .singleElement()
+                .satisfies(model -> {
+                    assertThat(model.modelType()).isEqualTo(ModelType.EMBEDDING);
+                    assertThat(model.adapterType()).isEqualTo(AdapterType.OPENAI_EMBEDDING);
+                    assertThat(model.catalogParameters().getConstraints().getContextTokens())
+                            .isPositive();
+                });
         provider.getSpec().setProviderType("openrouter");
-        var rerank = DiscoveredModel.builder().modelId("cohere/rerank-4-fast")
-            .modelType(ModelType.RERANK).adapterType(AdapterType.RERANK)
-            .source(DiscoverySource.REMOTE).build();
+        var rerank = DiscoveredModel.builder()
+                .modelId("cohere/rerank-4-fast")
+                .modelType(ModelType.RERANK)
+                .adapterType(AdapterType.RERANK)
+                .source(DiscoverySource.REMOTE)
+                .build();
         assertThat(enricher.enrich(provider, new OpenRouterProvider(), List.of(rerank)))
-            .singleElement().satisfies(model -> assertThat(model.catalogParameters()).isNotNull());
+                .singleElement()
+                .satisfies(model -> assertThat(model.catalogParameters()).isNotNull());
     }
 }

@@ -18,9 +18,7 @@ class ImageParameterMappingMergerTest {
 
         var result = ImageParameterMappingMerger.merge(body, new ParameterMappingTarget());
 
-        assertThat(result)
-            .containsEntry("size", "2048x2048")
-            .containsEntry("quality", "hd");
+        assertThat(result).containsEntry("size", "2048x2048").containsEntry("quality", "hd");
     }
 
     @Test
@@ -36,10 +34,10 @@ class ImageParameterMappingMergerTest {
         var result = ImageParameterMappingMerger.merge(body, target);
 
         assertThat(result)
-            .doesNotContainKey("n")
-            .containsEntry("batch_size", 2)
-            .containsEntry("size", "2048x2048")
-            .containsEntry("quality", "hd");
+                .doesNotContainKey("n")
+                .containsEntry("batch_size", 2)
+                .containsEntry("size", "2048x2048")
+                .containsEntry("quality", "hd");
     }
 
     @Test
@@ -47,10 +45,7 @@ class ImageParameterMappingMergerTest {
         var body = new LinkedHashMap<String, Object>();
         body.put("size", "1024x1024");
         body.put("width", 1024);
-        body.put("parameters", Map.of(
-            "size", "1024*1024",
-            "seed", 7,
-            "watermark", false));
+        body.put("parameters", Map.of("size", "1024*1024", "seed", 7, "watermark", false));
         var target = new ParameterMappingTarget();
         target.parameters().put("output_resolution", "2048*2048");
         target.recordAppliedParameter(ModelParameter.IMAGE_SIZE);
@@ -59,17 +54,15 @@ class ImageParameterMappingMergerTest {
 
         assertThat(result).doesNotContainKeys("size", "width");
         assertThat(parameters(result))
-            .doesNotContainKey("size")
-            .containsEntry("output_resolution", "2048*2048")
-            .containsEntry("seed", 7)
-            .containsEntry("watermark", false);
+                .doesNotContainKey("size")
+                .containsEntry("output_resolution", "2048*2048")
+                .containsEntry("seed", 7)
+                .containsEntry("watermark", false);
     }
 
     @Test
     void acceptsImmutableBodyWithoutMutatingTheCallerValue() {
-        var body = Map.<String, Object>of(
-            "size", "1024x1024",
-            "parameters", Map.of("seed", 7));
+        var body = Map.<String, Object>of("size", "1024x1024", "parameters", Map.of("seed", 7));
         var target = new ParameterMappingTarget();
         target.root().put("size", "2048x2048");
         target.recordAppliedParameter(ModelParameter.IMAGE_SIZE);

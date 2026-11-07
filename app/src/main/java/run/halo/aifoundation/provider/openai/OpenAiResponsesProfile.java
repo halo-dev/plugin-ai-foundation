@@ -22,8 +22,7 @@ final class OpenAiResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         body.putIfAbsent("store", false);
         appendHostedTools(body);
         requestEncryptedReasoningForStatelessCalls(body);
@@ -70,8 +69,7 @@ final class OpenAiResponsesProfile implements ResponsesProfile {
         if (isHostedToolType(type)) {
             return;
         }
-        throw new IllegalArgumentException(
-            "OpenAI builtinTools entries require a hosted-tool type");
+        throw new IllegalArgumentException("OpenAI builtinTools entries require a hosted-tool type");
     }
 
     private boolean isHostedToolType(Object type) {

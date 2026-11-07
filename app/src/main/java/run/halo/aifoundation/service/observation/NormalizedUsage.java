@@ -12,25 +12,24 @@ import run.halo.aifoundation.provider.usage.ProviderUsage;
 import run.halo.aifoundation.rerank.RerankUsage;
 
 public record NormalizedUsage(
-    Long inputTokens,
-    Long outputTokens,
-    Long cacheReadInputTokens,
-    Long cacheCreationInputTokens,
-    Long reasoningOutputTokens,
-    Long providerTotalTokens,
-    Long accountedTotalTokens,
-    UsageQuality quality
-) {
+        Long inputTokens,
+        Long outputTokens,
+        Long cacheReadInputTokens,
+        Long cacheCreationInputTokens,
+        Long reasoningOutputTokens,
+        Long providerTotalTokens,
+        Long accountedTotalTokens,
+        UsageQuality quality) {
 
     public NormalizedUsage {
         if (quality == null) {
             // Explicit quality denotes already-normalized evidence, including unknown totals.
             accountedTotalTokens = accountedTotalTokens != null
-                ? accountedTotalTokens : accounted(inputTokens, outputTokens, providerTotalTokens);
+                    ? accountedTotalTokens
+                    : accounted(inputTokens, outputTokens, providerTotalTokens);
             quality = quality(inputTokens, outputTokens, providerTotalTokens);
             if (quality == UsageQuality.MISSING) {
-                if (hasTokenDetails(cacheReadInputTokens, cacheCreationInputTokens,
-                    reasoningOutputTokens)) {
+                if (hasTokenDetails(cacheReadInputTokens, cacheCreationInputTokens, reasoningOutputTokens)) {
                     quality = UsageQuality.PARTIAL;
                 }
             }
@@ -55,41 +54,70 @@ public record NormalizedUsage(
     }
 
     public static NormalizedUsage missing() {
-        return new NormalizedUsage(null, null, null, null, null, null, null,
-            UsageQuality.MISSING);
+        return new NormalizedUsage(null, null, null, null, null, null, null, UsageQuality.MISSING);
     }
 
     public static NormalizedUsage from(LanguageModelUsage usage) {
         if (usage == null) {
             return missing();
         }
-        return new NormalizedUsage(value(usage.getInputTokens()), value(usage.getOutputTokens()),
-            null, null,
-            value(usage.getReasoningTokens()), value(usage.getTotalTokens()), null, null);
+        return new NormalizedUsage(
+                value(usage.getInputTokens()),
+                value(usage.getOutputTokens()),
+                null,
+                null,
+                value(usage.getReasoningTokens()),
+                value(usage.getTotalTokens()),
+                null,
+                null);
     }
 
     public static NormalizedUsage from(EmbeddingUsage usage) {
-        return usage == null ? missing()
-            : new NormalizedUsage(null, null, null, null, null, value(usage.getTokens()),
-                null, null);
+        return usage == null
+                ? missing()
+                : new NormalizedUsage(null, null, null, null, null, value(usage.getTokens()), null, null);
     }
 
     public static NormalizedUsage from(DecisionUsage usage) {
-        return usage == null ? missing()
-            : new NormalizedUsage(value(usage.getInputTokens()), value(usage.getOutputTokens()),
-                null, null, null, null, null, null);
+        return usage == null
+                ? missing()
+                : new NormalizedUsage(
+                        value(usage.getInputTokens()),
+                        value(usage.getOutputTokens()),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null);
     }
 
     public static NormalizedUsage from(RerankUsage usage) {
-        return usage == null ? missing()
-            : new NormalizedUsage(value(usage.getInputTokens()), null, null, null, null,
-                value(usage.getTotalTokens()), null, null);
+        return usage == null
+                ? missing()
+                : new NormalizedUsage(
+                        value(usage.getInputTokens()),
+                        null,
+                        null,
+                        null,
+                        null,
+                        value(usage.getTotalTokens()),
+                        null,
+                        null);
     }
 
     public static NormalizedUsage from(ImageUsage usage) {
-        return usage == null ? missing()
-            : new NormalizedUsage(value(usage.getInputTokens()), value(usage.getOutputTokens()),
-                null, null, null, value(usage.getTotalTokens()), null, null);
+        return usage == null
+                ? missing()
+                : new NormalizedUsage(
+                        value(usage.getInputTokens()),
+                        value(usage.getOutputTokens()),
+                        null,
+                        null,
+                        null,
+                        value(usage.getTotalTokens()),
+                        null,
+                        null);
     }
 
     public static NormalizedUsage from(Usage usage) {
@@ -100,14 +128,26 @@ public record NormalizedUsage(
             return missing();
         }
         if (usage instanceof ProviderUsage typed) {
-            var normalized = new NormalizedUsage(typed.inputTokens(), typed.outputTokens(),
-                typed.cacheReadTokens(), typed.cacheWriteTokens(), typed.reasoningTokens(),
-                typed.totalTokens(), null, null);
+            var normalized = new NormalizedUsage(
+                    typed.inputTokens(),
+                    typed.outputTokens(),
+                    typed.cacheReadTokens(),
+                    typed.cacheWriteTokens(),
+                    typed.reasoningTokens(),
+                    typed.totalTokens(),
+                    null,
+                    null);
             return typed.complete() ? normalized : normalized.partial();
         }
-        return new NormalizedUsage(value(usage.getPromptTokens()),
-            value(usage.getCompletionTokens()), null, null, null,
-            value(usage.getTotalTokens()), null, null);
+        return new NormalizedUsage(
+                value(usage.getPromptTokens()),
+                value(usage.getCompletionTokens()),
+                null,
+                null,
+                null,
+                value(usage.getTotalTokens()),
+                null,
+                null);
     }
 
     public static NormalizedUsage fromFailure(Throwable error) {
@@ -129,18 +169,24 @@ public record NormalizedUsage(
     }
 
     public NormalizedUsage partial() {
-        return quality == UsageQuality.MISSING ? this
-            : new NormalizedUsage(inputTokens, outputTokens, cacheReadInputTokens,
-                cacheCreationInputTokens, reasoningOutputTokens, providerTotalTokens,
-                accountedTotalTokens, UsageQuality.PARTIAL);
+        return quality == UsageQuality.MISSING
+                ? this
+                : new NormalizedUsage(
+                        inputTokens,
+                        outputTokens,
+                        cacheReadInputTokens,
+                        cacheCreationInputTokens,
+                        reasoningOutputTokens,
+                        providerTotalTokens,
+                        accountedTotalTokens,
+                        UsageQuality.PARTIAL);
     }
 
     public static NormalizedUsage sum(Collection<NormalizedUsage> values) {
         try {
             return sumChecked(values);
         } catch (ArithmeticException overflow) {
-            return new NormalizedUsage(null, null, null, null, null, null, null,
-                UsageQuality.PARTIAL);
+            return new NormalizedUsage(null, null, null, null, null, null, null, UsageQuality.PARTIAL);
         }
     }
 
@@ -181,8 +227,8 @@ public record NormalizedUsage(
             return missing();
         }
         var quality = anyMissing ? UsageQuality.PARTIAL : aggregateQuality;
-        return new NormalizedUsage(input, output, cacheRead, cacheCreation, reasoning,
-            providerTotal, accountedTotal, quality);
+        return new NormalizedUsage(
+                input, output, cacheRead, cacheCreation, reasoning, providerTotal, accountedTotal, quality);
     }
 
     private static UsageQuality quality(Long input, Long output, Long providerTotal) {
@@ -224,5 +270,4 @@ public record NormalizedUsage(
         }
         return value.longValue();
     }
-
 }

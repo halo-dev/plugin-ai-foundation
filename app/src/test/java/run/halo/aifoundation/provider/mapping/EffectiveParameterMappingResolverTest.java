@@ -26,67 +26,60 @@ import run.halo.app.extension.Metadata;
 class EffectiveParameterMappingResolverTest {
 
     private final AiProviderType providerType = mock(AiProviderType.class);
-    private final EffectiveParameterMappingResolver resolver =
-        new EffectiveParameterMappingResolver();
+    private final EffectiveParameterMappingResolver resolver = new EffectiveParameterMappingResolver();
 
     @BeforeEach
     void setUp() {
         when(providerType.getSupportedFeatures(AdapterType.OPENAI_RESPONSES))
-            .thenReturn(List.of(ModelFeature.values()));
+                .thenReturn(List.of(ModelFeature.values()));
         when(providerType.getDefaultBaseUrl()).thenReturn("https://api.openai.com");
         var defaults = Map.of(
-            ModelParameter.MAX_OUTPUT_TOKENS,
-            DefaultParameterMapping.template("openai.max-tokens"),
-            ModelParameter.REASONING, DefaultParameterMapping.unsupported()
-        );
-        when(providerType.getSupportedAdapterTypes()).thenReturn(
-            List.of(AdapterType.OPENAI_RESPONSES));
-        when(providerType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(
-            Optional.of(AdapterType.OPENAI_RESPONSES));
+                ModelParameter.MAX_OUTPUT_TOKENS,
+                DefaultParameterMapping.template("openai.max-tokens"),
+                ModelParameter.REASONING,
+                DefaultParameterMapping.unsupported());
+        when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.recommendAdapterType(ModelType.LANGUAGE))
+                .thenReturn(Optional.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
-            .thenReturn(defaults);
+                .thenReturn(defaults);
     }
 
     @Test
     void absentMappingsUseBuiltInDefaults() {
         var effective = resolver.resolve(resolution(null, null));
 
-        assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).template())
-            .isEqualTo("openai.max-tokens");
+        assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).template()).isEqualTo("openai.max-tokens");
         assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
-        assertThat(effective.get(ModelParameter.REASONING).mode())
-            .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+                .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
+        assertThat(effective.get(ModelParameter.REASONING).mode()).isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
     }
 
     @Test
     void providerOverrideReplacesBuiltIn() {
-        var providerMappings = languageMappings(ModelParameter.MAX_OUTPUT_TOKENS,
-            template("openai.max-completion-tokens"));
+        var providerMappings =
+                languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, template("openai.max-completion-tokens"));
 
         var effective = resolver.resolve(resolution(providerMappings, null));
 
         assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).template())
-            .isEqualTo("openai.max-completion-tokens");
+                .isEqualTo("openai.max-completion-tokens");
         assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.PROVIDER);
+                .isEqualTo(EffectiveParameterMappings.Source.PROVIDER);
     }
 
     @Test
     void modelOverrideWinsAndOtherFieldsInherit() {
-        var providerMappings = languageMappings(ModelParameter.MAX_OUTPUT_TOKENS,
-            template("openai.max-completion-tokens"));
-        var modelMappings = languageMappings(ModelParameter.REASONING,
-            template("reasoning.effort"));
+        var providerMappings =
+                languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, template("openai.max-completion-tokens"));
+        var modelMappings = languageMappings(ModelParameter.REASONING, template("reasoning.effort"));
 
         var effective = resolver.resolve(resolution(providerMappings, modelMappings));
 
         assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.PROVIDER);
-        assertThat(effective.get(ModelParameter.REASONING).template())
-            .isEqualTo("reasoning.effort");
-        assertThat(effective.get(ModelParameter.REASONING).source())
-            .isEqualTo(EffectiveParameterMappings.Source.MODEL);
+                .isEqualTo(EffectiveParameterMappings.Source.PROVIDER);
+        assertThat(effective.get(ModelParameter.REASONING).template()).isEqualTo("reasoning.effort");
+        assertThat(effective.get(ModelParameter.REASONING).source()).isEqualTo(EffectiveParameterMappings.Source.MODEL);
     }
 
     @Test
@@ -96,29 +89,40 @@ class EffectiveParameterMappingResolverTest {
         var effective = resolver.resolve(resolution(null, modelMappings));
 
         assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).mode())
-            .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+                .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
         assertThat(effective.get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.MODEL);
+                .isEqualTo(EffectiveParameterMappings.Source.MODEL);
     }
 
     @Test
     void matchingCatalogOverridesDefaultsButExplicitProviderAndModelMappingsWin() {
         var resolution = resolution(null, null);
         var profile = catalogProfile();
-        profile.setMappings(languageMappings(ModelParameter.MAX_OUTPUT_TOKENS,
-            template("responses.max-output-tokens")));
+        profile.setMappings(
+                languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, template("responses.max-output-tokens")));
         resolution.model().getSpec().setCatalogParameters(profile);
-        assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.CATALOG);
+        assertThat(resolver.resolve(resolution)
+                        .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                        .source())
+                .isEqualTo(EffectiveParameterMappings.Source.CATALOG);
 
-        resolution.provider().getSpec().setParameterMappings(languageMappings(
-            ModelParameter.MAX_OUTPUT_TOKENS, template("openai.max-tokens")));
-        assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.PROVIDER);
-        resolution.model().getSpec().setParameterMappings(languageMappings(
-            ModelParameter.MAX_OUTPUT_TOKENS, unsupported()));
-        assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.MODEL);
+        resolution
+                .provider()
+                .getSpec()
+                .setParameterMappings(
+                        languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, template("openai.max-tokens")));
+        assertThat(resolver.resolve(resolution)
+                        .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                        .source())
+                .isEqualTo(EffectiveParameterMappings.Source.PROVIDER);
+        resolution
+                .model()
+                .getSpec()
+                .setParameterMappings(languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, unsupported()));
+        assertThat(resolver.resolve(resolution)
+                        .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                        .source())
+                .isEqualTo(EffectiveParameterMappings.Source.MODEL);
     }
 
     @Test
@@ -140,10 +144,12 @@ class EffectiveParameterMappingResolverTest {
                 profile.setAdapterType(AdapterType.OPENAI_CHAT);
             }
             resolution.model().getSpec().setCatalogParameters(profile);
-            assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-                .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
+            assertThat(resolver.resolve(resolution)
+                            .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                            .source())
+                    .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
             assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens())
-                .isNull();
+                    .isNull();
         }
     }
 
@@ -174,17 +180,16 @@ class EffectiveParameterMappingResolverTest {
         assertThat(effective.getConstraints().getReasoning().getBudgetMinimum()).isEqualTo(100L);
         assertThat(effective.getConstraints().getReasoning().getBudgetMaximum()).isEqualTo(1000L);
         assertThat(effective.getMappings().getLanguage().getTemperature().getMode())
-            .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
+                .isEqualTo(ModelParameterMappings.Mode.UNSUPPORTED);
         assertThat(automatic.getToolChoices()).containsExactly("auto");
         assertThat(automatic.getReasoning().getBudgetMaximum()).isEqualTo(2000L);
     }
 
     @Test
     void manualMappingsOverrideConflictingCatalogConstraints() {
-        var resolution = resolution(languageMappings(ModelParameter.REASONING,
-            template("reasoning.responses-effort")),
-                languageMappings(ModelParameter.MAX_OUTPUT_TOKENS,
-            template("openai.max-tokens")));
+        var resolution = resolution(
+                languageMappings(ModelParameter.REASONING, template("reasoning.responses-effort")),
+                languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, template("openai.max-tokens")));
         var profile = catalogProfile();
         var constraints = new ModelParameterConstraints();
         constraints.setOutputTokens(100L);
@@ -197,15 +202,19 @@ class EffectiveParameterMappingResolverTest {
         var effective = resolver.resolveProfile(resolution);
         assertThat(effective.getConstraints().getOutputTokens()).isNull();
         assertThat(effective.getConstraints().getReasoning()).isNull();
-        assertThat(effective.getMappings().getLanguage().getReasoning().getReasoningMapping()
-            .getHigh())
-            .isNotNull();
+        assertThat(effective
+                        .getMappings()
+                        .getLanguage()
+                        .getReasoning()
+                        .getReasoningMapping()
+                        .getHigh())
+                .isNotNull();
     }
 
     @Test
     void manualReasoningConstraintsRestrictBothRuntimeAndConsoleProfile() {
-        var resolution = resolution(null, languageMappings(ModelParameter.REASONING,
-            template("reasoning.responses-effort")));
+        var resolution =
+                resolution(null, languageMappings(ModelParameter.REASONING, template("reasoning.responses-effort")));
         var constraints = new ModelParameterConstraints();
         var reasoning = new ModelParameterConstraints.Reasoning();
         reasoning.setToggle(false);
@@ -213,25 +222,34 @@ class EffectiveParameterMappingResolverTest {
         constraints.setReasoning(reasoning);
         resolution.model().getSpec().setParameterConstraints(constraints);
 
-        var effective = resolver.resolve(resolution).get(ModelParameter.REASONING)
-            .reasoningMapping();
-        var displayed = resolver.resolveProfile(resolution).getMappings().getLanguage()
-            .getReasoning().getReasoningMapping();
+        var effective =
+                resolver.resolve(resolution).get(ModelParameter.REASONING).reasoningMapping();
+        var displayed = resolver.resolveProfile(resolution)
+                .getMappings()
+                .getLanguage()
+                .getReasoning()
+                .getReasoningMapping();
         assertThat(effective).isEqualTo(displayed);
         assertThat(effective.getEnabled()).isNull();
         assertThat(effective.getDisabled()).isNull();
         assertThat(effective.getLow()).isNull();
         assertThat(effective.getMedium()).isNull();
         assertThat(effective.getHigh().getValue()).isEqualTo("high");
-        assertThat(resolution.model().getSpec().getParameterMappings().getLanguage()
-            .getReasoning().getReasoningMapping()).isNull();
+        assertThat(resolution
+                        .model()
+                        .getSpec()
+                        .getParameterMappings()
+                        .getLanguage()
+                        .getReasoning()
+                        .getReasoningMapping())
+                .isNull();
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void limitsStoredSupportDeclarationsToAdapterCapabilities(boolean manual) {
         when(providerType.getSupportedFeatures(AdapterType.OPENAI_RESPONSES))
-            .thenReturn(List.of(ModelFeature.STREAMING));
+                .thenReturn(List.of(ModelFeature.STREAMING));
         var resolution = resolution(null, null);
         var constraints = new ModelParameterConstraints();
         constraints.setToolCalling(true);
@@ -268,19 +286,21 @@ class EffectiveParameterMappingResolverTest {
         profile.setProviderBaseUrl("https://api.openai.com");
         profile.setMappings(languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, unsupported()));
         resolution.model().getSpec().setCatalogParameters(profile);
-        assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.CATALOG);
+        assertThat(resolver.resolve(resolution)
+                        .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                        .source())
+                .isEqualTo(EffectiveParameterMappings.Source.CATALOG);
         resolution.provider().getSpec().setBaseUrl("https://private.example.com");
-        assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
-        assertThat(resolver.resolveProfile(resolution).getProviderBaseUrl())
-            .isEqualTo("https://private.example.com");
+        assertThat(resolver.resolve(resolution)
+                        .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                        .source())
+                .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
+        assertThat(resolver.resolveProfile(resolution).getProviderBaseUrl()).isEqualTo("https://private.example.com");
     }
 
     @Test
     void nonLanguageCatalogFactsPreserveParameterMappingsAndRespectIdentity() {
-        for (var adapter : List.of(AdapterType.OPENAI_EMBEDDING, AdapterType.OPENAI_IMAGE,
-            AdapterType.RERANK)) {
+        for (var adapter : List.of(AdapterType.OPENAI_EMBEDDING, AdapterType.OPENAI_IMAGE, AdapterType.RERANK)) {
             var resolution = resolution(null, null);
             var spec = resolution.model().getSpec();
             spec.setModelType(adapter.getModelType());
@@ -303,11 +323,11 @@ class EffectiveParameterMappingResolverTest {
             manual.setContextTokens(4096L);
             spec.setParameterConstraints(manual);
             assertThat(resolver.resolveProfile(resolution).getConstraints().getContextTokens())
-                .isEqualTo(4096L);
+                    .isEqualTo(4096L);
             spec.setModelId("another-model");
             assertThat(resolver.applicableCatalogProfile(resolution)).isNull();
             assertThat(resolver.resolveProfile(resolution).getConstraints().getContextTokens())
-                .isEqualTo(4096L);
+                    .isEqualTo(4096L);
         }
     }
 
@@ -316,9 +336,9 @@ class EffectiveParameterMappingResolverTest {
         var resolution = resolution(null, null);
         resolution.model().getSpec().setAdapterType(AdapterType.OPENAI_CHAT);
         when(providerType.getSupportedAdapterTypes()).thenReturn(List.of(AdapterType.OPENAI_CHAT));
-        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_CHAT)).thenReturn(
-            Map.of(ModelParameter.MAX_OUTPUT_TOKENS,
-                DefaultParameterMapping.template("openai.max-tokens")));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_CHAT))
+                .thenReturn(Map.of(
+                        ModelParameter.MAX_OUTPUT_TOKENS, DefaultParameterMapping.template("openai.max-tokens")));
         var profile = catalogProfile();
         profile.setAdapterType(AdapterType.OPENAI_CHAT);
         profile.setMappings(languageMappings(ModelParameter.MAX_OUTPUT_TOKENS, unsupported()));
@@ -327,9 +347,12 @@ class EffectiveParameterMappingResolverTest {
         profile.setConstraints(constraints);
         resolution.model().getSpec().setCatalogParameters(profile);
         resolution.provider().getSpec().setChatEndpointPath("/custom/chat");
-        assertThat(resolver.resolve(resolution).get(ModelParameter.MAX_OUTPUT_TOKENS).source())
-            .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
-        assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens()).isNull();
+        assertThat(resolver.resolve(resolution)
+                        .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                        .source())
+                .isEqualTo(EffectiveParameterMappings.Source.BUILT_IN);
+        assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens())
+                .isNull();
     }
 
     @Test
@@ -347,7 +370,7 @@ class EffectiveParameterMappingResolverTest {
             resolution.provider().getSpec().setChatEndpointPath("/custom/chat");
             assertThat(resolver.applicableCatalogProfile(resolution)).isSameAs(profile);
             assertThat(resolver.resolveProfile(resolution).getConstraints().getOutputTokens())
-                .isEqualTo(100L);
+                    .isEqualTo(100L);
         }
     }
 
@@ -360,8 +383,7 @@ class EffectiveParameterMappingResolverTest {
         return profile;
     }
 
-    private ModelResolution resolution(ModelParameterMappings providerMappings,
-        ModelParameterMappings modelMappings) {
+    private ModelResolution resolution(ModelParameterMappings providerMappings, ModelParameterMappings modelMappings) {
         var provider = new AiProvider();
         provider.setMetadata(metadata("provider"));
         var providerSpec = new AiProvider.AiProviderSpec();
@@ -379,8 +401,8 @@ class EffectiveParameterMappingResolverTest {
         return new ModelResolution(model, provider, providerType, "key");
     }
 
-    private ModelParameterMappings languageMappings(ModelParameter parameter,
-        ModelParameterMappings.Selection selection) {
+    private ModelParameterMappings languageMappings(
+            ModelParameter parameter, ModelParameterMappings.Selection selection) {
         var mappings = new ModelParameterMappings();
         var language = new ModelParameterMappings.LanguageMappings();
         if (parameter == ModelParameter.MAX_OUTPUT_TOKENS) {

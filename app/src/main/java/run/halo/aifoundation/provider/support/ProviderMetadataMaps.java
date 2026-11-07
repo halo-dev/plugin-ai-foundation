@@ -6,8 +6,7 @@ import java.util.Map;
 /** Creates immutable provider metadata maps without retaining absent JSON fields. */
 public final class ProviderMetadataMaps {
 
-    private ProviderMetadataMaps() {
-    }
+    private ProviderMetadataMaps() {}
 
     public static Map<String, Object> immutableNonNull(Map<String, Object> metadata) {
         if (metadata == null) {
@@ -32,8 +31,7 @@ public final class ProviderMetadataMaps {
         return Map.copyOf(values);
     }
 
-    public static Map<String, Object> namespaced(String namespace,
-        Map<String, Object> metadata) {
+    public static Map<String, Object> namespaced(String namespace, Map<String, Object> metadata) {
         var values = immutableNonNull(metadata);
         if (values.isEmpty()) {
             return Map.of();

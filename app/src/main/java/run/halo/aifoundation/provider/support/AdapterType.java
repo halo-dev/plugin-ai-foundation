@@ -19,14 +19,19 @@ public enum AdapterType {
     DASHSCOPE_CHAT("dashscope-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     DASHSCOPE_RESPONSES("dashscope-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     DASHSCOPE_MESSAGES("dashscope-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
-    DASHSCOPE_EMBEDDING("dashscope-embedding", ModelType.EMBEDDING,
-        AdapterProtocol.EMBEDDING),
-    DASHSCOPE_COMPATIBLE_RERANK("dashscope-compatible-rerank", ModelType.RERANK,
-        AdapterProtocol.RERANK, "DashScope 兼容重排",
-        "使用兼容接口的扁平请求与响应结构"),
-    DASHSCOPE_NATIVE_RERANK("dashscope-native-rerank", ModelType.RERANK,
-        AdapterProtocol.RERANK, "DashScope 原生重排",
-        "使用原生接口的 input、parameters 与 output 结构，可承载文本或多模态输入"),
+    DASHSCOPE_EMBEDDING("dashscope-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
+    DASHSCOPE_COMPATIBLE_RERANK(
+            "dashscope-compatible-rerank",
+            ModelType.RERANK,
+            AdapterProtocol.RERANK,
+            "DashScope 兼容重排",
+            "使用兼容接口的扁平请求与响应结构"),
+    DASHSCOPE_NATIVE_RERANK(
+            "dashscope-native-rerank",
+            ModelType.RERANK,
+            AdapterProtocol.RERANK,
+            "DashScope 原生重排",
+            "使用原生接口的 input、parameters 与 output 结构，可承载文本或多模态输入"),
     DOUBAO_RESPONSES("doubao-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     DOUBAO_CHAT("doubao-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     DOUBAO_EMBEDDING("doubao-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
@@ -45,17 +50,12 @@ public enum AdapterType {
     MINIMAX_CHAT("minimax-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     MINIMAX_RESPONSES("minimax-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     OPENROUTER_CHAT("openrouter-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
-    OPENROUTER_RESPONSES("openrouter-responses", ModelType.LANGUAGE,
-        AdapterProtocol.RESPONSES),
-    OPENROUTER_MESSAGES("openrouter-messages", ModelType.LANGUAGE,
-        AdapterProtocol.MESSAGES),
-    OPENROUTER_EMBEDDING("openrouter-embedding", ModelType.EMBEDDING,
-        AdapterProtocol.EMBEDDING),
+    OPENROUTER_RESPONSES("openrouter-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
+    OPENROUTER_MESSAGES("openrouter-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
+    OPENROUTER_EMBEDDING("openrouter-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
     SILICONFLOW_CHAT("siliconflow-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
-    SILICONFLOW_MESSAGES("siliconflow-messages", ModelType.LANGUAGE,
-        AdapterProtocol.MESSAGES),
-    SILICONFLOW_EMBEDDING("siliconflow-embedding", ModelType.EMBEDDING,
-        AdapterProtocol.EMBEDDING),
+    SILICONFLOW_MESSAGES("siliconflow-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
+    SILICONFLOW_EMBEDDING("siliconflow-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
     MIMO_RESPONSES("mimo-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     MIMO_CHAT("mimo-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     MIMO_MESSAGES("mimo-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
@@ -65,30 +65,22 @@ public enum AdapterType {
     AIHUBMIX_RESPONSES("aihubmix-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     AIHUBMIX_CHAT("aihubmix-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     AIHUBMIX_MESSAGES("aihubmix-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
-    AIHUBMIX_EMBEDDING("aihubmix-embedding", ModelType.EMBEDDING,
-        AdapterProtocol.EMBEDDING),
-    OPENROUTER_IMAGE("openrouter-image", ModelType.IMAGE_GENERATION,
-        AdapterProtocol.IMAGE_GENERATION),
-    DASHSCOPE_IMAGE("dashscope-image", ModelType.IMAGE_GENERATION,
-        AdapterProtocol.IMAGE_GENERATION),
+    AIHUBMIX_EMBEDDING("aihubmix-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
+    OPENROUTER_IMAGE("openrouter-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
+    DASHSCOPE_IMAGE("dashscope-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
     DOUBAO_IMAGE("doubao-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
     ERNIE_IMAGE("ernie-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
     GITEE_IMAGE("gitee-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
     MINIMAX_IMAGE("minimax-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
-    SILICONFLOW_IMAGE("siliconflow-image", ModelType.IMAGE_GENERATION,
-        AdapterProtocol.IMAGE_GENERATION),
+    SILICONFLOW_IMAGE("siliconflow-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
     ZHIPU_IMAGE("zhipu-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
-    AIHUBMIX_IMAGE("aihubmix-image", ModelType.IMAGE_GENERATION,
-        AdapterProtocol.IMAGE_GENERATION),
+    AIHUBMIX_IMAGE("aihubmix-image", ModelType.IMAGE_GENERATION, AdapterProtocol.IMAGE_GENERATION),
     ANTHROPIC_MESSAGES("anthropic-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
-    GEMINI_GENERATE_CONTENT("gemini-generate-content", ModelType.LANGUAGE,
-        AdapterProtocol.GENERATE_CONTENT),
-    GEMINI_EMBED_CONTENT("gemini-embed-content", ModelType.EMBEDDING,
-        AdapterProtocol.EMBEDDING),
+    GEMINI_GENERATE_CONTENT("gemini-generate-content", ModelType.LANGUAGE, AdapterProtocol.GENERATE_CONTENT),
+    GEMINI_EMBED_CONTENT("gemini-embed-content", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
     RERANK("rerank", ModelType.RERANK, AdapterProtocol.RERANK),
     OLLAMA_CHAT("ollama-chat", ModelType.LANGUAGE, AdapterProtocol.OLLAMA_CHAT),
-    OLLAMA_OPENAI_CHAT("ollama-openai-chat", ModelType.LANGUAGE,
-        AdapterProtocol.CHAT_COMPLETIONS),
+    OLLAMA_OPENAI_CHAT("ollama-openai-chat", ModelType.LANGUAGE, AdapterProtocol.CHAT_COMPLETIONS),
     OLLAMA_RESPONSES("ollama-responses", ModelType.LANGUAGE, AdapterProtocol.RESPONSES),
     OLLAMA_MESSAGES("ollama-messages", ModelType.LANGUAGE, AdapterProtocol.MESSAGES),
     OLLAMA_EMBEDDING("ollama-embedding", ModelType.EMBEDDING, AdapterProtocol.EMBEDDING),
@@ -106,8 +98,7 @@ public enum AdapterType {
         this(value, modelType, protocol, protocol.getDisplayName(), protocol.getDescription());
     }
 
-    AdapterType(String value, ModelType modelType, AdapterProtocol protocol,
-        String displayName, String description) {
+    AdapterType(String value, ModelType modelType, AdapterProtocol protocol, String displayName, String description) {
         this.value = value;
         this.modelType = modelType;
         this.protocol = protocol;
@@ -122,8 +113,7 @@ public enum AdapterType {
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static AdapterType fromValue(String value) {
-        return find(value)
-            .orElseThrow(() -> new IllegalArgumentException("Unsupported adapterType: " + value));
+        return find(value).orElseThrow(() -> new IllegalArgumentException("Unsupported adapterType: " + value));
     }
 
     public static Optional<AdapterType> find(String value) {
@@ -131,17 +121,16 @@ public enum AdapterType {
             return Optional.empty();
         }
         return Arrays.stream(values())
-            .filter(adapter -> adapter.value.equals(value))
-            .findFirst();
+                .filter(adapter -> adapter.value.equals(value))
+                .findFirst();
     }
 
-    public static Optional<AdapterType> firstFor(Collection<AdapterType> adapters,
-        ModelType modelType) {
+    public static Optional<AdapterType> firstFor(Collection<AdapterType> adapters, ModelType modelType) {
         if (adapters == null || modelType == null) {
             return Optional.empty();
         }
         return adapters.stream()
-            .filter(adapter -> adapter.modelType == modelType)
-            .findFirst();
+                .filter(adapter -> adapter.modelType == modelType)
+                .findFirst();
     }
 }

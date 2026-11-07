@@ -25,14 +25,12 @@ public interface AnthropicMessagesProfile {
         headers.set("anthropic-version", "2023-06-01");
     }
 
-    default Map<String, Object> mediaContentPart(Media media,
-        ChatCompletionsOptions options) {
+    default Map<String, Object> mediaContentPart(Media media, ChatCompletionsOptions options) {
         return null;
     }
 
-    default void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
-    }
+    default void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {}
 
     default Map<String, Object> normalizeProviderMetadata(Map<String, Object> metadata) {
         return ProviderMetadataMaps.immutableNonNull(metadata);

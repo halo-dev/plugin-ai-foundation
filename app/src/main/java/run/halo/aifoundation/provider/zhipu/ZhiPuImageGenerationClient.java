@@ -17,11 +17,9 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 /** Native synchronous BigModel image client. */
 public final class ZhiPuImageGenerationClient extends AbstractJsonImageGenerationClient {
 
-    private static final Set<String> OPTIONS = Set.of(
-        "quality", "watermark_enabled", "user_id");
+    private static final Set<String> OPTIONS = Set.of("quality", "watermark_enabled", "user_id");
 
-    public ZhiPuImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public ZhiPuImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
@@ -31,8 +29,7 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         validateRequest(request);
         nativeOptions = validatedNativeOptions(nativeOptions);
         validateNativeOptions(nativeOptions);
@@ -49,8 +46,8 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "Zhipu");
         var images = new ArrayList<GeneratedFile>();
         for (var item : root.path("data")) {
@@ -64,31 +61,34 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
             raw.put("created", root.path("created").asLong());
         }
         if (root.path("content_filter").isArray()) {
-            raw.put("content_filter",
-                OBJECT_MAPPER.convertValue(root.path("content_filter"), Object.class));
+            raw.put("content_filter", OBJECT_MAPPER.convertValue(root.path("content_filter"), Object.class));
         }
-        return result(data, root, List.copyOf(images), ImageUsage.builder()
-                .imageCount(images.size()).raw(Map.copyOf(raw)).build(),
-            List.of(), null, options.model());
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                ImageUsage.builder()
+                        .imageCount(images.size())
+                        .raw(Map.copyOf(raw))
+                        .build(),
+                List.of(),
+                null,
+                options.model());
     }
 
     private void validateRequest(GenerateImageRequest request) {
         requirePrompt(request, "Zhipu image prompt must not be blank");
         if (request.getImages() != null && !request.getImages().isEmpty()) {
-            throw new IllegalArgumentException(
-                "Zhipu synchronous image generation does not document input images");
+            throw new IllegalArgumentException("Zhipu synchronous image generation does not document input images");
         }
         if (request.getMask() != null) {
-            throw new IllegalArgumentException(
-                "Zhipu synchronous image generation does not document masks");
+            throw new IllegalArgumentException("Zhipu synchronous image generation does not document masks");
         }
         if (request.getN() != null && request.getN() != 1) {
-            throw new IllegalArgumentException(
-                "Zhipu synchronous image generation returns exactly one image");
+            throw new IllegalArgumentException("Zhipu synchronous image generation returns exactly one image");
         }
         if (hasUndocumentedControls(request)) {
-            throw new IllegalArgumentException(
-                "Zhipu image API does not document aspect ratio, negative prompt, seed, "
+            throw new IllegalArgumentException("Zhipu image API does not document aspect ratio, negative prompt, seed, "
                     + "or response format controls");
         }
         validateSize(request.getSize());
@@ -117,8 +117,7 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported Zhipu image option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported Zhipu image option(s): " + String.join(", ", unknown));
         }
         return Map.copyOf(values);
     }
@@ -126,17 +125,14 @@ public final class ZhiPuImageGenerationClient extends AbstractJsonImageGeneratio
     private void validateNativeOptions(Map<String, Object> values) {
         var quality = string(values.get("quality"), "quality");
         if (quality != null && !Set.of("hd", "standard").contains(quality)) {
-            throw new IllegalArgumentException(
-                "Zhipu image quality must be 'hd' or 'standard'");
+            throw new IllegalArgumentException("Zhipu image quality must be 'hd' or 'standard'");
         }
-        if (values.get("watermark_enabled") != null
-            && !(values.get("watermark_enabled") instanceof Boolean)) {
+        if (values.get("watermark_enabled") != null && !(values.get("watermark_enabled") instanceof Boolean)) {
             throw new IllegalArgumentException("Zhipu watermark_enabled must be boolean");
         }
         var userId = string(values.get("user_id"), "user_id");
         if (userId != null && (userId.length() < 6 || userId.length() > 128)) {
-            throw new IllegalArgumentException(
-                "Zhipu image user_id length must be between 6 and 128");
+            throw new IllegalArgumentException("Zhipu image user_id length must be between 6 and 128");
         }
     }
 

@@ -27,7 +27,6 @@ import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
 import run.halo.aifoundation.provider.support.ProviderRerankingClient;
 import run.halo.aifoundation.provider.support.ReasoningControlOptions;
-import run.halo.aifoundation.provider.support.RerankingModelProviderOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -86,9 +85,13 @@ public class GiteeProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.GITEE_CHAT, AdapterType.GITEE_RESPONSES,
-            AdapterType.GITEE_MESSAGES, AdapterType.GITEE_EMBEDDING, AdapterType.RERANK,
-            AdapterType.GITEE_IMAGE);
+        return List.of(
+                AdapterType.GITEE_CHAT,
+                AdapterType.GITEE_RESPONSES,
+                AdapterType.GITEE_MESSAGES,
+                AdapterType.GITEE_EMBEDDING,
+                AdapterType.RERANK,
+                AdapterType.GITEE_IMAGE);
     }
 
     @Override
@@ -123,8 +126,7 @@ public class GiteeProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new GiteeChatModel(chatOptions(provider, apiKey, modelId),
-            webClientBuilder(provider));
+        return new GiteeChatModel(chatOptions(provider, apiKey, modelId), webClientBuilder(provider));
     }
 
     @Override
@@ -135,35 +137,34 @@ public class GiteeProvider extends AbstractAiProviderType {
             case GITEE_CHAT -> new GiteeChatModel(options, webClientBuilder(provider));
             case GITEE_RESPONSES -> new GiteeResponsesModel(options, webClientBuilder(provider));
             case GITEE_MESSAGES -> new GiteeMessagesModel(options, webClientBuilder(provider));
-            default -> throw new IllegalArgumentException("Unsupported Gitee AI language adapter: "
-                + resolved.adapterType());
+            default ->
+                throw new IllegalArgumentException("Unsupported Gitee AI language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = GiteeEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .customHeaders(failoverHeaders())
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .customHeaders(failoverHeaders())
+                .build();
         return new GiteeEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey,
-        String modelId) {
-        return new GiteeRerankingClient(resolveBaseUrl(provider), modelId, apiKey,
-            webClientBuilder(provider));
+    public ProviderRerankingClient buildRerankingClient(AiProvider provider, String apiKey, String modelId) {
+        return new GiteeRerankingClient(resolveBaseUrl(provider), modelId, apiKey, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new GiteeImageGenerationClient(new ImageGenerationClientOptions(getProviderType(),
-            resolveBaseUrl(provider), apiKey, modelId, failoverHeaders()),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new GiteeImageGenerationClient(
+                new ImageGenerationClientOptions(
+                        getProviderType(), resolveBaseUrl(provider), apiKey, modelId, failoverHeaders()),
+                imageWebClientBuilder(provider));
     }
 
     @Override
@@ -184,35 +185,37 @@ public class GiteeProvider extends AbstractAiProviderType {
         return languageModelProviderOptions();
     }
 
-    private LanguageModelProviderOptions languageModelProviderOptions(
-        StructuredOutputSupport structuredOutput) {
+    private LanguageModelProviderOptions languageModelProviderOptions(StructuredOutputSupport structuredOutput) {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, structuredOutput);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, structuredOutput);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(false)
-            .streamToolCallsForReasoning(false)
-            .requestHeadersSupported(true)
-            .seedSupported(true)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(structuredOutput)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .build();
+                .reasoningHistorySupported(false)
+                .streamToolCallsForReasoning(false)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(structuredOutput)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .build();
     }
 
     @Override
     public Mono<List<DiscoveredModel>> discoverModels(AiProvider provider, String apiKey) {
-        return getDiscoveryJson(provider, apiKey,
-            uriBuilder -> uriBuilder.path("/models")
-                .queryParam("include_details", true).build(), null)
-            .map(root -> {
-                var data = listValue(root, "data");
-                return data == null ? List.of()
-                    : discoveredModelsFromNodes(data, "id", this::discoveredModel);
-            });
+        return getDiscoveryJson(
+                        provider,
+                        apiKey,
+                        uriBuilder -> uriBuilder
+                                .path("/models")
+                                .queryParam("include_details", true)
+                                .build(),
+                        null)
+                .map(root -> {
+                    var data = listValue(root, "data");
+                    return data == null ? List.of() : discoveredModelsFromNodes(data, "id", this::discoveredModel);
+                });
     }
 
     private DiscoveredModel discoveredModel(Map<?, ?> node) {
@@ -226,20 +229,19 @@ public class GiteeProvider extends AbstractAiProviderType {
             return null;
         }
         return DiscoveredModel.builder()
-            .modelId(modelId)
-            .displayName(modelId)
-            .modelType(modelType)
-            .features(features(modelType, operations))
-            .adapterType(recommendAdapterType(modelType).orElse(null))
-            .source(DiscoverySource.REMOTE)
-            .confidence(DiscoveryConfidence.HIGH)
-            .build();
+                .modelId(modelId)
+                .displayName(modelId)
+                .modelType(modelType)
+                .features(features(modelType, operations))
+                .adapterType(recommendAdapterType(modelType).orElse(null))
+                .source(DiscoverySource.REMOTE)
+                .confidence(DiscoveryConfidence.HIGH)
+                .build();
     }
 
     private Set<String> operations(Map<?, ?> node) {
         var result = new LinkedHashSet<String>();
-        var values = node.get("operations") instanceof Iterable<?> iterable
-            ? iterable : List.of();
+        var values = node.get("operations") instanceof Iterable<?> iterable ? iterable : List.of();
         for (var value : values) {
             if (!(value instanceof Map<?, ?> operation)) {
                 continue;
@@ -269,8 +271,7 @@ public class GiteeProvider extends AbstractAiProviderType {
         if (contains(operations, "text2image", "image2image", "/images/")) {
             return ModelType.IMAGE_GENERATION;
         }
-        if (contains(operations, "text2text", "completions", "image2text",
-            "/responses")) {
+        if (contains(operations, "text2text", "completions", "image2text", "/responses")) {
             return ModelType.LANGUAGE;
         }
         return null;
@@ -303,16 +304,19 @@ public class GiteeProvider extends AbstractAiProviderType {
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        for (var parameter : List.of(ModelParameter.MIN_P, ModelParameter.REPETITION_PENALTY,
-            ModelParameter.PARALLEL_TOOL_CALLS, ModelParameter.IMAGE_SEED,
-            ModelParameter.NEGATIVE_PROMPT)) {
+        for (var parameter : List.of(
+                ModelParameter.MIN_P,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.PARALLEL_TOOL_CALLS,
+                ModelParameter.IMAGE_SEED,
+                ModelParameter.NEGATIVE_PROMPT)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);
     }
 
-    private run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions
-        chatOptions(AiProvider provider, String apiKey, String modelId) {
+    private run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions chatOptions(
+            AiProvider provider, String apiKey, String modelId) {
         return chatCompletionsOptions(provider, apiKey, modelId, failoverHeaders());
     }
 

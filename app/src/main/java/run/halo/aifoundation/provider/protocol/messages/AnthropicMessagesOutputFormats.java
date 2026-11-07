@@ -11,14 +11,11 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 public final class AnthropicMessagesOutputFormats {
 
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> OBJECT_TYPE = new TypeReference<>() {
-    };
+    private static final TypeReference<Map<String, Object>> OBJECT_TYPE = new TypeReference<>() {};
 
-    private AnthropicMessagesOutputFormats() {
-    }
+    private AnthropicMessagesOutputFormats() {}
 
-    public static void applyJsonSchema(Map<String, Object> body,
-        ChatCompletionsOptions options) {
+    public static void applyJsonSchema(Map<String, Object> body, ChatCompletionsOptions options) {
         var responseFormat = options.getResponseFormat();
         if (responseFormat == null) {
             return;
@@ -28,9 +25,7 @@ public final class AnthropicMessagesOutputFormats {
         }
         var schema = readSchema(responseFormat.getJsonSchema());
         var outputConfig = mutableOutputConfig(body.get("output_config"));
-        outputConfig.put("format", Map.of(
-            "type", "json_schema",
-            "schema", schema));
+        outputConfig.put("format", Map.of("type", "json_schema", "schema", schema));
         body.put("output_config", outputConfig);
     }
 
@@ -49,8 +44,7 @@ public final class AnthropicMessagesOutputFormats {
     }
 
     private static IllegalArgumentException missingSchema() {
-        return new IllegalArgumentException(
-            "Messages JSON Schema output requires a non-empty schema");
+        return new IllegalArgumentException("Messages JSON Schema output requires a non-empty schema");
     }
 
     private static Map<String, Object> mutableOutputConfig(Object value) {

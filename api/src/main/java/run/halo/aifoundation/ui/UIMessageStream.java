@@ -6,9 +6,8 @@ import reactor.core.publisher.Flux;
 /**
  * Structured stream of frontend-facing UI message chunks.
  *
- * <p>The stream is framework-neutral. Callers can expose {@link #chunks()} directly,
- * encode it as server-sent events with {@link UIMessageStreamResponse}, or read it
- * into message snapshots with {@link UIMessageStreamReader}.
+ * <p>The stream is framework-neutral. Callers can expose {@link #chunks()} directly, encode it as server-sent events
+ * with {@link UIMessageStreamResponse}, or read it into message snapshots with {@link UIMessageStreamReader}.
  */
 public final class UIMessageStream {
 

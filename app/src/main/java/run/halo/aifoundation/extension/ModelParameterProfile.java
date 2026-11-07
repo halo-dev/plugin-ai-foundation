@@ -10,14 +10,20 @@ import run.halo.aifoundation.provider.support.ModelFeature;
 @Data
 public class ModelParameterProfile {
     private String providerType;
+
     @Schema(description = "Provider endpoint captured with the catalog configuration")
     private String providerBaseUrl;
+
     private String modelId;
     private AdapterType adapterType;
+
     @Schema(description = "Automatically derived or resolved parameter mappings")
     private ModelParameterMappings mappings;
+
     private ModelParameterConstraints constraints;
-    @Schema(description = "Explicit provider feature evidence, excluding catalog facts; "
-        + "empty when no provider evidence was found")
+
+    @Schema(
+            description = "Explicit provider feature evidence, excluding catalog facts; "
+                    + "empty when no provider evidence was found")
     private Map<ModelFeature, Boolean> featureEvidence = Map.of();
 }

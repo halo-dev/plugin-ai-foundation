@@ -9,8 +9,8 @@ import lombok.NoArgsConstructor;
 /**
  * Non-fatal diagnostic emitted during image generation.
  *
- * <p>Warnings describe optional settings that were ignored, adjusted, or only partially applied.
- * Semantic capability failures are raised as exceptions instead of warnings.
+ * <p>Warnings describe optional settings that were ignored, adjusted, or only partially applied. Semantic capability
+ * failures are raised as exceptions instead of warnings.
  */
 @Data
 @Builder
@@ -18,18 +18,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ImageGenerationWarning {
 
-    /**
-     * Stable warning code suitable for programmatic handling.
-     */
+    /** Stable warning code suitable for programmatic handling. */
     private String code;
 
-    /**
-     * Human-readable, log-safe warning message.
-     */
+    /** Human-readable, log-safe warning message. */
     private String message;
 
-    /**
-     * Sanitized provider metadata related to the warning, when available.
-     */
+    /** Sanitized provider metadata related to the warning, when available. */
     private Map<String, Object> providerMetadata;
 }

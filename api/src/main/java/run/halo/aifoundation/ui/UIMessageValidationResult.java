@@ -8,8 +8,7 @@ import java.util.List;
  * @param messages immutable validated message input
  * @param issues validation issues found in the input
  */
-public record UIMessageValidationResult<M>(List<UIMessage<M>> messages,
-                                           List<UIMessageValidationIssue> issues) {
+public record UIMessageValidationResult<M>(List<UIMessage<M>> messages, List<UIMessageValidationIssue> issues) {
     public UIMessageValidationResult {
         messages = List.copyOf(messages);
         issues = List.copyOf(issues);

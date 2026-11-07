@@ -21,10 +21,10 @@ import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.image.ImageResponseFormat;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.GeneratedFile;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
-import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.support.image.ImageJson;
 import run.halo.aifoundation.provider.support.image.ImageParameterMappingMerger;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
@@ -38,8 +38,8 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
     private final OpenAiCompatibleImageOptions options;
     private final WebClient webClient;
 
-    public OpenAiCompatibleImageGenerationClient(OpenAiCompatibleImageOptions options,
-        WebClient.Builder webClientBuilder) {
+    public OpenAiCompatibleImageGenerationClient(
+            OpenAiCompatibleImageOptions options, WebClient.Builder webClientBuilder) {
         this.options = options;
         this.webClient = webClientBuilder.build();
     }
@@ -50,60 +50,55 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
     }
 
     @Override
-    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target) {
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request, ParameterMappingTarget target) {
         return generateImage(request, target, Map.of());
     }
 
     @Override
-    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+    public Mono<GenerateImageResult> generateImage(
+            GenerateImageRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         if (hasInputImages(request)) {
             return Mono.error(new IllegalArgumentException(
-                "OpenAI-compatible image adapter currently supports text-to-image requests only"));
+                    "OpenAI-compatible image adapter currently supports text-to-image requests only"));
         }
-        var body = ImageParameterMappingMerger.merge(
-            requestBody(request, nativeOptions), target);
+        var body = ImageParameterMappingMerger.merge(requestBody(request, nativeOptions), target);
         var url = imagesGenerationsUrl();
-        var diagnostics = ProviderDiagnostics.create(options.providerType(),
-            "openai-compatible-image");
+        var diagnostics = ProviderDiagnostics.create(options.providerType(), "openai-compatible-image");
         diagnostics.request(url, body, false);
-        return webClient.method(HttpMethod.POST)
-            .uri(URI.create(url))
-            .headers(headers -> {
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                if (hasText(options.apiKey())) {
-                    headers.setBearerAuth(options.apiKey());
-                }
-                options.customHeaders().forEach(headers::set);
-                if (request.getHeaders() != null) {
-                    request.getHeaders().forEach(headers::set);
-                }
-            })
-            .bodyValue(body)
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response,
-                        options.providerType(), "image", diagnostics);
-                }
-                return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> imageResponse(data, request));
-            });
+        return webClient
+                .method(HttpMethod.POST)
+                .uri(URI.create(url))
+                .headers(headers -> {
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    if (hasText(options.apiKey())) {
+                        headers.setBearerAuth(options.apiKey());
+                    }
+                    options.customHeaders().forEach(headers::set);
+                    if (request.getHeaders() != null) {
+                        request.getHeaders().forEach(headers::set);
+                    }
+                })
+                .bodyValue(body)
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(
+                                response, options.providerType(), "image", diagnostics);
+                    }
+                    return ProviderHttpResponseSupport.body(response, diagnostics)
+                            .map(data -> imageResponse(data, request));
+                });
     }
 
     Map<String, Object> requestBody(GenerateImageRequest request) {
         return requestBody(request, Map.of());
     }
 
-    Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         if (request == null) {
-            throw new IllegalArgumentException(
-                "OpenAI-compatible image prompt must not be blank");
+            throw new IllegalArgumentException("OpenAI-compatible image prompt must not be blank");
         }
         if (!hasText(request.getPrompt())) {
-            throw new IllegalArgumentException(
-                "OpenAI-compatible image prompt must not be blank");
+            throw new IllegalArgumentException("OpenAI-compatible image prompt must not be blank");
         }
         var body = new LinkedHashMap<String, Object>();
         if (nativeOptions != null) {
@@ -129,19 +124,19 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
             var images = images(root.path("data"));
             var warnings = warnings(root.path("data"));
             var responseMetadata = GenerationResponseMetadata.builder()
-                .id(textOrNull(root.path("id")))
-                .model(textOrNull(root.path("model")))
-                .timestamp(Instant.now())
-                .body(parseBody(data))
-                .metadata(Map.of("providerType", options.providerType()))
-                .build();
+                    .id(textOrNull(root.path("id")))
+                    .model(textOrNull(root.path("model")))
+                    .timestamp(Instant.now())
+                    .body(parseBody(data))
+                    .metadata(Map.of("providerType", options.providerType()))
+                    .build();
             return GenerateImageResult.builder()
-                .images(images)
-                .usage(usage(root.path("usage"), images.size()))
-                .warnings(warnings)
-                .responses(List.of(responseMetadata))
-                .providerMetadata(Map.of("providerType", options.providerType()))
-                .build();
+                    .images(images)
+                    .usage(usage(root.path("usage"), images.size()))
+                    .warnings(warnings)
+                    .responses(List.of(responseMetadata))
+                    .providerMetadata(Map.of("providerType", options.providerType()))
+                    .build();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to parse OpenAI-compatible image response", e);
         }
@@ -162,16 +157,16 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
             }
             if (hasText(base64)) {
                 images.add(GeneratedFile.builder()
-                    .base64(base64)
-                    .mediaType("image/png")
-                    .metadata(metadata)
-                    .build());
+                        .base64(base64)
+                        .mediaType("image/png")
+                        .metadata(metadata)
+                        .build());
             } else if (hasText(url)) {
                 images.add(GeneratedFile.builder()
-                    .url(url)
-                    .mediaType("image/png")
-                    .metadata(metadata)
-                    .build());
+                        .url(url)
+                        .mediaType("image/png")
+                        .metadata(metadata)
+                        .build());
             }
         }
         return List.copyOf(images);
@@ -186,10 +181,10 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
             var revisedPrompt = textOrNull(item.path("revised_prompt"));
             if (hasText(revisedPrompt)) {
                 warnings.add(ImageGenerationWarning.builder()
-                    .code("prompt-revised")
-                    .message("Provider revised the image generation prompt.")
-                    .providerMetadata(Map.of("revisedPrompt", revisedPrompt))
-                    .build());
+                        .code("prompt-revised")
+                        .message("Provider revised the image generation prompt.")
+                        .providerMetadata(Map.of("revisedPrompt", revisedPrompt))
+                        .build());
             }
         }
         return List.copyOf(warnings);
@@ -200,12 +195,12 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
             return ImageUsage.builder().imageCount(imageCount).build();
         }
         return ImageUsage.builder()
-            .inputTokens(intOrNull(usage.path("input_tokens")))
-            .outputTokens(intOrNull(usage.path("output_tokens")))
-            .totalTokens(intOrNull(usage.path("total_tokens")))
-            .imageCount(imageCount)
-            .raw(OBJECT_MAPPER.convertValue(usage, Object.class))
-            .build();
+                .inputTokens(intOrNull(usage.path("input_tokens")))
+                .outputTokens(intOrNull(usage.path("output_tokens")))
+                .totalTokens(intOrNull(usage.path("total_tokens")))
+                .imageCount(imageCount)
+                .raw(OBJECT_MAPPER.convertValue(usage, Object.class))
+                .build();
     }
 
     private Object parseBody(String data) throws JsonProcessingException {
@@ -217,7 +212,7 @@ public class OpenAiCompatibleImageGenerationClient implements ProviderImageGener
 
     private String imagesGenerationsUrl() {
         return ProviderUris.withoutTrailingSlashes(options.baseUrl())
-            + endpointPath(options.endpointPath(), IMAGES_GENERATIONS_PATH);
+                + endpointPath(options.endpointPath(), IMAGES_GENERATIONS_PATH);
     }
 
     private String endpointPath(String configuredPath, String defaultPath) {

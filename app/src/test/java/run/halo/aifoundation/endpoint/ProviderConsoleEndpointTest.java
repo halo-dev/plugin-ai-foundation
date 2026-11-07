@@ -56,30 +56,48 @@ class ProviderConsoleEndpointTest {
         when(openAiType.getProviderType()).thenReturn("openai");
         when(openAiType.requiresBaseUrl()).thenReturn(false);
         when(openAiType.getSupportedAdapterTypes())
-            .thenReturn(List.of(AdapterType.OPENAI_CHAT, AdapterType.OPENAI_EMBEDDING,
-                AdapterType.RERANK, AdapterType.OPENAI_IMAGE));
-        when(providerClientCache.getProviderTypeMap())
-            .thenReturn(Map.of("openai", openAiType));
+                .thenReturn(List.of(
+                        AdapterType.OPENAI_CHAT,
+                        AdapterType.OPENAI_EMBEDDING,
+                        AdapterType.RERANK,
+                        AdapterType.OPENAI_IMAGE));
+        when(providerClientCache.getProviderTypeMap()).thenReturn(Map.of("openai", openAiType));
         when(providerClientCache.getProviderType("openai")).thenReturn(openAiType);
 
-        var endpoint = new ProviderConsoleEndpoint(client, providerClientCache, secretResolver,
-            new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
-            new ModelCatalogEnricher(catalogService),
-            catalogService);
+        var endpoint = new ProviderConsoleEndpoint(
+                client,
+                providerClientCache,
+                secretResolver,
+                new ParameterMappingValidator(new ParameterMappingTemplateRegistry()),
+                new ModelCatalogEnricher(catalogService),
+                catalogService);
         webTestClient = WebTestClient.bindToRouterFunction(endpoint.endpoint())
-            .configureClient()
-            .build();
+                .configureClient()
+                .build();
     }
 
     @Test
     void refreshingCatalogNeverReadsOrWritesSavedModels() {
-        var status = new ModelCatalogStatus(ModelsDevCatalogService.SOURCE_URL,
-            java.time.Instant.parse("2026-10-26T10:00:00Z"), null, true, false, false, null);
+        var status = new ModelCatalogStatus(
+                ModelsDevCatalogService.SOURCE_URL,
+                java.time.Instant.parse("2026-10-26T10:00:00Z"),
+                null,
+                true,
+                false,
+                false,
+                null);
         when(catalogService.refresh()).thenReturn(Mono.just(status));
-        webTestClient.post().uri("/model-catalog/refresh").exchange()
-            .expectStatus().isOk()
-            .expectBody().jsonPath("$.available").isEqualTo(true)
-            .jsonPath("$.sourceUrl").isEqualTo(ModelsDevCatalogService.SOURCE_URL);
+        webTestClient
+                .post()
+                .uri("/model-catalog/refresh")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.available")
+                .isEqualTo(true)
+                .jsonPath("$.sourceUrl")
+                .isEqualTo(ModelsDevCatalogService.SOURCE_URL);
         verifyNoInteractions(client, secretResolver);
     }
 
@@ -88,16 +106,16 @@ class ProviderConsoleEndpointTest {
     @Test
     void list_returnsAllProviders() {
         when(client.listAll(eq(AiProvider.class), any(), any()))
-            .thenReturn(Flux.just(
-                provider("openai-prod", "openai"),
-                provider("ollama-local", "ollama")
-            ));
+                .thenReturn(Flux.just(provider("openai-prod", "openai"), provider("ollama-local", "ollama")));
 
-        webTestClient.get().uri("/providers")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBodyList(AiProvider.class)
-            .hasSize(2);
+        webTestClient
+                .get()
+                .uri("/providers")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(AiProvider.class)
+                .hasSize(2);
     }
 
     // ---- create ----
@@ -105,18 +123,20 @@ class ProviderConsoleEndpointTest {
     @Test
     void create_validProvider_returns200() {
         var p = provider("new-provider", "openai");
-        when(client.create(any(AiProvider.class)))
-            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiProvider.class)
-            .consumeWith(response ->
-                assertThat(response.getResponseBody().getSpec().getProviderType())
-                    .isEqualTo("openai"));
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AiProvider.class)
+                .consumeWith(response -> assertThat(
+                                response.getResponseBody().getSpec().getProviderType())
+                        .isEqualTo("openai"));
     }
 
     @Test
@@ -124,20 +144,22 @@ class ProviderConsoleEndpointTest {
         var p = provider("new-provider", "openai");
         p.getSpec().setProxyHost("127.0.0.1");
         p.getSpec().setProxyPort(7890);
-        when(client.create(any(AiProvider.class)))
-            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiProvider.class)
-            .consumeWith(response -> {
-                var spec = response.getResponseBody().getSpec();
-                assertThat(spec.getProxyHost()).isEqualTo("127.0.0.1");
-                assertThat(spec.getProxyPort()).isEqualTo(7890);
-            });
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AiProvider.class)
+                .consumeWith(response -> {
+                    var spec = response.getResponseBody().getSpec();
+                    assertThat(spec.getProxyHost()).isEqualTo("127.0.0.1");
+                    assertThat(spec.getProxyPort()).isEqualTo(7890);
+                });
     }
 
     @Test
@@ -148,17 +170,19 @@ class ProviderConsoleEndpointTest {
         language.setMaxOutputTokens(template("openai.max-completion-tokens"));
         mappings.setLanguage(language);
         p.getSpec().setParameterMappings(mappings);
-        when(client.create(any(AiProvider.class)))
-            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.spec.parameterMappings.language.maxOutputTokens.template")
-            .isEqualTo("openai.max-completion-tokens");
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.spec.parameterMappings.language.maxOutputTokens.template")
+                .isEqualTo("openai.max-completion-tokens");
     }
 
     @Test
@@ -170,11 +194,14 @@ class ProviderConsoleEndpointTest {
         mappings.setLanguage(language);
         p.getSpec().setParameterMappings(mappings);
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -194,11 +221,14 @@ class ProviderConsoleEndpointTest {
         mappings.setLanguage(language);
         p.getSpec().setParameterMappings(mappings);
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -208,22 +238,24 @@ class ProviderConsoleEndpointTest {
         p.getSpec().setEmbeddingEndpointPath("/compatible/embeddings");
         p.getSpec().setRerankEndpointPath("compatible/rerank");
         p.getSpec().setImageEndpointPath(" ");
-        when(client.create(any(AiProvider.class)))
-            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(AiProvider.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AiProvider.class)
-            .consumeWith(response -> {
-                var spec = response.getResponseBody().getSpec();
-                assertThat(spec.getChatEndpointPath()).isEqualTo("/compatible/chat");
-                assertThat(spec.getEmbeddingEndpointPath()).isEqualTo("/compatible/embeddings");
-                assertThat(spec.getRerankEndpointPath()).isEqualTo("/compatible/rerank");
-                assertThat(spec.getImageEndpointPath()).isNull();
-            });
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AiProvider.class)
+                .consumeWith(response -> {
+                    var spec = response.getResponseBody().getSpec();
+                    assertThat(spec.getChatEndpointPath()).isEqualTo("/compatible/chat");
+                    assertThat(spec.getEmbeddingEndpointPath()).isEqualTo("/compatible/embeddings");
+                    assertThat(spec.getRerankEndpointPath()).isEqualTo("/compatible/rerank");
+                    assertThat(spec.getImageEndpointPath()).isNull();
+                });
     }
 
     @Test
@@ -231,11 +263,14 @@ class ProviderConsoleEndpointTest {
         var p = provider("bad-provider", "openai");
         p.getSpec().setRerankEndpointPath("https://example.com/rerank");
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -243,11 +278,14 @@ class ProviderConsoleEndpointTest {
         var p = provider("bad-provider", "openai");
         p.getSpec().setProxyHost("127.0.0.1");
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -255,11 +293,14 @@ class ProviderConsoleEndpointTest {
         var p = provider("bad-provider", "openai");
         p.getSpec().setProxyPort(7890);
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -268,11 +309,14 @@ class ProviderConsoleEndpointTest {
         p.getSpec().setProxyHost(" ");
         p.getSpec().setProxyPort(7890);
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -281,33 +325,42 @@ class ProviderConsoleEndpointTest {
         p.getSpec().setProxyHost("127.0.0.1");
         p.getSpec().setProxyPort(0);
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void create_unsupportedProviderType_returns400() {
         var p = provider("bad-provider", "unknown-ai");
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void create_nullProviderType_returns400() {
         var p = provider("bad-provider", null);
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -318,11 +371,14 @@ class ProviderConsoleEndpointTest {
         p.setMetadata(metadata);
         // spec is null
 
-        webTestClient.post().uri("/providers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(p)
-            .exchange()
-            .expectStatus().isBadRequest();
+        webTestClient
+                .post()
+                .uri("/providers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(p)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     // ---- delete ----
@@ -334,9 +390,12 @@ class ProviderConsoleEndpointTest {
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(p));
         when(client.delete(p)).thenReturn(Mono.just(p));
 
-        webTestClient.delete().uri("/providers/openai-prod")
-            .exchange()
-            .expectStatus().isNoContent();
+        webTestClient
+                .delete()
+                .uri("/providers/openai-prod")
+                .exchange()
+                .expectStatus()
+                .isNoContent();
     }
 
     @Test
@@ -348,9 +407,12 @@ class ProviderConsoleEndpointTest {
         when(client.delete(model)).thenReturn(Mono.just(model));
         when(client.delete(p)).thenReturn(Mono.just(p));
 
-        webTestClient.delete().uri("/providers/openai-prod")
-            .exchange()
-            .expectStatus().isNoContent();
+        webTestClient
+                .delete()
+                .uri("/providers/openai-prod")
+                .exchange()
+                .expectStatus()
+                .isNoContent();
 
         verify(client).delete(model);
         verify(client).delete(p);
@@ -361,9 +423,12 @@ class ProviderConsoleEndpointTest {
         when(client.listAll(eq(AiModel.class), any(), isNull())).thenReturn(Flux.empty());
         when(client.fetch(AiProvider.class, "missing")).thenReturn(Mono.empty());
 
-        webTestClient.delete().uri("/providers/missing")
-            .exchange()
-            .expectStatus().isNotFound();
+        webTestClient
+                .delete()
+                .uri("/providers/missing")
+                .exchange()
+                .expectStatus()
+                .isNotFound();
     }
 
     // ---- discover models ----
@@ -373,39 +438,54 @@ class ProviderConsoleEndpointTest {
         var provider = provider("openai-prod", "openai");
         when(client.fetch(AiProvider.class, "openai-prod")).thenReturn(Mono.just(provider));
         when(secretResolver.resolveApiKey(isNull())).thenReturn(Mono.just("sk-test"));
-        when(openAiType.discoverModels(provider, "sk-test")).thenReturn(Mono.just(List.of(
-            new DiscoveredModel(
-                "gpt-4",
-                "gpt-4",
-                ModelType.LANGUAGE,
-                Set.of(ModelFeature.STREAMING),
-                AdapterType.OPENAI_CHAT,
-                DiscoverySource.RULE,
-                DiscoveryConfidence.LOW),
-            new DiscoveredModel("text-embedding-3-small", "text-embedding-3-small",
-                ModelType.EMBEDDING,
-                Set.of(),
-                null,
-                DiscoverySource.RULE,
-                DiscoveryConfidence.LOW)
-        )));
+        when(openAiType.discoverModels(provider, "sk-test"))
+                .thenReturn(Mono.just(List.of(
+                        new DiscoveredModel(
+                                "gpt-4",
+                                "gpt-4",
+                                ModelType.LANGUAGE,
+                                Set.of(ModelFeature.STREAMING),
+                                AdapterType.OPENAI_CHAT,
+                                DiscoverySource.RULE,
+                                DiscoveryConfidence.LOW),
+                        new DiscoveredModel(
+                                "text-embedding-3-small",
+                                "text-embedding-3-small",
+                                ModelType.EMBEDDING,
+                                Set.of(),
+                                null,
+                                DiscoverySource.RULE,
+                                DiscoveryConfidence.LOW))));
         when(openAiType.recommendAdapterType(any(DiscoveredModel.class)))
-            .thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
+                .thenReturn(Optional.of(AdapterType.OPENAI_EMBEDDING));
 
-        webTestClient.get().uri("/providers/openai-prod/discover-models")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.providerName").isEqualTo("openai-prod")
-            .jsonPath("$.models[0].modelId").isEqualTo("gpt-4")
-            .jsonPath("$.models[0].modelType").isEqualTo("language")
-            .jsonPath("$.models[0].features[0]").isEqualTo("streaming")
-            .jsonPath("$.models[0].source").isEqualTo("rule")
-            .jsonPath("$.models[0].confidence").isEqualTo("low")
-            .jsonPath("$.models[0].adapterType").isEqualTo("openai-chat")
-            .jsonPath("$.models[1].modelId").isEqualTo("text-embedding-3-small")
-            .jsonPath("$.models[1].modelType").isEqualTo("embedding")
-            .jsonPath("$.models[1].adapterType").isEqualTo("openai-embedding");
+        webTestClient
+                .get()
+                .uri("/providers/openai-prod/discover-models")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.providerName")
+                .isEqualTo("openai-prod")
+                .jsonPath("$.models[0].modelId")
+                .isEqualTo("gpt-4")
+                .jsonPath("$.models[0].modelType")
+                .isEqualTo("language")
+                .jsonPath("$.models[0].features[0]")
+                .isEqualTo("streaming")
+                .jsonPath("$.models[0].source")
+                .isEqualTo("rule")
+                .jsonPath("$.models[0].confidence")
+                .isEqualTo("low")
+                .jsonPath("$.models[0].adapterType")
+                .isEqualTo("openai-chat")
+                .jsonPath("$.models[1].modelId")
+                .isEqualTo("text-embedding-3-small")
+                .jsonPath("$.models[1].modelType")
+                .isEqualTo("embedding")
+                .jsonPath("$.models[1].adapterType")
+                .isEqualTo("openai-embedding");
     }
 
     // ---- helpers ----

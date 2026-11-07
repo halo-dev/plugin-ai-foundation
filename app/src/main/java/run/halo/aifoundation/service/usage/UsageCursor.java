@@ -11,14 +11,12 @@ record UsageCursor(Instant startedAt, String id, String filterHash) {
 
     static String encode(Instant startedAt, String id, UsageQuery query) {
         var value = startedAt.toEpochMilli() + "\n" + id + "\n" + hash(query);
-        return Base64.getUrlEncoder().withoutPadding()
-            .encodeToString(value.getBytes(StandardCharsets.UTF_8));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
     static UsageCursor decode(String encoded, UsageQuery query) {
         try {
-            var decoded = new String(Base64.getUrlDecoder().decode(encoded),
-                StandardCharsets.UTF_8);
+            var decoded = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
             var parts = decoded.split("\\n", -1);
             if (parts.length != 3) {
                 throw new IllegalArgumentException("Cursor must contain timestamp, id and filter hash");
@@ -26,8 +24,7 @@ record UsageCursor(Instant startedAt, String id, String filterHash) {
             if (!parts[2].equals(hash(query))) {
                 throw new IllegalArgumentException("Cursor does not match the current filters");
             }
-            return new UsageCursor(Instant.ofEpochMilli(Long.parseLong(parts[0])), parts[1],
-                parts[2]);
+            return new UsageCursor(Instant.ofEpochMilli(Long.parseLong(parts[0])), parts[1], parts[2]);
         } catch (IllegalArgumentException error) {
             throw new IllegalArgumentException("Invalid cursor", error);
         }

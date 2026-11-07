@@ -12,10 +12,14 @@ import java.util.Map;
  * @param reason optional approval or denial reason
  * @param providerMetadata provider-specific metadata
  */
-public record ToolApprovalResponseChunk(String approvalId, String toolCallId, String toolName,
-                                        Boolean approved, String reason,
-                                        Map<String, Object> providerMetadata)
-    implements UIMessageChunk {
+public record ToolApprovalResponseChunk(
+        String approvalId,
+        String toolCallId,
+        String toolName,
+        Boolean approved,
+        String reason,
+        Map<String, Object> providerMetadata)
+        implements UIMessageChunk {
 
     public ToolApprovalResponseChunk {
         providerMetadata = providerMetadata == null ? Map.of() : Map.copyOf(providerMetadata);

@@ -5,8 +5,7 @@ import java.util.Set;
 /** Structural inspection helpers for canonical Responses input items. */
 public final class ResponsesInputs {
 
-    private ResponsesInputs() {
-    }
+    private ResponsesInputs() {}
 
     public static boolean containsType(Object value, Set<String> types) {
         if (value instanceof java.util.Map<?, ?> map) {

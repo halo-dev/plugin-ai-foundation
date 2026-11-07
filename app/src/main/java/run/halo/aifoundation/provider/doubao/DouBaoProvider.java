@@ -16,9 +16,9 @@ import run.halo.aifoundation.provider.support.EmbeddingModelProviderOptions;
 import run.halo.aifoundation.provider.support.LanguageModelProviderOptions;
 import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ProviderFeatureSets;
-import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderModelRef;
+import run.halo.aifoundation.provider.support.ReasoningControlOptions;
 import run.halo.aifoundation.provider.support.StructuredOutputSupport;
 import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions;
 
@@ -74,8 +74,11 @@ public class DouBaoProvider extends AbstractAiProviderType {
 
     @Override
     public List<AdapterType> getSupportedAdapterTypes() {
-        return List.of(AdapterType.DOUBAO_RESPONSES, AdapterType.DOUBAO_CHAT,
-            AdapterType.DOUBAO_EMBEDDING, AdapterType.DOUBAO_IMAGE);
+        return List.of(
+                AdapterType.DOUBAO_RESPONSES,
+                AdapterType.DOUBAO_CHAT,
+                AdapterType.DOUBAO_EMBEDDING,
+                AdapterType.DOUBAO_IMAGE);
     }
 
     @Override
@@ -107,30 +110,29 @@ public class DouBaoProvider extends AbstractAiProviderType {
         var resolved = resolveModel(model);
         var options = chatCompletionsOptions(provider, apiKey, resolved.modelId(), Map.of());
         return switch (resolved.adapterType()) {
-            case DOUBAO_RESPONSES -> new DouBaoResponsesModel(options,
-                webClientBuilder(provider));
+            case DOUBAO_RESPONSES -> new DouBaoResponsesModel(options, webClientBuilder(provider));
             case DOUBAO_CHAT -> new DouBaoChatModel(options, webClientBuilder(provider));
-            default -> throw new IllegalArgumentException("Unsupported Doubao language adapter: "
-                + resolved.adapterType());
+            default ->
+                throw new IllegalArgumentException("Unsupported Doubao language adapter: " + resolved.adapterType());
         };
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = DouBaoEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .build();
         return new DouBaoEmbeddingModel(options, webClientBuilder(provider));
     }
 
     @Override
-    public ProviderImageGenerationClient buildImageGenerationClient(AiProvider provider,
-        String apiKey, String modelId) {
-        return new DouBaoImageGenerationClient(new ImageGenerationClientOptions(
-            getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
-            imageWebClientBuilder(provider));
+    public ProviderImageGenerationClient buildImageGenerationClient(
+            AiProvider provider, String apiKey, String modelId) {
+        return new DouBaoImageGenerationClient(
+                new ImageGenerationClientOptions(getProviderType(), resolveBaseUrl(provider), apiKey, modelId, null),
+                imageWebClientBuilder(provider));
     }
 
     @Override
@@ -141,37 +143,36 @@ public class DouBaoProvider extends AbstractAiProviderType {
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, StructuredOutputSupport.JSON_SCHEMA);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, StructuredOutputSupport.JSON_SCHEMA);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(false)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(false)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .build();
     }
 
     @Override
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        for (var parameter : List.of(ModelParameter.TOP_K, ModelParameter.MIN_P,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.SEED)) {
+        for (var parameter : List.of(
+                ModelParameter.TOP_K, ModelParameter.MIN_P, ModelParameter.REPETITION_PENALTY, ModelParameter.SEED)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);
     }
 
     private ChatModel responsesModel(AiProvider provider, String apiKey, String modelId) {
-        return new DouBaoResponsesModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new DouBaoResponsesModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     private String reasoningContent(AssistantMessage message) {

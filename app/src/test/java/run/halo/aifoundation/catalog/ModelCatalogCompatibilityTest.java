@@ -34,33 +34,37 @@ class ModelCatalogCompatibilityTest {
 
     @Test
     void keepsPublishedSourceValuesAndExhaustiveConsumersUnchanged() {
-        assertThat(CapabilitySource.values()).extracting(CapabilitySource::getValue)
-            .containsExactly("remote", "built-in", "manual", "unknown");
+        assertThat(CapabilitySource.values())
+                .extracting(CapabilitySource::getValue)
+                .containsExactly("remote", "built-in", "manual", "unknown");
         for (var source : CapabilitySource.values()) {
             // A published caller's exhaustive switch must still compile unchanged.
-            var published = switch (source) {
-                case REMOTE -> PublishedSource.REMOTE;
-                case BUILT_IN -> PublishedSource.BUILT_IN;
-                case MANUAL -> PublishedSource.MANUAL;
-                case UNKNOWN -> PublishedSource.UNKNOWN;
-            };
-            assertThat(JsonUtils.jsonToObject(JsonUtils.objectToJson(source),
-                PublishedSource.class))
-                .isEqualTo(published);
+            var published =
+                    switch (source) {
+                        case REMOTE -> PublishedSource.REMOTE;
+                        case BUILT_IN -> PublishedSource.BUILT_IN;
+                        case MANUAL -> PublishedSource.MANUAL;
+                        case UNKNOWN -> PublishedSource.UNKNOWN;
+                    };
+            assertThat(JsonUtils.jsonToObject(JsonUtils.objectToJson(source), PublishedSource.class))
+                    .isEqualTo(published);
         }
     }
 
     @Test
     void catalogSnapshotCanBeReadAndResavedWithoutProvenanceByPublishedReader() {
-        var service = new ModelsDevCatalogService(directory.resolve("catalog.json"),
-            Mono.just(CATALOG), CLOCK);
+        var service = new ModelsDevCatalogService(directory.resolve("catalog.json"), Mono.just(CATALOG), CLOCK);
         assertThat(service.refresh().block().available()).isTrue();
-        var discovered = DiscoveredModel.builder().modelId("exact-model")
-            .modelType(ModelType.LANGUAGE).adapterType(AdapterType.OPENAI_RESPONSES)
-            .features(Set.of(ModelFeature.STREAMING)).source(DiscoverySource.RULE).build();
-        var result = new ModelCatalogEnricher(service).enrich(
-            provider(null), new OpenAiProvider(), List.of(discovered))
-            .getFirst();
+        var discovered = DiscoveredModel.builder()
+                .modelId("exact-model")
+                .modelType(ModelType.LANGUAGE)
+                .adapterType(AdapterType.OPENAI_RESPONSES)
+                .features(Set.of(ModelFeature.STREAMING))
+                .source(DiscoverySource.RULE)
+                .build();
+        var result = new ModelCatalogEnricher(service)
+                .enrich(provider(null), new OpenAiProvider(), List.of(discovered))
+                .getFirst();
         var model = new AiModel();
         var spec = new AiModel.AiModelSpec();
         spec.setProviderName("openai-prod");
@@ -76,22 +80,23 @@ class ModelCatalogCompatibilityTest {
         var json = JsonUtils.objectToJson(model);
         var legacy = JsonUtils.jsonToObject(json, PublishedModel.class);
         assertThat(legacy.spec().capabilitySources().language()).isEqualTo(PublishedSource.UNKNOWN);
-        assertThat(legacy.spec().capabilities().sources().language())
-            .isEqualTo(PublishedSource.UNKNOWN);
+        assertThat(legacy.spec().capabilities().sources().language()).isEqualTo(PublishedSource.UNKNOWN);
         assertThat(legacy.spec().capabilities().language())
-            .isEqualTo(result.capabilities().getLanguage());
+                .isEqualTo(result.capabilities().getLanguage());
         assertThat(legacy.spec().modelId()).isEqualTo("exact-model");
         assertThat(json).contains("\"catalogMatch\"").doesNotContain("\"catalog\"");
 
         var restored = JsonUtils.jsonToObject(JsonUtils.objectToJson(legacy), AiModel.class);
         assertThat(restored.getSpec().getCatalogMatch()).isNull();
-        assertThat(new ModelCapabilityService().effectiveCapabilities(restored, null).getLanguage())
-            .isEqualTo(result.capabilities().getLanguage());
+        assertThat(new ModelCapabilityService()
+                        .effectiveCapabilities(restored, null)
+                        .getLanguage())
+                .isEqualTo(result.capabilities().getLanguage());
 
         // Published readers reject unknown capability source values.
-        assertThatThrownBy(() -> JsonUtils.jsonToObject(
-            json.replace("\"unknown\"", "\"catalog\""), PublishedModel.class))
-            .hasRootCauseInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(
+                        () -> JsonUtils.jsonToObject(json.replace("\"unknown\"", "\"catalog\""), PublishedModel.class))
+                .hasRootCauseInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -112,22 +117,26 @@ class ModelCatalogCompatibilityTest {
 
     // Frozen wire projection of v1.3.0 (5e0ed899), whose source enum is also used by v1.0.0.
     // Intentionally omit catalogMatch; use Halo's mapper to exercise unknown-field handling.
-    record PublishedModel(PublishedSpec spec) {
-    }
+    record PublishedModel(PublishedSpec spec) {}
 
-    record PublishedSpec(String providerName, String modelId, ModelType modelType,
-                         AdapterType adapterType, List<ModelFeature> features,
-                         PublishedCapabilities capabilities, PublishedSources capabilitySources) {
-    }
+    record PublishedSpec(
+            String providerName,
+            String modelId,
+            ModelType modelType,
+            AdapterType adapterType,
+            List<ModelFeature> features,
+            PublishedCapabilities capabilities,
+            PublishedSources capabilitySources) {}
 
-    record PublishedCapabilities(LanguageCapability language, PublishedSources sources) {
-    }
+    record PublishedCapabilities(LanguageCapability language, PublishedSources sources) {}
 
-    record PublishedSources(PublishedSource language, PublishedSource imageGeneration) {
-    }
+    record PublishedSources(PublishedSource language, PublishedSource imageGeneration) {}
 
     enum PublishedSource {
-        REMOTE("remote"), BUILT_IN("built-in"), MANUAL("manual"), UNKNOWN("unknown");
+        REMOTE("remote"),
+        BUILT_IN("built-in"),
+        MANUAL("manual"),
+        UNKNOWN("unknown");
 
         private final String value;
 
@@ -142,9 +151,10 @@ class ModelCatalogCompatibilityTest {
 
         @JsonCreator
         public static PublishedSource fromValue(String value) {
-            return Arrays.stream(values()).filter(source -> source.value.equals(value)).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                    "Unsupported capability source: " + value));
+            return Arrays.stream(values())
+                    .filter(source -> source.value.equals(value))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Unsupported capability source: " + value));
         }
     }
 }

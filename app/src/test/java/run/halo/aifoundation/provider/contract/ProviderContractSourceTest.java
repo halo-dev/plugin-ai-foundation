@@ -13,11 +13,10 @@ class ProviderContractSourceTest {
     @Test
     void recordsOnlyOfficialDocumentationProvenance() {
         var fields = Arrays.stream(ProviderContractSource.class.getDeclaredMethods())
-            .map(Method::getName)
-            .toList();
+                .map(Method::getName)
+                .toList();
 
-        assertThat(fields)
-            .containsExactlyInAnyOrder("provider", "officialDocumentation", "retrievedAt");
+        assertThat(fields).containsExactlyInAnyOrder("provider", "officialDocumentation", "retrievedAt");
     }
 
     @Test

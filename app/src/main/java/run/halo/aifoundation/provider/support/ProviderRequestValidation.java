@@ -11,12 +11,11 @@ public final class ProviderRequestValidation {
 
     private static final String CONTEXT_KEY = ProviderRequestValidation.class.getName();
 
-    private ProviderRequestValidation() {
-    }
+    private ProviderRequestValidation() {}
 
     public static ChatOptions attach(ChatOptions options, Consumer<Map<String, Object>> validator) {
         if (!(options instanceof ToolCallingChatOptions toolOptions)
-            || !(options.mutate() instanceof ToolCallingChatOptions.Builder<?> builder)) {
+                || !(options.mutate() instanceof ToolCallingChatOptions.Builder<?> builder)) {
             return options;
         }
         var context = new LinkedHashMap<String, Object>();
@@ -34,6 +33,5 @@ public final class ProviderRequestValidation {
         }
     }
 
-    private record RequestValidator(Consumer<Map<String, Object>> callback) {
-    }
+    private record RequestValidator(Consumer<Map<String, Object>> callback) {}
 }

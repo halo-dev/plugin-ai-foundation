@@ -11,8 +11,7 @@ class ProviderUsageTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
-    void invalidIterationCountersRemainUnknownRatherThanUsingIncompleteTopLevelTotals()
-        throws Exception {
+    void invalidIterationCountersRemainUnknownRatherThanUsingIncompleteTopLevelTotals() throws Exception {
         var usage = NormalizedUsage.from(ProviderUsage.messages(mapper.readTree("""
             {"input_tokens":10,"output_tokens":5,"iterations":[
               {"type":"compaction","input_tokens":"unknown","output_tokens":20},
@@ -71,8 +70,8 @@ class ProviderUsageTest {
                {"type":"message","input_tokens":100,"output_tokens":0},
                {"type":"fallback_message","input_tokens":10,"output_tokens":5}]}
             """);
-        assertThat(NormalizedUsage.from(ProviderUsage.messages(node, null))
-            .accountedTotalTokens()).isEqualTo(15L);
+        assertThat(NormalizedUsage.from(ProviderUsage.messages(node, null)).accountedTotalTokens())
+                .isEqualTo(15L);
     }
 
     @Test
@@ -84,8 +83,8 @@ class ProviderUsageTest {
         assertThat(invalid.accountedTotalTokens()).isNull();
         assertThat(invalid.outputTokens()).isEqualTo(5L);
         assertThat(invalid.quality()).isEqualTo(UsageQuality.PARTIAL);
-        var absent = NormalizedUsage.from(ProviderUsage.messages(mapper.readTree(
-            "{\"input_tokens\":10,\"output_tokens\":5}"), null));
+        var absent = NormalizedUsage.from(
+                ProviderUsage.messages(mapper.readTree("{\"input_tokens\":10,\"output_tokens\":5}"), null));
         assertThat(absent.accountedTotalTokens()).isEqualTo(15L);
     }
 
@@ -103,11 +102,13 @@ class ProviderUsageTest {
 
     @Test
     void ollamaCountersUseLongAndEmptyPartialIsMissing() throws Exception {
-        var usage = ProviderUsage.ollama(mapper.readTree(
-            "{\"prompt_eval_count\":2000000000,\"eval_count\":2000000000}"), null);
+        var usage = ProviderUsage.ollama(
+                mapper.readTree("{\"prompt_eval_count\":2000000000,\"eval_count\":2000000000}"), null);
         assertThat(NormalizedUsage.from(usage).accountedTotalTokens()).isEqualTo(4000000000L);
-        assertThat(NormalizedUsage.from(ProviderUsage.messages(
-            mapper.readTree("{}"), null).partial()).quality()).isEqualTo(UsageQuality.MISSING);
+        assertThat(NormalizedUsage.from(ProviderUsage.messages(mapper.readTree("{}"), null)
+                                .partial())
+                        .quality())
+                .isEqualTo(UsageQuality.MISSING);
     }
 
     @Test
@@ -135,8 +136,8 @@ class ProviderUsageTest {
              "input_tokens_details":{"cached_tokens":40},
              "output_tokens_details":{"reasoning_tokens":3}}
             """);
-        for (var usage : java.util.List.of(ProviderUsage.chatCompletions(chat, null),
-            ProviderUsage.responses(responses, null))) {
+        for (var usage : java.util.List.of(
+                ProviderUsage.chatCompletions(chat, null), ProviderUsage.responses(responses, null))) {
             var normalized = NormalizedUsage.from(usage);
             assertThat(normalized.accountedTotalTokens()).isEqualTo(75L);
             assertThat(normalized.cacheReadInputTokens()).isEqualTo(40L);
@@ -149,10 +150,11 @@ class ProviderUsageTest {
         var node = mapper.readTree("""
             {"prompt_tokens":-1,"completion_tokens":"5","total_tokens":9223372036854775808}
             """);
-        assertThat(NormalizedUsage.from(ProviderUsage.chatCompletions(node, null)).quality())
-            .isEqualTo(UsageQuality.MISSING);
-        var large = ProviderUsage.chatCompletions(mapper.readTree(
-            "{\"prompt_tokens\":3000000000,\"completion_tokens\":5}"), null);
+        assertThat(NormalizedUsage.from(ProviderUsage.chatCompletions(node, null))
+                        .quality())
+                .isEqualTo(UsageQuality.MISSING);
+        var large = ProviderUsage.chatCompletions(
+                mapper.readTree("{\"prompt_tokens\":3000000000,\"completion_tokens\":5}"), null);
         assertThat(NormalizedUsage.from(large).accountedTotalTokens()).isEqualTo(3000000005L);
         assertThat(large.getPromptTokens()).isNull();
     }

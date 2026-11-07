@@ -7,8 +7,7 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesModel;
 /** OpenRouter OpenResponses client. */
 public final class OpenRouterResponsesModel extends ResponsesModel {
 
-    public OpenRouterResponsesModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public OpenRouterResponsesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new OpenRouterResponsesProfile());
     }
 }

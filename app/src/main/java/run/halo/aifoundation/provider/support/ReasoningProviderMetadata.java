@@ -7,11 +7,9 @@ public final class ReasoningProviderMetadata {
 
     private static final String ROOT_KEY = "reasoningProviderMetadata";
 
-    private ReasoningProviderMetadata() {
-    }
+    private ReasoningProviderMetadata() {}
 
-    public static Map<String, Object> values(Map<String, Object> metadata,
-        String providerType) {
+    public static Map<String, Object> values(Map<String, Object> metadata, String providerType) {
         if (metadata == null) {
             return Map.of();
         }

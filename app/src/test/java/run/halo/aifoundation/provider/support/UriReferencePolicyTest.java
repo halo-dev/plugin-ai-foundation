@@ -29,10 +29,10 @@ class UriReferencePolicyTest {
     @Test
     void rejectsEmptyPoliciesAndPrefixes() {
         assertThatThrownBy(UriReferencePolicy::allowing)
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("At least one");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("At least one");
         assertThatThrownBy(() -> UriReferencePolicy.allowing("data:", " "))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("must not be blank");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not be blank");
     }
 }

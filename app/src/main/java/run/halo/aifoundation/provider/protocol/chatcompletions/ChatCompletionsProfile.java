@@ -3,16 +3,15 @@ package run.halo.aifoundation.provider.protocol.chatcompletions;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.content.Media;
 import org.springframework.ai.chat.prompt.Prompt;
-import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
+import org.springframework.ai.content.Media;
 import run.halo.aifoundation.provider.support.ProviderMetadataMaps;
 
 /**
  * Provider-owned policy hooks for the reusable Chat Completions wire implementation.
  *
- * <p>The common protocol supplies no endpoint, feature, option, or provider defaults. A provider
- * package must select them explicitly through this profile.
+ * <p>The common protocol supplies no endpoint, feature, option, or provider defaults. A provider package must select
+ * them explicitly through this profile.
  */
 public interface ChatCompletionsProfile {
 
@@ -24,17 +23,15 @@ public interface ChatCompletionsProfile {
         return new DeltaToolInputStreamDialect();
     }
 
-    default void customizeRequest(Map<String, Object> body, Prompt prompt,
-        ChatCompletionsOptions options, boolean stream) {
-    }
+    default void customizeRequest(
+            Map<String, Object> body, Prompt prompt, ChatCompletionsOptions options, boolean stream) {}
 
     /**
-     * Returns a provider-native content part for the supplied media, or {@code null} to use the
-     * common Chat Completions mapping.
+     * Returns a provider-native content part for the supplied media, or {@code null} to use the common Chat Completions
+     * mapping.
      *
-     * <p>Providers should use this hook when their accepted media types or URL schemes are
-     * narrower than the common protocol. The hook may reject unsupported media before any network
-     * request is made.
+     * <p>Providers should use this hook when their accepted media types or URL schemes are narrower than the common
+     * protocol. The hook may reject unsupported media before any network request is made.
      */
     default Map<String, Object> mediaContentPart(Media media) {
         return null;
@@ -52,7 +49,5 @@ public interface ChatCompletionsProfile {
         return Map.of();
     }
 
-    default void customizeAssistantMessage(Map<String, Object> body,
-        AssistantMessage message) {
-    }
+    default void customizeAssistantMessage(Map<String, Object> body, AssistantMessage message) {}
 }

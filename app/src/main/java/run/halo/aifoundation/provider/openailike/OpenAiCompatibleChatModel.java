@@ -5,14 +5,10 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsMo
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
 import run.halo.aifoundation.provider.protocol.chatcompletions.StandardChatCompletionsProfile;
 
-/**
- * Configurable OpenAI-compatible fallback over the reusable Chat Completions protocol.
- */
+/** Configurable OpenAI-compatible fallback over the reusable Chat Completions protocol. */
 public final class OpenAiCompatibleChatModel extends ChatCompletionsModel {
 
-    public OpenAiCompatibleChatModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
-        super(options, webClientBuilder,
-            new StandardChatCompletionsProfile("openai-compatible", "openai-compatible"));
+    public OpenAiCompatibleChatModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
+        super(options, webClientBuilder, new StandardChatCompletionsProfile("openai-compatible", "openai-compatible"));
     }
 }

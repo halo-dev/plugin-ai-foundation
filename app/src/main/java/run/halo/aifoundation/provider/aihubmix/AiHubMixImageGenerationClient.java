@@ -5,13 +5,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.web.reactive.function.client.WebClient;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
-import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.support.UriReferencePolicy;
@@ -21,19 +19,31 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 /** AIHubMix prediction client for explicitly routed synchronous image generation. */
 public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenerationClient {
 
-    private static final UriReferencePolicy HTTP_IMAGE_REFERENCES =
-        UriReferencePolicy.allowing("http://", "https://");
-    private static final UriReferencePolicy DATA_REFERENCES =
-        UriReferencePolicy.allowing("data:");
+    private static final UriReferencePolicy HTTP_IMAGE_REFERENCES = UriReferencePolicy.allowing("http://", "https://");
+    private static final UriReferencePolicy DATA_REFERENCES = UriReferencePolicy.allowing("data:");
     private static final Set<String> OPTIONS = Set.of(
-        "model_path", "input_fidelity", "moderation", "output_format", "background",
-        "quality", "numberOfImages", "sampleCount", "safety_tolerance", "raw",
-        "prompt_upsampling", "negative_prompt",
-        "prompt_extend", "thinking_mode", "watermark", "color_palette",
-        "sequential_image_generation", "stream", "response_format", "count_field");
+            "model_path",
+            "input_fidelity",
+            "moderation",
+            "output_format",
+            "background",
+            "quality",
+            "numberOfImages",
+            "sampleCount",
+            "safety_tolerance",
+            "raw",
+            "prompt_upsampling",
+            "negative_prompt",
+            "prompt_extend",
+            "thinking_mode",
+            "watermark",
+            "color_palette",
+            "sequential_image_generation",
+            "stream",
+            "response_format",
+            "count_field");
 
-    public AiHubMixImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public AiHubMixImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
@@ -43,21 +53,18 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
     }
 
     @Override
-    protected String endpointPath(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected String endpointPath(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         return "/models/" + modelPath(nativeOptions) + "/predictions";
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         validate(request, nativeOptions);
         var values = nativeOptions;
         var unknown = new LinkedHashSet<>(values.keySet());
         unknown.removeAll(OPTIONS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported AIHubMix image option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException("Unsupported AIHubMix image option(s): " + String.join(", ", unknown));
         }
         var input = new LinkedHashMap<String, Object>();
         input.put("prompt", request.getPrompt());
@@ -80,8 +87,8 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "AIHubMix");
         var images = new ArrayList<GeneratedFile>();
         collectImages(root.path("output"), nativeOptions, images);
@@ -90,16 +97,20 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
             collectImage(root, nativeOptions, images);
         }
         if (images.isEmpty() && isAsynchronousResponse(root)) {
-            throw new IllegalStateException(
-                "AIHubMix returned an asynchronous image task; this adapter supports only "
+            throw new IllegalStateException("AIHubMix returned an asynchronous image task; this adapter supports only "
                     + "documented synchronous prediction results");
         }
         if (images.isEmpty()) {
             throw new IllegalStateException("AIHubMix image response contained no image output");
         }
-        return result(data, root, List.copyOf(images),
-            tokenUsage(root.path("usage"), images.size()), List.of(),
-            firstText(root, "id", "prediction_id", "request_id"), options.model());
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                tokenUsage(root.path("usage"), images.size()),
+                List.of(),
+                firstText(root, "id", "prediction_id", "request_id"),
+                options.model());
     }
 
     private boolean isAsynchronousResponse(JsonNode root) {
@@ -112,8 +123,7 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
     private void validate(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         requirePrompt(request, "AIHubMix image prompt must not be blank");
         if (request.getMask() != null) {
-            throw new IllegalArgumentException(
-                "AIHubMix prediction image route does not document mask input");
+            throw new IllegalArgumentException("AIHubMix prediction image route does not document mask input");
         }
         validateImageCount(request.getN());
         validateStreamOption(nativeOptions.get("stream"));
@@ -137,27 +147,22 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
             return;
         }
         if (!(stream instanceof Boolean enabled)) {
-            throw new IllegalArgumentException(
-                "AIHubMix synchronous prediction requires stream=false");
+            throw new IllegalArgumentException("AIHubMix synchronous prediction requires stream=false");
         }
         if (enabled) {
-            throw new IllegalArgumentException(
-                "AIHubMix synchronous prediction requires stream=false");
+            throw new IllegalArgumentException("AIHubMix synchronous prediction requires stream=false");
         }
     }
 
     private void validateModelPath(String path) {
         if (!path.contains("/")) {
-            throw new IllegalArgumentException(
-                "AIHubMix model_path must use the documented provider/model form");
+            throw new IllegalArgumentException("AIHubMix model_path must use the documented provider/model form");
         }
         if (path.startsWith("/")) {
-            throw new IllegalArgumentException(
-                "AIHubMix model_path must use the documented provider/model form");
+            throw new IllegalArgumentException("AIHubMix model_path must use the documented provider/model form");
         }
         if (path.endsWith("/")) {
-            throw new IllegalArgumentException(
-                "AIHubMix model_path must use the documented provider/model form");
+            throw new IllegalArgumentException("AIHubMix model_path must use the documented provider/model form");
         }
     }
 
@@ -177,8 +182,7 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
             }
             throw new IllegalArgumentException("AIHubMix model_path must be a non-blank string");
         }
-        throw new IllegalArgumentException(
-            "AIHubMix image models require nativeOptions.model_path; "
+        throw new IllegalArgumentException("AIHubMix image models require nativeOptions.model_path; "
                 + "routing is configured by the administrator instead of inferred from model IDs");
     }
 
@@ -193,8 +197,7 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
         throw new IllegalArgumentException("AIHubMix " + option + " must be a non-blank string");
     }
 
-    private void collectImages(JsonNode node, Map<String, Object> nativeOptions,
-        List<GeneratedFile> images) {
+    private void collectImages(JsonNode node, Map<String, Object> nativeOptions, List<GeneratedFile> images) {
         if (node.isArray()) {
             node.forEach(item -> collectImage(item, nativeOptions, images));
         } else {
@@ -202,8 +205,7 @@ public final class AiHubMixImageGenerationClient extends AbstractJsonImageGenera
         }
     }
 
-    private void collectImage(JsonNode node, Map<String, Object> nativeOptions,
-        List<GeneratedFile> images) {
+    private void collectImage(JsonNode node, Map<String, Object> nativeOptions, List<GeneratedFile> images) {
         if (JsonNodes.isAbsent(node)) {
             return;
         }

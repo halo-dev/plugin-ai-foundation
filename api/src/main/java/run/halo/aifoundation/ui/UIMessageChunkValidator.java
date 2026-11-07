@@ -3,13 +3,10 @@ package run.halo.aifoundation.ui;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Validates UI message stream chunks before they are reduced into message state.
- */
+/** Validates UI message stream chunks before they are reduced into message state. */
 public final class UIMessageChunkValidator {
 
-    private UIMessageChunkValidator() {
-    }
+    private UIMessageChunkValidator() {}
 
     /**
      * Validates one stream chunk.
@@ -40,61 +37,91 @@ public final class UIMessageChunkValidator {
             case DataChunk data -> validateData(data, issues);
             case SourceUrlChunk source -> validateSourceUrl(source, issues);
             case SourceDocumentChunk source -> validateSourceDocument(source, issues);
-            case ToolInputStartChunk tool -> validateToolIdentity(tool.type(), tool.toolCallId(),
-                tool.toolName(), issues);
+            case ToolInputStartChunk tool ->
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
             case ToolInputDeltaChunk tool -> {
                 validateToolIdentityWithoutName(tool.type(), tool.toolCallId(), issues);
-                require(tool.type(), tool.toolCallId(), tool.inputTextDelta(),
-                    "chunk.tool.input-delta.required",
-                    "Tool input delta must not be blank", issues);
+                require(
+                        tool.type(),
+                        tool.toolCallId(),
+                        tool.inputTextDelta(),
+                        "chunk.tool.input-delta.required",
+                        "Tool input delta must not be blank",
+                        issues);
             }
-            case ToolInputAvailableChunk tool -> validateToolIdentity(tool.type(),
-                tool.toolCallId(), tool.toolName(), issues);
+            case ToolInputAvailableChunk tool ->
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
             case ToolInputErrorChunk tool -> {
                 validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
-                require(tool.type(), tool.toolCallId(), tool.errorText(),
-                    "chunk.tool.input-error-text.required",
-                    "Tool input error text must not be blank", issues);
+                require(
+                        tool.type(),
+                        tool.toolCallId(),
+                        tool.errorText(),
+                        "chunk.tool.input-error-text.required",
+                        "Tool input error text must not be blank",
+                        issues);
             }
-            case ToolOutputAvailableChunk tool -> validateToolIdentity(tool.type(),
-                tool.toolCallId(), tool.toolName(), issues);
+            case ToolOutputAvailableChunk tool ->
+                validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
             case ToolOutputErrorChunk tool -> {
                 validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
-                require(tool.type(), tool.toolCallId(), tool.errorText(),
-                    "chunk.tool.error-text.required", "Tool error text must not be blank",
-                    issues);
+                require(
+                        tool.type(),
+                        tool.toolCallId(),
+                        tool.errorText(),
+                        "chunk.tool.error-text.required",
+                        "Tool error text must not be blank",
+                        issues);
             }
             case ToolApprovalRequestChunk tool -> {
                 validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
-                require(tool.type(), tool.toolCallId(), tool.approvalId(),
-                    "chunk.tool.approval-id.required",
-                    "Tool approval id must not be blank", issues);
+                require(
+                        tool.type(),
+                        tool.toolCallId(),
+                        tool.approvalId(),
+                        "chunk.tool.approval-id.required",
+                        "Tool approval id must not be blank",
+                        issues);
             }
             case ToolApprovalResponseChunk tool -> {
                 validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
-                require(tool.type(), tool.toolCallId(), tool.approvalId(),
-                    "chunk.tool.approval-id.required",
-                    "Tool approval id must not be blank", issues);
+                require(
+                        tool.type(),
+                        tool.toolCallId(),
+                        tool.approvalId(),
+                        "chunk.tool.approval-id.required",
+                        "Tool approval id must not be blank",
+                        issues);
                 if (tool.approved() == null) {
-                    issues.add(issue(tool.type(), tool.toolCallId(),
-                        "chunk.tool.approved.required",
-                        "Tool approval response approved value must not be null"));
+                    issues.add(issue(
+                            tool.type(),
+                            tool.toolCallId(),
+                            "chunk.tool.approved.required",
+                            "Tool approval response approved value must not be null"));
                 }
             }
             case ToolChunk tool -> validateTool(tool, issues);
-            default -> {
-            }
+            default -> {}
         }
         return List.copyOf(issues);
     }
 
     private static void validateData(DataChunk data, List<UIMessageValidationIssue> issues) {
-        require(data.type(), data.id(), data.type(), "chunk.data.type.required",
-            "Data chunk type must not be blank", issues);
-        require(data.type(), data.id(), data.id(), "chunk.data.id.required",
-            "Data chunk id must not be blank", issues);
-        require(data.type(), data.id(), data.name(), "chunk.data.name.required",
-            "Data chunk name must not be blank", issues);
+        require(
+                data.type(),
+                data.id(),
+                data.type(),
+                "chunk.data.type.required",
+                "Data chunk type must not be blank",
+                issues);
+        require(data.type(), data.id(), data.id(), "chunk.data.id.required", "Data chunk id must not be blank", issues);
+        require(
+                data.type(),
+                data.id(),
+                data.name(),
+                "chunk.data.name.required",
+                "Data chunk name must not be blank",
+                issues);
         try {
             UIMessageDynamicNames.requireDataType(data.type(), data.name());
         } catch (IllegalArgumentException e) {
@@ -102,69 +129,93 @@ public final class UIMessageChunkValidator {
         }
     }
 
-    private static void validateSourceUrl(SourceUrlChunk source,
-        List<UIMessageValidationIssue> issues) {
-        require(source.type(), source.sourceId(), source.sourceId(),
-            "chunk.source.id.required", "Source id must not be blank", issues);
-        require(source.type(), source.sourceId(), source.url(),
-            "chunk.source-url.url.required", "Source URL must not be blank", issues);
+    private static void validateSourceUrl(SourceUrlChunk source, List<UIMessageValidationIssue> issues) {
+        require(
+                source.type(),
+                source.sourceId(),
+                source.sourceId(),
+                "chunk.source.id.required",
+                "Source id must not be blank",
+                issues);
+        require(
+                source.type(),
+                source.sourceId(),
+                source.url(),
+                "chunk.source-url.url.required",
+                "Source URL must not be blank",
+                issues);
     }
 
-    private static void validateSourceDocument(SourceDocumentChunk source,
-        List<UIMessageValidationIssue> issues) {
-        require(source.type(), source.sourceId(), source.sourceId(),
-            "chunk.source.id.required", "Source id must not be blank", issues);
-        require(source.type(), source.sourceId(), source.mediaType(),
-            "chunk.source-document.media-type.required",
-            "Document source media type must not be blank", issues);
-        require(source.type(), source.sourceId(), source.title(),
-            "chunk.source-document.title.required", "Document source title must not be blank",
-            issues);
+    private static void validateSourceDocument(SourceDocumentChunk source, List<UIMessageValidationIssue> issues) {
+        require(
+                source.type(),
+                source.sourceId(),
+                source.sourceId(),
+                "chunk.source.id.required",
+                "Source id must not be blank",
+                issues);
+        require(
+                source.type(),
+                source.sourceId(),
+                source.mediaType(),
+                "chunk.source-document.media-type.required",
+                "Document source media type must not be blank",
+                issues);
+        require(
+                source.type(),
+                source.sourceId(),
+                source.title(),
+                "chunk.source-document.title.required",
+                "Document source title must not be blank",
+                issues);
     }
 
     private static void validateTool(ToolChunk tool, List<UIMessageValidationIssue> issues) {
         validateToolIdentity(tool.type(), tool.toolCallId(), tool.toolName(), issues);
         if (tool.state() == null) {
-            issues.add(issue(tool.type(), tool.toolCallId(), "chunk.tool.state.required",
-                "Tool chunk state must not be null"));
+            issues.add(issue(
+                    tool.type(), tool.toolCallId(), "chunk.tool.state.required", "Tool chunk state must not be null"));
             return;
         }
         try {
             UIMessageDynamicNames.requireToolType(tool.type(), tool.toolName());
         } catch (IllegalArgumentException e) {
-            issues.add(issue(tool.type(), tool.toolCallId(), "chunk.tool.type.invalid",
-                e.getMessage()));
+            issues.add(issue(tool.type(), tool.toolCallId(), "chunk.tool.type.invalid", e.getMessage()));
         }
         if (tool.state() == ToolPartState.OUTPUT_ERROR && isBlank(tool.errorText())) {
-            issues.add(issue(tool.type(), tool.toolCallId(), "chunk.tool.error-text.required",
-                "Tool error text must not be blank"));
+            issues.add(issue(
+                    tool.type(),
+                    tool.toolCallId(),
+                    "chunk.tool.error-text.required",
+                    "Tool error text must not be blank"));
         }
     }
 
-    private static void validateToolIdentity(String type, String toolCallId, String toolName,
-        List<UIMessageValidationIssue> issues) {
+    private static void validateToolIdentity(
+            String type, String toolCallId, String toolName, List<UIMessageValidationIssue> issues) {
         validateToolIdentityWithoutName(type, toolCallId, issues);
-        require(type, toolCallId, toolName, "chunk.tool.name.required",
-            "Tool name must not be blank", issues);
+        require(type, toolCallId, toolName, "chunk.tool.name.required", "Tool name must not be blank", issues);
     }
 
-    private static void validateToolIdentityWithoutName(String type, String toolCallId,
-        List<UIMessageValidationIssue> issues) {
-        require(type, toolCallId, type, "chunk.tool.type.required",
-            "Tool chunk type must not be blank", issues);
-        require(type, toolCallId, toolCallId, "chunk.tool.id.required",
-            "Tool call id must not be blank", issues);
+    private static void validateToolIdentityWithoutName(
+            String type, String toolCallId, List<UIMessageValidationIssue> issues) {
+        require(type, toolCallId, type, "chunk.tool.type.required", "Tool chunk type must not be blank", issues);
+        require(type, toolCallId, toolCallId, "chunk.tool.id.required", "Tool call id must not be blank", issues);
     }
 
-    private static void require(String partType, String partId, String value, String code,
-        String message, List<UIMessageValidationIssue> issues) {
+    private static void require(
+            String partType,
+            String partId,
+            String value,
+            String code,
+            String message,
+            List<UIMessageValidationIssue> issues) {
         if (isBlank(value)) {
             issues.add(issue(partType, partId, code, message));
         }
     }
 
-    private static UIMessageValidationIssue issue(String partType, String partId, String code,
-        String message) {
+    private static UIMessageValidationIssue issue(String partType, String partId, String code, String message) {
         return new UIMessageValidationIssue(null, null, partType, partId, code, message);
     }
 

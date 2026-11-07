@@ -38,8 +38,7 @@ final class ModelCatalogTestFixtures {
             "api":{"rerank":{"base_url":"https://openrouter.ai/api/v1"}}}}}}
         """;
 
-    private ModelCatalogTestFixtures() {
-    }
+    private ModelCatalogTestFixtures() {}
 
     static AiProvider provider(String url) {
         var provider = new AiProvider();

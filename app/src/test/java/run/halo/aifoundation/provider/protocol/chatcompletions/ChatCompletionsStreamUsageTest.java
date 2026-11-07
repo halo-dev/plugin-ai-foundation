@@ -13,10 +13,12 @@ class ChatCompletionsStreamUsageTest {
         var encoder = new ChatCompletionsRequestEncoder(mock(ChatCompletionsProfile.class));
         var defaults = ChatCompletionsOptions.builder().model("model").build();
         assertThat(encoder.encode(new Prompt("Hello"), defaults, true))
-            .containsEntry("stream_options", Map.of("include_usage", true));
+                .containsEntry("stream_options", Map.of("include_usage", true));
         var constrained = defaults.mutate()
-            .streamOptions(new ChatCompletionsOptions.StreamOptions(null, null, null)).build();
+                .streamOptions(new ChatCompletionsOptions.StreamOptions(null, null, null))
+                .build();
         assertThat(encoder.encode(new Prompt("Hello"), constrained, true))
-            .doesNotContainKey("stream_options").containsEntry("stream", true);
+                .doesNotContainKey("stream_options")
+                .containsEntry("stream", true);
     }
 }

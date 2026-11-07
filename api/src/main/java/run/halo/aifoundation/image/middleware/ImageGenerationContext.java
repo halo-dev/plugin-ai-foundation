@@ -13,20 +13,17 @@ import run.halo.aifoundation.model.ProviderInfo;
  * @param model model being wrapped
  * @param request current image generation request
  * @param capabilities read-only capability snapshot for the resolved model
- * @param modelInfo stable model identity, or {@code null} when the model is not managed by AI
- *                  Foundation
- * @param providerInfo stable provider identity, or {@code null} when the model is not managed by AI
- *                     Foundation
+ * @param modelInfo stable model identity, or {@code null} when the model is not managed by AI Foundation
+ * @param providerInfo stable provider identity, or {@code null} when the model is not managed by AI Foundation
  */
-public record ImageGenerationContext(ImageGenerationModel model,
-                                     GenerateImageRequest request,
-                                     ModelCapabilities capabilities,
-                                     ModelInfo modelInfo,
-                                     ProviderInfo providerInfo) {
+public record ImageGenerationContext(
+        ImageGenerationModel model,
+        GenerateImageRequest request,
+        ModelCapabilities capabilities,
+        ModelInfo modelInfo,
+        ProviderInfo providerInfo) {
 
-    /**
-     * Creates a context and fills missing capability information with an empty snapshot.
-     */
+    /** Creates a context and fills missing capability information with an empty snapshot. */
     public ImageGenerationContext {
         Objects.requireNonNull(model, "model must not be null");
         Objects.requireNonNull(request, "request must not be null");
@@ -40,8 +37,11 @@ public record ImageGenerationContext(ImageGenerationModel model,
      * @param request current request
      */
     public ImageGenerationContext(ImageGenerationModel model, GenerateImageRequest request) {
-        this(model, request, model != null ? model.capabilities() : ModelCapabilities.empty(),
-            model != null ? model.modelInfo() : null,
-            model != null ? model.providerInfo() : null);
+        this(
+                model,
+                request,
+                model != null ? model.capabilities() : ModelCapabilities.empty(),
+                model != null ? model.modelInfo() : null,
+                model != null ? model.providerInfo() : null);
     }
 }

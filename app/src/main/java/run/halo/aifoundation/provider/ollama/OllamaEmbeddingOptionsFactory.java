@@ -14,14 +14,20 @@ final class OllamaEmbeddingOptionsFactory {
 
     private static final Set<String> PROVIDER_FIELDS = Set.of("truncate", "options");
     private static final Set<String> RUNTIME_FIELDS = Set.of(
-        "numa", "num_batch", "num_gpu", "main_gpu", "low_vram", "vocab_only",
-        "use_mmap", "use_mlock", "num_thread");
+            "numa",
+            "num_batch",
+            "num_gpu",
+            "main_gpu",
+            "low_vram",
+            "vocab_only",
+            "use_mmap",
+            "use_mlock",
+            "num_thread");
 
-    private OllamaEmbeddingOptionsFactory() {
-    }
+    private OllamaEmbeddingOptionsFactory() {}
 
-    static EmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    static EmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
@@ -29,13 +35,12 @@ final class OllamaEmbeddingOptionsFactory {
         var unknown = new LinkedHashSet<>(source.keySet());
         unknown.removeAll(PROVIDER_FIELDS);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported Ollama embedding provider option(s): "
-                + String.join(", ", unknown));
+            throw new IllegalArgumentException(
+                    "Unsupported Ollama embedding provider option(s): " + String.join(", ", unknown));
         }
         var runtime = source.get("options") instanceof Map<?, ?> map ? map : Map.of();
         if (source.get("options") != null && !(source.get("options") instanceof Map<?, ?>)) {
-            throw new IllegalArgumentException(
-                "Ollama embedding provider option 'options' must be an object");
+            throw new IllegalArgumentException("Ollama embedding provider option 'options' must be an object");
         }
         var unknownRuntime = new LinkedHashSet<String>();
         runtime.keySet().forEach(key -> {
@@ -44,8 +49,8 @@ final class OllamaEmbeddingOptionsFactory {
             }
         });
         if (!unknownRuntime.isEmpty()) {
-            throw new IllegalArgumentException("Unsupported Ollama embedding runtime option(s): "
-                + String.join(", ", unknownRuntime));
+            throw new IllegalArgumentException(
+                    "Unsupported Ollama embedding runtime option(s): " + String.join(", ", unknownRuntime));
         }
         if (request.getDimensions() == null && source.isEmpty()) {
             return null;
@@ -56,8 +61,8 @@ final class OllamaEmbeddingOptionsFactory {
                 normalizedRuntime.put(key.toString(), value);
             }
         });
-        return new OllamaEmbeddingOptions(null, request.getDimensions(),
-            bool(source.get("truncate"), "truncate"), Map.copyOf(normalizedRuntime));
+        return new OllamaEmbeddingOptions(
+                null, request.getDimensions(), bool(source.get("truncate"), "truncate"), Map.copyOf(normalizedRuntime));
     }
 
     private static Boolean bool(Object value, String field) {
@@ -66,5 +71,4 @@ final class OllamaEmbeddingOptionsFactory {
         }
         throw new IllegalArgumentException("Ollama " + field + " must be a boolean");
     }
-
 }

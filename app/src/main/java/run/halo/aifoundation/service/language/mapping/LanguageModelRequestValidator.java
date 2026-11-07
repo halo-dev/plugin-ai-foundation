@@ -15,9 +15,9 @@ import run.halo.aifoundation.media.DataContent;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.message.ModelMessagePart;
 import run.halo.aifoundation.message.ModelMessageRole;
+import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.schema.OutputSpec;
 import run.halo.aifoundation.schema.OutputType;
-import run.halo.aifoundation.part.PartType;
 import run.halo.aifoundation.service.capability.CapabilityMatchIssue;
 import run.halo.aifoundation.service.capability.ModelCapabilityMatcher;
 import run.halo.aifoundation.service.media.MediaResourcePolicy;
@@ -34,23 +34,31 @@ public final class LanguageModelRequestValidator {
     private final ModelCapabilityMatcher capabilityMatcher;
 
     public LanguageModelRequestValidator(String providerType, boolean reasoningHistorySupported) {
-        this(providerType, reasoningHistorySupported, ModelCapabilities.empty(), null, null,
-            new MediaResourcePolicy(), new ModelCapabilityMatcher());
+        this(
+                providerType,
+                reasoningHistorySupported,
+                ModelCapabilities.empty(),
+                null,
+                null,
+                new MediaResourcePolicy(),
+                new ModelCapabilityMatcher());
     }
 
-    public LanguageModelRequestValidator(String providerType, boolean reasoningHistorySupported,
-        ModelCapabilities modelCapabilities, String modelName, String providerName,
-        MediaResourcePolicy mediaResourcePolicy, ModelCapabilityMatcher capabilityMatcher) {
+    public LanguageModelRequestValidator(
+            String providerType,
+            boolean reasoningHistorySupported,
+            ModelCapabilities modelCapabilities,
+            String modelName,
+            String providerName,
+            MediaResourcePolicy mediaResourcePolicy,
+            ModelCapabilityMatcher capabilityMatcher) {
         this.providerType = providerType;
         this.reasoningHistorySupported = reasoningHistorySupported;
-        this.modelCapabilities = modelCapabilities != null ? modelCapabilities
-            : ModelCapabilities.empty();
+        this.modelCapabilities = modelCapabilities != null ? modelCapabilities : ModelCapabilities.empty();
         this.modelName = modelName;
         this.providerName = providerName;
-        this.mediaResourcePolicy = mediaResourcePolicy != null ? mediaResourcePolicy
-            : new MediaResourcePolicy();
-        this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher
-            : new ModelCapabilityMatcher();
+        this.mediaResourcePolicy = mediaResourcePolicy != null ? mediaResourcePolicy : new MediaResourcePolicy();
+        this.capabilityMatcher = capabilityMatcher != null ? capabilityMatcher : new ModelCapabilityMatcher();
     }
 
     public void validate(GenerateTextRequest request) {
@@ -61,7 +69,8 @@ public final class LanguageModelRequestValidator {
             throw new IllegalArgumentException("system must not be blank");
         }
         var hasPrompt = hasText(request.getPrompt());
-        var hasMessages = request.getMessages() != null && !request.getMessages().isEmpty();
+        var hasMessages =
+                request.getMessages() != null && !request.getMessages().isEmpty();
         if (hasPrompt == hasMessages) {
             throw new IllegalArgumentException("exactly one of prompt or messages must be provided");
         }
@@ -82,8 +91,7 @@ public final class LanguageModelRequestValidator {
             throw new IllegalArgumentException("topLogprobs must not be negative");
         }
         if (request.getTopLogprobs() != null && Boolean.FALSE.equals(request.getLogprobs())) {
-            throw new IllegalArgumentException(
-                "topLogprobs cannot be set when logprobs is false");
+            throw new IllegalArgumentException("topLogprobs cannot be set when logprobs is false");
         }
         validateOutput(request.getOutput());
         validateTools(request);
@@ -93,8 +101,8 @@ public final class LanguageModelRequestValidator {
         var tools = request.getTools();
         if (tools == null || tools.isEmpty()) {
             if (request.getToolChoice() != null
-                && (request.getToolChoice().getType() == ToolChoice.Type.TOOL
-                || request.getToolChoice().getType() == ToolChoice.Type.REQUIRED)) {
+                    && (request.getToolChoice().getType() == ToolChoice.Type.TOOL
+                            || request.getToolChoice().getType() == ToolChoice.Type.REQUIRED)) {
                 throw new IllegalArgumentException("toolChoice requires tools");
             }
             return;
@@ -114,14 +122,11 @@ public final class LanguageModelRequestValidator {
             validateSchemaObject(tool.getOutputSchema(), "tool outputSchema");
         }
         var choice = request.getToolChoice();
-        if (choice != null && choice.getType() == ToolChoice.Type.TOOL
-            && !hasText(choice.getToolName())) {
+        if (choice != null && choice.getType() == ToolChoice.Type.TOOL && !hasText(choice.getToolName())) {
             throw new IllegalArgumentException("toolChoice toolName must not be blank");
         }
-        if (choice != null && choice.getType() == ToolChoice.Type.TOOL
-            && !names.contains(choice.getToolName())) {
-            throw new IllegalArgumentException("toolChoice references unknown tool: "
-                + choice.getToolName());
+        if (choice != null && choice.getType() == ToolChoice.Type.TOOL && !names.contains(choice.getToolName())) {
+            throw new IllegalArgumentException("toolChoice references unknown tool: " + choice.getToolName());
         }
     }
 
@@ -136,13 +141,11 @@ public final class LanguageModelRequestValidator {
             throw new IllegalArgumentException("message content must not be empty");
         }
         for (var partIndex = 0; partIndex < message.getContent().size(); partIndex++) {
-            validatePart(message.getRole(), message.getContent().get(partIndex), messageIndex,
-                partIndex);
+            validatePart(message.getRole(), message.getContent().get(partIndex), messageIndex, partIndex);
         }
     }
 
-    private void validatePart(ModelMessageRole role, ModelMessagePart part, int messageIndex,
-        int partIndex) {
+    private void validatePart(ModelMessageRole role, ModelMessagePart part, int messageIndex, int partIndex) {
         if (part == null) {
             throw new IllegalArgumentException("message content must not contain null parts");
         }
@@ -166,28 +169,24 @@ public final class LanguageModelRequestValidator {
             validateToolResponsePart(part);
             return;
         }
-        if (role == ModelMessageRole.ASSISTANT
-            && PartType.isToolApprovalRequest(part.getType())) {
+        if (role == ModelMessageRole.ASSISTANT && PartType.isToolApprovalRequest(part.getType())) {
             validateToolApprovalRequestPart(part);
             return;
         }
-        if (role == ModelMessageRole.TOOL
-            && PartType.isToolApprovalResponse(part.getType())) {
+        if (role == ModelMessageRole.TOOL && PartType.isToolApprovalResponse(part.getType())) {
             validateToolApprovalResponsePart(part);
             return;
         }
         throw new IllegalArgumentException("unsupported content part type: " + part.getType());
     }
 
-    private void validateMediaPart(ModelMessageRole role, ModelMessagePart part, int messageIndex,
-        int partIndex) {
+    private void validateMediaPart(ModelMessageRole role, ModelMessagePart part, int messageIndex, int partIndex) {
         if (role != ModelMessageRole.USER && role != ModelMessageRole.ASSISTANT) {
-            throw new IllegalArgumentException(
-                "media content part is only supported for user or assistant messages");
+            throw new IllegalArgumentException("media content part is only supported for user or assistant messages");
         }
         if (part.getMedia() == null) {
-            throw new InvalidMediaContentException("media content must not be null", null, null,
-                messageIndex, partIndex);
+            throw new InvalidMediaContentException(
+                    "media content must not be null", null, null, messageIndex, partIndex);
         }
     }
 
@@ -207,8 +206,7 @@ public final class LanguageModelRequestValidator {
             var message = messages.get(messageIndex);
             for (var partIndex = 0; partIndex < message.getContent().size(); partIndex++) {
                 var part = message.getContent().get(partIndex);
-                if (part != null
-                    && (PartType.isImage(part.getType()) || PartType.isFile(part.getType()))) {
+                if (part != null && (PartType.isImage(part.getType()) || PartType.isFile(part.getType()))) {
                     contexts.add(new MediaPartContext(messageIndex, partIndex, part));
                 }
             }
@@ -222,75 +220,92 @@ public final class LanguageModelRequestValidator {
             throw invalidMedia("media content must not be null", null, context, null);
         }
         if (media.isUrl() == media.isData()) {
-            throw invalidMedia("media content must set exactly one of url or data", media,
-                context, null);
+            throw invalidMedia("media content must set exactly one of url or data", media, context, null);
         }
         if (!hasText(media.getMediaType())) {
-            throw invalidMedia("media type is required for language media input", media, context,
-                null);
+            throw invalidMedia("media type is required for language media input", media, context, null);
         }
         if (PartType.isImage(context.part().getType()) && !isImageMediaType(media.getMediaType())) {
-            throw invalidMedia("image media part requires an image/* media type", media, context,
-                null);
+            throw invalidMedia("image media part requires an image/* media type", media, context, null);
         }
     }
 
     private void validateMediaResourceLimits(List<MediaPartContext> contexts) {
         try {
-            mediaResourcePolicy.validate(contexts.stream().map(MediaPartContext::media).toList());
+            mediaResourcePolicy.validate(
+                    contexts.stream().map(MediaPartContext::media).toList());
         } catch (InvalidMediaContentException e) {
             var context = resourceContext(contexts, e.getPartIndex());
-            throw new InvalidMediaContentException(e.getMessage(), e.getMediaType(),
-                e.getFilename(), context == null ? e.getMessageIndex() : context.messageIndex(),
-                context == null ? e.getPartIndex() : context.partIndex(), e);
+            throw new InvalidMediaContentException(
+                    e.getMessage(),
+                    e.getMediaType(),
+                    e.getFilename(),
+                    context == null ? e.getMessageIndex() : context.messageIndex(),
+                    context == null ? e.getPartIndex() : context.partIndex(),
+                    e);
         } catch (MediaContentTooLargeException e) {
             var context = resourceContext(contexts, e.getPartIndex());
-            throw new MediaContentTooLargeException(e.getScope(), e.getMaxBytes(),
-                e.getActualBytes(), e.getMediaType(), e.getFilename(),
-                context == null ? e.getMessageIndex() : context.messageIndex(),
-                context == null ? e.getPartIndex() : context.partIndex());
+            throw new MediaContentTooLargeException(
+                    e.getScope(),
+                    e.getMaxBytes(),
+                    e.getActualBytes(),
+                    e.getMediaType(),
+                    e.getFilename(),
+                    context == null ? e.getMessageIndex() : context.messageIndex(),
+                    context == null ? e.getPartIndex() : context.partIndex());
         }
     }
 
     private void validateMediaCapability(MediaPartContext context) {
         var media = context.media();
         var language = LanguageCapability.builder()
-            .imageInput(PartType.isImage(context.part().getType()) ? Boolean.TRUE : null)
-            .fileInput(PartType.isFile(context.part().getType()) ? Boolean.TRUE : null)
-            .inputMediaTypes(List.of(media.getMediaType()))
-            .inputSources(List.of(media.source()))
-            .build();
-        var requirement = ModelCapabilityRequirement.builder()
-            .language(language)
-            .build();
+                .imageInput(PartType.isImage(context.part().getType()) ? Boolean.TRUE : null)
+                .fileInput(PartType.isFile(context.part().getType()) ? Boolean.TRUE : null)
+                .inputMediaTypes(List.of(media.getMediaType()))
+                .inputSources(List.of(media.source()))
+                .build();
+        var requirement =
+                ModelCapabilityRequirement.builder().language(language).build();
         var result = capabilityMatcher.match(modelCapabilities, requirement);
         if (result.matched()) {
             return;
         }
         var issue = result.issues().isEmpty()
-            ? new CapabilityMatchIssue("language", requirement, modelCapabilities)
-            : result.issues().getFirst();
+                ? new CapabilityMatchIssue("language", requirement, modelCapabilities)
+                : result.issues().getFirst();
         throw unsupportedCapability(issue, context);
     }
 
-    private UnsupportedModelCapabilityException unsupportedCapability(CapabilityMatchIssue issue,
-        MediaPartContext context) {
-        return new UnsupportedModelCapabilityException(resolvedModelName(), resolvedProviderName(),
-            providerType, issue.path(), issue.expected(), issue.actual(), context.messageIndex(),
-            context.partIndex());
+    private UnsupportedModelCapabilityException unsupportedCapability(
+            CapabilityMatchIssue issue, MediaPartContext context) {
+        return new UnsupportedModelCapabilityException(
+                resolvedModelName(),
+                resolvedProviderName(),
+                providerType,
+                issue.path(),
+                issue.expected(),
+                issue.actual(),
+                context.messageIndex(),
+                context.partIndex());
     }
 
-    private InvalidMediaContentException invalidMedia(String message, DataContent media,
-        MediaPartContext context, Throwable cause) {
+    private InvalidMediaContentException invalidMedia(
+            String message, DataContent media, MediaPartContext context, Throwable cause) {
         if (cause == null) {
-            return new InvalidMediaContentException(message,
-                media == null ? null : media.getMediaType(),
-                media == null ? null : media.getFilename(), context.messageIndex(),
-                context.partIndex());
+            return new InvalidMediaContentException(
+                    message,
+                    media == null ? null : media.getMediaType(),
+                    media == null ? null : media.getFilename(),
+                    context.messageIndex(),
+                    context.partIndex());
         }
-        return new InvalidMediaContentException(message, media == null ? null : media.getMediaType(),
-            media == null ? null : media.getFilename(), context.messageIndex(), context.partIndex(),
-            cause);
+        return new InvalidMediaContentException(
+                message,
+                media == null ? null : media.getMediaType(),
+                media == null ? null : media.getFilename(),
+                context.messageIndex(),
+                context.partIndex(),
+                cause);
     }
 
     private MediaPartContext resourceContext(List<MediaPartContext> contexts, Integer partIndex) {
@@ -320,46 +335,40 @@ public final class LanguageModelRequestValidator {
 
     private void validateReasoningPart(ModelMessageRole role, ModelMessagePart part) {
         if (role != ModelMessageRole.ASSISTANT) {
-            throw new IllegalArgumentException(
-                "reasoning content part is only supported for assistant messages");
+            throw new IllegalArgumentException("reasoning content part is only supported for assistant messages");
         }
         if (!reasoningHistorySupported) {
-            throw new IllegalArgumentException(
-                "assistant reasoning history is not supported by the resolved model");
+            throw new IllegalArgumentException("assistant reasoning history is not supported by the resolved model");
         }
-        if (!hasText(part.getText()) && (part.getProviderMetadata() == null
-            || part.getProviderMetadata().isEmpty())) {
-            throw new IllegalArgumentException(
-                "reasoning content part must include text or provider metadata");
+        if (!hasText(part.getText())
+                && (part.getProviderMetadata() == null
+                        || part.getProviderMetadata().isEmpty())) {
+            throw new IllegalArgumentException("reasoning content part must include text or provider metadata");
         }
     }
 
     private void validateToolCallPart(ModelMessagePart part) {
         if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
-            throw new IllegalArgumentException(
-                "tool-call content part must include toolCallId and toolName");
+            throw new IllegalArgumentException("tool-call content part must include toolCallId and toolName");
         }
     }
 
     private void validateToolResponsePart(ModelMessagePart part) {
         if (!hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
-            throw new IllegalArgumentException(
-                "tool content part must include toolCallId and toolName");
+            throw new IllegalArgumentException("tool content part must include toolCallId and toolName");
         }
     }
 
     private void validateToolApprovalRequestPart(ModelMessagePart part) {
-        if (!hasText(part.getApprovalId()) || !hasText(part.getToolCallId())
-            || !hasText(part.getToolName())) {
+        if (!hasText(part.getApprovalId()) || !hasText(part.getToolCallId()) || !hasText(part.getToolName())) {
             throw new IllegalArgumentException(
-                "tool approval request part must include approvalId, toolCallId and toolName");
+                    "tool approval request part must include approvalId, toolCallId and toolName");
         }
     }
 
     private void validateToolApprovalResponsePart(ModelMessagePart part) {
         if (!hasText(part.getApprovalId()) || part.getApproved() == null) {
-            throw new IllegalArgumentException(
-                "tool approval response part must include approvalId and approved");
+            throw new IllegalArgumentException("tool approval response part must include approvalId and approved");
         }
     }
 
@@ -367,22 +376,18 @@ public final class LanguageModelRequestValidator {
         var toolCallsById = new LinkedHashMap<String, String>();
         for (var message : messages) {
             for (var part : message.getContent()) {
-                if (message.getRole() == ModelMessageRole.ASSISTANT
-                    && PartType.isToolCall(part.getType())) {
+                if (message.getRole() == ModelMessageRole.ASSISTANT && PartType.isToolCall(part.getType())) {
                     toolCallsById.putIfAbsent(part.getToolCallId(), part.getToolName());
                     continue;
                 }
-                if (message.getRole() == ModelMessageRole.TOOL
-                    && PartType.isToolResponse(part.getType())) {
+                if (message.getRole() == ModelMessageRole.TOOL && PartType.isToolResponse(part.getType())) {
                     var expectedToolName = toolCallsById.get(part.getToolCallId());
                     if (expectedToolName == null) {
                         throw new IllegalArgumentException(
-                            "tool response references unknown tool call: "
-                                + part.getToolCallId());
+                                "tool response references unknown tool call: " + part.getToolCallId());
                     }
                     if (!expectedToolName.equals(part.getToolName())) {
-                        throw new IllegalArgumentException(
-                            "tool response toolName mismatch for tool call "
+                        throw new IllegalArgumentException("tool response toolName mismatch for tool call "
                                 + part.getToolCallId() + ": expected " + expectedToolName
                                 + " but got " + part.getToolName());
                     }
@@ -406,10 +411,8 @@ public final class LanguageModelRequestValidator {
                     throw new IllegalArgumentException("output choices must not contain blank values");
                 }
             }
-            case JSON -> {
-            }
-            default -> {
-            }
+            case JSON -> {}
+            default -> {}
         }
     }
 

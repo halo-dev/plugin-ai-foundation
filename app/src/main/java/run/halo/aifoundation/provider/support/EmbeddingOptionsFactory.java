@@ -8,6 +8,6 @@ import run.halo.aifoundation.embedding.EmbeddingWarning;
 @FunctionalInterface
 public interface EmbeddingOptionsFactory {
 
-    EmbeddingOptions build(EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions,
-        List<EmbeddingWarning> warnings);
+    EmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings);
 }

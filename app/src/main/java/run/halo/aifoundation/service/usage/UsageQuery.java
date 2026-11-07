@@ -6,25 +6,44 @@ import run.halo.aifoundation.service.observation.UsageQuality;
 import run.halo.aifoundation.service.observation.UsageStatus;
 
 public record UsageQuery(
-    Instant from,
-    Instant to,
-    String callerPlugin,
-    String feature,
-    String providerName,
-    String modelName,
-    String modelType,
-    String operation,
-    UsageStatus status,
-    UsageQuality usageQuality,
-    UsageTrendResolution resolution,
-    ZoneId timeZone
-) {
+        Instant from,
+        Instant to,
+        String callerPlugin,
+        String feature,
+        String providerName,
+        String modelName,
+        String modelType,
+        String operation,
+        UsageStatus status,
+        UsageQuality usageQuality,
+        UsageTrendResolution resolution,
+        ZoneId timeZone) {
 
-    public UsageQuery(Instant from, Instant to, String callerPlugin, String feature,
-        String providerName, String modelName, String modelType, String operation,
-        UsageStatus status, UsageQuality usageQuality, UsageTrendResolution resolution) {
-        this(from, to, callerPlugin, feature, providerName, modelName, modelType, operation,
-            status, usageQuality, resolution, ZoneId.of("UTC"));
+    public UsageQuery(
+            Instant from,
+            Instant to,
+            String callerPlugin,
+            String feature,
+            String providerName,
+            String modelName,
+            String modelType,
+            String operation,
+            UsageStatus status,
+            UsageQuality usageQuality,
+            UsageTrendResolution resolution) {
+        this(
+                from,
+                to,
+                callerPlugin,
+                feature,
+                providerName,
+                modelName,
+                modelType,
+                operation,
+                status,
+                usageQuality,
+                resolution,
+                ZoneId.of("UTC"));
     }
 
     public UsageQuery {

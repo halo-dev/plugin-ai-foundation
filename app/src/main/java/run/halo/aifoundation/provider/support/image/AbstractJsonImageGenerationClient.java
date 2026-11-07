@@ -18,10 +18,10 @@ import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.image.ImageUsage;
 import run.halo.aifoundation.media.DataContent;
+import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.support.JsonNodes;
 import run.halo.aifoundation.provider.support.ProviderImageGenerationClient;
 import run.halo.aifoundation.provider.support.ProviderUris;
-import run.halo.aifoundation.provider.mapping.ParameterMappingTarget;
 import run.halo.aifoundation.provider.transport.ProviderDiagnostics;
 import run.halo.aifoundation.provider.transport.ProviderHttpResponseSupport;
 
@@ -32,8 +32,8 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
     protected final ImageGenerationClientOptions options;
     private final WebClient webClient;
 
-    protected AbstractJsonImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    protected AbstractJsonImageGenerationClient(
+            ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         this.options = options;
         this.webClient = webClientBuilder.build();
     }
@@ -44,56 +44,55 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
     }
 
     @Override
-    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target) {
+    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request, ParameterMappingTarget target) {
         return generateImage(request, target, Map.of());
     }
 
     @Override
-    public Mono<GenerateImageResult> generateImage(GenerateImageRequest request,
-        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+    public Mono<GenerateImageResult> generateImage(
+            GenerateImageRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         var resolvedOptions = nativeOptions == null ? Map.<String, Object>of() : nativeOptions;
         var url = endpointUrl(request, resolvedOptions);
         var body = mappedRequestBody(request, target, resolvedOptions);
         var diagnostics = ProviderDiagnostics.create(options.providerType(), "image");
         diagnostics.request(url, body, false);
-        return webClient.method(HttpMethod.POST)
-            .uri(URI.create(url))
-            .headers(headers -> {
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                if (hasText(options.apiKey())) {
-                    headers.setBearerAuth(options.apiKey());
-                }
-                options.customHeaders().forEach(headers::set);
-                if (request.getHeaders() != null) {
-                    request.getHeaders().forEach(headers::set);
-                }
-            })
-            .bodyValue(body)
-            .exchangeToMono(response -> {
-                if (!response.statusCode().is2xxSuccessful()) {
-                    return ProviderHttpResponseSupport.errorMono(response,
-                        options.providerType(), "image", diagnostics);
-                }
-                return ProviderHttpResponseSupport.body(response, diagnostics)
-                    .map(data -> imageResponse(data, request, resolvedOptions));
-            });
+        return webClient
+                .method(HttpMethod.POST)
+                .uri(URI.create(url))
+                .headers(headers -> {
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    if (hasText(options.apiKey())) {
+                        headers.setBearerAuth(options.apiKey());
+                    }
+                    options.customHeaders().forEach(headers::set);
+                    if (request.getHeaders() != null) {
+                        request.getHeaders().forEach(headers::set);
+                    }
+                })
+                .bodyValue(body)
+                .exchangeToMono(response -> {
+                    if (!response.statusCode().is2xxSuccessful()) {
+                        return ProviderHttpResponseSupport.errorMono(
+                                response, options.providerType(), "image", diagnostics);
+                    }
+                    return ProviderHttpResponseSupport.body(response, diagnostics)
+                            .map(data -> imageResponse(data, request, resolvedOptions));
+                });
     }
 
-    protected abstract Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions);
+    protected abstract Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions);
 
     public final Map<String, Object> requestBody(GenerateImageRequest request) {
         return requestBody(request, Map.of());
     }
 
-    private Map<String, Object> mappedRequestBody(GenerateImageRequest request,
-        ParameterMappingTarget target, Map<String, Object> nativeOptions) {
+    private Map<String, Object> mappedRequestBody(
+            GenerateImageRequest request, ParameterMappingTarget target, Map<String, Object> nativeOptions) {
         return ImageParameterMappingMerger.merge(requestBody(request, nativeOptions), target);
     }
 
-    protected abstract GenerateImageResult imageResponse(String data,
-        GenerateImageRequest request, Map<String, Object> nativeOptions);
+    protected abstract GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions);
 
     public final GenerateImageResult imageResponse(String data, GenerateImageRequest request) {
         return imageResponse(data, request, Map.of());
@@ -103,18 +102,15 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
         return ProviderUris.withoutTrailingSlashes(options.baseUrl()) + endpointPath(request);
     }
 
-    protected String endpointUrl(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
-        return ProviderUris.withoutTrailingSlashes(options.baseUrl())
-            + endpointPath(request, nativeOptions);
+    protected String endpointUrl(GenerateImageRequest request, Map<String, Object> nativeOptions) {
+        return ProviderUris.withoutTrailingSlashes(options.baseUrl()) + endpointPath(request, nativeOptions);
     }
 
     protected String endpointPath(GenerateImageRequest request) {
         return endpointPath();
     }
 
-    protected String endpointPath(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected String endpointPath(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         return endpointPath(request);
     }
 
@@ -159,34 +155,40 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
         try {
             return OBJECT_MAPPER.readTree(data);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to parse " + providerLabel
-                + " image response", e);
+            throw new IllegalStateException("Failed to parse " + providerLabel + " image response", e);
         }
     }
 
-    protected GenerateImageResult result(String data, JsonNode root,
-        List<run.halo.aifoundation.media.GeneratedFile> images, ImageUsage usage,
-        List<ImageGenerationWarning> warnings, String id, String model) {
+    protected GenerateImageResult result(
+            String data,
+            JsonNode root,
+            List<run.halo.aifoundation.media.GeneratedFile> images,
+            ImageUsage usage,
+            List<ImageGenerationWarning> warnings,
+            String id,
+            String model) {
         return GenerateImageResult.builder()
-            .images(images == null ? List.of() : images)
-            .usage(usage == null ? ImageUsage.builder()
-                .imageCount(images == null ? 0 : images.size())
-                .build() : usage)
-            .warnings(warnings == null ? List.of() : warnings)
-            .responses(List.of(responseMetadata(data, root, id, model)))
-            .providerMetadata(Map.of("providerType", options.providerType()))
-            .build();
+                .images(images == null ? List.of() : images)
+                .usage(
+                        usage == null
+                                ? ImageUsage.builder()
+                                        .imageCount(images == null ? 0 : images.size())
+                                        .build()
+                                : usage)
+                .warnings(warnings == null ? List.of() : warnings)
+                .responses(List.of(responseMetadata(data, root, id, model)))
+                .providerMetadata(Map.of("providerType", options.providerType()))
+                .build();
     }
 
-    protected GenerationResponseMetadata responseMetadata(String data, JsonNode root, String id,
-        String model) {
+    protected GenerationResponseMetadata responseMetadata(String data, JsonNode root, String id, String model) {
         return GenerationResponseMetadata.builder()
-            .id(id)
-            .model(model)
-            .timestamp(Instant.now())
-            .body(parseBody(data))
-            .metadata(Map.of("providerType", options.providerType()))
-            .build();
+                .id(id)
+                .model(model)
+                .timestamp(Instant.now())
+                .body(parseBody(data))
+                .metadata(Map.of("providerType", options.providerType()))
+                .build();
     }
 
     protected ImageUsage tokenUsage(JsonNode usage, int imageCount) {
@@ -198,12 +200,12 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
             generatedImages = imageCount;
         }
         return ImageUsage.builder()
-            .inputTokens(firstInt(usage, "input_tokens", "prompt_tokens"))
-            .outputTokens(firstInt(usage, "output_tokens", "completion_tokens"))
-            .totalTokens(firstInt(usage, "total_tokens"))
-            .imageCount(generatedImages)
-            .raw(OBJECT_MAPPER.convertValue(usage, Object.class))
-            .build();
+                .inputTokens(firstInt(usage, "input_tokens", "prompt_tokens"))
+                .outputTokens(firstInt(usage, "output_tokens", "completion_tokens"))
+                .totalTokens(firstInt(usage, "total_tokens"))
+                .imageCount(generatedImages)
+                .raw(OBJECT_MAPPER.convertValue(usage, Object.class))
+                .build();
     }
 
     protected String outputMediaType(String outputFormat) {
@@ -254,5 +256,4 @@ public abstract class AbstractJsonImageGenerationClient implements ProviderImage
         }
         return !value.isBlank();
     }
-
 }

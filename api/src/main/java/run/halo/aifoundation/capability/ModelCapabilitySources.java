@@ -8,9 +8,8 @@ import lombok.NoArgsConstructor;
 /**
  * Source metadata for each capability domain in a {@link ModelCapabilities} snapshot.
  *
- * <p>Sources are tracked per domain, not per individual field. A manual source means an
- * administrator intentionally overrode that domain and discovery sync should preserve it unless
- * the administrator explicitly replaces it.
+ * <p>Sources are tracked per domain, not per individual field. A manual source means an administrator intentionally
+ * overrode that domain and discovery sync should preserve it unless the administrator explicitly replaces it.
  */
 @Data
 @Builder
@@ -25,14 +24,10 @@ public class ModelCapabilitySources {
         this(null, language, imageGeneration);
     }
 
-    /**
-     * Source for {@link ModelCapabilities#getLanguage()}.
-     */
+    /** Source for {@link ModelCapabilities#getLanguage()}. */
     private CapabilitySource language;
 
-    /**
-     * Source for {@link ModelCapabilities#getImageGeneration()}.
-     */
+    /** Source for {@link ModelCapabilities#getImageGeneration()}. */
     private CapabilitySource imageGeneration;
 
     /**
@@ -59,9 +54,9 @@ public class ModelCapabilitySources {
      */
     public static ModelCapabilitySources unknown() {
         return ModelCapabilitySources.builder()
-            .decision(CapabilitySource.UNKNOWN)
-            .language(CapabilitySource.UNKNOWN)
-            .imageGeneration(CapabilitySource.UNKNOWN)
-            .build();
+                .decision(CapabilitySource.UNKNOWN)
+                .language(CapabilitySource.UNKNOWN)
+                .imageGeneration(CapabilitySource.UNKNOWN)
+                .build();
     }
 }

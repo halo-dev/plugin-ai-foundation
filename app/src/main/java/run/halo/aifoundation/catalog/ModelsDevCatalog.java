@@ -14,10 +14,8 @@ import run.halo.aifoundation.provider.support.ModelType;
 record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
 
     private static final Set<String> PROTOCOLS =
-        Set.of("chat-completions", "responses", "messages", "generate-content", "images",
-            "embeddings", "rerank");
-    private static final Set<String> MODEL_TYPES =
-        Set.of("chat", "image", "embedding", "reranking");
+            Set.of("chat-completions", "responses", "messages", "generate-content", "images", "embeddings", "rerank");
+    private static final Set<String> MODEL_TYPES = Set.of("chat", "image", "embedding", "reranking");
 
     static ModelsDevCatalog parse(JsonNode root) {
         if (root == null || !root.isObject() || root.isEmpty()) {
@@ -35,8 +33,7 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
 
     private static Map<String, Entry> parseProvider(String providerId, JsonNode provider) {
         var models = provider.get("models");
-        if (!providerId.equals(provider.path("id").asText())
-            || models == null || !models.isObject()) {
+        if (!providerId.equals(provider.path("id").asText()) || models == null || !models.isObject()) {
             throw new IllegalArgumentException("Invalid models.dev provider");
         }
         var entries = new LinkedHashMap<String, Entry>();
@@ -68,14 +65,25 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
         projected.set("capabilities", projectModelCapabilities(capabilities));
         projected.set("limit", project(model.path("limit"), "context", "input", "output"));
         projected.set("api", projectProtocols(model.path("api")));
-        return new Entry(bool(capabilities.path("tools"), "supported"),
-            bool(capabilities, "structured_output"),
-            bool(capabilities.path("reasoning"), "supported"), inputs, projected);
+        return new Entry(
+                bool(capabilities.path("tools"), "supported"),
+                bool(capabilities, "structured_output"),
+                bool(capabilities.path("reasoning"), "supported"),
+                inputs,
+                projected);
     }
 
     private static ObjectNode projectModelCapabilities(JsonNode capabilities) {
-        var projected = project(capabilities, "structured_output", "temperature", "top_p", "top_k",
-            "store", "stream_usage", "prompt_cache_key", "service_tier");
+        var projected = project(
+                capabilities,
+                "structured_output",
+                "temperature",
+                "top_p",
+                "top_k",
+                "store",
+                "stream_usage",
+                "prompt_cache_key",
+                "service_tier");
         if (capabilities.has("tools")) {
             projected.set("tools", project(capabilities.path("tools"), "supported"));
         }
@@ -101,14 +109,12 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
                 return;
             }
             var projected = project(endpoint, "base_url", "path");
-            projected.set("compatibility",
-                project(endpoint.path("compatibility"), "max_tokens_field"));
+            projected.set("compatibility", project(endpoint.path("compatibility"), "max_tokens_field"));
             var capabilities = endpoint.path("capabilities");
-            var projectedCapabilities = project(capabilities, "store", "stream_usage",
-                "prompt_cache_key", "service_tier");
+            var projectedCapabilities =
+                    project(capabilities, "store", "stream_usage", "prompt_cache_key", "service_tier");
             if (capabilities.has("tools")) {
-                projectedCapabilities.set("tools", project(capabilities.path("tools"),
-                    "strict", "choice"));
+                projectedCapabilities.set("tools", project(capabilities.path("tools"), "strict", "choice"));
             }
             projected.set("capabilities", projectedCapabilities);
             protocols.set(protocol.getKey(), projected);
@@ -182,20 +188,20 @@ record ModelsDevCatalog(Map<String, Map<String, Entry>> providers) {
         return root;
     }
 
-    record Entry(Boolean tools, Boolean structuredOutput, Boolean reasoning,
-                 List<String> inputs, JsonNode model) {
+    record Entry(Boolean tools, Boolean structuredOutput, Boolean reasoning, List<String> inputs, JsonNode model) {
 
         boolean matchesModelType(ModelType type) {
             if (type == null) {
                 return false;
             }
-            var catalogType = switch (type) {
-                case LANGUAGE -> "chat";
-                case IMAGE_GENERATION -> "image";
-                case EMBEDDING -> "embedding";
-                case RERANK -> "reranking";
-                case DECISION -> null;
-            };
+            var catalogType =
+                    switch (type) {
+                        case LANGUAGE -> "chat";
+                        case IMAGE_GENERATION -> "image";
+                        case EMBEDDING -> "embedding";
+                        case RERANK -> "reranking";
+                        case DECISION -> null;
+                    };
             return catalogType != null && catalogType.equals(model.path("type").asText());
         }
 

@@ -1,8 +1,5 @@
 package run.halo.aifoundation.service.usage;
 
-import run.halo.aifoundation.service.observation.UsageCallDescriptor;
-import run.halo.aifoundation.service.observation.UsageOperation;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
@@ -11,7 +8,6 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.time.Clock;
 import java.time.Instant;
@@ -27,6 +23,8 @@ import run.halo.aifoundation.provider.support.ModelType;
 import run.halo.aifoundation.service.audit.CallerPluginInfo;
 import run.halo.aifoundation.service.audit.CallerPluginResolver;
 import run.halo.aifoundation.service.audit.ModelCallContext;
+import run.halo.aifoundation.service.observation.UsageCallDescriptor;
+import run.halo.aifoundation.service.observation.UsageOperation;
 
 class UsageStatisticsScaleBenchmarkTest {
 
@@ -41,8 +39,9 @@ class UsageStatisticsScaleBenchmarkTest {
 
     @Test
     void benchmarkMillionCallsAndFiveMillionExecutions() throws Exception {
-        assumeTrue("true".equalsIgnoreCase(System.getenv("AI_USAGE_BENCHMARK")),
-            "Set AI_USAGE_BENCHMARK=true to run the scale benchmark");
+        assumeTrue(
+                "true".equalsIgnoreCase(System.getenv("AI_USAGE_BENCHMARK")),
+                "Set AI_USAGE_BENCHMARK=true to run the scale benchmark");
         var paths = new UsageDatabasePaths(temporaryDirectory.resolve("plugins"));
         var store = new SqliteUsageStatisticsStore(paths);
         store.initialize();
@@ -64,14 +63,14 @@ class UsageStatisticsScaleBenchmarkTest {
         boolean more;
         do {
             var batchStarted = System.nanoTime();
-            more = store.retainBatch(
-                Clock.fixed(Instant.parse("2026-08-12T02:00:00Z"), ZoneOffset.UTC));
+            more = store.retainBatch(Clock.fixed(Instant.parse("2026-08-12T02:00:00Z"), ZoneOffset.UTC));
             batchMillis.add(elapsedMillis(batchStarted));
         } while (more);
         Collections.sort(batchMillis);
         var maintenanceP95 = batchMillis.get((int) Math.ceil(batchMillis.size() * 0.95) - 1);
-        System.out.printf("Maintenance batches=%d p95=%.2fms max=%.2fms%n",
-            batchMillis.size(), maintenanceP95, batchMillis.getLast());
+        System.out.printf(
+                "Maintenance batches=%d p95=%.2fms max=%.2fms%n",
+                batchMillis.size(), maintenanceP95, batchMillis.getLast());
         var retentionMillis = elapsedMillis(retentionStarted);
         System.out.printf("Retention completed in %.2fms%n", retentionMillis);
 
@@ -84,19 +83,29 @@ class UsageStatisticsScaleBenchmarkTest {
         var coldSummaryMillis = elapsedMillis(coldSummaryStarted);
         var summaryP95 = p95(40, () -> activeStore.summary(query, true));
         var filteredSummaryP95 = p95(25, () -> activeStore.summary(filtered, true));
-        System.out.printf("Summary first=%.2fms filteredP95=%.2fms%n",
-            coldSummaryMillis, filteredSummaryP95);
+        System.out.printf("Summary first=%.2fms filteredP95=%.2fms%n", coldSummaryMillis, filteredSummaryP95);
         var trendsP95 = p95(40, () -> activeStore.trends(query, true, null));
-        var localQuery = new UsageQuery(query.from(), query.to(), null, null, null, null,
-            null, null, null, null, UsageTrendResolution.DAY,
-            java.time.ZoneId.of("Asia/Kathmandu"));
+        var localQuery = new UsageQuery(
+                query.from(),
+                query.to(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                UsageTrendResolution.DAY,
+                java.time.ZoneId.of("Asia/Kathmandu"));
         var localTrendsP95 = p95(25, () -> activeStore.trends(localQuery, true, null));
         assertThat(activeStore.trends(localQuery, true, null).stream()
-            .mapToLong(UsageTrendPoint::callCount).sum()).isEqualTo(CALL_COUNT);
+                        .mapToLong(UsageTrendPoint::callCount)
+                        .sum())
+                .isEqualTo(CALL_COUNT);
         var first = activeStore.listCalls(query, 1, null).items().getFirst();
         var detailP95 = p95(25, () -> activeStore.getCall(first.id()));
-        System.out.printf("Queries completed: summaryP95=%.2fms trendsP95=%.2fms%n",
-            summaryP95, trendsP95);
+        System.out.printf("Queries completed: summaryP95=%.2fms trendsP95=%.2fms%n", summaryP95, trendsP95);
 
         store.close();
         var quickCheckStarted = System.nanoTime();
@@ -107,7 +116,8 @@ class UsageStatisticsScaleBenchmarkTest {
         var wal = paths.database().resolveSibling(paths.database().getFileName() + "-wal");
         var walBytes = Files.exists(wal) ? Files.size(wal) : 0;
         var plans = queryPlans(paths.database());
-        System.out.printf("""
+        System.out.printf(
+                """
             AI usage scale benchmark
             calls=%d executions=%d load=%.2fms retention=%.2fms
             enqueueP95=%.5fms
@@ -115,9 +125,22 @@ class UsageStatisticsScaleBenchmarkTest {
             summaryP95=%.2fms trendsP95=%.2fms localTrendsP95=%.2fms
             quickCheck=%.2fms databaseBytes=%d walBytes=%d
             plans=%s%n
-            """, CALL_COUNT, CALL_COUNT * EXECUTIONS_PER_CALL, loadMillis, retentionMillis,
-            enqueueP95, listP95, deepCursorP95, detailP95, summaryP95, trendsP95, localTrendsP95,
-            quickCheckMillis, databaseBytes, walBytes, plans);
+            """,
+                CALL_COUNT,
+                CALL_COUNT * EXECUTIONS_PER_CALL,
+                loadMillis,
+                retentionMillis,
+                enqueueP95,
+                listP95,
+                deepCursorP95,
+                detailP95,
+                summaryP95,
+                trendsP95,
+                localTrendsP95,
+                quickCheckMillis,
+                databaseBytes,
+                walBytes,
+                plans);
 
         assertThat(listP95).isLessThanOrEqualTo(200D);
         assertThat(enqueueP95).isLessThanOrEqualTo(1D);
@@ -135,24 +158,34 @@ class UsageStatisticsScaleBenchmarkTest {
         when(store.currentEpoch()).thenReturn(1L);
         // writeBatch is abstract; replicate the former default implementation.
         org.mockito.Mockito.doAnswer(invocation -> {
-            invocation.getArgument(0, List.class).forEach(action -> ((Runnable) action).run());
-            return null;
-        }).when(store).writeBatch(org.mockito.ArgumentMatchers.anyList());
+                    invocation.getArgument(0, List.class).forEach(action -> ((Runnable) action).run());
+                    return null;
+                })
+                .when(store)
+                .writeBatch(org.mockito.ArgumentMatchers.anyList());
         var blocked = new CountDownLatch(1);
         org.mockito.Mockito.doAnswer(invocation -> {
-            blocked.await();
-            return null;
-        }).when(store).startCall(org.mockito.ArgumentMatchers.any());
+                    blocked.await();
+                    return null;
+                })
+                .when(store)
+                .startCall(org.mockito.ArgumentMatchers.any());
         var resolver = mock(CallerPluginResolver.class);
-        when(resolver.resolveCurrentCallerSnapshot()).thenReturn(CallerPluginInfo.builder()
-            .pluginName("benchmark").version("1").detectionSource("benchmark").build());
+        when(resolver.resolveCurrentCallerSnapshot())
+                .thenReturn(CallerPluginInfo.builder()
+                        .pluginName("benchmark")
+                        .version("1")
+                        .detectionSource("benchmark")
+                        .build());
         var service = new UsageStatisticsService(store, resolver);
         service.initialize();
         var samples = new ArrayList<Double>(UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100);
-        var descriptor = new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
-            "model", "provider", "openai", "gpt"),
-            UsageOperation.LANGUAGE_GENERATE_TEXT, false, null,
-            resolver.resolveCurrentCallerSnapshot());
+        var descriptor = new UsageCallDescriptor(
+                new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt"),
+                UsageOperation.LANGUAGE_GENERATE_TEXT,
+                false,
+                null,
+                resolver.resolveCurrentCallerSnapshot());
         for (int index = 0; index < UsageStatisticsService.WRITE_QUEUE_CAPACITY + 100; index++) {
             var started = System.nanoTime();
             service.beginCall(descriptor);
@@ -176,7 +209,7 @@ class UsageStatisticsScaleBenchmarkTest {
             ) VALUES (?, 1, ?, ?, 50, ?, 'benchmark', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?,
               1, 5, 0, 1, ?, ?, ?, ?)
             """);
-            var executions = connection.prepareStatement("""
+                var executions = connection.prepareStatement("""
                 INSERT INTO ai_model_executions (
                   id, call_id, epoch, unit_kind, unit_index, attempt_index, started_at_ms,
                   completed_at_ms, status, request_model_id, response_model_id,
@@ -185,15 +218,21 @@ class UsageStatisticsScaleBenchmarkTest {
                 """)) {
             for (int callIndex = 0; callIndex < CALL_COUNT; callIndex++) {
                 var callId = "call-" + callIndex;
-                var startedAt = RANGE_END.toEpochMilli() - RANGE_MILLIS
-                    + Math.floorMod(callIndex * 7_919L, RANGE_MILLIS);
+                var startedAt =
+                        RANGE_END.toEpochMilli() - RANGE_MILLIS + Math.floorMod(callIndex * 7_919L, RANGE_MILLIS);
                 var missing = callIndex % 10 == 0;
                 var failed = callIndex % 20 == 0;
                 bindCall(calls, callIndex, callId, startedAt, missing, failed);
                 calls.addBatch();
                 for (int attempt = 0; attempt < EXECUTIONS_PER_CALL; attempt++) {
-                    bindExecution(executions, callIndex, callId, attempt, startedAt, missing,
-                        failed && attempt == EXECUTIONS_PER_CALL - 1);
+                    bindExecution(
+                            executions,
+                            callIndex,
+                            callId,
+                            attempt,
+                            startedAt,
+                            missing,
+                            failed && attempt == EXECUTIONS_PER_CALL - 1);
                     executions.addBatch();
                 }
                 if ((callIndex + 1) % BATCH_SIZE == 0) {
@@ -208,17 +247,17 @@ class UsageStatisticsScaleBenchmarkTest {
         }
     }
 
-    private static void bindCall(PreparedStatement statement, int index, String id,
-        long startedAt, boolean missing, boolean failed) throws Exception {
+    private static void bindCall(
+            PreparedStatement statement, int index, String id, long startedAt, boolean missing, boolean failed)
+            throws Exception {
         var parameter = 1;
         statement.setString(parameter++, id);
         statement.setLong(parameter++, startedAt);
         statement.setLong(parameter++, startedAt + 50);
         statement.setString(parameter++, "plugin-" + index % 20);
         statement.setString(parameter++, index % 2 == 0 ? "semantic-search" : "editor");
-        statement.setString(parameter++, index % 2 == 0
-            ? UsageOperation.LANGUAGE_GENERATE_TEXT
-            : UsageOperation.EMBEDDING_EMBED);
+        statement.setString(
+                parameter++, index % 2 == 0 ? UsageOperation.LANGUAGE_GENERATE_TEXT : UsageOperation.EMBEDDING_EMBED);
         statement.setString(parameter++, index % 2 == 0 ? "LANGUAGE" : "EMBEDDING");
         statement.setString(parameter++, "model-" + index % 50);
         statement.setString(parameter++, "provider-" + index % 10);
@@ -229,8 +268,15 @@ class UsageStatisticsScaleBenchmarkTest {
         setUsage(statement, parameter, missing, 100L, 50L);
     }
 
-    private static void bindExecution(PreparedStatement statement, int callIndex, String callId,
-        int attempt, long startedAt, boolean missing, boolean failed) throws Exception {
+    private static void bindExecution(
+            PreparedStatement statement,
+            int callIndex,
+            String callId,
+            int attempt,
+            long startedAt,
+            boolean missing,
+            boolean failed)
+            throws Exception {
         var parameter = 1;
         statement.setString(parameter++, "execution-" + callIndex + '-' + attempt);
         statement.setString(parameter++, callId);
@@ -243,8 +289,8 @@ class UsageStatisticsScaleBenchmarkTest {
         setUsage(statement, parameter, missing, 20L, 10L);
     }
 
-    private static void setUsage(PreparedStatement statement, int parameter, boolean missing,
-        long input, long output) throws Exception {
+    private static void setUsage(PreparedStatement statement, int parameter, boolean missing, long input, long output)
+            throws Exception {
         if (missing) {
             statement.setObject(parameter++, null);
             statement.setObject(parameter++, null);
@@ -259,8 +305,8 @@ class UsageStatisticsScaleBenchmarkTest {
     }
 
     private static UsageQuery query(String caller) {
-        return new UsageQuery(RANGE_END.minusMillis(RANGE_MILLIS), RANGE_END, caller, null,
-            null, null, null, null, null, null, null);
+        return new UsageQuery(
+                RANGE_END.minusMillis(RANGE_MILLIS), RANGE_END, caller, null, null, null, null, null, null, null, null);
     }
 
     private static double p95(int runs, Runnable operation) {
@@ -292,7 +338,7 @@ class UsageStatisticsScaleBenchmarkTest {
 
     private static String quickCheck(Path database) throws Exception {
         try (var connection = connection(database);
-            var rows = connection.createStatement().executeQuery("PRAGMA quick_check")) {
+                var rows = connection.createStatement().executeQuery("PRAGMA quick_check")) {
             return rows.next() ? rows.getString(1) : "no-result";
         }
     }
@@ -331,8 +377,7 @@ class UsageStatisticsScaleBenchmarkTest {
         return List.copyOf(plans);
     }
 
-    private static void addPlan(Connection connection, List<String> plans, String name, String sql)
-        throws Exception {
+    private static void addPlan(Connection connection, List<String> plans, String name, String sql) throws Exception {
         try (var rows = connection.createStatement().executeQuery("EXPLAIN QUERY PLAN " + sql)) {
             while (rows.next()) {
                 plans.add(name + ": " + rows.getString("detail"));

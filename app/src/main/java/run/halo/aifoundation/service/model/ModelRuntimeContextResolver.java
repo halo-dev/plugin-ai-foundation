@@ -13,8 +13,8 @@ public class ModelRuntimeContextResolver {
     private final EffectiveParameterMappingResolver mappingResolver;
     private final ParameterMappingTemplateRegistry mappingTemplates;
 
-    public ModelRuntimeContextResolver(EffectiveParameterMappingResolver mappingResolver,
-        ParameterMappingTemplateRegistry mappingTemplates) {
+    public ModelRuntimeContextResolver(
+            EffectiveParameterMappingResolver mappingResolver, ParameterMappingTemplateRegistry mappingTemplates) {
         this.mappingResolver = mappingResolver;
         this.mappingTemplates = mappingTemplates;
     }
@@ -22,13 +22,19 @@ public class ModelRuntimeContextResolver {
     public ModelRuntimeContext resolve(ModelResolution resolution) {
         var modelName = resolution.model().getMetadata().getName();
         var providerName = resolution.provider().getMetadata().getName();
-        var mappings = new RuntimeParameterMappings(mappingResolver.resolve(resolution),
-            mappingTemplates, modelName, providerName);
-        var model = ProviderModelResolver.resolve(resolution.providerType(),
-            ProviderModelRef.from(resolution.model()));
+        var mappings = new RuntimeParameterMappings(
+                mappingResolver.resolve(resolution), mappingTemplates, modelName, providerName);
+        var model = ProviderModelResolver.resolve(resolution.providerType(), ProviderModelRef.from(resolution.model()));
         resolution.providerType().validateNativeModelOptions(model);
-        return new ModelRuntimeContext(modelName, resolution.modelId(), providerName,
-            resolution.providerTypeName(), model.adapterType(), resolution.providerType(), mappings,
-            model.nativeOptions(), mappingResolver.resolveConstraints(resolution));
+        return new ModelRuntimeContext(
+                modelName,
+                resolution.modelId(),
+                providerName,
+                resolution.providerTypeName(),
+                model.adapterType(),
+                resolution.providerType(),
+                mappings,
+                model.nativeOptions(),
+                mappingResolver.resolveConstraints(resolution));
     }
 }

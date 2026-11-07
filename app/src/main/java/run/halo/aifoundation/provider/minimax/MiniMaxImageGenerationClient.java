@@ -21,11 +21,10 @@ import run.halo.aifoundation.provider.transport.ProviderHttpException;
 public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerationClient {
 
     private static final int MAX_PROMPT_LENGTH = 1500;
-    private static final List<String> ASPECT_RATIOS = List.of(
-        "1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9");
+    private static final List<String> ASPECT_RATIOS =
+            List.of("1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9");
 
-    public MiniMaxImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public MiniMaxImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
@@ -35,8 +34,7 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         validate(request);
         var body = new LinkedHashMap<String, Object>();
         nativeOptions.forEach((key, value) -> {
@@ -60,20 +58,23 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
         putIfNotNull(body, "n", request.getN());
         putIfHasText(body, "negative_prompt", request.getNegativePrompt());
         if (request.getResponseFormat() != null) {
-            body.put("response_format", request.getResponseFormat() == ImageResponseFormat.BASE64
-                ? "base64" : "url");
+            body.put("response_format", request.getResponseFormat() == ImageResponseFormat.BASE64 ? "base64" : "url");
         }
         if (request.getImages() != null && !request.getImages().isEmpty()) {
-            body.put("subject_reference", List.of(Map.of(
-                "type", "character",
-                "image_file", imageSource(request.getImages().getFirst()))));
+            body.put(
+                    "subject_reference",
+                    List.of(Map.of(
+                            "type",
+                            "character",
+                            "image_file",
+                            imageSource(request.getImages().getFirst()))));
         }
         return body;
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "MiniMax");
         var status = root.path("base_resp").path("status_code");
         if (status.isNumber() && status.asInt() != 0) {
@@ -102,18 +103,23 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
         var failedCount = nonNegativeInteger(root.path("metadata").path("failed_count"));
         if (failedCount > 0) {
             warnings.add(ImageGenerationWarning.builder()
-                .code("partial-generation")
-                .message("MiniMax failed to generate " + failedCount
-                    + " requested image(s).")
-                .providerMetadata(Map.of("failedCount", failedCount))
-                .build());
+                    .code("partial-generation")
+                    .message("MiniMax failed to generate " + failedCount + " requested image(s).")
+                    .providerMetadata(Map.of("failedCount", failedCount))
+                    .build());
         }
         var usage = ImageUsage.builder()
-            .imageCount(images.size())
-            .raw(OBJECT_MAPPER.convertValue(root.path("metadata"), Object.class))
-            .build();
-        return result(data, root, List.copyOf(images), usage, List.copyOf(warnings),
-            textOrNull(root.path("id")), options.model());
+                .imageCount(images.size())
+                .raw(OBJECT_MAPPER.convertValue(root.path("metadata"), Object.class))
+                .build();
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                usage,
+                List.copyOf(warnings),
+                textOrNull(root.path("id")),
+                options.model());
     }
 
     private int nonNegativeInteger(JsonNode node) {
@@ -133,8 +139,7 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
     private void validate(GenerateImageRequest request) {
         requirePrompt(request, "MiniMax image prompt must not be blank");
         if (request.getPrompt().length() > MAX_PROMPT_LENGTH) {
-            throw new IllegalArgumentException(
-                "MiniMax image prompt must not exceed 1500 characters");
+            throw new IllegalArgumentException("MiniMax image prompt must not exceed 1500 characters");
         }
         if (request.getMask() != null) {
             throw new IllegalArgumentException("MiniMax image generation does not support masks");
@@ -143,23 +148,19 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
             validateImageCount(request.getN());
         }
         if (request.getImages() != null && request.getImages().size() > 1) {
-            throw new IllegalArgumentException(
-                "MiniMax subject_reference accepts exactly one reference image");
+            throw new IllegalArgumentException("MiniMax subject_reference accepts exactly one reference image");
         }
         if (hasText(request.getSize()) && hasText(request.getAspectRatio())) {
-            throw new IllegalArgumentException(
-                "MiniMax image size and aspectRatio are mutually exclusive");
+            throw new IllegalArgumentException("MiniMax image size and aspectRatio are mutually exclusive");
         }
         if (hasText(request.getAspectRatio())
-            && !ASPECT_RATIOS.contains(request.getAspectRatio().toLowerCase(Locale.ROOT))) {
-            throw new IllegalArgumentException(
-                "Unsupported MiniMax image aspect ratio: " + request.getAspectRatio());
+                && !ASPECT_RATIOS.contains(request.getAspectRatio().toLowerCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("Unsupported MiniMax image aspect ratio: " + request.getAspectRatio());
         }
         if (hasText(request.getSize())) {
             var dimensions = parseDimensions(request.getSize());
             if (dimensions == null) {
-                throw new IllegalArgumentException(
-                    "MiniMax image size must use WIDTHxHEIGHT format");
+                throw new IllegalArgumentException("MiniMax image size must use WIDTHxHEIGHT format");
             }
             validateDimension(dimensions.width(), "width");
             validateDimension(dimensions.height(), "height");
@@ -188,8 +189,7 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
     }
 
     private IllegalArgumentException invalidDimension(String field) {
-        return new IllegalArgumentException(
-            "MiniMax image " + field + " must be 512-2048 pixels and divisible by 8");
+        return new IllegalArgumentException("MiniMax image " + field + " must be 512-2048 pixels and divisible by 8");
     }
 
     private Dimensions parseDimensions(String size) {
@@ -201,13 +201,11 @@ public final class MiniMaxImageGenerationClient extends AbstractJsonImageGenerat
             return null;
         }
         try {
-            return new Dimensions(Integer.parseInt(parts[0].trim()),
-                Integer.parseInt(parts[1].trim()));
+            return new Dimensions(Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim()));
         } catch (NumberFormatException ignored) {
             return null;
         }
     }
 
-    private record Dimensions(int width, int height) {
-    }
+    private record Dimensions(int width, int height) {}
 }

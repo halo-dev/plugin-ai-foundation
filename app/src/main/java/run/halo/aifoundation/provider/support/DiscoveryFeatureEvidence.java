@@ -7,8 +7,7 @@ import java.util.Set;
 /** Explicit evidence only: absent fields and adapter defaults must not become false evidence. */
 public final class DiscoveryFeatureEvidence {
 
-    private DiscoveryFeatureEvidence() {
-    }
+    private DiscoveryFeatureEvidence() {}
 
     public static Map<ModelFeature, Boolean> fromBooleanFields(Map<?, ?> node) {
         var evidence = new EnumMap<ModelFeature, Boolean>(ModelFeature.class);
@@ -19,8 +18,8 @@ public final class DiscoveryFeatureEvidence {
         return evidence;
     }
 
-    private static void copy(Map<?, ?> node, Map<ModelFeature, Boolean> evidence,
-        ModelFeature feature, String... fields) {
+    private static void copy(
+            Map<?, ?> node, Map<ModelFeature, Boolean> evidence, ModelFeature feature, String... fields) {
         for (var field : fields) {
             if (node.get(field) instanceof Boolean value) {
                 evidence.put(feature, value);
@@ -29,9 +28,8 @@ public final class DiscoveryFeatureEvidence {
         }
     }
 
-    public static void recordDeclaredFeatures(Map<ModelFeature, Boolean> evidence,
-        Set<ModelFeature> features,
-        ModelFeature... declaredFeatures) {
+    public static void recordDeclaredFeatures(
+            Map<ModelFeature, Boolean> evidence, Set<ModelFeature> features, ModelFeature... declaredFeatures) {
         for (var feature : declaredFeatures) {
             evidence.put(feature, features.contains(feature));
         }

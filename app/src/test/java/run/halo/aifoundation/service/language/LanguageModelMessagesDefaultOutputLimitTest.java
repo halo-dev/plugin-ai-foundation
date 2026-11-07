@@ -47,8 +47,8 @@ class LanguageModelMessagesDefaultOutputLimitTest {
             for (var prepared : List.of(false, true)) {
                 var probe = probe(AdapterType.OPENROUTER_MESSAGES, limit, Map.of());
                 assertAccepted(probe, request(null, prepared));
-                assertThat(probe.bodies()).allSatisfy(body ->
-                    assertThat(body).containsEntry("max_tokens", limit.intValue()));
+                assertThat(probe.bodies())
+                        .allSatisfy(body -> assertThat(body).containsEntry("max_tokens", limit.intValue()));
             }
         }
     }
@@ -59,8 +59,7 @@ class LanguageModelMessagesDefaultOutputLimitTest {
             for (var prepared : List.of(false, true)) {
                 var probe = probe(AdapterType.OPENROUTER_MESSAGES, limit, Map.of());
                 assertAccepted(probe, request(null, prepared));
-                assertThat(probe.bodies()).allSatisfy(body ->
-                    assertThat(body).containsEntry("max_tokens", 4096));
+                assertThat(probe.bodies()).allSatisfy(body -> assertThat(body).containsEntry("max_tokens", 4096));
             }
         }
     }
@@ -68,74 +67,65 @@ class LanguageModelMessagesDefaultOutputLimitTest {
     @Test
     void sdkAndPreparedOutputLengthsKeepTheirPrecedenceAndValidation() {
         for (var prepared : List.of(false, true)) {
-            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L,
-                Map.of("max_tokens", 5000));
+            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of("max_tokens", 5000));
             assertAccepted(accepted, request(1536, prepared));
-            assertThat(accepted.bodies()).allSatisfy(body ->
-                assertThat(body).containsEntry("max_tokens", 1536));
+            assertThat(accepted.bodies()).allSatisfy(body -> assertThat(body).containsEntry("max_tokens", 1536));
 
             var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of());
-            assertRejected(rejected, request(5000, prepared),
-                "maxOutputTokens must not exceed model limit 2048");
+            assertRejected(rejected, request(5000, prepared), "maxOutputTokens must not exceed model limit 2048");
         }
     }
 
     @Test
     void filteredSdkOutputLengthsStillUseASafeRequiredProtocolDefault() {
         var unsupported = new EffectiveParameterMappings.EffectiveMapping(
-            ModelParameterMappings.Mode.UNSUPPORTED, null, null,
-            EffectiveParameterMappings.Source.MODEL);
-        var mappings = new RuntimeParameterMappings(new EffectiveParameterMappings(
-            Map.of(ModelParameter.MAX_OUTPUT_TOKENS, unsupported)), null, "model", "provider");
+                ModelParameterMappings.Mode.UNSUPPORTED, null, null, EffectiveParameterMappings.Source.MODEL);
+        var mappings = new RuntimeParameterMappings(
+                new EffectiveParameterMappings(Map.of(ModelParameter.MAX_OUTPUT_TOKENS, unsupported)),
+                null,
+                "model",
+                "provider");
         for (var prepared : List.of(false, true)) {
-            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(),
-                options(), mappings);
+            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(), options(), mappings);
             assertAccepted(accepted, request(1536, prepared));
-            assertThat(accepted.bodies()).allSatisfy(body ->
-                assertThat(body).containsEntry("max_tokens", 2048));
-            var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(),
-                options(), mappings);
-            assertRejected(rejected, request(5000, prepared),
-                "maxOutputTokens must not exceed model limit 2048");
+            assertThat(accepted.bodies()).allSatisfy(body -> assertThat(body).containsEntry("max_tokens", 2048));
+            var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(), options(), mappings);
+            assertRejected(rejected, request(5000, prepared), "maxOutputTokens must not exceed model limit 2048");
         }
     }
 
     @Test
     void nativeOutputLengthsAreNeverReplacedByTheAutomaticDefault() {
         for (var prepared : List.of(false, true)) {
-            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L,
-                Map.of("max_tokens", 1536));
+            var accepted = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of("max_tokens", 1536));
             assertAccepted(accepted, request(null, prepared));
-            assertThat(accepted.bodies()).allSatisfy(body ->
-                assertThat(body).containsEntry("max_tokens", 1536));
+            assertThat(accepted.bodies()).allSatisfy(body -> assertThat(body).containsEntry("max_tokens", 1536));
 
-            var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L,
-                Map.of("max_tokens", 5000));
-            assertRejected(rejected, request(null, prepared),
-                "max_tokens must not exceed model limit 2048");
+            var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of("max_tokens", 5000));
+            assertRejected(rejected, request(null, prepared), "max_tokens must not exceed model limit 2048");
 
-            var completionAlias = probe(AdapterType.OPENROUTER_MESSAGES, 8192L,
-                Map.of("max_completion_tokens", 16384));
-            assertRejected(completionAlias, request(null, prepared),
-                "max_completion_tokens must not exceed model limit 8192");
+            var completionAlias = probe(AdapterType.OPENROUTER_MESSAGES, 8192L, Map.of("max_completion_tokens", 16384));
+            assertRejected(
+                    completionAlias, request(null, prepared), "max_completion_tokens must not exceed model limit 8192");
         }
     }
 
     @Test
     void explicitTransportDefaultsArePreservedAndValidated() {
         for (var options : List.of(
-            options().mutate().maxTokens(1536).build(),
-            options().mutate().maxCompletionTokens(1536).build(),
-            options().mutate().extraBody(Map.of("max_tokens", 1536)).build())) {
+                options().mutate().maxTokens(1536).build(),
+                options().mutate().maxCompletionTokens(1536).build(),
+                options().mutate().extraBody(Map.of("max_tokens", 1536)).build())) {
             var probe = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(), options);
             assertAccepted(probe, request(null, false));
-            assertThat(probe.bodies()).allSatisfy(body ->
-                assertThat(body).containsEntry("max_tokens", 1536));
+            assertThat(probe.bodies()).allSatisfy(body -> assertThat(body).containsEntry("max_tokens", 1536));
         }
-        var rejected = probe(AdapterType.OPENROUTER_MESSAGES, 2048L, Map.of(),
-            options().mutate().maxTokens(5000).build());
-        assertRejected(rejected, request(null, false),
-            "max_tokens must not exceed model limit 2048");
+        var rejected = probe(
+                AdapterType.OPENROUTER_MESSAGES,
+                2048L,
+                Map.of(),
+                options().mutate().maxTokens(5000).build());
+        assertRejected(rejected, request(null, false), "max_tokens must not exceed model limit 2048");
     }
 
     @Test
@@ -144,18 +134,21 @@ class LanguageModelMessagesDefaultOutputLimitTest {
             for (var prepared : List.of(false, true)) {
                 var probe = probe(adapter, 2048L, Map.of());
                 assertAccepted(probe, request(null, prepared));
-                assertThat(probe.bodies()).allSatisfy(body -> assertThat(body)
-                    .doesNotContainKeys("max_tokens", "max_completion_tokens",
-                        "max_output_tokens"));
+                assertThat(probe.bodies())
+                        .allSatisfy(body -> assertThat(body)
+                                .doesNotContainKeys("max_tokens", "max_completion_tokens", "max_output_tokens"));
             }
         }
     }
 
     private void assertAccepted(WireProbe probe, GenerateTextRequest request) {
-        probe.model().generateText(request).onErrorResume(error -> {
-            assertThat(error).isInstanceOf(ProviderHttpException.class);
-            return Mono.empty();
-        }).block();
+        probe.model()
+                .generateText(request)
+                .onErrorResume(error -> {
+                    assertThat(error).isInstanceOf(ProviderHttpException.class);
+                    return Mono.empty();
+                })
+                .block();
         probe.model().streamText(request).fullStream().collectList().block();
         // A deliberate HTTP error is returned only after capturing the final outgoing JSON.
         assertThat(probe.bodies()).hasSize(2);
@@ -163,70 +156,96 @@ class LanguageModelMessagesDefaultOutputLimitTest {
 
     private void assertRejected(WireProbe probe, GenerateTextRequest request, String message) {
         StepVerifier.create(probe.model().generateText(request))
-            .expectErrorMessage(message).verify();
-        var errors = probe.model().streamText(request).fullStream()
-            .filter(part -> PartType.ERROR.equals(part.getType())).collectList().block();
-        assertThat(errors).singleElement().satisfies(error ->
-            assertThat(error.getErrorText()).isEqualTo(message));
+                .expectErrorMessage(message)
+                .verify();
+        var errors = probe.model()
+                .streamText(request)
+                .fullStream()
+                .filter(part -> PartType.ERROR.equals(part.getType()))
+                .collectList()
+                .block();
+        assertThat(errors)
+                .singleElement()
+                .satisfies(error -> assertThat(error.getErrorText()).isEqualTo(message));
         assertThat(probe.bodies()).isEmpty();
     }
 
     private GenerateTextRequest request(Integer tokens, boolean prepared) {
-        return GenerateTextRequest.builder().prompt("Hello").maxRetries(0)
-            .maxOutputTokens(prepared ? null : tokens)
-            .prepareStep(prepared
-                ? step -> PreparedStep.builder().maxOutputTokens(tokens).build()
-                : null)
-            .build();
+        return GenerateTextRequest.builder()
+                .prompt("Hello")
+                .maxRetries(0)
+                .maxOutputTokens(prepared ? null : tokens)
+                .prepareStep(
+                        prepared
+                                ? step -> PreparedStep.builder()
+                                        .maxOutputTokens(tokens)
+                                        .build()
+                                : null)
+                .build();
     }
 
     private WireProbe probe(AdapterType adapter, Long limit, Map<String, Object> nativeOptions) {
         return probe(adapter, limit, nativeOptions, options());
     }
 
-    private WireProbe probe(AdapterType adapter, Long limit, Map<String, Object> nativeOptions,
-        ChatCompletionsOptions options) {
+    private WireProbe probe(
+            AdapterType adapter, Long limit, Map<String, Object> nativeOptions, ChatCompletionsOptions options) {
         return probe(adapter, limit, nativeOptions, options, RuntimeParameterMappings.empty());
     }
 
-    private WireProbe probe(AdapterType adapter, Long limit, Map<String, Object> nativeOptions,
-        ChatCompletionsOptions options, RuntimeParameterMappings mappings) {
+    private WireProbe probe(
+            AdapterType adapter,
+            Long limit,
+            Map<String, Object> nativeOptions,
+            ChatCompletionsOptions options,
+            RuntimeParameterMappings mappings) {
         var bodies = new ArrayList<Map<String, Object>>();
         var webClient = WebClient.builder().exchangeFunction(request -> {
             var output = new MockClientHttpRequest(request.method(), request.url());
             return request.writeTo(output, ExchangeStrategies.withDefaults())
-                .then(Mono.defer(output::getBodyAsString)).flatMap(body -> Mono.fromCallable(() -> {
-                    bodies.add(JSON.readValue(body, new TypeReference<>() { }));
-                    return ClientResponse.create(HttpStatus.BAD_REQUEST)
-                        .header("Content-Type", "application/json")
-                        .body("{\"error\":{\"message\":\"wire probe captured\"}}").build();
-                }));
+                    .then(Mono.defer(output::getBodyAsString))
+                    .flatMap(body -> Mono.fromCallable(() -> {
+                        bodies.add(JSON.readValue(body, new TypeReference<>() {}));
+                        return ClientResponse.create(HttpStatus.BAD_REQUEST)
+                                .header("Content-Type", "application/json")
+                                .body("{\"error\":{\"message\":\"wire probe captured\"}}")
+                                .build();
+                    }));
         });
-        ChatModel chat = switch (adapter) {
-            case OPENROUTER_MESSAGES -> new OpenRouterMessagesModel(options, webClient);
-            case OPENAI_CHAT -> new OpenAiChatModel(options, webClient);
-            case OPENAI_RESPONSES -> new OpenAiResponsesModel(options, webClient);
-            default -> throw new IllegalArgumentException("Unexpected test adapter");
-        };
-        AiProviderType provider = adapter == AdapterType.OPENROUTER_MESSAGES
-            ? new OpenRouterProvider() : new OpenAiProvider();
+        ChatModel chat =
+                switch (adapter) {
+                    case OPENROUTER_MESSAGES -> new OpenRouterMessagesModel(options, webClient);
+                    case OPENAI_CHAT -> new OpenAiChatModel(options, webClient);
+                    case OPENAI_RESPONSES -> new OpenAiResponsesModel(options, webClient);
+                    default -> throw new IllegalArgumentException("Unexpected test adapter");
+                };
+        AiProviderType provider =
+                adapter == AdapterType.OPENROUTER_MESSAGES ? new OpenRouterProvider() : new OpenAiProvider();
         var constraints = new ModelParameterConstraints();
         constraints.setOutputTokens(limit);
-        var context = new ModelRuntimeContext("model", "test-model", "provider",
-            provider.getProviderType(),
-            adapter, provider, mappings, nativeOptions, constraints);
-        var configuration = LanguageModelRuntimeConfiguration
-            .from(context, ModelCapabilities.empty());
-        var composition = LanguageModelRuntimeComposition.create(configuration,
-            new LanguageModelRuntimeSupport(), null, null);
+        var context = new ModelRuntimeContext(
+                "model",
+                "test-model",
+                "provider",
+                provider.getProviderType(),
+                adapter,
+                provider,
+                mappings,
+                nativeOptions,
+                constraints);
+        var configuration = LanguageModelRuntimeConfiguration.from(context, ModelCapabilities.empty());
+        var composition =
+                LanguageModelRuntimeComposition.create(configuration, new LanguageModelRuntimeSupport(), null, null);
         return new WireProbe(new LanguageModelImpl(chat, composition, context), bodies);
     }
 
     private ChatCompletionsOptions options() {
-        return ChatCompletionsOptions.builder().baseUrl("https://wire.invalid")
-            .model("test-model").maxRetries(0).build();
+        return ChatCompletionsOptions.builder()
+                .baseUrl("https://wire.invalid")
+                .model("test-model")
+                .maxRetries(0)
+                .build();
     }
 
-    private record WireProbe(LanguageModelImpl model, List<Map<String, Object>> bodies) {
-    }
+    private record WireProbe(LanguageModelImpl model, List<Map<String, Object>> bodies) {}
 }

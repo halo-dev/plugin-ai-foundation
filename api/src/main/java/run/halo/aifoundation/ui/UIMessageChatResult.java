@@ -11,9 +11,9 @@ import reactor.core.publisher.Mono;
  * @param conversion conversion result used for the model request
  * @param finish final aggregated response message and updated conversation
  */
-public record UIMessageChatResult<M>(UIMessageStream stream,
-                                     UIMessageStreamResponse response,
-                                     UIMessageValidationResult<M> validation,
-                                     UIMessageConversionResult conversion,
-                                     Mono<UIMessageStreamFinish<M>> finish) {
-}
+public record UIMessageChatResult<M>(
+        UIMessageStream stream,
+        UIMessageStreamResponse response,
+        UIMessageValidationResult<M> validation,
+        UIMessageConversionResult conversion,
+        Mono<UIMessageStreamFinish<M>> finish) {}

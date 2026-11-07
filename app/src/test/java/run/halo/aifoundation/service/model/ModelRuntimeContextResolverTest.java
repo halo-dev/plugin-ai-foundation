@@ -26,14 +26,13 @@ class ModelRuntimeContextResolverTest {
     @Test
     void resolvesSafeIdentityAndExecutableMappingsWithoutRetainingSecret() {
         var providerType = mock(AiProviderType.class);
-        when(providerType.getSupportedAdapterTypes()).thenReturn(
-            java.util.List.of(AdapterType.OPENAI_RESPONSES));
-        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES)).thenReturn(Map.of(
-            ModelParameter.MAX_OUTPUT_TOKENS,
-            DefaultParameterMapping.template("openai.max-completion-tokens")
-        ));
-        var resolver = new ModelRuntimeContextResolver(new EffectiveParameterMappingResolver(),
-            new ParameterMappingTemplateRegistry());
+        when(providerType.getSupportedAdapterTypes()).thenReturn(java.util.List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
+                .thenReturn(Map.of(
+                        ModelParameter.MAX_OUTPUT_TOKENS,
+                        DefaultParameterMapping.template("openai.max-completion-tokens")));
+        var resolver = new ModelRuntimeContextResolver(
+                new EffectiveParameterMappingResolver(), new ParameterMappingTemplateRegistry());
 
         var context = resolver.resolve(resolution(providerType));
 
@@ -44,26 +43,29 @@ class ModelRuntimeContextResolverTest {
         assertThat(context.adapterType()).isEqualTo(AdapterType.OPENAI_RESPONSES);
         assertThat(context.providerDefinition()).isSameAs(providerType);
         assertThat(context.nativeOptions()).containsEntry("thinking_budget", 4096);
-        assertThat(context.parameterMappings().get(ModelParameter.MAX_OUTPUT_TOKENS).template())
-            .isEqualTo("openai.max-completion-tokens");
+        assertThat(context.parameterMappings()
+                        .get(ModelParameter.MAX_OUTPUT_TOKENS)
+                        .template())
+                .isEqualTo("openai.max-completion-tokens");
         verify(providerType).validateNativeModelOptions(any());
         assertThat(Arrays.stream(ModelRuntimeContext.class.getRecordComponents())
-            .map(component -> component.getName().toLowerCase()))
-            .noneMatch(name -> name.contains("key") || name.contains("secret")
-                || name.equals("model") || name.equals("provider"));
+                        .map(component -> component.getName().toLowerCase()))
+                .noneMatch(name -> name.contains("key")
+                        || name.contains("secret")
+                        || name.equals("model")
+                        || name.equals("provider"));
     }
 
     @Test
     void normalizesMissingAdapterBeforeCreatingRuntimeContext() {
         var providerType = mock(AiProviderType.class);
-        when(providerType.getSupportedAdapterTypes()).thenReturn(
-            java.util.List.of(AdapterType.OPENAI_RESPONSES));
-        when(providerType.recommendAdapterType(ModelType.LANGUAGE)).thenReturn(
-            Optional.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.getSupportedAdapterTypes()).thenReturn(java.util.List.of(AdapterType.OPENAI_RESPONSES));
+        when(providerType.recommendAdapterType(ModelType.LANGUAGE))
+                .thenReturn(Optional.of(AdapterType.OPENAI_RESPONSES));
         when(providerType.getDefaultParameterMappings(AdapterType.OPENAI_RESPONSES))
-            .thenReturn(Map.of());
-        var resolver = new ModelRuntimeContextResolver(new EffectiveParameterMappingResolver(),
-            new ParameterMappingTemplateRegistry());
+                .thenReturn(Map.of());
+        var resolver = new ModelRuntimeContextResolver(
+                new EffectiveParameterMappingResolver(), new ParameterMappingTemplateRegistry());
         var resolution = resolution(providerType);
         resolution.model().getSpec().setAdapterType(null);
 

@@ -25,16 +25,25 @@ public class DecisionQuestion {
     private String noCriteria;
 
     public static DecisionQuestion yesNo(String instructions) {
-        return builder().type(DecisionQuestionType.YES_NO).instructions(instructions).build();
+        return builder()
+                .type(DecisionQuestionType.YES_NO)
+                .instructions(instructions)
+                .build();
     }
 
     public static DecisionQuestion choice(String instructions, Map<String, String> options) {
-        return builder().type(DecisionQuestionType.CHOICE).instructions(instructions)
-            .options(options).build();
+        return builder()
+                .type(DecisionQuestionType.CHOICE)
+                .instructions(instructions)
+                .options(options)
+                .build();
     }
 
     public static DecisionQuestion score(String instructions, List<String> levels) {
-        return builder().type(DecisionQuestionType.SCORE).instructions(instructions)
-            .levels(levels).build();
+        return builder()
+                .type(DecisionQuestionType.SCORE)
+                .instructions(instructions)
+                .levels(levels)
+                .build();
     }
 }

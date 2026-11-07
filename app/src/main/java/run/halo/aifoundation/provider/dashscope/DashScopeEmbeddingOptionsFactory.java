@@ -11,23 +11,22 @@ final class DashScopeEmbeddingOptionsFactory {
 
     private static final Set<String> FIELDS = Set.of("text_type", "output_type", "instruct");
 
-    private DashScopeEmbeddingOptionsFactory() {
-    }
+    private DashScopeEmbeddingOptionsFactory() {}
 
-    static org.springframework.ai.embedding.EmbeddingOptions build(EmbeddingRequest request,
-        EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
+    static org.springframework.ai.embedding.EmbeddingOptions build(
+            EmbeddingRequest request, EmbeddingModelProviderOptions providerOptions, List<EmbeddingWarning> warnings) {
         if (request == null) {
             return null;
         }
         var values = providerOptions.nativeOptions();
         rejectUnknownOptions(values.keySet());
         return DashScopeEmbeddingOptions.builder()
-            .dimensions(request.getDimensions())
-            .textType(textType(values.get("text_type")))
-            .outputType(outputType(values.get("output_type")))
-            .instruct(instruction(request, values.get("instruct")))
-            .customHeaders(request.getHeaders())
-            .build();
+                .dimensions(request.getDimensions())
+                .textType(textType(values.get("text_type")))
+                .outputType(outputType(values.get("output_type")))
+                .instruct(instruction(request, values.get("instruct")))
+                .customHeaders(request.getHeaders())
+                .build();
     }
 
     private static void rejectUnknownOptions(Set<String> fields) {
@@ -36,8 +35,7 @@ final class DashScopeEmbeddingOptionsFactory {
         if (unknown.isEmpty()) {
             return;
         }
-        throw new IllegalArgumentException("Unsupported DashScope embedding option(s): "
-            + String.join(", ", unknown));
+        throw new IllegalArgumentException("Unsupported DashScope embedding option(s): " + String.join(", ", unknown));
     }
 
     private static DashScopeEmbeddingOptions.TextType textType(Object value) {
@@ -48,8 +46,8 @@ final class DashScopeEmbeddingOptionsFactory {
         return switch (text) {
             case "query" -> DashScopeEmbeddingOptions.TextType.QUERY;
             case "document" -> DashScopeEmbeddingOptions.TextType.DOCUMENT;
-            default -> throw new IllegalArgumentException(
-                "DashScope embedding text_type must be 'query' or 'document'");
+            default ->
+                throw new IllegalArgumentException("DashScope embedding text_type must be 'query' or 'document'");
         };
     }
 
@@ -62,8 +60,9 @@ final class DashScopeEmbeddingOptionsFactory {
             case "dense" -> DashScopeEmbeddingOptions.OutputType.DENSE;
             case "sparse" -> DashScopeEmbeddingOptions.OutputType.SPARSE;
             case "dense&sparse" -> DashScopeEmbeddingOptions.OutputType.DENSE_AND_SPARSE;
-            default -> throw new IllegalArgumentException(
-                "DashScope embedding output_type must be 'dense', 'sparse', or 'dense&sparse'");
+            default ->
+                throw new IllegalArgumentException(
+                        "DashScope embedding output_type must be 'dense', 'sparse', or 'dense&sparse'");
         };
     }
 
@@ -81,7 +80,6 @@ final class DashScopeEmbeddingOptionsFactory {
         if (value instanceof String text && !text.isBlank()) {
             return text;
         }
-        throw new IllegalArgumentException("DashScope embedding " + field
-            + " must be a non-blank string");
+        throw new IllegalArgumentException("DashScope embedding " + field + " must be a non-blank string");
     }
 }

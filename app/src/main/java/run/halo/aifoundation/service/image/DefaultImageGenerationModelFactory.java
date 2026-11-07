@@ -24,10 +24,11 @@ public class DefaultImageGenerationModelFactory implements ImageGenerationModelF
     }
 
     @Autowired
-    public DefaultImageGenerationModelFactory(ProviderClientCache providerClientCache,
-        ModelCapabilityService modelCapabilityService,
-        ImageGenerationModelRuntimeFactory runtimeFactory,
-        ModelRuntimeContextResolver runtimeContextResolver) {
+    public DefaultImageGenerationModelFactory(
+            ProviderClientCache providerClientCache,
+            ModelCapabilityService modelCapabilityService,
+            ImageGenerationModelRuntimeFactory runtimeFactory,
+            ModelRuntimeContextResolver runtimeContextResolver) {
         this.providerClientCache = providerClientCache;
         this.modelCapabilityService = modelCapabilityService;
         this.runtimeFactory = runtimeFactory;
@@ -36,31 +37,27 @@ public class DefaultImageGenerationModelFactory implements ImageGenerationModelF
 
     @Override
     public ImageGenerationModel create(ModelResolution resolution) {
-        var adapter = AdapterType.firstFor(
-            resolution.providerType().getSupportedAdapterTypes(),
-            ModelType.IMAGE_GENERATION
-        );
+        var adapter =
+                AdapterType.firstFor(resolution.providerType().getSupportedAdapterTypes(), ModelType.IMAGE_GENERATION);
         if (adapter.isEmpty()) {
             return ImageGenerationModel.unsupported(
-                resolution.model().getMetadata().getName(),
-                resolution.provider().getMetadata().getName(),
-                resolution.providerTypeName()
-            );
+                    resolution.model().getMetadata().getName(),
+                    resolution.provider().getMetadata().getName(),
+                    resolution.providerTypeName());
         }
-        var client = providerClientCache == null ? null
-            : providerClientCache.getOrCreateImageGenerationClient(resolution.provider(),
-                resolution.apiKey(), ProviderModelRef.from(resolution.model()));
+        var client = providerClientCache == null
+                ? null
+                : providerClientCache.getOrCreateImageGenerationClient(
+                        resolution.provider(), resolution.apiKey(), ProviderModelRef.from(resolution.model()));
         if (client == null) {
             return ImageGenerationModel.unsupported(
-                resolution.model().getMetadata().getName(),
-                resolution.provider().getMetadata().getName(),
-                resolution.providerTypeName()
-            );
+                    resolution.model().getMetadata().getName(),
+                    resolution.provider().getMetadata().getName(),
+                    resolution.providerTypeName());
         }
-        var capabilities = modelCapabilityService.effectiveCapabilities(resolution.model(),
-            resolution.providerType());
-        var configuration = new ImageGenerationModelRuntimeConfiguration(
-            runtimeContextResolver.resolve(resolution), capabilities);
+        var capabilities = modelCapabilityService.effectiveCapabilities(resolution.model(), resolution.providerType());
+        var configuration =
+                new ImageGenerationModelRuntimeConfiguration(runtimeContextResolver.resolve(resolution), capabilities);
         return runtimeFactory.create(client, configuration);
     }
 }

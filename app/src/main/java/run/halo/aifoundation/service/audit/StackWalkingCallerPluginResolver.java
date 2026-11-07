@@ -21,11 +21,10 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
     private static final StackWalker STACK_WALKER = StackWalker.getInstance(RETAIN_CLASS_REFERENCE);
     private static final String DETECTION_SOURCE = "stack-classloader";
     private static final List<String> CONSOLE_TEST_CLASS_NAMES = List.of(
-        "run.halo.aifoundation.endpoint.ModelConsoleEndpoint",
-        "run.halo.aifoundation.endpoint.DecisionConsoleEndpoint");
-    private static final List<String> FRAMEWORK_PACKAGE_PREFIXES = List.of(
-        "java.", "jdk.", "reactor.", "org.springframework.", "org.pf4j.",
-        "run.halo.aifoundation.");
+            "run.halo.aifoundation.endpoint.ModelConsoleEndpoint",
+            "run.halo.aifoundation.endpoint.DecisionConsoleEndpoint");
+    private static final List<String> FRAMEWORK_PACKAGE_PREFIXES =
+            List.of("java.", "jdk.", "reactor.", "org.springframework.", "org.pf4j.", "run.halo.aifoundation.");
 
     private final ReactiveExtensionClient client;
     private final ObjectProvider<PluginWrapper> pluginWrapperProvider;
@@ -42,13 +41,13 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
     @Override
     public CallerPluginInfo resolveCurrentCallerSnapshot() {
         return detectCallerPlugin()
-            .map(plugin -> CallerPluginInfo.builder()
-                .detected(true)
-                .detectionSource(DETECTION_SOURCE)
-                .pluginName(plugin.getPluginId())
-                .version(plugin.getDescriptor().getVersion())
-                .build())
-            .orElseGet(this::unknown);
+                .map(plugin -> CallerPluginInfo.builder()
+                        .detected(true)
+                        .detectionSource(DETECTION_SOURCE)
+                        .pluginName(plugin.getPluginId())
+                        .version(plugin.getDescriptor().getVersion())
+                        .build())
+                .orElseGet(this::unknown);
     }
 
     private Optional<PluginWrapper> detectCallerPlugin() {
@@ -67,21 +66,20 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
                 pluginByClassLoader.put(classLoader, plugin);
             }
         }
-        return STACK_WALKER.walk(frames -> frames
-            .map(StackWalker.StackFrame::getDeclaringClass)
-            .map(type -> {
-                // Only the Console test boundary may identify Foundation as its own caller.
-                // Include nested classes for deferred RAG reranking invocations.
-                if (type.getClassLoader() == self.getPluginClassLoader()
-                    && CONSOLE_TEST_CLASS_NAMES.stream().anyMatch(name ->
-                        type.getName().equals(name) || type.getName().startsWith(name + "$"))) {
-                    return self;
-                }
-                return isCandidateCallerClass(type)
-                    ? pluginByClassLoader.get(type.getClassLoader()) : null;
-            })
-            .filter(Objects::nonNull)
-            .findFirst());
+        return STACK_WALKER.walk(frames -> frames.map(StackWalker.StackFrame::getDeclaringClass)
+                .map(type -> {
+                    // Only the Console test boundary may identify Foundation as its own caller.
+                    // Include nested classes for deferred RAG reranking invocations.
+                    if (type.getClassLoader() == self.getPluginClassLoader()
+                            && CONSOLE_TEST_CLASS_NAMES.stream()
+                                    .anyMatch(name -> type.getName().equals(name)
+                                            || type.getName().startsWith(name + "$"))) {
+                        return self;
+                    }
+                    return isCandidateCallerClass(type) ? pluginByClassLoader.get(type.getClassLoader()) : null;
+                })
+                .filter(Objects::nonNull)
+                .findFirst());
     }
 
     private boolean isCandidateCallerClass(Class<?> type) {
@@ -96,12 +94,12 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     private Mono<CallerPluginInfo> fetchCallerPlugin(String pluginName) {
         return client.fetch(Plugin.class, pluginName)
-            .map(this::fromPlugin)
-            .defaultIfEmpty(CallerPluginInfo.builder()
-                .detected(true)
-                .detectionSource(DETECTION_SOURCE)
-                .pluginName(pluginName)
-                .build());
+                .map(this::fromPlugin)
+                .defaultIfEmpty(CallerPluginInfo.builder()
+                        .detected(true)
+                        .detectionSource(DETECTION_SOURCE)
+                        .pluginName(pluginName)
+                        .build());
     }
 
     private CallerPluginInfo fromPlugin(Plugin plugin) {
@@ -110,8 +108,8 @@ public class StackWalkingCallerPluginResolver implements CallerPluginResolver {
 
     private CallerPluginInfo unknown() {
         return CallerPluginInfo.builder()
-            .detected(false)
-            .detectionSource("none")
-            .build();
+                .detected(false)
+                .detectionSource("none")
+                .build();
     }
 }

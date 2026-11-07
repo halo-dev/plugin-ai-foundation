@@ -6,35 +6,21 @@ import lombok.Value;
 import run.halo.aifoundation.message.ModelMessage;
 import run.halo.aifoundation.tool.ToolDefinition;
 
-/**
- * Immutable context passed to step-control callbacks.
- */
+/** Immutable context passed to step-control callbacks. */
 @Value
 @Builder
 public class StepContext {
-    /**
-     * Zero-based step index being prepared or just completed.
-     */
+    /** Zero-based step index being prepared or just completed. */
     Integer stepIndex;
-    /**
-     * Step that just completed when evaluating a stop condition. Null while preparing a step.
-     */
+    /** Step that just completed when evaluating a stop condition. Null while preparing a step. */
     GenerationStep step;
-    /**
-     * Steps completed before the current callback.
-     */
+    /** Steps completed before the current callback. */
     List<GenerationStep> steps;
-    /**
-     * Provider-neutral messages planned for the current step.
-     */
+    /** Provider-neutral messages planned for the current step. */
     List<ModelMessage> messages;
-    /**
-     * Request-scoped tools available before active-tool filtering.
-     */
+    /** Request-scoped tools available before active-tool filtering. */
     List<ToolDefinition> tools;
-    /**
-     * Current stop condition.
-     */
+    /** Current stop condition. */
     transient StopCondition stopWhen;
     /** Maximum output-token setting resolved for the current step. */
     Integer maxOutputTokens;
@@ -60,12 +46,8 @@ public class StepContext {
     Boolean parallelToolCalls;
     /** Stop sequences resolved for the current step. */
     List<String> stopSequences;
-    /**
-     * Current deterministic sampling seed, if one was configured.
-     */
+    /** Current deterministic sampling seed, if one was configured. */
     Integer seed;
-    /**
-     * Current retry attempts for retryable non-streaming provider calls.
-     */
+    /** Current retry attempts for retryable non-streaming provider calls. */
     Integer maxRetries;
 }

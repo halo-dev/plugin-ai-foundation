@@ -9,8 +9,7 @@ public final class ReasoningControlOptions {
 
     private static final ReasoningControlOptions UNSUPPORTED = new ReasoningControlOptions();
 
-    private ReasoningControlOptions() {
-    }
+    private ReasoningControlOptions() {}
 
     public static ReasoningControlOptions unsupported() {
         return UNSUPPORTED;
@@ -42,7 +41,6 @@ public final class ReasoningControlOptions {
             return;
         }
         throw new IllegalArgumentException(
-            "portable reasoning requires an explicit model parameter mapping for provider type: "
-                + providerType);
+                "portable reasoning requires an explicit model parameter mapping for provider type: " + providerType);
     }
 }

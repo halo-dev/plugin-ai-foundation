@@ -1,17 +1,15 @@
 package run.halo.aifoundation.service.usage;
 
-import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.retain;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static run.halo.aifoundation.service.usage.UsageStatisticsTestSupport.retain;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -46,14 +44,30 @@ import run.halo.aifoundation.service.observation.UsageUnitKind;
 class UsageObservationRegressionTest {
     @TempDir
     Path temp;
+
     private UsageCallStart start() {
-        return new UsageCallStart("review", 1, Instant.parse("2026-06-01T10:00:00Z"),
-            "plugin", "1", "stack", null, "language.generateText", "LANGUAGE",
-            "model", "provider", "openai", "requested", false);
+        return new UsageCallStart(
+                "review",
+                1,
+                Instant.parse("2026-06-01T10:00:00Z"),
+                "plugin",
+                "1",
+                "stack",
+                null,
+                "language.generateText",
+                "LANGUAGE",
+                "model",
+                "provider",
+                "openai",
+                "requested",
+                false);
     }
+
     private UsageQuery query(String from, String to) {
-        return new UsageQuery(Instant.parse(from), Instant.parse(to), null,null,null,null,null,null,null,null,null);
+        return new UsageQuery(
+                Instant.parse(from), Instant.parse(to), null, null, null, null, null, null, null, null, null);
     }
+
     @Test
     void historicalPartialDayMustNotSilentlyDisappear() {
         var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(temp));
@@ -61,17 +75,27 @@ class UsageObservationRegressionTest {
         try {
             var start = start();
             store.startCall(start);
-            store.finishCall(new UsageCallTerminal(start,start.startedAt().plusSeconds(1),
-                UsageStatus.SUCCEEDED,null,"actual",1,0,0,true,
-                new NormalizedUsage(10L,5L,null,null,null,null,null,null)));
-            retain(store, Clock.fixed(Instant.parse("2026-09-10T02:00:00Z"),ZoneOffset.UTC));
-            var summary = store.summary(query("2026-06-01T08:00:00Z","2026-06-01T20:00:00Z"),true);
-            assertThat(summary.callCount()).as("expired sub-day facts must not disappear")
-                .isEqualTo(1);
+            store.finishCall(new UsageCallTerminal(
+                    start,
+                    start.startedAt().plusSeconds(1),
+                    UsageStatus.SUCCEEDED,
+                    null,
+                    "actual",
+                    1,
+                    0,
+                    0,
+                    true,
+                    new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
+            retain(store, Clock.fixed(Instant.parse("2026-09-10T02:00:00Z"), ZoneOffset.UTC));
+            var summary = store.summary(query("2026-06-01T08:00:00Z", "2026-06-01T20:00:00Z"), true);
+            assertThat(summary.callCount())
+                    .as("expired sub-day facts must not disappear")
+                    .isEqualTo(1);
         } finally {
             store.close();
         }
     }
+
     @Test
     void lateCompletionMustBeVisibleAfterRetention() {
         var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(temp));
@@ -79,53 +103,78 @@ class UsageObservationRegressionTest {
         try {
             var start = start();
             store.startCall(start);
-            retain(store, Clock.fixed(Instant.parse("2026-06-02T02:00:00Z"),ZoneOffset.UTC));
-            store.finishCall(new UsageCallTerminal(start,Instant.parse("2026-06-02T03:00:00Z"),
-                UsageStatus.SUCCEEDED,null,"actual",1,0,0,true,
-                new NormalizedUsage(10L,5L,null,null,null,null,null,null)));
-            var summary = store.summary(query("2026-06-01T00:00:00Z","2026-06-02T00:00:00Z"),true);
+            retain(store, Clock.fixed(Instant.parse("2026-06-02T02:00:00Z"), ZoneOffset.UTC));
+            store.finishCall(new UsageCallTerminal(
+                    start,
+                    Instant.parse("2026-06-02T03:00:00Z"),
+                    UsageStatus.SUCCEEDED,
+                    null,
+                    "actual",
+                    1,
+                    0,
+                    0,
+                    true,
+                    new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
+            var summary = store.summary(query("2026-06-01T00:00:00Z", "2026-06-02T00:00:00Z"), true);
             assertThat(summary.successCount()).isEqualTo(1);
         } finally {
             store.close();
         }
     }
+
     @Test
     void cachedTextProjectionMustFinishLogicalCall() {
         var statistics = mock(UsageStatisticsService.class);
         var delegate = mock(LanguageModel.class);
         var session = mock(UsageCallSession.class);
-        var context = new ModelCallContext(ModelType.LANGUAGE,"model","provider","openai","gpt");
+        var context = new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt");
         var descriptor = mock(UsageCallDescriptor.class);
         var request = GenerateTextRequest.builder().prompt("test").build();
-        when(statistics.describeCall(any(),anyString(),anyBoolean(),any())).thenReturn(descriptor);
+        when(statistics.describeCall(any(), anyString(), anyBoolean(), any())).thenReturn(descriptor);
         when(statistics.beginCall(descriptor)).thenReturn(session);
-        when(delegate.streamText(request)).thenReturn(new StreamTextResult(Flux.empty(),Flux.just("cached"),
-            Flux.empty(),Flux.empty(),Mono.empty(),Mono.just(GenerateTextResult.builder().text("cached").build())));
-        var model = new AuditedLanguageModel(delegate,context,mock(CallerPluginAuditRecorder.class),statistics);
+        when(delegate.streamText(request))
+                .thenReturn(new StreamTextResult(
+                        Flux.empty(),
+                        Flux.just("cached"),
+                        Flux.empty(),
+                        Flux.empty(),
+                        Mono.empty(),
+                        Mono.just(GenerateTextResult.builder().text("cached").build())));
+        var model = new AuditedLanguageModel(delegate, context, mock(CallerPluginAuditRecorder.class), statistics);
         assertThat(model.streamText(request).textStream().collectList().block()).containsExactly("cached");
         verify(session).succeedProjection();
     }
+
     @Test
     void statisticsStartFailureMustNotFailModelCall() {
         var statistics = mock(UsageStatisticsService.class);
         var delegate = mock(LanguageModel.class);
-        var context = new ModelCallContext(ModelType.LANGUAGE,"model","provider","openai","gpt");
+        var context = new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt");
         var descriptor = mock(UsageCallDescriptor.class);
-        when(statistics.describeCall(any(),anyString(),anyBoolean(),any())).thenReturn(descriptor);
+        when(statistics.describeCall(any(), anyString(), anyBoolean(), any())).thenReturn(descriptor);
         when(statistics.beginCall(descriptor)).thenThrow(new IllegalStateException("telemetry failure"));
-        when(delegate.generateText("test")).thenReturn(Mono.just(GenerateTextResult.builder().text("ok").build()));
-        var model = new AuditedLanguageModel(delegate,context,mock(CallerPluginAuditRecorder.class),statistics);
+        when(delegate.generateText("test"))
+                .thenReturn(Mono.just(GenerateTextResult.builder().text("ok").build()));
+        var model = new AuditedLanguageModel(delegate, context, mock(CallerPluginAuditRecorder.class), statistics);
         assertThat(model.generateText("test").block().getText()).isEqualTo("ok");
     }
+
     @Test
     void extractionFailureMustStillRecordExecution() {
         var service = mock(UsageStatisticsService.class);
-        var session = new UsageCallSession(service,start(),Clock.systemUTC());
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP,0,
-            () -> Mono.just("ok"), ignored -> {throw new IllegalStateException("bad usage");}, ignored -> "model")
-            .contextWrite(ctx -> ctx.put(UsageCallSession.REACTOR_CONTEXT_KEY,session));
+        var session = new UsageCallSession(service, start(), Clock.systemUTC());
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Mono.just("ok"),
+                        ignored -> {
+                            throw new IllegalStateException("bad usage");
+                        },
+                        ignored -> "model")
+                .contextWrite(ctx -> ctx.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         assertThat(observed.block()).isEqualTo("ok");
-        verify(service).recordExecution(eq(session),any());
+        verify(service).recordExecution(eq(session), any());
     }
 
     @Test
@@ -136,12 +185,16 @@ class UsageObservationRegressionTest {
         when(statistics.describeCall(any(), anyString(), anyBoolean(), any())).thenReturn(descriptor);
         when(statistics.beginCall(descriptor)).thenReturn(session);
         var delegate = mock(LanguageModel.class);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
-            Mono::<GenerateTextResult>never, ignored -> NormalizedUsage.missing(), ignored -> null);
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        Mono::<GenerateTextResult>never,
+                        ignored -> NormalizedUsage.missing(),
+                        ignored -> null);
         when(delegate.generateText("test")).thenReturn(observed);
         var context = new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt");
-        var model = new AuditedLanguageModel(delegate, context,
-            mock(CallerPluginAuditRecorder.class), statistics);
+        var model = new AuditedLanguageModel(delegate, context, mock(CallerPluginAuditRecorder.class), statistics);
         var subscription = model.generateText("test").subscribe();
         subscription.dispose();
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
@@ -192,10 +245,11 @@ class UsageObservationRegressionTest {
         var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(temp));
         store.initialize();
         try {
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> store.writeBatch(java.util.List.of(
-                () -> store.startCall(start()),
-                () -> { throw new IllegalStateException("injected"); }
-            ))).isInstanceOf(IllegalStateException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> store.writeBatch(java.util.List.of(() -> store.startCall(start()), () -> {
+                                throw new IllegalStateException("injected");
+                            })))
+                    .isInstanceOf(IllegalStateException.class);
             assertThat(store.getCall(start().id())).isEmpty();
         } finally {
             store.close();
@@ -206,15 +260,32 @@ class UsageObservationRegressionTest {
     void realSqliteWriterKeepsEveryCallWhileQueriesRunConcurrently() throws Exception {
         var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(temp));
         var resolver = mock(CallerPluginResolver.class);
-        var caller = CallerPluginInfo.builder().pluginName("load-test").version("1")
-            .detectionSource("test").build();
+        var caller = CallerPluginInfo.builder()
+                .pluginName("load-test")
+                .version("1")
+                .detectionSource("test")
+                .build();
         when(resolver.resolveCurrentCallerSnapshot()).thenReturn(caller);
         var service = new UsageStatisticsService(store, resolver);
         service.initialize();
-        var descriptor = new UsageCallDescriptor(new ModelCallContext(ModelType.LANGUAGE,
-            "model", "provider", "openai", "gpt"), "language.generateText", false, null, caller);
-        var range = new UsageQuery(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60),
-            null, null, null, null, null, null, null, null, null);
+        var descriptor = new UsageCallDescriptor(
+                new ModelCallContext(ModelType.LANGUAGE, "model", "provider", "openai", "gpt"),
+                "language.generateText",
+                false,
+                null,
+                caller);
+        var range = new UsageQuery(
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(60),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         var samples = new long[1000];
         try (var reader = java.util.concurrent.Executors.newSingleThreadExecutor()) {
             var reading = reader.submit(() -> {
@@ -226,15 +297,14 @@ class UsageObservationRegressionTest {
             for (int i = 0; i < samples.length; i++) {
                 var started = System.nanoTime();
                 var call = service.beginCall(descriptor);
-                call.beginExecution(UsageUnitKind.GENERATION_STEP, 0).succeed(
-                    new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
+                call.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
+                        .succeed(new NormalizedUsage(10L, 5L, null, null, null, null, null, null), "gpt");
                 call.succeed("gpt", 1);
                 samples[i] = System.nanoTime() - started;
             }
             reading.get(30, java.util.concurrent.TimeUnit.SECONDS);
             var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
-            while (service.summary(range).block().successCount() < samples.length
-                && System.nanoTime() < deadline) {
+            while (service.summary(range).block().successCount() < samples.length && System.nanoTime() < deadline) {
                 Thread.sleep(10);
             }
             var summary = service.summary(range).block();
@@ -245,7 +315,7 @@ class UsageObservationRegressionTest {
             assertThat(service.health().writeFailures()).isZero();
             java.util.Arrays.sort(samples);
             System.out.println("Real SQLite mixed workload: 1000 calls, 3000 events, lifecycle p95="
-                + samples[949] / 1_000_000D + " ms");
+                    + samples[949] / 1_000_000D + " ms");
             assertThat(samples[949]).isLessThan(1_000_000L);
         } finally {
             service.close();
@@ -257,17 +327,27 @@ class UsageObservationRegressionTest {
         var store = new SqliteUsageStatisticsStore(new UsageDatabasePaths(temp));
         store.initialize();
         try {
-            var partial = NormalizedUsage.sum(java.util.List.of(NormalizedUsage.missing(),
-                new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
-            store.finishCall(new UsageCallTerminal(start(), start().startedAt().plusSeconds(1),
-                UsageStatus.SUCCEEDED, null, null, 1, 2, 1, true, partial));
+            var partial = NormalizedUsage.sum(java.util.List.of(
+                    NormalizedUsage.missing(), new NormalizedUsage(10L, 5L, null, null, null, null, null, null)));
+            store.finishCall(new UsageCallTerminal(
+                    start(),
+                    start().startedAt().plusSeconds(1),
+                    UsageStatus.SUCCEEDED,
+                    null,
+                    null,
+                    1,
+                    2,
+                    1,
+                    true,
+                    partial));
             var range = query("2026-06-01T00:00:00Z", "2026-06-02T00:00:00Z");
             var summary = store.summary(range, true);
             assertThat(summary.complete()).isTrue();
             assertThat(summary.partialUsageCalls()).isEqualTo(1);
             assertThat(summary.usageCoverage()).isZero();
             assertThat(summary.accountedTotalTokens()).isEqualTo(15L);
-            assertThat(store.trends(range, true, null).getFirst().partialUsageCalls()).isEqualTo(1);
+            assertThat(store.trends(range, true, null).getFirst().partialUsageCalls())
+                    .isEqualTo(1);
         } finally {
             store.close();
         }

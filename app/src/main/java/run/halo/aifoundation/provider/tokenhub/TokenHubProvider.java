@@ -97,17 +97,17 @@ public class TokenHubProvider extends AbstractAiProviderType {
 
     @Override
     public ChatModel buildChatModel(AiProvider provider, String apiKey, String modelId) {
-        return new TokenHubChatModel(chatCompletionsOptions(provider, apiKey, modelId, Map.of()),
-            webClientBuilder(provider));
+        return new TokenHubChatModel(
+                chatCompletionsOptions(provider, apiKey, modelId, Map.of()), webClientBuilder(provider));
     }
 
     @Override
     public EmbeddingModel buildEmbeddingModel(AiProvider provider, String apiKey, String modelId) {
         var options = TokenHubEmbeddingOptions.builder()
-            .baseUrl(resolveBaseUrl(provider))
-            .apiKey(apiKey)
-            .model(modelId)
-            .build();
+                .baseUrl(resolveBaseUrl(provider))
+                .apiKey(apiKey)
+                .model(modelId)
+                .build();
         return new TokenHubEmbeddingModel(options, webClientBuilder(provider));
     }
 
@@ -119,22 +119,21 @@ public class TokenHubProvider extends AbstractAiProviderType {
     @Override
     public LanguageModelProviderOptions languageModelProviderOptions() {
         var reasoning = ReasoningControlOptions.unsupported();
-        var optionsFactory = chatCompletionsOptionsFactory(
-            reasoning, false, StructuredOutputSupport.JSON_SCHEMA);
+        var optionsFactory = chatCompletionsOptionsFactory(reasoning, false, StructuredOutputSupport.JSON_SCHEMA);
         return chatCompletionsProviderOptionsBuilder()
-            .reasoningHistorySupported(true)
-            .streamToolCallsForReasoning(true)
-            .requestHeadersSupported(true)
-            .seedSupported(true)
-            .nativeStrictToolSchemas(false)
-            .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
-            .chatOptionsFactory(optionsFactory::basic)
-            .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
-            .structuredOutputChatOptionsFactory(optionsFactory::structured)
-            .reasoningControlOptions(reasoning)
-            .reasoningContentExtractor(this::reasoningContent)
-            .additionalMediaUrlSchemes(Set.of("ms"))
-            .build();
+                .reasoningHistorySupported(true)
+                .streamToolCallsForReasoning(true)
+                .requestHeadersSupported(true)
+                .seedSupported(true)
+                .nativeStrictToolSchemas(false)
+                .structuredOutputSupport(StructuredOutputSupport.JSON_SCHEMA)
+                .chatOptionsFactory(optionsFactory::basic)
+                .toolCallingChatOptionsFactory(optionsFactory::toolCalling)
+                .structuredOutputChatOptionsFactory(optionsFactory::structured)
+                .reasoningControlOptions(reasoning)
+                .reasoningContentExtractor(this::reasoningContent)
+                .additionalMediaUrlSchemes(Set.of("ms"))
+                .build();
     }
 
     @Override
@@ -149,12 +148,15 @@ public class TokenHubProvider extends AbstractAiProviderType {
     public Map<ModelParameter, DefaultParameterMapping> getDefaultParameterMappings() {
         var defaults = new EnumMap<ModelParameter, DefaultParameterMapping>(ModelParameter.class);
         defaults.putAll(super.getDefaultParameterMappings());
-        defaults.put(ModelParameter.MAX_OUTPUT_TOKENS,
-            DefaultParameterMapping.template("openai.max-completion-tokens"));
+        defaults.put(
+                ModelParameter.MAX_OUTPUT_TOKENS, DefaultParameterMapping.template("openai.max-completion-tokens"));
         // TokenHub documents that top_k, min_p and repetition_penalty are ignored, and that
         // embedding dimensions are fixed by the model.
-        for (var parameter : List.of(ModelParameter.TOP_K, ModelParameter.MIN_P,
-            ModelParameter.REPETITION_PENALTY, ModelParameter.DIMENSIONS)) {
+        for (var parameter : List.of(
+                ModelParameter.TOP_K,
+                ModelParameter.MIN_P,
+                ModelParameter.REPETITION_PENALTY,
+                ModelParameter.DIMENSIONS)) {
             defaults.put(parameter, DefaultParameterMapping.unsupported());
         }
         return Map.copyOf(defaults);

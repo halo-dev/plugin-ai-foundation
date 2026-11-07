@@ -1,12 +1,9 @@
 package run.halo.aifoundation.provider.protocol.chatcompletions;
 
-/**
- * Normalizes provider-specific tool argument chunk semantics into appendable deltas.
- */
+/** Normalizes provider-specific tool argument chunk semantics into appendable deltas. */
 public interface StreamDialect {
 
-    ArgumentDelta normalizeArguments(int index, String accumulatedArguments,
-        String providerArguments);
+    ArgumentDelta normalizeArguments(int index, String accumulatedArguments, String providerArguments);
 
     record ArgumentDelta(String delta, boolean reliable) {
 

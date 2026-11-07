@@ -49,55 +49,88 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         var tag = "console.api.aifoundation.halo.run/v1alpha1/UsageStatistics";
-        return route()
-            .GET("usage-statistics/summary", this::summary,
-                builder -> filters(builder.operationId("GetAiUsageSummary").tag(tag))
-                    .description("Get filtered AI call and token totals.")
-                    .response(responseBuilder().implementation(UsageSummary.class)))
-            .GET("usage-statistics/trends", this::trends,
-                builder -> filters(builder.operationId("ListAiUsageTrends").tag(tag))
-                    .description("List filtered usage trend buckets in the requested time zone.")
-                    .parameter(parameterBuilder().name("resolution").in(ParameterIn.QUERY)
-                        .description("Optional trend bucket resolution: DAY or HOUR.")
-                        .implementation(String.class))
-                    .parameter(parameterBuilder().name("dimension").in(ParameterIn.QUERY)
-                        .description("Optional per-bucket grouping: model, provider, or "
-                            + "callerPlugin. Adds byDimension to each bucket.")
-                        .implementation(String.class))
-                    .response(responseBuilder().implementationArray(UsageTrendPoint.class)))
-            .GET("usage-statistics/breakdown", this::breakdown,
-                builder -> filters(builder.operationId("GetAiUsageBreakdown").tag(tag))
-                    .description("Get usage totals grouped by a dimension.")
-                    .parameter(parameterBuilder().name("dimension").in(ParameterIn.QUERY)
-                        .required(true)
-                        .description("Group by: model, provider, or callerPlugin.")
-                        .implementation(String.class))
-                    .response(responseBuilder().implementation(UsageBreakdown.class)))
-            .GET("usage-statistics/calls", this::calls,
-                builder -> filters(builder.operationId("ListAiUsageCalls").tag(tag))
-                    .description("List logical AI calls from the last 90 days using cursor pagination.")
-                    .parameter(parameterBuilder().name("size").in(ParameterIn.QUERY)
-                        .description("Page size from 1 to 200.").implementation(Integer.class))
-                    .parameter(parameterBuilder().name("cursor").in(ParameterIn.QUERY)
-                        .description("Opaque cursor returned by the previous page.")
-                        .implementation(String.class))
-                    .response(responseBuilder().implementation(UsageCallPage.class)))
-            .GET("usage-statistics/calls/{id}", this::call,
-                builder -> builder.operationId("GetAiUsageCall").tag(tag)
-                    .description("Get a logical AI call from the last 90 days and its retained executions.")
-                    .parameter(parameterBuilder().name("id").in(ParameterIn.PATH)
-                        .required(true).implementation(String.class))
-                    .response(responseBuilder().implementation(UsageCallDetail.class)))
-            .GET("usage-statistics/health", this::health,
-                builder -> builder.operationId("GetAiUsageStatisticsHealth").tag(tag)
-                    .description("Get statistics availability and completeness indicators.")
-                    .response(responseBuilder().implementation(UsageHealth.class)))
-            .POST("usage-statistics/reset", this::reset,
-                builder -> builder.operationId("ResetAiUsageStatistics").tag(tag)
-                    .description("Delete all usage statistics. Requires confirmation RESET.")
-                    .requestBody(requestBodyBuilder().required(true)
-                        .implementation(ResetRequest.class)))
-            .build();
+        return route().GET(
+                        "usage-statistics/summary",
+                        this::summary,
+                        builder -> filters(
+                                        builder.operationId("GetAiUsageSummary").tag(tag))
+                                .description("Get filtered AI call and token totals.")
+                                .response(responseBuilder().implementation(UsageSummary.class)))
+                .GET(
+                        "usage-statistics/trends",
+                        this::trends,
+                        builder -> filters(
+                                        builder.operationId("ListAiUsageTrends").tag(tag))
+                                .description("List filtered usage trend buckets in the requested time zone.")
+                                .parameter(parameterBuilder()
+                                        .name("resolution")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Optional trend bucket resolution: DAY or HOUR.")
+                                        .implementation(String.class))
+                                .parameter(parameterBuilder()
+                                        .name("dimension")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Optional per-bucket grouping: model, provider, or "
+                                                + "callerPlugin. Adds byDimension to each bucket.")
+                                        .implementation(String.class))
+                                .response(responseBuilder().implementationArray(UsageTrendPoint.class)))
+                .GET(
+                        "usage-statistics/breakdown",
+                        this::breakdown,
+                        builder -> filters(builder.operationId("GetAiUsageBreakdown")
+                                        .tag(tag))
+                                .description("Get usage totals grouped by a dimension.")
+                                .parameter(parameterBuilder()
+                                        .name("dimension")
+                                        .in(ParameterIn.QUERY)
+                                        .required(true)
+                                        .description("Group by: model, provider, or callerPlugin.")
+                                        .implementation(String.class))
+                                .response(responseBuilder().implementation(UsageBreakdown.class)))
+                .GET(
+                        "usage-statistics/calls",
+                        this::calls,
+                        builder -> filters(
+                                        builder.operationId("ListAiUsageCalls").tag(tag))
+                                .description("List logical AI calls from the last 90 days using cursor pagination.")
+                                .parameter(parameterBuilder()
+                                        .name("size")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Page size from 1 to 200.")
+                                        .implementation(Integer.class))
+                                .parameter(parameterBuilder()
+                                        .name("cursor")
+                                        .in(ParameterIn.QUERY)
+                                        .description("Opaque cursor returned by the previous page.")
+                                        .implementation(String.class))
+                                .response(responseBuilder().implementation(UsageCallPage.class)))
+                .GET(
+                        "usage-statistics/calls/{id}",
+                        this::call,
+                        builder -> builder.operationId("GetAiUsageCall")
+                                .tag(tag)
+                                .description("Get a logical AI call from the last 90 days and its retained executions.")
+                                .parameter(parameterBuilder()
+                                        .name("id")
+                                        .in(ParameterIn.PATH)
+                                        .required(true)
+                                        .implementation(String.class))
+                                .response(responseBuilder().implementation(UsageCallDetail.class)))
+                .GET(
+                        "usage-statistics/health",
+                        this::health,
+                        builder -> builder.operationId("GetAiUsageStatisticsHealth")
+                                .tag(tag)
+                                .description("Get statistics availability and completeness indicators.")
+                                .response(responseBuilder().implementation(UsageHealth.class)))
+                .POST(
+                        "usage-statistics/reset",
+                        this::reset,
+                        builder -> builder.operationId("ResetAiUsageStatistics")
+                                .tag(tag)
+                                .description("Delete all usage statistics. Requires confirmation RESET.")
+                                .requestBody(requestBodyBuilder().required(true).implementation(ResetRequest.class)))
+                .build();
     }
 
     @Override
@@ -106,33 +139,33 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> summary(ServerRequest request) {
-        return query(request, null).flatMap(service::summary)
-            .flatMap(ServerResponse.ok()::bodyValue)
-            .onErrorResume(IllegalArgumentException.class, this::badRequest)
-            .onErrorResume(IllegalStateException.class, this::unavailable);
+        return query(request, null)
+                .flatMap(service::summary)
+                .flatMap(ServerResponse.ok()::bodyValue)
+                .onErrorResume(IllegalArgumentException.class, this::badRequest)
+                .onErrorResume(IllegalStateException.class, this::unavailable);
     }
 
     private Mono<ServerResponse> trends(ServerRequest request) {
         return query(request, text(request, "resolution"))
-            .flatMap(value -> service.trends(value, dimension(request)))
-            .flatMap(ServerResponse.ok()::bodyValue)
-            .onErrorResume(IllegalArgumentException.class, this::badRequest)
-            .onErrorResume(IllegalStateException.class, this::unavailable);
+                .flatMap(value -> service.trends(value, dimension(request)))
+                .flatMap(ServerResponse.ok()::bodyValue)
+                .onErrorResume(IllegalArgumentException.class, this::badRequest)
+                .onErrorResume(IllegalStateException.class, this::unavailable);
     }
 
     private Mono<ServerResponse> breakdown(ServerRequest request) {
         return Mono.fromCallable(() -> {
-                var dimension = dimension(request);
-                if (dimension == null) {
-                    throw new IllegalArgumentException("dimension is required");
-                }
-                return dimension;
-            })
-            .flatMap(dimension -> query(request, null)
-                .flatMap(value -> service.breakdown(value, dimension)))
-            .flatMap(ServerResponse.ok()::bodyValue)
-            .onErrorResume(IllegalArgumentException.class, this::badRequest)
-            .onErrorResume(IllegalStateException.class, this::unavailable);
+                    var dimension = dimension(request);
+                    if (dimension == null) {
+                        throw new IllegalArgumentException("dimension is required");
+                    }
+                    return dimension;
+                })
+                .flatMap(dimension -> query(request, null).flatMap(value -> service.breakdown(value, dimension)))
+                .flatMap(ServerResponse.ok()::bodyValue)
+                .onErrorResume(IllegalArgumentException.class, this::badRequest)
+                .onErrorResume(IllegalStateException.class, this::unavailable);
     }
 
     private static UsageBreakdownDimension dimension(ServerRequest request) {
@@ -141,19 +174,20 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> calls(ServerRequest request) {
-        return query(request, null).flatMap(value -> service.listCalls(value, pageSize(request),
-                request.queryParam("cursor").orElse(null)))
-            .flatMap(ServerResponse.ok()::bodyValue)
-            .onErrorResume(IllegalArgumentException.class, this::badRequest)
-            .onErrorResume(IllegalStateException.class, this::unavailable);
+        return query(request, null)
+                .flatMap(value -> service.listCalls(
+                        value, pageSize(request), request.queryParam("cursor").orElse(null)))
+                .flatMap(ServerResponse.ok()::bodyValue)
+                .onErrorResume(IllegalArgumentException.class, this::badRequest)
+                .onErrorResume(IllegalStateException.class, this::unavailable);
     }
 
     private Mono<ServerResponse> call(ServerRequest request) {
         return service.getCall(request.pathVariable("id"))
-            .flatMap(result -> result.<Mono<ServerResponse>>map(
-                    value -> ServerResponse.ok().bodyValue(value))
-                .orElseGet(() -> ServerResponse.notFound().build()))
-            .onErrorResume(IllegalStateException.class, this::unavailable);
+                .flatMap(result -> result.<Mono<ServerResponse>>map(
+                                value -> ServerResponse.ok().bodyValue(value))
+                        .orElseGet(() -> ServerResponse.notFound().build()))
+                .onErrorResume(IllegalStateException.class, this::unavailable);
     }
 
     private Mono<ServerResponse> health(ServerRequest request) {
@@ -162,11 +196,11 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> reset(ServerRequest request) {
         return request.bodyToMono(ResetRequest.class)
-            .switchIfEmpty(Mono.error(new IllegalArgumentException("request body is required")))
-            .flatMap(body -> service.reset(body.confirmation()))
-            .then(ServerResponse.ok().build())
-            .onErrorResume(IllegalArgumentException.class, this::badRequest)
-            .onErrorResume(IllegalStateException.class, this::unavailable);
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("request body is required")))
+                .flatMap(body -> service.reset(body.confirmation()))
+                .then(ServerResponse.ok().build())
+                .onErrorResume(IllegalArgumentException.class, this::badRequest)
+                .onErrorResume(IllegalStateException.class, this::unavailable);
     }
 
     private Mono<UsageQuery> query(ServerRequest request, String resolution) {
@@ -183,31 +217,45 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
             }
             var feature = text(request, "feature");
             validateFeature(feature);
-            return new UsageQuery(from, to, text(request, "callerPlugin"),
-                feature, text(request, "providerName"),
-                text(request, "modelName"), text(request, "modelType"),
-                text(request, "operation"), enumValue(request, "status", UsageStatus.class),
-                enumValue(request, "usageQuality", UsageQuality.class),
-                resolution == null ? null : trendResolution(resolution), timeZone(request));
+            return new UsageQuery(
+                    from,
+                    to,
+                    text(request, "callerPlugin"),
+                    feature,
+                    text(request, "providerName"),
+                    text(request, "modelName"),
+                    text(request, "modelType"),
+                    text(request, "operation"),
+                    enumValue(request, "status", UsageStatus.class),
+                    enumValue(request, "usageQuality", UsageQuality.class),
+                    resolution == null ? null : trendResolution(resolution),
+                    timeZone(request));
         });
     }
 
     private static org.springdoc.core.fn.builders.operation.Builder filters(
-        org.springdoc.core.fn.builders.operation.Builder builder) {
-        builder.parameter(parameterBuilder().name("from").in(ParameterIn.QUERY)
-                .description("Inclusive ISO-8601 instant; defaults to 30 days before to.")
-                .implementation(Instant.class))
-            .parameter(parameterBuilder().name("to").in(ParameterIn.QUERY)
-                .description("Exclusive ISO-8601 instant; defaults to the next UTC midnight "
-                    + "for stable cursor pagination.")
-                .implementation(Instant.class))
-            .parameter(parameterBuilder().name("timeZone").in(ParameterIn.QUERY)
-                .description("IANA time zone for trend buckets; defaults to UTC.")
-                .implementation(String.class));
-        for (var name : new String[] {"callerPlugin", "feature", "providerName", "modelName",
-            "modelType", "operation", "status", "usageQuality"}) {
-            builder.parameter(parameterBuilder().name(name).in(ParameterIn.QUERY)
-                .implementation(String.class));
+            org.springdoc.core.fn.builders.operation.Builder builder) {
+        builder.parameter(parameterBuilder()
+                        .name("from")
+                        .in(ParameterIn.QUERY)
+                        .description("Inclusive ISO-8601 instant; defaults to 30 days before to.")
+                        .implementation(Instant.class))
+                .parameter(parameterBuilder()
+                        .name("to")
+                        .in(ParameterIn.QUERY)
+                        .description("Exclusive ISO-8601 instant; defaults to the next UTC midnight "
+                                + "for stable cursor pagination.")
+                        .implementation(Instant.class))
+                .parameter(parameterBuilder()
+                        .name("timeZone")
+                        .in(ParameterIn.QUERY)
+                        .description("IANA time zone for trend buckets; defaults to UTC.")
+                        .implementation(String.class));
+        for (var name : new String[] {
+            "callerPlugin", "feature", "providerName", "modelName", "modelType", "operation", "status", "usageQuality"
+        }) {
+            builder.parameter(
+                    parameterBuilder().name(name).in(ParameterIn.QUERY).implementation(String.class));
         }
         return builder;
     }
@@ -259,12 +307,13 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
     }
 
     private static String text(ServerRequest request, String name) {
-        return request.queryParam(name).map(String::trim).filter(value -> !value.isEmpty())
-            .orElse(null);
+        return request.queryParam(name)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .orElse(null);
     }
 
-    private static <E extends Enum<E>> E enumValue(ServerRequest request, String name,
-        Class<E> type) {
+    private static <E extends Enum<E>> E enumValue(ServerRequest request, String name, Class<E> type) {
         var value = text(request, name);
         if (value == null) {
             return null;
@@ -285,18 +334,14 @@ public class UsageStatisticsConsoleEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> badRequest(Throwable error) {
-        return ServerResponse.status(HttpStatus.BAD_REQUEST)
-            .bodyValue(new ErrorResponse(error.getMessage()));
+        return ServerResponse.status(HttpStatus.BAD_REQUEST).bodyValue(new ErrorResponse(error.getMessage()));
     }
 
     private Mono<ServerResponse> unavailable(Throwable error) {
-        return ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE)
-            .bodyValue(new ErrorResponse(error.getMessage()));
+        return ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE).bodyValue(new ErrorResponse(error.getMessage()));
     }
 
-    public record ResetRequest(String confirmation) {
-    }
+    public record ResetRequest(String confirmation) {}
 
-    public record ErrorResponse(String message) {
-    }
+    public record ErrorResponse(String message) {}
 }

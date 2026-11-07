@@ -13,17 +13,15 @@ import run.halo.aifoundation.provider.support.ModelFeature;
 import run.halo.aifoundation.provider.support.ModelType;
 
 public record DiscoveredModelItem(
-    String modelId,
-    String displayName,
-    String name,
-    ModelType modelType,
-    List<ModelFeature> features,
-    DiscoverySource source,
-    DiscoveryConfidence confidence,
-    @Nullable AdapterType adapterType,
-    @Nullable ModelCapabilities capabilities,
-    @Nullable ModelCapabilitySources capabilitySources,
-    @Nullable ModelCatalogMatch catalogMatch,
-    @Nullable ModelParameterProfile catalogParameters
-) {
-}
+        String modelId,
+        String displayName,
+        String name,
+        ModelType modelType,
+        List<ModelFeature> features,
+        DiscoverySource source,
+        DiscoveryConfidence confidence,
+        @Nullable AdapterType adapterType,
+        @Nullable ModelCapabilities capabilities,
+        @Nullable ModelCapabilitySources capabilitySources,
+        @Nullable ModelCatalogMatch catalogMatch,
+        @Nullable ModelParameterProfile catalogParameters) {}

@@ -19,8 +19,7 @@ import run.halo.aifoundation.tool.ToolDefinition;
 /** Validates explicit requests against resolved model facts without inventing request defaults. */
 final class LanguageModelParameterValidator {
     // Restrict catalog tiers only; auto/default and unknown native values retain their semantics.
-    private static final Set<String> CATALOG_SERVICE_TIERS =
-        Set.of("flex", "priority", "fast", "ultrafast", "standby");
+    private static final Set<String> CATALOG_SERVICE_TIERS = Set.of("flex", "priority", "fast", "ultrafast", "standby");
     private final ModelParameterConstraints constraints;
     private final RuntimeParameterMappings mappings;
     private final AdapterProtocol protocol;
@@ -35,13 +34,15 @@ final class LanguageModelParameterValidator {
         if (constraints == null) {
             return;
         }
-        if (request.getMaxOutputTokens() != null && constraints.getOutputTokens() != null
-            && request.getMaxOutputTokens() > constraints.getOutputTokens()) {
-            throw new IllegalArgumentException("maxOutputTokens must not exceed model limit "
-                + constraints.getOutputTokens());
+        if (request.getMaxOutputTokens() != null
+                && constraints.getOutputTokens() != null
+                && request.getMaxOutputTokens() > constraints.getOutputTokens()) {
+            throw new IllegalArgumentException(
+                    "maxOutputTokens must not exceed model limit " + constraints.getOutputTokens());
         }
         if (Boolean.FALSE.equals(constraints.getToolCalling())
-            && request.getTools() != null && !request.getTools().isEmpty()) {
+                && request.getTools() != null
+                && !request.getTools().isEmpty()) {
             throw new IllegalArgumentException("Tool calling is not supported by this model");
         }
         validateToolChoice(request);
@@ -56,17 +57,18 @@ final class LanguageModelParameterValidator {
         if (choiceType == null) {
             choiceType = ToolChoice.Type.AUTO;
         }
-        var choice = switch (choiceType) {
-            case AUTO -> "auto";
-            case NONE -> "none";
-            case REQUIRED -> "required";
-            case TOOL -> "tool";
-        };
+        var choice =
+                switch (choiceType) {
+                    case AUTO -> "auto";
+                    case NONE -> "none";
+                    case REQUIRED -> "required";
+                    case TOOL -> "tool";
+                };
         var allowed = constraints.getToolChoices();
         var namedToolAllowed = choice.equals("tool") && allowed.contains("function");
         if (!allowed.contains(choice) && !namedToolAllowed) {
-            throw new IllegalArgumentException("toolChoice " + choice
-                + " is not supported by this model; allowed values: " + allowed);
+            throw new IllegalArgumentException(
+                    "toolChoice " + choice + " is not supported by this model; allowed values: " + allowed);
         }
     }
 
@@ -78,8 +80,7 @@ final class LanguageModelParameterValidator {
     }
 
     ChatOptions withRequestValidation(ChatOptions options) {
-        return constraints == null ? options
-            : ProviderRequestValidation.attach(options, this::validateRequestBody);
+        return constraints == null ? options : ProviderRequestValidation.attach(options, this::validateRequestBody);
     }
 
     void validateRequestBody(Map<String, Object> body) {
@@ -105,33 +106,38 @@ final class LanguageModelParameterValidator {
         var tokens = new BigDecimal(number.toString());
         if (field.equals("options.num_predict") && tokens.signum() < 0) {
             throw new IllegalArgumentException(
-                "options.num_predict must specify a finite output limit when the model limit is "
-                    + constraints.getOutputTokens());
+                    "options.num_predict must specify a finite output limit when the model limit is "
+                            + constraints.getOutputTokens());
         }
         if (tokens.compareTo(BigDecimal.valueOf(constraints.getOutputTokens())) > 0) {
-            throw new IllegalArgumentException(field + " must not exceed model limit "
-                + constraints.getOutputTokens());
+            throw new IllegalArgumentException(field + " must not exceed model limit " + constraints.getOutputTokens());
         }
     }
 
     OutputSpec nativeOutput(OutputSpec output) {
-        return constraints != null && Boolean.FALSE.equals(constraints.getStructuredOutput())
-            ? null : output;
+        return constraints != null && Boolean.FALSE.equals(constraints.getStructuredOutput()) ? null : output;
     }
 
     List<ToolDefinition> nativeTools(List<ToolDefinition> tools) {
-        if (tools == null || constraints == null
-            || !Boolean.FALSE.equals(constraints.getToolStrict())) {
+        if (tools == null || constraints == null || !Boolean.FALSE.equals(constraints.getToolStrict())) {
             return tools;
         }
         return tools.stream().map(this::withoutNativeStrictMode).toList();
     }
 
     private ToolDefinition withoutNativeStrictMode(ToolDefinition tool) {
-        return new ToolDefinition(tool.getName(), tool.getDescription(),
-            tool.getInputSchema(), tool.getOutputSchema(), tool.getInputExamples(), null,
-            tool.getApprovalPolicy(), tool.getOnInputStart(), tool.getOnInputDelta(),
-            tool.getOnInputAvailable(), tool.getExecutor());
+        return new ToolDefinition(
+                tool.getName(),
+                tool.getDescription(),
+                tool.getInputSchema(),
+                tool.getOutputSchema(),
+                tool.getInputExamples(),
+                null,
+                tool.getApprovalPolicy(),
+                tool.getOnInputStart(),
+                tool.getOnInputDelta(),
+                tool.getOnInputAvailable(),
+                tool.getExecutor());
     }
 
     private void validateNativeSampling(Map<String, Object> body) {
@@ -145,13 +151,13 @@ final class LanguageModelParameterValidator {
     }
 
     private boolean usesRootParameterFields() {
-        return protocol == AdapterProtocol.CHAT_COMPLETIONS || protocol == AdapterProtocol.RESPONSES
-            || protocol == AdapterProtocol.MESSAGES;
+        return protocol == AdapterProtocol.CHAT_COMPLETIONS
+                || protocol == AdapterProtocol.RESPONSES
+                || protocol == AdapterProtocol.MESSAGES;
     }
 
     private void validateSamplingFields(Map<?, ?> values, String prefix) {
-        rejectUnsupportedValue(prefix + "temperature", values.get("temperature"),
-            constraints.getTemperature());
+        rejectUnsupportedValue(prefix + "temperature", values.get("temperature"), constraints.getTemperature());
         rejectUnsupportedValue(prefix + "top_p", values.get("top_p"), constraints.getTopP());
         rejectUnsupportedValue(prefix + "top_k", values.get("top_k"), constraints.getTopK());
     }
@@ -164,21 +170,21 @@ final class LanguageModelParameterValidator {
         if (!Boolean.FALSE.equals(body.get("store"))) {
             rejectUnsupportedValue("store", body.get("store"), constraints.getStore());
         }
-        rejectUnsupportedValue("prompt_cache_key", body.get("prompt_cache_key"),
-            constraints.getPromptCacheKey());
+        rejectUnsupportedValue("prompt_cache_key", body.get("prompt_cache_key"), constraints.getPromptCacheKey());
         var streamOptions = body.get("stream_options");
         if (Boolean.FALSE.equals(constraints.getStreamUsage())
-            && streamOptions instanceof Map<?, ?> options && options.containsKey("include_usage")) {
-            throw new IllegalArgumentException(
-                "stream_options.include_usage is not supported by this model");
+                && streamOptions instanceof Map<?, ?> options
+                && options.containsKey("include_usage")) {
+            throw new IllegalArgumentException("stream_options.include_usage is not supported by this model");
         }
         var tier = body.get("service_tier");
-        if (tier != null && CATALOG_SERVICE_TIERS.contains(tier.toString())
-            && constraints.getServiceTiers() != null
-            && !constraints.getServiceTiers().contains(tier.toString())) {
+        if (tier != null
+                && CATALOG_SERVICE_TIERS.contains(tier.toString())
+                && constraints.getServiceTiers() != null
+                && !constraints.getServiceTiers().contains(tier.toString())) {
             throw new IllegalArgumentException("service_tier " + tier
-                + " is not supported by this model; allowed values: "
-                + constraints.getServiceTiers());
+                    + " is not supported by this model; allowed values: "
+                    + constraints.getServiceTiers());
         }
     }
 
@@ -187,8 +193,7 @@ final class LanguageModelParameterValidator {
             return;
         }
         switch (protocol) {
-            case CHAT_COMPLETIONS ->
-                rejectStructuredFormat("response_format", body.get("response_format"));
+            case CHAT_COMPLETIONS -> rejectStructuredFormat("response_format", body.get("response_format"));
             case RESPONSES -> {
                 if (body.get("text") instanceof Map<?, ?> text) {
                     rejectStructuredFormat("text.format", text.get("format"));
@@ -205,22 +210,20 @@ final class LanguageModelParameterValidator {
                     throw structuredFormatUnsupported("format");
                 }
             }
-            default -> { }
+            default -> {}
         }
     }
 
     private void rejectStructuredFormat(String field, Object value) {
         if (value instanceof Map<?, ?> format
-            && ("json_schema".equals(format.get("type"))
-                || "json_object".equals(format.get("type")))) {
+                && ("json_schema".equals(format.get("type")) || "json_object".equals(format.get("type")))) {
             throw structuredFormatUnsupported(field);
         }
     }
 
     private IllegalArgumentException structuredFormatUnsupported(String field) {
-        return new IllegalArgumentException(field
-            + " requests native structured output, which is not "
-            + "supported by this model");
+        return new IllegalArgumentException(
+                field + " requests native structured output, which is not " + "supported by this model");
     }
 
     private void validateNativeReasoning(Map<String, Object> body) {
@@ -243,10 +246,9 @@ final class LanguageModelParameterValidator {
     }
 
     private void validateNativeReasoning(String field, Object value) {
-        if (value != null && !RuntimeParameterMappings.reasoningFieldAllowed(field, value,
-            constraints.getReasoning())) {
-            throw new IllegalArgumentException(field + " value " + value
-                + " is not supported by this model");
+        if (value != null
+                && !RuntimeParameterMappings.reasoningFieldAllowed(field, value, constraints.getReasoning())) {
+            throw new IllegalArgumentException(field + " value " + value + " is not supported by this model");
         }
     }
 

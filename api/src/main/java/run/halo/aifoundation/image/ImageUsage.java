@@ -8,8 +8,7 @@ import lombok.NoArgsConstructor;
 /**
  * Usage information reported by an image generation provider.
  *
- * <p>Not all providers report token or image usage. Missing values should be treated as
- * unavailable rather than zero.
+ * <p>Not all providers report token or image usage. Missing values should be treated as unavailable rather than zero.
  */
 @Data
 @Builder
@@ -17,28 +16,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ImageUsage {
 
-    /**
-     * Input token count reported by the provider, when available.
-     */
+    /** Input token count reported by the provider, when available. */
     private Integer inputTokens;
 
-    /**
-     * Output token count reported by the provider, when available.
-     */
+    /** Output token count reported by the provider, when available. */
     private Integer outputTokens;
 
-    /**
-     * Total token count reported by the provider, when available.
-     */
+    /** Total token count reported by the provider, when available. */
     private Integer totalTokens;
 
-    /**
-     * Number of generated images represented by this usage value, when available.
-     */
+    /** Number of generated images represented by this usage value, when available. */
     private Integer imageCount;
 
-    /**
-     * Provider-native usage payload for advanced diagnostics.
-     */
+    /** Provider-native usage payload for advanced diagnostics. */
     private Object raw;
 }

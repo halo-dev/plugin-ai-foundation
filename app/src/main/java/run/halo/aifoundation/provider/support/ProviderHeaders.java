@@ -6,11 +6,10 @@ import java.util.Map;
 /** Shared rules for merging caller-provided provider headers. */
 public final class ProviderHeaders {
 
-    private ProviderHeaders() {
-    }
+    private ProviderHeaders() {}
 
-    public static Map<String, String> merge(Map<String, String> defaults,
-        Map<String, String> providerOverrides, Map<String, String> requestHeaders) {
+    public static Map<String, String> merge(
+            Map<String, String> defaults, Map<String, String> providerOverrides, Map<String, String> requestHeaders) {
         var merged = new LinkedHashMap<String, String>();
         putAll(merged, defaults);
         putAll(merged, providerOverrides);
@@ -38,8 +37,7 @@ public final class ProviderHeaders {
         target.putAll(source);
     }
 
-    private static void putValidHeaders(Map<String, String> target,
-        Map<String, String> source) {
+    private static void putValidHeaders(Map<String, String> target, Map<String, String> source) {
         if (source == null) {
             return;
         }

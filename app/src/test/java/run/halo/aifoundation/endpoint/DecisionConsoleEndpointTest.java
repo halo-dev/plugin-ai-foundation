@@ -38,13 +38,18 @@ import run.halo.app.extension.ReactiveExtensionClient;
 class DecisionConsoleEndpointTest {
     private final AiModelService service = mock(AiModelService.class);
     private final WebTestClient client = WebTestClient.bindToRouterFunction(
-        new DecisionConsoleEndpoint(service).endpoint()).build();
+                    new DecisionConsoleEndpoint(service).endpoint())
+            .build();
 
     @Test
     void invalidQuestionsAreRejectedBeforeResolvingModel() {
-        client.post().uri("/models/configured-model/test-decision").contentType(MediaType.APPLICATION_JSON)
-            .bodyValue("{\"state\":\"text\",\"questions\":{}}")
-            .exchange().expectStatus().isBadRequest();
+        client.post()
+                .uri("/models/configured-model/test-decision")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"state\":\"text\",\"questions\":{}}")
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
         verifyNoInteractions(service);
     }
 
@@ -53,10 +58,22 @@ class DecisionConsoleEndpointTest {
         var model = mock(DecisionModel.class);
         when(service.decisionModel("configured-model")).thenReturn(Mono.just(model));
         when(model.decide(any())).thenReturn(Mono.just(new DecisionResponse("jev-version", Map.of(), null)));
-        client.post().uri("/models/configured-model/test-decision").contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("state", "{\"comment\":\"hello\"}", "stateFormat", "JSON",
-                "questions", Map.of("q", Map.of("type", "YES_NO", "instructions", "Spam?"))))
-            .exchange().expectStatus().isOk().expectBody().jsonPath("$.model").isEqualTo("jev-version");
+        client.post()
+                .uri("/models/configured-model/test-decision")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "state",
+                        "{\"comment\":\"hello\"}",
+                        "stateFormat",
+                        "JSON",
+                        "questions",
+                        Map.of("q", Map.of("type", "YES_NO", "instructions", "Spam?"))))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.model")
+                .isEqualTo("jev-version");
         var request = ArgumentCaptor.forClass(DecisionRequest.class);
         verify(model).decide(request.capture());
         assertThat(request.getValue().getState()).isEqualTo(Map.of("comment", "hello"));
@@ -67,23 +84,39 @@ class DecisionConsoleEndpointTest {
     @ValueSource(strings = {"1.0000000000000000001", "1e-400"})
     void preservesJsonNumberPrecisionThroughRequestSnapshot(String number) {
         var submitted = new AtomicReference<DecisionRequest>();
-        var response = new DecisionResponse("jev-version", Map.of("q",
-            DecisionAnswer.builder().type(DecisionQuestionType.YES_NO).probability(0.5).build()), null);
-        var model = new DecisionModelImpl(request -> {
-            submitted.set(request);
-            return Mono.just(response);
-        }, new UsageExecutionObserver(), new TypeSafeProvider().decisionCapabilities());
+        var response = new DecisionResponse(
+                "jev-version",
+                Map.of(
+                        "q",
+                        DecisionAnswer.builder()
+                                .type(DecisionQuestionType.YES_NO)
+                                .probability(0.5)
+                                .build()),
+                null);
+        var model = new DecisionModelImpl(
+                request -> {
+                    submitted.set(request);
+                    return Mono.just(response);
+                },
+                new UsageExecutionObserver(),
+                new TypeSafeProvider().decisionCapabilities());
         when(service.decisionModel("configured-model")).thenReturn(Mono.just(model));
 
-        client.post().uri("/models/configured-model/test-decision")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("state", "{\"amounts\":[%s]}".formatted(number), "stateFormat", "JSON",
-                "questions", Map.of("q", Map.of("type", "YES_NO",
-                    "instructions", "Above the threshold?"))))
-            .exchange().expectStatus().isOk();
+        client.post()
+                .uri("/models/configured-model/test-decision")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "state",
+                        "{\"amounts\":[%s]}".formatted(number),
+                        "stateFormat",
+                        "JSON",
+                        "questions",
+                        Map.of("q", Map.of("type", "YES_NO", "instructions", "Above the threshold?"))))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
-        assertThat(submitted.get().getState())
-            .isEqualTo(Map.of("amounts", List.of(new BigDecimal(number))));
+        assertThat(submitted.get().getState()).isEqualTo(Map.of("amounts", List.of(new BigDecimal(number))));
     }
 
     @ParameterizedTest
@@ -93,18 +126,24 @@ class DecisionConsoleEndpointTest {
         var caller = new AtomicReference<CallerPluginInfo>();
         var model = mock(DecisionModel.class);
         var resolution = Mono.just(model);
-        when(service.decisionModel("configured-model")).thenReturn(asyncResolution
-            ? resolution.publishOn(reactor.core.scheduler.Schedulers.boundedElastic()) : resolution);
+        when(service.decisionModel("configured-model"))
+                .thenReturn(
+                        asyncResolution
+                                ? resolution.publishOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                                : resolution);
         when(model.decide(any())).thenAnswer(invocation -> {
             caller.set(resolver.resolveCurrentCallerSnapshot());
             return Mono.just(new DecisionResponse("jev-version", Map.of(), null));
         });
 
-        client.post().uri("/models/configured-model/test-decision")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("state", "Hello",
-                "questions", Map.of("q", Map.of("type", "YES_NO", "instructions", "Spam?"))))
-            .exchange().expectStatus().isOk();
+        client.post()
+                .uri("/models/configured-model/test-decision")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "state", "Hello", "questions", Map.of("q", Map.of("type", "YES_NO", "instructions", "Spam?"))))
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         assertThat(caller.get()).isNotNull();
         assertThat(caller.get().isDetected()).isTrue();

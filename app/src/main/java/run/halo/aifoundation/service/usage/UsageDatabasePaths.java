@@ -23,5 +23,4 @@ class UsageDatabasePaths {
     Path database() {
         return database;
     }
-
 }

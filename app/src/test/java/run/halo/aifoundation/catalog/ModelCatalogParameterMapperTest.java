@@ -1,7 +1,6 @@
 package run.halo.aifoundation.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.CATALOG;
 import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.NON_CHAT_CATALOG;
 import static run.halo.aifoundation.catalog.ModelCatalogTestFixtures.provider;
 
@@ -54,8 +53,7 @@ class ModelCatalogParameterMapperTest {
         assertThat(budgetMapping.getLow().getValue()).isEqualTo("2048");
         assertThat(budgetMapping.getMedium().getValue()).isEqualTo("4096");
         assertThat(budgetMapping.getHigh().getValue()).isEqualTo("8192");
-        assertThat(budgetMapping.getLow().getAdditionalValues()).singleElement()
-            .satisfies(value -> {
+        assertThat(budgetMapping.getLow().getAdditionalValues()).singleElement().satisfies(value -> {
             assertThat(value.getField()).isEqualTo("enable_thinking");
             assertThat(value.getValue()).isEqualTo("true");
         });
@@ -70,11 +68,10 @@ class ModelCatalogParameterMapperTest {
         assertThat(effortMapping.getHigh().getValue()).isEqualTo("xhigh");
         assertThat(effortMapping.getDisabled()).isNull();
 
-        var fixed = profile(type, AdapterType.DASHSCOPE_CHAT,
-            entry("{\"reasoning\":{\"supported\":true}}", "{}", BOTH_PROTOCOLS));
+        var fixed = profile(
+                type, AdapterType.DASHSCOPE_CHAT, entry("{\"reasoning\":{\"supported\":true}}", "{}", BOTH_PROTOCOLS));
         assertThat(fixed.getConstraints().getReasoning().getSupported()).isTrue();
-        assertThat(fixed.getMappings().getLanguage().getReasoning().getMode())
-            .isEqualTo(Mode.UNSUPPORTED);
+        assertThat(fixed.getMappings().getLanguage().getReasoning().getMode()).isEqualTo(Mode.UNSUPPORTED);
     }
 
     @Test
@@ -97,17 +94,16 @@ class ModelCatalogParameterMapperTest {
         var entry = bundle.catalog().find("siliconflow-cn", "deepseek-ai/DeepSeek-V4-Flash");
         assertThat(entry).isNotNull();
         var result = profile(new SiliconFlowProvider(), AdapterType.SILICONFLOW_CHAT, entry);
-        assertThat(result.getConstraints().getReasoning().getEfforts())
-            .containsExactly("high", "max");
+        assertThat(result.getConstraints().getReasoning().getEfforts()).containsExactly("high", "max");
         assertThat(result.getFeatureEvidence()).isEmpty();
         var selection = result.getMappings().getLanguage().getReasoning();
         assertThat(selection.getMode()).isEqualTo(Mode.TEMPLATE);
         assertThat(selection.getTemplate()).isEqualTo("reasoning.enable-thinking");
         assertThat(selection.getReasoningMapping().getDisabled()).isNull();
         assertThat(applyReasoning(result, ReasoningOptions.effort(ReasoningOptions.Effort.LOW)))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "high"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "high"));
         assertThat(applyReasoning(result, ReasoningOptions.effort(ReasoningOptions.Effort.HIGH)))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "max"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "max"));
     }
 
     @Test
@@ -126,9 +122,9 @@ class ModelCatalogParameterMapperTest {
             assertThat(selection.getReasoningMapping().getMedium()).isNull();
             assertThat(selection.getReasoningMapping().getHigh()).isNull();
             assertThat(applyReasoning(result, ReasoningOptions.enabled()))
-                .containsExactlyEntriesOf(Map.of("thinking", Map.of("type", "enabled")));
+                    .containsExactlyEntriesOf(Map.of("thinking", Map.of("type", "enabled")));
             assertThat(applyReasoning(result, ReasoningOptions.disabled()))
-                .containsExactlyEntriesOf(Map.of("thinking", Map.of("type", "disabled")));
+                    .containsExactlyEntriesOf(Map.of("thinking", Map.of("type", "disabled")));
         }
     }
 
@@ -143,22 +139,22 @@ class ModelCatalogParameterMapperTest {
         assertThat(selection.getTemplate()).isEqualTo("reasoning.kimi");
         assertThat(selection.getReasoningMapping().getDisabled()).isNull();
         assertThat(applyReasoning(result, ReasoningOptions.effort(ReasoningOptions.Effort.LOW)))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "low"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "low"));
         assertThat(applyReasoning(result, ReasoningOptions.effort(ReasoningOptions.Effort.MEDIUM)))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "high"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "high"));
         assertThat(applyReasoning(result, ReasoningOptions.effort(ReasoningOptions.Effort.HIGH)))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "max"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "max"));
     }
 
     @Test
     void kimiToggleMappingRequiresExplicitCatalogControlEvidence() throws Exception {
-        for (var controls : List.of("", ",\"toggle\":false",
-            ",\"toggle\":true,\"effort\":[\"future-strength\"]")) {
-            var result = profile(new KimiProvider(), AdapterType.KIMI_CHAT,
-                entry("{\"reasoning\":{\"supported\":true" + controls + "}}", "{}",
-                    BOTH_PROTOCOLS));
+        for (var controls : List.of("", ",\"toggle\":false", ",\"toggle\":true,\"effort\":[\"future-strength\"]")) {
+            var result = profile(
+                    new KimiProvider(),
+                    AdapterType.KIMI_CHAT,
+                    entry("{\"reasoning\":{\"supported\":true" + controls + "}}", "{}", BOTH_PROTOCOLS));
             assertThat(result.getMappings().getLanguage().getReasoning().getMode())
-                .isEqualTo(Mode.UNSUPPORTED);
+                    .isEqualTo(Mode.UNSUPPORTED);
         }
     }
 
@@ -168,13 +164,13 @@ class ModelCatalogParameterMapperTest {
             {"reasoning":{"supported":true,"effort":["none","minimal","low","medium","high","xhigh","max"]}}
             """, "{}", BOTH_PROTOCOLS));
         assertThat(result.getMappings().getLanguage().getReasoning().getTemplate())
-            .isEqualTo("reasoning.thinking-type");
+                .isEqualTo("reasoning.thinking-type");
         assertThat(applyReasoning(result, ReasoningOptions.enabled()))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "medium"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "medium"));
         assertThat(applyReasoning(result, ReasoningOptions.effort(ReasoningOptions.Effort.HIGH)))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "max"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "max"));
         assertThat(applyReasoning(result, ReasoningOptions.disabled()))
-            .containsExactlyEntriesOf(Map.of("reasoning_effort", "none"));
+                .containsExactlyEntriesOf(Map.of("reasoning_effort", "none"));
     }
 
     @Test
@@ -183,10 +179,10 @@ class ModelCatalogParameterMapperTest {
             {"reasoning":{"supported":true,"toggle":true,"effort":["minimal","low","medium","high"]}}
             """, "{}", BOTH_PROTOCOLS));
         assertThat(applyReasoning(result, ReasoningOptions.effort(ReasoningOptions.Effort.HIGH)))
-            .containsExactlyInAnyOrderEntriesOf(Map.of("reasoning_effort", "high",
-                "thinking", Map.of("type", "enabled")));
+                .containsExactlyInAnyOrderEntriesOf(
+                        Map.of("reasoning_effort", "high", "thinking", Map.of("type", "enabled")));
         assertThat(applyReasoning(result, ReasoningOptions.disabled()))
-            .containsExactlyEntriesOf(Map.of("thinking", Map.of("type", "disabled")));
+                .containsExactlyEntriesOf(Map.of("thinking", Map.of("type", "disabled")));
     }
 
     @Test
@@ -194,35 +190,39 @@ class ModelCatalogParameterMapperTest {
         var capabilities = """
             {"reasoning":{"supported":true,"effort":["low","medium","high"]}}
             """;
-        var responses = profile(new DouBaoProvider(), AdapterType.DOUBAO_RESPONSES,
-            entry(capabilities, "{}", BOTH_PROTOCOLS));
+        var responses =
+                profile(new DouBaoProvider(), AdapterType.DOUBAO_RESPONSES, entry(capabilities, "{}", BOTH_PROTOCOLS));
         assertThat(applyReasoning(responses, ReasoningOptions.effort(ReasoningOptions.Effort.HIGH)))
-            .containsExactlyEntriesOf(Map.of("reasoning", Map.of("effort", "high")));
-        var messages = profile(new SiliconFlowProvider(), AdapterType.SILICONFLOW_MESSAGES,
-            entry(capabilities, "{}",
-                "{\"messages\":{\"base_url\":\"https://api.siliconflow.cn/v1\"}}"));
+                .containsExactlyEntriesOf(Map.of("reasoning", Map.of("effort", "high")));
+        var messages = profile(
+                new SiliconFlowProvider(),
+                AdapterType.SILICONFLOW_MESSAGES,
+                entry(capabilities, "{}", "{\"messages\":{\"base_url\":\"https://api.siliconflow.cn/v1\"}}"));
         assertThat(messages.getMappings().getLanguage().getReasoning().getMode())
-            .isEqualTo(Mode.UNSUPPORTED);
+                .isEqualTo(Mode.UNSUPPORTED);
     }
 
     @Test
     void effortFallbackKeepsEmptyAndUnknownCatalogEffortsUnsupported() throws Exception {
         for (var efforts : List.of("[]", "[\"future-strength\"]")) {
-            var result = profile(new SiliconFlowProvider(), AdapterType.SILICONFLOW_CHAT,
-                entry("{\"reasoning\":{\"supported\":true,\"effort\":" + efforts + "}}",
-                    "{}", BOTH_PROTOCOLS));
+            var result = profile(
+                    new SiliconFlowProvider(),
+                    AdapterType.SILICONFLOW_CHAT,
+                    entry("{\"reasoning\":{\"supported\":true,\"effort\":" + efforts + "}}", "{}", BOTH_PROTOCOLS));
             assertThat(result.getMappings().getLanguage().getReasoning().getMode())
-                .isEqualTo(Mode.UNSUPPORTED);
+                    .isEqualTo(Mode.UNSUPPORTED);
         }
     }
 
     @Test
     void samplingFalseDisablesMappingWhileMissingSupportKeepsInheritance() throws Exception {
-        var result = profile(new OpenAiProvider(), AdapterType.OPENAI_RESPONSES,
-            entry("{\"temperature\":false,\"top_k\":true}", "{}", BOTH_PROTOCOLS));
+        var result = profile(
+                new OpenAiProvider(),
+                AdapterType.OPENAI_RESPONSES,
+                entry("{\"temperature\":false,\"top_k\":true}", "{}", BOTH_PROTOCOLS));
         assertThat(result.getConstraints().getTemperature()).isFalse();
         assertThat(result.getMappings().getLanguage().getTemperature().getMode())
-            .isEqualTo(Mode.UNSUPPORTED);
+                .isEqualTo(Mode.UNSUPPORTED);
         assertThat(result.getConstraints().getTopP()).isNull();
         assertThat(result.getMappings().getLanguage().getTopP()).isNull();
         assertThat(result.getConstraints().getTopK()).isTrue();
@@ -258,7 +258,7 @@ class ModelCatalogParameterMapperTest {
         assertThat(chat.getConstraints().getToolStrict()).isFalse();
         assertThat(chat.getConstraints().getToolChoices()).isEmpty();
         assertThat(chat.getMappings().getLanguage().getMaxOutputTokens().getField())
-            .isEqualTo("max_completion_tokens");
+                .isEqualTo("max_completion_tokens");
     }
 
     @Test
@@ -266,18 +266,24 @@ class ModelCatalogParameterMapperTest {
         var entry = entry("""
             {"tools":{"supported":false},"structured_output":false,"reasoning":{"supported":false}}
             """, "{}", BOTH_PROTOCOLS);
-        var model = model(AdapterType.OPENAI_RESPONSES).toBuilder().source(DiscoverySource.REMOTE)
-            .features(Set.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
-                ModelFeature.REASONING))
-            .featureEvidence(Map.of(ModelFeature.REASONING, false)).build();
-        var result = ModelCatalogParameterMapper.map(provider(null),
-            new OpenAiProvider(), model, entry, AdapterType.OPENAI_RESPONSES);
+        var model = model(AdapterType.OPENAI_RESPONSES).toBuilder()
+                .source(DiscoverySource.REMOTE)
+                .features(Set.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING))
+                .featureEvidence(Map.of(ModelFeature.REASONING, false))
+                .build();
+        var result = ModelCatalogParameterMapper.map(
+                provider(null), new OpenAiProvider(), model, entry, AdapterType.OPENAI_RESPONSES);
         assertThat(result.getConstraints().getToolCalling()).isTrue();
         assertThat(result.getConstraints().getStructuredOutput()).isTrue();
         assertThat(result.getConstraints().getReasoning().getSupported()).isFalse();
-        assertThat(result.getFeatureEvidence()).containsExactlyInAnyOrderEntriesOf(Map.of(
-            ModelFeature.TOOL_CALL, true, ModelFeature.STRUCTURED_OUTPUT, true,
-            ModelFeature.REASONING, false));
+        assertThat(result.getFeatureEvidence())
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        ModelFeature.TOOL_CALL,
+                        true,
+                        ModelFeature.STRUCTURED_OUTPUT,
+                        true,
+                        ModelFeature.REASONING,
+                        false));
     }
 
     @Test
@@ -286,11 +292,10 @@ class ModelCatalogParameterMapperTest {
             {"tools":{"supported":false},"structured_output":true,"reasoning":{"supported":true}}
             """, "{}", BOTH_PROTOCOLS);
         var model = model(AdapterType.OPENAI_RESPONSES).toBuilder()
-            .features(Set.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT,
-                ModelFeature.REASONING))
-            .build();
-        var result = ModelCatalogParameterMapper.map(provider(null),
-            new OpenAiProvider(), model, entry, AdapterType.OPENAI_RESPONSES);
+                .features(Set.of(ModelFeature.TOOL_CALL, ModelFeature.STRUCTURED_OUTPUT, ModelFeature.REASONING))
+                .build();
+        var result = ModelCatalogParameterMapper.map(
+                provider(null), new OpenAiProvider(), model, entry, AdapterType.OPENAI_RESPONSES);
         assertThat(result.getConstraints().getToolCalling()).isFalse();
         assertThat(result.getConstraints().getStructuredOutput()).isTrue();
         assertThat(result.getConstraints().getReasoning().getSupported()).isTrue();
@@ -301,25 +306,27 @@ class ModelCatalogParameterMapperTest {
     void explicitFeatureEvidenceIsPreservedWithoutPromotingOtherFeatures() throws Exception {
         var entry = entry("{}", "{}", BOTH_PROTOCOLS);
         var model = model(AdapterType.OPENAI_RESPONSES).toBuilder()
-            .featureEvidence(Map.of(ModelFeature.TOOL_CALL, false,
-                ModelFeature.STRUCTURED_OUTPUT, true, ModelFeature.VISION, true))
-            .build();
-        var result = ModelCatalogParameterMapper.map(provider(null),
-            new OpenAiProvider(), model, entry, AdapterType.OPENAI_RESPONSES);
-        assertThat(result.getFeatureEvidence()).containsExactlyInAnyOrderEntriesOf(Map.of(
-            ModelFeature.TOOL_CALL, false, ModelFeature.STRUCTURED_OUTPUT, true));
+                .featureEvidence(Map.of(
+                        ModelFeature.TOOL_CALL, false, ModelFeature.STRUCTURED_OUTPUT, true, ModelFeature.VISION, true))
+                .build();
+        var result = ModelCatalogParameterMapper.map(
+                provider(null), new OpenAiProvider(), model, entry, AdapterType.OPENAI_RESPONSES);
+        assertThat(result.getFeatureEvidence())
+                .containsExactlyInAnyOrderEntriesOf(
+                        Map.of(ModelFeature.TOOL_CALL, false, ModelFeature.STRUCTURED_OUTPUT, true));
     }
 
     @Test
     void providerEvidenceSurvivesSnapshotSerialization() throws Exception {
         var mapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
-        var result = profile(new OpenAiProvider(), AdapterType.OPENAI_RESPONSES,
-            entry("{}", "{}", BOTH_PROTOCOLS));
+        var result = profile(new OpenAiProvider(), AdapterType.OPENAI_RESPONSES, entry("{}", "{}", BOTH_PROTOCOLS));
         assertThat(mapper.readValue(mapper.writeValueAsString(result), ModelParameterProfile.class)
-            .getFeatureEvidence()).isEmpty();
+                        .getFeatureEvidence())
+                .isEmpty();
         result.setFeatureEvidence(Map.of(ModelFeature.TOOL_CALL, false));
         assertThat(mapper.readValue(mapper.writeValueAsString(result), ModelParameterProfile.class)
-            .getFeatureEvidence()).containsEntry(ModelFeature.TOOL_CALL, false);
+                        .getFeatureEvidence())
+                .containsEntry(ModelFeature.TOOL_CALL, false);
     }
 
     @Test
@@ -327,10 +334,8 @@ class ModelCatalogParameterMapperTest {
         var result = profile(new OpenAiProvider(), AdapterType.OPENAI_RESPONSES, entry("""
             {"reasoning":{"supported":true,"effort":["future-strength"]}}
             """, "{}", BOTH_PROTOCOLS));
-        assertThat(result.getConstraints().getReasoning().getEfforts())
-            .containsExactly("future-strength");
-        assertThat(result.getMappings().getLanguage().getReasoning().getMode())
-            .isEqualTo(Mode.UNSUPPORTED);
+        assertThat(result.getConstraints().getReasoning().getEfforts()).containsExactly("future-strength");
+        assertThat(result.getMappings().getLanguage().getReasoning().getMode()).isEqualTo(Mode.UNSUPPORTED);
     }
 
     @Test
@@ -347,42 +352,38 @@ class ModelCatalogParameterMapperTest {
     @Test
     void missingProtocolProducesNoProfile() throws Exception {
         var type = new OpenAiProvider();
-        var entry = entry("{}", "{}",
-            "{\"chat-completions\":{\"base_url\":\"https://api.openai.com/v1\"}}");
+        var entry = entry("{}", "{}", "{\"chat-completions\":{\"base_url\":\"https://api.openai.com/v1\"}}");
         assertThat(profile(type, AdapterType.OPENAI_RESPONSES, entry)).isNull();
     }
 
     @Test
     void budgetOnlyModelsDoNotInheritUnrelatedEffortToggleOnAnotherProtocol() throws Exception {
-        var result = profile(new DashScopeProvider(), AdapterType.DASHSCOPE_RESPONSES, entry("""
+        var result =
+                profile(new DashScopeProvider(), AdapterType.DASHSCOPE_RESPONSES, entry("""
             {"reasoning":{"supported":true,"toggle":true,"budget":{"max":81920}}}
             """, "{}", BOTH_PROTOCOLS));
-        assertThat(result.getMappings().getLanguage().getReasoning().getMode())
-            .isEqualTo(Mode.UNSUPPORTED);
+        assertThat(result.getMappings().getLanguage().getReasoning().getMode()).isEqualTo(Mode.UNSUPPORTED);
     }
 
     @Test
     void missingV2MaxTokensFieldUsesItsDocumentedChatCompletionsDefault() throws Exception {
-        var result = profile(new OpenAiProvider(), AdapterType.OPENAI_CHAT,
-            entry("{}", "{}", BOTH_PROTOCOLS));
+        var result = profile(new OpenAiProvider(), AdapterType.OPENAI_CHAT, entry("{}", "{}", BOTH_PROTOCOLS));
         assertThat(result.getMappings().getLanguage().getMaxOutputTokens().getField())
-            .isEqualTo("max_completion_tokens");
-        var legacyField = profile(new OpenAiProvider(), AdapterType.OPENAI_CHAT,
-            entry("{}", "{}", """
+                .isEqualTo("max_completion_tokens");
+        var legacyField = profile(new OpenAiProvider(), AdapterType.OPENAI_CHAT, entry("{}", "{}", """
                 {"chat-completions":{"base_url":"https://api.openai.com/v1",
                   "compatibility":{"max_tokens_field":"max_tokens"}}}
                 """));
         assertThat(legacyField.getMappings().getLanguage().getMaxOutputTokens().getField())
-            .isEqualTo("max_tokens");
-        var kimi = profile(new KimiProvider(), AdapterType.KIMI_CHAT,
-            entry("{}", "{}", """
+                .isEqualTo("max_tokens");
+        var kimi = profile(new KimiProvider(), AdapterType.KIMI_CHAT, entry("{}", "{}", """
                 {"chat-completions":{"base_url":"https://api.moonshot.cn/v1",
                   "compatibility":{"max_tokens_field":"max_tokens"}}}
                 """));
         assertThat(kimi.getMappings().getLanguage().getMaxOutputTokens().getTemplate())
-            .isEqualTo("openai.max-completion-tokens");
+                .isEqualTo("openai.max-completion-tokens");
         assertThat(kimi.getMappings().getLanguage().getMaxOutputTokens().getField())
-            .isEqualTo("max_tokens");
+                .isEqualTo("max_tokens");
     }
 
     @Test
@@ -399,15 +400,14 @@ class ModelCatalogParameterMapperTest {
             """, "{}", BOTH_PROTOCOLS));
         assertThat(result.getConstraints().getToolCalling()).isFalse();
         assertThat(result.getConstraints().getStructuredOutput()).isFalse();
-        assertThat(result.getMappings().getLanguage().getReasoning().getMode())
-            .isEqualTo(Mode.UNSUPPORTED);
+        assertThat(result.getMappings().getLanguage().getReasoning().getMode()).isEqualTo(Mode.UNSUPPORTED);
     }
 
     @Test
     void nonChatProfilesKeepInputLimitsWithoutCreatingRequestParameters() throws Exception {
         var catalog = ModelsDevCatalog.parse(MAPPER.readTree(NON_CHAT_CATALOG));
-        var embedding = profile(new OpenAiProvider(), AdapterType.OPENAI_EMBEDDING,
-            catalog.find("openai", "embedding-model"));
+        var embedding =
+                profile(new OpenAiProvider(), AdapterType.OPENAI_EMBEDDING, catalog.find("openai", "embedding-model"));
         assertThat(embedding.getConstraints().getContextTokens()).isEqualTo(8191);
         assertThat(embedding.getConstraints().getInputTokens()).isEqualTo(8000);
         assertThat(embedding.getConstraints().getOutputTokens()).isNull();
@@ -415,15 +415,13 @@ class ModelCatalogParameterMapperTest {
         assertThat(embedding.getMappings().getLanguage()).isNull();
         assertThat(embedding.getFeatureEvidence()).isEmpty();
 
-        var image = profile(new OpenAiProvider(), AdapterType.OPENAI_IMAGE,
-            catalog.find("openai", "image-model"));
+        var image = profile(new OpenAiProvider(), AdapterType.OPENAI_IMAGE, catalog.find("openai", "image-model"));
         assertThat(image.getConstraints().getContextTokens()).isEqualTo(8192);
         assertThat(image.getConstraints().getOutputTokens()).isNull();
         assertThat(image.getMappings().getImageGeneration()).isNull();
         assertThat(image.getConstraints().getReasoning()).isNull();
 
-        var rerank = profile(new OpenRouterProvider(), AdapterType.RERANK,
-            catalog.find("openrouter", "rerank-model"));
+        var rerank = profile(new OpenRouterProvider(), AdapterType.RERANK, catalog.find("openrouter", "rerank-model"));
         assertThat(rerank.getConstraints().getContextTokens()).isEqualTo(4096);
         assertThat(rerank.getConstraints().getInputTokens()).isEqualTo(4000);
         assertThat(rerank.getConstraints().getOutputTokens()).isNull();
@@ -449,7 +447,8 @@ class ModelCatalogParameterMapperTest {
         assertThat(result.getConstraints().getTemperature()).isNull();
         assertThat(result.getConstraints().getToolCalling()).isNull();
         assertThat(result.getConstraints().getReasoning()).isNull();
-        assertThat(profile(new OpenAiProvider(), AdapterType.OPENAI_CHAT, entry)).isNull();
+        assertThat(profile(new OpenAiProvider(), AdapterType.OPENAI_CHAT, entry))
+                .isNull();
     }
 
     @Test
@@ -463,25 +462,31 @@ class ModelCatalogParameterMapperTest {
         assertThat(result.getMappings().getEmbedding()).isNull();
     }
 
-    private ModelParameterProfile profile(AiProviderType type, AdapterType adapter,
-        ModelsDevCatalog.Entry entry) {
+    private ModelParameterProfile profile(AiProviderType type, AdapterType adapter, ModelsDevCatalog.Entry entry) {
         var provider = provider(null);
         provider.getSpec().setProviderType(type.getProviderType());
-        var model = model(adapter).toBuilder().modelId(entry.model().path("id").asText()).build();
+        var model = model(adapter).toBuilder()
+                .modelId(entry.model().path("id").asText())
+                .build();
         return ModelCatalogParameterMapper.map(provider, type, model, entry, adapter);
     }
 
-    private Map<String, Object> applyReasoning(ModelParameterProfile profile,
-        ReasoningOptions intent) {
+    private Map<String, Object> applyReasoning(ModelParameterProfile profile, ReasoningOptions intent) {
         var registry = new ParameterMappingTemplateRegistry();
-        new ParameterMappingValidator(registry).validateModel(profile.getMappings(),
-            ModelType.LANGUAGE, profile.getAdapterType());
+        new ParameterMappingValidator(registry)
+                .validateModel(profile.getMappings(), ModelType.LANGUAGE, profile.getAdapterType());
         var selection = profile.getMappings().getLanguage().getReasoning();
-        var mapping = new EffectiveParameterMappings.EffectiveMapping(selection.getMode(),
-            selection.getTemplate(), selection.getField(), selection.getReasoningMapping(),
-            EffectiveParameterMappings.Source.CATALOG);
-        var runtime = new RuntimeParameterMappings(new EffectiveParameterMappings(
-            Map.of(ModelParameter.REASONING, mapping)), registry, profile.getModelId(), "provider");
+        var mapping = new EffectiveParameterMappings.EffectiveMapping(
+                selection.getMode(),
+                selection.getTemplate(),
+                selection.getField(),
+                selection.getReasoningMapping(),
+                EffectiveParameterMappings.Source.CATALOG);
+        var runtime = new RuntimeParameterMappings(
+                new EffectiveParameterMappings(Map.of(ModelParameter.REASONING, mapping)),
+                registry,
+                profile.getModelId(),
+                "provider");
         runtime.validateReasoning(intent, profile.getConstraints().getReasoning());
         var target = new ParameterMappingTarget();
         assertThat(runtime.applyReasoning(intent, target)).isTrue();
@@ -489,12 +494,15 @@ class ModelCatalogParameterMapperTest {
     }
 
     private DiscoveredModel model(AdapterType adapter) {
-        return DiscoveredModel.builder().modelId("model").modelType(adapter.getModelType())
-            .adapterType(adapter).source(DiscoverySource.RULE).build();
+        return DiscoveredModel.builder()
+                .modelId("model")
+                .modelType(adapter.getModelType())
+                .adapterType(adapter)
+                .source(DiscoverySource.RULE)
+                .build();
     }
 
-    private ModelsDevCatalog.Entry entry(String capabilities, String limits, String api)
-        throws Exception {
+    private ModelsDevCatalog.Entry entry(String capabilities, String limits, String api) throws Exception {
         var root = MAPPER.createObjectNode();
         var provider = root.putObject("provider");
         provider.put("id", "provider");

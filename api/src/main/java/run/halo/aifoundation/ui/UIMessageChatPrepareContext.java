@@ -5,9 +5,7 @@ import lombok.Builder;
 import lombok.Value;
 import run.halo.aifoundation.chat.GenerateTextRequest;
 
-/**
- * Context passed to an async UI message chat prepare hook.
- */
+/** Context passed to an async UI message chat prepare hook. */
 @Value
 @Builder
 public class UIMessageChatPrepareContext<M> {

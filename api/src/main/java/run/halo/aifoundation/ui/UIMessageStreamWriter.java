@@ -4,9 +4,7 @@ import java.util.Map;
 import org.reactivestreams.Publisher;
 import run.halo.aifoundation.media.GeneratedFile;
 
-/**
- * Writes chunks into a Halo UI message stream.
- */
+/** Writes chunks into a Halo UI message stream. */
 public interface UIMessageStreamWriter {
 
     /**
@@ -97,16 +95,21 @@ public interface UIMessageStreamWriter {
      * @param data optional inline file data, commonly base64
      * @param providerMetadata provider-specific metadata
      */
-    default void writeFile(String fileId, String url, String title, String mediaType, Object data,
-        Map<String, Object> providerMetadata) {
+    default void writeFile(
+            String fileId,
+            String url,
+            String title,
+            String mediaType,
+            Object data,
+            Map<String, Object> providerMetadata) {
         write(UIMessageChunks.file(fileId, url, title, mediaType, data, providerMetadata));
     }
 
     /**
      * Writes a generated file as a UI message file chunk.
      *
-     * <p>The caller supplies the stable {@code fileId}; AI Foundation does not infer storage
-     * identity or persist the file as an attachment.
+     * <p>The caller supplies the stable {@code fileId}; AI Foundation does not infer storage identity or persist the
+     * file as an attachment.
      *
      * @param fileId stable file id used as the replacement key
      * @param file generated file returned by a model
@@ -122,13 +125,11 @@ public interface UIMessageStreamWriter {
      * @param file generated file returned by a model
      * @param providerMetadata provider metadata to attach to the UI file part
      */
-    default void writeFile(String fileId, GeneratedFile file,
-        Map<String, Object> providerMetadata) {
+    default void writeFile(String fileId, GeneratedFile file, Map<String, Object> providerMetadata) {
         if (file == null) {
             throw new IllegalArgumentException("generated file must not be null");
         }
         var title = file.getTitle() != null ? file.getTitle() : file.getFilename();
-        writeFile(fileId, file.getUrl(), title, file.getMediaType(), file.getBase64(),
-            providerMetadata);
+        writeFile(fileId, file.getUrl(), title, file.getMediaType(), file.getBase64(), providerMetadata);
     }
 }

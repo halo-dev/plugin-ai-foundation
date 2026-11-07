@@ -11,8 +11,14 @@ import run.halo.aifoundation.provider.protocol.responses.ResponsesProfile;
 final class OllamaResponsesProfile implements ResponsesProfile {
 
     private static final List<String> UNSUPPORTED_FIELDS = List.of(
-        "previous_response_id", "conversation", "parallel_tool_calls", "store", "metadata",
-        "service_tier", "reasoning", "text");
+            "previous_response_id",
+            "conversation",
+            "parallel_tool_calls",
+            "store",
+            "metadata",
+            "service_tier",
+            "reasoning",
+            "text");
 
     @Override
     public String providerType() {
@@ -25,8 +31,7 @@ final class OllamaResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         body.remove("stream_options");
         rejectUnsupportedFields(body);
         rejectMedia(body.get("input"));
@@ -37,8 +42,7 @@ final class OllamaResponsesProfile implements ResponsesProfile {
             if (!body.containsKey(field)) {
                 continue;
             }
-            throw new IllegalArgumentException(
-                "Ollama Responses does not support request field: " + field);
+            throw new IllegalArgumentException("Ollama Responses does not support request field: " + field);
         }
     }
 
@@ -47,7 +51,7 @@ final class OllamaResponsesProfile implements ResponsesProfile {
             return;
         }
         throw new IllegalArgumentException(
-            "Ollama Responses currently documents text input only; use an Ollama Chat or "
-                + "Messages adapter for images");
+                "Ollama Responses currently documents text input only; use an Ollama Chat or "
+                        + "Messages adapter for images");
     }
 }

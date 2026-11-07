@@ -26,41 +26,40 @@ import run.halo.aifoundation.service.observation.UsageExecutionObserver;
 
 class EmbeddingModelRuntimeFactoryTest {
 
-    private final EmbeddingModelRuntimeFactory factory =
-        new EmbeddingModelRuntimeFactory(new UsageExecutionObserver());
+    private final EmbeddingModelRuntimeFactory factory = new EmbeddingModelRuntimeFactory(new UsageExecutionObserver());
 
     @Test
     void create_preservesBatchingLimitsAndProviderTypeMetadata() {
         var springModel = mock(EmbeddingModel.class);
         when(springModel.call(any(EmbeddingRequest.class)))
-            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))))
-            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {2.0f}, 0))));
+                .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))))
+                .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {2.0f}, 0))));
 
-        var model = factory.create(springModel, configuration(1,
-            EmbeddingModelProviderOptions.defaults()));
+        var model = factory.create(springModel, configuration(1, EmbeddingModelProviderOptions.defaults()));
 
         StepVerifier.create(model.embed(List.of("first", "second")))
-            .assertNext(response -> {
-                assertThat(response.getEmbeddings()).hasSize(2);
-                assertThat(response.getProviderMetadata()).containsEntry("providerType", "openai");
-            })
-            .verifyComplete();
+                .assertNext(response -> {
+                    assertThat(response.getEmbeddings()).hasSize(2);
+                    assertThat(response.getProviderMetadata()).containsEntry("providerType", "openai");
+                })
+                .verifyComplete();
     }
 
     @Test
     void create_appliesTypedDimensionsAtCompositionBoundary() {
         var springModel = mock(EmbeddingModel.class);
         when(springModel.call(any(EmbeddingRequest.class)))
-            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
-        var model = factory.create(springModel, configuration(96,
-            new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build)));
+                .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
+        var model = factory.create(
+                springModel,
+                configuration(96, new EmbeddingModelProviderOptions(OpenAiEmbeddingOptionsFactory::build)));
 
         StepVerifier.create(model.embed(run.halo.aifoundation.embedding.EmbeddingRequest.builder()
-                .inputs(List.of("first"))
-                .dimensions(512)
-                .build()))
-            .assertNext(response -> assertThat(response.getEmbeddings()).hasSize(1))
-            .verifyComplete();
+                        .inputs(List.of("first"))
+                        .dimensions(512)
+                        .build()))
+                .assertNext(response -> assertThat(response.getEmbeddings()).hasSize(1))
+                .verifyComplete();
 
         var captor = ArgumentCaptor.forClass(EmbeddingRequest.class);
         org.mockito.Mockito.verify(springModel).call(captor.capture());
@@ -78,24 +77,28 @@ class EmbeddingModelRuntimeFactoryTest {
         var provider = mock(AiProviderType.class);
         when(provider.maxEmbeddingsPerCall()).thenReturn(96);
         when(provider.embeddingModelProviderOptions()).thenReturn(providerOptions);
-        var context = new ModelRuntimeContext("model-a", "embedding-a", "provider-a", "openai",
-            AdapterType.OPENAI_EMBEDDING, provider, RuntimeParameterMappings.empty(),
-            Map.of("encoding_format", "base64"));
+        var context = new ModelRuntimeContext(
+                "model-a",
+                "embedding-a",
+                "provider-a",
+                "openai",
+                AdapterType.OPENAI_EMBEDDING,
+                provider,
+                RuntimeParameterMappings.empty(),
+                Map.of("encoding_format", "base64"));
         var springModel = mock(EmbeddingModel.class);
         when(springModel.call(any(EmbeddingRequest.class)))
-            .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
+                .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[] {1.0f}, 0))));
         var model = factory.create(springModel, EmbeddingModelRuntimeConfiguration.from(context));
 
-        StepVerifier.create(model.embed(List.of("first")))
-            .expectNextCount(1)
-            .verifyComplete();
+        StepVerifier.create(model.embed(List.of("first"))).expectNextCount(1).verifyComplete();
 
         assertThat(capturedOptions.get()).isEqualTo(Map.of("encoding_format", "base64"));
     }
 
-    private EmbeddingModelRuntimeConfiguration configuration(int maxEmbeddingsPerCall,
-        EmbeddingModelProviderOptions providerOptions) {
-        return new EmbeddingModelRuntimeConfiguration(ModelRuntimeContext.unresolved("openai"),
-            maxEmbeddingsPerCall, false, providerOptions);
+    private EmbeddingModelRuntimeConfiguration configuration(
+            int maxEmbeddingsPerCall, EmbeddingModelProviderOptions providerOptions) {
+        return new EmbeddingModelRuntimeConfiguration(
+                ModelRuntimeContext.unresolved("openai"), maxEmbeddingsPerCall, false, providerOptions);
     }
 }

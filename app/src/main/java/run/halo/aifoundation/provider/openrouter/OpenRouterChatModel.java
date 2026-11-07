@@ -7,8 +7,7 @@ import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOp
 /** OpenRouter-owned Chat Completions adapter. */
 public final class OpenRouterChatModel extends ChatCompletionsModel {
 
-    public OpenRouterChatModel(ChatCompletionsOptions options,
-        WebClient.Builder webClientBuilder) {
+    public OpenRouterChatModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder, new OpenRouterChatProfile());
     }
 }

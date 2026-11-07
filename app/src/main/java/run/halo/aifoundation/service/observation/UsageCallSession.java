@@ -44,11 +44,12 @@ public final class UsageCallSession {
 
     public UsageExecutionScope beginExecution(UsageUnitKind kind, int unitIndex) {
         var key = kind.name() + ':' + unitIndex;
-        var attemptIndex = attemptSequences.computeIfAbsent(key, ignored -> new AtomicInteger())
-            .getAndIncrement();
+        var attemptIndex = attemptSequences
+                .computeIfAbsent(key, ignored -> new AtomicInteger())
+                .getAndIncrement();
         attempts.incrementAndGet();
-        return new UsageExecutionScope(this, UUID.randomUUID().toString(), kind, unitIndex,
-            attemptIndex, clock.instant());
+        return new UsageExecutionScope(
+                this, UUID.randomUUID().toString(), kind, unitIndex, attemptIndex, clock.instant());
     }
 
     public void succeed(String responseModelId, int stepCount) {
@@ -63,8 +64,7 @@ public final class UsageCallSession {
     /** A filtered projection may finish before a cached stream's result metadata is consumed. */
     public void succeedProjection() {
         var status = latestExecutionStatus.get();
-        finish(status == null ? UsageStatus.SUCCEEDED : status, latestExecutionError.get(),
-            null, 0, true);
+        finish(status == null ? UsageStatus.SUCCEEDED : status, latestExecutionError.get(), null, 0, true);
     }
 
     public void fail(Throwable error, int stepCount) {
@@ -88,9 +88,16 @@ public final class UsageCallSession {
         return attempts.get() > 0;
     }
 
-    synchronized void recordExecution(String id, UsageUnitKind kind, int unitIndex, int attemptIndex,
-        java.time.Instant startedAt, UsageStatus status, Throwable error, String responseModelId,
-        NormalizedUsage usage) {
+    synchronized void recordExecution(
+            String id,
+            UsageUnitKind kind,
+            int unitIndex,
+            int attemptIndex,
+            java.time.Instant startedAt,
+            UsageStatus status,
+            Throwable error,
+            String responseModelId,
+            NormalizedUsage usage) {
         var normalized = usage == null ? NormalizedUsage.missing() : usage;
         if (normalized.quality() == UsageQuality.MISSING) {
             missingExecutions.incrementAndGet();
@@ -103,12 +110,26 @@ public final class UsageCallSession {
         if (kind == UsageUnitKind.GENERATION_STEP) {
             observedGenerationSteps.accumulateAndGet(unitIndex + 1, Math::max);
         }
-        executionUsage = executionUsage == null ? normalized
-            : NormalizedUsage.sum(java.util.List.of(executionUsage, normalized));
+        executionUsage = executionUsage == null
+                ? normalized
+                : NormalizedUsage.sum(java.util.List.of(executionUsage, normalized));
         completedExecutions++;
-        service.recordExecution(this, new UsageExecutionRecord(id, start.id(), start.epoch(), kind,
-            unitIndex, attemptIndex, startedAt, clock.instant(), status, UsageError.from(error),
-            start.requestModelId(), responseModelId, normalized));
+        service.recordExecution(
+                this,
+                new UsageExecutionRecord(
+                        id,
+                        start.id(),
+                        start.epoch(),
+                        kind,
+                        unitIndex,
+                        attemptIndex,
+                        startedAt,
+                        clock.instant(),
+                        status,
+                        UsageError.from(error),
+                        start.requestModelId(),
+                        responseModelId,
+                        normalized));
         publishTerminalIfReady();
     }
 
@@ -116,13 +137,12 @@ public final class UsageCallSession {
         return start;
     }
 
-    private synchronized void finish(UsageStatus status, UsageError error,
-        String responseModelId, int stepCount) {
+    private synchronized void finish(UsageStatus status, UsageError error, String responseModelId, int stepCount) {
         finish(status, error, responseModelId, stepCount, false);
     }
 
-    private synchronized void finish(UsageStatus status, UsageError error,
-        String responseModelId, int stepCount, boolean projection) {
+    private synchronized void finish(
+            UsageStatus status, UsageError error, String responseModelId, int stepCount, boolean projection) {
         if (!acceptTerminal(projection)) {
             return;
         }
@@ -142,9 +162,17 @@ public final class UsageCallSession {
         if (start.streaming()) {
             resolvedStepCount = Math.max(resolvedStepCount, observedGenerationSteps.get());
         }
-        pendingTerminal = new UsageCallTerminal(start, completedAt, status, error,
-            resolvedResponseModelId, resolvedStepCount, attempts.get(), missingExecutions.get(),
-            complete, resolvedUsage);
+        pendingTerminal = new UsageCallTerminal(
+                start,
+                completedAt,
+                status,
+                error,
+                resolvedResponseModelId,
+                resolvedStepCount,
+                attempts.get(),
+                missingExecutions.get(),
+                complete,
+                resolvedUsage);
         publishTerminalIfReady();
     }
 
@@ -180,9 +208,18 @@ public final class UsageCallSession {
         }
         var value = pendingTerminal;
         pendingTerminal = null;
-        service.finishCall(this, new UsageCallTerminal(start, value.completedAt(), value.status(),
-            value.error(), value.responseModelId(), value.stepCount(), attempts.get(),
-            missingExecutions.get(), !incomplete.get(),
-            executionUsage == null ? NormalizedUsage.missing() : executionUsage));
+        service.finishCall(
+                this,
+                new UsageCallTerminal(
+                        start,
+                        value.completedAt(),
+                        value.status(),
+                        value.error(),
+                        value.responseModelId(),
+                        value.stepCount(),
+                        attempts.get(),
+                        missingExecutions.get(),
+                        !incomplete.get(),
+                        executionUsage == null ? NormalizedUsage.missing() : executionUsage));
     }
 }

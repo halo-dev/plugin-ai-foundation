@@ -11,6 +11,5 @@ public final class UsageOperation {
     public static final String DECISION = "decision.decide";
     public static final String RERANK = "rerank.rerank";
 
-    private UsageOperation() {
-    }
+    private UsageOperation() {}
 }

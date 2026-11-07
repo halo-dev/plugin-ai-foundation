@@ -37,11 +37,18 @@ class UsageExecutionObserverTest {
     void timeoutKeepsOriginalFailureAndMarksCallAndExecutionTimedOut(Throwable failure) {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
-                () -> Mono.error(failure), ignored -> NormalizedUsage.missing(), ignored -> null)
-            .doOnError(error -> session.fail(error, 1))
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
-        StepVerifier.create(observed).expectErrorMatches(error -> error == failure).verify();
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Mono.error(failure),
+                        ignored -> NormalizedUsage.missing(),
+                        ignored -> null)
+                .doOnError(error -> session.fail(error, 1))
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        StepVerifier.create(observed)
+                .expectErrorMatches(error -> error == failure)
+                .verify();
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
@@ -56,9 +63,14 @@ class UsageExecutionObserverTest {
         var session = session(service);
         var first = new NormalizedUsage(10L, 1L, null, null, null, null, null, UsageQuality.PARTIAL);
         var last = new NormalizedUsage(10L, 5L, null, null, null, null, null, null);
-        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                () -> Flux.just(first, last, last), value -> value, ignored -> "actual")
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observeFlux(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Flux.just(first, last, last),
+                        value -> value,
+                        ignored -> "actual")
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         StepVerifier.create(observed).expectNext(first, last, last).verifyComplete();
         session.succeed("actual", 1);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
@@ -72,16 +84,28 @@ class UsageExecutionObserverTest {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
-            "invalid", null, null, null, null, 0, LanguageModelUsage.builder()
-                .inputTokens(7).outputTokens(3).totalTokens(10).build(), null);
+                "invalid",
+                null,
+                null,
+                null,
+                null,
+                0,
+                LanguageModelUsage.builder()
+                        .inputTokens(7)
+                        .outputTokens(3)
+                        .totalTokens(10)
+                        .build(),
+                null);
         var attempts = new AtomicInteger();
-        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                () -> attempts.getAndIncrement() == 0 ? Flux.error(failure)
-                    : Flux.just("success"),
-                ignored -> new NormalizedUsage(2L, 3L, null, null, null, null, null, null),
-                ignored -> "actual")
-            .retryWhen(Retry.max(1))
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observeFlux(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> attempts.getAndIncrement() == 0 ? Flux.error(failure) : Flux.just("success"),
+                        ignored -> new NormalizedUsage(2L, 3L, null, null, null, null, null, null),
+                        ignored -> "actual")
+                .retryWhen(Retry.max(1))
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
         StepVerifier.create(observed).expectNext("success").verifyComplete();
         session.succeed("actual", 1);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
@@ -95,8 +119,14 @@ class UsageExecutionObserverTest {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
-            "invalid", null, null, "private output must not be retained", null, 0,
-            LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(), null);
+                "invalid",
+                null,
+                null,
+                "private output must not be retained",
+                null,
+                0,
+                LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(),
+                null);
         session.fail(failure, 0);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
@@ -112,16 +142,24 @@ class UsageExecutionObserverTest {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
-            "invalid", null, null, null, null, 2,
-            LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(), null);
+                "invalid",
+                null,
+                null,
+                null,
+                null,
+                2,
+                LanguageModelUsage.builder().inputTokens(7).outputTokens(3).build(),
+                null);
         session.succeedProjection();
         session.fail(failure, 0);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service, times(2)).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
-        assertThat(terminal.getAllValues()).extracting(UsageCallTerminal::usage)
-            .containsOnly(NormalizedUsage.missing());
-        assertThat(terminal.getAllValues()).extracting(UsageCallTerminal::attemptCount)
-            .containsOnly(0);
+        assertThat(terminal.getAllValues())
+                .extracting(UsageCallTerminal::usage)
+                .containsOnly(NormalizedUsage.missing());
+        assertThat(terminal.getAllValues())
+                .extracting(UsageCallTerminal::attemptCount)
+                .containsOnly(0);
         assertThat(terminal.getValue().status()).isEqualTo(UsageStatus.FAILED);
     }
 
@@ -129,11 +167,14 @@ class UsageExecutionObserverTest {
     void recordsFirstAttemptSuccess() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.RERANK, 0,
-                () -> Mono.just("ok"),
-                ignored -> new NormalizedUsage(4L, 2L, null, null, null, null, null, null),
-                ignored -> "actual")
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.RERANK,
+                        0,
+                        () -> Mono.just("ok"),
+                        ignored -> new NormalizedUsage(4L, 2L, null, null, null, null, null, null),
+                        ignored -> "actual")
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectNext("ok").verifyComplete();
 
@@ -148,15 +189,18 @@ class UsageExecutionObserverTest {
     void emptyMonoCompletesWithoutTelemetryFailure() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.RERANK, 0,
-                Mono::<String>empty,
-                ignored -> {
-                    throw new AssertionError("extractor must not be called for an empty Mono");
-                },
-                ignored -> {
-                    throw new AssertionError("extractor must not be called for an empty Mono");
-                })
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.RERANK,
+                        0,
+                        Mono::<String>empty,
+                        ignored -> {
+                            throw new AssertionError("extractor must not be called for an empty Mono");
+                        },
+                        ignored -> {
+                            throw new AssertionError("extractor must not be called for an empty Mono");
+                        })
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).verifyComplete();
 
@@ -171,8 +215,7 @@ class UsageExecutionObserverTest {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
 
-        session.beginExecution(UsageUnitKind.RERANK, 0)
-            .succeed(NormalizedUsage.missing(), null);
+        session.beginExecution(UsageUnitKind.RERANK, 0).succeed(NormalizedUsage.missing(), null);
         session.succeed(null, 1);
 
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
@@ -186,12 +229,16 @@ class UsageExecutionObserverTest {
     void monoExtractorFailureDoesNotFailModelResult() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.RERANK, 0,
-                () -> Mono.just("ok"),
-                ignored -> {
-                    throw new IllegalStateException("broken usage metadata");
-                }, ignored -> "actual")
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.RERANK,
+                        0,
+                        () -> Mono.just("ok"),
+                        ignored -> {
+                            throw new IllegalStateException("broken usage metadata");
+                        },
+                        ignored -> "actual")
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectNext("ok").verifyComplete();
     }
@@ -200,15 +247,19 @@ class UsageExecutionObserverTest {
     void fluxExtractorFailureDoesNotFailModelStream() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                () -> Flux.just("first", "second"),
-                value -> {
-                    if ("second".equals(value)) {
-                        throw new IllegalStateException("broken usage metadata");
-                    }
-                    return new NormalizedUsage(3L, 2L, null, null, null, null, null, null);
-                }, ignored -> "actual")
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observeFlux(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Flux.just("first", "second"),
+                        value -> {
+                            if ("second".equals(value)) {
+                                throw new IllegalStateException("broken usage metadata");
+                            }
+                            return new NormalizedUsage(3L, 2L, null, null, null, null, null, null);
+                        },
+                        ignored -> "actual")
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectNext("first", "second").verifyComplete();
 
@@ -220,30 +271,47 @@ class UsageExecutionObserverTest {
     @Test
     void createsOnePhysicalAttemptPerActualRetryAndUsesChildUsageForParent() {
         var service = mock(UsageStatisticsService.class);
-        var start = new UsageCallStart("call", 1, Instant.parse("2026-08-11T00:00:00Z"),
-            "plugin", "1", "stack", null, "language.generateText", "LANGUAGE", "model",
-            "provider", "openai", "requested", false);
-        var session = new UsageCallSession(service, start,
-            Clock.fixed(Instant.parse("2026-08-11T00:00:01Z"), ZoneOffset.UTC));
+        var start = new UsageCallStart(
+                "call",
+                1,
+                Instant.parse("2026-08-11T00:00:00Z"),
+                "plugin",
+                "1",
+                "stack",
+                null,
+                "language.generateText",
+                "LANGUAGE",
+                "model",
+                "provider",
+                "openai",
+                "requested",
+                false);
+        var session = new UsageCallSession(
+                service, start, Clock.fixed(Instant.parse("2026-08-11T00:00:01Z"), ZoneOffset.UTC));
         var attempts = new AtomicInteger();
         var observer = new UsageExecutionObserver();
-        var observed = observer.observe(UsageUnitKind.GENERATION_STEP, 0,
-                () -> attempts.getAndIncrement() == 0
-                    ? Mono.error(new IllegalStateException("retry")) : Mono.just("ok"),
-                ignored -> new NormalizedUsage(4L, 2L, null, null, null, null, null, null),
-                ignored -> "actual")
-            .retryWhen(Retry.max(1))
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = observer.observe(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> attempts.getAndIncrement() == 0
+                                ? Mono.error(new IllegalStateException("retry"))
+                                : Mono.just("ok"),
+                        ignored -> new NormalizedUsage(4L, 2L, null, null, null, null, null, null),
+                        ignored -> "actual")
+                .retryWhen(Retry.max(1))
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectNext("ok").verifyComplete();
         session.succeed("actual", 1);
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         verify(service, times(2)).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
-        assertThat(execution.getAllValues()).extracting(UsageExecutionRecord::attemptIndex)
-            .containsExactly(0, 1);
-        assertThat(execution.getAllValues()).extracting(UsageExecutionRecord::status)
-            .containsExactly(UsageStatus.FAILED, UsageStatus.SUCCEEDED);
+        assertThat(execution.getAllValues())
+                .extracting(UsageExecutionRecord::attemptIndex)
+                .containsExactly(0, 1);
+        assertThat(execution.getAllValues())
+                .extracting(UsageExecutionRecord::status)
+                .containsExactly(UsageStatus.FAILED, UsageStatus.SUCCEEDED);
         var terminal = ArgumentCaptor.forClass(UsageCallTerminal.class);
         verify(service).finishCall(org.mockito.ArgumentMatchers.any(), terminal.capture());
         assertThat(terminal.getValue().attemptCount()).isEqualTo(2);
@@ -255,22 +323,29 @@ class UsageExecutionObserverTest {
     void recordsEveryAttemptWhenRetriesAreExhausted() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.RERANK, 0,
-                () -> Mono.error(new IllegalStateException("unavailable")),
-                ignored -> NormalizedUsage.missing(), ignored -> null)
-            .retryWhen(Retry.max(2))
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.RERANK,
+                        0,
+                        () -> Mono.error(new IllegalStateException("unavailable")),
+                        ignored -> NormalizedUsage.missing(),
+                        ignored -> null)
+                .retryWhen(Retry.max(2))
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectError().verify();
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         verify(service, times(3)).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
-        assertThat(execution.getAllValues()).extracting(UsageExecutionRecord::attemptIndex)
-            .containsExactly(0, 1, 2);
-        assertThat(execution.getAllValues()).extracting(UsageExecutionRecord::status)
-            .containsOnly(UsageStatus.FAILED);
-        assertThat(execution.getAllValues()).extracting(value -> value.usage().quality())
-            .containsOnly(UsageQuality.MISSING);
+        assertThat(execution.getAllValues())
+                .extracting(UsageExecutionRecord::attemptIndex)
+                .containsExactly(0, 1, 2);
+        assertThat(execution.getAllValues())
+                .extracting(UsageExecutionRecord::status)
+                .containsOnly(UsageStatus.FAILED);
+        assertThat(execution.getAllValues())
+                .extracting(value -> value.usage().quality())
+                .containsOnly(UsageQuality.MISSING);
     }
 
     @Test
@@ -278,32 +353,51 @@ class UsageExecutionObserverTest {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var failure = new run.halo.aifoundation.exception.StructuredOutputValidationException(
-            "invalid", null, null, null, null, 0, LanguageModelUsage.builder()
-                .inputTokens(7).outputTokens(3).totalTokens(10).build(), null);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.GENERATION_STEP, 0,
-                () -> Mono.error(failure), ignored -> NormalizedUsage.missing(), ignored -> null)
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+                "invalid",
+                null,
+                null,
+                null,
+                null,
+                0,
+                LanguageModelUsage.builder()
+                        .inputTokens(7)
+                        .outputTokens(3)
+                        .totalTokens(10)
+                        .build(),
+                null);
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Mono.error(failure),
+                        ignored -> NormalizedUsage.missing(),
+                        ignored -> null)
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
-        StepVerifier.create(observed).expectErrorSatisfies(error -> assertThat(error)
-            .isSameAs(failure)).verify();
+        StepVerifier.create(observed)
+                .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
+                .verify();
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         verify(service).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
         assertThat(execution.getValue().usage().accountedTotalTokens()).isEqualTo(10L);
-        assertThat(execution.getValue().usage().quality())
-            .isEqualTo(UsageQuality.REPORTED_COMPONENTS);
+        assertThat(execution.getValue().usage().quality()).isEqualTo(UsageQuality.REPORTED_COMPONENTS);
     }
 
     @Test
     void recordsSynchronousInvocationFailureAsAnExecution() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observe(UsageUnitKind.RERANK, 0,
-                () -> {
-                    throw new IllegalStateException("provider creation failed");
-                },
-                ignored -> NormalizedUsage.missing(), ignored -> null)
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observe(
+                        UsageUnitKind.RERANK,
+                        0,
+                        () -> {
+                            throw new IllegalStateException("provider creation failed");
+                        },
+                        ignored -> NormalizedUsage.missing(),
+                        ignored -> null)
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectError(IllegalStateException.class).verify();
 
@@ -318,8 +412,7 @@ class UsageExecutionObserverTest {
         var session = session(service);
         var timeout = reactor.core.Exceptions.propagate(new TimeoutException("slow provider"));
 
-        session.beginExecution(UsageUnitKind.RERANK, 0)
-            .fail(timeout, NormalizedUsage.missing(), null);
+        session.beginExecution(UsageUnitKind.RERANK, 0).fail(timeout, NormalizedUsage.missing(), null);
         session.fail(timeout, 1);
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
@@ -338,8 +431,7 @@ class UsageExecutionObserverTest {
         var session = session(service);
         var cancelled = new AiGenerationCancelledException("cancelled by request token");
 
-        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
-            .fail(cancelled, NormalizedUsage.missing(), null);
+        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0).fail(cancelled, NormalizedUsage.missing(), null);
         session.fail(cancelled, 1);
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
@@ -354,12 +446,14 @@ class UsageExecutionObserverTest {
     void preservesUsageObservedBeforeFailedStreamAttempt() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                () -> Flux.concat(Flux.just("partial"),
-                    Flux.error(new IllegalStateException("stream failed"))),
-                ignored -> new NormalizedUsage(3L, 2L, null, null, null, null, null, null),
-                ignored -> "actual")
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observeFlux(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Flux.concat(Flux.just("partial"), Flux.error(new IllegalStateException("stream failed"))),
+                        ignored -> new NormalizedUsage(3L, 2L, null, null, null, null, null, null),
+                        ignored -> "actual")
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectNext("partial").expectError().verify();
 
@@ -375,8 +469,7 @@ class UsageExecutionObserverTest {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var failure = new IllegalStateException("stream failed");
-        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
-            .fail(failure, NormalizedUsage.missing(), null);
+        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0).fail(failure, NormalizedUsage.missing(), null);
 
         session.succeed(null, 0);
 
@@ -390,10 +483,8 @@ class UsageExecutionObserverTest {
     void streamingProjectionCompletionUsesObservedStepAndResponseModel() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0)
-            .succeed(NormalizedUsage.missing(), "actual-0");
-        session.beginExecution(UsageUnitKind.GENERATION_STEP, 1)
-            .succeed(NormalizedUsage.missing(), "actual-1");
+        session.beginExecution(UsageUnitKind.GENERATION_STEP, 0).succeed(NormalizedUsage.missing(), "actual-0");
+        session.beginExecution(UsageUnitKind.GENERATION_STEP, 1).succeed(NormalizedUsage.missing(), "actual-1");
 
         session.succeed(null, 0);
 
@@ -408,32 +499,47 @@ class UsageExecutionObserverTest {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
         var observer = new UsageExecutionObserver();
-        var firstStep = observer.observe(UsageUnitKind.GENERATION_STEP, 0,
-            () -> Mono.just("step-0"), ignored -> NormalizedUsage.missing(), ignored -> null);
-        var secondStep = observer.observe(UsageUnitKind.GENERATION_STEP, 1,
-            () -> Mono.just("step-1"), ignored -> NormalizedUsage.missing(), ignored -> null);
-        var slowFirstBatch = observer.observe(UsageUnitKind.EMBEDDING_BATCH, 0,
-            () -> Mono.delay(Duration.ofMillis(20)).thenReturn("batch-0"),
-            ignored -> NormalizedUsage.missing(), ignored -> null);
-        var fastSecondBatch = observer.observe(UsageUnitKind.EMBEDDING_BATCH, 1,
-            () -> Mono.just("batch-1"), ignored -> NormalizedUsage.missing(), ignored -> null);
+        var firstStep = observer.observe(
+                UsageUnitKind.GENERATION_STEP,
+                0,
+                () -> Mono.just("step-0"),
+                ignored -> NormalizedUsage.missing(),
+                ignored -> null);
+        var secondStep = observer.observe(
+                UsageUnitKind.GENERATION_STEP,
+                1,
+                () -> Mono.just("step-1"),
+                ignored -> NormalizedUsage.missing(),
+                ignored -> null);
+        var slowFirstBatch = observer.observe(
+                UsageUnitKind.EMBEDDING_BATCH,
+                0,
+                () -> Mono.delay(Duration.ofMillis(20)).thenReturn("batch-0"),
+                ignored -> NormalizedUsage.missing(),
+                ignored -> null);
+        var fastSecondBatch = observer.observe(
+                UsageUnitKind.EMBEDDING_BATCH,
+                1,
+                () -> Mono.just("batch-1"),
+                ignored -> NormalizedUsage.missing(),
+                ignored -> null);
         var observed = Flux.concat(firstStep, secondStep)
-            .concatWith(Flux.merge(slowFirstBatch, fastSecondBatch))
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+                .concatWith(Flux.merge(slowFirstBatch, fastSecondBatch))
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed)
-            .expectNext("step-0", "step-1", "batch-1", "batch-0")
-            .verifyComplete();
+                .expectNext("step-0", "step-1", "batch-1", "batch-0")
+                .verifyComplete();
 
         var execution = ArgumentCaptor.forClass(UsageExecutionRecord.class);
         verify(service, times(4)).recordExecution(org.mockito.ArgumentMatchers.any(), execution.capture());
         assertThat(execution.getAllValues())
-            .extracting(value -> List.of(value.unitKind(), value.unitIndex(), value.attemptIndex()))
-            .containsExactly(
-                List.of(UsageUnitKind.GENERATION_STEP, 0, 0),
-                List.of(UsageUnitKind.GENERATION_STEP, 1, 0),
-                List.of(UsageUnitKind.EMBEDDING_BATCH, 1, 0),
-                List.of(UsageUnitKind.EMBEDDING_BATCH, 0, 0));
+                .extracting(value -> List.of(value.unitKind(), value.unitIndex(), value.attemptIndex()))
+                .containsExactly(
+                        List.of(UsageUnitKind.GENERATION_STEP, 0, 0),
+                        List.of(UsageUnitKind.GENERATION_STEP, 1, 0),
+                        List.of(UsageUnitKind.EMBEDDING_BATCH, 1, 0),
+                        List.of(UsageUnitKind.EMBEDDING_BATCH, 0, 0));
     }
 
     @Test
@@ -456,7 +562,8 @@ class UsageExecutionObserverTest {
             start.countDown();
         } finally {
             pool.shutdown();
-            assertThat(pool.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(pool.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS))
+                    .isTrue();
         }
         verify(service, times(1)).finishCall(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
@@ -465,9 +572,14 @@ class UsageExecutionObserverTest {
     void streamCancellationRecordsCancelledExecution() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                Flux::<String>never, ignored -> NormalizedUsage.missing(), ignored -> null)
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observeFlux(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        Flux::<String>never,
+                        ignored -> NormalizedUsage.missing(),
+                        ignored -> null)
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).thenCancel().verify();
 
@@ -480,11 +592,14 @@ class UsageExecutionObserverTest {
     void streamCancellationPreservesLastObservedUsage() {
         var service = mock(UsageStatisticsService.class);
         var session = session(service);
-        var observed = new UsageExecutionObserver().observeFlux(UsageUnitKind.GENERATION_STEP, 0,
-                () -> Flux.concat(Flux.just("partial"), Flux.never()),
-                ignored -> new NormalizedUsage(3L, 2L, null, null, null, null, null, null),
-                ignored -> "actual")
-            .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
+        var observed = new UsageExecutionObserver()
+                .observeFlux(
+                        UsageUnitKind.GENERATION_STEP,
+                        0,
+                        () -> Flux.concat(Flux.just("partial"), Flux.never()),
+                        ignored -> new NormalizedUsage(3L, 2L, null, null, null, null, null, null),
+                        ignored -> "actual")
+                .contextWrite(context -> context.put(UsageCallSession.REACTOR_CONTEXT_KEY, session));
 
         StepVerifier.create(observed).expectNext("partial").thenCancel().verify();
 
@@ -496,12 +611,22 @@ class UsageExecutionObserverTest {
     }
 
     private static UsageCallSession session(UsageStatisticsService service) {
-        var start = new UsageCallStart("call-atomic", 1,
-            Instant.parse("2026-08-11T00:00:00Z"), "plugin", "1", "stack", null,
-            "language.streamText", "LANGUAGE", "model", "provider", "openai", "requested",
-            true);
-        return new UsageCallSession(service, start,
-            Clock.fixed(Instant.parse("2026-08-11T00:00:01Z"), ZoneOffset.UTC));
+        var start = new UsageCallStart(
+                "call-atomic",
+                1,
+                Instant.parse("2026-08-11T00:00:00Z"),
+                "plugin",
+                "1",
+                "stack",
+                null,
+                "language.streamText",
+                "LANGUAGE",
+                "model",
+                "provider",
+                "openai",
+                "requested",
+                true);
+        return new UsageCallSession(service, start, Clock.fixed(Instant.parse("2026-08-11T00:00:01Z"), ZoneOffset.UTC));
     }
 
     private static final class UsageReportingException extends RuntimeException {

@@ -9,8 +9,13 @@ import run.halo.aifoundation.provider.protocol.messages.StandardAnthropicMessage
 public final class GiteeMessagesModel extends AnthropicMessagesModel {
 
     public GiteeMessagesModel(ChatCompletionsOptions options, WebClient.Builder webClientBuilder) {
-        super(options, webClientBuilder, new StandardAnthropicMessagesProfile(
-            "gitee-moark", "gitee-messages", "/messages",
-            StandardAnthropicMessagesProfile.Authentication.BEARER));
+        super(
+                options,
+                webClientBuilder,
+                new StandardAnthropicMessagesProfile(
+                        "gitee-moark",
+                        "gitee-messages",
+                        "/messages",
+                        StandardAnthropicMessagesProfile.Authentication.BEARER));
     }
 }

@@ -7,8 +7,8 @@ import org.springframework.ai.embedding.EmbeddingOptions;
 /**
  * Resolves request-scoped embedding options without hiding provider-specific fields.
  *
- * <p>Standard {@link EmbeddingOptions} values can override every provider's defaults. Values
- * unique to a provider are read only when the request uses that provider's options type.</p>
+ * <p>Standard {@link EmbeddingOptions} values can override every provider's defaults. Values unique to a provider are
+ * read only when the request uses that provider's options type.
  */
 public final class EmbeddingOptionOverrides<T extends EmbeddingOptions> {
 
@@ -21,7 +21,7 @@ public final class EmbeddingOptionOverrides<T extends EmbeddingOptions> {
     }
 
     public static <T extends EmbeddingOptions> EmbeddingOptionOverrides<T> from(
-        EmbeddingOptions request, Class<T> providerType) {
+            EmbeddingOptions request, Class<T> providerType) {
         return new EmbeddingOptionOverrides<>(request, providerType);
     }
 
@@ -84,8 +84,7 @@ public final class EmbeddingOptionOverrides<T extends EmbeddingOptions> {
         return value;
     }
 
-    private static <T extends EmbeddingOptions> T providerRequest(EmbeddingOptions request,
-        Class<T> providerType) {
+    private static <T extends EmbeddingOptions> T providerRequest(EmbeddingOptions request, Class<T> providerType) {
         if (!providerType.isInstance(request)) {
             return null;
         }

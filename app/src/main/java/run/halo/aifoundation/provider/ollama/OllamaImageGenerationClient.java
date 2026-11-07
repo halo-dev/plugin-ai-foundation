@@ -15,8 +15,7 @@ import run.halo.aifoundation.provider.support.image.ImageGenerationClientOptions
 /** Dedicated client for Ollama's experimental OpenAI-compatible image endpoint. */
 public final class OllamaImageGenerationClient extends AbstractJsonImageGenerationClient {
 
-    public OllamaImageGenerationClient(ImageGenerationClientOptions options,
-        WebClient.Builder webClientBuilder) {
+    public OllamaImageGenerationClient(ImageGenerationClientOptions options, WebClient.Builder webClientBuilder) {
         super(options, webClientBuilder);
     }
 
@@ -26,17 +25,14 @@ public final class OllamaImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected Map<String, Object> requestBody(GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected Map<String, Object> requestBody(GenerateImageRequest request, Map<String, Object> nativeOptions) {
         requirePrompt(request, "Ollama image prompt must not be blank");
         validateResponseFormat(request.getResponseFormat());
         if (request.getImages() != null && !request.getImages().isEmpty()) {
-            throw new IllegalArgumentException(
-                "Ollama image editing is not documented by the experimental endpoint");
+            throw new IllegalArgumentException("Ollama image editing is not documented by the experimental endpoint");
         }
         if (request.getMask() != null) {
-            throw new IllegalArgumentException(
-                "Ollama image masks are not documented by the experimental endpoint");
+            throw new IllegalArgumentException("Ollama image masks are not documented by the experimental endpoint");
         }
         var body = new LinkedHashMap<String, Object>();
         if (nativeOptions != null) {
@@ -51,8 +47,8 @@ public final class OllamaImageGenerationClient extends AbstractJsonImageGenerati
     }
 
     @Override
-    protected GenerateImageResult imageResponse(String data, GenerateImageRequest request,
-        Map<String, Object> nativeOptions) {
+    protected GenerateImageResult imageResponse(
+            String data, GenerateImageRequest request, Map<String, Object> nativeOptions) {
         var root = readTree(data, "Ollama");
         var images = new ArrayList<GeneratedFile>();
         var output = root.path("data");
@@ -64,16 +60,20 @@ public final class OllamaImageGenerationClient extends AbstractJsonImageGenerati
                 }
             }
         }
-        return result(data, root, List.copyOf(images),
-            tokenUsage(root.path("usage"), images.size()), List.of(),
-            null, options.model());
+        return result(
+                data,
+                root,
+                List.copyOf(images),
+                tokenUsage(root.path("usage"), images.size()),
+                List.of(),
+                null,
+                options.model());
     }
 
     private void validateResponseFormat(ImageResponseFormat responseFormat) {
         if (responseFormat == null || responseFormat == ImageResponseFormat.BASE64) {
             return;
         }
-        throw new IllegalArgumentException(
-            "Ollama image generation supports only the BASE64 response format");
+        throw new IllegalArgumentException("Ollama image generation supports only the BASE64 response format");
     }
 }

@@ -4,9 +4,7 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.Value;
 
-/**
- * Options for building retrieval-augmented generation middleware.
- */
+/** Options for building retrieval-augmented generation middleware. */
 @Value
 @Builder(toBuilder = true)
 public class RagMiddlewareOptions {
@@ -43,15 +41,15 @@ public class RagMiddlewareOptions {
 
     public static RagMiddlewareOptions defaults(RagRetriever retriever) {
         return RagMiddlewareOptions.builder()
-            .retriever(retriever)
-            .maxResults(8)
-            .maxContextCharacters(12_000)
-            .promptPlacement(RagPromptPlacement.LAST_USER_MESSAGE)
-            .emptyContextPolicy(RagEmptyContextPolicy.SKIP_MODEL)
-            .retrievalFailurePolicy(RagFailurePolicy.FAIL)
-            .rerankFailurePolicy(RagFailurePolicy.FAIL)
-            .emptyContextText("I could not find relevant context to answer this question.")
-            .contextHeader("Use the following context to answer the user's question.")
-            .build();
+                .retriever(retriever)
+                .maxResults(8)
+                .maxContextCharacters(12_000)
+                .promptPlacement(RagPromptPlacement.LAST_USER_MESSAGE)
+                .emptyContextPolicy(RagEmptyContextPolicy.SKIP_MODEL)
+                .retrievalFailurePolicy(RagFailurePolicy.FAIL)
+                .rerankFailurePolicy(RagFailurePolicy.FAIL)
+                .emptyContextText("I could not find relevant context to answer this question.")
+                .contextHeader("Use the following context to answer the user's question.")
+                .build();
     }
 }

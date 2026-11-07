@@ -8,19 +8,30 @@ import java.util.Set;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.content.Media;
 import run.halo.aifoundation.provider.protocol.chatcompletions.ChatCompletionsOptions;
-import run.halo.aifoundation.provider.protocol.responses.ResponsesProfile;
 import run.halo.aifoundation.provider.protocol.responses.ResponsesOutputReplay;
+import run.halo.aifoundation.provider.protocol.responses.ResponsesProfile;
 
 /** DeepSeek policy for its stateless Responses compatibility surface. */
 final class DeepSeekResponsesProfile implements ResponsesProfile {
 
-    private static final Set<String> REPLAYED_OUTPUT_TYPES =
-        Set.of("reasoning", "web_search_call");
+    private static final Set<String> REPLAYED_OUTPUT_TYPES = Set.of("reasoning", "web_search_call");
     private static final List<String> IGNORED_FIELDS = List.of(
-        "store", "previous_response_id", "conversation", "background", "metadata", "include",
-        "prompt", "truncation", "service_tier", "safety_identifier", "prompt_cache_key",
-        "prompt_cache_retention", "context_management", "parallel_tool_calls", "max_tool_calls",
-        "stream_options");
+            "store",
+            "previous_response_id",
+            "conversation",
+            "background",
+            "metadata",
+            "include",
+            "prompt",
+            "truncation",
+            "service_tier",
+            "safety_identifier",
+            "prompt_cache_key",
+            "prompt_cache_retention",
+            "context_management",
+            "parallel_tool_calls",
+            "max_tool_calls",
+            "stream_options");
 
     @Override
     public String providerType() {
@@ -33,8 +44,7 @@ final class DeepSeekResponsesProfile implements ResponsesProfile {
     }
 
     @Override
-    public void customizeRequestBody(Map<String, Object> body,
-        ChatCompletionsOptions options, boolean stream) {
+    public void customizeRequestBody(Map<String, Object> body, ChatCompletionsOptions options, boolean stream) {
         removeIgnoredFields(body);
         removeUnsupportedToolFields(body);
     }
@@ -46,8 +56,7 @@ final class DeepSeekResponsesProfile implements ResponsesProfile {
 
     @Override
     public List<Map<String, Object>> assistantInputItems(AssistantMessage message) {
-        return ResponsesOutputReplay.assistantInputItems(
-            message, providerType(), REPLAYED_OUTPUT_TYPES);
+        return ResponsesOutputReplay.assistantInputItems(message, providerType(), REPLAYED_OUTPUT_TYPES);
     }
 
     private void removeIgnoredFields(Map<String, Object> body) {
@@ -72,5 +81,4 @@ final class DeepSeekResponsesProfile implements ResponsesProfile {
         tool.remove("strict");
         return tool;
     }
-
 }

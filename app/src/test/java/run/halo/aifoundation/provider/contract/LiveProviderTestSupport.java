@@ -9,16 +9,16 @@ public final class LiveProviderTestSupport {
 
     public static final String ENABLED_ENV = "AI_FOUNDATION_LIVE_PROVIDER_TESTS";
 
-    private LiveProviderTestSupport() {
-    }
+    private LiveProviderTestSupport() {}
 
     public static SecretValue requireCredential(String providerType, String environmentName) {
         var environment = System.getenv();
-        Assumptions.assumeTrue(isEnabled(providerType, environment),
-            () -> "Live " + providerType + " provider tests are not enabled");
+        Assumptions.assumeTrue(
+                isEnabled(providerType, environment), () -> "Live " + providerType + " provider tests are not enabled");
         var value = environment.get(environmentName);
-        Assumptions.assumeTrue(value != null && !value.isBlank(),
-            () -> "Live " + providerType + " provider credential is not configured");
+        Assumptions.assumeTrue(
+                value != null && !value.isBlank(),
+                () -> "Live " + providerType + " provider credential is not configured");
         return new SecretValue(value);
     }
 

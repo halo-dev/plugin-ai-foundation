@@ -21,14 +21,12 @@ final class EmbeddingResponseAggregator {
         this.providerType = providerType;
     }
 
-    EmbeddingResponse aggregate(List<EmbeddingBatchResult> batchResults,
-        List<EmbeddingWarning> requestWarnings) {
+    EmbeddingResponse aggregate(List<EmbeddingBatchResult> batchResults, List<EmbeddingWarning> requestWarnings) {
         var sorted = batchResults.stream()
-            .sorted(Comparator.comparingInt(EmbeddingBatchResult::index))
-            .toList();
-        var embeddings = sorted.stream()
-            .flatMap(batch -> batch.embeddings().stream())
-            .toList();
+                .sorted(Comparator.comparingInt(EmbeddingBatchResult::index))
+                .toList();
+        var embeddings =
+                sorted.stream().flatMap(batch -> batch.embeddings().stream()).toList();
         var warnings = new ArrayList<>(requestWarnings);
         var usageAccumulator = new UsageAccumulator();
         ResponseMetadata lastMetadata = null;
@@ -41,27 +39,23 @@ final class EmbeddingResponseAggregator {
                 usageAccumulator.add(usage);
             }
             batchMetadata.add(Map.of(
-                "index", batch.index(),
-                "response", responseMetadataMap(batch.metadata())
-            ));
+                    "index", batch.index(),
+                    "response", responseMetadataMap(batch.metadata())));
         }
 
         var usage = usageAccumulator.usage();
         if (usage == null) {
-            warnings.add(warning("missing-embedding-usage",
-                "The provider response did not include embedding token usage."));
+            warnings.add(
+                    warning("missing-embedding-usage", "The provider response did not include embedding token usage."));
         }
 
         return EmbeddingResponse.builder()
-            .embeddings(embeddings)
-            .usage(usage)
-            .response(mapResponseMetadata(lastMetadata))
-            .warnings(List.copyOf(warnings))
-            .providerMetadata(Map.of(
-                "providerType", providerType,
-                "batches", List.copyOf(batchMetadata)
-            ))
-            .build();
+                .embeddings(embeddings)
+                .usage(usage)
+                .response(mapResponseMetadata(lastMetadata))
+                .warnings(List.copyOf(warnings))
+                .providerMetadata(Map.of("providerType", providerType, "batches", List.copyOf(batchMetadata)))
+                .build();
     }
 
     private EmbeddingUsage mapUsage(Usage usage) {
@@ -80,9 +74,9 @@ final class EmbeddingResponseAggregator {
             return null;
         }
         return EmbeddingUsage.builder()
-            .tokens(total)
-            .raw(usage.getNativeUsage())
-            .build();
+                .tokens(total)
+                .raw(usage.getNativeUsage())
+                .build();
     }
 
     private Usage usage(ResponseMetadata metadata) {
@@ -92,18 +86,17 @@ final class EmbeddingResponseAggregator {
         return null;
     }
 
-    private run.halo.aifoundation.embedding.EmbeddingResponseMetadata mapResponseMetadata(
-        ResponseMetadata metadata) {
+    private run.halo.aifoundation.embedding.EmbeddingResponseMetadata mapResponseMetadata(ResponseMetadata metadata) {
         if (metadata == null) {
             return null;
         }
         var values = responseMetadataMap(metadata);
         return run.halo.aifoundation.embedding.EmbeddingResponseMetadata.builder()
-            .id(stringValue(values.get("id")))
-            .model(model(metadata))
-            .timestamp(Instant.now())
-            .metadata(values)
-            .build();
+                .id(stringValue(values.get("id")))
+                .model(model(metadata))
+                .timestamp(Instant.now())
+                .metadata(values)
+                .build();
     }
 
     private String model(ResponseMetadata metadata) {
@@ -137,10 +130,10 @@ final class EmbeddingResponseAggregator {
 
     private EmbeddingWarning warning(String code, String message) {
         return EmbeddingWarning.builder()
-            .code(code)
-            .message(message)
-            .providerMetadata(Map.of("providerType", providerType))
-            .build();
+                .code(code)
+                .message(message)
+                .providerMetadata(Map.of("providerType", providerType))
+                .build();
     }
 
     private Integer safe(Integer value) {
@@ -172,10 +165,7 @@ final class EmbeddingResponseAggregator {
             if (tokens == null && raw == null) {
                 return null;
             }
-            return EmbeddingUsage.builder()
-                .tokens(tokens)
-                .raw(raw)
-                .build();
+            return EmbeddingUsage.builder().tokens(tokens).raw(raw).build();
         }
     }
 }

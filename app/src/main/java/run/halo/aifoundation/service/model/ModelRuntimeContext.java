@@ -6,46 +6,60 @@ import run.halo.aifoundation.provider.AiProviderType;
 import run.halo.aifoundation.provider.mapping.RuntimeParameterMappings;
 import run.halo.aifoundation.provider.support.AdapterType;
 
-/**
- * Secret-free immutable configuration shared by capability-specific model runtimes.
- */
+/** Secret-free immutable configuration shared by capability-specific model runtimes. */
 public record ModelRuntimeContext(
-    String modelName,
-    String modelId,
-    String providerName,
-    String providerType,
-    AdapterType adapterType,
-    AiProviderType providerDefinition,
-    RuntimeParameterMappings parameterMappings,
-    Map<String, Object> nativeOptions,
-    ModelParameterConstraints parameterConstraints
-) {
+        String modelName,
+        String modelId,
+        String providerName,
+        String providerType,
+        AdapterType adapterType,
+        AiProviderType providerDefinition,
+        RuntimeParameterMappings parameterMappings,
+        Map<String, Object> nativeOptions,
+        ModelParameterConstraints parameterConstraints) {
 
     public ModelRuntimeContext {
-        parameterMappings = parameterMappings != null
-            ? parameterMappings : RuntimeParameterMappings.empty();
+        parameterMappings = parameterMappings != null ? parameterMappings : RuntimeParameterMappings.empty();
         nativeOptions = nativeOptions == null ? Map.of() : Map.copyOf(nativeOptions);
     }
 
-    public ModelRuntimeContext(String modelName, String modelId, String providerName,
-        String providerType, AdapterType adapterType, AiProviderType providerDefinition,
-        RuntimeParameterMappings parameterMappings, Map<String, Object> nativeOptions) {
-        this(modelName, modelId, providerName, providerType, adapterType, providerDefinition,
-            parameterMappings, nativeOptions, null);
+    public ModelRuntimeContext(
+            String modelName,
+            String modelId,
+            String providerName,
+            String providerType,
+            AdapterType adapterType,
+            AiProviderType providerDefinition,
+            RuntimeParameterMappings parameterMappings,
+            Map<String, Object> nativeOptions) {
+        this(
+                modelName,
+                modelId,
+                providerName,
+                providerType,
+                adapterType,
+                providerDefinition,
+                parameterMappings,
+                nativeOptions,
+                null);
     }
 
     public static ModelRuntimeContext unresolved(String providerType) {
         return unresolved(providerType, null, null, RuntimeParameterMappings.empty());
     }
 
-    public static ModelRuntimeContext unresolved(String providerType, String modelName,
-        String providerName, RuntimeParameterMappings parameterMappings) {
+    public static ModelRuntimeContext unresolved(
+            String providerType, String modelName, String providerName, RuntimeParameterMappings parameterMappings) {
         return unresolved(providerType, null, modelName, providerName, parameterMappings);
     }
 
-    public static ModelRuntimeContext unresolved(String providerType, String modelId,
-        String modelName, String providerName, RuntimeParameterMappings parameterMappings) {
-        return new ModelRuntimeContext(modelName, modelId, providerName, providerType, null, null,
-            parameterMappings, Map.of());
+    public static ModelRuntimeContext unresolved(
+            String providerType,
+            String modelId,
+            String modelName,
+            String providerName,
+            RuntimeParameterMappings parameterMappings) {
+        return new ModelRuntimeContext(
+                modelName, modelId, providerName, providerType, null, null, parameterMappings, Map.of());
     }
 }

@@ -21,16 +21,16 @@ public class DefaultModelSlotStore {
 
     public Mono<DefaultModelSlots> get() {
         return client.fetch(ConfigMap.class, configMapName())
-            .flatMap(this::readSlots)
-            .defaultIfEmpty(new DefaultModelSlots());
+                .flatMap(this::readSlots)
+                .defaultIfEmpty(new DefaultModelSlots());
     }
 
     public Mono<DefaultModelSlots> save(DefaultModelSlots slots) {
         var payload = JSON_MAPPER.writeValueAsString(slots);
         return client.fetch(ConfigMap.class, configMapName())
-            .flatMap(configMap -> updateConfigMap(configMap, payload))
-            .switchIfEmpty(Mono.defer(() -> createConfigMap(payload)))
-            .thenReturn(slots);
+                .flatMap(configMap -> updateConfigMap(configMap, payload))
+                .switchIfEmpty(Mono.defer(() -> createConfigMap(payload)))
+                .thenReturn(slots);
     }
 
     private Mono<DefaultModelSlots> readSlots(ConfigMap configMap) {
